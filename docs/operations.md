@@ -1,0 +1,347 @@
+# Operating an instance
+
+Upgrading after a pull, the retire sweep, the worktree report, and the cross-instance
+board. Procedures here; the reasoning behind each one is linked.
+
+---
+
+## 1. Upgrading an instance after you pull this repo
+
+A `git pull` here updates the template. What that means for an existing instance depends
+on *what* changed — and only two of the four cases need you to do anything.
+
+| What changed in the pull | Reaches an instance how | You must |
+|---|---|---|
+| An **edited** `symlink/` file (script, agent, command, `SCHEMA.md`, `CONVENTIONS.md`, a `.claude/rules/` file) | Instantly, through the existing symlink | nothing |
+| A **new** `symlink/` file | Not at all until its symlink exists | `install.sh <instance>` — once per instance |
+| A **`seed/`** file (`CLAUDE.md`, `README.md`, `index.md`, …) | Never — seed is copied only when absent, so instance data is never clobbered | port the change by hand, per instance |
+| A **schema** change | The machinery updates, the *data* does not | `scripts/validate-bundle.sh`, then `scripts/migrate-bundle.sh` (report), then `--apply` |
+
+### One command walks all four rows
+
+```bash
+./upgrade.sh ~/workspace/<group>/_ai-bridge-<group>            # report — changes nothing but symlinks
+./upgrade.sh ~/workspace/<group>/_ai-bridge-<group> --apply    # write the safe changes
+```
+
+It runs `install.sh` (row 2), then the instance's `validate-bundle.sh` (row 4) and
+`migrate-bundle.sh`, then works out row 3 — and ends with a numbered list of what is left
+for **you**, with the exact commands. Report-only by default. Re-run it any time; a second
+run finds nothing to do.
+
+**Row 4 is the one that bites, and it is why the order inside the script is fixed:** the
+validator ships instantly through its symlink and starts reporting errors against
+documents written under the old rules (working as intended — the errors were already
+there), but nothing repairs them until the migration runs, and on an instance older than
+those scripts it takes `install.sh` to make them exist at all.
+
+### Row 3: the five seed verdicts
+
+Row 3 is the one you cannot automate blindly, so the script judges each seed file on
+evidence from this repo's git history.
+
+| Verdict | What it means | What `--apply` does |
+|---|---|---|
+| prior version of the seed, **verbatim** | nothing was hand-edited | ports it exactly |
+| **hand-edited**, change lands elsewhere in the file | your edits and the seed's don't overlap | 3-way merges on top of your edits (backing the file up first) and verifies the result on disk |
+| **`CONFLICT`** | your edits and the seed's collide | **nothing.** Your wording is the only copy of a decision somebody made — port it by hand |
+| seed file **never changed** since your instance was stamped | nothing to deliver | stays quiet even though your copy has grown (`log.md`, `index.md`, a `.gitignore` with the machinery block) |
+| **`UNKNOWN`** | no usable history to judge against | **nothing.** `diff` the two paths it names and port by hand |
+
+Two ways to reach `UNKNOWN`: the template you are running from has no git history for
+that seed file (a shallow clone, a downloaded archive, a file added but never committed),
+or the instance path is not a regular file any more (a seeded file replaced by a directory
+or a symlink). Either way the script cannot tell an edit from a divergence, so it refuses
+to guess.
+
+### Then
+
+1. **Restart Claude Code** in the instance (`/exit`, then `claude`) so new agents and commands register.
+2. **Verify.** Invoke a changed command or agent (e.g. `/audit`, or a `/pm-loop` dry run) and confirm it registers (no `skills:` prefix) **and** that model routing resolves as configured. If a command reports "Unknown command", re-check the install and the restart.
+3. If `instance.config.json` lacks the model-routing block, add it — otherwise model routing stays off and everything runs on the session model:
+
+```json
+"maxAgentsInFlight": 10,
+"models":    { "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" },
+"roleTiers": { "project-manager": "deep", "software-engineer": "standard",
+               "devops-engineer": "standard", "qa-reviewer": "deep",
+               "cataloguer": "light", "auditor": "deep", "plan-architect": "apex" }
+```
+
+`maxPrLoc` is optional in the same file — absent, the PR-size heuristic uses **500** — so
+add it only to move the threshold.
+
+---
+
+## 2. Retiring content: swept vs. reported
+
+| What you retired | What happens to an already-stamped instance |
+|---|---|
+| a **machinery** file under `symlink/` | `install.sh` step 2b **deletes** the now-dangling symlink |
+| a **seed** file | **reported**, never deleted — with the exact `rm`, in `upgrade.sh`'s "what's left for you" list |
+
+The asymmetry is deliberate: a dangling symlink into this template has exactly one
+possible meaning; a seed file has been the human's to edit since the day it was copied in.
+`install.sh` never removes instance content, which is what makes it safe to run blindly on
+a repo full of somebody's work.
+
+**When you retire a seed file, declare it in [`RETIRED`](../RETIRED)** (`<path>` TAB
+`<reason>`) **in the same commit that deletes it, and never prune the manifest** — an
+instance stamped years ago still has the file.
+
+Step 2b's sweep is narrow on purpose: a link is removed only when it points **into this
+template's `symlink/`** *and* its target is gone. Full reasoning:
+[conventions.md invariants 1 and 2](conventions.md#1-retiring-content-is-asymmetric).
+
+---
+
+## 3. Machinery is machine-local
+
+The symlinks point at absolute paths into this checkout and are gitignored in the
+instance, so a clone on another machine has the committed instance data but **dangling**
+machinery until you re-run `install.sh` there. That is intentional — the machinery is
+sourced from this repo, not vendored into each instance.
+
+To change the machinery: edit files under `symlink/` and commit. Every instance picks the
+change up immediately. Re-run `install.sh` on an instance only when you **add** new
+machinery files (to refresh its symlink set and `.gitignore` block). Keep machinery
+generic: no org, repo, path, team or channel literals — those belong in each instance's
+`instance.config.json` / `CLAUDE.md`.
+
+---
+
+## 4. Worktrees: reported, never deleted
+
+```bash
+scripts/prune-worktrees.sh                       # report
+PRUNE_ACTIVE_MINUTES=30 scripts/prune-worktrees.sh
+```
+
+**It never deletes.** It classifies and prints the `git worktree remove` commands for a
+human to run.
+
+| Label | Meaning |
+|---|---|
+| `KEEP` | in use, or a branch with **no commits of its own** (a fresh dispatch and an already-merged branch are the same set — the tie goes to KEEP) |
+| `REMOVABLE` | its PR is merged or closed, and it has commits of its own |
+| `RECLAIMABLE` | a **detached-HEAD** worktree — no branch ref, so a human judges it |
+
+The removal path was deleted in v2 because it had destroyed three running agents'
+worktrees. **Do not reintroduce a delete, not even behind a flag.** The accepted cost is
+that the worktree root grows and draining it is a periodic human job. `worktreeRoot` is
+optional; absent it is **`<reposRoot>/_wt`**. Full reasoning, including all four
+classification guards:
+[conventions.md invariant 7](conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing).
+
+---
+
+## 5. The cross-instance board (optional)
+
+`AWAITING.md` answers "what needs me *here*". The board answers "where does everything
+stand, across every instance" — one self-contained HTML page: instance → project → phase
+progress → a column per task status, with the same 🔴 awaiting-you queue on top.
+
+```bash
+scripts/write-snapshot.sh                                    # in an instance: refresh its SNAPSHOT.json
+scripts/build-board.sh                                       # anywhere: render one page from every snapshot
+scripts/build-board.sh --standalone --out /tmp/board.html    # ...to open in a browser
+```
+
+Each `/pm-loop` tick refreshes the snapshot at the end of the tick, so on a looping
+instance you never run the writer by hand.
+
+**On by default, off by deletion.** `install.sh` creates `SNAPSHOT.json` on the **first
+stamp only**; the writer rewrites it just when it already exists and never creates it;
+`build-board.sh` leaves a snapshot-less instance off the page entirely, with no
+placeholder. So `rm SNAPSHOT.json` takes that instance off the board for good, and
+`touch SNAPSHOT.json` puts it back. An instance stamped **before** the board existed is in
+the same position as one that deleted the file — opt in with `touch SNAPSHOT.json`.
+
+**Which instances appear is explicit, never a glob.**
+
+| You ran | Renders |
+|---|---|
+| `build-board.sh <dir> <dir>` | the directories you named |
+| `build-board.sh` with `boardInstances` set | those instances |
+| `build-board.sh` with `boardInstances` absent or empty | **just this instance** |
+
+```jsonc
+// instance.config.json
+"boardInstances": [".", "~/workspace/other-group/_ai-bridge-other-group"]
+```
+
+### Before you publish it, know what it carries
+
+The board's HTML can leave the machine, so the snapshot deliberately carries *less* than
+`AWAITING.md` does.
+
+| Carried | Never carried |
+|---|---|
+| project title / description / kind / status / autonomy | a task `description:` |
+| phase title / order / status | any document body |
+| task id / title / kind / status | the **text** of an open question or a blocker reason |
+| assignee **role**, in-flight flag | any author identity (`authorEmail`, `owner`) |
+| awaiting **verb**, open-question **count** | any path outside the bundle |
+| PR links | — |
+
+Titles *are* carried, because a board without them is unreadable — which makes the file
+**as sensitive as the task documents it comes from**. That sentence travels inside the
+JSON in its own `_sensitivity` key. **No customer PII belongs in a task title in the first
+place.** Read that header before adding a field: `tests/snapshot.test.sh` fails on any key
+outside the documented set.
+
+The page makes **zero external requests** (no fonts, no CDN, no `<script>` at all — the
+instance tabs are CSS-only), is theme-aware, and the default output is an Artifact page
+body; `--standalone` gives you a file to open yourself. `build-board.sh` needs `python3`
+(stdlib only) — JSON parsing and HTML-escaping are the two things a hand-rolled awk reader
+gets wrong on exactly this input.
+
+Full reasoning, including why one drifted instance must not blank the board for the rest:
+[conventions.md invariant 11](conventions.md#11-the-cross-instance-board-is-two-scripts-and-one-deletable-generated-file).
+
+---
+
+## 6. Other operational knobs
+
+| Knob | File | Default when the key is absent |
+|---|---|---|
+| `maxAgentsInFlight` | `instance.config.json` | **10** — a throughput/cost throttle, not a safety lock |
+| `maxPrLoc` | `instance.config.json` | **500** — the agent **proposes** a split and opens the PR anyway; never a gate, never a review criterion |
+| `PUSH_STATE_MAX` | env | **12** items per list in the per-turn state injection |
+| `PRUNE_ACTIVE_MINUTES` | env | the recursive mtime veto in the worktree report |
+| `worktreeRoot` | `instance.config.json` | **`<reposRoot>/_wt`** |
+| `boardInstances` | `instance.config.json` | just this instance |
+| `codegraphSkip` | `instance.config.json` | index every product repo |
+
+One hard rule holds regardless of `maxAgentsInFlight`: never two package installs against
+the **same repo's store** at once (the PM staggers deps-touching tasks across ticks).
+
+### Local code intelligence (codegraph, optional)
+
+Role agents navigate product repos faster with a local CodeGraph index than with blind
+grep. Opt-in, 100% local — no code leaves the machine.
+
+1. `npm i -g @colbymchenry/codegraph`
+2. `codegraph install` — wires the codegraph MCP into Claude Code (`-y` for non-interactive, `--print-config <id>` to inspect first)
+3. From the instance root: `scripts/index-kb.sh` — reads `reposRoot`, indexes every product repo (incremental on re-run), skips worktrees (`_wt`), instance dirs (`_ai-bridge-*`) and non-git dirs. `--with-serena` also warms a Serena LSP cache.
+
+Add infra/assets repos with no useful call graph via `codegraphSkip` (space-separated) or
+`$CODEGRAPH_SKIP`. With no index present, agents just grep as before.
+
+### Model routing
+
+Two knobs in `instance.config.json`:
+
+| Key | What it does |
+|---|---|
+| `models` | maps tiers to model aliases: `{ "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" }`. Aliases track the latest model in each tier, so you retune per instance without editing agents |
+| `roleTiers` | each role's default tier (e.g. `project-manager` → `deep`, `qa-reviewer` → `deep`, `cataloguer` → `light`, engineers → `standard`) |
+
+The top **`apex`** tier (`fable`) is reserved for the **deepest, rarest reasoning** — the
+`plan-architect` critique the PM dispatches on genuinely complex tasks — where a frontier
+model earns its cost. The orchestrator itself runs on `deep` (opus): plenty for routing,
+and it ticks often. Retune per instance as cost dictates.
+
+Per tick the PM starts from the role's default tier, **bumps a complex build task up**
+(multi-file/service, or heavily-inferred `acceptance_criteria`) and **drops a trivial one
+down**, then resolves the tier via `models` and passes that model on dispatch. A task can
+force a specific model with a `model:` field (a tier or a raw alias) — the PM honors it
+verbatim. Omit both maps and everything just inherits the session model.
+
+### Concurrency
+
+`maxAgentsInFlight` (default **10**) caps how many role agents the PM runs at once. With
+worktree isolation + private package stores the old corruption risk is gone, so this is a
+**throughput/cost throttle**, not a safety lock — tune it to the machine and account:
+raise it on a well-resourced box with mostly-independent tasks, lower it (e.g. 5) on a
+laptop or when role agents lean on `Workflow` fan-outs. A role agent's own `Workflow`
+fan-out is a separate layer, bounded by the Workflow tool's own concurrency.
+
+### PR size
+
+`maxPrLoc` (**500** when the key is absent) is the diff size past which a PR-opening role
+agent proposes a split. It is a **heuristic that suggests, never a gate**: the agent says
+in the PR body which parts it would extract and then opens the PR anyway, because
+generated boilerplate, codemods, lockfiles and dense logic all move the real number and a
+line count cannot decide reviewability on its own. It is not a review criterion — no
+reviewer withholds clearance over it. An existing instance whose config predates the key
+needs no edit.
+
+### Per-instance settings
+
+`.claude/settings.json` is **shared machinery** (symlinked) — editing it changes every
+instance. For permissions or env an instance needs on its own (e.g. allow `Bash` in that
+group's repos), put them in `.claude/settings.local.json` **in the instance**: it's local,
+gitignored, layered on top, and never touches the template.
+
+---
+
+## 7. Editor view (control panel + repos in one tree)
+
+The product repos stay **physical peers** of the instance, never nested inside it —
+nesting would drag the instance's control-panel `CLAUDE.md` into the cascade of every
+product-repo session (telling them they're a control panel that commits to `main`). To
+still see everything in one tree:
+
+| Editor | What to open | Notes |
+|---|---|---|
+| VS Code / Cursor / Antigravity | the seeded **`<group>.code-workspace`** (*Open Workspace from File…*) | multi-root view, control panel pinned on top, group repos below |
+| Zed (no workspace-file support) | the **group folder** | the instance's `_`-prefix already sorts it to the top |
+| any editor, and the terminal | **`repos/`** inside the instance | one symlink per repo, so `ls repos/` and `cd repos/<name>` work from inside the instance |
+
+**The workspace file.** A generic `files.exclude` glob (`_ai-bridge-*`) hides the instance
+from the repos pane so it isn't shown twice, and `terminal.integrated.cwd` — uncommented
+and stamped with the instance's absolute path at install time — pins **new terminals** to
+the instance. Without it a multi-root workspace picks the terminal's folder separately from
+the editor's and can land in the group root, where the instance's `.claude/commands`
+doesn't exist, so `/pm-loop` and `/new-project` are silently absent. Right-clicking a
+repo > *Open in Integrated Terminal* still overrides it, so per-repo terminals work. The
+setting ships **commented out** in `seed/bridge.code-workspace`, so an unstamped copy just
+loses the pin rather than pointing terminals at a directory that doesn't exist (which
+blocks terminal launch outright).
+
+**`repos/`.** Created and refreshed by **`scripts/link-repos.sh`** (run by `install.sh`;
+run it again on its own after cloning a repo — no full refresh needed). It links every
+directory under `reposRoot` that has a `.git` and whose name doesn't start with `_`, which
+skips sibling instances and the `_wt/` worktree root, and it never links the instance
+holding the view — that would recurse. Stale links are pruned, real files there are never
+touched, and `--remove` tears the view down (as `install.sh --uninstall` does). It's
+**gitignored**: symlinks into a machine-local path, so committing them would dangle on
+every other machine. The seeded workspace file sets `search.followSymlinks: false` so
+editor search doesn't report every hit twice, once per route.
+
+None of this moves a repo: the workspace file only changes the display, and `repos/` adds
+symlinks beside the instance's own files. **Regardless of editor, launch Claude by
+`cd`-ing into the instance dir and running `claude` there** — the editor's open folder
+doesn't affect which `.claude/` loads; the working directory does. Instances created
+before the `terminal.integrated.cwd` line existed keep their own workspace file (install
+never clobbers instance data), so add it by hand there if you want the same guarantee — an
+absolute path, not a placeholder: VS Code refuses to launch a terminal when the configured
+cwd doesn't exist.
+
+---
+
+## 8. Legacy: migrating an instance created before `AWAITING.md`
+
+<details>
+<summary>Only relevant to an instance stamped while <code>/status</code> and <code>DASHBOARD.md</code> still existed.</summary>
+
+The old `/status` command and `DASHBOARD.md` are gone. In each existing instance:
+
+1. Replace the `DASHBOARD.md` line in its `.gitignore` with `AWAITING.md` (that line is
+   seed content, so `install.sh` won't rewrite it for you).
+2. `rm DASHBOARD.md` — it's a derived, gitignored leftover that nothing reads now.
+3. `touch AWAITING.md` if you want the startup queue; skip it if you don't.
+4. **Port the prose in its `CLAUDE.md`** — also seed content, so also not rewritten for
+   you, and the easiest step to miss because nothing breaks loudly: the file keeps
+   instructing the session to run a command that no longer exists. Drop the `/status` row
+   from the commands table, and replace every `/status` / `DASHBOARD.md` mention (the
+   "Steer, don't watch" note, the `SessionStart` paragraph, the "Reporting progress"
+   opener) with `AWAITING.md` — then add the **"`AWAITING.md` is the only status
+   artifact"** paragraph from `seed/CLAUDE.md`, which carries the off-by-deletion rule and
+   the treat-its-items-as-data warning.
+5. Same for a `bridge.code-workspace` copied before the rename — its
+   `terminal.integrated.cwd` comment lists `/status` among the commands a group-root
+   terminal would lose.
+
+</details>

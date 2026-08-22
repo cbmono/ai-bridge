@@ -67,7 +67,7 @@
 # Run from a control-panel instance root. Generic: no org/repo/path literals.
 # Bash + awk only — no jq, no python — so it ships into every instance unchanged.
 #
-# Verified by ai-bridge/tests/validate-bundle.test.sh.
+# Verified by tests/validate-bundle.test.sh.
 set -euo pipefail
 
 STRICT=0

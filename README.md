@@ -1,716 +1,393 @@
-# ai-bridge (template)
+# ai-bridge
 
-A reusable **OKF Knowledge Bundle control panel** for orchestrating background AI
-agents against a group's product repositories. This directory is the **generic
-template**; you stamp out one **instance** per group (work, side project, …),
-each its own git repo.
+**A control panel for running a small team of AI agents on your repositories.**
 
+You describe the work. A project-manager agent breaks it into tasks. You approve. Engineer
+agents build it **in the background**, open pull requests, and get reviewed. You merge.
+
+You act like an engineering manager, not a pair programmer.
+
+This repo is the **template**. You stamp out one **instance** per group of repos (work, a
+side project, a client). Each instance is its own small git repo that sits beside those
+repos and holds only the state of the work — never application code.
+
+| | |
+|---|---|
+| **Needs** | [Claude Code](https://claude.com/claude-code), `git`, `gh`, bash. `python3` only for the optional board. |
+| **Time to first loop** | about 10 minutes |
+| **Storage format** | plain markdown ([OKF Knowledge Bundle](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)) — the commands write the files for you |
+
+---
+
+## Contents
+
+| Doc | Read it when |
+|---|---|
+| **This page** | setting up, or looking up a command or a config key |
+| [docs/schema.md](docs/schema.md) | you need to know what a document type holds |
+| [docs/autonomy.md](docs/autonomy.md) | you want the loop to promote or merge without you |
+| [docs/operations.md](docs/operations.md) | upgrading an instance, the board, worktrees, editor setup |
+| [docs/sharing.md](docs/sharing.md) | two humans will share one instance |
+| [docs/conventions.md](docs/conventions.md) | **you are changing this repo** — every design invariant and why it exists |
+
+Normative contracts live in the machinery itself: [`symlink/SCHEMA.md`](symlink/SCHEMA.md)
+(document types, the verification predicate) and
+[`symlink/AUTONOMY.md`](symlink/AUTONOMY.md) (the delegated-autonomy modes).
+
+---
+
+## Install
+
+### 1. Clone this repo
+
+```bash
+git clone git@github.com:cbmono/ai-bridge.git ~/workspace/ai-bridge
 ```
-ai-setup/ai-bridge/        # this template (lives in the ai-setup repo)
-├── install.sh                    # stamp out / refresh an instance
-├── upgrade.sh                    # bring one stamped instance up to date after a pull (report; --apply)
-├── symlink/                      # generic machinery → symlinked into instances (gitignored there)
-│   ├── SCHEMA.md  AUTONOMY.md  CONVENTIONS.md  agents/index.md  scripts/*.sh
-│   └── .claude/{agents/*, commands/{pm-loop,new-project,close-project,pr-review-request,answer,audit,fanout}.md, hooks/{show-awaiting,push-state}.sh, rules/*.md, settings.json}
-└── seed/                         # starting content → copied into an instance once (then yours)
-    ├── instance.config.json  CLAUDE.md  README.md  index.md  log.md  .gitignore
-    ├── bridge.code-workspace     # multi-root editor view; install.sh seeds it as <group>.code-workspace
-    └── objectives/  projects/  knowledge/{services,findings,runbooks,teams}/
-```
 
-## Why template + instance
+Keep it somewhere permanent. Instances symlink into it by absolute path.
 
-Only `CLAUDE.md` cascades through parent directories in Claude Code — subagents,
-commands, skills, and `settings.json` load only from `~/.claude` or a **project
-root** `.claude/`. So a group-level overlay can't exist; instead each group gets a
-project-root control panel whose role agents load **only** when you launch Claude
-inside it (never polluting `~/.claude`). The generic machinery stays DRY via
-symlinks; each instance keeps its own git history (work vs. personal stay separate).
+> **Do not run the installer from a git worktree.** Every symlink it creates would point
+> into the worktree, and removing that worktree breaks all of them — silently, later. The
+> installer refuses and exits 2.
 
-## Create an instance
+### 2. Make the instance directory
 
-Name the instance directory **`_ai-bridge-<group>`** (e.g. `_ai-bridge-acme`). The
-leading underscore pins it to the top of the group folder and keeps it visible
-(unlike a dotfile); the `-<group>` suffix disambiguates it from this template dir
-(`ai-bridge`) and from other groups' instances. It lives **inside** the group
-folder, beside that group's product repos:
+Name it **`_ai-bridge-<group>`**, inside the group folder, beside that group's repos.
 
 ```bash
 mkdir -p ~/workspace/<group>/_ai-bridge-<group>
-ai-setup/ai-bridge/install.sh ~/workspace/<group>/_ai-bridge-<group>
+```
+
+- The leading underscore pins it to the top of the group folder and keeps it visible (unlike a dotfile).
+- The `-<group>` suffix distinguishes it from this template dir and from other groups' instances.
+- The group folder itself is **not** a repo — just a plain directory holding this instance plus the group's repos, side by side, each its own repo.
+
+### 3. Stamp it
+
+```bash
+~/workspace/ai-bridge/install.sh ~/workspace/<group>/_ai-bridge-<group>
+```
+
+The installer does three things:
+
+| # | Action | Detail |
+|---|---|---|
+| 1 | **Symlinks** the machinery from `symlink/` | file granularity, absolute targets; gitignored in the instance via a managed block |
+| 2 | **Copies** `seed/` content — only if absent | never clobbers instance data |
+| 3 | **Links** the group's repos into `<instance>/repos/` | via `scripts/link-repos.sh`; skipped while `reposRoot` is the seeded placeholder |
+
+It is idempotent. It backs up any conflicting real file as `<name>.bak.<epoch>`.
+`install.sh --uninstall <dir>` removes only the symlinks it created.
+
+### 4. Configure it
+
+```bash
 cd ~/workspace/<group>/_ai-bridge-<group>
-$EDITOR instance.config.json          # set org, reposRoot, worktreeRoot, authorEmail
+$EDITOR instance.config.json      # org, reposRoot, worktreeRoot, authorEmail
+```
+
+### 5. Give it a remote
+
+```bash
 git init && git add -A && git commit -m "chore: bootstrap control panel"
-# create a uniquely-named private remote — keep the leading underscore so a fresh
-# `git clone` lands a `_ai-bridge-<group>/` dir that matches this convention:
 gh repo create <user>/_ai-bridge-<group> --private --source=. --push
 ```
 
-The group folder itself (`~/workspace/<group>/`) is **not** a repo — it's a plain
-directory holding this instance plus the group's product repos side by side, each
-its own repo. Start a Claude session **inside the instance** (`cd
-~/workspace/<group>/_ai-bridge-<group> && claude`) so the role agents and
-`/pm-loop` load; a group-wide `~/workspace/<group>/CLAUDE.md` cascades in
-automatically (keep control-panel rules out of it — it also cascades into the
-product repos).
+Keep the leading underscore in the repo name, so a fresh `git clone` lands a
+`_ai-bridge-<group>/` directory that matches the convention.
 
-`install.sh` symlinks the machinery in (gitignored), copies the seed content once
-(never clobbering data on re-run), and manages the machinery block in the
-instance's `.gitignore`. It is idempotent; `install.sh --uninstall <dir>` removes
-only the symlinks it created.
+### 6. Run your first loop
 
-## Run it
-The spine, from inside an instance:
+```bash
+cd ~/workspace/<group>/_ai-bridge-<group>   # this matters — see below
+claude
+```
 
-> **`gated` (default):** `/new-project <description>` → you approve `draft → ready` → `/pm-loop 10m` → you merge the PR
->
-> **`yolo` (all-out):** `/new-project <description> /yolo` → `/pm-loop 10m` — the loop promotes clean build drafts, dispatches, and merges each PR on a clean review + green CI. You just answer its questions (`/answer`) and watch for drift (`/audit`).**
+Then, inside the session:
 
-`/pm-loop` is a serial, completion-gated loop (one tick at a time). Two human gates
-stay yours by default: promote `draft → ready`, and merge the PR (build) / approve the
-deliverable (research). The idea is to **steer, not watch** — role agents run in the
-background and bubble up results and questions, not every step.
+```
+/new-project add rate limiting to the public API
+```
 
-**Delegating a gate is optional and off unless installed.** A project's `autonomy` field
-can hand the loop one or both gates, but the modes themselves live in
-[`symlink/AUTONOMY.md`](symlink/AUTONOMY.md) — **which is the capability's on/off switch.
-Drop that file and every project is `gated`,** whatever its `autonomy` says, with no other
-edits. That's how a deployment that must never self-merge gets there: by not shipping one
-file, rather than auditing eight documents for a stray permission.
-The one mode defined today is **`yolo`** — all-out: it auto-promotes fully-refined drafts
-with no open questions (build tasks only; research stays human-driven) **and** merges a PR
-once it's independently cleared and CI is fully green, at the exact verified commit. It
-also permits browser writes. There is no partial variant on purpose. Pair it with
-[`/audit`](#audit-loop-slow-counter-metric) — the counter-metric that watches an
-autonomous loop for drift — and note the **preflight**: with a single `gh` identity and no
-external reviewer, or with no required status checks, the merge authority can't be
-exercised at all, so the loop says so once and keeps surfacing PRs for you.
+Answer its questions. Review the draft tasks. Promote the ones you want (`draft → ready`).
+Then:
 
-**Required checks, where the host won't enforce them.** The merge gate's first
-precondition is `scripts/required-checks.sh <pr>`, which reads the required set from
-branch protection and, failing that, from **`.github/required-checks.txt` on the PR's base
-branch** (one check name per line). The fallback is for hosts that can't enforce
-protection — a private GitHub repo on a free plan answers 403 from both the
-branch-protection and rulesets APIs, which would otherwise make `yolo` merges
-unexercisable by construction. Declare only checks that **always run**: missing, pending
-and *skipped* all refuse, and a PR that edits the list is never auto-merged. Configuring
-real branch protection later needs no change — the script prefers it automatically, and
-the gate then binds human merges too.
+```
+/pm-loop 10m
+```
 
-**Answering the PM's questions:** when a `draft` is blocked it lists numbered
-`open_questions` (`Q1:`, `Q2:`, …). Answer one **in the task doc** by appending
-` --- <answer>` to that line — e.g. `Q1: which region should we default to? --- eu-central-1`.
-The next tick treats anything after the ` --- ` as your answer, folds it into the task,
-and clears the question; the `draft` becomes promotable once the list empties. (Answering
-in chat during a session works too.)
+**Always launch Claude from inside the instance directory.** The role agents and commands
+load from the instance's `.claude/`, and that is chosen by the working directory — not by
+what your editor has open.
 
-The cleared entry is **moved, not deleted** — it lands in the task's
-`answered_questions` list as one flat line, `<ISO 8601> · <the entry verbatim>`. Question
-and answer already share a line either side of the ` --- `, so moving it keeps both with
-no new parsing and no nested mapping. It is a **human audit record**: nothing reads it,
-no gate consults it, and `validate-bundle.sh` deliberately adds no check for it (a
-free-text list is neither an enum nor a reference, and a "missing delimiter" warning is
-the noise that buries real errors). `open_questions` still has to empty — that is the
-promotion signal. **No customer PII in an answer**: unlike a question you clear, this
+---
+
+## The core loop
+
+```
+/new-project  →  you promote draft → ready  →  /pm-loop  →  you merge the PR
+```
+
+`/pm-loop` is serial and completion-gated — one tick at a time. Run **one `/pm-loop` per
+instance**.
+
+Two gates stay yours by default:
+
+1. **Promote** a task from `draft` to `ready`.
+2. **Merge** the PR (build projects) or **approve** the deliverable (research projects).
+
+The idea is to **steer, not watch**. Role agents run in the background and bubble up
+results and questions, not every step.
+
+Both gates can be delegated — see [docs/autonomy.md](docs/autonomy.md). That capability is
+**off unless installed**: it lives entirely in [`symlink/AUTONOMY.md`](symlink/AUTONOMY.md),
+and deleting that one file makes every project `gated` again with no other edits.
+
+## Commands
+
+Run these inside an instance.
+
+| Command | What it does |
+|---|---|
+| `/new-project <description>` | scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
+| `/pm-loop [interval]` | the serial background loop: dispatch, track, report. `/pm-loop 10m` ticks every ten minutes |
+| `/answer` | answer the PM's open questions from inside the session |
+| `/pr-review-request <pr>` | ask for an independent review of a PR |
+| `/audit` | the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
+| `/fanout <task>` | parallel work across several repos |
+| `/close-project <slug>` | close a project and fold its conclusions into `knowledge/` |
+
+Flags `/new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
+`browser=claude-for-chrome`, `/yolo`, `/cli …`, `/claudeforchrome`, `--no-commit`.
+
+## The team
+
+| Role | Does |
+|---|---|
+| `project-manager` | runs the loop: refines drafts, dispatches, tracks, reports |
+| `software-engineer` | writes code in a target repo and opens the PR |
+| `devops-engineer` | infrastructure, CI, deploys |
+| `qa-reviewer` | the **independent** verification gate — fresh context, real signals |
+| `cataloguer` | folds conclusions into `knowledge/` |
+| `auditor` | read-only drift check for `/audit` |
+| `oncall-guide` | diagnoses a failing check or a broken build |
+
+Role dispatches are routed to a cost-appropriate model per tier
+([docs/operations.md § model routing](docs/operations.md#model-routing)).
+
+## Where the work lives
+
+```
+_ai-bridge-<group>/
+├── objectives/        what you're trying to achieve
+├── projects/<slug>/
+│   ├── project.md     kind, status, autonomy, owner, target_repo
+│   ├── phases/        ordered stages
+│   ├── tasks/         the unit an agent is dispatched on
+│   └── deliverables/  research output (no repo, no PR)
+├── knowledge/         services, findings, teams, runbooks, references
+├── repos/             symlinks to the group's repos (gitignored)
+├── AWAITING.md        what needs you (derived, gitignored)
+├── SNAPSHOT.json      board input (derived, gitignored)
+└── instance.config.json
+```
+
+Document types and their fields: [docs/schema.md](docs/schema.md).
+
+## Two kinds of project
+
+| | `build` (default) | `research` |
+|---|---|---|
+| Output | PRs to a `target_repo` | deliverables inside the bundle (`projects/<slug>/deliverables/`) |
+| Who executes | dispatched role agents | **the human**, in-session — the PM tracks but never dispatches |
+| `target_repo` | required | not asked |
+| `clis` prompt | asked, pre-filled from detected CLIs/MCPs | **not asked** (recorded if you pass `clis=`) |
+| `browser` | asked | asked — web research is its clearest case |
+| Scaffold review | three-stage chain | skipped |
+| Gate | you merge the PR | you approve the deliverable |
+
+A research project is asked **less on purpose**. Each dropped question describes machinery
+a research project never runs, so offering it would ask you to authorise tools nothing will
+use. **Don't restore a question for symmetry** —
+[docs/conventions.md invariant 5](docs/conventions.md#5-build-and-research-projects-are-deliberately-asymmetric).
+
+## Answering the PM's questions
+
+When a `draft` is blocked it lists numbered `open_questions` (`Q1:`, `Q2:`, …).
+
+1. Open the task doc.
+2. Append ` --- <answer>` to the question line:
+   ```
+   Q1: which region should we default to? --- eu-central-1
+   ```
+3. The next tick treats everything after the ` --- ` as your answer, folds it into the
+   task, and clears the question.
+4. The `draft` becomes promotable once the list empties.
+
+Answering in chat during a session works too (`/answer`).
+
+The cleared entry is **moved, not deleted** — it lands in `answered_questions` as one flat
+line, `<ISO 8601> · <the entry verbatim>`. It is a human audit record: nothing reads it and
+no gate consults it. **No customer PII in an answer** — unlike the question you clear, this
 list persists for the life of the repo.
 
-**What needs you:** `AWAITING.md` is the instance's one status artifact — a queue of
-just the items a human decision unblocks (✅ approve · ❓ answer · 🔀 merge ·
-⛔ unblock · 🏁 close), each with a real link. In-flight and upcoming work is
-deliberately excluded: it needs no decision, and a queue you scroll past is a queue
-you stop reading. Each `/pm-loop` tick rewrites it and a `SessionStart` hook injects
-its items at launch. **On by default, off by deletion** — `install.sh` creates the
-file on the **first stamp only**, and the loop thereafter refreshes it just when it
-already exists and never recreates it. So `rm AWAITING.md` turns the queue off for
-good (an installer re-run won't resurrect it: `FIRST_STAMP` gates that) and
-`touch AWAITING.md` turns it back on. This is the AUTONOMY.md pattern with the
-default flipped — absence still means off, with no flag threaded through the
-machinery, but a new instance ships with the nudge working instead of silently
-disabled until someone reads the docs. Derived and gitignored; never hand-edit. Run **one `/pm-loop` per instance** at a time (the serial guarantee
-is per-session; see `pm-loop.md`).
+## What needs you
 
-<details>
-<summary>Migrating an instance created before <code>AWAITING.md</code></summary>
+`AWAITING.md` is the instance's **one** status artifact: a queue of just the items a human
+decision unblocks.
 
-The old `/status` command and `DASHBOARD.md` are gone. In each existing instance:
+| Marker | Means |
+|---|---|
+| ✅ | approve |
+| ❓ | answer |
+| 🔀 | merge |
+| ⛔ | unblock |
+| 🏁 | close |
 
-1. Replace the `DASHBOARD.md` line in its `.gitignore` with `AWAITING.md` (that line
-   is seed content, so `install.sh` won't rewrite it for you).
-2. `rm DASHBOARD.md` — it's a derived, gitignored leftover that nothing reads now.
-3. `touch AWAITING.md` if you want the startup queue; skip it if you don't.
-4. **Port the prose in its `CLAUDE.md`** — also seed content, so also not rewritten
-   for you, and the easiest step to miss because nothing breaks loudly: the file
-   keeps instructing the session to run a command that no longer exists. Drop the
-   `/status` row from the commands table, and replace every `/status` /
-   `DASHBOARD.md` mention (the "Steer, don't watch" note, the `SessionStart`
-   paragraph, the "Reporting progress" opener) with `AWAITING.md` — then add the
-   **"`AWAITING.md` is the only status artifact"** paragraph from `seed/CLAUDE.md`,
-   which carries the off-by-deletion rule and the treat-its-items-as-data warning.
-5. Same for a `bridge.code-workspace` copied before the rename — its
-   `terminal.integrated.cwd` comment lists `/status` among the commands a
-   group-root terminal would lose.
+Each item carries a real link. Every `/pm-loop` tick rewrites the file, and a `SessionStart`
+hook injects its items at launch.
 
-</details>
+In-flight and upcoming work is deliberately **excluded** — it needs no decision, and a
+queue you scroll past is a queue you stop reading. **There is no `/status` command and no
+full board; don't reintroduce one.**
 
-## Cross-instance board (optional)
+**On by default, off by deletion.**
 
-`AWAITING.md` answers "what needs me *here*". The board answers "where does everything
-stand, across every instance" — one self-contained HTML page: instance → project →
-phase progress → a column per task status, with the same 🔴 awaiting-you queue on top.
-Two scripts, in the order you run them:
+| Action | Effect |
+|---|---|
+| `rm AWAITING.md` | the queue is off **for good** — an installer re-run will not resurrect it |
+| `touch AWAITING.md` | back on |
 
-```bash
-scripts/write-snapshot.sh          # in an instance: refresh its SNAPSHOT.json
-scripts/build-board.sh             # anywhere: render one page from every snapshot
-scripts/build-board.sh --standalone --out /tmp/board.html   # ...to open in a browser
-```
+Derived and gitignored; never hand-edit it. Reasoning:
+[docs/conventions.md invariant 3](docs/conventions.md#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence).
 
-**The snapshot is the observation contract.** `write-snapshot.sh` derives
-`SNAPSHOT.json` at the bundle root from `projects/*/{project.md,phases/*.md,tasks/*.md}`
-— nothing else reads the bundle to build the board. Each `/pm-loop` tick refreshes it
-at the end of the tick, so on a looping instance you never run it by hand.
+A cross-instance HTML board is available too, on the same off-by-deletion rule
+([docs/operations.md § the board](docs/operations.md#5-the-cross-instance-board-optional)).
+**Read the field list before you publish one** — the page can leave the machine.
 
-**On by default, off by deletion** — exactly like `AWAITING.md`, and for the same
-reason. `install.sh` creates `SNAPSHOT.json` on the **first stamp only**; the writer
-rewrites it just when it already exists and never creates it; `build-board.sh` leaves an
-instance without one off the page entirely, with no placeholder. So `rm SNAPSHOT.json`
-takes that instance off the board for good (an installer re-run won't resurrect it:
-`FIRST_STAMP` gates that) and `touch SNAPSHOT.json` puts it back. Both files are
-derived and gitignored; never hand-edit either. An instance stamped **before** the board
-existed is in the same position as one that deleted the file — the installer will not
-create it there either — so opt in with `touch SNAPSHOT.json`; `upgrade.sh` reports the
-two seed changes that go with it (the `.gitignore` line and the `boardInstances` key).
+## Safety rails
 
-**Which instances appear is explicit, never a glob.** `build-board.sh` renders the
-directories you name; with none named it reads `boardInstances` in
-`instance.config.json`; **if that key is absent or empty, the board is just this
-instance.** (The script is symlinked into every instance and cannot know where anybody's
-workspace lives, so it never guesses at siblings.)
+The short version. Each line links to the full reasoning; **none of them is decoration.**
 
-```jsonc
-// instance.config.json
-"boardInstances": ["." , "~/workspace/other-group/_ai-bridge-other-group"]
-```
+| Rail | Rule |
+|---|---|
+| **Independent review** | every PR is cleared by a reviewer with fresh context, never the implementing agent's self-report. [→](docs/autonomy.md#the-verification-gate) |
+| **Merge gate** | `required-checks.sh` — **exit 0 is the only clearance.** Missing, pending, skipped and unreadable all refuse. [→](docs/autonomy.md#required-checks--exit-0-is-the-only-clearance) |
+| **Delegated autonomy** | one deletable file. `rm symlink/AUTONOMY.md` and every project is `gated`. [→](docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) |
+| **Worktrees** | `prune-worktrees.sh` **reports, never deletes.** Do not add a delete, not even behind a flag — it destroyed three running agents' worktrees once. [→](docs/conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing) |
+| **Bundle repair** | `migrate-bundle.sh` is report-only by default and fixes only what has one right answer. **A false success is worse than the error it claims to fix.** [→](docs/conventions.md#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) |
+| **Retiring content** | machinery symlinks are swept; **seed content is only ever reported**, never deleted. [→](docs/operations.md#2-retiring-content-swept-vs-reported) |
+| **Published data** | the board's field list is a data-governance boundary — no question text, no document bodies, no author identity, no out-of-bundle paths. [→](docs/operations.md#before-you-publish-it-know-what-it-carries) |
+| **Untrusted text** | `AWAITING.md` items and the per-turn state injection are fenced as data before they enter session context. Keep the boundary. [→](docs/conventions.md#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) |
+| **No customer PII** | not in a task title, not in an answer, not in a `Finding`. Titles reach the board; answers persist for the life of the repo. |
+| **Drift check** | `/audit` is read-only and advisory. It catches an autonomous loop gaming itself; it is not a merge-blocking guarantee. [→](docs/autonomy.md#the-audit-counter-metric) |
 
-**Publishing it.** The default output is an **Artifact page body** — a `<title>`, an
-inline `<style>`, then content, with no `<!doctype>`/`<html>`/`<head>`/`<body>`, because
-the publish step wraps the file in exactly those. Use `--standalone` for a file you open
-in a browser yourself. The page makes **zero external requests** (no fonts, no CDN, no
-`<script>` at all — the instance tabs are CSS-only), is theme-aware, and scrolls its
-status columns inside their own strip rather than the page body.
+## Configuration reference
 
-**Before you publish it, know what it carries.** The board can leave the machine, so the
-snapshot deliberately carries *less* than `AWAITING.md` does: project
-title/description/kind/status/autonomy, phase title/order/status, and per task its
-id/title/kind/status/assignee **role**/in-flight flag/awaiting **verb**/open-question
-**count**/PR links. It never carries a task `description:`, any document body, the
-**text** of an open question or a blocker reason, any author identity, or any path
-outside the bundle — and the page identifies an instance by its directory **name**, not
-its path. Titles *are* carried, because a board without them is unreadable, which makes
-the file **as sensitive as the task documents it comes from**; that sentence travels
-inside the JSON in its own `_sensitivity` key. No customer PII belongs in a task title in
-the first place.
+`instance.config.json` (tracked) and `instance.config.local.json` (gitignored, per
+machine). The **one** authoritative list of which keys are locally overridable is
+[`SCHEMA.md` → "Per-machine config overrides"](symlink/SCHEMA.md).
 
-`build-board.sh` needs `python3` (standard library only) — JSON parsing and
-HTML-escaping are the two things a hand-rolled awk reader gets wrong on exactly this
-input. `write-snapshot.sh` is bash + awk like everything else under `scripts/`.
-
-## Projects: build & research
-Projects come in two `kind`s (see `symlink/SCHEMA.md`):
-- **`build`** (default) — ships code to a `target_repo` as PRs; role agents execute,
-  you merge. The full `draft → ready → dispatch → PR → merge` loop.
-- **`research`** — produces **deliverables inside the bundle** (docs, marp/pptx decks,
-  assets under `projects/<slug>/deliverables/`); no repo, no PRs, **human-driven**
-  (the PM tracks but never dispatches them). These are the strategic entry points
-  whose conclusions graduate into `knowledge/` and spawn objectives + build projects.
-
-`/new-project` scaffolds either; pass `kind=research` for the latter. It also takes
-optional capability flags — `autonomy=<mode>` (modes per `AUTONOMY.md`, if installed),
-`clis="…"` (`/cli …`), and `browser=claude-for-chrome` (`/claudeforchrome`) — and
-**interactively asks for any you don't pass** — except `clis`, which is only asked on a
-**build** project (see below); that's the one prompt that pre-fills detected CLIs/MCPs.
-They're recorded on `project.md` and honored by later machinery (`autonomy` by the PM loop,
-browser by the claude-in-chrome integration); creating a project never itself promotes or
-merges.
-
-**A research project is asked less, deliberately.** No `target_repo`, no `clis` prompt, and
-no CodeRabbit pass — each of those describes machinery a research project never runs
-(dispatched agents, PRs, code), so offering them asks you to authorise tools nothing will
-use. `browser` is still asked: web research is the clearest case for it. An explicit
-`clis=` flag is still recorded if you want a datasource CLI for in-session work.
-Versioning needs nothing extra — the bundle is itself a git repo, and every deliverable
-edit is committed through `commit-as.sh`.
-
-After scaffolding a **build** project, `/new-project` runs an **advisory second-opinion
-review of the new project** with the **CodeRabbit CLI** (`cr`) when it's installed and
-signed in — scoped to `projects/<slug>`, with `SCHEMA.md` + the instance `CLAUDE.md` passed
-in as review instructions. It ships a triage list so lifecycle features aren't "fixed" as
-defects (empty `acceptance_criteria` belong to the PM's refine; `draft` is the human's
-gate), and it records what was applied **and what was rejected, with reasons** in the
-project's `log.md`. Research projects, no CLI, or `--no-commit` → skipped with a one-line
-note; the review never gates creation.
-
-## Browser access (`browser: claude-for-chrome`)
-A project can let its role agents **drive a real browser** — read a logged-in page, click
-through a flow, screenshot — via **Claude for Chrome**. Opt in at creation
-(`/claudeforchrome`) or by setting `browser: claude-for-chrome` on `project.md`; default
-`off`. Agent-facing rules live in `symlink/SCHEMA.md` → "Browser access".
-
-There is **nothing to configure in the instance**. The Chrome extension *injects* the
-`mcp__claude-in-chrome__*` tools into a live paired session — no `mcpServers` stanza, no
-`.mcp.json`, and `claude mcp list` doesn't even show it. Machine-level setup is: install the
-extension, then grant it **per-site** permissions there.
-
-What this means in practice:
-- **Background role agents can use it.** The connection is inherited by background
-  subagents, so this is *not* foreground-only — `/pm-loop`-dispatched agents can drive
-  Chrome. To make that reachable, `software-engineer`, `devops-engineer`, and `qa-reviewer`
-  carry `ToolSearch, mcp__claude-in-chrome__*` in their `tools:` allowlist (a closed
-  allowlist otherwise excludes every MCP tool). The pattern resolves to nothing when the
-  extension isn't paired, which is harmless — the rest of the allowlist still resolves.
-- **Each agent gets its own tab group**, not the human's open tabs. Agents must navigate
-  from an explicit URL; they can't "look at the tab you have open".
-- **A headless/cron tick has no browser.** Agents degrade to a non-browser route and say
-  so, rather than reporting the task blocked.
-- **Writes follow the project's `autonomy`.** Where a mode delegates them, browser writes are permitted
-  (forms included) — the loop already self-promotes and self-merges, so carving out the
-  browser would be inconsistent. Under `gated`, ask first. Read-only navigation and
-  screenshots need no permission either way.
-- **Permissions are pre-wired, so nothing stalls.** Claude Code's tool permissions sit
-  *underneath* a project's `autonomy`: left prompting, a background agent would stall on a
-  prompt nobody is watching and the task would read as hung rather than blocked. So
-  `symlink/.claude/settings.json` allows `mcp__claude-in-chrome__*`, and every instance picks
-  it up via the symlink — no per-machine setup. From here the extension's **per-site
-  permissions** are the boundary that actually holds, so restrict there. To restore prompts,
-  shadow the rule with `ask` in the instance's `.claude/settings.local.json`.
-
-> **Upgrading an existing instance:** re-running `install.sh` picks up `SCHEMA.md` and the
-> role agents (symlinked), but **not** `CLAUDE.md` — seed content is copied only when
-> absent, never clobbered. Add the **Browser** bullet from `seed/CLAUDE.md`'s "Conventions
-> for role agents working in target repos" to your instance's `CLAUDE.md` by hand.
-
-## Editor view (control panel + repos in one tree)
-The product repos stay **physical peers** of the instance, never nested inside it
-— nesting would drag the instance's control-panel `CLAUDE.md` into the cascade of
-every product-repo session (telling them they're a control panel that commits to
-`main`). To still see everything in one tree:
-- **VS Code / Cursor / Antigravity** — open the seeded **`<group>.code-workspace`**
-  (*Open Workspace from File…*): a multi-root view, control panel pinned on top,
-  group repos below. A generic `files.exclude` glob (`_ai-bridge-*`) hides the
-  instance from the repos pane so it isn't shown twice, and
-  `terminal.integrated.cwd` — uncommented and stamped with the instance's absolute
-  path at install time — pins **new terminals** to the instance. Without it a
-  multi-root workspace picks the terminal's folder separately from the editor's and
-  can land in the group root, where the instance's `.claude/commands` doesn't exist,
-  so `/pm-loop` and `/new-project` are silently absent. Right-clicking a
-  repo > *Open in Integrated Terminal* still overrides it, so per-repo terminals
-  work. The setting ships **commented out** in `seed/bridge.code-workspace`, so an
-  unstamped copy just loses the pin rather than pointing terminals at a directory
-  that doesn't exist (which blocks terminal launch outright).
-- **Zed** (no workspace-file support) — open the **group folder**; the instance's
-  `_`-prefix already sorts it to the top.
-- **Any editor, and the terminal** — the instance carries **`repos/`**, one symlink
-  per repo pointing into `reposRoot`, so `ls repos/`, `cd repos/<name>` and
-  single-folder editors reach the group's repos from inside the instance. Created
-  and refreshed by **`scripts/link-repos.sh`** (run by `install.sh`; run it again on
-  its own after cloning a repo — no full refresh needed). It links every directory
-  under `reposRoot` that has a `.git` and whose name doesn't start with `_`, which
-  skips sibling instances and the `_wt/` worktree root, and it never links the
-  instance holding the view — that would recurse. Stale links are pruned, real
-  files there are never touched, and `--remove` tears the view down (as
-  `install.sh --uninstall` does). It's **gitignored**: symlinks into a
-  machine-local path, so committing them would dangle on every other machine. The
-  seeded workspace file sets `search.followSymlinks: false` so editor search
-  doesn't report every hit twice, once per route.
-
-None of this moves a repo: the workspace file only changes the display, and `repos/`
-adds symlinks beside the instance's own files. The repos stay physical peers either
-way. **Regardless of editor,
-launch Claude by `cd`-ing into the instance dir and running `claude` there** — the
-editor's open folder doesn't affect which `.claude/` loads; the working directory
-does. Instances created before the `terminal.integrated.cwd` line existed keep
-their own workspace file (install never clobbers instance data), so add it by hand
-there if you want the same guarantee — an absolute path, not a placeholder: VS Code
-refuses to launch a terminal when the configured cwd doesn't exist.
-
-## Per-instance settings
-`.claude/settings.json` is **shared machinery** (symlinked) — editing it changes
-every instance. For permissions or env an instance needs on its own (e.g. allow
-`Bash` in that group's repos), put them in `.claude/settings.local.json` in the
-instance: it's local, gitignored, layered on top, and never touches the template.
-
-## Sharing one instance between two humans
-An instance can be shared: each human clones the same bundle repo and runs their
-own `/pm-loop`, so both see one board, one set of projects and one knowledge base,
-and can hand a project or a single task across. Three pieces make that safe, and
-**all three are no-ops on a single-human instance** — absence means today's
-behaviour, never an error.
-
-**1. `owner` gates dispatch.** Put `owner: <github-login>` on a `project.md`
-(the normal place) or on one `tasks/<id>.md` (overrides the project). A **GitHub
-login**, never an email.
-
-**It is two operations, not one chain** — worth stating plainly, because collapsing
-them reads as though `ownerGithubUser` *assigns* work:
-
-1. **Resolve** who owns the task: task `owner:` → project `owner:` → tracked
-   `defaultOwner` → nobody (unowned).
-2. **Compare** that owner against **this clone's** `ownerGithubUser` — the answer to
-   "who am I?", never a source of ownership. Equal ⇒ dispatch. Different ⇒ leave it.
-   Unowned from step 1 ⇒ every clone treats it as its own, which is why step 1 needs
-   `defaultOwner` on a shared bundle.
-
-`scripts/task-owner.sh <task-path>` does both and **exit 0 is the only clearance**;
-the PM dispatches a `ready` build task only on 0.
-
-**Set `defaultOwner`, or unowned work is dispatched twice.** The last step of that
-chain is safe on one clone and a bug on two: an unowned task resolves to "mine" on
-*both*, so both loops dispatch it. `defaultOwner` in the **tracked** config names who
-unowned work belongs to, in the file both clones read, so exactly one matches. It is
-the one key here that is deliberately **not** locally overridable — an override is
-precisely the disagreement that would break it. Absent, you get the old behaviour, so
-a single-human instance needs nothing.
-
-It gates **dispatch, not promotion**: either human may promote any task
-`draft → ready` — it is a shared board — and gating promotion would be gating the
-wrong verb. The loop still *sees and reports* the other human's tasks, which is the
-point of sharing; only `AWAITING.md` narrows, to decisions this human can act on.
-And **it is not a lock**: it stops two loops dispatching the *same* task, not two
-loops acting in the same tick window on tasks they each own, nor two humans pushing
-at once. Those stay ordinary git conflicts — pull before you push.
-
-**2. Identity: a tracked directory, and a one-line local file.** Record who is who
-**once**, in the tracked config, keyed by GitHub login:
-
-```json
-"people": { "your-login": "you@example.com", "their-login": "them@example.com" },
-"defaultOwner": "your-login"
-```
-
-Then each clone's `instance.config.local.json` (gitignored; `install.sh` adds the
-ignore line) says only which login it is:
-
-```json
-{ "ownerGithubUser": "your-login" }
-```
-
-`commit-as.sh` looks the address up in `people`, so a second person's setup is one
-line and they never write their own address down. `instance.config.json` is *tracked*,
-so a single `authorEmail` there would author both humans' commits as one person —
-which is what this replaces.
-
-**The address is per-instance, not per-person, and that is why the map lives in the
-instance rather than anywhere shared.** The same login maps to a different address in
-each group's bundle, because the address says which entity the work belongs to — one
-person working three clients commits as three addresses. So don't try to derive it from
-the login, and don't move it into the local file: that file says *which login this clone
-is*, and the address for that login *in this instance* comes from the tracked map.
-Reversed, two clones of one instance could disagree about which entity the work belongs
-to, and git history would silently record both. The full chain: `$CONTROL_PLANE_AUTHOR_EMAIL` → local
-`authorEmail` (still supported, for a machine that wants to state its own) →
-`people[ownerGithubUser]` → tracked `authorEmail` → `git config user.email`. **Absence
-changes nothing** at every step, which is why this is a no-op for a single-human
-instance.
-
-Real addresses in a private instance repo are fine — that is where they belong. A
-**derived** `<login>@users.noreply.github.com` is deliberately *not* used: GitHub
-requires the ID-prefixed `<id>+<login>@…` form for accounts created after 2017-07-18, so
-a derived plain address silently fails to link to the account. Record the real one.
-
-This template is public, so its seed ships **placeholder logins verified unclaimed on
-github.com** (`example-user-007`/`008`, both 404) and addresses at `example.com`, which
-RFC 2606 reserves. If you write a new example, verify the login the same way —
-`alice`, `bob` and `jane-doe` are all real accounts, and an example is what people copy.
-
-**The local file also covers this machine's paths.** `reposRoot`, `worktreeRoot` and
-`boardInstances` are absolute paths, so a tracked value cannot be right for two
-machines; all three are overridable, and every reader honours it (`prune-worktrees.sh`,
-`link-repos.sh`, `index-kb.sh`, `build-board.sh`). The **one** place the overridable
-set is listed — with what each key means when absent — is
-[`SCHEMA.md` → "Per-machine config overrides"](symlink/SCHEMA.md). Two rules survive
-the override and are checked against the *effective* values: `worktreeRoot` must never
-sit inside the synced `reposRoot`, and `reposRoot` must not be the instance directory
-itself.
-
-**3. The derived indexes are gitignored.** `index.md` (root) and
-`projects/*/index.md` are rewritten every tick from the documents they summarise, so
-two loops conflict on them on every push; they join `AWAITING.md` and `SNAPSHOT.json`
-as derived-and-ignored, and nothing is lost — `validate-bundle.sh` deliberately never
-validated them. (`install.sh` adds both lines to an instance's `.gitignore`; they are
-deliberately not in `seed/.gitignore`, which is itself an active `.gitignore` over
-this template's own `seed/` directory and would untrack the seed's own `index.md`.) `knowledge/index.md` stays **tracked**: it changes only when the KB
-changes, and every agent is told to scan it, so a fresh clone needs it present. On an
-instance whose `index.md` files are already committed the ignore line is inert, so
-`install.sh` prints the exact `git rm --cached` to run — it never untracks anything
-itself.
-
-Note the second clone is not a first stamp (`instance.config.json` arrives tracked),
-so `install.sh` there will **not** create `AWAITING.md` or `SNAPSHOT.json` — it says
-so, with the `touch` to turn each on.
-
-## Verification gate
-Before any PR merges, it's checked by an **independent** reviewer — fresh context,
-judged on real signals (acceptance criteria met, CI actually green), never the
-implementing agent's self-report. Role agents embed the task's `acceptance_criteria`
-in the PR body so the reviewer evaluates against them. The reviewer is an external one
-(e.g. CodeRabbit) when the repo configures it, otherwise the `qa-reviewer` agent is the
-fallback. Before *that*, the implementing agent **self-reviews its own diff** and fixes
-findings (`code-architect` / a careful pass) — a pre-filter that
-shifts cheap issues left, **not** a replacement for the independent gate.
-
-**A verdict is structured, and clearance is a nine-clause predicate.** The `qa-reviewer`
-ends its review with a machine-readable `okf-verdict` trailer; the loop reads the verdict
-**only** from that trailer and criteria coverage only from the checklist's checkbox state,
-never from prose. **The full predicate — the normative list every consumer must check — is
-in [`SCHEMA.md`](symlink/SCHEMA.md) → "Independent verification gate".** Don't implement
-from this summary; it names three *failure classes* to convey the shape, not the complete
-set of requirements:
-
-1. **An unfinished verdict** — trailer missing, partial, `inconclusive`, carrying
-   `caveats`, or omitting a mandatory lens. An approval that admits its own analysis is
-   unfinished is not an approval.
-2. **An unverified criterion** — any `acceptance_criteria` box left unchecked. Green CI is
-   not evidence for a criterion no check covers.
-3. **A refusal dressed as a pass** — the reviewer declaring it didn't review
-   (rate-limited, quota exhausted, skipped) while a **green check** publishes alongside.
-   The most convincing false pass in the system.
-
-The predicate also requires a current `head_sha`, the right reviewer identity, no
-unresolved reviewer thread, and — for an external reviewer — a reconciled comment count.
-Each failure class above has cleared a real bug in a real run; this is contract, not
-etiquette.
-
-**One review per PR (cost control).** The gate needs *one* fresh-context review, not a
-review per push. Left at its defaults CodeRabbit re-runs on **every push** and replies to
-**every comment**, so a PR whose findings an agent then fixes burns several sessions to
-re-confirm a diff that's already clean. Three rules keep it to one:
-1. **Pin it in the target repo's `.coderabbit.yaml`** — `reviews.auto_review.auto_incremental_review: false`
-   (stop re-reviewing each push) and `chat.auto_reply: false` (stop replying to every
-   comment; it still answers an explicit `@coderabbitai`). Both default to `true`. This
-   repo's own [`.coderabbit.yaml`](../.coderabbit.yaml) is a working, commented example.
-2. **Don't pay for the same reviewer twice.** If CodeRabbit reviews the PR, the
-   pre-filter self-review uses the *free local* reviewer (`code-architect`), not the
-   `coderabbit` CLI. `qa-reviewer` likewise **reads** an existing CodeRabbit review off the
-   PR (via the structured `--json reviews`, not `--comments`) rather than re-running the CLI
-   over the same diff — and when the repo is configured but hasn't been reviewed *yet*, it
-   reports the gate as pending instead of substituting a CLI run.
-3. **Never re-review to confirm a fix.** Agents address findings, push, and reply once
-   with what changed. A re-review is requested only after a rewrite substantial enough to
-   invalidate the original review. **This is about the same diff.** A push moves the head,
-   which makes any prior verdict stale (predicate clause 3), so the *new* commit still has
-   to be verified before it can merge — that's re-verification of different code, not
-   re-review of the same code, and the loop does it automatically.
-**Recommended: set branch protection to require CI green + a review from that
-reviewer** (e.g. CodeRabbit as a required reviewer, or a dedicated verifier status
-check). Note GitHub only enforces *that* CI passed and a review happened — whether the
-reviewer actually checked the acceptance criteria is the reviewer's job, not something
-branch protection can guarantee. Where a project delegates merging this same clearance is
-what lets the loop merge; otherwise it's surfaced for you (see the PM loop).
-
-## Audit loop (slow counter-metric)
-`/pm-loop` optimizes throughput; **`/audit`** is the independent check that the
-throughput is actually moving the real goals. Run it on a **slow cadence** (weekly, or
-after a batch of projects close): the read-only `auditor` grounds each objective's
-`success_criteria` against live `gh`/`git` reality and flags the four ways a busy
-control panel drifts — **Goodhart** (lots closed, goal unmoved), **measurement decay**
-(stale `Finding`s), **green-but-not-progressing** projects, and any **weakened anchor**
-(a human gate or the verification gate slipping, or a merge-delegating project merging PRs an
-independent reviewer hasn't cleared). It writes a dated audit to `log.md` and **never acts** — responding
-(adjust targets, re-validate findings) is your governance call. It's the independent
-signal that catches an autonomous loop gaming itself — a periodic, advisory guardrail, not a
-merge-blocking guarantee.
-
-## Model routing
-Role dispatches are routed to a cost-appropriate model. Two knobs in
-`instance.config.json`:
-- `models` — maps tiers to model aliases: `{ "light": "haiku", "standard": "sonnet",
-  "deep": "opus", "apex": "fable" }`. Aliases track the latest model in each tier, so
-  you retune per instance without editing agents.
-- `roleTiers` — each role's default tier (e.g. `project-manager` → `deep`, `qa-reviewer`
-  → `deep`, `cataloguer` → `light`, engineers → `standard`). The top **`apex`** tier
-  (`fable`) is reserved for the **deepest, rarest reasoning** — the `plan-architect`
-  critique the PM dispatches on genuinely complex tasks — where a frontier model earns
-  its cost. The orchestrator itself runs on `deep` (opus): plenty for routing, and it
-  ticks often. Retune per instance as cost dictates.
-
-Per tick the PM starts from the role's default tier, **bumps a complex build task
-up** (multi-file/service, or heavily-inferred `acceptance_criteria`) and **drops a
-trivial one down**, then resolves the tier via `models` and passes that model on
-dispatch. A task can force a specific model with a `model:` field (a tier or a raw
-alias) — the PM honors it verbatim. Omit both maps and everything just inherits the
-session model.
-
-## Concurrency
-`maxAgentsInFlight` (in `instance.config.json`, default **10**) caps how many role agents
-the PM runs at once. With worktree isolation + private package stores the old corruption
-risk is gone, so this is a **throughput/cost throttle**, not a safety lock — tune it to the
-machine and account: raise it on a well-resourced box with mostly-independent tasks, lower
-it (e.g. 5) on a laptop or when role agents lean on `Workflow` fan-outs. One hard rule holds
-regardless of the number: never two package installs against the **same repo's store** at
-once (the PM staggers deps-touching tasks across ticks). A role agent's own `Workflow`
-fan-out is a separate layer, bounded by the Workflow tool's own concurrency.
-
-## PR size
-`maxPrLoc` (in `instance.config.json`, **500** when the key is absent) is the diff size
-past which a PR-opening role agent proposes a split. It is a **heuristic that suggests,
-never a gate**: the agent says in the PR body which parts it would extract and then opens
-the PR anyway, because generated boilerplate, codemods, lockfiles and dense logic all
-move the real number and a line count cannot decide reviewability on its own. It is not a
-review criterion — no reviewer withholds clearance over it. An existing instance whose
-config predates the key needs no edit; add it only to move the threshold.
-
-## Per-turn state injection
-`push-state.sh` is a `UserPromptSubmit` hook: on every prompt it derives one line of
-**current** instance state — in-flight task ids, the awaiting count, active projects and
-their phase — and pushes it into context. `/pm-loop` is a long-lived session whose context
-still describes tick one after five ticks, and a stale roster is not corrected by an
-instruction to re-read; it is corrected by a **newer statement** of the truth, which is
-why the line says out loud that it supersedes any earlier count. It is **self-detecting**
-(silent outside an instance root, so it is safe to inherit anywhere), always prints inside
-one — zeros included, because `in-flight 0` is exactly the correction a session
-remembering three live dispatches needs — fences its output as untrusted data, and is
-capped by `PUSH_STATE_MAX` (default **12**) per list, reporting what it dropped. It reads
-`AWAITING.md` for a count only and never reshapes it; absent, it reports `off` rather than
-a `0` nobody measured. Every value it injects is a **filename** — a project slug, a task
-id, a phase stem — and a filename may legally contain a newline, a carriage return or a
-tab, so each is encoded to one line before it enters the fence. That is the fence's
-integrity, not tidiness: a carriage return in a directory name could otherwise print the
-closing marker as its own line and put everything after it, this hook's own instruction
-included, outside the untrusted-data boundary. Covered by
-`ai-bridge/tests/push-state.test.sh`.
-
-## Local code intelligence (codegraph, optional)
-Role agents navigate product repos faster with a local **CodeGraph** index than with
-blind grep. It's opt-in and 100% local (no code leaves the machine) — the replacement
-for the old mempalace memory hook.
-
-1. **Install the CLI:** `npm i -g @colbymchenry/codegraph`.
-2. **Expose it to agents (MCP):** `codegraph install` wires the codegraph MCP into
-   Claude Code (writes the MCP config + an auto-allow permissions list). Use
-   `codegraph install -y` for non-interactive, or `--print-config <id>` to inspect first.
-3. **Index the repos:** from the instance root, run `scripts/index-kb.sh` — it reads
-   `reposRoot`, indexes every product repo (incremental on re-run), and skips
-   worktrees (`_wt`), instance dirs (`_ai-bridge-*`), and non-git dirs. Add infra/
-   assets repos with no useful call graph via `codegraphSkip` in
-   `instance.config.json` (space-separated) or `$CODEGRAPH_SKIP`. `--with-serena`
-   also warms a Serena LSP cache when Serena is installed.
-
-Each repo gets a `.codegraph/` index and a defensive `codegraph.json` exclude. Role
-agents detect the index and use it automatically (see the "Conventions for role
-agents" section of an instance's `CLAUDE.md`); with no index present they just grep
-as before.
-
-## Machinery is machine-local
-The symlinks point at absolute paths into this template and are gitignored in the
-instance, so a clone on another machine has the committed instance data but
-**dangling** machinery until you re-run `install.sh` there. That's intentional —
-the machinery is sourced from `ai-setup`, not vendored into each instance.
-
-## After pulling `ai-setup` — what each instance needs
-
-A `git pull` here updates the template. What that means for an existing instance
-depends on *what* changed, and only two of the four cases need you to do anything:
-
-| What changed in the pull | Reaches an instance how | You must |
+| Key | Absent means | Overridable per machine |
 |---|---|---|
-| An **edited** `symlink/` file (script, agent, command, `SCHEMA.md`, `CONVENTIONS.md`, a `.claude/rules/` file) | Instantly, through the existing symlink | nothing |
-| A **new** `symlink/` file | Not at all until its symlink exists | `ai-bridge/install.sh <instance>` — once per instance |
-| A **`seed/`** file (`CLAUDE.md`, `README.md`, `index.md`, …) | Never — seed is copied only when absent, so instance data is never clobbered | port the change by hand, per instance |
-| A **schema** change | The machinery updates, the *data* does not | `scripts/validate-bundle.sh`, then `scripts/migrate-bundle.sh` (report), then `--apply` |
+| `org` | — | yes |
+| `reposRoot` | required for dispatch | yes |
+| `worktreeRoot` | **`<reposRoot>/_wt`** | yes |
+| `authorEmail` | fall through to `git config user.email` | yes |
+| `people` (login → commit email) | fall through to `authorEmail` | **no** — both clones must agree |
+| `defaultOwner` | unowned work is dispatched by **every** clone | **no** |
+| `ownerGithubUser` | this clone has no configured human | **local file only** |
+| `maxAgentsInFlight` | **10** | yes |
+| `maxPrLoc` | **500** | yes |
+| `models` / `roleTiers` | everything inherits the session model | yes |
+| `externalReviewer` | the CodeRabbit CLI | yes |
+| `boardInstances` | the board is just this instance | yes |
+| `codegraphSkip` | index every product repo | yes |
 
-**One command walks all four rows, per instance:**
+Environment knobs: `PUSH_STATE_MAX` (default **12**), `PRUNE_ACTIVE_MINUTES`,
+`CODEGRAPH_SKIP`, `CONTROL_PLANE_AUTHOR_EMAIL`.
 
-```bash
-ai-setup/ai-bridge/upgrade.sh ~/workspace/<group>/_ai-bridge-<group>            # report
-ai-setup/ai-bridge/upgrade.sh ~/workspace/<group>/_ai-bridge-<group> --apply    # write it
-```
+## Scripts
 
-It runs `install.sh` (row 2), then the instance's `validate-bundle.sh` (row 4) and
-`migrate-bundle.sh`, then works out row 3 — and ends with a numbered list of what is
-left for **you**, with the exact commands. Report-only by default: the default run
-changes nothing beyond the symlinks `install.sh` creates. Re-run it any time; a
-second run finds nothing to do.
+Run from an instance root unless noted.
 
-Row 4 is the one that bites, and it is why the order inside the script is fixed:
-the validator ships instantly through its symlink and starts reporting errors
-against documents written under the old rules (working as intended — the errors were
-already there), but nothing repairs them until the migration runs, and on an instance
-older than those scripts it takes `install.sh` to make them exist at all.
+| Script | Does | Writes? |
+|---|---|---|
+| `validate-bundle.sh` | schema errors + dangling frontmatter references | no |
+| `migrate-bundle.sh` | mechanical schema repairs | only with `--apply` |
+| `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
+| `commit-as.sh` | commits as the right agent identity | yes |
+| `required-checks.sh` | resolves a PR's required checks | no |
+| `task-owner.sh` | resolves and compares a task's owner | no |
+| `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
+| `build-board.sh` | renders the HTML board (anywhere; needs `python3`) | yes, the output file |
+| `link-repos.sh` | refreshes `<instance>/repos/` | yes |
+| `index-kb.sh` | builds local CodeGraph indexes for the group's repos | yes |
 
-Row 3 is the one you cannot automate blindly, so the script judges each seed file on
-evidence from this repo's git history:
+## Troubleshooting
 
-- Your copy is a **prior version of the seed, verbatim** → nothing was hand-edited, so
-  `--apply` ports it exactly.
-- Your copy is **hand-edited but the seed's change lands elsewhere in the file** →
-  `--apply` 3-way merges the change on top of your edits (backing the file up first)
-  and verifies the result on disk.
-- Your edits and the seed's **collide** → reported as a `CONFLICT` with the diff, and
-  **not touched**. Your wording is the only copy of a decision somebody made; port it
-  by hand.
-- The seed file has **never changed** since your instance was stamped → nothing to
-  deliver, so it stays quiet even though your copy has grown (`log.md`, `index.md`, a
-  `.gitignore` with the machinery block).
-- There is **no usable history to judge against** → reported as `UNKNOWN` and **never
-  ported**. Two ways to get here: the template you are running from has no git history
-  for that seed file (a shallow clone, a downloaded archive, a file added but never
-  committed), or the instance path is not a regular file any more (a seeded file replaced
-  by a directory or a symlink). Either way the script cannot tell an edit from a
-  divergence, so it refuses to guess — `diff` the two paths it names and port by hand.
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `/pm-loop` reports "Unknown command" | Claude was launched outside the instance dir, or new machinery isn't linked | `cd` into the instance and relaunch; then `install.sh <instance>` |
+| A command or agent is missing after a pull | it is a **new** `symlink/` file, so no symlink exists yet | `install.sh <instance>` |
+| A seed change from a pull never arrived | seed is copied only when absent, by design | `./upgrade.sh <instance>` and port what it reports |
+| Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `install.sh` from the main working tree |
+| Installer exits 2, "refusing to install from a git worktree" | working as designed | `git -C <src> worktree list` — the first entry is the main tree |
+| The startup nudge is empty | `AWAITING.md` was deleted, or the PM reshaped its layout | `touch AWAITING.md`; `show-awaiting.sh` greps the heading and bullets **literally** |
+| An instance is missing from the board | it has no `SNAPSHOT.json`, or `boardInstances` doesn't name it | `touch SNAPSHOT.json` in it |
+| A `yolo` project never merges anything | preflight failed: one `gh` identity, no external reviewer, or no required checks | the loop says which; fix that, or merge by hand |
+| `required-checks.sh` exits 2 | the platform probe returned something it cannot classify | that is a refusal by design — read the message, don't loosen the script |
+| CodeRabbit: "Unable to determine base branch" | a remote-less instance has no `origin/HEAD` to infer one from | `git config coderabbit.baseBranch <branch>` |
+| Validator errors right after an upgrade | the machinery updated, the data didn't | `./upgrade.sh <instance>` runs validate → migrate in the right order |
+| Two loops dispatched the same task | `defaultOwner` is not set on a shared bundle | [docs/sharing.md](docs/sharing.md) |
+| Machinery symlinks all dangle on a second machine | intentional — machinery is machine-local | re-run `install.sh` there |
 
-A **retired** seed file — one the template has stopped shipping, declared in
-`ai-bridge/RETIRED` — is **reported, never deleted**, with the exact `rm` command, and
-listed in "what's left for you". The asymmetry with machinery is deliberate: a dangling
-symlink into the template has one possible meaning, so `install.sh` sweeps it; a seed file
-has been yours to edit since the day it was copied in, and `todos.md` was literally your
-notes. The installer never removes instance content — that is what makes it safe to run
-blindly on a repo full of your work.
+---
 
-`migrate-bundle.sh` likewise leaves some things alone — a dangling reference, an
-unrecognised status, a document whose frontmatter never closes. Those need a decision,
-not a rewrite, and the report names each one.
+## Why template + instance
 
-## Updating the machinery
-Edit files under `symlink/` here and commit to `ai-setup`. Because instances
-symlink them, every instance picks up the change immediately — re-run `install.sh`
-on an instance only when you **add** new machinery files (to refresh its symlink
-set and `.gitignore` block). Keep machinery generic: no org, repo, path, team, or
-channel literals — those belong in each instance's `instance.config.json` /
-`CLAUDE.md`.
+Only `CLAUDE.md` cascades through parent directories in Claude Code — subagents, commands,
+skills and `settings.json` load only from `~/.claude` or a **project root** `.claude/`. So
+a group-level overlay can't exist. Instead each group gets a project-root control panel
+whose role agents load **only** when you launch Claude inside it, never polluting
+`~/.claude`. The generic machinery stays DRY via symlinks; each instance keeps its own git
+history, so work and personal stay separate.
 
-## Upgrading an existing instance
-When the template gains new machinery or new seed keys, bring an already-stamped
-instance up to date:
+## Changing this repo
 
-1. **Pull the template** you stamped from (`ai-setup`, or your fork) to `main`. The
-   symlinked machinery — agents, commands, `SCHEMA.md`, scripts — updates **immediately**
-   (the instance symlinks it); no reinstall needed for *changed* files.
-2. **Run the upgrade** — `ai-setup/ai-bridge/upgrade.sh <instance-dir>`, then again with
-   `--apply` once you have read the report. It links any **new** machinery files (that is
-   `install.sh`, which it calls), validates and migrates the bundle, and ports the seed
-   changes it can prove are safe. See *After pulling `ai-setup`* above for what each
-   verdict means.
-3. **Port what it hands back.** A seed file it reports as a `CONFLICT` is hand-diverged
-   and stays untouched — that is where your instance's own decisions live. An `UNKNOWN`
-   also stays untouched, for a different reason: there was no history to judge it
-   against, so `diff` it against the seed path the report names and decide yourself. In particular,
-   if `instance.config.json` lacks the model-routing block, add it — otherwise model
-   routing stays off and everything runs on the session model:
-   ```json
-   "maxAgentsInFlight": 10,
-   "models":    { "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" },
-   "roleTiers": { "project-manager": "deep", "software-engineer": "standard",
-                  "devops-engineer": "standard", "qa-reviewer": "deep",
-                  "cataloguer": "light", "auditor": "deep", "plan-architect": "apex" }
-   ```
-   `maxPrLoc` is optional in the same file — absent, the PR-size heuristic uses **500** —
-   so add it only if you want a different threshold.
-   Optionally fold any new conventions from the template's `seed/CLAUDE.md` into your
-   instance's `CLAUDE.md`.
-4. **Restart Claude Code** in the instance (`/exit`, then `claude`) so new agents and
-   commands register.
-5. **Verify.** Invoke a changed command or agent (e.g. `/audit`, or a `/pm-loop` dry
-   run) and confirm it registers (no `skills:` prefix) **and** that model routing
-   resolves as configured — the deepest `plan-architect` critique routes to the `apex`
-   tier (Fable), workers to their lower tiers. If a command reports "Unknown command",
-   re-check step 2 and the restart.
+Read [docs/conventions.md](docs/conventions.md) first. It records the design invariants and
+what went wrong to produce each one — the reasoning is the asset, so relocate it rather
+than shortening it.
+
+- Machinery goes in `symlink/`. Keep it **generic**: no org, repo, path, team or channel literals — those belong in an instance's `instance.config.json` / `CLAUDE.md`.
+- Starting content goes in `seed/`. Retiring a seed file needs an entry in [`RETIRED`](RETIRED) in the same commit.
+- Tests live in `tests/`, never under `symlink/` — everything there ships into every instance.
+- Run the suite before pushing: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`
+- This repo is **public**. Placeholders must be verified unclaimed: `example-user-007` / `example-user-008` and `example.com`.
+
+Agent-facing rules are in [`CLAUDE.md`](CLAUDE.md) and [`.claude/rules/`](.claude/rules).
+
+## Relationship to `ai-setup`
+
+ai-bridge used to live as an `ai-bridge/` subtree inside
+[`ai-setup`](https://github.com/cbmono/ai-setup), the Claude Code defaults repo. **This
+repo is now the canonical copy** — every instance's machinery is symlinked from *this*
+checkout, and `install.sh` and `upgrade.sh` here are the ones to run.
+
+`ai-setup` still carries the old `ai-bridge/` subtree for the moment, deliberately, as a
+rollback point to the version that was running before the split. **Treat it as frozen.**
+If you find yourself reading `ai-setup/ai-bridge/…`, you are reading the stale copy.
+
+The two repos are independent by design: `ai-setup`'s user-wide installer is scoped to
+`.claude` and never touched this template.
+
+`ai-setup` is still worth having alongside — an instance's `seed/CLAUDE.md` imports the
+behavioural defaults that installer links into `~/.claude` (`@.claude/claude-defaults.md`).
+ai-bridge does not require it: a missing import is a no-op, not an error.
+
+### A config layer may land here later
+
+Folding `ai-setup`'s config layer (its commands, agents, output style, hooks and scripts)
+into this repo — under a `config/` directory, with a second install target — is on the
+table. Nothing here assumes it either way, and this README has room for it. Until then,
+this repo ships the control panel only, and `~/.claude` comes from `ai-setup`.

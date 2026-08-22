@@ -27,7 +27,7 @@ instance.config.local.json
 # The derived navigation indexes (`/index.md`, `/projects/*/index.md`) are ignored
 # too — but the lines live in install.sh, NOT here, and that is not an oversight.
 # THIS FILE IS ITSELF AN ACTIVE .gitignore INSIDE THE ai-bridge TEMPLATE'S OWN
-# `seed/` DIRECTORY, so a `/index.md` line here matches `ai-bridge/seed/index.md`
+# `seed/` DIRECTORY, so a `/index.md` line here matches `seed/index.md`
 # and silently stops the template from tracking its own seed file. (Measured: it
 # broke the upgrade.sh fixture, which re-inits a repo over a copy of seed/.) The
 # other entries above are safe because no seed file is named any of them.

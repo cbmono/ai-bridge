@@ -7,7 +7,7 @@
 #     install.sh --uninstall [TARGET]  # remove only the symlinks this script created
 #     install.sh --help
 #
-# It does three things, mirroring how the parent ai-setup repo provisions ~/.claude:
+# It does three things, mirroring how the `ai-setup` repo provisions ~/.claude:
 #   1. SYMLINKS the generic machinery in `symlink/` into TARGET (file granularity,
 #      absolute targets). Updates to the template propagate to every instance.
 #      These paths are gitignored in the instance (managed block in .gitignore).
@@ -27,9 +27,9 @@ TEMPLATE_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC_DIR_FOR_GUARD="$TEMPLATE_DIR"
 # Refuse to install from a git WORKTREE.
 #
-# Both installers derive their source from `dirname $0` and then create symlinks that
-# point AT that path — `~/.claude/*` here, an instance's whole machinery set in
-# ai-bridge/install.sh. A linked worktree is temporary by design: `ExitWorktree` or
+# This installer derives its source from `dirname $0` and then creates symlinks that
+# point AT that path — an instance's whole machinery set. (`ai-setup`'s own installer
+# carries the same guard for `~/.claude/*`.) A linked worktree is temporary by design: `ExitWorktree` or
 # `git worktree remove` deletes it, and every symlink created from it dangles the moment
 # it goes. That failure is silent — nothing errors at install time, and it surfaces later
 # as commands and hooks that have simply vanished.
@@ -343,7 +343,7 @@ fi
 #
 # And why the INDEX lines live ONLY here, never in seed/.gitignore: that file is an
 # active .gitignore inside the template's own `seed/` directory, so a `/index.md`
-# line in it matches `ai-bridge/seed/index.md` and silently stops the template from
+# line in it matches `seed/index.md` and silently stops the template from
 # tracking its own seed file. Measured — it broke the upgrade.sh fixture, which
 # re-inits a repo over a copy of seed/. `instance.config.local.json` has no such
 # collision (no seed file is named that), so it is in both places, harmlessly.
@@ -417,7 +417,7 @@ echo "      (Set reposRoot first, then 'scripts/link-repos.sh' fills in repos/.)
 # exactly "there are errors" (exit 1): absent (an instance older than the validator) or
 # clean says nothing, and any other exit code — 2 is "not an instance root" — is not
 # something a user can act on from here.
-# Retired seed content — REPORT, never remove. See ai-bridge/RETIRED for why the
+# Retired seed content — REPORT, never remove. See RETIRED for why the
 # machinery sweep (step 2b) may delete and this may not: a symlink into this template
 # whose target is gone has one possible meaning; a seed file the human has owned since it
 # was copied does not. Absence of the manifest, or an empty one, is silence — not an error.

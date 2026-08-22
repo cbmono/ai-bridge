@@ -68,7 +68,7 @@
 # GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
 # instance. It reads no org, repo or path literal.
 #
-# Verified by ai-bridge/tests/task-owner.test.sh.
+# Verified by tests/task-owner.test.sh.
 set -euo pipefail
 
 CONFIG="instance.config.json"

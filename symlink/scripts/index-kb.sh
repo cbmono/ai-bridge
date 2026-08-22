@@ -4,7 +4,7 @@
 # MCP) instead of blind-grepping. 100% local — no code leaves the machine.
 #
 # OPTIONAL integration. Requires the `codegraph` CLI on PATH
-# (`npm i -g @colbymchenry/codegraph`); see ai-bridge/README.md "Local code
+# (`npm i -g @colbymchenry/codegraph`); see docs/operations.md "Local code
 # intelligence (codegraph, optional)". Safe to re-run — incremental (`sync` after
 # the first index).
 #

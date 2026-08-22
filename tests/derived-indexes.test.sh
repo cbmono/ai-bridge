@@ -38,14 +38,14 @@ hasnt()  { printf '%s\n' "$2" | grep -q -- "$1" && echo 1 || echo 0; }
 
 echo "== the lines are NOT in seed/.gitignore, and that is deliberate =="
 # seed/.gitignore is an ACTIVE .gitignore inside the template's own seed/ directory,
-# so a `/index.md` line there matches `ai-bridge/seed/index.md` and stops the template
+# so a `/index.md` line there matches `seed/index.md` and stops the template
 # from tracking its own seed file. It broke the upgrade.sh fixture, which re-inits a
 # repo over a copy of seed/. So the lines live in install.sh, and this asserts the trap
 # stays closed — against git's own answer, not the pattern text.
 assert "seed/.gitignore has no /index.md line" \
   "$(no_if grep -qxF '/index.md' "$TPL/seed/.gitignore")"
 assert "…and the seed's own index.md is trackable" \
-  "$(no_if git -C "$TPL/.." check-ignore --no-index -q ai-bridge/seed/index.md)"
+  "$(no_if git -C "$TPL" check-ignore --no-index -q seed/index.md)"
 assert "…and it says why, so nobody 'fixes' it" \
   "$(yes_if grep -q 'ACTIVE .gitignore' "$TPL/seed/.gitignore")"
 # A bare `index.md` line would match at every depth, knowledge/ included.

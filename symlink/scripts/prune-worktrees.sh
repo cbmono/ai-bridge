@@ -130,7 +130,7 @@
 # Usage:  scripts/prune-worktrees.sh          # classify and report; never removes
 #         scripts/prune-worktrees.sh --dry-run  # accepted, no-op (always dry now)
 #
-# Verified by ai-bridge/tests/prune-worktrees.test.sh in the ai-setup template
+# Verified by tests/prune-worktrees.test.sh in the ai-bridge template
 # repo, which builds one throwaway worktree per decision class and asserts every
 # outcome. Run it after any change here — this script cannot be exercised safely
 # by hand. (The harness lives outside symlink/ deliberately: everything under
