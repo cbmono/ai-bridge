@@ -174,5 +174,5 @@ assistant directly and it reads the task docs.
 ## Re-link the machinery
 If the template moves or you add machinery, re-run the template's installer:
 ```
-<ai-setup>/ai-bridge/install.sh <path-to-this-instance>
+<ai-bridge>/install.sh <path-to-this-instance>
 ```

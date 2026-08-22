@@ -17,7 +17,7 @@
 #   · No SNAPSHOT.json  ⇒  exit 0, write nothing, say nothing. That instance simply
 #     does not appear on the board.
 #   · `rm SNAPSHOT.json` is therefore permanent: this script NEVER creates the file,
-#     and `ai-bridge/install.sh` creates it on the FIRST STAMP ONLY (FIRST_STAMP), so
+#     and `install.sh` creates it on the FIRST STAMP ONLY (FIRST_STAMP), so
 #     no later refresh resurrects it.
 #   · `touch SNAPSHOT.json` turns it back on. Presence is the switch; content is
 #     derived, so an empty or truncated file is fine — the next run overwrites it.
@@ -64,7 +64,7 @@
 # script under `scripts/`, so it ships into every instance unchanged. `generated_at`
 # is the only non-deterministic field; set `SNAPSHOT_NOW` to pin it.
 #
-# Verified by ai-bridge/tests/snapshot.test.sh.
+# Verified by tests/snapshot.test.sh.
 set -euo pipefail
 
 QUIET=0

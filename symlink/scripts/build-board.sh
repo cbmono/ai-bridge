@@ -66,7 +66,7 @@
 # `--standalone` for a local look, and the plain file for publishing.
 #
 # Deterministic apart from the "rendered" line. No network. Verified by
-# ai-bridge/tests/snapshot.test.sh.
+# tests/snapshot.test.sh.
 set -euo pipefail
 
 OUT="board.html"

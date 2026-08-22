@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Exercises ai-bridge/upgrade.sh, plus the one nudge line it added to install.sh.
+# Exercises upgrade.sh, plus the one nudge line it added to install.sh.
 #
 # The properties that matter are the negative ones, in this order:
 #   · a default run writes NOTHING (the whole instance is checksummed before and after,

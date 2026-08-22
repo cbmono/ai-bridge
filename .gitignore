@@ -1,0 +1,24 @@
+.DS_Store
+tmp/
+.env
+
+# Runtime state Claude Code writes into a project's `.claude/` (settings.local.json,
+# caches, session data) must never be committed — this repo is public. So deny the
+# directory and re-include the tracked defaults one by one, the way `ai-setup` does it:
+# present AND future runtime folders stay out of git without anyone remembering to add a
+# line.
+#
+# These patterns carry a LEADING SLASH on purpose. `.claude/*` would be anchored to this
+# file's directory by git's own rule (a separator in the middle anchors the pattern), but
+# the explicit form says so out loud — `symlink/.claude/` is TRACKED MACHINERY, and an
+# unanchored pattern that swallowed it would silently stop shipping every role agent,
+# command and hook to every instance.
+/.claude/*
+!/.claude/rules/
+
+# NOT ignored, and deliberately listed here so nobody "tidies" them into the block above:
+#   symlink/.claude/**   — machinery symlinked into every instance
+#   seed/.gitignore      — an active .gitignore over this template's own seed/ directory.
+#                          Never add an `/index.md` line THERE: it would match
+#                          seed/index.md and stop this repo tracking its own seed file.
+#                          tests/derived-indexes.test.sh holds that trap closed.

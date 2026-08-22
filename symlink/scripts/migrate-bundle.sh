@@ -36,7 +36,7 @@
 # again after.
 #
 # Run from a control-panel instance root. Bash + awk + git only.
-# Verified by ai-bridge/tests/migrate-bundle.test.sh.
+# Verified by tests/migrate-bundle.test.sh.
 set -euo pipefail
 
 APPLY=0

@@ -1,0 +1,26 @@
+---
+paths:
+  - "/tests/**"
+---
+
+# Test conventions
+
+Loads when you read anything under `tests/`. POSIX shell harnesses, no framework, no
+build step. Run them all before pushing:
+
+```bash
+for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done
+```
+
+## Rules
+
+- **`ok()` compares actual to expected, in that argument order**, and every harness prints its own `pass=/fail=` (or `N passed, N failed`) line and exits non-zero on any failure. Keep both.
+- **Harnesses live here, never under `/symlink/`.** Everything under `symlink/` ships into every instance, and a fixture harness is not machinery an instance needs.
+- **A test that only asserts the refusal is vacuous.** Assert **both directions** — that the guard fires *and* that the normal path still works. `installer-worktree-guard.test.sh` says so in its header: "It refuses in a worktree" alone would pass a script that refuses everywhere.
+- **Assert the property, not the implementation text.** `derived-indexes.test.sh` checks `git check-ignore --no-index` rather than the pattern string; `snapshot.test.sh` asserts no key outside the documented allowlist is emitted.
+- **Every capability that can be turned off needs a test proving it is off when the file is gone** — `commit-as-guard.test.sh` for `AUTONOMY.md`, `awaiting-queue.test.sh` for `AWAITING.md`. ([conventions 4](../../docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file))
+- **A path that can emit a *false zero* or a false success is the highest-value thing to test here.** `push-state.test.sh` guards an authoritative `in-flight 0` produced by an unreadable file; `migrate-bundle.test.sh` guards a `FIXED` printed for a write that never landed.
+- **Extend a `gh` stub to mirror real quirks rather than working around them in the script** — a 404 body goes to **stdout**, the "no required checks" message to **stderr**. `required-checks.test.sh` owns that stub.
+- **Compare resolved paths.** `mktemp` hands back `/var/...` while git reports `/private/var/...` on macOS, so an unresolved grep fails on a correct message. This trap has appeared three times in this codebase.
+- **`rule-globs-anchored.test.sh` asserts a measured fact the official docs contradict** — a `paths:` pattern is only root-anchored with a leading `/`. It is a test rather than a convention precisely because a convention that contradicts the documentation gets "corrected" back.
+- **Fixtures must not touch the user's real `~/.claude` or a real instance.** Build a throwaway repo under `mktemp -d` and copy the script under test into it.

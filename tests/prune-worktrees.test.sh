@@ -38,9 +38,9 @@
 # makes; it exits non-zero on any other, so a new gh call shows up as a failure
 # instead of silently degrading to "no PR".
 #
-# Usage:  ai-bridge/tests/prune-worktrees.test.sh
-#         PRUNER=/path/to/prune-worktrees.sh ai-bridge/tests/prune-worktrees.test.sh
-#         SHOW_ONLY=1 ai-bridge/tests/prune-worktrees.test.sh   # run, no asserts
+# Usage:  tests/prune-worktrees.test.sh
+#         PRUNER=/path/to/prune-worktrees.sh tests/prune-worktrees.test.sh
+#         SHOW_ONLY=1 tests/prune-worktrees.test.sh   # run, no asserts
 #
 # SHOW_ONLY prints the raw pruner output for every fixture without asserting. It
 # is how you see what a given version of the pruner decides — including an older

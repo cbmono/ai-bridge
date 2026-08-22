@@ -37,7 +37,7 @@
 # DELIBERATELY SELF-CONTAINED: it derives everything from the bundle on each run
 # and depends on no generated snapshot file. Bash + find + awk only, no jq.
 #
-# Verified by ai-bridge/tests/push-state.test.sh.
+# Verified by tests/push-state.test.sh.
 set -euo pipefail
 
 root="${CLAUDE_PROJECT_DIR:-$PWD}"

@@ -3,11 +3,11 @@
 # upgrade.sh — bring ONE already-stamped ai-bridge instance up to date with this
 # template, after a `git pull` here.
 #
-#   Usage: ai-bridge/upgrade.sh <instance-dir>            # report what a pull means (default)
-#          ai-bridge/upgrade.sh <instance-dir> --apply    # write the safe changes
+#   Usage: ./upgrade.sh <instance-dir>            # report what a pull means (default)
+#          ./upgrade.sh <instance-dir> --apply    # write the safe changes
 #
 # WHY THIS EXISTS.
-# README.md's "After pulling `ai-setup`" table says a pull reaches an instance in four
+# docs/operations.md's four-case table says a pull reaches an instance in four
 # different ways, and two of them need a human to do something. In practice nobody
 # remembers which two, in what order, per instance — so the machinery ships instantly
 # through its symlinks while the *data* it validates, and the seed content it assumes,
@@ -80,7 +80,7 @@
 # instance root — stamping a NEW instance is `install.sh`'s job, not an upgrade.
 #
 # Bash + awk + git only — no jq, no python.
-# Verified by ai-bridge/tests/upgrade.test.sh.
+# Verified by tests/upgrade.test.sh.
 set -euo pipefail
 
 TEMPLATE_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -258,7 +258,7 @@ echo "== 4/4  seed drift (seed/ edits never reach a stamped instance) ======"
 
 # Every git query below runs from the REPO ROOT with root-relative paths. `git -C <dir>`
 # makes a pathspec relative to <dir>, so querying from the template dir with the path
-# git reports for it ("ai-bridge/seed/…") silently matched nothing — and "no history"
+# git reports for it ("seed/…") silently matched nothing — and "no history"
 # is indistinguishable from "no evidence", which downgraded every drifted file to
 # UNKNOWN. Resolve the root once, and prefix paths with the template's own prefix.
 GIT_OK=1
