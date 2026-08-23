@@ -210,6 +210,59 @@ depends_ids() { # <frontmatter>
     | grep -v '^$' || true
 }
 
+# The TEXT of each open question — OPT-IN, and off unless SNAPSHOT_QUESTION_TEXT=1.
+#
+# THIS CROSSES THE ALLOWLIST ON PURPOSE, at the bundle owner's explicit instruction
+# (2026-08-23): a board that says "1 open question" and will not say which one is not
+# actionable. Everything about the shape is chosen so the DEFAULT stays exactly as it
+# was — absence of the variable means absence of the key, so an instance that never
+# sets it publishes precisely what it published before, and the two assertions that
+# forbid question text (snapshot.test.sh: "open-question TEXT never reaches the
+# snapshot", and the secrets sweep over the rendered page) still hold unchanged.
+#
+# Set it only for an instance whose task titles AND question text are safe to publish.
+# The Alteos instance states no-PII rules four times in its CLAUDE.md; it is exactly
+# the case this stays off for.
+# How many advisor concerns are still untriaged. A COUNT, never the text: unlike
+# `open_questions` this is not a human gate at all — it is the loop's own inbox — so
+# the board shows it as information, not as something demanding attention. It gets no
+# awaiting verb for exactly that reason.
+advisor_note_count() { # <frontmatter>
+  local r n
+  r="$(list_region "$1" advisor_notes)"
+  if list_filled "$1" advisor_notes; then
+    n="$(printf '%s\n' "$r" | sed -e 's/^[[:space:]]*//' | grep -c '^-' || true)"
+    [[ "${n:-0}" -gt 0 ]] && printf '%s' "$n" || printf '1'
+  else printf '0'; fi
+}
+
+question_texts() { # <frontmatter>
+  [[ "${SNAPSHOT_QUESTION_TEXT:-}" == 1 ]] || return 0
+  local r
+  r="$(list_region "$1" open_questions)"
+  # Both YAML forms. A block entry is one line, so it needs only the `- ` and the
+  # surrounding quotes stripped. An inline list is split on `", "` rather than on a
+  # bare comma, because a question routinely CONTAINS a comma — splitting on that
+  # would shred one question into several.
+  # An empty ALTERNATIVE in an ERE — `^(a|b|)$` — is not portable: this machine's
+  # grep (ugrep) refuses it outright with "empty (sub)expression", and because the
+  # pipeline ends in `|| true` the refusal was SILENT — every question disappeared
+  # rather than erroring. Filter blanks with a separate plain-grep instead.
+  #
+  # TRIM FIRST, THEN STRIP BRACKETS. The other order leaves the `[` of an empty
+  # `open_questions: []` behind as a one-character "question", because list_region
+  # hands back the text after the colon WITH its leading space, so `^\[` never
+  # matches. Measured: every task with no questions grew a bogus entry.
+  printf '%s\n' "$r" \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+    | sed -e 's/^-[[:space:]]*//' \
+    | sed -e 's/^\[//' -e 's/\]$//' \
+    | sed -e 's/",[[:space:]]*"/\n/g' \
+    | sed -e 's/^"//' -e 's/"$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+    | grep -v '^$' \
+    | grep -vE '^(\[|\]|\[\])$' || true
+}
+
 # ---------------------------------------------------------------- assembly
 tasks_total=0
 awaiting_total=0
@@ -283,6 +336,14 @@ EOF
     in_flight=false; [[ "$t_status" == "in-progress" ]] && in_flight=true
 
     # depends_on -> a JSON array of IDs. jstr() does the escaping, as everywhere else.
+    an="$(advisor_note_count "$tfm")"
+    qt_json=""
+    while IFS= read -r qt; do
+      [[ -n "$qt" ]] || continue
+      [[ -n "$qt_json" ]] && qt_json="$qt_json, "
+      qt_json="$qt_json$(jstr "$qt")"
+    done <<< "$(question_texts "$tfm")"
+
     dep_json=""
     while IFS= read -r dep; do
       [[ -n "$dep" ]] || continue
@@ -308,7 +369,7 @@ EOF
     t_count=$((t_count+1)); tasks_total=$((tasks_total+1))
 
     tasks_json="$tasks_json${tasks_json:+,}
-      {\"id\": $(jstr "$t_id"), \"title\": $(jstr "$t_title"), \"kind\": $(jstr "$t_kind"), \"status\": $(jstr "$t_status"), \"assignee\": $(jstr "$t_assignee"), \"phase\": $(jstr "$t_phase"), \"in_flight\": $in_flight, \"awaiting\": $(jstr "$awaiting"), \"open_questions\": $oq, \"depends_on\": [$dep_json], \"prs\": [$prs_json]}"
+      {\"id\": $(jstr "$t_id"), \"title\": $(jstr "$t_title"), \"kind\": $(jstr "$t_kind"), \"status\": $(jstr "$t_status"), \"assignee\": $(jstr "$t_assignee"), \"phase\": $(jstr "$t_phase"), \"in_flight\": $in_flight, \"awaiting\": $(jstr "$awaiting"), \"open_questions\": $oq, \"advisor_notes\": $an${qt_json:+, \"open_question_text\": [$qt_json]}, \"depends_on\": [$dep_json], \"prs\": [$prs_json]}"
   done <<EOF
 $(find "$pdir/tasks" -maxdepth 1 -name '*.md' 2>/dev/null | grep -vE '/(index|log)\.md$' | sort || true)
 EOF
@@ -348,7 +409,7 @@ cat > "$tmp" <<JSON
 {
   "_schema": "ai-bridge board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy; phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/depends_on IDs/PR links. Never: task descriptions, document bodies, question or blocker TEXT, author identity, or any path outside this bundle.",
+  "_carries": "project title/description/kind/status/autonomy; phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author identity, or any path outside this bundle.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},

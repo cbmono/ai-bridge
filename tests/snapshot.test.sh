@@ -301,7 +301,7 @@ echo "== the field allowlist =="
 # a check that can be walked around is worse than no check: it certifies the
 # boundary while not testing it. Recursing over the parsed object also covers keys
 # at any depth, which the flat text scan only did by accident.
-ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions depends_on prs repo number url '
+ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions advisor_notes depends_on prs repo number url '
 extra_keys() { # <json file> <allowed> -> the keys present but not allowed
   python3 - "$1" "$2" <<'PYK'
 import json, sys
@@ -339,6 +339,10 @@ assert "…the COUNT does (2 questions on task-001)"        "$(fhas '"open_quest
 # of the four things the allowlist names (prose, bodies, identity, out-of-bundle paths).
 # If a future edit emits the raw `/projects/.../task-x.md` value instead, that is an
 # out-of-bundle-shaped path on a publishable page and this assertion is the tripwire.
+# advisor_notes is a COUNT and gets NO awaiting verb: it is the loop's inbox, not the
+# human's, so a task with untriaged concerns must not appear as awaiting anything.
+assert "advisor_notes defaults to 0"                      "$(fhas '"advisor_notes": 0' "$SNAP")"
+
 assert "depends_on carries a task ID (inline form)"        "$(fhas '"depends_on": ["task-001"]' "$SNAP")"
 assert "…and both entries of a BLOCK-form list"           "$(fhas '"depends_on": ["task-001", "task-002"]' "$SNAP")"
 assert "…while a task with none gets an empty array"      "$(fhas '"depends_on": []' "$SNAP")"
