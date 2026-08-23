@@ -145,10 +145,13 @@ no PII/secrets. The role-specific procedure is below.
      verdict rather than leaving a reader to assume a deep review happened.
    - **d. If the cheap route is unreachable, fall back — silently, and never as an error.**
      The delegate reports it cannot invoke `code-review` (an older harness, the skill
-     absent, the dispatch failing): then escalate per (c) if the probe finds both agents,
-     and otherwise review the diff **inline yourself** — correctness, edge cases, security
-     (injection, authz, secrets/PII leakage), tests, conventions. A missing skill must
-     never fail a review, and must never leave a PR with **no** second opinion at all.
+     absent, the dispatch failing): **revert to what this step did before the cheap route
+     existed.** That means the pair from (c) **unconditionally, with no trigger required**
+     — there is no cheap signal left to gate on, so gating here would hand the PR *no*
+     second opinion at all, which is the one outcome this branch exists to prevent — or,
+     if the probe finds them absent, review the diff **inline yourself**: correctness, edge
+     cases, security (injection, authz, secrets/PII leakage), tests, conventions. A missing
+     skill must never fail a review, and must never leave a PR unreviewed by anyone.
    **Name the route that ran in your verdict** (a/b/c/d, and which agents you dispatched).
    A reader cannot tell from a clean verdict whether it cost one Sonnet or three Opus.
 5. **Verify the change meets each `acceptance_criteria` item — this is the gate, and step 4

@@ -147,6 +147,13 @@ echo "== the degrade path =="
 ok "unavailability is handled beside the route" \
    "$(yn near "$QA" 'code-review' 'unavailab|not available|older harness|cannot invoke' 14)" yes
 ok "…and it is not an error path"             "$(yn near "$QA" 'code-review' 'never as an error|never an error|not an error|silent' 20)" yes
+# AND the fallback must be UNCONDITIONAL, which is subtler than it looks and was a real
+# defect in this file's first draft. The escalation in (c) is trigger-gated; if the degrade
+# path merely says "escalate per (c)", then a benign diff on an older harness fires no
+# trigger, runs no reviewer, and gets **no** second opinion at all — the exact outcome the
+# criterion forbids, reached by prose that reads perfectly. So the degrade clause has to say
+# out loud that no trigger is required.
+ok "…and its fallback is unconditional"       "$(yn near "$QA" 'cannot invoke' 'unconditionally|no trigger required' 8)" yes
 
 # ============================================== 4b. the gate itself was not delegated away
 echo "== the verifier survives the cheaper reviewer =="
