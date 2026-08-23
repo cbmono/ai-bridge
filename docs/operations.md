@@ -141,32 +141,36 @@ classification guards:
 stand, across every instance" — instance → project → phase progress → a column per task
 status, with the same 🔴 awaiting-you queue on top.
 
-**One snapshot, three renderers.** `scripts/write-snapshot.sh` derives each instance's
-`SNAPSHOT.json`; every renderer reads that file and none of them reads the bundle. That
-separation is the whole reason the second and third renderer were cheap — see
+**One snapshot, three scripts, four ways to look at it.** `scripts/write-snapshot.sh`
+derives each instance's `SNAPSHOT.json`; every renderer reads that file and none of them
+reads the bundle. That separation is the whole reason each renderer after the first was
+cheap — see
 [conventions.md invariant 11](conventions.md#11-the-cross-instance-board-is-two-scripts-and-one-deletable-generated-file).
+The two HTML views are one script and a flag, not two scripts: `--layout columns` (the
+default) is the kanban page, `--layout table` is the collapsed page meant for publishing.
 
 ```bash
 scripts/write-snapshot.sh                                    # in an instance: refresh its SNAPSHOT.json
 scripts/print-board.sh                                       # the terminal board
-scripts/build-board.sh                                       # one HTML page from every snapshot
+scripts/build-board.sh                                       # one HTML page from every snapshot (columns)
 scripts/build-board.sh --standalone --out /tmp/board.html    # ...to open in a browser
 scripts/watch-board.sh                                       # a local page, re-rendered on every change
-scripts/build-artifact-board.sh                              # an Artifact page BODY, for publishing
+scripts/build-board.sh --layout table                        # an Artifact page BODY, for publishing
 ```
 
 Each `/pm-loop` tick refreshes the snapshot at the end of the tick, so on a looping
-instance you never run the writer by hand.
+instance you never run the writer by hand — and where `boardArtifactUrl` is set, the same
+tick re-renders and republishes the page ([below](#publishing-it-from-each-tick)).
 
 ### Which renderer to reach for
 
-| | `print-board.sh` | `build-board.sh` | `watch-board.sh` | `build-artifact-board.sh` |
-|---|---|---|---|
-| Output | columns in your terminal | one HTML file | one HTML file, kept fresh |
-| Freshness | the moment you ran it | the moment you ran it | live, to the second |
-| Shareable | paste the text | **yes** — publish it, read it on a phone | no, local only |
-| Costs | nothing | a re-run to refresh | **a resident process** |
-| Reach for it | by default, when you are already in a terminal | when someone else needs to see it | while actively working a queue |
+| | `print-board.sh` | `build-board.sh` | `build-board.sh --layout table` | `watch-board.sh` |
+|---|---|---|---|---|
+| Output | columns in your terminal | one HTML file, the kanban view | one HTML page **body**, projects collapsed | one HTML file, kept fresh |
+| Freshness | the moment you ran it | the moment you ran it | the moment you ran it — or every tick, once published | live, to the second |
+| Shareable | paste the text | you publish it yourself | **yes** — publish it, read it on a phone | no, local only |
+| Costs | nothing | a re-run to refresh | a re-run, or a looping instance | **a resident process** |
+| Reach for it | by default, when you are already in a terminal | you want the kanban view, locally | someone else needs to see it | while actively working a queue |
 
 **The watcher needs a process you keep alive, and that is a real cost, not a detail.**
 ai-bridge deliberately has no resident process: its agents are ephemeral subagents inside
@@ -274,6 +278,7 @@ Full reasoning, including why one drifted instance must not blank the board for 
 | `PRUNE_ACTIVE_MINUTES` | env | the recursive mtime veto in the worktree report |
 | `worktreeRoot` | `instance.config.json` | **`<reposRoot>/_wt`** |
 | `boardInstances` | `instance.config.json` | just this instance |
+| `boardArtifactUrl` | `instance.config.json` | **a tick never publishes** — render and publish by hand, or not at all |
 | `codegraphSkip` | `instance.config.json` | index every product repo |
 
 One hard rule holds regardless of `maxAgentsInFlight`: never two package installs against
@@ -419,17 +424,57 @@ preference.
 |---|---|---|---|
 | `print-board.sh` | this terminal | none | you are already in the terminal. The default. |
 | `build-board.sh` | a local HTML file | none | you want the kanban view, or to publish it yourself |
-| `build-artifact-board.sh` | **published, shareable** | none | a teammate needs to see it, or you want it on a phone |
+| `build-board.sh --layout table` | **published, shareable** | none | a teammate needs to see it, or you want it on a phone |
 | `watch-board.sh` | this machine only | **a resident one** | the board **must not leave the machine** |
 
 The last row is not a fallback, it is the compliant path. Publishing sends every task
 **title** to claude.ai; the snapshot's own `_sensitivity` field says it is "as sensitive
 as the task documents it comes from". For an instance whose `CLAUDE.md` carries no-PII
 rules, `watch-board.sh` is the only renderer that answers "nowhere" — which is why it
-was NOT retired when the Artifact renderer was added
-([finding](../../private/_ai-bridge-private/knowledge/findings/local-only-board-is-the-compliant-path.md)).
+was NOT retired when the publishable layout arrived. (The reasoning was recorded as a
+Finding in the private instance that raised it, so it is not linkable from this public
+repo; the short version is the paragraph you just read.)
 
-`build-artifact-board.sh` emits a page **body** — no `<!doctype>`, `<html>`, `<head>` or
+`--layout table` emits a page **body** — no `<!doctype>`, `<html>`, `<head>` or
 `<body>`, because the publish step wraps the file in exactly those. Opening it directly
 in a browser lands in quirks mode; that is expected, and `build-board.sh --standalone`
 is the one to open locally.
+
+### Publishing it from each tick
+
+A published board is a **static page**: three things have to happen for it to move, and
+only two of them are a script. `write-snapshot.sh` refreshes the data,
+`build-board.sh --layout table` re-renders the page — and then somebody has to publish
+it, which no script can do, because publishing is a tool the agent holds and not a
+command on the machine. Left there, the page goes stale with only its masthead timestamp
+to admit it.
+
+So record the page's URL once and each `/pm-loop` tick keeps it current:
+
+```jsonc
+// instance.config.json
+"boardArtifactUrl": "https://claude.ai/public/artifacts/<the-id-of-your-board>"
+```
+
+Four properties, and the first is the one to remember:
+
+1. **Absent means silence, not an error.** No `boardArtifactUrl` ⇒ the tick renders
+   nothing, publishes nothing and says nothing — the same shape as the optional
+   `advisor`. An instance whose board must not leave the machine must not acquire a
+   broken step by upgrading, and deleting the key turns publishing off again.
+2. **The URL is read, never invented.** Publishing without it forks a *second* artifact
+   rather than updating the first, so the URL a team bookmarked would freeze while a new
+   page appeared every gap. A tick that publishes to a fresh URL is a bug, not an
+   outcome; if the recorded one stops resolving, the tick says so in one line and
+   recording a replacement stays yours.
+3. **It is not per-machine.** Unlike `boardInstances`, it is not in the
+   `instance.config.local.json` override set: the URL names one page a whole team shares,
+   and two clones with two values publish two boards that each look like the board.
+4. **A republish is not a change.** The tick still reports `noop: true` when the
+   documents did not move — a board refresh alone must not wake anybody, or an idle loop
+   starts scrolling and gets switched off.
+
+Publishing is still a **decision**, not a default: it sends every task title to
+claude.ai. Read [what the snapshot carries](#before-you-publish-it-know-what-it-carries)
+before you set the key, and note that `board: true` (a local, gitignored snapshot)
+publishes nothing on its own — the two switches are independent.

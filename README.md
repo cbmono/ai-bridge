@@ -301,6 +301,11 @@ scripts/build-board.sh --layout table       # the same data, collapsed — for p
 scripts/watch-board.sh                      # ./.board-live/board.html, re-rendered on every change
 ```
 
+**A published page can keep itself current.** Publish the `--layout table` page once,
+record its URL as `boardArtifactUrl` in `instance.config.json`, and every `/pm-loop` tick
+re-renders and republishes it *there* — no key, and no tick ever publishes anything
+([docs/operations.md § publishing it from each tick](docs/operations.md#publishing-it-from-each-tick)).
+
 **The watcher's cost is the real one, so read it before you pick it.** It needs a
 resident process, and ai-bridge deliberately has none — its agents are ephemeral
 subagents inside one session, and nothing here runs between sessions. So the live page
@@ -365,6 +370,7 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
 | `boardInstances` | the board is just this instance | yes |
+| `boardArtifactUrl` | **no tick ever publishes the board** | **no** — one URL, one shared page |
 | `codegraphSkip` | index every product repo | yes |
 
 Environment knobs: `PUSH_STATE_MAX` (default **12**), `PRUNE_ACTIVE_MINUTES`,

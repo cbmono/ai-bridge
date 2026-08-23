@@ -1,7 +1,7 @@
 ---
 description: Start the Project Manager loop as a SERIAL, completion-driven loop (one tick at a time) in this control-panel instance repo
 argument-hint: "[gap]  pause between ticks, default 10m  (e.g. 0m for back-to-back, 30m)"
-allowed-tools: Bash(pwd), Bash(ls:*), Agent, ScheduleWakeup, CronList, CronDelete
+allowed-tools: Bash(pwd), Bash(ls:*), Agent, Artifact, ScheduleWakeup, CronList, CronDelete
 ---
 
 Start the **Project Manager loop** — but as a **SERIAL, completion-driven** loop:
@@ -94,6 +94,28 @@ here buys nothing and is paid for twice.
 
 **This is not "print less".** Collapsing, quieting or redirecting the output would
 keep every token and lose the trail. The work does not belong here at all.
+
+### Why `Artifact` is in `allowed-tools`
+
+It is the one grant that is not a precondition, so the reason lives beside the list it
+widens. **The rule above is untouched: `Artifact` reads nothing.** It publishes a page —
+it cannot open a task document, the git history or the GitHub API, which is what that
+list is closed against.
+
+It is here because **publishing is the one board step no script can do.**
+`scripts/write-snapshot.sh` refreshes the data and `scripts/build-board.sh --layout
+table` renders the page, but neither can put it where a teammate opens it, so without
+this grant a published board goes stale with only its masthead timestamp to admit it.
+
+**The publish happens in the TICK, not here** — see `.claude/agents/project-manager.md`
+step 8, which renders and publishes as its last act. Two reasons, the second decisive:
+the tick already holds `Bash`, so it is the only one of the two that can render at all;
+and the page body is tens of kilobytes that would otherwise land in **this** session's
+context, the one thing the section above exists to protect. The grant sits in this list
+anyway because this list is the loop's tool contract — a reader has to be able to see
+that the loop publishes — and because a tick that cannot publish from a subagent says so
+in one line and step 2c finishes the job. **Either way it is one publish per tick, to the
+URL already recorded in config.**
 
 ## How the serial loop works
 
@@ -188,12 +210,45 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    any other shape, ignore it and continue — an observer that can stall the loop is
    worse than no observer.
 
+2c. **Republish the board, if this instance publishes one.** Same shape as 2b, and the
+   same rule first: **absence means skip in silence** — no message, no warning, nothing
+   in the tick summary. An instance that does not publish its board must not acquire a
+   broken step.
+
+   **You do not read the config here.** The tick does (`boardArtifactUrl` in
+   `instance.config.json`), and it ends its report with at most one line:
+
+   ```
+   BOARD: published <url>              # done — nothing for you to do
+   BOARD: rendered <path> -> <url>     # it could not publish; you finish it
+   ```
+
+   No `BOARD:` line ⇒ no `boardArtifactUrl`, or nothing to publish ⇒ step over it
+   without a word. On the second form, publish **that file** to **that exact URL** with
+   `Artifact`, updating the artifact that is already there.
+
+   **A new URL each tick is a bug, not an outcome.** Publishing without the recorded URL
+   forks a *second* artifact instead of updating the first: the board the team
+   bookmarked quietly stops moving while a fresh one appears every gap. So the URL is
+   read from config and **never invented** — not guessed from a previous tick's output,
+   not "recreated" because the old one 404s. A URL that no longer resolves is the human's
+   decision to record a new one in `instance.config.json`, never yours.
+
+   **It never blocks, and it is not a state change.** A failed or refused publish is one
+   line in the tick summary and the loop goes on to step 3, exactly like the advisor —
+   and a tick whose only act was refreshing the board still reports `noop: true` (step 3).
+
 3. **On completion**, schedule the next tick after the gap: call `ScheduleWakeup`
    with `delaySeconds` = the gap, and `prompt` = `/pm-loop <gap>` so this skill
    re-enters and dispatches the next tick. (If gap is `0m`, dispatch the next
    tick immediately instead of scheduling.)
    **Always pass `noop` and `reason`.** `noop: true` when the tick changed nothing
    (no dispatch, no status change, no `AWAITING.md` edit); `noop: false` when it did.
+   **A board refresh or a republish is not a change.** The snapshot and the page are
+   derived from documents that did not move, so a tick whose only act was re-rendering
+   them is still `noop: true`. Every tick refreshes the board, so counting it would pin
+   `noop` to `false` forever, retire the streak line below, and hand the human back the
+   scrolling idle loop the streak exists to prevent.
    Consecutive `noop: true` ticks collapse into one streak line in the human's
    terminal instead of one wakeup line each — an idle loop should be nearly silent,
    and this is the whole difference between a loop you leave running and one you
@@ -298,3 +353,9 @@ ticks, regardless of how long a tick runs.
   `touch SNAPSHOT.json` puts it back. Which instances a board shows comes from
   `boardInstances` in `instance.config.json`; **if that key is absent or empty, the
   board is just this instance.**
+- **A published board is republished by the same tick** — but only where
+  `boardArtifactUrl` is set in `instance.config.json`. The tick re-renders with
+  `scripts/build-board.sh --layout table` and publishes to that recorded URL (step 2c);
+  **no key ⇒ no render, no publish, no mention.** Refreshing the snapshot is local and
+  publishes nothing, so the two switches are independent: an instance can be on the
+  terminal board and never publish a page.
