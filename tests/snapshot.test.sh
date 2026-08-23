@@ -202,6 +202,8 @@ TSK
 # at `ready` awaits nothing — it is waiting on a dispatch, not on a human)
 cat > "$ALPHA/projects/ci/tasks/task-004.md" <<'TSK'
 ---
+depends_on: [ "/projects/ci/tasks/task-001.md", "/projects/ci/tasks/task-002.md" ]
+advisor_notes: [ "Should this be split before dispatch?", "Is the target repo right?" ]
 type: Task
 title: Add a smoke test
 kind: build
@@ -342,9 +344,15 @@ assert "…the COUNT does (2 questions on task-001)"        "$(fhas '"open_quest
 # advisor_notes is a COUNT and gets NO awaiting verb: it is the loop's inbox, not the
 # human's, so a task with untriaged concerns must not appear as awaiting anything.
 assert "advisor_notes defaults to 0"                      "$(fhas '"advisor_notes": 0' "$SNAP")"
+# A FLOW-form list must count every entry. Counting only block-form `- ` lines reported
+# 1 for a two-entry flow list, which is the bug this pins (CodeRabbit, PR #8).
+assert "…and counts every entry of a FLOW-form list"      "$(fhas '"advisor_notes": 2' "$SNAP")"
 
 assert "depends_on carries a task ID (inline form)"        "$(fhas '"depends_on": ["task-001"]' "$SNAP")"
 assert "…and both entries of a BLOCK-form list"           "$(fhas '"depends_on": ["task-001", "task-002"]' "$SNAP")"
+# A QUOTED path must normalise to the same ID. The closing quote used to defeat the
+# `.md` suffix rule, emitting `task-001.md"` — an invalid ID on a publishable page.
+assert "…and a QUOTED path normalises identically"        "$(fhasnt '.md\"' "$SNAP")"
 assert "…while a task with none gets an empty array"      "$(fhas '"depends_on": []' "$SNAP")"
 assert "…and never a path"                                "$(fhasnt '"depends_on": ["/' "$SNAP")"
 assert "…and never keeps the .md suffix"                  "$(fhasnt '.md"]' "$SNAP")"

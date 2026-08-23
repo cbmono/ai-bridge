@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+#
+# artifact-board.test.sh — scripts/build-artifact-board.sh renders an Artifact page
+# BODY, from the snapshot only, and leaks nothing the snapshot does not carry.
+#
+# WHY THIS EXISTS SEPARATELY from board-renderers.test.sh: this renderer targets a
+# different medium. The other three write a terminal table or a standalone HTML file;
+# this one writes a fragment the artifact host wraps in <!doctype>/<html>/<head>/<body>.
+# So the assertion that matters most here is the one no other harness makes — that the
+# output carries NONE of those tags. A page that ships them gets double-nested.
+#
+# The escaping assertions are not duplicated effort either. Escaping is per MEDIUM: the
+# terminal renderer guards ESC and newline, this one guards `<`, `&` and `"` in an
+# attribute, because every button carries untrusted title text in a data- attribute.
+#
+# Fixtures are hand-written SNAPSHOT.json files rather than write-snapshot.sh output:
+# this harness is about the RENDERER, and building the input by hand is what lets it
+# assert on forms the live instance does not currently contain.
+set -uo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+GEN="$REPO/symlink/scripts/build-artifact-board.sh"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/artboard.XXXXXX")"
+trap 'rm -rf "$TMP"' EXIT
+pass=0; fail=0
+assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
+           else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
+yes_if() { if "$@" >/dev/null 2>&1; then echo 0; else echo 1; fi; }
+fhas()   { grep -qF -- "$1" "$2" && echo 0 || echo 1; }
+fhasnt() { grep -qF -- "$1" "$2" && echo 1 || echo 0; }
+eq()     { [[ "$1" == "$2" ]] && echo 0 || echo 1; }
+
+# Planted strings. Each must never appear in the page: the snapshot does not carry the
+# fields they would come from, so their presence would mean the renderer invented a path
+# back to the bundle.
+HOSTILE='Rename <script>alert(1)</script> & "quote" it'
+
+mk() { # <dir> <group> <json-projects>
+  mkdir -p "$1"
+  cat > "$1/SNAPSHOT.json" <<JSON
+{"_schema":"ai-bridge board snapshot v1","group":"$2",
+ "generated_at":"2026-08-23T12:00:00Z","counts":{"projects":1,"tasks":1,"awaiting":0},
+ "projects":$3}
+JSON
+}
+
+# ---- a live project, a finished one, and every affordance ------------------
+mk "$TMP/alpha" "alpha" '[
+ {"slug":"live-one","title":"Live work","kind":"build","status":"active","autonomy":"gated",
+  "awaiting_close":false,"phase_progress":{"done":1,"total":3},
+  "tasks":[
+    {"id":"task-001","title":"First","status":"in-progress","assignee":"software-engineer",
+     "awaiting":"","open_questions":0,"advisor_notes":0,"depends_on":[],"in_flight":true,
+     "prs":[{"repo":"o/r","number":41,"url":"https://github.com/o/r/pull/41"}]},
+    {"id":"task-002","title":"HOSTILE_TITLE","status":"draft","assignee":"",
+     "awaiting":"approve","open_questions":0,"advisor_notes":2,
+     "depends_on":["task-001"],"in_flight":false,"prs":[]},
+    {"id":"task-003","title":"Third","status":"ready","assignee":"qa-reviewer",
+     "awaiting":"","open_questions":2,"advisor_notes":0,
+     "depends_on":["task-001","task-002"],"in_flight":false,"prs":[],
+     "open_question_text":["Q1 body?","advisor: escalated one?"]}]},
+ {"slug":"all-done","title":"Finished work","kind":"build","status":"active",
+  "awaiting_close":true,"phase_progress":{"done":2,"total":2},
+  "tasks":[{"id":"task-001","title":"Done","status":"done","assignee":"","awaiting":"",
+            "open_questions":0,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]}]'
+# substitute the hostile title without fighting JSON quoting in the heredoc
+python3 - "$TMP/alpha/SNAPSHOT.json" "$HOSTILE" <<'PYS'
+import json, sys
+p, hostile = sys.argv[1], sys.argv[2]
+d = json.load(open(p))
+for pr in d["projects"]:
+    for t in pr["tasks"]:
+        if t["title"] == "HOSTILE_TITLE":
+            t["title"] = hostile
+json.dump(d, open(p, "w"))
+PYS
+
+OUT="$TMP/page.html"
+rc=0; bash "$GEN" --out "$OUT" "$TMP/alpha" >/dev/null 2>&1 || rc=$?
+assert "it renders and exits 0"                      "$(eq "$rc" 0)"
+assert "…and wrote the page"                         "$(yes_if test -s "$OUT")"
+
+echo "== it is a page BODY, not a document =="
+for tag in '<!doctype' '<!DOCTYPE' '<html' '<head>' '<body' '</body' '</html'; do
+  assert "no $tag"                                   "$(fhasnt "$tag" "$OUT")"
+done
+
+echo "== the title names the workspace =="
+assert "group becomes the title"                     "$(fhas '<title>Alpha Bridge Board</title>' "$OUT")"
+
+echo "== projects are collapsed, and finished ones sink =="
+assert "three <details>, none open"                  "$(fhasnt '<details class="proj" open' "$OUT")"
+assert "a finished project is marked"                "$(fhas 'done-tag' "$OUT")"
+assert "…under a Finished divider"                   "$(fhas 'class="sep"' "$OUT")"
+assert "…and it sorts AFTER the live one"            "$(yes_if python3 -c "
+import sys; h=open('$OUT').read()
+sys.exit(0 if h.index('Live work') < h.index('Finished work') else 1)")"
+
+echo "== untrusted title text is escaped for THIS medium =="
+assert "no raw <script> survives"                    "$(fhasnt '<script>alert(1)</script>' "$OUT")"
+assert "…the tag is entity-escaped"                  "$(fhas '&lt;script&gt;' "$OUT")"
+assert "…and a quote inside an attribute is escaped" "$(fhasnt 'data-copy="Rename <' "$OUT")"
+
+echo "== references are short, and never a real path =="
+assert "a task ref drops projects/"                  "$(fhasnt 'data-copy="projects/' "$OUT")"
+assert "…and drops .md"                              "$(fhasnt '.md"' "$OUT")"
+assert "…and keeps <project>/tasks/<id>"             "$(fhas 'live-one/tasks/task-001' "$OUT")"
+
+echo "== depends_on shows the NUMBER only =="
+assert "a single dependency renders 001"             "$(fhas '>001</button>' "$OUT")"
+assert "…two render as a pair"                       "$(fhas '>002</button>' "$OUT")"
+assert "…never the full slug"                        "$(fhasnt '>task-001-<' "$OUT")"
+
+echo "== questions =="
+assert "a Qn handle exists per question"             "$(fhas 'Q2: ' "$OUT")"
+assert "carried question text is shown"              "$(fhas 'Q1 body?' "$OUT")"
+assert "an escalated concern says where it came from" "$(fhas 'could not settle it' "$OUT")"
+assert "…and the advisor: marker is stripped"        "$(fhasnt 'Q2: advisor:' "$OUT")"
+assert "a question on a READY task reaches the rail" "$(fhas 'class="verb">question' "$OUT")"
+
+echo "== advisor_notes is information, not a demand =="
+assert "an untriaged concern shows as a concern pill" "$(fhas 'concern' "$OUT")"
+assert "…and never as an awaiting verb"              "$(fhasnt 'class="verb">advisor' "$OUT")"
+
+echo "== a PR is a real link =="
+assert "PR links to GitHub"                          "$(fhas 'href="https://github.com/o/r/pull/41"' "$OUT")"
+assert "…and opens safely"                           "$(fhas 'rel="noopener noreferrer"' "$OUT")"
+
+echo "== both themes are defined on bare :root =="
+assert "no token defined only in a media/theme block" "$(yes_if python3 -c "
+import re,sys
+css=open('$OUT').read()
+root=set(re.findall(r'--([a-z0-9-]+)\s*:', re.search(r':root\{(.*?)\}', css, re.S).group(1)))
+allt=set(re.findall(r'--([a-z0-9-]+)\s*:', css))
+sys.exit(0 if not (allt-root) else 1)")"
+assert "body paints its own background"               "$(fhas 'background:var(--ground)' "$OUT")"
+
+echo "== absence is safe =="
+mkdir -p "$TMP/nosnap"
+rc2=0; bash "$GEN" --out "$TMP/none.html" "$TMP/nosnap" >/dev/null 2>&1 || rc2=$?
+assert "an instance with no snapshot exits 0"        "$(eq "$rc2" 0)"
+assert "…and writes nothing"                         "$(fhasnt x "$TMP/none.html" 2>/dev/null || echo 0)"
+
+echo "== one drifted instance must not blank the board =="
+mkdir -p "$TMP/bad"; printf 'not json at all\n' > "$TMP/bad/SNAPSHOT.json"
+rc3=0; bash "$GEN" --out "$TMP/mixed.html" "$TMP/bad" "$TMP/alpha" >/dev/null 2>&1 || rc3=$?
+assert "a broken snapshot is skipped, not fatal"     "$(eq "$rc3" 0)"
+assert "…and the good instance still renders"        "$(fhas 'Alpha Bridge Board' "$TMP/mixed.html")"
+
+echo "== flags =="
+assert "an unknown flag is refused"                  "$(yes_if bash -c "bash '$GEN' --nope 2>/dev/null; [ \$? -eq 2 ]")"
+assert "--help prints the header"                    "$(yes_if bash -c "bash '$GEN' --help 2>&1 | grep -q 'Artifact page body'")"
+
+printf '\n%s passed, %s failed\n' "$pass" "$fail"
+[ "$fail" -eq 0 ]

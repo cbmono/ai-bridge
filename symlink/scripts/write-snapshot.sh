@@ -186,6 +186,43 @@ count_questions() { # <frontmatter>
   else printf '0'; fi
 }
 
+# ONE normaliser for every list field, because three ad-hoc pipelines drifted into
+# three different bugs (CodeRabbit, PR #8): a quoted `depends_on` entry kept its
+# closing quote so the `.md` strip missed and the ID came out `task-001.md"`; a
+# flow-form `advisor_notes` with two entries counted 1; and a flow-form
+# `open_questions` stranded a quote on the first and last entry.
+#
+# The single cause in all three was ORDER: split before trimming, or strip quotes
+# before removing the flow brackets, and the outer entries keep a stray character.
+# So: trim, unwrap the brackets, trim again, THEN split, THEN unquote, THEN trim.
+#
+# Splitting is quote-aware. A quoted list is split on the quote-comma-quote seam,
+# never a bare comma — question text routinely contains commas and splitting on those
+# shreds one question into several. An unquoted list (the form `depends_on` uses) has
+# no such hazard, so a bare comma is the right separator there.
+yaml_list_entries() { # <frontmatter> <key>
+  local r inner
+  r="$(list_region "$1" "$2")"
+  inner="$(printf '%s\n' "$r" \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+    | sed -e 's/^-[[:space:]]*//' \
+    | sed -e 's/^\[//' -e 's/\]$//' \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  case "$inner" in
+    *'"'*) inner="$(printf '%s\n' "$inner" | sed -e 's/"[[:space:]]*,[[:space:]]*"/\
+/g')" ;;
+    *)     inner="$(printf '%s\n' "$inner" | sed -e 's/[[:space:]]*,[[:space:]]*/\
+/g')" ;;
+  esac
+  printf '%s\n' "$inner" \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+    | sed -e 's/^"//' -e 's/"$//' \
+    | sed -e "s/^'//" -e "s/'\$//" \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+    | grep -v '^$' \
+    | grep -vE '^(\[|\]|\[\])$' || true
+}
+
 # The task IDs a task depends on. Emitted as IDs, not paths: an ID is what a human
 # reads on the board and the full path is derivable from the project slug, so
 # carrying the path would be redundant AND longer. Bundle-relative either way, so
@@ -197,17 +234,8 @@ count_questions() { # <frontmatter>
 # path outside the bundle — the four things the allowlist actually names. A reader
 # adding a field here should be able to say which of those four it is; this is none.
 depends_ids() { # <frontmatter>
-  local r
-  r="$(list_region "$1" depends_on)"
-  # Both YAML forms arrive here, so normalise separators before splitting: strip the
-  # flow brackets and any block `- `, turn commas into newlines, then take the
-  # basename minus .md. A blank or `[]` list yields nothing at all, not an empty ID.
-  printf '%s\n' "$r" \
-    | tr -d '[]' \
-    | sed -e 's/^[[:space:]]*-[[:space:]]*//' -e 's/,/\n/g' \
-    | tr ',' '\n' \
-    | sed -e 's#^[[:space:]]*##' -e 's#[[:space:]]*$##' -e 's#^.*/##' -e 's#\.md$##' \
-    | grep -v '^$' || true
+  # Entries arrive already trimmed and unquoted, so basename-then-suffix is safe.
+  yaml_list_entries "$1" depends_on | sed -e 's#^.*/##' -e 's#\.md$##' | grep -v '^$' || true
 }
 
 # The TEXT of each open question — OPT-IN, and off unless SNAPSHOT_QUESTION_TEXT=1.
@@ -228,39 +256,18 @@ depends_ids() { # <frontmatter>
 # the board shows it as information, not as something demanding attention. It gets no
 # awaiting verb for exactly that reason.
 advisor_note_count() { # <frontmatter>
-  local r n
-  r="$(list_region "$1" advisor_notes)"
-  if list_filled "$1" advisor_notes; then
-    n="$(printf '%s\n' "$r" | sed -e 's/^[[:space:]]*//' | grep -c '^-' || true)"
-    [[ "${n:-0}" -gt 0 ]] && printf '%s' "$n" || printf '1'
+  local n
+  n="$(yaml_list_entries "$1" advisor_notes | grep -c . || true)"
+  if [[ "${n:-0}" -gt 0 ]]; then printf '%s' "$n"
+  # Non-empty but nothing parsed: report 1 rather than 0. The board only ever says
+  # "there is something here", so an honest floor beats a silent zero.
+  elif list_filled "$1" advisor_notes; then printf '1'
   else printf '0'; fi
 }
 
 question_texts() { # <frontmatter>
   [[ "${SNAPSHOT_QUESTION_TEXT:-}" == 1 ]] || return 0
-  local r
-  r="$(list_region "$1" open_questions)"
-  # Both YAML forms. A block entry is one line, so it needs only the `- ` and the
-  # surrounding quotes stripped. An inline list is split on `", "` rather than on a
-  # bare comma, because a question routinely CONTAINS a comma — splitting on that
-  # would shred one question into several.
-  # An empty ALTERNATIVE in an ERE — `^(a|b|)$` — is not portable: this machine's
-  # grep (ugrep) refuses it outright with "empty (sub)expression", and because the
-  # pipeline ends in `|| true` the refusal was SILENT — every question disappeared
-  # rather than erroring. Filter blanks with a separate plain-grep instead.
-  #
-  # TRIM FIRST, THEN STRIP BRACKETS. The other order leaves the `[` of an empty
-  # `open_questions: []` behind as a one-character "question", because list_region
-  # hands back the text after the colon WITH its leading space, so `^\[` never
-  # matches. Measured: every task with no questions grew a bogus entry.
-  printf '%s\n' "$r" \
-    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-    | sed -e 's/^-[[:space:]]*//' \
-    | sed -e 's/^\[//' -e 's/\]$//' \
-    | sed -e 's/",[[:space:]]*"/\n/g' \
-    | sed -e 's/^"//' -e 's/"$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-    | grep -v '^$' \
-    | grep -vE '^(\[|\]|\[\])$' || true
+  yaml_list_entries "$1" open_questions
 }
 
 # ---------------------------------------------------------------- assembly
