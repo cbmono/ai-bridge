@@ -58,6 +58,8 @@ whether `main` actually moved backwards, before reporting corruption.
 
 ## Preconditions
 
+**Three checks, and the list is closed** — see "The launcher reads nothing else".
+
 1. Must run from a **control-panel instance root**, so the `.claude/agents` role
    agents, the target-repo clones, and `gh` load. **Detect** the instance root by
    confirming `SCHEMA.md` + `.claude/agents` + `instance.config.json` exist in the cwd; if
@@ -69,13 +71,34 @@ whether `main` actually moved backwards, before reporting corruption.
    job's prompt is `run the project-manager agent for one LIVE tick`, `CronDelete`
    it — that job is the overlap bug. Do **not** create a cron here.
 
+### The launcher reads nothing else
+
+Do **not** read task documents, `log.md`, the tick ledger, `AWAITING.md`,
+`SNAPSHOT.json`, a worktree listing, `git status`, `git log`, `gh repo view` or
+`gh pr list` here — not the whole thing, not a summary, not "just to orient". **The
+tick does every one of them** (`.claude/agents/project-manager.md`, steps 0–1), which
+is why `allowed-tools` above lists no reader beyond `pwd`/`ls`.
+
+Two reasons, and the second is the one that matters. The human ran a command, not a
+briefing, so nothing should scroll before "tick dispatched". And every byte read here
+lands in the **main session's** context — the one context this loop has to survive on
+for hours across many ticks — while the tick is a backgrounded agent with its own
+context, where a full state read is free and is discarded when it ends. The
+launcher's answer is thrown away the moment it dispatches either way, so a state read
+here buys nothing and is paid for twice.
+
+**This is not "print less".** Collapsing, quieting or redirecting the output would
+keep every token and lose the trail. The work does not belong here at all.
+
 ## How the serial loop works
 
 Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
 1. **Run one tick now.** Spawn the `project-manager` agent
    (`subagent_type: project-manager`) for ONE LIVE tick (background), with the
-   standing guardrails below. **Run the tick on the orchestrator's configured model:**
+   standing guardrails below. **Brief it with the gap and the guardrails, not with
+   state** — it reads the bundle, `git` and `gh` itself, so there is nothing for you
+   to look up first. **Run the tick on the orchestrator's configured model:**
    resolve `project-manager` in `roleTiers` (default `deep`) → an alias via `models`
    (default `deep` → `opus`), and pass that as the tick's model. If `models`/`roleTiers`
    are absent, inherit the session model. (The top `apex`/`fable` tier is reserved for
@@ -93,24 +116,21 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    verdict; a quiet repo proves nothing either (a tick holding for its own
    subagents is quiet by definition).
 
-   **After a compaction, that memory is gone — so trust the disk, not your
-   recollection.** This loop is long-lived and its context gets summarised; the
-   in-flight set is answered from session history, which is exactly what
-   compaction discards. Re-derive it from the root `log.md` tick ledger — whose
-   entry the PM **opens before dispatching**, precisely so a tick that dies
-   mid-flight still leaves a trace, and whose open-with-no-close state is the
-   only thing on disk that distinguishes "dispatched, waiting" from "never
-   ran" — then the task documents' own `status:`, then `git log`, in that order, and treat all three
-   as outranking anything you seem to remember. The failure this prevents is
-   re-dispatching a task sequence that already finished, which costs a full set of
-   agent runs and can open duplicate PRs; it is the most expensive failure observed
-   in loops of this shape. If the ledger and a task's `status:` disagree, the task
-   document wins and the ledger was written by a tick that died before curating.
-   **An open entry does not mean its agents are alive.** Nothing on disk can show
-   that — which is why the notification is the only finished signal in the first
-   place. So an open entry is a reason to report and stop, never to re-dispatch or
-   to silently adopt the work as your own in-flight set; a stale open entry would
-   otherwise miscount the `maxAgentsInFlight` cap in both directions.
+   **After a compaction, that memory is gone — and the answer is still not yours to
+   look up.** This loop is long-lived and its context gets summarised; the in-flight
+   set is answered from session history, which is exactly what compaction discards.
+   **Do not go read the disk here to reconstruct it.** Dispatch a tick and let it
+   answer: re-deriving the in-flight set from disk is the tick's own first step,
+   which it takes whether or not you ask — the root `log.md` tick ledger (whose
+   open-with-no-close entry is the only thing on disk that distinguishes
+   "dispatched, waiting" from "never ran"), then the task documents' own `status:`,
+   then `git log` / `gh pr list`, each outranking anything anyone remembers. See
+   `.claude/agents/project-manager.md` step 0, which owns that property in full.
+   A tick that finds an open entry **reports it and holds** rather than
+   re-dispatching, so the failure this protects against — re-dispatching a task
+   sequence that already finished, the most expensive failure observed in loops of
+   this shape — is caught one context deeper, where the read is free. Such a tick is
+   a finished tick: schedule the gap as usual (step 3) and surface what it says.
 2b. **Ask the advisor, if this instance has one.** Two conditions, both from
    `instance.config.json`, and **absence of either means skip this step silently** —
    no message, no warning, the tick is over. Never treat absence as an error.
@@ -254,6 +274,10 @@ ticks, regardless of how long a tick runs.
   serial"): don't start a second session looping the same working tree. Two humans
   sharing one bundle from two clones is a different case and is supported — see
   there. To change the gap: stop, then `/pm-loop <gap>`.
+- **Starting the loop prints a handful of lines, not a screen**: the preconditions
+  when one fails, one line naming the gap, and that the tick is dispatched. If a
+  start scrolls the terminal, the launcher did work that belonged in the tick — move
+  it there (see "The launcher reads nothing else"); do not quiet it in place.
 - A tick with nothing to do is a fast no-op — the gap keeps idle cycles cheap.
 - Each tick refreshes `AWAITING.md` — the queue of what a human decision unblocks —
   **only when that file already exists**; a `SessionStart` hook surfaces its
