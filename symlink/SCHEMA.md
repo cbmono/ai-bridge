@@ -118,6 +118,21 @@ objective: /objectives/<slug>.md
 phase: /projects/<slug>/phases/<n>-<slug>.md          # optional, links task to its phase
 depends_on: [ /projects/<slug>/tasks/<id>.md, ... ]   # optional
 acceptance_criteria: [ "<testable outcome>", ... ]    # PM fills/expands during refine
+worktree: /abs/path/to/worktree        # optional, BUILD only. MACHINE-READ by scripts/reclaim-worktree.sh.
+branch:   <branch-name>                # optional, BUILD only. MACHINE-READ. Required whenever `worktree:` is set.
+# Both are written by the project-manager AT DISPATCH, and read only when the task
+# reaches `done`, to reclaim that one worktree. They are machine-read — unlike
+# `interfaces:` below — so keep them exact: an absolute path and the literal branch name.
+#
+# Why they exist at all: reclaiming a worktree by SCANNING a directory destroyed three
+# running agents' work, because a scan cannot tell a fresh dispatch that has not committed
+# from an already-merged branch — in git they are identical. The task record can, because
+# it was written at dispatch by the thing doing the dispatching. So the reclaim is driven
+# by these two fields or it does not happen: no `worktree:`, no removal, ever.
+#
+# `worktree:` set while `branch:` is absent is a REFUSAL, not a licence to skip the check
+# — a recorded path with no recorded branch cannot be proven to still be the worktree this
+# task created, and a worktree path can be recycled.
 interfaces:                           # optional, BUILD-shaped. NOT machine-read.
   consumes: [ "<exact name/signature this task depends on>", ... ]
   produces: [ "<exact name/signature this task exposes>", ... ]

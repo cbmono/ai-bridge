@@ -37,13 +37,15 @@ move it here intact instead.
 | 12 | [Three behaviours against a silent wrong answer](#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) | `push-state.sh`, `answered_questions`, `maxPrLoc` |
 | 13 | [A shared instance is three no-ops and one gate](sharing.md) | `task-owner.sh`, config split, derived indexes |
 | 14 | [`knowledge/references/` is the fifth knowledge kind](#14-knowledgereferences-is-the-fifth-knowledge-kind) | `validate-bundle.sh`, `SCHEMA.md` |
+| 15 | [The kill switch is one hook, and it fails open](#15-the-kill-switch-is-one-hook-and-it-fails-open) | `agent-control.sh`, `control.sh` |
+| 15 | [The config layer is two tiers, and the arrow stays one-way](#15-the-config-layer-is-two-tiers-and-the-arrow-stays-one-way) | `install.sh --config`, `config/` |
 
 ---
 
 ## Layout
 
 - **This repo** — a **reusable OKF control-panel template**. `symlink/` holds generic machinery (SCHEMA, `AUTONOMY.md` — the deletable delegated-autonomy capability, `CONVENTIONS.md` — the shared role-agent conventions, read on dispatch because they govern the target repos, which no `paths:` glob can reach, role agents, `/pm-loop`, `/new-project`, `/close-project`, `/pr-review-request`, `/answer`, `/fanout`, `/audit`, `commit-as.sh`, `required-checks.sh`, `task-owner.sh`, `prune-worktrees.sh`, `validate-bundle.sh`, `migrate-bundle.sh`, `write-snapshot.sh`, `build-board.sh`, `index-kb.sh`, `link-repos.sh`, a `SessionStart` hook for tasks-awaiting-you, a `UserPromptSubmit` hook pushing current instance state) symlinked into per-group **instances**; `seed/` holds starting content copied once; `install.sh` stamps out / refreshes an instance and manages its gitignore; `RETIRED` declares seed paths the template has stopped shipping, which are reported and never deleted. Each instance is its own repo under `~/workspace/<group>/_ai-bridge-<group>/` (leading underscore, named distinctly from this template dir). Keep machinery generic — org/repo/path/team/channel literals live in an instance's `instance.config.json` / `CLAUDE.md`, never in `symlink/`. <!-- This bullet was duplicated three times by conflict resolutions; it is now ONE line carrying the union of all three. If you resolve a conflict here, merge into this line — never append a second copy. -->
-- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root `install.sh` is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery is symlinked from *this* checkout, and `ai-setup`'s installer has nothing to do with it. `ai-setup` still carries the old subtree as a deliberate rollback point — it is frozen, and a path under `ai-setup/ai-bridge/` is the stale copy. A future change may fold `ai-setup`'s *config* layer into this repo under `config/` with a second install target; nothing here assumes it either way.
+- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root `install.sh` is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery is symlinked from *this* checkout, and `ai-setup`'s installer has nothing to do with it. `ai-setup` still carries the old subtree as a deliberate rollback point — it is frozen, and a path under `ai-setup/ai-bridge/` is the stale copy. `ai-setup`'s *config* layer has since been folded in here under `config/`, behind a second install target (`install.sh --config`) — see [15](#15-the-config-layer-is-two-tiers-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
 
 ---
 
@@ -138,6 +140,204 @@ The gate is on the wrong verb if you get it backwards. The full reasoning — ow
 ## 14. `knowledge/references/` is the fifth knowledge kind
 
 **…and promoting it was a two-line change because the location filter was never a list of four names.** `validate-bundle.sh` collects `knowledge/<kind>/*.md` as a *shape*, so the one live instance's 7 `type: Reference` documents were already being checked for `type`, `timestamp` and dangling refs — measured, 0 findings. The only gap was `status`, unchecked because `Reference` had no enum, which left invisible exactly the drift class the script was built for (one type's enum applied to another: `open` on a Reference reads as a Finding). So the fix is `Reference) echo "current superseded"` plus the `SCHEMA.md` section — all 7 already carry `current`, so it is a no-op on live data and a real check on the next edit. Declaring the enum also makes `status` **required** there; root documents typed `Reference` (`SCHEMA.md`, `AUTONOMY.md`) carry none and are unaffected, because they sit outside every schema-defined location. Relocating those documents into `findings/` was rejected: they are specs and contracts, not one decision each, and moving someone's content to satisfy a validator that already reads it is the wrong direction.
+
+## 15. The config layer is two tiers, and the arrow stays one-way
+
+**ai-bridge depended on a separate repo for four things, and all four failed silently.**
+The measurement that forced this: **nine** top-level entries of the live `~/.claude` were
+symlinks into that other checkout, so "it will never be used again" was false on the very
+machine running ai-bridge — it was the parent config layer of every session, instances
+included. Four of those entries were load-bearing here: the `@~/.claude/claude-defaults.md`
+import in `seed/CLAUDE.md` (the hard one — every new instance inherited it), and probed
+lookups for `code-architect`, `deep-bug-scan` and `plan-architect`. A missing `@import` is
+a **no-op** and a failed `test -f` merely skips a fan-out, so on a machine that never ran
+that installer an instance lost its session defaults, `qa-reviewer` lost its second opinion
+and the PM lost its plan critic — and nobody could tell. **Silent degradation is the worst
+shape a failure can take**, which is the whole argument for folding the layer in.
+
+**The import is INLINED, not re-pointed.** An `@import` is loaded at launch anyway, so a
+separate file bought organisation rather than context — and it bought one more thing that
+could dangle. The section now lives in `seed/CLAUDE.md` itself. Seed content is copied only
+when absent, though, so an instance stamped earlier keeps the dead import forever:
+`install.sh` reports it with the exact replacement and **never edits `CLAUDE.md`**, which
+is instance data the human owns and has very likely edited around. Report-only, the same
+contract as `RETIRED`.
+
+**Two tiers, because they answer different questions.** `config/required/` is what
+ai-bridge itself probes for, and it must stay generic. `config/opinionated/` is one
+person's commands, output style, hooks and scripts, and is the only place in this repo
+where a company's internal tool may be named (`/dave`); an adopter takes it, forks it, or
+deletes the directory. **Deleting either tier is safe** — the `AUTONOMY.md` pattern applied
+to a whole directory, with `--config` linking whatever is there and erroring nowhere.
+
+**The arrow stays one-way, and that is what makes this modular rather than merely
+bundled.** `symlink/` must never *require* `config/`: the role agents keep probing with
+`test -f`, so an instance stamped on a machine that never ran `--config` still works — it
+loses a second opinion, not a feature. The bare `install.sh <dir>` interface is unchanged
+for the same reason: three live instances and `upgrade.sh` call it that way, so
+`--instance` is only its explicit spelling and never a new requirement.
+
+**No drop-in directory is ever linked as a directory.** `agents/`, `commands/` and
+`skills/` receive new subdirectories from skill and plugin installers at any time, so a
+whole-directory symlink aims them at this checkout and every drop-in lands inside a public
+git repo. Not hypothetical: it is how four uninvited skills got committed to `ai-setup` on
+2026-08-22, three of them symlinks to a path that existed under `~/.claude` but not in the
+repo — dead links its installer would then have pushed into every consumer's config dir.
+Two fixes were available: carry that repo's `.gitignore` allow-list (`.claude/skills/*`
+denied, one `!` per shipped skill) plus its test, or link per **file**. **Per-file linking
+was chosen because it removes the hazard instead of policing it** — the config dir's
+directories stay real directories that own their own contents, so a drop-in cannot reach
+this checkout at all and no allow-list has to be maintained as skills come and go. It also
+gives back the slot the allow-list approach costs: a personal global command can live in
+`~/.claude/commands/` beside the linked ones, which a whole-dir link makes impossible.
+
+**Two refusals and one abstention complete it.** (a) `--config` refuses to write *through*
+a symlinked directory — if `~/.claude/agents` is a link into another checkout, writing
+`agents/x.md` would create a file **inside that other repo**, silently, and leave the
+config dir with nothing of its own; it names the directory, prints the `mv` that fixes it,
+and exits non-zero. (b) Both tiers declaring the same relative path is refused **before any
+write**, because whichever ran second would move the first aside as a `.bak` and shadow it,
+and a shadowed default is the exact silent failure this change exists to remove. (c)
+`settings.json` is linked only when there is none: it can hold permissions, env vars and
+plugin choices somebody tuned by hand, and it is the one file here where a merge could
+widen what Claude is allowed to *do* rather than how it reports. `ai-setup`'s installer
+merges two display-only keys into a real one; that is deliberately **not** ported, so
+`--config` stays purely additive — every write it makes is a symlink it created itself. The
+trade is stated out loud rather than hidden: the status line and the `Brief` style reach an
+established install only when the human runs the two printed commands.
+
+The worktree guard covers both halves, because it runs before the flags are parsed — a
+config install from a worktree fails identically, every link pointing into a checkout that
+is about to be deleted. Covered by `tests/config-layer.test.sh`.
+
+
+## 15. The kill switch is one hook, and it fails open
+
+ai-bridge could dispatch a role agent but not **redirect or cleanly stop** one. A bad
+dispatch ran to completion or was killed, and a kill mid-worktree leaves the worktree and
+its index in whatever state the agent had reached — which nothing then cleans up, because
+`prune-worktrees.sh` is report-only ([7](#7-prune-worktreessh-is-report-only-and-that-is-load-bearing)).
+With `AUTONOMY.md` present an agent commits, pushes and merges without asking, and the
+only counter-metric is `/audit`, which is retrospective and slow-cadence. So the missing
+piece was a **live** one: `.claude/hooks/agent-control.sh` (a `PreToolUse` hook) plus
+`scripts/control.sh` (the operator side), supporting `gate`, `steer` and `halt` against
+one agent.
+
+**It is keyed on `agent_id`, and that was measured rather than assumed.** A spike proved
+two things: `PreToolUse` *does* fire for a dispatched subagent's own tool calls, and the
+payload carries `agent_id` / `agent_type` on the subagent's event while the parent's
+`Agent` call carries neither. The trap it closed is the important half — **`session_id`
+and `transcript_path` are IDENTICAL for parent and subagent**, so a design keyed on
+either would silently have been all-or-nothing: halt one agent, lose the human's own
+session with it. Two properties follow and both are load-bearing: the *presence* of
+`agent_id` is the parent-vs-subagent test with no heuristic, and an absent `agent_id`
+therefore means **exit 0 immediately** — this hook can never gate the parent. There is
+deliberately **no all-agents wildcard**, because it would reintroduce exactly the failure
+the measurement exists to have avoided. This is the third scoping assumption in the
+project to have been wrong (native worktree isolation, `paths:` globs, nearly this one),
+so treat "does this identifier distinguish what I think it does?" as always needing a
+measurement.
+
+**Absence is the safe default, and the state deliberately lives nowhere in `symlink/`.**
+No `.claude/control/` directory ⇒ the hook is a strict no-op: no read, no write, no
+output, exit 0. That is the `AUTONOMY.md` idiom
+([4](#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file)), but it
+could **not** be a file under `symlink/`, because machinery is re-linked unconditionally
+and a per-instance `rm` would come back by itself. The directory is runtime state that
+`control.sh arm` creates and `disarm` removes. It carries a `.gitignore` holding a single
+`*`, which ignores every file in the directory **including itself**, so git sees the
+directory as empty and tracks none of it — and that is not cosmetic: committed, this state
+would travel to another clone of a shared bundle and gate that human's agents from a file
+they never wrote. Doing it that way also keeps the whole feature out of `install.sh` and
+out of `seed/.gitignore`, so it behaves identically on an instance stamped today and one
+stamped a year ago, with no installer run and no seed delivery.
+
+**Fail open, loudly — this is the one place where a refusal is the worse error.** The hook
+sits in front of *every* tool call in *every* session of the instance. No `jq`, an
+unparseable payload, an unreadable or malformed control file, a verb it does not
+recognise: all of them log and **let the call through**. A hook that blocks work because
+its own state file is corrupt is worse than no hook. The exit code is never used to signal
+a refusal (exit 2 would block); a refusal is JSON on stdout and the script's only exit
+status is 0. `set -e` is deliberately absent — with it, an unexpected non-zero becomes a
+"non-blocking error" printed on every single tool call for no gain. An unrecognised verb
+is the sharpest case: it carries a meaning the hook cannot read, so honouring it as a
+denial would be inventing one, exactly the closed-mapping reasoning
+[9](#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default)
+records.
+
+**`jq` is a hard requirement, and the reason is spoofing.** `tool_input` is arbitrary
+nested JSON, so a grep/sed parser hunting for `"agent_id"` can be fooled by that string
+appearing *inside* a tool argument — a Bash command containing
+`"agent_id": "some-other-id"` would let a halted agent walk past its own halt. jq reads
+the top-level key and cannot be fooled that way. Since the hook must fail *open* without
+jq, the refusal is moved to `control.sh arm`, which is the one moment a human is watching
+and can install it.
+
+**`halt` emits `{"continue": false}` AND a deny, on purpose.** `continue: false` is
+documented, but its scope inside a subagent's tool call is not — the docs do not say
+whether it stops only that subagent or bubbles up. Unverified is not the same as broken,
+so halt emits both: if `continue` is scoped to the subagent the agent stops cleanly, and
+if it is ignored the deny still refuses the call and the directive persists. Halt
+**degrades to a gate rather than to nothing.** A kill switch may turn out blunter than
+advertised; it may not turn out inert. For the same reason halt is **not consumed** — one
+that fires once and then lets the agent carry on is not a kill switch — while `steer` *is*
+consumed, being one note at one boundary. And `steer` emits **no `permissionDecision` at
+all**: `"allow"` would bypass the permission system and silently grant a call a `gated`
+instance would have asked about, which is not something a course correction is entitled
+to do.
+
+**Bounded, and it says what it dropped.** `CONTROL_MAX` (**20** when unset — state that
+fallback in every doc naming it) caps pending directives. `control.sh` **refuses** to add
+the 21st and prints what is pending, rather than FIFO-dropping the oldest the way the
+mechanism this was modelled on does: silently dropping a halt is the one failure the
+feature exists to prevent, so which directive to release is a human decision. The hook's
+own scan stops at the same number and logs how many records it did not read — only
+reachable through a hand-edited file, and never a reason to fail closed.
+
+**The note is fenced as untrusted data, and the PREFIX is what closes the hole.** A
+reason/note is human free text that the hook injects into the *agent's* context beside its
+own instruction, so it is fenced and labelled the way `show-awaiting.sh` fences its items
+([12](#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one)).
+Fencing alone is not enough: a note reading exactly `--- END OPERATOR DIRECTIVE ---` would
+forge the closing marker, so every injected line is prefixed and can never open at column
+0. `control.sh`'s `oneline()` is the **single** choke point where operator text becomes a
+record field — a tab would collide with the field separator, a newline would split the
+record, a raw CR would let the text close the fence on any reader honouring it, all three
+measured in `push-state.sh` — and the TAB-separated record format then makes a raw newline
+unrepresentable, which is why the hook adds no second sanitising pass.
+
+**One bug worth keeping written down, because it passed a test first.** TAB is an *IFS
+whitespace* character, so `IFS=$'\t' read -r a b c` collapses a run of tabs and skips
+leading ones. With `@tsv` output, an absent `agent_id` therefore made the leading empty
+fields vanish and `read` assigned the **tool name** to `agent_id`: the parent's own tool
+call entered the roster as an agent called `Bash`, and a directive named `Bash` would have
+gated the human's session — the exact failure keying on `agent_id` exists to prevent. The
+test that should have caught it asserted "no roster row has an empty id", which was true
+for the wrong reason. Both reads are now one value per line, and the assertion counts
+roster growth instead. **Assert the property, not the absence of the symptom.**
+
+**A halt is recorded, but not in `log.md`.** The hook writes every action it takes to
+`.claude/control/control.log` — append-only, machine-local, greppable — and `control.sh`
+**prints** the exact `log.md` bullet and its `commit-as.sh` command without running
+either, the same report-the-command shape as `RETIRED`, `prune-worktrees.sh` and
+`install.sh`'s `git rm --cached`. Three reasons the hook must not touch `log.md` itself:
+it is **tracked**, and several agents share one working tree, so a spontaneous diff there
+is absorbed under the wrong author by whichever sibling stages `log.md` by name next
+(`commit-as.sh`'s whole header is about that); a correct entry is newest-first under a
+dated heading, so it is a read-modify-write that two concurrent halts corrupt; and a hook
+that can damage a tracked bundle document while its own state is fine is worse than one
+that writes somewhere local. Whether a halt belongs in the bundle's permanent history is
+also a judgement — a fat-fingered dispatch and an agent pushing to the wrong repo are not
+the same event.
+
+**Two honest limits.** A halt takes effect at the agent's **next tool call**: it does not
+interrupt a command already running, and an agent making no tool calls is not reached.
+And the roster only fills while armed, so an agent dispatched on a disarmed instance has
+its id recorded nowhere — which is why arming is a separate act worth doing before you
+need it. **No circuit breaker was built**: the cost-velocity / no-progress escalation
+ladder needs a resident process to run its beat, and ai-bridge has none.
+
+Covered by `tests/agent-control.test.sh` (133 assertions, most of them refusals).
 
 ---
 

@@ -29,6 +29,7 @@ repos and holds only the state of the work — never application code.
 | [docs/operations.md](docs/operations.md) | upgrading an instance, the board, worktrees, editor setup |
 | [docs/sharing.md](docs/sharing.md) | two humans will share one instance |
 | [docs/conventions.md](docs/conventions.md) | **you are changing this repo** — every design invariant and why it exists |
+| [The config layer](#the-config-layer) | you want this repo's agents, commands and hooks in `~/.claude` too |
 
 Normative contracts live in the machinery itself: [`symlink/SCHEMA.md`](symlink/SCHEMA.md)
 (document types, the verification predicate) and
@@ -381,13 +382,56 @@ If you find yourself reading `ai-setup/ai-bridge/…`, you are reading the stale
 The two repos are independent by design: `ai-setup`'s user-wide installer is scoped to
 `.claude` and never touched this template.
 
-`ai-setup` is still worth having alongside — an instance's `seed/CLAUDE.md` imports the
-behavioural defaults that installer links into `~/.claude` (`@.claude/claude-defaults.md`).
-ai-bridge does not require it: a missing import is a no-op, not an error.
+**Its config layer now lives here**, under `config/` — see [The config layer](#the-config-layer)
+below. The `@~/.claude/claude-defaults.md` import that every instance used to inherit is
+gone: that section is inlined in `seed/CLAUDE.md`, so nothing can dangle.
 
-### A config layer may land here later
+---
 
-Folding `ai-setup`'s config layer (its commands, agents, output style, hooks and scripts)
-into this repo — under a `config/` directory, with a second install target — is on the
-table. Nothing here assumes it either way, and this README has room for it. Until then,
-this repo ships the control panel only, and `~/.claude` comes from `ai-setup`.
+## The config layer
+
+ai-bridge can also install the **`~/.claude` layer**: the agents, commands, output style,
+hooks and scripts a Claude Code session loads *outside* any instance. A fresh laptop is
+one clone and one install.
+
+```bash
+~/workspace/ai-bridge/install.sh --config
+```
+
+It links **one file at a time** into `${CLAUDE_CONFIG_DIR:-~/.claude}`. A real file in the
+way is backed up as `<name>.bak.<epoch>`. Restart Claude Code afterwards so it re-scans
+agents and commands.
+
+### Two tiers
+
+| Tier | Holds | Why it is its own tier |
+|---|---|---|
+| **`config/required/`** | `code-architect`, `deep-bug-scan`, `plan-architect` | the only three agents this repo's own role agents look for. Without them `qa-reviewer` loses its second opinion and the PM loses its plan critic — **silently**, which is why they ship here now |
+| **`config/opinionated/`** | 10 commands (`/plan`, `/grill`, `/verify`, `/acp`, `/scan`, `/stack`, `/techdebt`, `/rabbit`, `/dave`, `/codex-handoff`), 3 more agents (`build-validator`, `oncall-guide`, `stack-navigator`), the `Brief` output style, 2 hooks (status line, format-on-write), 2 scripts, `MEMORY.md`, `settings.json`, two `*.example.json` | one person's setup. Take it, fork it, or delete the directory. `/dave` calls one company's internal tool — that is exactly the kind of thing this tier is for |
+
+Delete either directory and `--config` still works: it links whatever is there, and errors
+nowhere.
+
+### Five rules it follows
+
+1. **Never a whole-directory symlink.** `agents/`, `commands/` and `skills/` are *drop-in* directories — any skill or plugin installer can write a new subdirectory into them at any moment. Linking one as a unit aims it at this checkout, so every drop-in lands inside a public git repo. That is how four uninvited skills once got committed to the parent repo, three of them dead links. Per-file links keep `~/.claude/<dir>` a real directory that owns its own contents.
+2. **It refuses to write *through* a symlinked directory.** If `~/.claude/agents` is itself a link into some other checkout, `--config` skips it, names it, prints the `mv` that fixes it, and exits non-zero. It never writes into the other repo.
+3. **`settings.json` stays yours.** It is linked only when you have none. Otherwise the installer prints the two commands to adopt the baseline and stops — it never edits your file, not even to merge one key.
+4. **A retired file's link is swept.** Delete something from `config/` and the next `--config` removes the dangling link. A dangling command still registers with Claude Code; a dangling hook exits 127 every launch.
+5. **Nothing here is required.** An instance never needs the config layer, and the config layer never needs an instance. `install.sh <dir>` behaves exactly as it always did.
+
+### Uninstall
+
+```bash
+~/workspace/ai-bridge/install.sh --config --uninstall
+```
+
+Removes only the symlinks it created. Real files, `*.bak.*` backups and your runtime state
+(`plugins/`, `projects/`, history) are left alone.
+
+### Coming from the separate `ai-setup` repo
+
+An instance stamped before this existed carries one line in its `CLAUDE.md`:
+`@~/.claude/claude-defaults.md`. That file is no longer shipped, and a missing `@import`
+fails **silently**. `install.sh <instance>` now reports it. Replace that line with the
+`## Session defaults` section from [`seed/CLAUDE.md`](seed/CLAUDE.md).
