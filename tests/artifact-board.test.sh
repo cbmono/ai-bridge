@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 #
-# artifact-board.test.sh — scripts/build-artifact-board.sh renders an Artifact page
-# BODY, from the snapshot only, and leaks nothing the snapshot does not carry.
+# artifact-board.test.sh — `scripts/build-board.sh --layout table` renders an Artifact
+# page BODY, from the snapshot only, and leaks nothing the snapshot does not carry.
 #
-# WHY THIS EXISTS SEPARATELY from board-renderers.test.sh: this renderer targets a
-# different medium. The other three write a terminal table or a standalone HTML file;
-# this one writes a fragment the artifact host wraps in <!doctype>/<html>/<head>/<body>.
-# So the assertion that matters most here is the one no other harness makes — that the
-# output carries NONE of those tags. A page that ships them gets double-nested.
+# WHY THIS EXISTS SEPARATELY from board-renderers.test.sh: this LAYOUT targets a
+# different medium. The other renderers write a terminal table or a standalone HTML
+# file; this one writes a fragment the artifact host wraps in
+# <!doctype>/<html>/<head>/<body>. So the assertion that matters most here is the one no
+# other harness makes — that the output carries NONE of those tags. A page that ships
+# them gets double-nested.
+#
+# It was its own SCRIPT (`build-artifact-board.sh`) until the two HTML renderers were
+# consolidated behind `--layout`; every assertion below is the one it made then, run
+# against the surviving entry point. Nothing was dropped in the move, which is the whole
+# point of keeping this file rather than folding it into another one.
 #
 # The escaping assertions are not duplicated effort either. Escaping is per MEDIUM: the
 # terminal renderer guards ESC and newline, this one guards `<`, `&` and `"` in an
@@ -19,7 +25,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-GEN="$REPO/symlink/scripts/build-artifact-board.sh"
+# Every render below passes `--layout table` explicitly: the DEFAULT is `columns`, so a
+# missing flag would assert the table layout's properties against the kanban page.
+GEN="$REPO/symlink/scripts/build-board.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/artboard.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
@@ -76,7 +84,7 @@ json.dump(d, open(p, "w"))
 PYS
 
 OUT="$TMP/page.html"
-rc=0; bash "$GEN" --out "$OUT" "$TMP/alpha" >/dev/null 2>&1 || rc=$?
+rc=0; bash "$GEN" --layout table --out "$OUT" "$TMP/alpha" >/dev/null 2>&1 || rc=$?
 assert "it renders and exits 0"                      "$(eq "$rc" 0)"
 assert "…and wrote the page"                         "$(yes_if test -s "$OUT")"
 
@@ -137,19 +145,54 @@ assert "body paints its own background"               "$(fhas 'background:var(--
 
 echo "== absence is safe =="
 mkdir -p "$TMP/nosnap"
-rc2=0; bash "$GEN" --out "$TMP/none.html" "$TMP/nosnap" >/dev/null 2>&1 || rc2=$?
+rc2=0; bash "$GEN" --layout table --out "$TMP/none.html" "$TMP/nosnap" >/dev/null 2>&1 || rc2=$?
 assert "an instance with no snapshot exits 0"        "$(eq "$rc2" 0)"
 assert "…and writes nothing"                         "$(fhasnt x "$TMP/none.html" 2>/dev/null || echo 0)"
 
 echo "== one drifted instance must not blank the board =="
 mkdir -p "$TMP/bad"; printf 'not json at all\n' > "$TMP/bad/SNAPSHOT.json"
-rc3=0; bash "$GEN" --out "$TMP/mixed.html" "$TMP/bad" "$TMP/alpha" >/dev/null 2>&1 || rc3=$?
+rc3=0; bash "$GEN" --layout table --out "$TMP/mixed.html" "$TMP/bad" "$TMP/alpha" >/dev/null 2>&1 || rc3=$?
 assert "a broken snapshot is skipped, not fatal"     "$(eq "$rc3" 0)"
 assert "…and the good instance still renders"        "$(fhas 'Alpha Bridge Board' "$TMP/mixed.html")"
 
 echo "== flags =="
 assert "an unknown flag is refused"                  "$(yes_if bash -c "bash '$GEN' --nope 2>/dev/null; [ \$? -eq 2 ]")"
 assert "--help prints the header"                    "$(yes_if bash -c "bash '$GEN' --help 2>&1 | grep -q 'Artifact page body'")"
+
+echo "== --layout picks the markup, and refuses to guess =="
+# The consolidation's contract. `columns` is the DEFAULT so that no existing caller
+# changed when the second script was deleted; an unknown value must refuse rather than
+# fall back, because falling back would publish the wrong page silently.
+assert "an unknown layout exits 2"                   "$(yes_if bash -c "bash '$GEN' --layout kanban --out '$TMP/x.html' '$TMP/alpha' 2>/dev/null; [ \$? -eq 2 ]")"
+assert "…naming both layouts on stderr"              "$(yes_if bash -c "bash '$GEN' --layout kanban --out '$TMP/x.html' '$TMP/alpha' 2>&1 >/dev/null | grep -q 'columns|table'")"
+assert "…and writes no page"                         "$(fhasnt x "$TMP/x.html" 2>/dev/null || echo 0)"
+assert "--layout with no value exits 2"              "$(yes_if bash -c "bash '$GEN' --layout 2>/dev/null; [ \$? -eq 2 ]")"
+bash "$GEN" --layout=table --out "$TMP/eq.html" "$TMP/alpha" >/dev/null 2>&1
+assert "--layout=table is the same page as --layout table" "$(yes_if cmp -s "$TMP/eq.html" "$OUT")"
+DEF="$TMP/default.html"
+bash "$GEN" --out "$DEF" "$TMP/alpha" >/dev/null 2>&1
+assert "the default layout is columns — the kanban strip"  "$(fhas 'class="cols"' "$DEF")"
+assert "…not the table's decision rail"                    "$(fhasnt 'class="rail"' "$DEF")"
+assert "…and it is what --layout columns emits"            "$(yes_if bash -c "bash '$GEN' --layout columns --out '$TMP/cols.html' '$TMP/alpha' >/dev/null 2>&1; cmp -s '$TMP/cols.html' '$DEF'")"
+
+echo "== --standalone is orthogonal to --layout: wrapping, not markup =="
+SA="$TMP/sa.html"
+bash "$GEN" --layout table --standalone --out "$SA" "$TMP/alpha" >/dev/null 2>&1
+assert "the table layout can be standalone too"      "$(yes_if sh -c 'head -1 "$1" | grep -qF "<!doctype html>"' _ "$SA")"
+assert "…with exactly one <body>"                    "$(eq "$(grep -cF '<body>' "$SA")" 1)"
+assert "…the <style> in <head> and the board in <body>" "$(yes_if python3 -c "
+import sys
+t=open('$SA').read()
+head=t[t.index('<head>'):t.index('</head>')]
+body=t[t.index('<body>'):t.index('</body>')]
+sys.exit(0 if '<style>' in head and 'class=\"board\"' in body and '<h1>' not in head else 1)")"
+assert "…and the same markup as the page body"       "$(fhas 'class="rail"' "$SA")"
+
+echo "== there is only ONE HTML renderer now =="
+assert "build-artifact-board.sh is gone"             "$(yes_if test ! -e "$REPO/symlink/scripts/build-artifact-board.sh")"
+# The runnable form, not the name: build-board.sh's own header still explains what was
+# merged into it, and a comment recording that is not a caller.
+assert "…and no machinery still tells anyone to run it" "$(yes_if bash -c "! grep -rlF scripts/build-artifact-board '$REPO/symlink' >/dev/null 2>&1")"
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
