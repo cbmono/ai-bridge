@@ -73,7 +73,13 @@ ok() { # <name> <actual> <expected>
 # ------------------------------------------------------------------ the vocabulary
 # Closed list of harness tool names, plus a pattern for MCP tools (which cannot be
 # enumerated). A name absent from here is prose, by construction.
-VOCAB='Agent|Task|Workflow|Skill|Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep|Bash|BashOutput|KillShell|KillBash|WebFetch|WebSearch|TodoWrite|ToolSearch|SlashCommand|ExitPlanMode|EnterWorktree|mcp__[A-Za-z0-9_*-]+'
+# `Task` is DELIBERATELY EXCLUDED even though it is the dispatch tool's name in some
+# harness versions: OKF's own document type is also `Task`, and this bundle backticks that
+# type constantly (`symlink/SCHEMA.md:441`, `docs/schema.md:27`, `new-project.md:58`).
+# Including it would flag the bundle's core vocabulary as a tool reference — the exact
+# cry-wolf failure that gets a check deleted. `Agent` is the name that decides dispatch
+# here and it carries no such collision.
+VOCAB='Agent|Workflow|Skill|Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep|Bash|BashOutput|KillShell|KillBash|WebFetch|WebSearch|TodoWrite|ToolSearch|SlashCommand|ExitPlanMode|EnterWorktree|mcp__[A-Za-z0-9_*-]+'
 MENTION_RE="\`($VOCAB)\`"
 
 # ------------------------------------------------------------------ the primitives
@@ -100,10 +106,22 @@ mention_lines() { # <file> <tool> — line numbers (of the body) naming <tool>
   body "$1" | grep -nF "\`$2\`" | cut -d: -f1 | paste -sd, - 2>/dev/null
 }
 
-# A declaration is `<!-- tool-mention: <names> — <reason> -->`. Parse it ONCE, here, and
-# emit `ok|<names>` or `bad|<names>` so "which tools are declared" and "is it malformed"
-# can never disagree. The separator is an em-dash or a spaced hyphen; a declaration with
-# no separator, or nothing after it, carries no reason and is therefore not a declaration.
+mention_count() { # <file> <tool> — how many times the body names <tool>
+  body "$1" | grep -oF "\`$2\`" | grep -c .
+}
+
+# A declaration is `<!-- tool-mention: <Tool>(<N>), ... — <reason> -->`, where N is how
+# many mentions of that tool the file is declaring. Parse it ONCE, here, and emit
+# `ok|<names>` or `bad|<names>` so "which tools are declared" and "is this malformed" can
+# never disagree. The separator before the reason is an em-dash or a spaced hyphen.
+#
+# THE BUDGET `(N)` IS WHAT KEEPS A DECLARATION FROM BECOMING A BLANKET WAIVER, and it
+# exists because the first version of this check was measurably too weak: with a bare
+# `<!-- tool-mention: Agent -->` on `CONVENTIONS.md`, re-introducing the exact defect this
+# whole file was written for ("dispatch code-architect ... using the `Agent` tool") still
+# passed. Pinning the count means a NEW mention of an already-declared tool fails until
+# someone folds it into the reason deliberately. A declaration with no reason, or with a
+# name carrying no `(N)`, is not a declaration and exempts nothing.
 parse_declarations() { # <file>
   grep -oE '<!--[[:space:]]*tool-mention:[^>]*-->' "$1" 2>/dev/null | while IFS= read -r d; do
     inner="$(printf '%s' "$d" | sed -E 's/^<!--[[:space:]]*tool-mention:[[:space:]]*//; s/[[:space:]]*-->[[:space:]]*$//')"
@@ -112,16 +130,29 @@ parse_declarations() { # <file>
                    reason="$(printf '%s' "$inner" | sed -E 's/^[^—]*—//; s/^.* - //' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')" ;;
       *)           names="$inner"; reason="" ;;
     esac
-    if [ -n "$reason" ]; then printf 'ok|%s\n' "$names"; else printf 'bad|%s\n' "$names"; fi
+    # Every name must carry a `(N)` budget, or the whole declaration is malformed.
+    budgeted=yes
+    for n in $(printf '%s' "$names" | tr ',' ' '); do
+      case "$n" in *\(*\)) ;; *) budgeted=no ;; esac
+    done
+    if [ -n "$reason" ] && [ "$budgeted" = yes ]; then printf 'ok|%s\n' "$names"
+    else printf 'bad|%s\n' "$names"; fi
   done
 }
 
 declared_of() { # <file> — tool names from well-formed declarations, one per line
   parse_declarations "$1" | grep '^ok|' | cut -d'|' -f2- \
-    | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$' | sort -u
+    | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+    | sed -E 's/\([0-9]+\)$//' | grep -v '^$' | sort -u
 }
 
-malformed_declarations() { # <file> — count of declarations with no reason
+declared_budget() { # <file> <tool> — the N this file declared for <tool> (0 if none)
+  parse_declarations "$1" | grep '^ok|' | cut -d'|' -f2- | tr ',' '\n' \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+    | awk -v t="$2" 'index($0, t"(") == 1 { sub(/^.*\(/, ""); sub(/\).*$/, ""); s+=$0 } END {print s+0}'
+}
+
+malformed_declarations() { # <file> — count of declarations with no reason or no budget
   parse_declarations "$1" | grep -c '^bad|'
 }
 
@@ -141,11 +172,13 @@ covered() { # <tool> <allowlist-file> — is <tool> granted? honors a trailing `
 # redundant" and APPENDS its findings to the file named by $FINDINGS. It runs inside a
 # command substitution, so a shell variable would be discarded with the subshell; a file
 # is the only channel that survives, and a lost finding would make the count unreadable.
+# A budget mismatch counts as a VIOLATION, not a separate class: an extra undeclared
+# mention is the defect this file exists to catch, however it got there.
 FINDINGS=""
 note() { [ -n "$FINDINGS" ] && printf '%s\n' "$1" >> "$FINDINGS"; }
 audit() {
   local file="$1" allow="$2" label="$3"
-  local v=0 d=0 s=0 r=0 tool
+  local v=0 d=0 s=0 r=0 tool budget actual
   local -a mentioned=() declared=()
   while IFS= read -r tool; do [ -n "$tool" ] && mentioned+=("$tool"); done < <(mentions_of "$file")
   while IFS= read -r tool; do [ -n "$tool" ] && declared+=("$tool"); done < <(declared_of "$file")
@@ -155,6 +188,12 @@ audit() {
     covered "$tool" "$allow" && continue
     if printf '%s\n' "${declared[@]-}" | grep -qxF "$tool"; then
       d=$((d+1))
+      budget="$(declared_budget "$file" "$tool")"
+      actual="$(mention_count "$file" "$tool")"
+      if [ "$actual" != "$budget" ]; then
+        v=$((v+1))
+        note "        OVER BUDGET  ${label} names \`${tool}\` ${actual}x (body line(s) $(mention_lines "$file" "$tool")) but declares ${budget} — fold the new mention into the reason, or make it executable"
+      fi
     else
       v=$((v+1))
       note "        UNAVAILABLE  ${label} names \`${tool}\` (body line(s) $(mention_lines "$file" "$tool")) — not in the allowlist, not declared"
@@ -300,43 +339,66 @@ fixture bad 'Read, Grep' 'For wide work, author a `Workflow` fan-out.'
 read -r v d s r <<<"$(run_fx bad)"
 ok "checker flags an absent tool"            "$v" 1
 
-# 4b. the four prose words that fooled the first manual sweep must stay green.
+# 4b. the four prose words that fooled the first manual sweep must stay green — and so
+# must a BACKTICKED `Task`, which is an OKF document type in this bundle, not a tool.
 fixture prose 'Read, Grep' 'Never write to the bundle. The agent roster lists each agent.
 Keep the workflow structure. Read the task document first, then edit the task file.
-A skill is not a tool here; bash it out if you must.'
+A skill is not a tool here; bash it out if you must.
+Set the `Task` frontmatter, per the `Task` type in `SCHEMA.md`.'
 read -r v d s r <<<"$(run_fx prose)"
 ok "checker ignores prose (write/agent/workflow/task)" "$v" 0
+ok "checker ignores the OKF \`Task\` type"     "$(printf '%s\n' "$(mentions_of "$FX/prose.md")" | grep -c '^Task$')" 0
 
 # 4c. a backticked tool the agent DOES hold is green — the rule is possession, not the word.
 fixture granted 'Read, Grep, Bash' 'Use `Bash` and `Read`; never `Grep` a whole repo blindly.'
 read -r v d s r <<<"$(run_fx granted)"
 ok "checker allows a granted tool"           "$v" 0
 
-# 4d. a declaration with a reason exempts the mention, and is counted as declared.
-fixture declared 'Read, Grep' '<!-- tool-mention: Workflow — named to record that it is absent; the route is sequential -->
+# 4d. a declaration with a reason AND a matching budget exempts the mention.
+fixture declared 'Read, Grep' '<!-- tool-mention: Workflow(1) — named to record that it is absent; the route is sequential -->
 You hold no `Workflow`, so wide work is sequential.'
 read -r v d s r <<<"$(run_fx declared)"
 ok "declaration exempts the mention"         "$v" 0
 ok "declaration is counted"                  "$d" 1
+ok "budget is parsed"                        "$(declared_budget "$FX/declared.md" Workflow)" 1
 
-# 4e. a declaration without a reason is not a declaration.
-fixture noreason 'Read, Grep' '<!-- tool-mention: Workflow -->
+# 4e. THE BUDGET IS THE TEETH: one more mention than declared fails, so a declaration can
+# never become a blanket waiver for the next author. This is the case the first version of
+# this check got wrong — it passed while the original defect was re-introduced verbatim.
+fixture overbudget 'Read, Grep' '<!-- tool-mention: Workflow(1) — one mention, deliberately -->
+You hold no `Workflow`. But for wide work, author a `Workflow` fan-out anyway.'
+read -r v d s r <<<"$(run_fx overbudget)"
+ok "an extra mention breaks the budget"      "$v" 1
+ok "...and is still counted as declared"     "$d" 1
+# ...while a reworded file with the same number of mentions stays green.
+fixture rewordedok 'Read, Grep' '<!-- tool-mention: Workflow(1) — one mention, deliberately -->
+Completely different prose, still exactly one `Workflow`.'
+read -r v d s r <<<"$(run_fx rewordedok)"
+ok "rewording within budget stays green"     "$v" 0
+
+# 4f. a declaration missing its reason, or missing its budget, is not a declaration.
+fixture noreason 'Read, Grep' '<!-- tool-mention: Workflow(1) -->
 You hold no `Workflow`.'
 read -r v d s r <<<"$(run_fx noreason)"
 ok "reasonless declaration does not exempt"  "$v" 1
 ok "reasonless declaration is malformed"     "$(malformed_declarations "$FX/noreason.md")" 1
+fixture nobudget 'Read, Grep' '<!-- tool-mention: Workflow — a reason, but no count to pin it to -->
+You hold no `Workflow`.'
+read -r v d s r <<<"$(run_fx nobudget)"
+ok "budgetless declaration does not exempt"  "$v" 1
+ok "budgetless declaration is malformed"     "$(malformed_declarations "$FX/nobudget.md")" 1
 
-# 4f. a declaration for a tool no longer named is stale; one for a granted tool is redundant.
-fixture stale 'Read, Grep' '<!-- tool-mention: Workflow — the instruction it guarded was deleted -->
+# 4g. a declaration for a tool no longer named is stale; one for a granted tool is redundant.
+fixture stale 'Read, Grep' '<!-- tool-mention: Workflow(1) — the instruction it guarded was deleted -->
 Nothing here names a tool.'
 read -r v d s r <<<"$(run_fx stale)"
 ok "checker flags a stale declaration"       "$s" 1
-fixture redundant 'Read, Grep, Bash' '<!-- tool-mention: Bash — pointless, Bash is granted -->
+fixture redundant 'Read, Grep, Bash' '<!-- tool-mention: Bash(1) — pointless, Bash is granted -->
 Use `Bash`.'
 read -r v d s r <<<"$(run_fx redundant)"
 ok "checker flags a redundant declaration"   "$r" 1
 
-# 4g. MCP wildcards: a trailing `*` in the allowlist covers the whole prefix, nothing more.
+# 4h. MCP wildcards: a trailing `*` in the allowlist covers the whole prefix, nothing more.
 fixture mcpok 'Read, mcp__claude-in-chrome__*' 'Call `mcp__claude-in-chrome__navigate`, then `mcp__claude-in-chrome__*` as needed.'
 read -r v d s r <<<"$(run_fx mcpok)"
 ok "wildcard covers its prefix"              "$v" 0
@@ -344,11 +406,11 @@ fixture mcpbad 'Read, mcp__claude-in-chrome__*' 'Call `mcp__other__thing`.'
 read -r v d s r <<<"$(run_fx mcpbad)"
 ok "wildcard does not cover another server"  "$v" 1
 
-# 4h. no `tools:` key ⇒ unconstrained ⇒ nothing to flag, however it is phrased.
+# 4i. no `tools:` key ⇒ unconstrained ⇒ nothing to flag, however it is phrased.
 fixture inherits '' 'Invoke the `Skill` tool and author a `Workflow`.'
 ok "no tools: key means no constraint"       "$(has_tools_key "$FX/inherits.md")" no
 
-# 4i. the shared-doc rule: the intersection binds, so one reader lacking a tool is enough.
+# 4j. the shared-doc rule: the intersection binds, so one reader lacking a tool is enough.
 fixture reader_with_agent    'Agent, Read, Grep' 'x'
 fixture reader_without_agent 'Read, Grep'        'x'
 printf 'Dispatch `code-architect` with the `Agent` tool.\n' > "$FX/shared.md"

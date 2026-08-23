@@ -35,7 +35,7 @@ setting `status`, no PII/secrets, and capturing
    (Don't reinstate a "you may author a fan-out" clause here: the condition can never be
    true for this agent, and a write fan-out would need a worktree per subagent anyway —
    never parallel writes to your one worktree.)
-   <!-- tool-mention: Workflow, Agent — named to record that this agent holds neither, so the optional fan-out clause that used to be here was permanently dead. The sequential route is the fix; widening the allowlist is a separate decision. Enforced by tests/agent-tool-allowlist.test.sh. -->
+   <!-- tool-mention: Workflow(1), Agent(1) — named to record that this agent holds neither, so the optional fan-out clause that used to be here was permanently dead. The sequential route is the fix; widening the allowlist is a separate decision. Enforced by tests/agent-tool-allowlist.test.sh. -->
 4. **Test-first only where it earns it.** Write the test **before** the code when the
    task touches **money, auth/authorisation, data integrity or a migration, or a public
    contract other code depends on**. Everywhere else — UI, copy, styling, config, a

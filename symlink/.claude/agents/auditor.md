@@ -63,7 +63,7 @@ instance's `CLAUDE.md` (data-handling, units, no PII).
   the condition can never be true for this agent, and read-only-by-allowlist is what makes
   your "I never act" claim enforceable rather than aspirational. Bound the cost by sampling
   (above) instead of by parallelism.
-  <!-- tool-mention: Workflow, Agent — named to record that this agent holds neither, so the fan-out clause that used to be here was permanently dead. Stating the sequential route is the fix; widening the allowlist is not. Enforced by tests/agent-tool-allowlist.test.sh. -->
+  <!-- tool-mention: Workflow(1), Agent(1) — named to record that this agent holds neither, so the fan-out clause that used to be here was permanently dead. Stating the sequential route is the fix; widening the allowlist is not. Enforced by tests/agent-tool-allowlist.test.sh. -->
 - **Never act.** You surface, you don't fix: no `status` changes, no dispatch, no
   promote/merge. Adjusting targets or objectives in response is the **human's**
   governance call — the loop above you.

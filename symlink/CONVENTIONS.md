@@ -14,15 +14,15 @@ including the majority that dispatch no role agent. The `CLAUDE.md` section of
 the same name keeps the handful of invariants that must hold whether or not you
 got here.
 
-**One rule about this file's own wording, because four agents with four different
-`tools:` lists read it:** an instruction here must be executable by **every** one of them,
-so where a rule depends on a tool only some of you hold, it says which list decides and
-what the others do instead. Never the other way round — a condition on what is *installed*
-reads as satisfied while being unexecutable for an agent that lacks the tool, which is how
-the `code-architect` clause below was wrong for two releases.
-`tests/agent-tool-allowlist.test.sh` in `cbmono/ai-bridge` enforces this.
+**One rule about this file's own wording, because four agents with differing `tools:`
+lists read it:** an instruction here must be executable by **every** one of them, so where
+a rule depends on a tool only some of you hold, it says **which list decides** and what the
+others do instead. Never the other way round — a condition on what is *installed* reads as
+satisfied while still being unexecutable for an agent that lacks the tool, which is exactly
+how the `code-architect` clause below went unnoticed. `tests/agent-tool-allowlist.test.sh`
+in `cbmono/ai-bridge` enforces this.
 
-<!-- tool-mention: Workflow, Agent, EnterWorktree, mcp__claude-in-chrome__* — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent; EnterWorktree may be missing for a subagent; oncall-guide holds no browser tools. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
+<!-- tool-mention: Workflow(2), Agent(2), EnterWorktree(1), mcp__claude-in-chrome__*(1) — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent; EnterWorktree may be missing for a subagent; oncall-guide holds no browser tools. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
 
 - Read `instance.config.json` for `reposRoot` (where target repos are cloned).
   Honor this `CLAUDE.md` for data-handling, units, and commit-attribution.
