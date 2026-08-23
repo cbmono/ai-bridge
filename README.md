@@ -16,6 +16,7 @@ repos and holds only the state of the work — never application code.
 | **Needs** | [Claude Code](https://claude.com/claude-code), `git`, `gh`, bash. `python3` only for the optional board (all three renderers). |
 | **Time to first loop** | about 10 minutes |
 | **Storage format** | plain markdown ([OKF Knowledge Bundle](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)) — the commands write the files for you |
+| **License** | [MIT](LICENSE) |
 
 ---
 
@@ -442,9 +443,15 @@ ai-bridge used to live as an `ai-bridge/` subtree inside
 repo is now the canonical copy** — every instance's machinery is symlinked from *this*
 checkout, and `install.sh` and `upgrade.sh` here are the ones to run.
 
-`ai-setup` still carries the old `ai-bridge/` subtree for the moment, deliberately, as a
-rollback point to the version that was running before the split. **Treat it as frozen.**
-If you find yourself reading `ai-setup/ai-bridge/…`, you are reading the stale copy.
+`ai-setup` **no longer carries the subtree** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69)
+removed it, because a stale second copy that documentation still described as live was
+inviting edits that would reach nobody. The pre-split version is therefore in git history,
+not in any checkout: `git -C ai-setup show f8b09a4:ai-bridge/` is the last state it had
+(`ai-setup` commit `f8b09a4`, "fix: refuse to install from a git worktree (#68)").
+
+Nothing here needs it. That measurement is why it went: `diff -rq` found **nothing** that
+existed only in the subtree, while this repo was ahead by 4 scripts, 1 hook, 9 tests and
+22 changed files.
 
 The two repos are independent by design: `ai-setup`'s user-wide installer is scoped to
 `.claude` and never touched this template.
