@@ -87,8 +87,12 @@ no PII/secrets. The role-specific procedure is below.
    told you whether this diff already has an independent review. *That* answer decides what
    runs here — not what happens to be installed on the machine.
    - **a. A real external review exists** (step 3, case a) — you already have the
-     independent diff signal. Fold its findings into your verdict and run **no** further
-     reviewer over the same diff: not the cheap review below, not the escalation.
+     independent diff signal. Fold its findings into your verdict and do **not** run the
+     cheap review below over the same diff. The escalation in (c) still applies on its own
+     terms, minus its first trigger: a real external review is not a weak review, so "it
+     found something" is that signal *working* rather than a reason to spend two Opus
+     agents — but a sensitive surface it never addressed, or a part of the diff it says it
+     skipped, is as much a gap here as it is in (b).
    - **b. Otherwise, ONE cheap review is the default opening move.** Dispatch a single
      agent — `general-purpose` is the right type, and it needs nothing installed — at the
      instance's *standard* tier (`model: sonnet`), and have it invoke the harness's built-in
@@ -116,10 +120,12 @@ no PII/secrets. The role-specific procedure is below.
      filesystem): `test -f ~/.claude/agents/code-architect.md` and
      `test -f ~/.claude/agents/deep-bug-scan.md`; absent, there is nothing to escalate to.
      Escalate when **any** of these holds:
-     - the cheap review returned **any** finding — cheap proposes, expensive adjudicates;
-     - it reported that it **skipped** part of the diff. Measured on a real PR, `low` treated
-       the test file as out of scope — 428 of 489 added lines — and reported nothing; a
-       "clean" review of a fraction of the diff is not a clean review;
+     - the **cheap** review returned any finding — cheap proposes, expensive adjudicates.
+       This trigger is about a *weak* reviewer finding something, so it does not fire for a
+       real external review's findings — see (a);
+     - the review you have says it **skipped** part of the diff. Measured on a real PR,
+       `low` treated the test file as out of scope — 428 of 489 added lines — and then
+       reported nothing; a "clean" review of a fraction of a diff is not a clean review;
      - the diff touches authn/authz, secret or credential handling, money, or a destructive
        data path (migration, deletion, retention). A missed bug there costs more than the
        two dispatches;
