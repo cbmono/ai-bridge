@@ -291,13 +291,13 @@ are doing, not by which is newest.
 | You want | Run | Costs |
 |---|---|---|
 | a look right now, in the terminal you are in | `scripts/print-board.sh` | nothing |
-| a page to share, publish, or read on a phone | `scripts/build-board.sh` | a re-run to refresh |
+| a page to open locally, or to publish for the team | `scripts/build-board.sh` — `--layout columns` (the default) or `--layout table` | a re-run to refresh |
 | a page that updates itself as you work | `scripts/watch-board.sh` | **a process you keep running** |
-| a page you can share with the team | `scripts/build-artifact-board.sh`, published as an Artifact | nothing — no process, and it survives the session |
 
 ```bash
 scripts/print-board.sh                      # columns: instance, project, phases, tasks, awaiting
 scripts/build-board.sh --standalone         # ./board.html, openable in a browser
+scripts/build-board.sh --layout table       # the same data, collapsed — for publishing as an Artifact
 scripts/watch-board.sh                      # ./.board-live/board.html, re-rendered on every change
 ```
 

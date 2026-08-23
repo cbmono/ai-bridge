@@ -106,6 +106,30 @@ rm "$TPL/symlink/DOOMED-TWICE.md"
 bash "$TPL/install.sh" "$ODD" >"$TMP/out10" 2>&1
 assert "glob-y path: the link is swept"     "$(no_if test -L "$ODD/DOOMED-TWICE.md")"
 
+# --- the one script this sweep has actually had to retire: build-artifact-board.sh.
+# The two HTML renderers were consolidated behind `build-board.sh --layout table`, which
+# deleted the second one from the template — so every instance stamped before that carries
+# a link to a path that no longer exists. The generic case above already covers it, and
+# that is the claim worth pinning: NO installer edit was needed, so nothing in install.sh
+# names this script and nothing there would notice if the sweep regressed. The criterion
+# asked for the links to be swept; this asserts that outcome against the real name.
+#
+# The link is made by INSTALL.SH from a template that still ships the script, not by hand:
+# `ln -s "$TPL/..."` writes an unresolved path, and on macOS install.sh resolves its own
+# location through /var -> /private/var, so `ours` would not recognise the hand-made link
+# and this would pass for the wrong reason. Stamping it the way an instance really got it
+# is also the only faithful fixture — that instance was stamped before the deletion.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$TPL/symlink/scripts/build-artifact-board.sh"
+bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
+assert "an instance stamped before the merge has it" "$(yes_if test -e "$INST/scripts/build-artifact-board.sh")"
+rm "$TPL/symlink/scripts/build-artifact-board.sh"
+bash "$TPL/install.sh" "$INST" >"$TMP/out-board" 2>&1
+assert "the retired renderer's link is swept"        "$(no_if test -L "$INST/scripts/build-artifact-board.sh")"
+assert "…and reported by name"                       "$(yes_if grep -q 'retire scripts/build-artifact-board.sh' "$TMP/out-board")"
+assert "…while the surviving renderer stays linked"  "$(yes_if test -e "$INST/scripts/build-board.sh")"
+# Generic on purpose: install.sh must not carry a list of retired machinery to sweep.
+assert "install.sh names no retired script"          "$(no_if grep -q 'build-artifact-board' "$TPL/install.sh")"
+
 # --- retired SEED content: reported with an rm, never removed.
 # The asymmetry with the machinery sweep above is the whole point. A symlink into this
 # template whose target is gone has one possible meaning; a seed file the human has owned
