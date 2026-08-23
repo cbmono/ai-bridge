@@ -17,6 +17,8 @@
   "codegraphSkip": "",
   "externalReviewer": null,
   "prReviewSlackChannel": null,
+  "board": true,
+  "$board": "ON BY DEFAULT. true (or absent) => install.sh creates SNAPSHOT.json when missing, on any stamp, so this instance appears on the terminal board and its page can be rendered. false => never created, and the installer says so. NOTE: a snapshot is a LOCAL gitignored file — it does not publish anything. Publishing is a separate act (build-artifact-board.sh plus an Artifact URL), and question TEXT needs SNAPSHOT_QUESTION_TEXT=1 on top of that. So on-by-default is safe even for an instance that must not publish.",
   "$advisor": "OPTIONAL read-only tick observer. Add \"advisor\" to roles to enable it, and set roleTiers.advisor to pick its model (absent => light, the cheapest tier). Omit it and /pm-loop skips that step silently. Its concerns are adjudicated by the deep-tier project-manager before any human sees them, and it has no channel to worker agents, so a cheap model can never steer an expensive one.",
   "roles": [
     "project-manager",

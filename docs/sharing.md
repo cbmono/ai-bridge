@@ -9,6 +9,17 @@ every step — never an error.
 
 ---
 
+## The short way
+
+`scripts/add-second-human.sh <instance> [--apply]` does the shared, tracked half of this
+— the `people` map and `defaultOwner` — and prints the commands the second human runs on
+their own machine. Report-only by default. It validates the login and address before
+writing, parses the config back before claiming success, and refuses if `python3` is
+absent rather than editing JSON line-wise.
+
+It cannot do their half: their `ownerGithubUser` and their absolute paths live in a
+gitignored file on their machine.
+
 ## Do it in this order
 
 | # | Step | Where | Command / value |

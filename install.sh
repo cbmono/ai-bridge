@@ -433,6 +433,23 @@ echo "Installing ai-bridge instance at $TARGET"
 # Is this the first stamp, or a refresh of an existing instance? Decided BEFORE
 # seeding, since seeding is what creates instance.config.json. Only the awaiting
 # queue below needs to know, and it needs to badly: see there for why.
+# Read a boolean from instance.config.json without requiring jq. Absent key, absent
+# file, or an unreadable file all yield the DEFAULT — absence must never flip a
+# behaviour to the unsafe side, and here the default is the caller's business.
+cfg_bool() { # <key> <default> <config-path>
+  # No jq dependency, and NO BRE ALTERNATION. `\(true\|false\)` is a GNU sed extension:
+  # BSD sed matches nothing and this function silently returned the default forever, so
+  # `board: false` was ignored. Measured — it is the third time today that `\|` outside
+  # ERE has produced a silent wrong answer in this codebase. Two fixed-string greps
+  # instead; `false` is checked FIRST so a malformed file cannot turn an opt-out into an
+  # opt-in.
+  _k="$1"; _d="$2"; _f="$3"
+  [ -f "$_f" ] || { printf '%s' "$_d"; return 0; }
+  if grep -q "\"$_k\"[[:space:]]*:[[:space:]]*false" "$_f" 2>/dev/null; then printf 'false'
+  elif grep -q "\"$_k\"[[:space:]]*:[[:space:]]*true" "$_f" 2>/dev/null; then printf 'true'
+  else printf '%s' "$_d"; fi
+}
+
 FIRST_STAMP=no
 [ -e "$TARGET/instance.config.json" ] || FIRST_STAMP=yes
 
@@ -519,34 +536,52 @@ fi
 # 1c. The board snapshot, created ONLY on the first stamp — same contract, same
 # reason, same guard as AWAITING.md above.
 #
-# SNAPSHOT.json is opt-in by presence: scripts/write-snapshot.sh rewrites it only when
-# it exists and never creates it, and scripts/build-board.sh leaves an instance without
-# one off the board entirely. So `rm SNAPSHOT.json` takes this instance off the board
-# for good — and FIRST_STAMP is what makes "for good" true, because a refresh that
-# re-created the file would silently undo that decision.
+# SNAPSHOT.json is ON BY DEFAULT, and `board` in instance.config.json is the off switch.
+#
+# It used to be opt-in by presence, with FIRST_STAMP making `rm SNAPSHOT.json`
+# permanent. That inverted the common case: every instance stamped before the board
+# existed silently stayed off it, and putting one back on meant knowing to `touch` a file
+# nothing mentioned. Three of three instances here were in that state.
+#
+# So the decision moved to config, where it is visible and survives a re-stamp:
+#
+#   · `board` absent or true  => create SNAPSHOT.json when missing, on ANY stamp.
+#   · `board: false`          => never create it, and say so.
+#
+# `rm SNAPSHOT.json` still takes the instance off the board immediately — the writer
+# never resurrects it (see write-snapshot.sh) — but it is no longer PERMANENT: the next
+# stamp brings it back unless config says otherwise. That is the trade, and it is the
+# right way round: a deletion is a moment's decision, a config key is a durable one.
+#
+# WHAT THIS DOES NOT CHANGE, and the distinction matters for a no-PII instance:
+# SNAPSHOT.json is a LOCAL, gitignored file. Having one puts an instance on the
+# TERMINAL board and makes a page renderable — it does not publish anything. Publishing
+# is a separate, deliberate act (build-artifact-board.sh + an Artifact URL), and
+# question TEXT needs SNAPSHOT_QUESTION_TEXT=1 on top of that. On-by-default is
+# therefore safe for an instance that must not publish.
 #
 # It is deliberately generated ROOT content and not a file under symlink/: machinery is
-# re-linked unconditionally on every run (see AUTONOMY.md's hazard in
-# .claude/rules/ai-bridge.md), so a deletable capability built out of a machinery file
-# comes back by itself. A gitignored root file has no such hole.
+# re-linked unconditionally on every run, so a deletable capability built out of a
+# machinery file comes back by itself. A gitignored root file has no such hole.
 #
 # Seeded content is a VALID EMPTY snapshot rather than an empty file: build-board.sh
 # parses this as JSON, and a zero-byte file would render an "unreadable snapshot" note
 # on a brand-new instance that has done nothing wrong.
-if [ "$FIRST_STAMP" = yes ] && [ ! -e "$TARGET/SNAPSHOT.json" ]; then
+BOARD_OPT="$(cfg_bool board true "$TARGET/instance.config.json")"
+if [ "$BOARD_OPT" = false ]; then
+  echo "  skip  SNAPSHOT.json (board: false in instance.config.json)"
+elif [ ! -e "$TARGET/SNAPSHOT.json" ]; then
   cat > "$TARGET/SNAPSHOT.json" <<'SNAPSHOT'
 {
   "_schema": "ai-bridge board snapshot v1",
-  "_sensitivity": "Derived and gitignored. Rewritten by scripts/write-snapshot.sh each /pm-loop tick. Delete this file to take this instance off the board for good.",
+  "_sensitivity": "Derived and gitignored. Rewritten by scripts/write-snapshot.sh each /pm-loop tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
   "group": "",
   "generated_at": "",
   "counts": {"projects": 0, "tasks": 0, "awaiting": 0},
   "projects": []
 }
 SNAPSHOT
-  echo "  seed  SNAPSHOT.json (on the board; delete it to take this instance off)"
-elif [ "$FIRST_STAMP" = no ] && [ ! -e "$TARGET/SNAPSHOT.json" ]; then
-  echo "  skip  SNAPSHOT.json (absent by choice — run 'touch SNAPSHOT.json' to re-enable)"
+  echo "  seed  SNAPSHOT.json (on the board; set \"board\": false to opt out)"
 fi
 
 # 2. Machinery — symlink each file (absolute target), backing up real conflicts.
