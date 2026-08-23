@@ -51,10 +51,19 @@ done
 command -v python3 >/dev/null 2>&1 || {
   echo "snapshot.test: needs python3 (build-board.sh does too — see its header)." >&2; exit 2; }
 
+# TWO STEPS, NEVER ONE — the one-expression form is DESTRUCTIVE. When $TMPDIR names a
+# directory that does not exist, `mktemp -d` fails, the inner substitution of
+# `TMP="$(cd "$(mktemp -d …)" && pwd)"` is empty, `cd ""` SUCCEEDS WITHOUT MOVING (a
+# documented bash no-op), `pwd` returns this script's own cwd — the checkout — and the
+# trap below deletes it. That happened twice on 2026-08-23. So the creation is guarded
+# here, and the normalisation below is handed a path already known good.
+# tests/harness-temp-safety.test.sh fails on the one-expression form anywhere in tests/.
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/snapshot-fixture.XXXXXX")" || {
+  echo "snapshot.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 # `cd`+`pwd` normalises the path: TMPDIR carries a trailing slash on macOS, so the raw
 # mktemp result contains `//` — which Python's Path() collapses, silently making the
 # "no filesystem path on the page" assertion below match nothing either way.
-TMP="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/snapshot-fixture.XXXXXX")" && pwd)"
+TMP="$(cd "$TMP" && pwd)"
 trap 'rm -rf "$TMP"' EXIT
 
 pass=0; fail=0
