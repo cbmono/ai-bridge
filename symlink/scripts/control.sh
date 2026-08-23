@@ -204,7 +204,12 @@ disarm)
   n="$(pending_count)"
   rm -rf "$CTL" || { echo "error: could not remove $CTL" >&2; exit 1; }
   echo "disarmed  agent control is off; the hook is now a strict no-op."
-  [ "$n" != 0 ] && echo "          ${n} pending directive(s) went with it."
+  # `[ "$n" != 0 ] && echo …` as the LAST command in the branch made a successful disarm
+  # of an empty queue exit 1, because the test itself is the exit status. The removal had
+  # already happened, so the status contradicted the result — and a kill switch whose
+  # "off" reports failure is one an operator stops trusting.
+  if [ "$n" != 0 ]; then echo "          ${n} pending directive(s) went with it."; fi
+  exit 0
   ;;
 
 agents)
@@ -296,8 +301,17 @@ halt|gate|pause|steer)
 
   arm quiet
 
+  # Does a directive for this agent already exist? Decide BEFORE the cap, because a
+  # replacement swaps a record rather than adding one, so it cannot grow the queue —
+  # and refusing it would block exactly the operation you most need at a full queue:
+  # escalating an agent already gated to a halt.
+  replacing=0
+  if [ -f "$DIRECTIVES" ] && awk -F'\t' -v id="$id" '$2 == id { found=1 } END { exit !found }' "$DIRECTIVES"; then
+    replacing=1
+  fi
+
   n="$(pending_count)"
-  if [ "$n" -ge "$MAX" ]; then
+  if [ "$replacing" -eq 0 ] && [ "$n" -ge "$MAX" ]; then
     echo "error: ${n} directives already pending and CONTROL_MAX is ${MAX}. Refusing to add" >&2
     echo "       another rather than dropping one — silently dropping a halt is the failure" >&2
     echo "       this whole mechanism exists to prevent. Release one first:" >&2
@@ -310,7 +324,7 @@ halt|gate|pause|steer)
 
   # A second directive for the same agent would make "the first match wins"
   # depend on file order, so replace rather than stack.
-  if [ -f "$DIRECTIVES" ] && awk -F'\t' -v id="$id" '$2 == id { found=1 } END { exit !found }' "$DIRECTIVES"; then
+  if [ "$replacing" -eq 1 ]; then
     tmp="$DIRECTIVES.tmp.$$"
     awk -F'\t' -v id="$id" '$2 != id' "$DIRECTIVES" > "$tmp" && mv "$tmp" "$DIRECTIVES" || rm -f "$tmp"
     echo "note   replaced the directive already pending for $id"

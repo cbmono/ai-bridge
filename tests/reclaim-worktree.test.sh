@@ -534,6 +534,33 @@ write_task task-live-legacycfg done "$WT_LIVE" okf/demo-live fixture-org/proj "$
 run --dry-run "projects/demo/tasks/task-live-legacycfg.md"
 assert "with no worktreeRoot, a path under the unconfigured root is refused" "$(eq "$RC" 1)"
 
+
+echo "--- G1b: a task document from OUTSIDE this instance is refused -------------"
+# The hole the review found: the prefix strip left `rel` absolute for a path outside the
+# instance, so every later guard then read an attacker-chosen file. A `done` task carrying
+# a matching worktree:, branch:, target_repo: and a merged PR URL would pass all of them
+# and remove a clean, registered worktree this instance never dispatched. The authority for
+# deleting a worktree is THIS bundle's own record of having created it — a well-formed
+# document from anywhere else is not evidence.
+EXT="$TMP/outside"; mkdir -p "$EXT"
+# Copy a task that WOULD otherwise pass every guard, so the refusal can only come from
+# the location check. That is what makes this assertion non-vacuous.
+GOODTASK="$(cd "$INSTANCE" && ls projects/*/tasks/*.md 2>/dev/null | head -1)"
+if [ -n "$GOODTASK" ]; then
+  cp "$INSTANCE/$GOODTASK" "$EXT/stolen.md"
+  run "$EXT/stolen.md"
+  assert "G1b external task path: refuses (exit 2, a caller error)" "$(eq "$RC" 2)"
+  assert "G1b external task path: says why"         "$(has 'not a task document of this instance')"
+  assert "G1b external task path: names projects/"  "$(has 'projects/')"
+  # And the partner direction: the SAME document, in place, is still accepted far enough
+  # to reach a later guard — so the refusal is about location, not about the document.
+  run "$GOODTASK"
+  assert "G1b the in-place task is NOT refused for location" \
+    "$(printf '%s' "$OUT" | grep -q 'not a task document of this instance' && echo 1 || echo 0)"
+else
+  printf '  SKIP  no fixture task available for the external-path case\n'
+fi
+
 # --- verdict ----------------------------------------------------------------
 echo
 echo "pass=$pass fail=$fail"

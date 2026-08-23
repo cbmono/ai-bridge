@@ -184,7 +184,18 @@ config_entries() {
 }
 
 # Top-level entries the config layer manages — the roots of the dangling-link sweep.
-config_tops() { { config_entries | cut -f2 | sed 's#/.*##'; echo settings.json; } | sort -u; }
+# Roots to sweep for retired links. Deliberately NOT just the roots present in the
+# current source tree: if the last file under `config/opinionated/commands/` is removed,
+# that root disappears from `config_entries`, the sweep stops searching
+# `$CONFIG_DEST/commands`, and its dangling links stay registered — a retired command that
+# still shows up, or a retired hook that exits 127 on every startup. The whole point of the
+# sweep is the case where a source file is GONE, so it cannot be driven by what remains.
+#
+# The fixed list is the set this installer has ever managed. Add to it when a new root
+# ships; never prune it, for the same reason RETIRED is never pruned — an install from
+# years ago still has the directory.
+CONFIG_MANAGED_TOPS="agents commands hooks output-styles scripts skills rules claude-defaults.md MEMORY.md settings.json"
+config_tops() { { config_entries | cut -f2 | sed 's#/.*##'; printf '%s\n' $CONFIG_MANAGED_TOPS; } | sort -u; }
 
 # Print the first DIRECTORY component of $1 that is a symlink under the config dir.
 #

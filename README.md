@@ -399,7 +399,9 @@ one clone and one install.
 ```
 
 It links **one file at a time** into `${CLAUDE_CONFIG_DIR:-~/.claude}`. A real file in the
-way is backed up as `<name>.bak.<epoch>`. Restart Claude Code afterwards so it re-scans
+way is backed up as `<name>.bak.<epoch>` — **except `settings.json`, which is left exactly
+as it is.** That one holds your permissions, so it is never moved aside: an installer that
+replaced it could widen what agents are allowed to do, and no convenience is worth that. Restart Claude Code afterwards so it re-scans
 agents and commands.
 
 ### Two tiers

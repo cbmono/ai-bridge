@@ -274,9 +274,16 @@ ok "binary file: exit 0"                               "$RC" 0
 ok "binary file: the tool call is ALLOWED"             "$([ -z "$OUT" ] && echo yes || echo no)" yes
 # Unreadable, not just malformed.
 printf 'halt\tA1\t2026-08-23T00:00:00Z\tx\n' > "$CTL/directives"; chmod 000 "$CTL/directives"
-run A1 software-engineer Bash
-ok "unreadable file: exit 0"                           "$RC" 0
-ok "unreadable file: the tool call is ALLOWED"         "$([ -z "$OUT" ] && echo yes || echo no)" yes
+# Mode 000 does not stop the ROOT user reading a file, so under root the hook reads the
+# halt and denies — a failure the hook did not cause. CI images commonly run as root, so
+# skip the pair rather than let it report a phantom regression there.
+if [ "$(id -u)" -eq 0 ]; then
+  printf '  SKIP  %-58s (running as root)\n' "unreadable file: fails open"
+else
+  run A1 software-engineer Bash
+  ok "unreadable file: exit 0"                           "$RC" 0
+  ok "unreadable file: the tool call is ALLOWED"         "$([ -z "$OUT" ] && echo yes || echo no)" yes
+fi
 chmod 644 "$CTL/directives"
 # The non-vacuity pair: the SAME file readable does gate.
 run A1 software-engineer Bash
@@ -402,6 +409,34 @@ ok "the operator script is executable-shaped"          "$(head -1 "$CTL_SRC" | g
 ok "both files pass bash -n"                           "$(bash -n "$HOOK_SRC" && bash -n "$CTL_SRC" && echo yes || echo no)" yes
 # Machinery must stay generic: no org, repo, path, team or channel literals.
 ok "no absolute home path leaked into the machinery"   "$(grep -c '/Users/' "$HOOK_SRC" "$CTL_SRC" | awk -F: '{s+=$2} END {print s}')" 0
+
+
+echo "--- the two statuses the review caught, which this suite had missed --------"
+# `disarm` on an EMPTY queue exited 1: `[ "$n" != 0 ] && echo …` was the branch's last
+# command, so the test's own false result became the script's exit status. The removal had
+# already happened, so a successful disarm reported failure — and a kill switch whose
+# "off" looks like an error is one an operator stops trusting.
+ctl arm >/dev/null 2>&1
+OUT="$(ctl disarm 2>&1)"; RC=$?
+ok "disarm with NOTHING pending exits 0"               "$RC" 0
+ok "…and still says it disarmed"                     "$(printf '%s' "$OUT" | grep -qi disarmed && echo yes || echo no)" yes
+# And the non-vacuity partner: with something pending it must still exit 0 AND say so.
+ctl gate B9 --reason x >/dev/null 2>&1
+OUT="$(ctl disarm 2>&1)"; RC=$?
+ok "disarm WITH a pending directive exits 0"           "$RC" 0
+ok "…and reports what went with it"                  "$(printf '%s' "$OUT" | grep -q "pending directive" && echo yes || echo no)" yes
+
+# The cap refused a REPLACEMENT, which cannot grow the queue — blocking exactly the
+# operation you most need at a full queue: escalating an already-gated agent to a halt.
+ctl disarm >/dev/null 2>&1; ctl arm >/dev/null 2>&1
+i=1; while [ "$i" -le 3 ]; do ctl gate "F$i" --reason x >/dev/null 2>&1; i=$((i+1)); done
+RC=0; OUT="$(CONTROL_MAX=3 ctl halt F2 --reason escalate 2>&1)" || RC=$?
+ok "at the cap, escalating an EXISTING agent is allowed" "$RC" 0
+ok "…and the queue did not grow"                      "$(grep -cv '^[[:space:]]*\(#\|$\)' "$CTL/directives")" 3
+ok "…and F2 is now halt, not gate"                    "$(awk -F'\t' '$2=="F2"{print $1}' "$CTL/directives")" halt
+RC=0; CONTROL_MAX=3 ctl gate F9 --reason new >/dev/null 2>&1 || RC=$?
+ok "at the cap, a NEW agent is still refused"          "$([ "$RC" -ne 0 ] && echo yes || echo no)" yes
+ctl disarm >/dev/null 2>&1
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -37,7 +37,7 @@ move it here intact instead.
 | 12 | [Three behaviours against a silent wrong answer](#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) | `push-state.sh`, `answered_questions`, `maxPrLoc` |
 | 13 | [A shared instance is three no-ops and one gate](sharing.md) | `task-owner.sh`, config split, derived indexes |
 | 14 | [`knowledge/references/` is the fifth knowledge kind](#14-knowledgereferences-is-the-fifth-knowledge-kind) | `validate-bundle.sh`, `SCHEMA.md` |
-| 15 | [The kill switch is one hook, and it fails open](#15-the-kill-switch-is-one-hook-and-it-fails-open) | `agent-control.sh`, `control.sh` |
+| 16 | [The kill switch is one hook, and it fails open](#16-the-kill-switch-is-one-hook-and-it-fails-open) | `agent-control.sh`, `control.sh` |
 | 15 | [The config layer is two tiers, and the arrow stays one-way](#15-the-config-layer-is-two-tiers-and-the-arrow-stays-one-way) | `install.sh --config`, `config/` |
 
 ---
@@ -211,7 +211,7 @@ config install from a worktree fails identically, every link pointing into a che
 is about to be deleted. Covered by `tests/config-layer.test.sh`.
 
 
-## 15. The kill switch is one hook, and it fails open
+## 16. The kill switch is one hook, and it fails open
 
 ai-bridge could dispatch a role agent but not **redirect or cleanly stop** one. A bad
 dispatch ran to completion or was killed, and a kill mid-worktree leaves the worktree and

@@ -247,6 +247,26 @@ tdir="$(dirname "$TARGET")"
 [ -d "$tdir" ] || fatal "no such task document: $TARGET"
 abs="$(cd "$tdir" && pwd -P)/$(basename "$TARGET")"
 root="$(pwd -P)"
+
+# The task document must live under THIS instance's projects/. Without this the prefix
+# strip below silently leaves `rel` absolute for a path outside the instance, and every
+# later guard then reads an attacker-chosen file: a `done` task carrying a matching
+# `worktree:`, `branch:`, `target_repo:` and a merged PR URL would pass all of them and
+# remove a clean, registered worktree this instance never dispatched. The authority for
+# deleting a worktree is *this bundle's own record of having created it*, so a document
+# from anywhere else is not evidence, however well-formed it looks.
+#
+# Compared canonically (`pwd -P` both sides) because /var vs /private/var on macOS makes
+# two spellings of one path — the trap that has already broken task-owner.sh and
+# codegraph-sync.sh in this codebase.
+case "$abs" in
+  "$root"/projects/*) ;;
+  *) fatal "$TARGET is not a task document of this instance.
+       Expected a path under $root/projects/ — got $abs.
+       Refusing: the record that authorises removing a worktree has to be this
+       bundle's own." ;;
+esac
+
 rel="${abs#"$root"/}"
 [ -f "$rel" ] || fatal "no such task document: $TARGET"
 
