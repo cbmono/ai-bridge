@@ -111,6 +111,30 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    place. So an open entry is a reason to report and stop, never to re-dispatch or
    to silently adopt the work as your own in-flight set; a stale open entry would
    otherwise miscount the `maxAgentsInFlight` cap in both directions.
+2b. **Ask the advisor, if there is one.** `ls .claude/agents/advisor.md` — **absent
+   is the normal case and means skip this step silently**: no message, no warning,
+   the tick is over. Never treat absence as an error, and never mention an advisor
+   that is not installed.
+
+   Present ⇒ dispatch the `advisor` agent once, read-only, with the tick's summary:
+   what it promoted, what it dispatched to whom, what it closed, and the task
+   documents it touched. It replies `ADVISOR: clear` (the normal case — say nothing
+   and move on) or `ADVISOR: concern` followed by one line of
+   `<task-path> --- <question>`.
+
+   On a concern, **you** fold that line verbatim into that task's
+   `open_questions` — the advisor is read-only by design, so write authority stays
+   with you. That is the whole integration: `open_questions` is already the only
+   promotion signal and already what puts a ❓ row in `AWAITING.md`, so a concern
+   reaches the human through the existing channel and needs no new mechanism, no
+   new file and no new validator check.
+
+   **It never blocks.** A concern does not undo the dispatch, reverse a promotion,
+   or delay the next tick — it is a question waiting for a human, and the tick that
+   raised it has already finished. If the advisor errors, times out, or answers in
+   any other shape, ignore it and continue: an observer that can stall the loop is
+   worse than no observer.
+
 3. **On completion**, schedule the next tick after the gap: call `ScheduleWakeup`
    with `delaySeconds` = the gap, and `prompt` = `/pm-loop <gap>` so this skill
    re-enters and dispatches the next tick. (If gap is `0m`, dispatch the next
