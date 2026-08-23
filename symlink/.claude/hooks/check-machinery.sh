@@ -73,7 +73,9 @@ for rel in $PROBES; do
     fi
   fi
 done
-total="$(set -- $PROBES; echo $#)"   # counted, not written twice: a hardcoded 4 would drift
+# Counted, never written twice: a hardcoded "of 4" drifts the moment a probe is added.
+# shellcheck disable=SC2086  # unquoted on purpose — the split into words IS the count.
+total="$(set -- $PROBES; echo $#)"
 [ "$n" -gt 0 ] || exit 0
 
 # Where this template lives NOW, read from this script's own path — the one machinery path

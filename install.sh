@@ -271,7 +271,7 @@ config_ours() {
 # too. Scoped to the entries this layer manages, never the whole config dir: ~/.claude
 # also holds plugins/, projects/ and sessions/, none of it ours to walk.
 config_sweep() {
-  local t roots="" rel
+  local t roots="" rel was
   while IFS= read -r t; do
     [ -n "$t" ] || continue
     if [ -d "$CONFIG_DEST/$t" ] && [ ! -L "$CONFIG_DEST/$t" ]; then roots="$roots $CONFIG_DEST/$t"; fi
@@ -295,8 +295,8 @@ EOF
     # thing safe to delete here. The config layer accumulates this debris exactly as the
     # instance half does: 24 links dangled in ~/.claude when the checkout moved.
     if dead_backup config_ours "$rel" "$l"; then
-      echo "  sweep  $rel (dead backup of a relinked file, was -> $(readlink "$l"))"
-      rm -f "$l"
+      was="$(readlink "$l")"; rm -f "$l"
+      echo "  sweep  $rel (dead backup of a relinked file, was -> $was)"
     fi
   done
 }
@@ -687,8 +687,8 @@ while IFS= read -r dst; do
     # step 2 moves each one aside and relinks — leaving one dead `.bak.*` symlink per
     # machinery file, invisible to the retire test above because it points at the OLD
     # template. dead_backup() carries the reasoning and the three conditions.
-    echo "  sweep  $rel (dead backup of a relinked file, was -> $(readlink "$dst"))"
-    rm -f "$dst"
+    was="$(readlink "$dst")"; rm -f "$dst"
+    echo "  sweep  $rel (dead backup of a relinked file, was -> $was)"
   fi
 done <<EOF
 $(find "$TARGET" -name .git -prune -o -type l -print 2>/dev/null | sort)

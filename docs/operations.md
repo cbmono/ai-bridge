@@ -108,6 +108,57 @@ machinery files (to refresh its symlink set and `.gitignore` block). Keep machin
 generic: no org, repo, path, team or channel literals — those belong in each instance's
 `instance.config.json` / `CLAUDE.md`.
 
+### Moving this checkout: 185 dangling symlinks, and nothing noticed
+
+Measured 2026-08-23. `~/workspace/ai-bridge` was moved with a plain `mv`. Every symlink is
+absolute, so everything broke at once:
+
+| where | dangling symlinks |
+|---|---|
+| three instances | 39 + 64 + 58 |
+| `~/.claude` (the `--config` layer) | 24 |
+
+**185 broken links, and all three instances looked fine from the outside.** A dangling
+symlink is invisible until something executes it — which for a `/pm-loop` tick means
+mid-dispatch, with agents already briefed.
+
+The repair is one idempotent command per instance, from the checkout's **new** location:
+
+```bash
+bash /new/path/to/ai-bridge/install.sh ~/workspace/_ai-bridge-<group>   # per instance
+bash /new/path/to/ai-bridge/install.sh --config                         # once, for ~/.claude
+```
+
+`install.sh` relinks every machinery file and, in the same run, **sweeps the dead
+`<name>.bak.<epoch>` symlinks it makes on the way** — step 2 moves each dangling link aside
+before relinking, so without the sweep one repair left 38 dead backups in a test instance
+and 122 across two real ones. The sweep only ever removes a **dangling symlink** whose
+original now exists again as a link of ours; a `.bak.*` **regular file** is content a human
+owns and is never touched, and neither is a dangling `.bak.*` link that was not ours.
+`tests/moved-template.test.sh` pins all four negatives.
+
+**Detection.** `.claude/hooks/check-machinery.sh` runs at `SessionStart`, resolves four
+machinery links (a root document, a script, a role agent, a hook) and — if any dangle —
+names them, names where they pointed, and prints the exact `install.sh` line that repairs
+this instance. It never repairs anything itself. In a healthy instance, and in any
+non-bridge project that inherits the hook, it prints nothing and exits 0.
+
+> **The hole this leaves, stated rather than implied.** `.claude/settings.json` is itself
+> one of the machinery symlinks, so when the **whole** checkout moves it dangles too —
+> Claude Code then has no project settings, the hook is never registered, and it cannot
+> run. The hook therefore catches the partial cases (a file renamed or retired inside a
+> template that is still where the instance thinks it is; a half-repaired instance) and
+> **not** the wholesale move that motivated it. A detector built out of the machinery it
+> checks does not survive the total failure of that machinery.
+>
+> Closing it needs one real, non-symlinked file the harness reads unconditionally. The
+> obvious candidate — make `.claude/settings.json` the one machinery file `install.sh`
+> **copies** instead of links, with the check inlined in the hook command so no script file
+> can dangle — costs the property every other machinery file has: edits under `symlink/`
+> would stop reaching already-stamped instances, and `install.sh` would have to start
+> editing a settings file it currently promises never to touch. That is a deliberate trade,
+> not a bug fix, so it is recorded here for a decision rather than made in a hook.
+
 ---
 
 ## 4. Worktrees: reported, never deleted
