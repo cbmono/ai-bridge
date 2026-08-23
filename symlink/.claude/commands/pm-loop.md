@@ -225,7 +225,11 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
    No `BOARD:` line ⇒ no `boardArtifactUrl`, or nothing to publish ⇒ step over it
    without a word. On the second form, publish **that file** to **that exact URL** with
-   `Artifact`, updating the artifact that is already there.
+   `Artifact`, updating the artifact that is already there. **Widen nothing to do it**: if
+   publishing needs the page body inline and you hold no reader, that is where this step
+   stops — say so in one line, with the path and the URL, and let the human finish it. A
+   grant added here to work around the closed list above would cost more than a stale
+   board does.
 
    **A new URL each tick is a bug, not an outcome.** Publishing without the recorded URL
    forks a *second* artifact instead of updating the first: the board the team

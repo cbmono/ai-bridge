@@ -458,10 +458,16 @@ So record the page's URL once and each `/pm-loop` tick keeps it current:
 
 Four properties, and the first is the one to remember:
 
-1. **Absent means silence, not an error.** No `boardArtifactUrl` ⇒ the tick renders
-   nothing, publishes nothing and says nothing — the same shape as the optional
+1. **Absent means silence, not an error.** No `boardArtifactUrl` (or `null`) ⇒ the tick
+   renders nothing, publishes nothing and says nothing — the same shape as the optional
    `advisor`. An instance whose board must not leave the machine must not acquire a
-   broken step by upgrading, and deleting the key turns publishing off again.
+   broken step by upgrading, and deleting the key turns publishing off again. A key that
+   is *present* but not an `https://` URL is the one case that gets a line: a typo is not
+   a decision, and silence would hide it. (The off switch is a **config key**, not a
+   deletable file under `symlink/` — which is the caveat
+   [conventions.md invariant 4](conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file)
+   ends on: machinery is re-linked unconditionally, so a file-shaped switch gets switched
+   back on by the next `install.sh`.)
 2. **The URL is read, never invented.** Publishing without it forks a *second* artifact
    rather than updating the first, so the URL a team bookmarked would freeze while a new
    page appeared every gap. A tick that publishes to a fresh URL is a bug, not an
@@ -469,7 +475,9 @@ Four properties, and the first is the one to remember:
    recording a replacement stays yours.
 3. **It is not per-machine.** Unlike `boardInstances`, it is not in the
    `instance.config.local.json` override set: the URL names one page a whole team shares,
-   and two clones with two values publish two boards that each look like the board.
+   and two clones with two values publish two boards that each look like the board. Two
+   clones with the *same* value is the design — just keep their `boardInstances` in
+   agreement, or the one page alternates between two views of the group.
 4. **A republish is not a change.** The tick still reports `noop: true` when the
    documents did not move — a board refresh alone must not wake anybody, or an idle loop
    starts scrolling and gets switched off.
