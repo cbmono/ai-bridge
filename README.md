@@ -80,6 +80,21 @@ The installer does three things:
 It is idempotent. It backs up any conflicting real file as `<name>.bak.<epoch>`.
 `install.sh --uninstall <dir>` removes only the symlinks it created.
 
+#### It also asks who the team is — once
+
+On a **first** stamp, at a terminal, it offers to collect the roster: one line per person,
+`<github-login> <commit-email>`, **yourself first**. That fills in the tracked `people`
+map and `defaultOwner`, plus this clone's gitignored `instance.config.local.json` — the
+three values a shared bundle needs, which used to be hand-edited afterwards. See
+[docs/sharing.md](docs/sharing.md#the-installer-asks-once).
+
+- **Nothing is written until you confirm it.** ctrl-C, ctrl-D and an empty first line all
+  write nothing at all, and say so — a half-answered roster is never left behind.
+- **It never asks on a refresh, and never when stdin is not a terminal** (a script,
+  `upgrade.sh`, a background agent). It prints what to edit by hand instead.
+- **It never overwrites a value that is already there.**
+- Skipping costs nothing: fill the same three values in by hand whenever you like.
+
 ### 4. Configure it
 
 ```bash
