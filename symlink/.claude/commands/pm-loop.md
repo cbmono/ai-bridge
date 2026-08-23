@@ -209,7 +209,9 @@ ticks, regardless of how long a tick runs.
   good (the loop never recreates it); `touch AWAITING.md` turns it back on.
 - Each tick also refreshes `SNAPSHOT.json` (via `scripts/write-snapshot.sh --quiet`,
   at the end of the tick) — the derived, gitignored feed for the cross-instance board
-  that `scripts/build-board.sh` renders. Same rule and same off switch: the writer
+  that `scripts/build-board.sh` renders as a page, `scripts/print-board.sh` prints in a
+  terminal, and `scripts/watch-board.sh` keeps live locally. Same rule and same off
+  switch for all three: the writer
   rewrites the file **only when it already exists** and never creates it, so
   `rm SNAPSHOT.json` takes this instance off the board for good and
   `touch SNAPSHOT.json` puts it back. Which instances a board shows comes from

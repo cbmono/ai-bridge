@@ -138,17 +138,70 @@ classification guards:
 ## 5. The cross-instance board (optional)
 
 `AWAITING.md` answers "what needs me *here*". The board answers "where does everything
-stand, across every instance" — one self-contained HTML page: instance → project → phase
-progress → a column per task status, with the same 🔴 awaiting-you queue on top.
+stand, across every instance" — instance → project → phase progress → a column per task
+status, with the same 🔴 awaiting-you queue on top.
+
+**One snapshot, three renderers.** `scripts/write-snapshot.sh` derives each instance's
+`SNAPSHOT.json`; every renderer reads that file and none of them reads the bundle. That
+separation is the whole reason the second and third renderer were cheap — see
+[conventions.md invariant 11](conventions.md#11-the-cross-instance-board-is-two-scripts-and-one-deletable-generated-file).
 
 ```bash
 scripts/write-snapshot.sh                                    # in an instance: refresh its SNAPSHOT.json
-scripts/build-board.sh                                       # anywhere: render one page from every snapshot
+scripts/print-board.sh                                       # the terminal board
+scripts/build-board.sh                                       # one HTML page from every snapshot
 scripts/build-board.sh --standalone --out /tmp/board.html    # ...to open in a browser
+scripts/watch-board.sh                                       # a local page, re-rendered on every change
 ```
 
 Each `/pm-loop` tick refreshes the snapshot at the end of the tick, so on a looping
 instance you never run the writer by hand.
+
+### Which renderer to reach for
+
+| | `print-board.sh` | `build-board.sh` | `watch-board.sh` |
+|---|---|---|---|
+| Output | columns in your terminal | one HTML file | one HTML file, kept fresh |
+| Freshness | the moment you ran it | the moment you ran it | live, to the second |
+| Shareable | paste the text | **yes** — publish it, read it on a phone | no, local only |
+| Costs | nothing | a re-run to refresh | **a resident process** |
+| Reach for it | by default, when you are already in a terminal | when someone else needs to see it | while actively working a queue |
+
+**The watcher needs a process you keep alive, and that is a real cost, not a detail.**
+ai-bridge deliberately has no resident process: its agents are ephemeral subagents inside
+one Claude Code session, nothing runs between sessions, and no daemon is installed or
+supervised. It is the same constraint that made munder-difflin's live telemetry
+unreachable for us. So the live page is a terminal tab you keep open — it stops when you
+close it, sleep the machine, or lose the session, it gives you nothing to share and no
+phone access, and it is per-machine. If any of that matters, the other two cost nothing
+and you re-run them.
+
+Details worth knowing before you pick one:
+
+1. **`print-board.sh` degrades rather than wrapping.** On a narrow terminal it drops the
+   status columns that are zero in *every* row (naming them under the table), clips
+   **names** with `…`, and never clips a **number** — a wrong count is worse than a
+   missing column. Below the width where a table still fits, it prints one short block
+   per project. Piped output is never clipped at all, because narrowness is a property of
+   a terminal, not of a pipe.
+2. **It colours only a TTY, and honours `NO_COLOR`.** A board redirected into a file, a
+   ticket or a PR body carries no escape codes. `--color always` forces colour anyway;
+   `--width N` pins the layout, which is what makes the output reproducible.
+3. **`watch-board.sh` writes into `.board-live/`, which is gitignored** (`install.sh`
+   appends the line, so instances stamped before it existed get it too). It re-renders on
+   any change to this instance's task documents, and on any watched instance's snapshot
+   being rewritten.
+4. **It watches with `fswatch` if you have it, and polls if you do not** (`--interval`,
+   default **2** seconds). `fswatch` is never assumed — the probe reports which mechanism
+   it picked. `WATCH_BOARD_WATCHER=poll` or `=fswatch` overrides the probe (`auto` when
+   absent).
+5. **It refreshes only *this* instance's snapshot.** A sibling instance on the board is
+   rendered from whatever snapshot it currently has, refreshed by its own `/pm-loop`. A
+   watcher started in one group does not write files in another group's directory.
+6. **Ctrl-C stops it cleanly and leaves nothing behind** — no stamp file, no orphaned
+   child. The page it produced stays where it is.
+7. **`--once` renders and exits**, which is the way to get a local standalone page
+   without keeping anything running.
 
 **On by default, off by deletion.** `install.sh` creates `SNAPSHOT.json` on the **first
 stamp only**; the writer rewrites it just when it already exists and never creates it;
@@ -194,7 +247,14 @@ The page makes **zero external requests** (no fonts, no CDN, no `<script>` at al
 instance tabs are CSS-only), is theme-aware, and the default output is an Artifact page
 body; `--standalone` gives you a file to open yourself. `build-board.sh` needs `python3`
 (stdlib only) — JSON parsing and HTML-escaping are the two things a hand-rolled awk reader
-gets wrong on exactly this input.
+gets wrong on exactly this input. `print-board.sh` needs it for the same two reasons with
+a different sink: a terminal's metacharacters are ANSI escapes and newlines, and a title
+carrying one must not repaint the screen or forge a row.
+
+**Escaping is per-medium, and all three renderers do it.** A title is human prose, so the
+HTML board escapes for markup and the terminal board strips every code point in Unicode
+category C (ESC and the other controls, the bidi overrides). Nothing from a snapshot ever
+sets a colour.
 
 Full reasoning, including why one drifted instance must not blank the board for the rest:
 [conventions.md invariant 11](conventions.md#11-the-cross-instance-board-is-two-scripts-and-one-deletable-generated-file).
