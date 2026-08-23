@@ -533,6 +533,19 @@ assert "…and with the line removed, git no longer ignores it" \
 bash "$BRIDGE_INSTALL" "$OLD" >/dev/null 2>&1 </dev/null
 assert "…a re-run of install.sh puts it back"  "$(yes_if git -C "$OLD" check-ignore -q .board-live/probe.txt)"
 assert "…exactly once, not once per run"       "$(eq "$(grep -cF '.board-live' "$OLD/.gitignore")" 1)"
+echo
+echo "== a fresh instance is named by its directory, not \".\" =="
+# install.sh seeds a snapshot with an EMPTY group, and the default discovery target is
+# Path("."), whose .name is empty too — so both renderers fell through and labelled the
+# instance ".". Asserted here for BOTH of them, even though tests/snapshot.test.sh owns
+# the HTML board otherwise: the fallback is shared, and it was fixed in one change.
+FRESH_TTY="$( cd "$INST" && bash "$PRINT" --width 0 2>/dev/null )"
+assert "the terminal board names the instance"     "$(yes_if sh -c 'printf "%s\n" "$1" | grep -q "^stamped "' _ "$FRESH_TTY")"
+assert "…and never labels a row \".\""              "$(yes_if sh -c 'printf "%s\n" "$1" | grep -qv "^\. "' _ "$FRESH_TTY")"
+( cd "$INST" && bash "$BOARD" --out "$TMP/fresh.html" >/dev/null 2>&1 )
+assert "the HTML board names it too"                "$(fhas '>stamped ' "$TMP/fresh.html")"
+assert "…and carries no \".\" tab label"            "$(fhasnt '>. <' "$TMP/fresh.html")"
+
 # The renderers must be linked into an instance, or nobody can run them there.
 assert "install.sh links print-board.sh"       "$(yes_if test -L "$INST/scripts/print-board.sh")"
 assert "…and watch-board.sh"                   "$(yes_if test -L "$INST/scripts/watch-board.sh")"

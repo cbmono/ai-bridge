@@ -225,6 +225,21 @@ def toint(v, default=0):
         return default
 
 
+def dirname(d):
+    """The directory's own name — never a path.
+
+    `.resolve()` first, because the default discovery target is Path("."), whose
+    `.name` is EMPTY: a snapshot carrying no `group` (exactly what install.sh seeds
+    on a first stamp) then fell through to str(d) and labelled the instance ".".
+    Resolving yields the real basename, and taking only the basename keeps the
+    published-page rule intact — a name leaves, a path never does.
+    """
+    try:
+        return d.resolve().name
+    except OSError:
+        return d.name
+
+
 def resolve_dirs(argv):
     """Named dirs, else `boardInstances`, else just this instance — never a glob.
 
@@ -275,12 +290,12 @@ for d in dirs:
         # tickets, and an absolute path carries the operator's home directory for no
         # reader benefit. The stderr line keeps the full path, for the one person who
         # can act on it.
-        broken.append((clean(d.name or str(d)), clean(f"{type(exc).__name__}: {exc}")))
+        broken.append((clean(dirname(d) or str(d)), clean(f"{type(exc).__name__}: {exc}")))
         print(f"print-board: {d}/SNAPSHOT.json is malformed — printing a note.", file=sys.stderr)
         continue
     # str(), not just truthiness: a non-string group (say 5) survives a `not` test and
     # then breaks the first thing that compares or pads it.
-    data["group"] = clean(str(data.get("group") or "") or d.name.removeprefix("_ai-bridge-") or str(d))
+    data["group"] = clean(str(data.get("group") or "") or dirname(d).removeprefix("_ai-bridge-") or str(d))
     instances.append(data)
 
 # ---------------------------------------------------------------- rows

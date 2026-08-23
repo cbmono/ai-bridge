@@ -119,6 +119,21 @@ def href(url):
     u = "" if url is None else str(url)
     return u if u.lower().startswith(("http://", "https://")) else ""
 
+def dirname(d):
+    """The directory's own name — never a path.
+
+    `.resolve()` first, because the default discovery target is Path("."), whose
+    `.name` is EMPTY: a snapshot carrying no `group` (exactly what install.sh seeds
+    on a first stamp) then fell through to str(d) and labelled the instance ".".
+    Resolving yields the real basename, and taking only the basename keeps the
+    published-page rule intact — a name leaves, a path never does.
+    """
+    try:
+        return d.resolve().name
+    except OSError:
+        return d.name
+
+
 def resolve_dirs(argv):
     if argv:
         return [Path(a).expanduser() for a in argv], None
@@ -186,13 +201,13 @@ for d in dirs:
         # absolute path leaks the operator's home directory and username for no
         # reader benefit. The stderr line above still carries the full path, where
         # the person who can fix it is the only one reading.
-        broken.append((d.name or str(d), type(exc).__name__ + ": " + str(exc)))
+        broken.append((dirname(d) or str(d), type(exc).__name__ + ": " + str(exc)))
         print(f"build-board: {d}/SNAPSHOT.json is malformed — rendering a note.", file=sys.stderr)
         continue
-    data["_dir"] = d.name or str(d)   # name, not path — see the note above
+    data["_dir"] = dirname(d) or str(d)   # name, not path — see the note above
     # str(), not just truthiness: a non-string group (say 5) survives a `not` test and
     # then makes the awaiting sort compare int with str, which raises TypeError.
-    data["group"] = str(data.get("group") or "") or d.name.removeprefix("_ai-bridge-") or str(d)
+    data["group"] = str(data.get("group") or "") or dirname(d).removeprefix("_ai-bridge-") or str(d)
     instances.append(data)
 
 def tolist(v):
