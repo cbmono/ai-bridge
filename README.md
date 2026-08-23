@@ -483,7 +483,7 @@ agents and commands.
 
 | Tier | Holds | Why it is its own tier |
 |---|---|---|
-| **`config/required/`** | `code-architect`, `deep-bug-scan`, `plan-architect` | the only three agents this repo's own role agents look for. Without them `qa-reviewer` loses its second opinion and the PM loses its plan critic — **silently**, which is why they ship here now |
+| **`config/required/`** | `code-architect`, `deep-bug-scan`, `plan-architect` | the only three agents this repo's own role agents look for. Without them `qa-reviewer` loses the escalation behind its cheap second opinion and the PM loses its plan critic — **silently**, which is why they ship here now |
 | **`config/opinionated/`** | 10 commands (`/plan`, `/grill`, `/verify`, `/acp`, `/scan`, `/stack`, `/techdebt`, `/rabbit`, `/dave`, `/codex-handoff`), 3 more agents (`build-validator`, `oncall-guide`, `stack-navigator`), the `Brief` output style, 2 hooks (status line, format-on-write), 2 scripts, `MEMORY.md`, `settings.json`, two `*.example.json` | one person's setup. Take it, fork it, or delete the directory. `/dave` calls one company's internal tool — that is exactly the kind of thing this tier is for |
 
 Delete either directory and `--config` still works: it links whatever is there, and errors

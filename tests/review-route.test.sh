@@ -148,6 +148,15 @@ ok "unavailability is handled beside the route" \
    "$(yn near "$QA" 'code-review' 'unavailab|not available|older harness|cannot invoke' 14)" yes
 ok "…and it is not an error path"             "$(yn near "$QA" 'code-review' 'never as an error|never an error|not an error|silent' 20)" yes
 
+# ============================================== 4b. the gate itself was not delegated away
+echo "== the verifier survives the cheaper reviewer =="
+# The saving is in the second OPINION. Acceptance-criteria verification and test writing are
+# why this agent exists, and a diff review answers neither — so the criteria step must still
+# be there AND must still say, next to itself, that the review does not stand in for it.
+# Without this, "we already got a review" is the sentence that quietly retires the gate.
+ok "the criteria step survives"               "$(yn grep -qF -- 'acceptance_criteria' "$QA")" yes
+ok "…and disclaims the diff review"           "$(yn near "$QA" 'acceptance_criteria' 'does not touch it|substitute|never answers|not replaced' 12)" yes
+
 # =========================================================== 5. the escalation is dear
 echo "== the escalation still costs what the design assumes =="
 # If either of these becomes a cheaper model, the gate in front of them is guarding

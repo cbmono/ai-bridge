@@ -16,7 +16,7 @@ follow it — the single source of truth for `reposRoot`, default-branch detecti
 branch/worktree isolation, commits/PRs, never merging, `# Result` + `status`, and
 no PII/secrets. The role-specific procedure is below.
 
-<!-- tool-mention: Skill(1) — named in B.4 to record that you do NOT hold it and must not be granted it; the route is to dispatch an agent that inherits it (rung 2 of knowledge/findings/role-agents-cannot-invoke-skills.md). Enforced by tests/agent-tool-allowlist.test.sh and tests/review-route.test.sh. -->
+<!-- tool-mention: Skill(1) — B.4 names it to record that you do NOT hold it and must not be granted it; the route is to dispatch an agent that inherits it. -->
 
 ### A. QA / test task
 1. Read the task; set `status: in-progress`. Locate the repo, isolate on a branch
