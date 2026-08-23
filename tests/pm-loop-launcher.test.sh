@@ -42,17 +42,20 @@ ok "tick agent exists" "$([ -f "$TICK" ] && echo yes || echo no)" yes
 
 # --- the launcher's preconditions are a closed list of three ---------------------
 # Numbered items inside `## Preconditions`, stopping at the next heading of any depth.
+# `/^#/` and not an interval like `{2,}`: not every awk supports interval expressions,
+# and one that doesn't would silently run the scan on into the next section.
 count_preconditions() { # <file>
-  awk '/^## Preconditions/{p=1;next} p&&/^#{2,} /{p=0} p&&/^[0-9]+\. /{n++} END{print n+0}' "$1"
+  awk '/^## Preconditions/{p=1;next} p&&/^#/{p=0} p&&/^[0-9]+\. /{n++} END{print n+0}' "$1"
 }
 ok "preconditions listed" "$(count_preconditions "$LAUNCHER")" 3
 
 # --- allowed-tools grants the launcher no reader ---------------------------------
 # `pwd` and `ls` are the instance-root probe and are fine. Anything that can read a
-# document, the git history or the GitHub API is the regression.
+# document, the git history or the GitHub API is the regression — including a bare
+# `Bash`, which grants all of them at once.
 readers_granted() { # <file> -> count
   awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{print}' "$1" \
-    | grep -o -E 'Read|Grep|Glob|WebFetch|Bash\((git|gh|cat|grep|head|tail|sed|awk|find|\*|:)' \
+    | grep -o -E 'Read|Grep|Glob|WebFetch|Bash\((git|gh|cat|grep|head|tail|sed|awk|find|jq|\*|:)|Bash[[:space:]]*(,|$)' \
     | wc -l | tr -d ' '
 }
 ok "no reader in allowed-tools" "$(readers_granted "$LAUNCHER")" 0
@@ -63,7 +66,7 @@ ok "no reader in allowed-tools" "$(readers_granted "$LAUNCHER")" 0
 ok "launcher carries the closed-list rule" "$(has "$LAUNCHER" 'The launcher reads nothing else')" yes
 # The rule must still name what it forbids; a heading over an empty list is no rule.
 forbidden_named() { # <file> -> count of the four costly sources named in that section
-  awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#{2,3} /{p=0} p' "$1" \
+  awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$1" \
     | grep -o -E 'log\.md|tick ledger|git log|gh pr list' | sort -u | wc -l | tr -d ' '
 }
 ok "the rule names what it forbids" "$(forbidden_named "$LAUNCHER")" 4
@@ -100,6 +103,12 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT
 } > "$tmp/bad.md"
 ok "checker counts the fixture's preconditions" "$(count_preconditions "$tmp/bad.md")" 4
 ok "checker flags the fixture's readers"        "$(readers_granted "$tmp/bad.md")" 2
+# A bare `Bash` grants every one of those readers at once, so it counts too.
+printf -- '---\nallowed-tools: Agent, Bash\n---\n' > "$tmp/bare.md"
+ok "checker flags a bare Bash grant"           "$(readers_granted "$tmp/bare.md")" 1
+# ...and the good line stays clean, or the check would flag everything.
+printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Agent\n---\n' > "$tmp/good.md"
+ok "checker passes pwd/ls-only grants"         "$(readers_granted "$tmp/good.md")" 0
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
