@@ -148,7 +148,7 @@ state, and act only on deltas.
 
    For each **build** `ready` task whose `depends_on` are
    all `done`, that clears the ownership check, and that is not already in-progress: set `assignee` +
-   `status: in-progress`, then spawn the role with the Agent tool
+   `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the task — both, or neither**, because `reclaim-worktree.sh` refuses a path with no branch to verify it against. Write them BEFORE spawning, so a tick that dies mid-dispatch still leaves the record the reclaim depends on. Then spawn the role with the Agent tool
    (`subagent_type: <assignee>`), passing the absolute task path and its
    `target_repo`. Respect the concurrency cap **`maxAgentsInFlight`** from
    `instance.config.json` (fall back to 5 if the key is absent) — that many agents in
@@ -243,7 +243,15 @@ state, and act only on deltas.
    delegates merging, this same clearance is the precondition `AUTONOMY.md` builds on.
 
 5. **Reflect merges.** For `in-review` tasks, check the PR(s): when **all** of a
-   task's PRs are **merged** → `status: done`, and re-evaluate dependents (they may
+   task's PRs are **merged** → `status: done`, then **reclaim that task's worktree**:
+   `scripts/reclaim-worktree.sh <task-path>`. It refuses unless every guard passes — no
+   `worktree:` recorded, a missing `branch:`, a locked or detached worktree, uncommitted
+   or unpushed work — and a refusal is **normal, not an error to work around**: it exits
+   non-zero, you report it and move on. Never pass a force flag, never remove the path by
+   hand, and never widen the search beyond the one path the task recorded. The scan-based
+   version of this destroyed three agents' work; the whole reason a delete is allowed here
+   is that the path came from the record rather than from a guess. Then re-evaluate
+   dependents (they may
    become dispatchable next tick). If review **requests changes** → back to
    `in-progress`. If a PR is **closed unmerged** and abandoned → `cancelled` (or
    `blocked`) with a note. A multi-PR task stays `in-review` until all merge.
