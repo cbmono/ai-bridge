@@ -835,6 +835,22 @@ def task_number(tid):
     return (tid or "")[5:] if (tid or "").startswith("task-") else (tid or "")
 
 
+Q_BUTTON_CAP = 24
+
+
+def q_range(t):
+    """1..N for a task's open questions, N capped.
+
+    `open_questions` is a COUNT the writer derives from the task document, and a button
+    is emitted per question — so a drifted `"open_questions": 900000000` is a valid int
+    that renders for hours and produces a page nobody can open. toint() cannot catch
+    that: the type is right and the value is absurd. The cap is deliberately far above
+    any real task (a document with two dozen open questions has a different problem) and
+    is not a silent truncation of anything that occurs in practice.
+    """
+    return range(1, min(toint(t.get("open_questions")), Q_BUTTON_CAP) + 1)
+
+
 def explain(verb, p, t, hint):
     """One short paragraph saying what this verb means and why THIS item is here.
 
@@ -966,7 +982,13 @@ def render_table():
     if asks:
         o.append('<section class="rail"><h2>Awaiting you</h2><ul>')
         for g, p, t, hint in asks:
-            what = (t.get("id") + " (" + str(t.get("title") or "") + ")") if t.get("id") else str(t.get("title") or "")
+            # str() on the id, not just on the title: a snapshot carrying `"id": 5`
+            # parses, so the malformed-snapshot path never sees it, and `5 + " ("` then
+            # raised TypeError — which meant NO FILE WAS WRITTEN AT ALL, one drifted
+            # instance blanking the published board for every healthy one. Same class as
+            # toint() above, and the reason nothing here concatenates snapshot data raw.
+            tid_txt = str(t.get("id") or "")
+            what = (tid_txt + " (" + str(t.get("title") or "") + ")") if tid_txt else str(t.get("title") or "")
             where = g + " › " + str(p.get("title") or "")
             o.append('<li class="ask"><details class="why"><summary class="line">'
                      '<span class="verb">%s</span><span class="what">%s</span>'
@@ -975,11 +997,11 @@ def render_table():
                      % (e(where), " · <code>%s</code>" % e(hint) if hint else ""))
             o.append('<p>%s</p></details>' % e(explain(t.get("awaiting"), p, t, hint)))
             o.append('<div class="acts">')
-            if t.get("id"):
-                ref = short_ref(str(p.get("slug") or ""), t["id"])
+            if tid_txt:
+                ref = short_ref(str(p.get("slug") or ""), tid_txt)
                 o.append('<button class="ghost" data-copy="%s" data-what="Task reference">'
                          "copy task ref</button>" % e(ref))
-                for i in range(1, toint(t.get("open_questions")) + 1):
+                for i in q_range(t):
                     o.append('<button class="qbtn" data-copy="%s" data-what="Q%d handle" '
                              'title="Copy &quot;%s Q%d:&quot; ready to type your answer after">'
                              "answer Q%d</button>"
@@ -1078,7 +1100,7 @@ def render_table():
                     'title="Copy &quot;%s Q%d:&quot; ready to type your answer after">'
                     'Q%d</button>' % (e("%s Q%d: " % (ref, i)), i,
                                       e(ref), i, i)
-                    for i in range(1, q + 1)))
+                    for i in q_range(t)))
             else:
                 o.append('<td class="r dim">—</td>')
             # The http/https rule applies here too: a PR URL is a link only on that

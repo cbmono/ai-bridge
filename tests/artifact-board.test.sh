@@ -185,7 +185,35 @@ drift_case "a non-numeric phase total" \
   '{"group":"drift","counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","phase_progress":{"total":"two","done":"one"},"tasks":[]}]}'
 drift_case "a task is a string, not an object" \
   '{"group":"drift","counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","tasks":["oops"]}]}'
+# A NUMERIC task id, on a task the decision rail renders. Found by reading this diff, not
+# by any of the cases above: the rail concatenated the id with a string, so `"id": 5`
+# raised TypeError and wrote no file at all — the same one-instance-blanks-the-board
+# failure, reached through the one field that was still handled raw.
+drift_case "a task id is a number" \
+  '{"group":"drift","counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","tasks":[{"id":5,"title":"numeric id","status":"draft","awaiting":"approve","open_questions":0}]}]}'
 rm -rf "$TMP/drift"
+
+echo "== an absurd question count cannot render forever =="
+# toint() cannot catch this one: the type is right and the value is absurd. A button per
+# question means a nine-digit count renders for hours and produces a page nobody can
+# open, so the count is capped. Runs with a timeout because the failure mode IS the hang.
+mk "$TMP/manyq" "manyq" '[
+ {"slug":"p","title":"Question flood","kind":"build","status":"active","awaiting_close":false,
+  "phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Absurd count","status":"draft","assignee":"",
+            "awaiting":"answer","open_questions":900000000,"advisor_notes":0,
+            "depends_on":[],"in_flight":false,"prs":[]}]}]'
+QOUT="$TMP/manyq.html"
+qrc=0
+( bash "$GEN" --layout table --out "$QOUT" "$TMP/manyq" >/dev/null 2>&1 ) &
+qpid=$!
+for _ in $(seq 1 30); do kill -0 "$qpid" 2>/dev/null || break; sleep 1; done
+if kill -0 "$qpid" 2>/dev/null; then kill -9 "$qpid" 2>/dev/null; qrc=1; fi
+wait "$qpid" 2>/dev/null || true
+assert "the page renders instead of hanging"         "$(eq "$qrc" 0)"
+assert "…and it was written"                         "$(yes_if test -s "$QOUT")"
+assert "…with the first question handle"             "$(fhas 'Q1</button>' "$QOUT")"
+assert "…and the count capped, not unbounded"        "$(fhasnt 'Q25</button>' "$QOUT")"
 
 echo "== a PR URL is a link only on http/https, here too =="
 mk "$TMP/hostile" "hostile" '[

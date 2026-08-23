@@ -49,15 +49,27 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 
 # ---------------------------------------------------------------- the ceiling
 #
-# Measured 2026-08-23 in this repo, immediately after build-artifact-board.sh was folded
-# into build-board.sh behind --layout (17 files). Pre-consolidation, at 68479c1, the same
-# two expressions read 6,061 and 3,408 — so the consolidation removed a 602-line file and
-# the merged renderer absorbed all but five lines of it: the two layouts share discovery,
-# escaping and coercion but genuinely differ in markup and CSS, and the table layout also
-# gained the hardening it had been missing. The cut this objective wants has NOT happened
-# yet. What has happened is that it can no longer un-happen quietly.
-CEILING_TOTAL=6056
-CEILING_CODE=3398
+# Measured 2026-08-23 in this repo, after build-artifact-board.sh was folded into
+# build-board.sh behind --layout (18 files -> 17). Pre-consolidation, at 68479c1, the same
+# two expressions read 6,061 and 3,408, so the honest arithmetic is:
+#
+#   6,061 / 3,408   before                 18 files
+#   6,056 / 3,398   the consolidation      17 files   (-5 / -10)
+#   6,078 / 3,410   what is pinned here    17 files   (+22 / +12)
+#
+# Two things that number says, and both belong here rather than in a PR nobody will read
+# again. First, MERGING THE RENDERERS CUT ALMOST NOTHING: the two layouts already shared
+# discovery, escaping and coercion, and what remains — markup, CSS, a decision rail — is
+# genuinely different per layout. The duplication that went was structural (one hardened
+# path instead of two, so a fix can no longer land in one layout and miss the other), not
+# 600 lines. Second, the +22 is two defects found reviewing that merge: a numeric task id
+# crashed the render, and a drifted question count rendered a button per question. Both
+# blanked the whole published board. Ten of the 22 lines are the comments explaining why.
+#
+# So the cut this objective wants has NOT happened, and this constant does not pretend
+# otherwise. What has changed is that it can no longer fail to happen quietly.
+CEILING_TOTAL=6078
+CEILING_CODE=3410
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is
