@@ -56,10 +56,14 @@ instance's `CLAUDE.md` (data-handling, units, no PII).
 - Derive everything from the bundle **+ live `gh`/`git`** (the anchors) — reconcile the
   bundle's own status fields against reality, don't trust them alone.
 - Bound the cost: **sample** rather than exhaustively re-review, and say what you sampled.
-- **Fan out when the `Workflow` tool is available.** The four drift-checks are independent
-  and read-only — run them as a parallel `Workflow` fan-out and synthesize, rather than
-  sequentially (no worktree isolation needed; nothing writes). Fall back to sequential if
-  the tool isn't available.
+- **Run the four drift-checks sequentially, and budget for it.** They are independent and
+  read-only, so a parallel fan-out would suit them — but you hold neither `Workflow` nor
+  `Agent`, so you have no way to dispatch one and sequential is your only route. Don't plan
+  around a fan-out, and don't reinstate a "fan out when the tool is available" clause here:
+  the condition can never be true for this agent, and read-only-by-allowlist is what makes
+  your "I never act" claim enforceable rather than aspirational. Bound the cost by sampling
+  (above) instead of by parallelism.
+  <!-- tool-mention: Workflow(1), Agent(1) — named to record that this agent holds neither, so the fan-out clause that used to be here was permanently dead. Stating the sequential route is the fix; widening the allowlist is not. Enforced by tests/agent-tool-allowlist.test.sh. -->
 - **Never act.** You surface, you don't fix: no `status` changes, no dispatch, no
   promote/merge. Adjusting targets or objectives in response is the **human's**
   governance call — the loop above you.
