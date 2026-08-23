@@ -88,7 +88,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # AND THIS PROJECT STILL OWES A REDUCTION. The objective's second criterion is that a
 # project serving it LOWERS one of these two constants before it closes. Raising them here
 # does not discharge that; it enlarges it. The largest remaining candidates are the four
-# board renderers (1,907 lines between them), not anything this task touched.
+# board renderers (build-board, print-board, watch-board, write-snapshot: 2,342 lines), not anything this task touched.
 CEILING_TOTAL=6185
 CEILING_CODE=3447
 
