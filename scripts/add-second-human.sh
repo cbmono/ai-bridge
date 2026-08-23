@@ -27,9 +27,17 @@ set -uo pipefail
 # authorship via the `people` map.
 SECOND_LOGIN="${SECOND_LOGIN:-REPLACE-github-login}"
 SECOND_EMAIL="${SECOND_EMAIL:-REPLACE@example.com}"
-# Who owns work carrying no explicit `owner:`. MUST be one login, and MUST be identical
-# on both clones — this is the key that prevents double dispatch.
-DEFAULT_OWNER="${DEFAULT_OWNER:-$SECOND_LOGIN}"
+# Who owns work carrying no explicit `owner:`. MUST be one login, MUST be identical on
+# both clones, and HAS NO SAFE DEFAULT — which is why this one is not defaulted.
+#
+# The first version defaulted it to SECOND_LOGIN. That is wrong in the common case and
+# wrong in the expensive direction: on an existing bundle the unowned backlog is the
+# FIRST human's, so defaulting to the newcomer hands them every untagged task and gives
+# the original owner none. Caught on the first real run.
+DEFAULT_OWNER="${DEFAULT_OWNER:-}"
+
+# The first human, so `people` maps both and ownership can resolve on either clone.
+FIRST_LOGIN="${FIRST_LOGIN:-}"
 # ------------------------------------------------------------------------------
 
 APPLY=0
@@ -54,6 +62,14 @@ case "$SECOND_LOGIN" in
     echo "  SECOND_LOGIN=octocat SECOND_EMAIL=o@example.com $0 $TARGET" >&2
     exit 2 ;;
 esac
+[ -n "$DEFAULT_OWNER" ] || {
+  echo "add-second-human: DEFAULT_OWNER is required — there is no safe default." >&2
+  echo "                  It is who owns work with no explicit \`owner:\`, and on an" >&2
+  echo "                  existing bundle that is almost always the FIRST human, not" >&2
+  echo "                  the one being added. Set it explicitly:" >&2
+  echo "  DEFAULT_OWNER=<first-human-login> SECOND_LOGIN=... SECOND_EMAIL=... $0 $TARGET" >&2
+  exit 2; }
+
 command -v python3 >/dev/null 2>&1 || {
   echo "add-second-human: needs python3 to edit JSON safely (never line-wise)." >&2; exit 2; }
 
@@ -69,10 +85,11 @@ case "$SECOND_EMAIL" in
 esac
 
 echo "== the shared, TRACKED half (both clones must agree) =================="
-python3 - "$CFG" "$SECOND_LOGIN" "$SECOND_EMAIL" "$DEFAULT_OWNER" "$APPLY" <<'PYEOF'
+python3 - "$CFG" "$SECOND_LOGIN" "$SECOND_EMAIL" "$DEFAULT_OWNER" "$APPLY" "$FIRST_LOGIN" <<'PYEOF'
 import json, sys
 cfg, login, email, owner = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 apply_ = sys.argv[5] == "1"
+first = sys.argv[6] if len(sys.argv) > 6 else ""
 d = json.load(open(cfg))
 people = dict(d.get("people") or {})
 changes = []
@@ -88,8 +105,13 @@ if people.get(login) != email:
 # and ownership cannot resolve on their clone.
 me = d.get("authorEmail")
 if me and me not in people.values():
-    print("  NOTE: authorEmail %s is not in `people`." % me)
-    print("        Add the first human as well, or ownership cannot resolve on their clone.")
+    if first:
+        changes.append(("people[%s]" % first, people.get(first), me))
+        people[first] = me
+    else:
+        print("  NOTE: authorEmail %s is not in `people`, and FIRST_LOGIN was not given." % me)
+        print("        Pass FIRST_LOGIN=<your-github-login> so both humans are mapped —")
+        print("        otherwise ownership cannot resolve on the first human's clone.")
 
 if d.get("defaultOwner") != owner:
     changes.append(("defaultOwner", d.get("defaultOwner"), owner))
