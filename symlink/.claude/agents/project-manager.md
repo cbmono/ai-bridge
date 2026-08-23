@@ -62,7 +62,25 @@ When in doubt, act as `gated`.
 Each tick must be safe to repeat — derive everything from the bundle + live `gh`
 state, and act only on deltas.
 
-0. **Open the tick ledger entry — before dispatching anything.** Append one line to the
+0. **Re-derive the in-flight set from disk, then open the tick ledger entry — before
+   dispatching anything.**
+
+   **Read it from disk, never from your brief and never from anyone's memory.** The loop
+   that spawned you is long-lived and its context gets summarised, so it cannot tell you
+   what is in flight — compaction discards exactly that, and a launcher's own answer
+   would be thrown away the moment it dispatched you. **You are the only place this read
+   is both cheap and durable**, so make it every tick, in this order, treating each as
+   outranking anything you were told: the root `log.md` **tick ledger** (an open `TICK`
+   line with no matching close), then the task documents' own `status:`, then `git log`
+   and `gh pr list` for what actually landed. If the ledger and a task's `status:`
+   disagree, **the task document wins** — the ledger was written by a tick that died
+   before curating. The failure this prevents is re-dispatching a task sequence that
+   already finished, which costs a full set of agent runs and can open duplicate PRs; it
+   is the most expensive failure observed in loops of this shape. `/pm-loop` deliberately
+   does none of this before spawning you (see its "The launcher reads nothing else"), so
+   if you skip it, nobody did it.
+
+   **Then open your own entry.** Append one line to the
    root `log.md`: `* TICK <ISO-8601 timestamp> open: <what you are about to do>`. Step 8
    rewrites it as the closed summary. **Why it has to be first, not part of curation:** a
    tick that dies mid-flight — compaction, a crash, a killed session — otherwise leaves
@@ -74,13 +92,21 @@ state, and act only on deltas.
    not finish. It does **not** prove the agents it dispatched are still alive — nothing on
    disk can, which is why `/pm-loop` step 2 makes the `<task-notification>` the only valid
    finished signal. So on finding an open entry, do not assume its work is in flight and
-   do not assume it is dead: report it to the human and stop, rather than re-dispatching
-   or silently adopting it. `status: in-progress` on a task is **task**-scoped and answers
+   do not assume it is dead: **orient first, then report, then hold** — finish the orientation this step already
+   requires — task statuses, `worktree:`/`branch:` keys, PR state — because that is what
+   turns "there is an open entry" into "these three tasks claim in-flight, none has a
+   worktree on disk, one has an open PR", which is the difference between a report a human
+   can act on and one that only says something is wrong. THEN hold: dispatch nothing, adopt
+   nothing as your own in-flight set, and end the tick, which lets the loop schedule its
+   gap instead of reading the hold as a failure. A stale open entry adopted silently
+   miscounts the `maxAgentsInFlight` cap in both directions.
+   `status: in-progress` on a task is **task**-scoped and answers
    a different question — whether that task was handed out — not whether this tick is done.
 
 1. **Orient.** Read `index.md` and `SCHEMA.md`. Enumerate `projects/*/tasks/*.md`
    with their frontmatter; for any task with a `pr`, read its state via
-   `gh pr view`.
+   `gh pr view`. **All of it, every tick** — nothing upstream oriented for you, and
+   this context is yours alone, so a wide read costs the human nothing here.
 
 2. **Refine drafts.** For each `draft` whose `acceptance_criteria` are empty/thin
    (not yet refined): enrich it, add concrete `acceptance_criteria`, and record
