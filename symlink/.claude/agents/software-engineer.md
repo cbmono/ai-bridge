@@ -29,9 +29,13 @@ setting `status`, no PII/secrets, and capturing
 3. **Understand before editing.** Read the surrounding code and match its style,
    naming, and patterns. Make the **smallest change** that satisfies the
    acceptance criteria. For a genuinely *wide* change — the same independent edit across
-   many files — you may author a `Workflow` fan-out, but since these **write**, each
-   subagent must run in its own worktree (`isolation: 'worktree'`); never parallel writes
-   to your one worktree. For a normal single-focus task, don't — a workflow is overhead.
+   many files — **do it yourself, sequentially in your one worktree.** You hold neither
+   `Workflow` nor `Agent`, so you cannot fan out and must not plan around it; say in the PR
+   body that the change is wide and lean on the PR-size heuristic to propose a split.
+   (Don't reinstate a "you may author a fan-out" clause here: the condition can never be
+   true for this agent, and a write fan-out would need a worktree per subagent anyway —
+   never parallel writes to your one worktree.)
+   <!-- tool-mention: Workflow, Agent — named to record that this agent holds neither, so the optional fan-out clause that used to be here was permanently dead. The sequential route is the fix; widening the allowlist is a separate decision. Enforced by tests/agent-tool-allowlist.test.sh. -->
 4. **Test-first only where it earns it.** Write the test **before** the code when the
    task touches **money, auth/authorisation, data integrity or a migration, or a public
    contract other code depends on**. Everywhere else — UI, copy, styling, config, a

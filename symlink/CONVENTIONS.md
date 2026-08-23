@@ -14,6 +14,16 @@ including the majority that dispatch no role agent. The `CLAUDE.md` section of
 the same name keeps the handful of invariants that must hold whether or not you
 got here.
 
+**One rule about this file's own wording, because four agents with four different
+`tools:` lists read it:** an instruction here must be executable by **every** one of them,
+so where a rule depends on a tool only some of you hold, it says which list decides and
+what the others do instead. Never the other way round — a condition on what is *installed*
+reads as satisfied while being unexecutable for an agent that lacks the tool, which is how
+the `code-architect` clause below was wrong for two releases.
+`tests/agent-tool-allowlist.test.sh` in `cbmono/ai-bridge` enforces this.
+
+<!-- tool-mention: Workflow, Agent, EnterWorktree, mcp__claude-in-chrome__* — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent; EnterWorktree may be missing for a subagent; oncall-guide holds no browser tools. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
+
 - Read `instance.config.json` for `reposRoot` (where target repos are cloned).
   Honor this `CLAUDE.md` for data-handling, units, and commit-attribution.
 - **Detect the default branch** (`git symbolic-ref --short refs/remotes/origin/HEAD`
@@ -48,9 +58,15 @@ got here.
   review criterion either — a reviewer never withholds clearance over it, and it never
   appears as a finding. If the split is obviously right and cheap, do it before opening.
 - **Self-review before you open the PR (a pre-filter, not the gate).** On your own diff,
-  run a review and fix what it flags *first*: dispatch `code-architect` if it's installed
-  in `~/.claude/agents/`, else do a careful pass yourself (correctness, edge cases,
-  security, tests). **Don't spend a CodeRabbit session here if CodeRabbit reviews the PR
+  run a review and fix what it flags *first* (correctness, edge cases, security, tests).
+  **Which route you take is decided by your own `tools:` list, not by what is installed on
+  the machine.** Hold `Agent`? — `qa-reviewer` does — dispatch `code-architect`. Don't hold
+  it? — `software-engineer`, `devops-engineer` and `oncall-guide` don't — then **a careful
+  pass over your own diff *is* the route**, not a fallback from one, because there is
+  nothing to fall back from. Check your allowlist if you are unsure: an installed
+  `code-architect` changes nothing for an agent that cannot dispatch, which is why this
+  reads on possession rather than on installation.
+  **Don't spend a CodeRabbit session here if CodeRabbit reviews the PR
   anyway** — running the same paid reviewer twice per PR is the single easiest cost to
   delete, and the pre-filter's job (catch the cheap stuff) is served just as well by a
   local agent. Reach for `coderabbit review` locally **only** when the repo has *no*
@@ -65,16 +81,24 @@ got here.
   *substantial rewrite* that invalidates the original review. Repos should pin this with
   `.coderabbit.yaml` (`auto_incremental_review: false`, `chat.auto_reply: false`) so it
   holds by default rather than by everyone's discipline.
-- **Wide work via workflows (optional).** For genuinely wide, *independent* work, author a
-  `Workflow` fan-out instead of grinding serially (find the real edges → fan out → verify →
-  synthesize). **Read-only** fan-out (review, audit, research, code-navigation) needs **no
-  worktree isolation** (nothing writes) but still obeys the instance's concurrency/resource
-  limits (the `maxAgentsInFlight` cap) — it does **not** license unlimited dispatches;
-  **write** fan-out must *also* give each subagent its own worktree (`isolation:
-  'worktree'`) — never parallel writes to a shared clone/worktree (the same collision the
-  per-task isolation rule prevents). Skip it for small/sequential work (pure
-  overhead). Under **ultracode**, authoring a workflow for substantial wide work is the
-  default. `/pm-loop` stays serial — workflows live *inside* a task, never at the loop level.
+- **Wide work: fan out only if you actually can — most of you can't.** For genuinely wide,
+  *independent* work a parallel fan-out beats grinding serially (find the real edges → fan
+  out → verify → synthesize), but check your `tools:` list before you plan around one.
+  **No role agent's allowlist contains `Workflow`**, so the `Workflow` idiom is dead for
+  every one of you and is deliberately not written here as an option — granting it is a
+  standalone decision with its own cost, not something a convenience clause settles. Only
+  `qa-reviewer` holds `Agent`, so only `qa-reviewer` can fan out at all, and it does so by
+  dispatching several agents in parallel. `software-engineer`, `devops-engineer` and
+  `oncall-guide` hold neither: **for you, wide work is sequential**, and that is the
+  intended behaviour rather than a gap to route around — say so in the PR body and lean on
+  the PR-size heuristic above if the result is large. Whoever *does* fan out: **read-only**
+  fan-out (review, audit, research, code-navigation) needs **no worktree isolation**
+  (nothing writes) but still obeys the instance's concurrency/resource limits (the
+  `maxAgentsInFlight` cap) — it does **not** license unlimited dispatches; a **write**
+  fan-out must *also* give each subagent its own worktree — never parallel writes to a
+  shared clone/worktree (the same collision the per-task isolation rule prevents). Skip it
+  for small/sequential work (pure overhead). `/pm-loop` stays serial — a fan-out lives
+  *inside* a task, never at the loop level.
 - Write the PR URL and a `# Result` summary back into the task document, and set
   the task `status: in-review` (or `blocked`, with why, if you can't proceed).
 - **No customer PII** in code, commits, or PR text; **never echo, print, or log

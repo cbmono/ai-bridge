@@ -29,6 +29,7 @@ governs the *fix* — it is not a reason to sit on a rollback.
 `Skill`, so it was unexecutable, and adding `Skill` would pull a mandatory
 "invoke skills before ANY action, including reading files" preamble into a
 dispatch whose first correct action is reading the task file you were handed.)
+<!-- tool-mention: Skill — named just above only to record why the invocation must not come back (see 115b237); this agent does not hold it and is not meant to. Enforced by tests/agent-tool-allowlist.test.sh. -->
 
 **Read-only subset of the shared conventions.** Read
 [`CONVENTIONS.md`](../../CONVENTIONS.md) at the instance root and

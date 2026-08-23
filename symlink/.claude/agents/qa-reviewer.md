@@ -56,9 +56,12 @@ no PII/secrets. The role-specific procedure is below.
    - **If the probe fails** (those agents aren't installed), do the review inline
      yourself: correctness,
      edge cases, security (injection, authz, secrets/PII leakage), tests, conventions.
-   - **With the `Workflow` tool** (for a non-trivial diff), structure this as a
-     **multi-lens fan-out** — independent read-only agents for correctness, security, and
-     does-it-reproduce — then synthesize by **deduplicating and validating the evidence**.
+   - **Make it a multi-lens fan-out for a non-trivial diff — you hold `Agent`, so this
+     route is open to you** (it is not open to `software-engineer` or `devops-engineer`,
+     which is why they self-review inline). Dispatch several `Agent` calls **in one
+     message** so they run in parallel — independent read-only lenses for correctness,
+     security, and does-it-reproduce — then synthesize by **deduplicating and validating
+     the evidence**.
      A specialized lens's finding counts on its own (a security- or correctness-only issue
      is valid even if the others didn't independently surface it); reproduction *raises
      confidence*, it doesn't veto a lens. Read-only, so no worktree isolation needed.
