@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 #
-# install.sh — provision (or refresh) an ai-bridge INSTANCE.
+# install.sh — provision (or refresh) an ai-bridge INSTANCE, or link the CONFIG LAYER.
 #
 #   Usage:
 #     install.sh [TARGET]              # install/refresh an instance at TARGET (default: cwd)
-#     install.sh --uninstall [TARGET]  # remove only the symlinks this script created
+#     install.sh --instance [TARGET]   # the same thing, stated explicitly
+#     install.sh --config              # link config/ into ~/.claude (CLAUDE_CONFIG_DIR wins)
+#     install.sh --uninstall [TARGET]  # remove only the instance symlinks this created
+#     install.sh --config --uninstall  # remove only the config-layer symlinks this created
 #     install.sh --help
 #
-# It does three things, mirroring how the `ai-setup` repo provisions ~/.claude:
+# INSTANCE mode does three things:
 #   1. SYMLINKS the generic machinery in `symlink/` into TARGET (file granularity,
 #      absolute targets). Updates to the template propagate to every instance.
 #      These paths are gitignored in the instance (managed block in .gitignore).
@@ -18,6 +21,13 @@
 #      instance without ever being nested in it. Gitignored, and skipped while
 #      reposRoot is still the seeded placeholder. Re-run that script on its own
 #      after cloning a repo; you don't need a full refresh for it.
+#
+# CONFIG mode links the two tiers of `config/` into the Claude Code config dir, one
+# FILE at a time — never a whole directory (see the CONFIG LAYER block below):
+#   · config/required/     — the agents ai-bridge's own role agents probe for.
+#   · config/opinionated/  — one human's commands, output style, hooks and scripts.
+# Either tier may be deleted; absence is safe. An instance never needs either, and the
+# config layer never needs an instance.
 #
 # Idempotent: re-running relinks cleanly and reports already-linked entries.
 # Backs up any conflicting real file as <name>.bak.<epoch> before linking.
@@ -78,14 +88,30 @@ BEGIN_MARK="# >>> ai-bridge machinery (symlinked) >>>"
 END_MARK="# <<< ai-bridge machinery <<<"
 
 MODE="install"
+# Which half of the repo this run is about. `instance` is the default because a BARE
+# directory argument has always meant "stamp an instance here" — three live instances and
+# upgrade.sh call it that way, so `--instance` is only the explicit spelling of the
+# existing behaviour, never a new requirement.
+LAYER="instance"
+LAYER_FLAG=""
 TARGET=""
 for arg in "$@"; do
   case "$arg" in
     --uninstall) MODE="uninstall" ;;
+    --config|--instance)
+      # Mutually exclusive, and said so rather than letting the last flag win: the two
+      # write to completely different places, so a run that meant one and did the other
+      # is not something to guess at.
+      if [ -n "$LAYER_FLAG" ] && [ "$LAYER_FLAG" != "$arg" ]; then
+        echo "error: --config and --instance are mutually exclusive" >&2; exit 2
+      fi
+      LAYER_FLAG="$arg"; LAYER="${arg#--}" ;;
     --help|-h)
       # Range must cover the whole header block above (through the "Backs up…"
       # line) — extend it when you add lines there, or --help truncates silently.
-      sed -n '3,23p' "$0" | sed 's/^# \{0,1\}//'
+      # tests/config-layer.test.sh asserts the flags appear in the output, which is
+      # what notices a stale range instead of leaving --help quietly truncated.
+      sed -n '3,33p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
     *)
@@ -93,6 +119,262 @@ for arg in "$@"; do
       TARGET="$arg" ;;
   esac
 done
+if [ "$LAYER" = "config" ] && [ -n "$TARGET" ]; then
+  echo "error: --config takes no target directory (it links into" >&2
+  echo "       \${CLAUDE_CONFIG_DIR:-\$HOME/.claude}); got '$TARGET'" >&2
+  exit 2
+fi
+
+# ===========================================================================
+# CONFIG LAYER (--config) — link config/ into the Claude Code config dir.
+# ===========================================================================
+#
+# WHY IT IS HERE AT ALL. ai-bridge used to depend on a *separate* config repo for four
+# things, and all four failed SILENTLY: the `@~/.claude/claude-defaults.md` import every
+# instance inherited from seed/CLAUDE.md (now inlined there, so nothing can dangle), and
+# three probed-for agents — `code-architect`, `deep-bug-scan`, `plan-architect`. A fresh
+# laptop is now one clone and one install.
+#
+# THE ARROW IS ONE-WAY. `symlink/` must never *require* `config/`. The role agents keep
+# probing with `test -f`, so an instance stamped on a machine that never ran `--config`
+# works — it loses a second opinion, not a feature. `tests/config-layer.test.sh` asserts
+# a config-less stamp. Both tiers are deletable: `rm -rf config/opinionated` (or
+# `config/required`) must break nothing and error nowhere.
+#
+# EVERY LINK IS PER FILE, NEVER PER DIRECTORY. agents/, commands/, hooks/, scripts/ and
+# skills/ are DROP-IN directories — a skill or plugin installer can write a new
+# subdirectory into ~/.claude/skills at any moment. Linking such a directory as a unit
+# aims it at this repo's working tree, so every drop-in lands INSIDE a public git repo.
+# That is not hypothetical: it is how four uninvited skills got committed to the parent
+# repo on 2026-08-22, three of them dangling symlinks its installer would then have
+# pushed into every consumer's ~/.claude. Per-file linking leaves ~/.claude/<dir> a real
+# directory that owns its own contents, so a drop-in can never reach this checkout and
+# no .gitignore allow-list is needed to keep it out. Do not "simplify" this to whole-dir
+# links — `tests/config-layer.test.sh` asserts a fresh drop-in stays outside the repo.
+CONFIG_SRC="$TEMPLATE_DIR/config"
+CONFIG_TIERS="required opinionated"
+# Honour CLAUDE_CONFIG_DIR: when it is set, Claude Code reads settings, agents and hooks
+# from there instead of ~/.claude, so installing into $HOME would put the layer somewhere
+# nothing loads it from. It is also the same expression config/opinionated/settings.json
+# uses to reference its hooks, so the installer and the hook command cannot disagree.
+CONFIG_DEST="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+
+# Every linkable file, as "<tier><TAB><relative path>".
+#
+# Three kinds of file are never linked, at any depth: `README.md` (a repo doc — and in
+# commands/ Claude Code would register it as the command `/README`), `*.example.json`
+# (copy-from templates: a linked one is clutter that dangles if this checkout moves), and
+# settings.json, which is linked by its own block below because it is the one file that
+# can already hold permissions and plugins a human tuned by hand.
+config_entries() {
+  local tier
+  for tier in $CONFIG_TIERS; do
+    [ -d "$CONFIG_SRC/$tier" ] || continue
+    ( cd "$CONFIG_SRC/$tier" && find . -type f -print ) | sed 's#^\./##' | sort \
+    | while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        # Parameter expansion, not basename: this scan runs a few times per invocation
+        # and one fork per file per pass is a measurable cost on a loaded machine.
+        case "${rel##*/}" in
+          README.md|settings.json|*.example.json|.DS_Store) continue ;;
+        esac
+        printf '%s\t%s\n' "$tier" "$rel"
+      done
+  done
+}
+
+# Top-level entries the config layer manages — the roots of the dangling-link sweep.
+config_tops() { { config_entries | cut -f2 | sed 's#/.*##'; echo settings.json; } | sort -u; }
+
+# Print the first DIRECTORY component of $1 that is a symlink under the config dir.
+#
+# This guard is what keeps the per-file fix honest. A whole-directory symlink left over
+# from another setup (this machine's ~/.claude/agents pointed into the parent config repo
+# for a year) turns "$CONFIG_DEST/agents/x.md" into a write INSIDE that other checkout —
+# modifying a repo nobody asked us to touch, silently, and leaving the config dir with no
+# file of its own. So refuse the entry and say what to do about it.
+config_link_parent() {
+  local rel="$1" dir cur part
+  case "$rel" in */*) dir="${rel%/*}" ;; *) return 1 ;; esac
+  cur="$CONFIG_DEST"
+  local IFS=/
+  for part in $dir; do
+    cur="$cur/$part"
+    if [ -L "$cur" ]; then printf '%s' "$cur"; return 0; fi
+  done
+  return 1
+}
+
+# True only when CONFIG_DEST/$1 is a symlink we created (points into this checkout's
+# config/), decided by the target rather than by name — the same `ours` test the instance
+# half uses, and the reason an uninstall can never remove somebody else's link.
+config_ours() {
+  local dst="$CONFIG_DEST/$1"
+  [ -L "$dst" ] || return 1
+  case "$(readlink "$dst")" in "$CONFIG_SRC"/*) return 0 ;; esac
+  return 1
+}
+
+# Remove links into this checkout's config/ whose target is gone.
+#
+# Same reasoning as the instance half's step 2b, and the same narrowness: the link must
+# point INTO $CONFIG_SRC *and* its target must be missing. A dangling entry is worse than
+# an absent one — Claude Code registers a command whose file has vanished, and a hook
+# whose script is gone exits 127 on every launch — so retiring a config file has to sweep
+# too. Scoped to the entries this layer manages, never the whole config dir: ~/.claude
+# also holds plugins/, projects/ and sessions/, none of it ours to walk.
+config_sweep() {
+  local t roots=""
+  while IFS= read -r t; do
+    [ -n "$t" ] || continue
+    if [ -d "$CONFIG_DEST/$t" ] && [ ! -L "$CONFIG_DEST/$t" ]; then roots="$roots $CONFIG_DEST/$t"; fi
+  done <<EOF
+$(config_tops)
+EOF
+  {
+    find "$CONFIG_DEST" -maxdepth 1 -type l -print 2>/dev/null || true
+    # shellcheck disable=SC2086
+    if [ -n "$roots" ]; then find $roots -type l -print 2>/dev/null || true; fi
+  } | sort -u | while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    case "$(readlink "$l")" in
+      "$CONFIG_SRC"/*) if [ ! -e "$l" ]; then rm -f "$l"; echo "  retire ${l#"$CONFIG_DEST"/} (no longer shipped by the config layer)"; fi ;;
+    esac
+  done
+}
+
+config_require_src() {
+  if [ ! -d "$CONFIG_SRC" ]; then
+    echo "error: this checkout has no config layer ($CONFIG_SRC)." >&2
+    echo "       Nothing to link. An instance install (install.sh [TARGET]) never needs it." >&2
+    exit 2
+  fi
+  if [ -L "$CONFIG_DEST" ]; then
+    echo "error: $CONFIG_DEST is itself a symlink ($(readlink "$CONFIG_DEST"))." >&2
+    echo "       This expects a real directory that owns your runtime state (plugins/," >&2
+    echo "       projects/, history). Replace the symlink with a real directory first." >&2
+    exit 2
+  fi
+}
+
+config_install() {
+  local tier rel src dst bak off tgt n_link=0 n_ok=0 n_moved=0 n_refused=0 reported=" " dups
+  config_require_src
+
+  # Refuse BEFORE any write when both tiers claim the same relative path: whichever ran
+  # second would move the first aside as a .bak and shadow it, and a shadowed default is
+  # exactly the silent failure this whole layer exists to remove.
+  dups="$(config_entries | cut -f2 | sort | uniq -d)"
+  if [ -n "$dups" ]; then
+    echo "error: config/required and config/opinionated both declare:" >&2
+    while IFS= read -r rel; do [ -n "$rel" ] && echo "         $rel" >&2; done <<EOF
+$dups
+EOF
+    echo "       Each path must live in exactly one tier. Nothing was linked." >&2
+    exit 2
+  fi
+
+  mkdir -p "$CONFIG_DEST"
+  echo "Linking the ai-bridge config layer into $CONFIG_DEST"
+  while IFS=$'\t' read -r tier rel; do
+    [ -n "$rel" ] || continue
+    src="$CONFIG_SRC/$tier/$rel"; dst="$CONFIG_DEST/$rel"
+    off="$(config_link_parent "$rel" || true)"
+    if [ -n "$off" ]; then
+      n_refused=$((n_refused+1))
+      case "$reported" in
+        *" $off "*) ;;
+        *)
+          reported="$reported$off "
+          echo "  skip  ${rel%/*}/ — $off is a symlink -> $(readlink "$off")" >&2
+          echo "        Linking through it would write into that other checkout. Replace it" >&2
+          echo "        with a real directory first, keeping whatever it holds:" >&2
+          echo "          mv $(printf '%q' "$off") $(printf '%q' "$off").bak.\$(date +%s) && mkdir -p $(printf '%q' "$off")" >&2
+          ;;
+      esac
+      continue
+    fi
+    if [ -L "$dst" ]; then
+      tgt="$(readlink "$dst")"
+      if [ "$tgt" = "$src" ]; then
+        echo "  ok    $rel (already linked)"; n_ok=$((n_ok+1)); continue
+      fi
+      # Ours, but aimed at the other tier: the file changed tier between two runs. Our
+      # own link is not worth preserving, so relink rather than leave a .bak symlink
+      # behind — the backup path below is for a REAL file, which is never ours to lose.
+      case "$tgt" in "$CONFIG_SRC"/*) rm "$dst" ;; esac
+    fi
+    mkdir -p "$(dirname "$dst")"
+    if [ -e "$dst" ] || [ -L "$dst" ]; then
+      bak="$dst.bak.$(date +%s)"; mv "$dst" "$bak"
+      echo "  moved $rel -> ${bak##*/}"; n_moved=$((n_moved+1))
+    fi
+    ln -s "$src" "$dst"
+    echo "  link  $rel"; n_link=$((n_link+1))
+  done <<EOF
+$(config_entries)
+EOF
+
+  # settings.json is per-machine sensitive — it can carry permissions, env vars and
+  # plugin choices somebody tuned by hand, and it is the one file here where replacing
+  # a value could widen what Claude is allowed to *do* rather than how it reports. So:
+  # adopt the baseline only when there is nothing to lose, and otherwise print the two
+  # commands and stop. This install never edits a real settings.json — deliberately not
+  # even to merge a display-only key, which keeps `--config` purely additive: every
+  # write it makes is a new named file or a symlink it created itself.
+  local sjs="$CONFIG_SRC/opinionated/settings.json" sjd="$CONFIG_DEST/settings.json"
+  if [ -f "$sjs" ]; then
+    if [ -L "$sjd" ] && [ "$(readlink "$sjd")" = "$sjs" ]; then
+      echo "  ok    settings.json (already linked)"
+    elif [ -L "$sjd" ] && [ ! -e "$sjd" ]; then
+      rm "$sjd"; ln -s "$sjs" "$sjd"; echo "  relink settings.json (was dangling)"
+    elif [ -e "$sjd" ] || [ -L "$sjd" ]; then
+      echo "  keep  settings.json (yours — permissions and plugins left alone)"
+      echo "        To adopt this layer's baseline instead, back yours up and link it:"
+      echo "          mv $(printf '%q' "$sjd") $(printf '%q' "$sjd").bak.\$(date +%s)"
+      echo "          ln -s $(printf '%q' "$sjs") $(printf '%q' "$sjd")"
+      echo "        Or copy just the display-only keys across by hand: statusLine,"
+      echo "        outputStyle (\"Brief\"), and the format-on-write PostToolUse hook."
+    else
+      ln -s "$sjs" "$sjd"; echo "  link  settings.json"
+    fi
+  fi
+
+  config_sweep
+
+  echo "Done. $n_link linked, $n_ok already in place, $n_moved moved aside."
+  if [ "$n_refused" -gt 0 ]; then
+    echo "warn  $n_refused file(s) NOT linked: a directory in the way is a symlink (above)." >&2
+    echo "      Fix those directories and re-run; nothing was written through them." >&2
+    return 1
+  fi
+  echo "Next: restart Claude Code (/exit, then \`claude\`) so it re-scans agents and commands."
+  return 0
+}
+
+config_uninstall() {
+  config_require_src
+  echo "Removing ai-bridge config-layer symlinks from $CONFIG_DEST"
+  local tier rel
+  while IFS=$'\t' read -r tier rel; do
+    [ -n "$rel" ] || continue
+    if config_ours "$rel"; then rm "$CONFIG_DEST/$rel"; echo "  rm    $rel"; fi
+  done <<EOF
+$(config_entries)
+EOF
+  if config_ours settings.json; then rm "$CONFIG_DEST/settings.json"; echo "  rm    settings.json"; fi
+  config_sweep
+  echo "Done. Your runtime state, real files, and *.bak.* backups were left untouched."
+  return 0
+}
+
+if [ "$LAYER" = "config" ]; then
+  config_rc=0
+  if [ "$MODE" = "uninstall" ]; then config_uninstall || config_rc=$?
+  else config_install || config_rc=$?; fi
+  exit "$config_rc"
+fi
+
 TARGET="$(cd "${TARGET:-$PWD}" 2>/dev/null && pwd || true)"
 [ -n "$TARGET" ] || { echo "error: target directory does not exist" >&2; exit 2; }
 [ -d "$SYMLINK_SRC" ] || { echo "error: template missing $SYMLINK_SRC" >&2; exit 2; }
@@ -450,6 +732,28 @@ if [ -f "$RETIRED_LIST" ]; then
       echo "        rm $(printf '%q' "$TARGET/$rpath")"
     fi
   done < "$RETIRED_LIST"
+fi
+
+# One report-only nudge for a stale session-defaults import.
+#
+# seed/CLAUDE.md used to end with `@~/.claude/claude-defaults.md` — a file only a
+# SEPARATE repo's installer ever created, and the one hard dependency this template had
+# on it. Every instance inherited the line, and on a machine that never ran that
+# installer it resolved to nothing: a missing @import is a silent no-op, which is exactly
+# why nobody noticed. The section is inlined in seed/CLAUDE.md now, but seed content is
+# copied only when ABSENT, so an instance stamped earlier keeps the dead import forever.
+#
+# Report it, never rewrite it: CLAUDE.md is instance data the human owns and has very
+# likely edited around. Same contract as RETIRED — say the exact thing to do, once.
+# The pattern is ANCHORED to the start of a line: seed/CLAUDE.md's replacement section
+# explains itself by quoting the old import inside an HTML comment, and an unanchored
+# match would nag every freshly-stamped instance about a line it does not have.
+if [ -f "$TARGET/CLAUDE.md" ] \
+   && grep -qE '^[[:space:]]*@~/\.claude/claude-defaults\.md[[:space:]]*$' "$TARGET/CLAUDE.md"; then
+  echo "This instance's CLAUDE.md still imports ~/.claude/claude-defaults.md:"
+  echo "      that file is no longer shipped, and a missing @import fails SILENTLY."
+  echo "      Replace that one line with the '## Session defaults' section from:"
+  echo "        $SEED_SRC/CLAUDE.md"
 fi
 
 if [ -e "$TARGET/scripts/validate-bundle.sh" ]; then

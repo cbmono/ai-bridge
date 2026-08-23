@@ -214,11 +214,32 @@ Detail: `.claude/rules/knowledge-base.md`, which loads when you read a `knowledg
   team in `knowledge/teams/` (customize this line for your group).
 
 ## Session defaults
-@~/.claude/claude-defaults.md
 
-<!-- Pulls in the shared ai-setup behavioral defaults (planning, parallelism,
-verification) so a bridge session has them even if this group has no umbrella
-CLAUDE.md. Requires ai-setup's installer to have linked them into ~/.claude. If
-this group's ../CLAUDE.md already imports the same file, this is a harmless
-duplicate — drop one. -->
+<!-- INLINED ON PURPOSE — do not turn this back into an `@import`. This section used
+to be `@~/.claude/claude-defaults.md`, a file only the separate `ai-setup` repo's
+installer ever created. On any machine that never ran that installer the import
+resolved to NOTHING, silently: every instance inherited it and nobody could tell.
+An `@import` is loaded at launch anyway, so it bought organisation, not context.
+If this group's ../CLAUDE.md says the same things, drop one copy. -->
+
+### Planning & thinking
+- **Front-load the spec.** Intent, constraints, acceptance criteria, and file paths belong in the first user turn — extra turns add reasoning overhead.
+- **Adaptive thinking.** The model decides per-step whether to think. Steer via prompt: `think carefully and step-by-step` for hard problems, `respond directly` for lookups.
+- **Plan before editing non-trivial work.** Multi-file, cross-layer, or fuzzy-criteria tasks — confirm the approach with the user first.
+
+### Parallelism & delegation
+- **Spawn subagents explicitly** for genuinely independent work — don't serialize it.
+- **Use tools proactively.** Grep/Glob the repo thoroughly before answering — don't rely on memory.
+- **Read before you write.** Before adding to a file, scan its exports, immediate callers, and shared utilities — duplicate helpers and silent breakage live there.
+
+### Compounding engineering
+- **Learn from corrections.** When the user points out a mistake or preference, add a specific rule to the relevant `CLAUDE.md` so it doesn't recur. `Don't import from lodash — we use remeda` beats `be careful with imports`.
+
+### PR sizing
+- **Keep PRs under `maxPrLoc` (500 when the key is absent) for reviewability.** Past that, propose a split before committing. Line count is a heuristic — generated boilerplate, codemods, and dense logic are context-dependent — so suggest, don't block.
+
+### Output style
+- **Number multi-item output** so the reader can reference one by number ("re: 2, …"). Bullets only for unordered sub-points.
+- **Answer vs deliverable.** An *answer* (explaining, deciding, reporting) says its point and stops; a *deliverable* you were asked to produce (doc, plan, spec, PR body, code) runs as long as the work needs. Can't tell which? It's an answer — keep it lean. Trims the reply, never the reasoning.
+- **Never state cost or token spend in prose** — you can't see those numbers; the status line reports them for real.
 
