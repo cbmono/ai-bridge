@@ -33,6 +33,15 @@
 #   UNGUARDED  the path is canonicalised through `cd`, but the `mktemp` that created it
 #              carries no `||` abort, so a failed mktemp reaches the `cd` empty.
 #
+# TWO LIMITS, STATED RATHER THAN GUESSED AT. The scanner reads one line at a time, so
+# (a) the `||` abort must sit on the `mktemp` assignment line — chasing a guard onto a
+# following line would mean deciding which nearby test counts, which is guessing; and
+# (b) the trap must name the path inline (`trap 'rm -rf "$TMP"' EXIT`), because a trap
+# that calls a cleanup function hides the path from a line-wise read. Every harness in
+# this directory does both today, and the corpus assertions below fail loudly if the
+# scanner ever stops finding traps at all — which is the failure mode that would let a
+# blind spot pass as clean.
+#
 # Both are asserted NON-VACUOUSLY, over synthetic harnesses that do and do not carry each
 # shape: a static check that passes on everything is indistinguishable from no check. The
 # fixtures are emitted through `printf` rather than a heredoc on purpose — a heredoc puts
@@ -54,7 +63,15 @@ TESTS="$REPO/tests"
 die() { printf 'harness-temp-safety.test: %s\n' "$*" >&2; exit 2; }
 [ -d "$TESTS" ] || die "no tests directory at $TESTS"
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/harness-temp-safety.XXXXXX")" || die "mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — does that directory exist?"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/harness-temp-safety.XXXXXX")" || die "mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first."
+# This file eats its own cooking, and it had to: the real macOS $TMPDIR ends in a slash,
+# so the raw mktemp result above is `/var/folders/…/T//harness-temp-safety.xxxxxx`, while a
+# path built from it and then normalised downstream comes back with one slash — and the
+# "path is under TMPDIR" assertion below compared the two and failed. `pwd`, not `pwd -P`:
+# the fixtures normalise logically too, and a physical path here would put /private/var
+# against their /var. That is the same class of mismatch the two harnesses' `cd` exists to
+# avoid, which is why criterion 3 forbids deleting it.
+TMP="$(cd "$TMP" && pwd)"
 trap 'rm -rf "$TMP"' EXIT
 
 pass=0; fail=0
@@ -76,11 +93,12 @@ scan() {
   for v in $vars; do
     asg="$(printf '%s\n' "$body" | grep -nE "^[[:space:]]*$v=")"
     [ -n "$asg" ] || continue
-    # (1) the destructive shape.
-    printf '%s\n' "$asg" | grep -E 'cd[[:space:]]+"?\$\(' \
+    # (1) the destructive shape. The leading class keeps `cd` a word: without it,
+    #     a variable or function ending in "cd" would read as the builtin.
+    printf '%s\n' "$asg" | grep -E '(^|[^[:alnum:]_])cd[[:space:]]+"?\$\(' \
       | sed "s|^|NESTED-CD ${f##*/}:\$$v:|"
     # (2) a `cd` canonicalisation is only safe over a guarded mktemp.
-    if printf '%s\n' "$asg" | grep -qE 'cd[[:space:]]'; then
+    if printf '%s\n' "$asg" | grep -qE '(^|[^[:alnum:]_])cd[[:space:]]'; then
       printf '%s\n' "$asg" | grep -F 'mktemp' | grep -vF '||' \
         | sed "s|^|UNGUARDED ${f##*/}:\$$v:|"
     fi
