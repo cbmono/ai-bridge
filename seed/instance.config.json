@@ -17,6 +17,7 @@
   "codegraphSkip": "",
   "externalReviewer": null,
   "prReviewSlackChannel": null,
+  "$advisor": "OPTIONAL read-only tick observer. Add \"advisor\" to roles to enable it, and set roleTiers.advisor to pick its model (absent => light, the cheapest tier). Omit it and /pm-loop skips that step silently. Its concerns are adjudicated by the deep-tier project-manager before any human sees them, and it has no channel to worker agents, so a cheap model can never steer an expensive one.",
   "roles": [
     "project-manager",
     "software-engineer",

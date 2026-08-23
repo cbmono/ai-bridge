@@ -152,6 +152,7 @@ scripts/print-board.sh                                       # the terminal boar
 scripts/build-board.sh                                       # one HTML page from every snapshot
 scripts/build-board.sh --standalone --out /tmp/board.html    # ...to open in a browser
 scripts/watch-board.sh                                       # a local page, re-rendered on every change
+scripts/build-artifact-board.sh                              # an Artifact page BODY, for publishing
 ```
 
 Each `/pm-loop` tick refreshes the snapshot at the end of the tick, so on a looping
@@ -159,7 +160,7 @@ instance you never run the writer by hand.
 
 ### Which renderer to reach for
 
-| | `print-board.sh` | `build-board.sh` | `watch-board.sh` |
+| | `print-board.sh` | `build-board.sh` | `watch-board.sh` | `build-artifact-board.sh` |
 |---|---|---|---|
 | Output | columns in your terminal | one HTML file | one HTML file, kept fresh |
 | Freshness | the moment you ran it | the moment you ran it | live, to the second |
@@ -405,3 +406,28 @@ The old `/status` command and `DASHBOARD.md` are gone. In each existing instance
    terminal would lose.
 
 </details>
+
+
+## Which renderer, and the one question that decides it
+
+**Where may this board go?** That is the whole decision, and it is per instance — not a
+preference.
+
+| | Reach | Process | Use it when |
+|---|---|---|---|
+| `print-board.sh` | this terminal | none | you are already in the terminal. The default. |
+| `build-board.sh` | a local HTML file | none | you want the kanban view, or to publish it yourself |
+| `build-artifact-board.sh` | **published, shareable** | none | a teammate needs to see it, or you want it on a phone |
+| `watch-board.sh` | this machine only | **a resident one** | the board **must not leave the machine** |
+
+The last row is not a fallback, it is the compliant path. Publishing sends every task
+**title** to claude.ai; the snapshot's own `_sensitivity` field says it is "as sensitive
+as the task documents it comes from". For an instance whose `CLAUDE.md` carries no-PII
+rules, `watch-board.sh` is the only renderer that answers "nowhere" — which is why it
+was NOT retired when the Artifact renderer was added
+([finding](../../private/_ai-bridge-private/knowledge/findings/local-only-board-is-the-compliant-path.md)).
+
+`build-artifact-board.sh` emits a page **body** — no `<!doctype>`, `<html>`, `<head>` or
+`<body>`, because the publish step wraps the file in exactly those. Opening it directly
+in a browser lands in quirks mode; that is expected, and `build-board.sh --standalone`
+is the one to open locally.

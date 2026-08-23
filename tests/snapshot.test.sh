@@ -176,6 +176,7 @@ title: Bump the pinned toolchain
 kind: build
 status: in-review
 assignee: software-engineer
+depends_on: [ /projects/ci/tasks/task-001.md ]
 open_questions: []
 pr: [ "https://github.com/acme/monorepo/pull/2725" ]
 ---
@@ -189,6 +190,9 @@ kind: build
 status: blocked
 assignee: devops-engineer
 description: blocked because $SECRET_BLOCKER
+depends_on:
+  - /projects/ci/tasks/task-001.md
+  - /projects/ci/tasks/task-002.md
 open_questions: []
 ---
 # Notes
@@ -198,6 +202,8 @@ TSK
 # at `ready` awaits nothing — it is waiting on a dispatch, not on a human)
 cat > "$ALPHA/projects/ci/tasks/task-004.md" <<'TSK'
 ---
+depends_on: [ "/projects/ci/tasks/task-001.md", "/projects/ci/tasks/task-002.md" ]
+advisor_notes: [ "Should this be split before dispatch?", "Is the target repo right?" ]
 type: Task
 title: Add a smoke test
 kind: build
@@ -297,7 +303,7 @@ echo "== the field allowlist =="
 # a check that can be walked around is worse than no check: it certifies the
 # boundary while not testing it. Recursing over the parsed object also covers keys
 # at any depth, which the flat text scan only did by accident.
-ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions prs repo number url '
+ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions advisor_notes depends_on prs repo number url '
 extra_keys() { # <json file> <allowed> -> the keys present but not allowed
   python3 - "$1" "$2" <<'PYK'
 import json, sys
@@ -328,6 +334,28 @@ assert "a task description never reaches the snapshot"   "$(fhasnt "$SECRET_DESC
 assert "no document body reaches the snapshot"           "$(fhasnt "$SECRET_BODY" "$SNAP")"
 assert "open-question TEXT never reaches the snapshot"    "$(fhasnt "$SECRET_QUESTION" "$SNAP")"
 assert "…the COUNT does (2 questions on task-001)"        "$(fhas '"open_questions": 2' "$SNAP")"
+
+# depends_on is carried as bundle-local task IDs, never as paths. That is the whole
+# reason it sits inside the allowlist rather than being an exception to it: an ID is a
+# structural reference between two documents in this bundle, like `phase:`, and not one
+# of the four things the allowlist names (prose, bodies, identity, out-of-bundle paths).
+# If a future edit emits the raw `/projects/.../task-x.md` value instead, that is an
+# out-of-bundle-shaped path on a publishable page and this assertion is the tripwire.
+# advisor_notes is a COUNT and gets NO awaiting verb: it is the loop's inbox, not the
+# human's, so a task with untriaged concerns must not appear as awaiting anything.
+assert "advisor_notes defaults to 0"                      "$(fhas '"advisor_notes": 0' "$SNAP")"
+# A FLOW-form list must count every entry. Counting only block-form `- ` lines reported
+# 1 for a two-entry flow list, which is the bug this pins (CodeRabbit, PR #8).
+assert "…and counts every entry of a FLOW-form list"      "$(fhas '"advisor_notes": 2' "$SNAP")"
+
+assert "depends_on carries a task ID (inline form)"        "$(fhas '"depends_on": ["task-001"]' "$SNAP")"
+assert "…and both entries of a BLOCK-form list"           "$(fhas '"depends_on": ["task-001", "task-002"]' "$SNAP")"
+# A QUOTED path must normalise to the same ID. The closing quote used to defeat the
+# `.md` suffix rule, emitting `task-001.md"` — an invalid ID on a publishable page.
+assert "…and a QUOTED path normalises identically"        "$(fhasnt '.md\"' "$SNAP")"
+assert "…while a task with none gets an empty array"      "$(fhas '"depends_on": []' "$SNAP")"
+assert "…and never a path"                                "$(fhasnt '"depends_on": ["/' "$SNAP")"
+assert "…and never keeps the .md suffix"                  "$(fhasnt '.md"]' "$SNAP")"
 assert "a blocker reason never reaches the snapshot"      "$(fhasnt "$SECRET_BLOCKER" "$SNAP")"
 assert "…the VERB does (unblock)"                         "$(fhas '"awaiting": "unblock"' "$SNAP")"
 assert "authorEmail never reaches the snapshot"           "$(fhasnt "$SECRET_EMAIL" "$SNAP")"

@@ -111,28 +111,56 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    place. So an open entry is a reason to report and stop, never to re-dispatch or
    to silently adopt the work as your own in-flight set; a stale open entry would
    otherwise miscount the `maxAgentsInFlight` cap in both directions.
-2b. **Ask the advisor, if there is one.** `ls .claude/agents/advisor.md` — **absent
-   is the normal case and means skip this step silently**: no message, no warning,
-   the tick is over. Never treat absence as an error, and never mention an advisor
-   that is not installed.
+2b. **Ask the advisor, if this instance has one.** Two conditions, both from
+   `instance.config.json`, and **absence of either means skip this step silently** —
+   no message, no warning, the tick is over. Never treat absence as an error.
 
-   Present ⇒ dispatch the `advisor` agent once, read-only, with the tick's summary:
-   what it promoted, what it dispatched to whom, what it closed, and the task
-   documents it touched. It replies `ADVISOR: clear` (the normal case — say nothing
-   and move on) or `ADVISOR: concern` followed by one line of
-   `<task-path> --- <question>`.
+   - `"advisor"` must appear in `roles`. Not listed ⇒ the instance does not want one.
+   - `.claude/agents/advisor.md` must exist. Deleted ⇒ same answer, and the file is
+     the off switch that works even on an instance whose config you cannot edit.
 
-   On a concern, **you** fold that line verbatim into that task's
-   `open_questions` — the advisor is read-only by design, so write authority stays
-   with you. That is the whole integration: `open_questions` is already the only
-   promotion signal and already what puts a ❓ row in `AWAITING.md`, so a concern
-   reaches the human through the existing channel and needs no new mechanism, no
-   new file and no new validator check.
+   Its model comes from `roleTiers.advisor` resolved through `models`, exactly like
+   every other role. **Absent ⇒ `light`**, the cheapest tier — an observer that costs
+   as much as the work it observes is not worth running.
 
-   **It never blocks.** A concern does not undo the dispatch, reverse a promotion,
-   or delay the next tick — it is a question waiting for a human, and the tick that
-   raised it has already finished. If the advisor errors, times out, or answers in
-   any other shape, ignore it and continue: an observer that can stall the loop is
+   Dispatch it once, read-only, with the tick's summary: what it promoted, what it
+   dispatched to whom, what it closed, and the task documents it touched. It replies
+   `ADVISOR: clear` (the normal case — say nothing, move on) or `ADVISOR: concern`
+   followed by one line of `<task-path> --- <question>`.
+
+   **YOU ADJUDICATE IT, AND THE HUMAN IS THE LAST RESORT — not the first.** The
+   advisor runs on the cheapest tier; you run on `deep`. Read the documents it cites
+   and decide:
+
+   - **It does not hold** ⇒ drop it silently. No fold-in, no report, no arguing with
+     it in the log.
+   - **It holds and you can act on it** ⇒ act, and record it in `answered_questions`
+     prefixed `advisor:` so the provenance survives. **The human is not involved.**
+   - **It holds and you genuinely cannot decide** — a trade-off only the owner can
+     make, a missing fact no document contains ⇒ *then* escalate: copy it into that
+     task's `open_questions` prefixed `advisor:`. That is the one path to a human.
+
+   A concern you have not triaged yet goes in `advisor_notes` (see `SCHEMA.md`), which
+   is **deliberately not a gate**: it does not block promotion, does not put a row in
+   `AWAITING.md`, and no validator checks it. Triage the list on the next tick.
+
+   **Why the asymmetry matters.** The owner is one person and the loop parallelises
+   across tasks, so a mechanism that routes every concern to a human makes the human
+   the bottleneck and the advisor a net loss. Escalating is the exception you must
+   justify to yourself, not the default. If you find yourself escalating most
+   concerns, the advisor is miscalibrated — say so in the tick report rather than
+   forwarding the noise.
+
+   Two consequences worth being explicit about, because the shape is easy to get
+   backwards. **A cheap model never steers an expensive one**: the advisor has no
+   channel to `software-engineer` or anyone else, so nothing it says can redirect work
+   in flight — its only possible outcome is a question a human answers. And **the
+   filter is a deep model reviewing a light one**, not the reverse, so a false
+   positive costs one cheap dispatch and none of the human's attention.
+
+   **It never blocks.** A verified concern does not undo the dispatch, reverse a
+   promotion, or delay the next tick. If the advisor errors, times out, or answers in
+   any other shape, ignore it and continue — an observer that can stall the loop is
    worse than no observer.
 
 3. **On completion**, schedule the next tick after the gap: call `ScheduleWakeup`
