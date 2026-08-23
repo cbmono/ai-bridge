@@ -24,3 +24,15 @@ for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done
 - **Compare resolved paths.** `mktemp` hands back `/var/...` while git reports `/private/var/...` on macOS, so an unresolved grep fails on a correct message. This trap has appeared three times in this codebase.
 - **`rule-globs-anchored.test.sh` asserts a measured fact the official docs contradict** — a `paths:` pattern is only root-anchored with a leading `/`. It is a test rather than a convention precisely because a convention that contradicts the documentation gets "corrected" back.
 - **Fixtures must not touch the user's real `~/.claude` or a real instance.** Build a throwaway repo under `mktemp -d` and copy the script under test into it.
+
+## Run the suite from the MAIN checkout, never a worktree
+
+Three harnesses — `derived-indexes`, `link-repos` and `snapshot` — invoke this repo's own
+`install.sh`, and `install.sh` **refuses to run from a git worktree** by design (it would
+create symlinks into a directory that `git worktree remove` later deletes). So running the
+suite inside a worktree fails those three, roughly 90 assertions, for a reason that has
+nothing to do with the code under test.
+
+That is the guard working, not a bug — but it reads exactly like a regression, so: run the
+suite from the main working tree, or from a fresh clone. If you are working in a worktree,
+clone to a temp directory to verify.
