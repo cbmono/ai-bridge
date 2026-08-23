@@ -628,10 +628,43 @@ assert "…and the derived board HTML"                "$(fhas 'board.html' "$INS
 printf 'LOCAL SNAPSHOT CONTENT\n' > "$INST/SNAPSHOT.json"
 bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 assert "a refresh never clobbers an existing snapshot" "$(fhas 'LOCAL SNAPSHOT CONTENT' "$INST/SNAPSHOT.json")"
+# THE OFF SWITCH IS CONFIG NOW, NOT DELETION — and the difference is deliberate.
+#
+# It used to be opt-in by presence: `rm SNAPSHOT.json` was permanent because only a FIRST
+# stamp created the file. That inverted the common case — every instance stamped before
+# the board existed silently stayed off it, and three of three real instances were in
+# that state. So `board` in instance.config.json decides, and it survives a re-stamp.
+#
+# What deletion still does, and what it no longer does, are both asserted here.
 rm "$INST/SNAPSHOT.json"
 bash "$BRIDGE_INSTALL" "$INST" >"$TMP/i2.out" 2>&1
-assert "deletion survives an installer re-run (FIRST_STAMP)" "$(yes_if test ! -e "$INST/SNAPSHOT.json")"
-assert "…and the re-run says it is absent by choice" "$(fhas "skip  SNAPSHOT.json (absent by choice" "$TMP/i2.out")"
+assert "a re-stamp RESTORES a deleted snapshot (board defaults on)" \
+  "$(yes_if test -f "$INST/SNAPSHOT.json")"
+assert "…and says so"                               "$(fhas 'seed  SNAPSHOT.json' "$TMP/i2.out")"
+
+# `board: false` is the durable opt-out: it must beat a re-stamp, which deletion no
+# longer does. This is the assertion a no-publish instance depends on.
+rm "$INST/SNAPSHOT.json"
+python3 - "$INST/instance.config.json" <<'PYCFG'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p)); d["board"] = False
+json.dump(d, open(p, "w"), indent=2)
+PYCFG
+bash "$BRIDGE_INSTALL" "$INST" >"$TMP/i3.out" 2>&1
+assert "board:false keeps it off across a re-stamp"  "$(yes_if test ! -e "$INST/SNAPSHOT.json")"
+assert "…and the installer says which key did it"   "$(fhas 'board: false in instance.config.json' "$TMP/i3.out")"
+python3 - "$INST/instance.config.json" <<'PYCFG'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p)); d.pop("board", None)
+json.dump(d, open(p, "w"), indent=2)
+PYCFG
+assert "an ABSENT board key still means on"          "$(yes_if sh -c 'bash "$1" "$2" >/dev/null 2>&1; test -f "$2/SNAPSHOT.json"' _ "$BRIDGE_INSTALL" "$INST")"
+
+# The writer is unchanged: it refreshes an existing snapshot and NEVER creates one. That
+# is what still makes a mid-session `rm` take effect immediately.
+rm "$INST/SNAPSHOT.json"
 mkdir -p "$INST/projects/x/tasks"
 cat > "$INST/projects/x/project.md" <<'PRJ'
 ---

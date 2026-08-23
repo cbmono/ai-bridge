@@ -204,7 +204,9 @@ Details worth knowing before you pick one:
 7. **`--once` renders and exits**, which is the way to get a local standalone page
    without keeping anything running.
 
-**On by default, off by deletion.** `install.sh` creates `SNAPSHOT.json` on the **first
+**On by default, off by `board: false`.** (Changed 2026-08-23: it used to be opt-in by presence, with `rm` permanent. That inverted the common case — every instance stamped before the board existed silently stayed off it, and three of three real instances were in that state. The decision now lives in `board` in `instance.config.json`, where it is visible and survives a re-stamp. A `rm` still drops an instance off immediately, but the next stamp restores it unless config says otherwise. A snapshot is a LOCAL gitignored file — having one does not publish anything.)
+
+**Historic note.** `install.sh` creates `SNAPSHOT.json` on the **first
 stamp only**; the writer rewrites it just when it already exists and never creates it;
 `build-board.sh` leaves a snapshot-less instance off the page entirely, with no
 placeholder. So `rm SNAPSHOT.json` takes that instance off the board for good, and
