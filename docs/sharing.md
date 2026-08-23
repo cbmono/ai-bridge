@@ -69,7 +69,7 @@ The value is a **GitHub username, never an email**: public, stable, and it keeps
 
 A derived `<login>@users.noreply.github.com` was **rejected, not skipped**: GitHub requires the ID-prefixed `<id>+<login>@…` form for accounts created after 2017-07-18, so a derived plain address silently fails to link — and the linking behaviour cannot be verified from here without pushing as that account. Real addresses in a private instance repo are fine; **this template is public, so `seed/instance.config.json` ships placeholder logins VERIFIED UNCLAIMED on github.com (`example-user-007`/`008`, both 404) and addresses at `example.com` (RFC 2606, cannot receive mail), and says so in a `$people` note** — the real map belongs in the instance. **Verify any new placeholder the same way**: `alice`, `bob` and `jane-doe` are all real accounts, so a plausible-looking example names a stranger, and an example is the thing people copy verbatim. Test fixtures follow the same rule, and `commit-as-identity.test.sh` asserts the seed carries no live-account name and no address outside `example.com`.
 
-`install.sh` may one day *ask* for the map on a first stamp; if you build that, three things break existing flows if you get them wrong: prompt only on `FIRST_STAMP` (`upgrade.sh` calls the installer on every run, including its non-interactive report mode), only when stdin is a TTY (it must stay safe from a script and from a background agent with no terminal — otherwise print the instruction), and never overwrite a value that is already there (the seeds-if-absent contract).
+`install.sh` **does** ask for the map on a first stamp now — steps 3 to 5 of the table above, collected at install time instead of hand-edited afterwards. The three things that would have broken existing flows are the three guards it carries; they, and the failure the prompt's shape is designed around, are written up in ["The installer asks, once"](#the-installer-asks-once) at the end of this page.
 
 ### (c) The derived `index.md` files become gitignored
 
@@ -94,3 +94,48 @@ not be the instance directory itself.
 
 **Pushing is still git.** Ownership stops two loops dispatching the same task. It does
 not stop two humans pushing at once — pull before you push.
+
+---
+
+## The installer asks, once
+
+Steps 3 to 5 of the table above used to be an eight-step checklist somebody performed
+after the stamp. On a **first stamp**, at a terminal, `install.sh` now offers to collect
+them instead: one line per person (`<github-login> <commit-email>`), yourself first, and
+it writes the tracked `people` map, the tracked `defaultOwner`, and this clone's
+gitignored `instance.config.local.json`. Nothing about the model above changed — this is
+only the collection step it was missing.
+
+**Three guards, each protecting a flow that already worked.**
+
+| Guard | Why it exists |
+|---|---|
+| Only on the **first stamp** | `upgrade.sh` calls `install.sh` on *every* run, including its non-interactive report-only mode, so an unguarded prompt would block every upgrade. It reuses the same `FIRST_STAMP` that gates `AWAITING.md`, rather than inventing a second notion of "new" |
+| Only when **stdin is a terminal** | otherwise it skips, leaves the placeholder, and prints the instruction. A prompt nobody can see is a hang, and a hang in a background agent is invisible |
+| **Never overwrite** | only the seeded placeholder is ever rewritten, and the local file only when absent. Seeds-if-absent is what makes the installer safe to re-run on a repo full of somebody's work |
+
+**One batched prompt, and the reason is the failure mode rather than the keystrokes.**
+Asked person by person, a roster accumulates state across reads: enter one pair, hit
+ctrl-C, and the instance is left with a map that resolves for one human and silently
+falls through for the other. So the whole roster arrives as one block, and **nothing is
+written until a separate confirmation** — an interrupt, EOF, an unreadable line and a
+declined confirmation all take the same exit: write nothing, and say which happened. It
+is also two reads regardless of team size, which is why `/new-project` batches its
+capability questions the same way.
+
+**Two more properties worth keeping if you touch it.** The write is *verified by parsing
+it back* — before the temp file lands and again after — and if neither `jq` nor `python3`
+is on the machine the prompt is **not offered at all**: a broken `instance.config.json`
+breaks every later script in the instance, and this repo has a recorded incident of a
+script printing success for a write that never landed
+([conventions 9](conventions.md#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default)).
+And **validation is the escaping**: a login must match the GitHub-username rule
+`task-owner.sh` already applies and an address a conservative mail shape, so no accepted
+value can carry a character that would need escaping into a JSON string. What counts as
+"still the placeholder" is deliberately name-independent — an entry whose login equals
+the local part of its address at `example.com` — so renaming the seed's example logins
+cannot silently switch the prompt off.
+
+Covered by `tests/team-setup.test.sh` (94 assertions, most of them refusals: a non-TTY
+stamp, a refresh, an existing value, a real `SIGINT` delivered mid-answer, EOF, a
+declined confirmation, unreadable input, and `--config`).

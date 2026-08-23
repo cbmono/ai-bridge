@@ -21,6 +21,11 @@
 #      instance without ever being nested in it. Gitignored, and skipped while
 #      reposRoot is still the seeded placeholder. Re-run that script on its own
 #      after cloning a repo; you don't need a full refresh for it.
+#   4. On a FIRST stamp, at a terminal, OFFERS to collect the team's GitHub logins and
+#      commit emails into `people` + `defaultOwner`, and writes this clone's
+#      `instance.config.local.json`. One batched prompt; nothing is written until you
+#      confirm it. Skipped (with the instruction printed) when stdin is not a terminal,
+#      never asked on a refresh, and it never overwrites a value already there.
 #
 # CONFIG mode links the two tiers of `config/` into the Claude Code config dir, one
 # FILE at a time — never a whole directory (see the CONFIG LAYER block below):
@@ -111,7 +116,7 @@ for arg in "$@"; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/config-layer.test.sh asserts the flags appear in the output, which is
       # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,33p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,38p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
     *)
@@ -694,6 +699,445 @@ fi
 # install. Template copy, for the same reason as in --uninstall.
 ( cd "$TARGET" && bash "$SYMLINK_SRC/scripts/link-repos.sh" ) \
   || echo "  warn  repos/ view not refreshed; run scripts/link-repos.sh by hand" >&2
+
+# ===========================================================================
+# 4b. THE TEAM ROSTER — offered once, on a first stamp, only at a terminal.
+# ===========================================================================
+#
+# WHAT IT WRITES, AND WHY IT IS WORTH ASKING. Three values, all of them already
+# specified in docs/sharing.md and SCHEMA.md → "Per-machine config overrides": the
+# TRACKED `people` map (GitHub login → commit email, so scripts/commit-as.sh can author
+# each clone's commits as the human running it), the TRACKED `defaultOwner` (so two
+# clones of one bundle agree who *unowned* work belongs to instead of both dispatching
+# it), and this clone's own gitignored `instance.config.local.json`, naming which login
+# this clone IS. Hand-editing all three after the stamp was exactly the "several manual
+# steps" shape that produced upgrade.sh: fine for whoever wrote it, an eight-step
+# checklist for the next person. Nothing here redesigns that model — this is only the
+# collection step it was missing.
+#
+# THREE GUARDS, each protecting a flow that already works:
+#
+#   1. FIRST_STAMP ONLY. upgrade.sh calls this installer on EVERY run, including its
+#      non-interactive report-only mode, so an unguarded prompt would block every
+#      upgrade. It reuses the FIRST_STAMP computed before seeding for AWAITING.md rather
+#      than inventing a second notion of "new" — two notions are two things to get out
+#      of step.
+#   2. A TTY ONLY. Otherwise skip, leave the placeholder, and print the instruction.
+#      This script has to stay safe to run from a script, from upgrade.sh, and from a
+#      background agent with no terminal: a prompt nobody can see is a hang, and a hang
+#      in a background agent is invisible.
+#   3. NEVER OVERWRITE. Only the SEEDED placeholder is ever rewritten — the awk pass
+#      below recognises the exact placeholder lines and refuses when it does not find
+#      them — and the local file is written only when absent. That seeds-if-absent
+#      contract is what makes this installer safe to re-run on a repo full of somebody's
+#      work, so it is checked against the FILE rather than merely inferred from
+#      FIRST_STAMP.
+#
+# And a fourth, which is really the verification rule: NO VERIFIER, NO WRITE. A broken
+# instance.config.json breaks every later script in the instance, so the result is parsed
+# back — before the temp file lands and again after it lands — and if neither jq nor
+# python3 is on this machine the prompt is not offered at all. This codebase has a
+# recorded incident of a script printing FIXED for a write that never landed
+# (migrate-bundle.sh); verify-after-write is the standing answer, and a write we cannot
+# verify is one we do not make.
+#
+# ONE BATCHED PROMPT, NOT N SERIAL ONES, and the reason is the failure mode rather than
+# the keystrokes. Asked person-by-person, a roster accumulates state across reads: enter
+# one pair, hit ctrl-C, and the instance is left with a map that resolves for one human
+# and silently falls through for the other. Here the whole roster arrives as ONE block
+# and nothing is written until a separate confirmation, so a partial answer cannot become
+# a partial file — EOF, an interrupt, an unreadable line and a declined confirmation all
+# take the same exit: write nothing, and say which happened. It is also two reads
+# regardless of team size, which is the reasoning /new-project already uses to batch its
+# capability questions.
+#
+# VALIDATION IS ALSO THE ESCAPING. Every login must match the GitHub-username rule
+# task-owner.sh and commit-as.sh already apply (1-39 alphanumerics, single hyphens
+# between them), and every address a deliberately conservative mail shape. Both reject
+# quotes, backslashes, whitespace and control characters, so no ACCEPTED value can carry
+# a character that would need JSON escaping: the file cannot be broken by its content,
+# only by a bug in this block — which is what the parse-back catches.
+TEAM_CFG="$TARGET/instance.config.json"
+TEAM_LCFG="$TARGET/instance.config.local.json"
+
+# How to do it by hand. Printed on every path that decides not to write, so a skip is
+# never a dead end — the same "say the exact thing to do" contract as RETIRED.
+team_manual_note() {
+  echo "        Set it by hand instead (the full order is in $TEMPLATE_DIR/docs/sharing.md):"
+  echo "          instance.config.json        \"people\": { \"<login>\": \"<commit-email>\" }"
+  echo "          instance.config.json        \"defaultOwner\": \"<login>\""
+  echo "          instance.config.local.json  { \"ownerGithubUser\": \"<your-login>\" }"
+}
+
+# A GitHub username, by the same rule task-owner.sh's valid_user uses. Deliberately not a
+# looser one: the value is compared against `owner:` in task documents and interpolated
+# into a grep there, so a shape those readers refuse must be refused here too.
+team_valid_login() { # <value>
+  [ ${#1} -ge 1 ] && [ ${#1} -le 39 ] || return 1
+  printf '%s' "$1" | grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'
+}
+# A conservative address shape. It rejects plenty of technically-legal addresses, and
+# that is the trade: an address nobody can type here can still be written by hand,
+# whereas a quote or a backslash accepted here would land inside a JSON string.
+team_valid_email() { # <value>
+  [ ${#1} -ge 3 ] && [ ${#1} -le 254 ] || return 1
+  printf '%s' "$1" | grep -qE '^[A-Za-z0-9._%+-]+@[A-Za-z0-9][A-Za-z0-9.-]*\.[A-Za-z]{2,}$'
+}
+
+# Does this file parse as JSON?  0 = yes, 1 = NO, 2 = no parser on this machine.
+# The three answers are distinguished on purpose: "we could not check" must never be
+# reported as "it is fine" — the required-checks.sh discipline, applied to a write.
+team_json_ok() { # <file>
+  if command -v jq >/dev/null 2>&1; then
+    jq -e . "$1" >/dev/null 2>&1 && return 0
+    return 1
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json,sys; json.load(sys.stdin)' >/dev/null 2>&1 <"$1" && return 0
+    return 1
+  fi
+  return 2
+}
+
+# The inner text of the `people` object, flattened onto one line. Same problem
+# commit-as.sh's people_email() solves, and awk for the same reason it uses awk: this is
+# a nested object, so a same-named key elsewhere in the file must not answer.
+team_people_segment() { # <file>
+  [ -f "$1" ] || return 0
+  awk '
+    !inb {
+      i = index($0, "\"people\""); if (i == 0) next
+      $0 = substr($0, i + 8)
+      i = index($0, "{"); if (i == 0) next
+      $0 = substr($0, i + 1); inb = 1
+    }
+    {
+      e = index($0, "}")
+      if (e) { printf "%s ", substr($0, 1, e - 1); exit }
+      printf "%s ", $0
+    }
+  ' "$1"
+}
+
+# Read `defaultOwner` back out, with the same portable extractor the machinery uses.
+team_read_owner() { # <file>
+  [ -f "$1" ] || return 0
+  sed -n 's/.*"defaultOwner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1" | head -n1
+}
+
+# Everything this claims to have written, checked by reading the file back. Structural
+# validity is not enough: a JSON file can parse perfectly and still be missing the pair
+# we said we added, which is the false-success shape this repo has already been bitten by.
+team_verify() { # <file> <owner> <roster-file>
+  local f="$1" who="$2" rf="$3" seg pair l e
+  team_json_ok "$f" || return 1
+  [ "$(team_read_owner "$f")" = "$who" ] || return 1
+  seg="$(team_people_segment "$f")"
+  # Exactly as many pairs as the roster has, so a placeholder that SURVIVED the rewrite
+  # fails here: the object must have been replaced, not added to, and a stranger's login
+  # left in a real roster is worse than a missing one. Counting colons is enough because
+  # a validated login and address contain none.
+  [ "$(printf '%s' "$seg" | tr -cd ':' | wc -c | tr -d ' ')" = "$(grep -c . "$rf")" ] || return 1
+  while read -r l e; do
+    [ -n "$l" ] || continue
+    pair="\"$l\": \"$e\""
+    printf '%s' "$seg" | grep -qF -- "$pair" || return 1
+  done < "$rf"
+  return 0
+}
+
+# ---------------------------------------------------------------- the three guards
+team_ask=yes
+[ "$FIRST_STAMP" = yes ] || team_ask=no
+[ -f "$TEAM_CFG" ] || team_ask=no
+# Guard 2. TEAM_SETUP_STDIN=1 is the ONE way past the TTY test, and it exists so the
+# refusals here can be tested at all — the role SNAPSHOT_NOW plays for write-snapshot.sh.
+# It must be set deliberately (nothing in upgrade.sh, in a role agent, or in a background
+# agent's environment sets it), and even then it cannot hang: every read in forced mode
+# carries a timeout.
+TEAM_FORCED="${TEAM_SETUP_STDIN:-}"
+if [ "$team_ask" = yes ] && [ ! -t 0 ] && [ "$TEAM_FORCED" != 1 ]; then
+  team_ask=no
+  echo "  skip  team roster (stdin is not a terminal, so nothing was asked)."
+  team_manual_note
+fi
+# Guard 3, asked of the FILE. On a first stamp this is the seed verbatim, but
+# seeds-if-absent is a property of the file rather than of FIRST_STAMP, and a value
+# somebody already put there is never ours to replace — so this is checked, not inferred.
+#
+# What counts as "still the placeholder" is deliberately name-INDEPENDENT: an entry whose
+# login equals the local part of its address at example.com (`"x": "x@example.com"`),
+# which is the shape seed/instance.config.json ships and a shape no real roster has. A
+# hard-coded `example-user-007` would stop recognising the placeholder the day somebody
+# renames it — silently, since the failure is "the prompt is never offered again". The
+# back-reference is why this is sed rather than awk (awk regexes have none).
+if [ "$team_ask" = yes ]; then
+  team_seg="$(team_people_segment "$TEAM_CFG")"
+  team_rest="$(printf '%s' "$team_seg" | sed 's/"\([A-Za-z0-9-]\{1,\}\)"[[:space:]]*:[[:space:]]*"\1@example\.com"//g')"
+  if [ -n "$(team_read_owner "$TEAM_CFG")" ] || printf '%s' "$team_rest" | grep -q '"'; then
+    team_ask=no
+    echo "  keep  team roster in instance.config.json (already set — left alone)"
+  fi
+fi
+# Guard 4: no verifier, no write.
+if [ "$team_ask" = yes ]; then
+  team_vrc=0
+  team_json_ok "$TEAM_CFG" || team_vrc=$?
+  if [ "$team_vrc" = 2 ]; then
+    team_ask=no
+    echo "  skip  team roster (neither jq nor python3 here, so a write could not be verified)."
+    team_manual_note
+  elif [ "$team_vrc" != 0 ]; then
+    team_ask=no
+    echo "  skip  team roster (instance.config.json does not parse as JSON — fix that first)."
+    team_manual_note
+  fi
+fi
+
+# ---------------------------------------------------------------- the prompt
+if [ "$team_ask" = yes ]; then
+  # The prompt goes to STDERR and the result lines to stdout with the rest of the install
+  # report. Two reasons: upgrade.sh filters this script's stdout line by line, and stderr
+  # is unbuffered, so an interrupted prompt is still on screen where it happened.
+  TEAM_ABORT=0
+  team_on_int() { TEAM_ABORT=1; printf '\n' >&2; }
+  trap team_on_int INT
+  # One line into REPLY_LINE; non-zero on EOF, timeout or interrupt. The TRAP FLAG is
+  # what distinguishes an interrupt from EOF, and it has to be: bash 3.2 (what macOS
+  # ships) returns plain 1 from an interrupted `read`, exactly as it does at EOF —
+  # measured — so an exit-status test would report ctrl-C as "input ended" and take the
+  # wrong branch. Same status, different meaning: read the flag, not the code.
+  team_read() {
+    REPLY_LINE=""
+    local rc=0
+    if [ "$TEAM_FORCED" = 1 ]; then
+      IFS= read -r -t 10 REPLY_LINE || rc=$?
+    else
+      IFS= read -r REPLY_LINE || rc=$?
+    fi
+    [ "$rc" = 0 ] || return 1
+    [ "$TEAM_ABORT" = 0 ] || return 1
+    return 0
+  }
+
+  TEAM_ROSTER="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-roster.XXXXXX")"
+  team_state=ask   # ask → write, or one of: eof, interrupt, declined, unreadable
+  team_tries=0
+  while [ "$team_state" = ask ]; do
+    team_tries=$((team_tries+1))
+    : > "$TEAM_ROSTER"
+    team_n=0
+    {
+      echo ""
+      echo "Team roster for this instance — asked once, on a first stamp."
+      echo "  One person per line:  <github-login> <commit-email>"
+      echo "  YOURSELF FIRST: your login becomes this instance's defaultOwner and this"
+      echo "  clone's identity in instance.config.local.json."
+      echo "  An empty line ends the list. Nothing is written until you confirm it, and"
+      echo "  ctrl-C, ctrl-D or an empty first line all write nothing at all."
+    } >&2
+    while :; do
+      printf '  %d> ' "$((team_n+1))" >&2
+      if ! team_read; then
+        if [ "$TEAM_ABORT" = 0 ]; then team_state=eof; else team_state=interrupt; fi
+        break
+      fi
+      # Surrounding whitespace is a typo, not an answer — stripped before deciding whether
+      # the line is empty, or a stray space would end the list without meaning to.
+      team_line="$(printf '%s' "$REPLY_LINE" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+      [ -n "$team_line" ] || break
+      team_login="$(printf '%s' "$team_line" | awk '{print $1}')"
+      team_email="$(printf '%s' "$team_line" | awk '{print $2}')"
+      team_extra="$(printf '%s' "$team_line" | awk '{print $3}')"
+      if [ -n "$team_extra" ] || [ -z "$team_email" ]; then
+        echo "        ✗ expected exactly two fields: <github-login> <commit-email>" >&2
+        team_state=unreadable; break
+      fi
+      if ! team_valid_login "$team_login"; then
+        echo "        ✗ '$team_login' is not a GitHub username (1-39 alphanumerics, single hyphens between them)" >&2
+        team_state=unreadable; break
+      fi
+      if ! team_valid_email "$team_email"; then
+        echo "        ✗ '$team_email' is not an address this can write safely" >&2
+        team_state=unreadable; break
+      fi
+      if grep -q "^$team_login " "$TEAM_ROSTER"; then
+        echo "        ✗ '$team_login' is already in this roster" >&2
+        team_state=unreadable; break
+      fi
+      printf '%s %s\n' "$team_login" "$team_email" >> "$TEAM_ROSTER"
+      team_n=$((team_n+1))
+    done
+    if [ "$team_state" = unreadable ]; then
+      # Re-ask the whole block rather than patching the one line: the block is the unit
+      # that gets confirmed, so a half-corrected block is the state this design avoids.
+      if [ "$team_tries" -lt 3 ]; then
+        echo "        Let's take the list again from the top." >&2
+        team_state=ask
+        continue
+      fi
+      break
+    fi
+    [ "$team_state" = ask ] || break
+    if [ "$team_n" -eq 0 ]; then team_state=declined; break; fi
+
+    TEAM_OWNER="$(head -n1 "$TEAM_ROSTER" | awk '{print $1}')"
+    {
+      echo ""
+      echo "  About to write:"
+      echo "    instance.config.json        defaultOwner = $TEAM_OWNER"
+      while read -r team_l team_e; do
+        [ -n "$team_l" ] && echo "                                people[$team_l] = $team_e"
+      done < "$TEAM_ROSTER"
+      echo "    instance.config.local.json  ownerGithubUser = $TEAM_OWNER  (gitignored)"
+      printf '  Write it? [y/N] '
+    } >&2
+    if ! team_read; then
+      if [ "$TEAM_ABORT" = 0 ]; then team_state=eof; else team_state=interrupt; fi
+      break
+    fi
+    case "$(printf '%s' "$REPLY_LINE" | tr '[:upper:]' '[:lower:]')" in
+      y|yes) team_state=write ;;
+      *)     team_state=declined ;;
+    esac
+  done
+  trap - INT
+
+  case "$team_state" in
+    write) ;;
+    interrupt)
+      rm -f "$TEAM_ROSTER"
+      echo "  roster: nothing written (interrupted). No partial map was left behind."
+      team_manual_note
+      # The install itself is complete — only the roster was skipped — but ctrl-C should
+      # still feel like it stopped something, so this exits with the conventional SIGINT
+      # code rather than pretending nothing happened. Everything below on a FIRST stamp is
+      # a no-op anyway: nothing is retired, and a fresh seed validates clean.
+      exit 130 ;;
+    *)
+      rm -f "$TEAM_ROSTER"
+      case "$team_state" in
+        eof)        echo "  roster: nothing written (input ended)." ;;
+        unreadable) echo "  roster: nothing written (could not read the list)." ;;
+        *)          echo "  roster: nothing written (declined)." ;;
+      esac
+      team_manual_note ;;
+  esac
+fi
+
+# ---------------------------------------------------------------- the write
+if [ "${team_state:-}" = write ]; then
+  # The tracked half, as ONE awk pass that only ever replaces lines it RECOGNISES:
+  # `"defaultOwner": null,`, the `$people` note, and a `people` object holding nothing but
+  # placeholder entries. Anything else — a drifted seed, a roster somebody already wrote —
+  # makes it exit 3, and then nothing is written at all. That is guard 3 and a seed-drift
+  # guard in one mechanism, and it degrades to "print the instruction", never to a
+  # half-rewritten file.
+  team_lines="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-people.XXXXXX")"
+  team_total="$(grep -c . "$TEAM_ROSTER" || true)"
+  team_i=0
+  while read -r team_l team_e; do
+    [ -n "$team_l" ] || continue
+    team_i=$((team_i+1))
+    if [ "$team_i" -lt "$team_total" ]; then
+      printf '    "%s": "%s",\n' "$team_l" "$team_e" >> "$team_lines"
+    else
+      printf '    "%s": "%s"\n' "$team_l" "$team_e" >> "$team_lines"
+    fi
+  done < "$TEAM_ROSTER"
+
+  team_note="Collected by install.sh when this instance was stamped: GitHub login -> commit email, for THIS instance. The address is PER-INSTANCE, not per-person -- it says which entity the work belongs to -- so never derive it from the login, and never move it into instance.config.local.json (that file says which login this clone IS). Read by scripts/commit-as.sh via ownerGithubUser; see SCHEMA.md 'Per-machine config overrides' and docs/sharing.md. Edit by hand to add or remove someone."
+
+  # Temp file BESIDE the target, carrying the target's mode: mktemp creates 0600, so a
+  # rename from $TMPDIR would silently make this config 0600, and a cross-filesystem mv
+  # degrades to copy-and-remove, where an interruption leaves a half-written file. Same
+  # rule as migrate-bundle.sh.
+  team_tmp="$TEAM_CFG.tmp.$$"
+  team_orig="$TEAM_CFG.orig.$$"
+  cp -p "$TEAM_CFG" "$team_tmp" 2>/dev/null || cp "$TEAM_CFG" "$team_tmp"
+  cp -p "$TEAM_CFG" "$team_orig" 2>/dev/null || cp "$TEAM_CFG" "$team_orig"
+  team_rc=0
+  awk -v owner="$TEAM_OWNER" -v note="$team_note" -v rf="$team_lines" '
+    /^[[:space:]]*"defaultOwner"[[:space:]]*:[[:space:]]*null[[:space:]]*,[[:space:]]*$/ {
+      printf "  \"defaultOwner\": \"%s\",\n", owner; dow++; next
+    }
+    /^[[:space:]]*"\$people"[[:space:]]*:/ { printf "  \"$people\": \"%s\",\n", note; next }
+    /^[[:space:]]*"people"[[:space:]]*:[[:space:]]*\{[[:space:]]*$/ {
+      print "  \"people\": {"
+      while ((getline line < rf) > 0) print line
+      close(rf)
+      print "  },"
+      ppl++; inppl = 1; next
+    }
+    inppl {
+      # Guard 3 above has already established that this object is the untouched
+      # placeholder, so these lines are being DISCARDED, not judged: all this has to do
+      # is refuse a shape it cannot safely replace. A flat "key": "value" pair is
+      # discarded; anything else — a nested object, an array, a comment — sets bad, and
+      # then nothing is written at all.
+      if ($0 ~ /^[[:space:]]*"[^"]*"[[:space:]]*:[[:space:]]*"[^"]*"[[:space:]]*,?[[:space:]]*$/) next
+      if ($0 ~ /^[[:space:]]*\}[[:space:]]*,?[[:space:]]*$/) { inppl = 0; next }
+      bad = 1; next
+    }
+    { print }
+    END { if (bad || dow != 1 || ppl != 1) exit 3 }
+  ' "$TEAM_CFG" > "$team_tmp" || team_rc=$?
+
+  if [ "$team_rc" != 0 ]; then
+    rm -f "$team_tmp" "$team_orig" "$team_lines" "$TEAM_ROSTER"
+    echo "  roster: nothing written — instance.config.json does not carry the placeholder" >&2
+    echo "          roster this expected to replace, so it was left exactly as it is." >&2
+    team_manual_note >&2
+  elif ! team_verify "$team_tmp" "$TEAM_OWNER" "$TEAM_ROSTER"; then
+    # Verified BEFORE the rename, so an unparseable file never lands at all.
+    rm -f "$team_tmp" "$team_orig" "$team_lines" "$TEAM_ROSTER"
+    echo "error: the roster this would have written does not verify, so instance.config.json" >&2
+    echo "       was left exactly as it is. That is a bug in install.sh, not something you did." >&2
+    team_manual_note >&2
+    exit 1
+  else
+    mv "$team_tmp" "$TEAM_CFG"
+    # And verified AGAIN once it lands. A write this script only *believes* it made is the
+    # failure migrate-bundle.sh recorded: FIXED printed for an insert that silently
+    # no-opped. A false success is worse than the error it claims to fix.
+    if ! team_verify "$TEAM_CFG" "$TEAM_OWNER" "$TEAM_ROSTER"; then
+      mv "$team_orig" "$TEAM_CFG"
+      rm -f "$team_lines" "$TEAM_ROSTER"
+      echo "error: instance.config.json did not verify after the write, and has been" >&2
+      echo "       restored to the file that was there before. Nothing was kept." >&2
+      team_manual_note >&2
+      exit 1
+    fi
+    rm -f "$team_orig"
+    echo "  wrote instance.config.json (people: $team_total, defaultOwner: $TEAM_OWNER)"
+  fi
+  rm -f "$team_lines"
+
+  # The local half — this clone's identity. Written only when absent, like every other
+  # seeded file, and gitignored (step 3b above appends the line), so it never becomes one
+  # human's identity inside the other's clone.
+  if [ -e "$TEAM_LCFG" ]; then
+    echo "  keep  instance.config.local.json (exists — this clone's identity left alone)"
+  else
+    team_ltmp="$TEAM_LCFG.tmp.$$"
+    {
+      echo "{"
+      echo "  \"\$schema\": \"Per-machine overrides for THIS clone -- gitignored, never committed. Which GitHub login this clone is, plus any absolute path or address that cannot be right on both machines. See SCHEMA.md, 'Per-machine config overrides'.\","
+      printf '  "ownerGithubUser": "%s"\n' "$TEAM_OWNER"
+      echo "}"
+    } > "$team_ltmp"
+    if team_json_ok "$team_ltmp" \
+       && [ "$(sed -n 's/.*"ownerGithubUser"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$team_ltmp" | head -n1)" = "$TEAM_OWNER" ]; then
+      mv "$team_ltmp" "$TEAM_LCFG"
+      echo "  wrote instance.config.local.json (ownerGithubUser: $TEAM_OWNER)"
+    else
+      rm -f "$team_ltmp"
+      echo "error: instance.config.local.json did not verify, so nothing was written." >&2
+      echo "       Create it by hand: { \"ownerGithubUser\": \"$TEAM_OWNER\" }" >&2
+    fi
+  fi
+  rm -f "$TEAM_ROSTER"
+fi
 
 echo "Done. Machinery symlinked & gitignored; seed content in place."
 echo "Next: edit instance.config.json, then run /pm-loop from this directory."
