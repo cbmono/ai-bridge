@@ -629,6 +629,19 @@ if ! grep -qE '^/?repos/?$' "$gi"; then
 GI
 fi
 
+# The local live board (scripts/watch-board.sh) writes its page here. Appended for the
+# same reason as /repos/ and instance.config.local.json below: seed content is copied
+# only when ABSENT, so an instance stamped before this directory existed — which is
+# every instance in existence — would otherwise commit a generated HTML page.
+if ! grep -qE '^/?\.board-live/?$' "$gi"; then
+  cat >> "$gi" <<'GI'
+
+# The local live board page (scripts/watch-board.sh). Derived output, regenerated on
+# every task-document change, and per-machine. Delete it freely.
+/.board-live/
+GI
+fi
+
 # 3b. Two more ignores, appended once each if missing — OUTSIDE the managed block,
 # for the same reason as /repos/ above.
 #

@@ -27,11 +27,11 @@ for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done
 
 ## Run the suite from the MAIN checkout, never a worktree
 
-Three harnesses — `derived-indexes`, `link-repos` and `snapshot` — invoke this repo's own
-`install.sh`, and `install.sh` **refuses to run from a git worktree** by design (it would
-create symlinks into a directory that `git worktree remove` later deletes). So running the
-suite inside a worktree fails those three, roughly 90 assertions, for a reason that has
-nothing to do with the code under test.
+Four harnesses — `derived-indexes`, `link-repos`, `snapshot` and `board-renderers` —
+invoke this repo's own `install.sh`, and `install.sh` **refuses to run from a git worktree**
+by design (it would create symlinks into a directory that `git worktree remove` later
+deletes). So running the suite inside a worktree fails those four, well over a hundred
+assertions, for a reason that has nothing to do with the code under test.
 
 That is the guard working, not a bug — but it reads exactly like a regression, so: run the
 suite from the main working tree, or from a fresh clone. If you are working in a worktree,

@@ -5,6 +5,7 @@
 #
 #   Usage:
 #     scripts/build-board.sh [--out FILE] [--standalone] [INSTANCE_DIR ...]
+#     scripts/build-board.sh --list-instances [INSTANCE_DIR ...]
 #
 #     INSTANCE_DIR ...  the instances to render. With none given, the list comes
 #                       from `boardInstances` in ./instance.config.local.json, else
@@ -13,6 +14,10 @@
 #     --out FILE        where to write (default: ./board.html)
 #     --standalone      wrap the output in <!doctype html>/<head> for opening in a
 #                       browser directly. OMIT for publishing (see OUTPUT SHAPE).
+#     --list-instances  print the resolved instance directories, one per line, and
+#                       exit without writing anything. This exists so watch-board.sh
+#                       can learn WHICH directories to watch without carrying a third
+#                       copy of the discovery rule below — one script owns it.
 #
 # DISCOVERY IS EXPLICIT, NEVER A GLOB. This file is symlinked into every instance,
 # so it may not know where anybody's workspace lives — no `~/workspace/*`, no
@@ -71,12 +76,14 @@ set -euo pipefail
 
 OUT="board.html"
 STANDALONE=0
+LIST_ONLY=0
 DIRS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --out) shift; [[ $# -gt 0 ]] || { echo "build-board: --out needs a path" >&2; exit 2; }; OUT="$1" ;;
     --out=*) OUT="${1#--out=}" ;;
     --standalone) STANDALONE=1 ;;
+    --list-instances) LIST_ONLY=1 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit 0 ;;
     -*) echo "build-board: unknown flag '$1'" >&2; exit 2 ;;
     *) DIRS+=("$1") ;;
@@ -89,7 +96,8 @@ command -v python3 >/dev/null 2>&1 || {
   exit 2
 }
 
-BOARD_OUT="$OUT" BOARD_STANDALONE="$STANDALONE" python3 - "${DIRS[@]+"${DIRS[@]}"}" <<'PY'
+BOARD_OUT="$OUT" BOARD_STANDALONE="$STANDALONE" BOARD_LIST_ONLY="$LIST_ONLY" \
+  python3 - "${DIRS[@]+"${DIRS[@]}"}" <<'PY'
 import html, json, os, sys
 from pathlib import Path
 
@@ -140,6 +148,24 @@ def resolve_dirs(argv):
     return [Path(".")], "this instance"
 
 dirs, source = resolve_dirs(sys.argv[1:])
+
+# --list-instances: answer the discovery question and stop, writing nothing. It is
+# deliberately the SAME resolve_dirs call the render path uses — a second
+# implementation of the rule is a second thing to drift. Paths only, one per line, so
+# a caller can read them into a shell array.
+if os.environ.get("BOARD_LIST_ONLY") == "1":
+    for d in dirs:
+        # One path per LINE, so a path containing a newline would forge an entry in
+        # the caller's array — the same class as push-state.sh encoding every
+        # file-derived value to one line. `boardInstances` is human-written JSON, where
+        # a "\n" is legal, so this is a refusal rather than an escape: an unusable name
+        # is named on stderr and dropped, never silently split in two.
+        if "\n" in str(d) or "\r" in str(d):
+            print(f"build-board: skipping an instance path containing a newline: {d!r}",
+                  file=sys.stderr)
+            continue
+        print(d)
+    sys.exit(0)
 
 instances, broken = [], []
 for d in dirs:

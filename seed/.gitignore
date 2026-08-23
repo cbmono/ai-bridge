@@ -18,6 +18,12 @@ AWAITING.md
 SNAPSHOT.json
 board.html
 
+# The local live board page (scripts/watch-board.sh) — the same HTML as board.html,
+# regenerated on every task-document change by a watcher you keep running. Derived,
+# per-machine, and safe to delete. install.sh appends this line too, so it reaches
+# instances stamped before the directory existed.
+/.board-live/
+
 # Per-machine identity overrides (authorEmail, ownerGithubUser). instance.config.json
 # is tracked and therefore SHARED, so on a bundle two humans clone its authorEmail
 # would author both people's commits as one person. This file wins over it for those

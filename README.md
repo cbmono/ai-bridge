@@ -13,7 +13,7 @@ repos and holds only the state of the work — never application code.
 
 | | |
 |---|---|
-| **Needs** | [Claude Code](https://claude.com/claude-code), `git`, `gh`, bash. `python3` only for the optional board. |
+| **Needs** | [Claude Code](https://claude.com/claude-code), `git`, `gh`, bash. `python3` only for the optional board (all three renderers). |
 | **Time to first loop** | about 10 minutes |
 | **Storage format** | plain markdown ([OKF Knowledge Bundle](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)) — the commands write the files for you |
 
@@ -26,7 +26,7 @@ repos and holds only the state of the work — never application code.
 | **This page** | setting up, or looking up a command or a config key |
 | [docs/schema.md](docs/schema.md) | you need to know what a document type holds |
 | [docs/autonomy.md](docs/autonomy.md) | you want the loop to promote or merge without you |
-| [docs/operations.md](docs/operations.md) | upgrading an instance, the board, worktrees, editor setup |
+| [docs/operations.md](docs/operations.md) | upgrading an instance, the board's three renderers, worktrees, editor setup |
 | [docs/sharing.md](docs/sharing.md) | two humans will share one instance |
 | [docs/conventions.md](docs/conventions.md) | **you are changing this repo** — every design invariant and why it exists |
 | [The config layer](#the-config-layer) | you want this repo's agents, commands and hooks in `~/.claude` too |
@@ -277,9 +277,54 @@ full board; don't reintroduce one.**
 Derived and gitignored; never hand-edit it. Reasoning:
 [docs/conventions.md invariant 3](docs/conventions.md#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence).
 
-A cross-instance HTML board is available too, on the same off-by-deletion rule
+A cross-instance board is available too, on the same off-by-deletion rule
 ([docs/operations.md § the board](docs/operations.md#5-the-cross-instance-board-optional)).
 **Read the field list before you publish one** — the page can leave the machine.
+
+## Three ways to see the board
+
+One snapshot, three renderers. `scripts/write-snapshot.sh` derives each instance's
+`SNAPSHOT.json`; all three read it and none of them reads the bundle. Pick by what you
+are doing, not by which is newest.
+
+| You want | Run | Costs |
+|---|---|---|
+| a look right now, in the terminal you are in | `scripts/print-board.sh` | nothing |
+| a page to share, publish, or read on a phone | `scripts/build-board.sh` | a re-run to refresh |
+| a page that updates itself as you work | `scripts/watch-board.sh` | **a process you keep running** |
+
+```bash
+scripts/print-board.sh                      # columns: instance, project, phases, tasks, awaiting
+scripts/build-board.sh --standalone         # ./board.html, openable in a browser
+scripts/watch-board.sh                      # ./.board-live/board.html, re-rendered on every change
+```
+
+**The watcher's cost is the real one, so read it before you pick it.** It needs a
+resident process, and ai-bridge deliberately has none — its agents are ephemeral
+subagents inside one session, and nothing here runs between sessions. So the live page
+is a terminal tab you keep open: it stops when you close it, sleep the machine, or lose
+the session, and it gives you nothing to share and no phone access. If any of that
+matters, the other two renderers cost nothing and you re-run them.
+
+Three properties are shared by all three, because they belong to the snapshot rather
+than to any renderer:
+
+1. **No `SNAPSHOT.json`, no appearance.** That instance is absent — no placeholder, no
+   warning — and no renderer ever creates the file.
+2. **One broken instance cannot blank the board.** An unreadable snapshot becomes a
+   visible note; a snapshot carrying wrong *types* degrades to zero for that field and
+   everything else still renders.
+3. **Every title is escaped for its output medium** — HTML for the page, control
+   characters and ANSI sequences for the terminal. Task titles are human prose.
+
+`print-board.sh` colours only a terminal and honours `NO_COLOR`, so a board piped into a
+file, a ticket or a PR body carries no escape codes. On a narrow terminal it drops
+columns that are zero in every row (and says which), clips **names** with `…`, and never
+clips a **number** — a wrong count is worse than a missing column. Below the width where
+a table still fits, it prints one short block per project instead of wrapping.
+
+`watch-board.sh` uses `fswatch` when it is installed and a polling loop (default 2s) when
+it is not; either way it is stopped with Ctrl-C and leaves nothing behind.
 
 ## Safety rails
 
@@ -321,7 +366,9 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `codegraphSkip` | index every product repo | yes |
 
 Environment knobs: `PUSH_STATE_MAX` (default **12**), `PRUNE_ACTIVE_MINUTES`,
-`CODEGRAPH_SKIP`, `CONTROL_PLANE_AUTHOR_EMAIL`.
+`CODEGRAPH_SKIP`, `CONTROL_PLANE_AUTHOR_EMAIL`, `NO_COLOR` (honoured by
+`print-board.sh`), `WATCH_BOARD_WATCHER` (`auto` when absent — `poll` or `fswatch`
+override the watcher's probe).
 
 ## Scripts
 
@@ -337,6 +384,8 @@ Run from an instance root unless noted.
 | `task-owner.sh` | resolves and compares a task's owner | no |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) | yes, the output file |
+| `print-board.sh` | prints the board in the terminal | no |
+| `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos | yes |
 
@@ -351,6 +400,9 @@ Run from an instance root unless noted.
 | Installer exits 2, "refusing to install from a git worktree" | working as designed | `git -C <src> worktree list` — the first entry is the main tree |
 | The startup nudge is empty | `AWAITING.md` was deleted, or the PM reshaped its layout | `touch AWAITING.md`; `show-awaiting.sh` greps the heading and bullets **literally** |
 | An instance is missing from the board | it has no `SNAPSHOT.json`, or `boardInstances` doesn't name it | `touch SNAPSHOT.json` in it |
+| `print-board.sh` printed nothing at all | it was not run from an instance root — that is silence by design, not an error | `cd` into the instance |
+| The terminal board is missing a status column | every row was zero there, so it was dropped to fit the width; the footer names which | widen the terminal, or `--width 0` |
+| The live page never updates | the watcher was stopped, or the change was outside `projects/` | restart `scripts/watch-board.sh`; it prints a line per render |
 | A `yolo` project never merges anything | preflight failed: one `gh` identity, no external reviewer, or no required checks | the loop says which; fix that, or merge by hand |
 | `required-checks.sh` exits 2 | the platform probe returned something it cannot classify | that is a refusal by design — read the message, don't loosen the script |
 | CodeRabbit: "Unable to determine base branch" | a remote-less instance has no `origin/HEAD` to infer one from | `git config coderabbit.baseBranch <branch>` |
