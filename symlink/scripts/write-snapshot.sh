@@ -186,6 +186,30 @@ count_questions() { # <frontmatter>
   else printf '0'; fi
 }
 
+# The task IDs a task depends on. Emitted as IDs, not paths: an ID is what a human
+# reads on the board and the full path is derivable from the project slug, so
+# carrying the path would be redundant AND longer. Bundle-relative either way, so
+# this adds no out-of-bundle path to the published page.
+#
+# WHY THIS IS INSIDE THE ALLOWLIST rather than an exception to it: `depends_on` is a
+# structural reference between two documents in this bundle, exactly like `phase:`
+# which the snapshot already carries. It is not free prose, not identity, and not a
+# path outside the bundle — the four things the allowlist actually names. A reader
+# adding a field here should be able to say which of those four it is; this is none.
+depends_ids() { # <frontmatter>
+  local r
+  r="$(list_region "$1" depends_on)"
+  # Both YAML forms arrive here, so normalise separators before splitting: strip the
+  # flow brackets and any block `- `, turn commas into newlines, then take the
+  # basename minus .md. A blank or `[]` list yields nothing at all, not an empty ID.
+  printf '%s\n' "$r" \
+    | tr -d '[]' \
+    | sed -e 's/^[[:space:]]*-[[:space:]]*//' -e 's/,/\n/g' \
+    | tr ',' '\n' \
+    | sed -e 's#^[[:space:]]*##' -e 's#[[:space:]]*$##' -e 's#^.*/##' -e 's#\.md$##' \
+    | grep -v '^$' || true
+}
+
 # ---------------------------------------------------------------- assembly
 tasks_total=0
 awaiting_total=0
@@ -258,6 +282,14 @@ EOF
     # has handed over and the PR is waiting on a reviewer or a merge.
     in_flight=false; [[ "$t_status" == "in-progress" ]] && in_flight=true
 
+    # depends_on -> a JSON array of IDs. jstr() does the escaping, as everywhere else.
+    dep_json=""
+    while IFS= read -r dep; do
+      [[ -n "$dep" ]] || continue
+      [[ -n "$dep_json" ]] && dep_json="$dep_json, "
+      dep_json="$dep_json$(jstr "$dep")"
+    done <<< "$(depends_ids "$tfm")"
+
     # The awaiting verb, and ONLY the verb — mirrors show-awaiting.sh's glyph set
     # (✅ approve · ❓ answer · 🔀 merge · ⛔ unblock · 🏁 close) minus the reason text.
     # A `draft` with no acceptance_criteria is still being refined, so it awaits
@@ -276,7 +308,7 @@ EOF
     t_count=$((t_count+1)); tasks_total=$((tasks_total+1))
 
     tasks_json="$tasks_json${tasks_json:+,}
-      {\"id\": $(jstr "$t_id"), \"title\": $(jstr "$t_title"), \"kind\": $(jstr "$t_kind"), \"status\": $(jstr "$t_status"), \"assignee\": $(jstr "$t_assignee"), \"phase\": $(jstr "$t_phase"), \"in_flight\": $in_flight, \"awaiting\": $(jstr "$awaiting"), \"open_questions\": $oq, \"prs\": [$prs_json]}"
+      {\"id\": $(jstr "$t_id"), \"title\": $(jstr "$t_title"), \"kind\": $(jstr "$t_kind"), \"status\": $(jstr "$t_status"), \"assignee\": $(jstr "$t_assignee"), \"phase\": $(jstr "$t_phase"), \"in_flight\": $in_flight, \"awaiting\": $(jstr "$awaiting"), \"open_questions\": $oq, \"depends_on\": [$dep_json], \"prs\": [$prs_json]}"
   done <<EOF
 $(find "$pdir/tasks" -maxdepth 1 -name '*.md' 2>/dev/null | grep -vE '/(index|log)\.md$' | sort || true)
 EOF
@@ -316,7 +348,7 @@ cat > "$tmp" <<JSON
 {
   "_schema": "ai-bridge board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy; phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/PR links. Never: task descriptions, document bodies, question or blocker TEXT, author identity, or any path outside this bundle.",
+  "_carries": "project title/description/kind/status/autonomy; phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/depends_on IDs/PR links. Never: task descriptions, document bodies, question or blocker TEXT, author identity, or any path outside this bundle.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},
