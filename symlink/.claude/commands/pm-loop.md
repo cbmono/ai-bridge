@@ -65,13 +65,18 @@ whether `main` actually moved backwards, before reporting corruption.
    confirming `SCHEMA.md` + `.claude/agents` + `instance.config.json` exist in the cwd; if
    not, tell the user to `cd` into the instance and stop. (Do not hardcode a path —
    instances live under different group folders.)
-2. Read `instance.config.json` for `reposRoot` (where target repos are cloned) and
-   `org` (the GitHub org for `target_repo` values).
-3. **Kill any fixed-interval PM cron** from an older approach: `CronList`, and if a
+2. **Kill any fixed-interval PM cron** from an older approach: `CronList`, and if a
    job's prompt is `run the project-manager agent for one LIVE tick`, `CronDelete`
    it — that job is the overlap bug. Do **not** create a cron here.
 
 ### The launcher reads nothing else
+
+**`instance.config.json` is not an exception, and this section used to imply it was.** An
+earlier draft of this trim kept a precondition telling the launcher to read `reposRoot`
+and `org` — values the launcher never uses. The TICK uses them, and the tick reads the
+config itself. A precondition the tool contract forbids is worse than a missing one: it
+reads as licence to widen `allowed-tools`, which is the whole thing this trim exists to
+prevent.
 
 Do **not** read task documents, `log.md`, the tick ledger, `AWAITING.md`,
 `SNAPSHOT.json`, a worktree listing, `git status`, `git log`, `gh repo view` or

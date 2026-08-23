@@ -28,6 +28,8 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LAUNCHER="$REPO/symlink/.claude/commands/pm-loop.md"
 TICK="$REPO/symlink/.claude/agents/project-manager.md"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")"
+trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 ok() { # <name> <actual> <expected>
   if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
@@ -47,18 +49,47 @@ ok "tick agent exists" "$([ -f "$TICK" ] && echo yes || echo no)" yes
 count_preconditions() { # <file>
   awk '/^## Preconditions/{p=1;next} p&&/^#/{p=0} p&&/^[0-9]+\. /{n++} END{print n+0}' "$1"
 }
-ok "preconditions listed" "$(count_preconditions "$LAUNCHER")" 3
+# TWO, not three. The third — "read instance.config.json for reposRoot and org" — was
+# removed: the launcher never used those values, the TICK does and reads config itself,
+# and a precondition the tool contract forbids reads as licence to widen allowed-tools.
+ok "preconditions listed" "$(count_preconditions "$LAUNCHER")" 2
 
 # --- allowed-tools grants the launcher no reader ---------------------------------
 # `pwd` and `ls` are the instance-root probe and are fine. Anything that can read a
 # document, the git history or the GitHub API is the regression — including a bare
 # `Bash`, which grants all of them at once.
-readers_granted() { # <file> -> count
-  awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{print}' "$1" \
-    | grep -o -E 'Read|Grep|Glob|WebFetch|Bash\((git|gh|cat|grep|head|tail|sed|awk|find|jq|\*|:)|Bash[[:space:]]*(,|$)' \
+readers_granted() { # <file> -> count of grants that are NOT on the approved list
+  # AN ALLOWLIST, NOT A DENYLIST. The first version grepped for a fixed set of readers
+  # — Read|Grep|Glob|WebFetch and a handful of Bash commands — so `Bash(curl:*)`,
+  # `Bash(python:*)` and `Bash(node:*)` all returned 0 and this check PASSED while the
+  # launcher could read anything on the machine or the network. A denylist over an open
+  # set cannot be completed, which is why this repo's own permission guidance prefers
+  # the simple allowlist shapes. So: extract every grant, subtract the two approved
+  # forms, and count what is left.
+  awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
+    | tr ',' '\n' \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+    | grep -v '^$' \
+    | grep -v -x -e 'Bash(pwd)' -e 'Bash(ls:\*)' \
+                 -e 'Agent' -e 'ScheduleWakeup' -e 'CronList' -e 'CronDelete' \
     | wc -l | tr -d ' '
 }
+
 ok "no reader in allowed-tools" "$(readers_granted "$LAUNCHER")" 0
+
+# NON-VACUITY. A check that cannot fail proves nothing, and the previous one could not
+# fail on these three — each was outside its fixed denylist. Every fixture is a real
+# reader: curl reaches the network, python and node read any file on the machine.
+for probe in 'Bash(curl:*)' 'Bash(python:*)' 'Bash(node:*)' 'Read' 'Bash'; do
+  printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Agent, %s\n---\nbody\n' "$probe" \
+    > "$TMP/probe.md"
+  ok "…and it FAILS on a $probe grant" "$( [ "$(readers_granted "$TMP/probe.md")" -ge 1 ] && echo yes || echo no )" yes
+done
+# …while the real launcher's exact grant list still passes, so the allowlist is not
+# simply rejecting everything.
+printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Agent, ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
+  > "$TMP/probe.md"
+ok "…and PASSES on the approved set alone" "$(readers_granted "$TMP/probe.md")" 0
 
 # --- the launcher says, in the file, that it reads nothing else -------------------
 # `The launcher reads nothing else` is an anchor both files cite, so it is grepped

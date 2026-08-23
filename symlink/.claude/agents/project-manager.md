@@ -92,7 +92,11 @@ state, and act only on deltas.
    not finish. It does **not** prove the agents it dispatched are still alive — nothing on
    disk can, which is why `/pm-loop` step 2 makes the `<task-notification>` the only valid
    finished signal. So on finding an open entry, do not assume its work is in flight and
-   do not assume it is dead: report it to the human and **hold** — dispatch nothing, adopt
+   do not assume it is dead: **orient first, then report, then hold** — finish the orientation this step already
+   requires — task statuses, `worktree:`/`branch:` keys, PR state — because that is what
+   turns "there is an open entry" into "these three tasks claim in-flight, none has a
+   worktree on disk, one has an open PR", which is the difference between a report a human
+   can act on and one that only says something is wrong. THEN hold: dispatch nothing, adopt
    nothing as your own in-flight set, and end the tick, which lets the loop schedule its
    gap instead of reading the hold as a failure. A stale open entry adopted silently
    miscounts the `maxAgentsInFlight` cap in both directions.
