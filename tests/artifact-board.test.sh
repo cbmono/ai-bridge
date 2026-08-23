@@ -154,6 +154,54 @@ mkdir -p "$TMP/bad"; printf 'not json at all\n' > "$TMP/bad/SNAPSHOT.json"
 rc3=0; bash "$GEN" --layout table --out "$TMP/mixed.html" "$TMP/bad" "$TMP/alpha" >/dev/null 2>&1 || rc3=$?
 assert "a broken snapshot is skipped, not fatal"     "$(eq "$rc3" 0)"
 assert "…and the good instance still renders"        "$(fhas 'Alpha Bridge Board' "$TMP/mixed.html")"
+assert "…and it is a VISIBLE note, not a silent absence" "$(fhas 'Unreadable snapshot' "$TMP/mixed.html")"
+assert "…naming the instance by directory NAME"      "$(fhas 'bad/SNAPSHOT.json' "$TMP/mixed.html")"
+assert "…and never by its path"                      "$(fhasnt "$TMP/bad" "$TMP/mixed.html")"
+# THE OTHER HALF, and the one this layout did not have before the consolidation: valid
+# JSON carrying wrong TYPES. `"tasks":"three"` parses, so nothing above catches it — the
+# string was then iterated as a list of task dicts and `.get` raised AttributeError,
+# which meant NO FILE WAS WRITTEN AT ALL. One drifted instance blanked the published
+# board for every healthy one. Measured against the pre-consolidation script; it is why
+# both layouts now share one toint()/tolist()/todict() path.
+mkdir -p "$TMP/drift"
+drift_case() { # <label> <snapshot json>
+  printf '%s\n' "$2" > "$TMP/drift/SNAPSHOT.json"
+  # Removed first: a page left behind by the previous case would satisfy the
+  # "still renders" half even if this case wrote nothing at all.
+  rm -f "$TMP/drift.html"
+  local rc=0 out
+  out="$(bash "$GEN" --layout table --out "$TMP/drift.html" "$TMP/alpha" "$TMP/drift" 2>&1)" || rc=$?
+  assert "$1: exits 0"                           "$(eq "$rc" 0)"
+  assert "$1: no traceback"                      "$(printf '%s\n' "$out" | grep -qF Traceback && echo 1 || echo 0)"
+  # alpha's own project, not the page title: with two instances on the board the title
+  # is the generic "Bridge Board", so asserting on it would prove nothing about alpha.
+  assert "$1: the healthy instance still renders" "$(fhas 'Live work' "$TMP/drift.html")"
+}
+drift_case "tasks is not a list" \
+  '{"group":"drift","counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","tasks":"three"}]}'
+drift_case "projects is not a list" \
+  '{"group":"drift","counts":{"tasks":"many"},"projects":"lots"}'
+drift_case "a non-numeric phase total" \
+  '{"group":"drift","counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","phase_progress":{"total":"two","done":"one"},"tasks":[]}]}'
+drift_case "a task is a string, not an object" \
+  '{"group":"drift","counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","tasks":["oops"]}]}'
+rm -rf "$TMP/drift"
+
+echo "== a PR URL is a link only on http/https, here too =="
+mk "$TMP/hostile" "hostile" '[
+ {"slug":"p","title":"Scheme check","kind":"build","status":"active","awaiting_close":false,
+  "phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Two PRs, one hostile","status":"in-review","assignee":"",
+            "awaiting":"","open_questions":0,"advisor_notes":0,"depends_on":[],"in_flight":false,
+            "prs":[{"repo":"o/r","number":41,"url":"https://github.com/o/r/pull/41"},
+                   {"repo":"o/r","number":9,"url":"javascript:alert(1)"}]}]}]'
+OUT2="$TMP/scheme.html"
+bash "$GEN" --layout table --out "$OUT2" "$TMP/hostile" >/dev/null 2>&1
+# The other rule this layout did not carry: it wrote the snapshot's URL straight into
+# the href, so a `javascript:` PR URL became a live link on a page meant for publishing.
+assert "a javascript: URL is never an href"          "$(fhasnt 'href="javascript:' "$OUT2")"
+assert "…and is inert text instead"                  "$(fhas 'link withheld: not http/https' "$OUT2")"
+assert "…while the http PR link beside it still works" "$(fhas 'href="https://github.com/o/r/pull/41"' "$OUT2")"
 
 echo "== flags =="
 assert "an unknown flag is refused"                  "$(yes_if bash -c "bash '$GEN' --nope 2>/dev/null; [ \$? -eq 2 ]")"
