@@ -537,3 +537,12 @@ Publishing is still a **decision**, not a default: it sends every task title to
 claude.ai. Read [what the snapshot carries](#before-you-publish-it-know-what-it-carries)
 before you set the key, and note that `board: true` (a local, gitignored snapshot)
 publishes nothing on its own — the two switches are independent.
+
+**A `SessionStart` hook surfaces the link too.** `.claude/hooks/show-board-link.sh`
+reads this same `boardArtifactUrl` — never a second copy of it — and, if it is set,
+prints it once when a session starts, so the human can open the page instead of
+digging for the URL. Same off switch as everything else here: absent, empty, or `null`
+means exit 0 in silence, and so does a non-bridge project that happens to inherit the
+hook. It reads nothing else — no task document, no `AWAITING.md` — so it is not a
+second, unvalidated copy of `show-awaiting.sh`'s field discipline; it prints the link
+and nothing more.
