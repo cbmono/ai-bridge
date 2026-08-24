@@ -144,16 +144,29 @@ ok() { # <name> <actual> <expected>
 #         `lex` subsumes it and also handles the trailing case it missed);
 #   \c    escapes, in code and in double quotes alike, so `\$(` is not an opener.
 #
-# WHERE IT STOPS, AND WHY THERE. Quote state is reset at every physical line boundary; only
-# the substitution depth carries across lines. So a single-quoted string spanning physical
-# lines is read as code from its second line on. That is chosen, not overlooked: carrying an
-# open quote across lines would make a bare `X='`, the offending line, and a closing `'` join
-# into one statement beginning `X=` — the same bypass with a longer fuse. Misreading the
-# inside of a multi-line string costs at most an extra statement boundary, which means MORE
-# places the predicates look, never fewer. Also not tracked, deliberately: heredoc bodies
-# (a body line that looks like an opener over-joins — that is what the two tripwires below
-# are for), backtick substitution (no harness here uses it), and `$((…))`, which needs no
-# case of its own because its two closers net out against its one opener.
+# WHERE IT STOPS, AND WHY THERE — measured, not assumed. Quote state is reset at every
+# physical line boundary; only the substitution depth (and its `qs` stack) carries across
+# lines. So a single-quoted string that really does span physical lines is read as code from
+# its second line on. That happens in this directory: agent-tool-allowlist.test.sh:349 opens
+# a four-line quoted fixture, and this normaliser reports it as four statements rather than
+# one. It is harmless in the only direction that matters — extra statement boundaries are
+# MORE places the predicates look, never fewer, and the whole-tree diff against the counting
+# version reports the same offences either way.
+#
+# Carrying quote state across lines was tried and rejected on evidence. It is only coherent
+# if an unterminated quote also CONTINUES the statement — lexing as though quotes span lines
+# while splitting statements as though they do not is just a third behaviour. And that
+# coherent version re-opens this section's bypass with a longer fuse: with it, a bare `X='`,
+# the offending assignment, and a closing `'` join into one statement beginning `X=`, which
+# reports NOTHING (measured: 0 findings, against 2 from the shipped lexer — the
+# `bad-longfuse` fixture below is that exact file), and it trips the runaway tripwire on 2
+# of the 31 real harnesses here, which this lexer trips on none.
+#
+# Also not tracked, deliberately: heredoc bodies (a body line that looks like an opener
+# over-joins — that is what the two tripwires below are for); backtick substitution, which
+# is read as ordinary characters (measured: every backtick in this directory outside a
+# comment is literal text inside a string, so nothing here turns on it); and `$((…))`, which
+# needs no case of its own because its two closers net out against its one opener.
 #
 # It still does not parse, and its remaining error is over-joining rather than
 # under-joining: it errs toward reading MORE text, not less. That direction is the safer one
@@ -353,7 +366,18 @@ fx_trap() { printf 'trap %s EXIT\n' "'rm -rf \"\$FTMP\"'"; }
   printf '%s\n' "echo 'a \$( inside a literal'" 'echo "a ) inside a string"  # and a ) in a comment'
   fx_trap; } > "$FX/good-noisy.test.sh"
 
-for k in bad-nested bad-unguarded bad-multiline bad-continued bad-bypass good-twostep good-plain good-multiline good-noisy; do
+# (j) THE LONGER FUSE, and the honest label on it: this fixture is flagged by the counting
+#     version too, so it is NOT evidence for `lex`. It is a guard against the refactor that
+#     looks like an improvement — teaching the lexer to carry quote state across physical
+#     lines, which is only coherent if an open quote also continues the statement, and which
+#     then joins all of this into one statement beginning `X=` and reports nothing. Measured
+#     on that variant: 0 findings here. The boundary at `logical_lines` is a decision, so it
+#     gets a test rather than only a paragraph.
+{ fx_head
+  printf '%s\n' "X='" 'FTMP="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/fx.XXXXXX")" && pwd)"' "'"
+  fx_trap; } > "$FX/bad-longfuse.test.sh"
+
+for k in bad-nested bad-unguarded bad-multiline bad-continued bad-bypass bad-longfuse good-twostep good-plain good-multiline good-noisy; do
   o="$(scan "$FX/$k.test.sh")"
   case "$k" in
     bad-nested)
@@ -368,7 +392,7 @@ for k in bad-nested bad-unguarded bad-multiline bad-continued bad-bypass good-tw
       ok "fixture $k is flagged UNGUARDED"  "$(printf '%s' "$o" | grep -c '^UNGUARDED' || true)" 1
       ok "fixture $k is reported at its first physical line" \
          "$(printf '%s' "$o" | grep -c ':3:' || true)" 2 ;;
-    bad-bypass)
+    bad-bypass|bad-longfuse)
       # The same two classes as (a) — and reported at line 4, the offence's OWN line,
       # not the line of the literal that used to swallow it.
       ok "fixture $k is flagged NESTED-CD"  "$(printf '%s' "$o" | grep -c '^NESTED-CD' || true)" 1
