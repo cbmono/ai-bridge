@@ -483,7 +483,7 @@ ai-bridge installs into that directory too, but only the paths **it probes for**
 agents (`code-architect`, `deep-bug-scan`, `plan-architect`), so a fresh laptop works after
 one clone and one install without needing a second repo.
 
-It used to install ~23 more, as a fork of ai-setup's tree — two installers claiming the same
+It used to install 21 more, as a fork of ai-setup's tree — two installers claiming the same
 paths, 14 of them diverged, ownership decided by whichever ran last. Two of the fixes that
 existed only in the fork closed *secret-exposure* paths the public repo was still shipping.
 [docs/claude-config-ownership.md](docs/claude-config-ownership.md) is the full record, and
@@ -525,8 +525,11 @@ completely unaffected (`--config` then exits 2 saying there is nothing to link).
 ~/workspace/ai-bridge/install.sh --config --uninstall
 ```
 
-Removes only the symlinks it created. Real files, `*.bak.*` backups and your runtime state
-(`plugins/`, `projects/`, history) are left alone.
+Removes only the symlinks it created — everywhere it created them, which includes a
+`<root>.bak.<epoch>` directory another installer moved aside (ai-setup does that when it
+takes `~/.claude/agents` over as a whole directory, and three links used to survive there,
+still resolving into the checkout you had just detached from). Real files, `*.bak.*` backup
+*files*, and your runtime state (`plugins/`, `projects/`, history) are left alone.
 
 ### Coming from the separate `ai-setup` repo
 

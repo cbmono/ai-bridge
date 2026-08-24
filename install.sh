@@ -146,7 +146,7 @@ fi
 #
 # AND WHY IT IS NOW ONLY THREE FILES. Closing those four dependencies by forking the
 # whole of `cbmono/ai-setup`'s `.claude/` tree bought a second problem: two installers
-# claiming `${CLAUDE_CONFIG_DIR:-~/.claude}`, 23 entries shipped by both, 14 diverged, and
+# claiming `${CLAUDE_CONFIG_DIR:-~/.claude}`, 24 entries shipped by both, 14 diverged, and
 # ownership decided by whichever ran last. ai-setup owns that directory now. This layer
 # keeps exactly the paths ai-bridge itself PROBES for and nothing else — the smallest set
 # that makes a fresh laptop work without cloning another repo. Re-adding anything here
@@ -315,6 +315,31 @@ config_ours() {
 # which is precisely the "retired command still shows up, retired hook exits 127" failure
 # the comment above describes. Pinned by a fixture whose config dir has a space in it.
 #
+# THE ROOTS INCLUDE WHAT ai-setup MOVED ASIDE, and this one needs no unusual permissions at
+# all — it is the order this repo recommends. ai-setup links each top-level entry as a whole
+# unit, renaming the real directory to `<root>.bak.<epoch>` first. After it runs,
+# `$CONFIG_DEST/commands` is a SYMLINK, so the `[ ! -L … ]` test below drops it, and the 11
+# links this layer must retire sit in `commands.bak.<epoch>/` — a directory, so the
+# top-level `-maxdepth 1` scan does not see them either. Measured on the real in-place
+# upgrade in the recommended order: `--config` retired **2 of 21** and reported "Those 2
+# path(s) … they moved", leaving 19 dangling, un-retired and unreported; `--config
+# --uninstall` exited **0** with three links STILL LIVE into the checkout the user had just
+# detached from. The same failure as the unquoted `find $roots`, reached by a third route.
+# So a moved-aside copy of a managed root is itself a sweep root — restricted to
+# `.bak.<digits>`, the name both installers write, and to real directories, because a `.bak`
+# FILE is a human's own content that an installer moved and never ours to walk into.
+#
+# `find` CANNOT ANSWER "NOTHING TO RETIRE" WHEN IT COULD NOT LOOK, and both calls used to
+# end `2>/dev/null || true`, discarding precisely that distinction. A config dir whose
+# `commands/` is mode 0300 — writable but not readable, which is what a `chmod` typo or an
+# odd umask leaves behind — measured **exit 0, 11 `retire` lines, "Those 11 path(s) … they
+# moved", 0 fail, 0 warn, and ten dangling commands still registered**: the identical
+# failure the checked `rm` below was added for, in the DISCOVERY half rather than the
+# REMOVAL half. Unreadable is the worse of the two because it is silent — mode 500 at least
+# made `rm` fail. So every directory the sweep must list is probed first and NAMED if it
+# cannot be listed, and `find`'s own status is kept as a backstop for whatever a probe
+# cannot predict.
+#
 # THE LOOP RUNS IN THIS SHELL, not down a pipe, so $CONFIG_RETIRED survives it. The count
 # is what lets the caller point at cbmono/ai-setup: a user whose 19 links just vanished is
 # owed the name of the repo that ships them now.
@@ -333,20 +358,64 @@ config_ours() {
 # stays registered. The counter now moves only after the write succeeded, and the caller
 # turns any failure into a non-zero exit through config_sweep_warn.
 CONFIG_RETIRED=0
+CONFIG_DETACHED=0
 CONFIG_SWEEP_FAIL=0
-config_sweep() {
-  local t l rel was n_roots=0
+# Absolute paths the CALLER's own loop owns and has already reported on, newline-delimited
+# and newline-terminated. Only `detach` mode reads it, and only so one unremovable link is
+# not counted and named twice — once by config_uninstall's entries loop and once here.
+CONFIG_SWEEP_SKIP=""
+config_sweep() { # [retire|detach]
+  local mode="${1:-retire}" t b d l rel was n_roots=0 blind=0 find_rc=0 scan="" part=""
   local roots=()
   CONFIG_RETIRED=0
+  CONFIG_DETACHED=0
   CONFIG_SWEEP_FAIL=0
   while IFS= read -r t; do
     [ -n "$t" ] || continue
     if [ -d "$CONFIG_DEST/$t" ] && [ ! -L "$CONFIG_DEST/$t" ]; then
       roots+=("$CONFIG_DEST/$t"); n_roots=$((n_roots+1))
     fi
+    # …and the copy another installer moved aside, which is where this layer's links go when
+    # ai-setup takes the root over. An unmatched glob stays literal, and `-d` rejects it.
+    for b in "$CONFIG_DEST/$t".bak.*; do
+      [ -d "$b" ] && [ ! -L "$b" ] || continue
+      case "${b##*.bak.}" in ''|*[!0-9]*) continue ;; esac
+      roots+=("$b"); n_roots=$((n_roots+1))
+    done
   done <<EOF
 $(config_tops)
 EOF
+  # CAN WE LOOK? Probed per directory so the answer names the path, and before anything is
+  # counted, because "0 to retire" and "could not read the directory" must never print the
+  # same. `find` lists an unreadable directory (its parent supplies the name) and only fails
+  # to descend, so this sees the one it is about to be blind inside.
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    { [ -r "$d" ] && [ -x "$d" ]; } && continue
+    case "$d" in
+      "$CONFIG_DEST") rel="." ;;
+      *) rel="${d#"$CONFIG_DEST"/}" ;;
+    esac
+    echo "  fail   $rel — cannot list this directory; links under it were NOT examined" >&2
+    CONFIG_SWEEP_FAIL=$((CONFIG_SWEEP_FAIL+1)); blind=$((blind+1))
+  done <<EOF
+$( printf '%s\n' "$CONFIG_DEST"
+   if [ "$n_roots" -gt 0 ]; then find "${roots[@]}" -type d -print 2>/dev/null || true; fi )
+EOF
+  # The status of each `find`, kept rather than discarded into `|| true`. The probe above is
+  # more precise when it fires; this is the backstop for a traversal that fails some other
+  # way, and it reports only when the probe found nothing, so one cause is not counted twice.
+  if ! part="$(find "$CONFIG_DEST" -maxdepth 1 -type l -print 2>/dev/null)"; then find_rc=1; fi
+  scan="$part"
+  if [ "$n_roots" -gt 0 ]; then
+    if ! part="$(find "${roots[@]}" -type l -print 2>/dev/null)"; then find_rc=1; fi
+    scan="$scan
+$part"
+  fi
+  if [ "$find_rc" -ne 0 ] && [ "$blind" -eq 0 ]; then
+    echo "  fail   . — could not fully traverse $CONFIG_DEST; this sweep is INCOMPLETE" >&2
+    CONFIG_SWEEP_FAIL=$((CONFIG_SWEEP_FAIL+1))
+  fi
   while IFS= read -r l; do
     [ -n "$l" ] || continue
     rel="${l#"$CONFIG_DEST"/}"
@@ -359,7 +428,26 @@ EOF
           fi
           CONFIG_RETIRED=$((CONFIG_RETIRED+1))
           echo "  retire $rel (no longer shipped by the config layer)"
+          continue
         fi
+        # LIVE, and ours. On an install that is nothing to act on — it is a link to a file
+        # this layer still ships. On an UNINSTALL it is the opposite: a link still pointing
+        # into the checkout the user is detaching from. config_uninstall's own loop walks
+        # `config_entries`, i.e. paths spelled as they are shipped, so it cannot see one
+        # stranded inside a `<root>.bak.<epoch>` directory that ai-setup moved aside — which
+        # is exactly where the three that survived the measured uninstall were.
+        [ "$mode" = detach ] || continue
+        case "$CONFIG_SWEEP_SKIP" in
+          *"
+$l
+"*) continue ;;
+        esac
+        if ! rm -f "$l" 2>/dev/null; then
+          echo "  fail   $rel — cannot remove this link; it is STILL pointing into this checkout" >&2
+          CONFIG_SWEEP_FAIL=$((CONFIG_SWEEP_FAIL+1)); continue
+        fi
+        CONFIG_DETACHED=$((CONFIG_DETACHED+1))
+        echo "  detach $rel (was still linked into this checkout)"
         continue ;;
     esac
     # Not ours by target, so the branch above cannot see it — but it may be OUR OWN dead
@@ -375,9 +463,7 @@ EOF
       echo "  sweep  $rel (dead backup of a relinked file, was -> $was)"
     fi
   done <<EOF
-$( { find "$CONFIG_DEST" -maxdepth 1 -type l -print 2>/dev/null || true
-     if [ "$n_roots" -gt 0 ]; then find "${roots[@]}" -type l -print 2>/dev/null || true; fi
-   } | sort -u )
+$(printf '%s\n' "$scan" | sort -u)
 EOF
 }
 
@@ -400,11 +486,15 @@ config_handover_note() {
 # its sibling to report a full retirement it had not performed. A partial handover is worse
 # than a refused one: the paths that survived are dangling links Claude Code still
 # registers, and the epilogue has already pointed the user at another repo to install from.
+# It counts what the sweep could not LOOK AT as well as what it could not remove, because a
+# directory it cannot list is not "nothing to retire" — that was blocker B3, measured as
+# exit 0 with ten dangling commands still registered.
 config_sweep_warn() {
   [ "$CONFIG_SWEEP_FAIL" -gt 0 ] || return 0
-  echo "warn  $CONFIG_SWEEP_FAIL retired link(s) could NOT be removed (named above) — they" >&2
-  echo "      are still registered and still dangling. The counts above exclude them. Make" >&2
-  echo "      $CONFIG_DEST and its subdirectories writable and re-run." >&2
+  echo "warn  $CONFIG_SWEEP_FAIL path(s) the sweep could not finish (named above). A link it" >&2
+  echo "      could not remove is still registered and still dangling, and a directory it" >&2
+  echo "      could not list may hold more. The counts above exclude them. Make" >&2
+  echo "      $CONFIG_DEST and its subdirectories readable and writable, then re-run." >&2
   return 1
 }
 
@@ -460,6 +550,14 @@ config_install() {
     #     installers ran in would change the outcome.
     #   · IT DOES NOT RESOLVE. Nobody ships it, and we cannot write it without writing
     #     into someone else's checkout. Refuse, name the directory, print the fix.
+    #
+    # `-f`, NOT `-e`. `-e` is true for a DIRECTORY, so a directory named `code-architect.md`
+    # inside the provider's tree would count as "provided": this run would write nothing,
+    # exit 0, and the `test -f ~/.claude/agents/code-architect.md` probe in
+    # `symlink/.claude/agents/qa-reviewer.md` would still fail — silently, in a session. The
+    # contract is "a FILE exists at this path", so the test has to be the same one the
+    # consumer makes. This line is the whole content of its own commit; the fixture that
+    # pins it is in `tests/config-layer.test.sh` (a directory in the provider's slot).
     if [ -n "$off" ] && [ -f "$CONFIG_DEST/$rel" ]; then
       echo "  ok    $rel (provided by $off -> $(readlink "$off"))"; n_else=$((n_else+1)); continue
     fi
@@ -469,9 +567,21 @@ config_install() {
         *" $off "*) ;;
         *)
           reported="$reported$off "
+          # THE FIRST OPTION IS THE PROVIDER'S OWN INSTALLER, and it is printed first
+          # because the `mv` used to be printed alone — actively harmful advice on the
+          # normal machine. cbmono/ai-setup owns this config dir and links these roots as
+          # whole directories BY DESIGN, so following a bare `mv` there deactivates every
+          # agent, command and hook it ships, and its next run moves the replacement aside
+          # again: the two installers ping-pong. The `mv` is right only for a link that is
+          # nobody's design — some other tool's leftover — so it is offered second, and it
+          # says which case it is for.
           echo "  skip  ${rel%/*}/ — $off is a symlink -> $(readlink "$off")" >&2
-          echo "        Linking through it would write into that other checkout. Replace it" >&2
-          echo "        with a real directory first, keeping whatever it holds:" >&2
+          echo "        Linking through it would write into that other checkout, so nothing" >&2
+          echo "        was written. If that link is cbmono/ai-setup's — it owns" >&2
+          echo "        $CONFIG_DEST and links these directories as units — run ITS" >&2
+          echo "        install.sh; it ships this file and the requirement is then met." >&2
+          echo "        Only if the link belongs to no installer, replace it with a real" >&2
+          echo "        directory, keeping whatever it holds:" >&2
           echo "          mv $(printf '%q' "$off") $(printf '%q' "$off").bak.\$(date +%s) && mkdir -p $(printf '%q' "$off")" >&2
           ;;
       esac
@@ -562,9 +672,14 @@ config_uninstall() {
   # `commands/` and `agents/` at mode 500: three `rm` lines, 21 `retire` lines, 8 removals,
   # exit 0 — and THREE LINKS STILL LIVE into the checkout the user had just detached from.
   # An uninstall that says it detached and did not is worse than one that refuses.
-  local tier rel n_fail=0
+  local tier rel n_fail=0 handled=""
   while IFS=$'\t' read -r tier rel; do
     [ -n "$rel" ] || continue
+    # Recorded whether or not the `rm` below runs, so the sweep's detach pass never counts
+    # or names a path this loop already owns. Without it, an unwritable `agents/` reports
+    # each of its three links twice.
+    handled="$handled
+$CONFIG_DEST/$rel"
     if config_ours "$rel"; then
       if rm "$CONFIG_DEST/$rel" 2>/dev/null; then
         echo "  rm    $rel"
@@ -579,8 +694,26 @@ EOF
   # No explicit settings.json removal: this layer does not ship one, and a link left from
   # when it did is dangling — config_sweep retires it by target, along with every other
   # link into this checkout whose file is gone.
-  config_sweep
-  echo "Done. Your runtime state, real files, and *.bak.* backups were left untouched."
+  #
+  # DETACH, not just retire. The loop above walks `config_entries`, i.e. paths spelled the
+  # way this layer ships them, so it cannot see a LIVE link of ours that is no longer
+  # spelled that way — the three in `agents.bak.<epoch>/` after ai-setup took the root over,
+  # which a measured `--config --uninstall` left resolving into the just-detached checkout
+  # while exiting 0. An uninstall that reports success and did not detach is worse than one
+  # that refuses, so the sweep removes live links into this checkout too on this path only.
+  CONFIG_SWEEP_SKIP="$handled
+"
+  config_sweep detach
+  CONFIG_SWEEP_SKIP=""
+  # It no longer says "*.bak.* backups were left untouched" without qualification, because
+  # the detach pass above removes links into THIS checkout wherever it finds them — including
+  # inside a `<root>.bak.<epoch>` directory another installer moved aside, which is where the
+  # three that survived a measured uninstall were. A `.bak.*` regular FILE is still never
+  # touched: that is a human's content.
+  echo "Done. Your runtime state and your own real files were left untouched, backups"
+  echo "      included — apart from links into this checkout, which is what you asked to remove."
+  [ "$CONFIG_DETACHED" -eq 0 ] || \
+    echo "      $CONFIG_DETACHED further link(s) into this checkout were detached (above)."
   config_handover_note
   local rc=0
   if [ "$n_fail" -gt 0 ]; then

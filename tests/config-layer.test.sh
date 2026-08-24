@@ -78,11 +78,16 @@ run_cfg() {  # <dest> <tpl> [extra args…] → exit code
 # to pass plainly. Call it as `said '--config'`, never `said -- '--config'`: the extra `--`
 # becomes "$1", the pattern is silently discarded, and the assertion can never fail.
 said() { grep -q -- "$1" "$TMP/out" && echo yes || echo no; }
-# Files the layer is expected to link: every file in either tier except the two kinds
-# that are never linked (a repo README, a copy-from *.example.json template).
+# Files the layer is expected to link: every file in the tier except the kinds that are
+# never linked. It must mirror `config_entries()`'s exclusion list EXACTLY, or the count
+# assertion below fails naming nothing useful. Two were missing: `settings.json` (ai-setup's
+# file — a re-forked copy here would make this read one too many) and `.DS_Store`, which
+# `make_tpl`'s `cp -R` copies straight out of the real checkout on macOS, so a Finder visit
+# to `config/` turned this suite red with "links every linkable file — got 3, want 4".
 linkable() { # <tpl>
   find "$1/config" -type f 2>/dev/null \
-    | grep -v '/README\.md$' | grep -v '\.example\.json$' | wc -l | tr -d ' '
+    | grep -v '/README\.md$' | grep -v '\.example\.json$' \
+    | grep -v '/settings\.json$' | grep -v '/\.DS_Store$' | wc -l | tr -d ' '
 }
 
 TPL="$TMP/tpl"; make_tpl "$TPL"
@@ -294,7 +299,7 @@ ok "a real file survives"                 "$(yn test -f "$D11/agents/mine.md")" 
 # =========================================================================== #
 echo "-- the handover: links from the layer this repo no longer ships are retired"
 # The transition every existing machine goes through. Before the ownership split this
-# layer linked ~23 more paths out of config/opinionated/; those files are gone, so the
+# layer linked 21 more paths out of config/opinionated/; those files are gone, so the
 # links dangle — a dangling command still registers with Claude Code and a dangling hook
 # exits 127 on every launch. CONFIG_MANAGED_TOPS is what makes the sweep still LOOK in
 # commands/, hooks/, scripts/ and output-styles/ now that nothing under config/ names
@@ -334,7 +339,14 @@ ok "…and it names the repo they moved to"  "$(said 'cbmono/ai-setup')" yes
 # cross-repo group does it by membership here, and ai-setup's own harness does it per path.
 ok "…the dangling audit reports a clean handover" \
    "$(find "$D15" -type l ! -exec test -e {} \; -print | wc -l | tr -d ' ')" 0
-ok "…while a path it retired is simply ABSENT" "$(yn test -e "$D15/settings.json")" no
+# `test -e` was the assertion here, and it CANNOT FAIL: it is already false for a dangling
+# link, so it read "no" before the sweep ran as well as after — a decorative test inside the
+# group whose whole subject is decorative tests. `find -name` sees the entry itself whether
+# or not it resolves, so it counts 1 before the sweep and 0 after: the number moves with the
+# behaviour, which is the only thing that makes it an assertion.
+ok "…while a path it retired is simply ABSENT" \
+   "$(find "$D15" -maxdepth 1 -name settings.json | wc -l | tr -d ' ')" 0
+ok "…and the sweep is what took it"        "$(said 'retire settings.json')" yes
 ok "…so 0 dangling is not 0 lost"          "$(yn test -L "$D15/settings.json")" no
 run_cfg "$D15" "$T7" >/dev/null
 ok "a steady-state run stays quiet about it" "$(said 'cbmono/ai-setup')" no
@@ -479,6 +491,208 @@ ok "…the rm half fully succeeded"           "$(grep -cE '^  rm +agents/' "$TMP
 ok "…so no rm failure supplied that status" "$(grep -cE '^  fail +agents/' "$TMP/out" | tr -d ' ')" 0
 ok "…only the sweep did"                    "$(grep -cE '^  fail +commands/' "$TMP/out" | tr -d ' ')" 2
 chmod 700 "$D20/commands"
+
+# --------------------------------------------------------------------------- #
+echo "-- …and a directory it cannot LIST is a failure, not an empty sweep"
+# THE THIRD ROUTE TO THE SAME FAILURE, and the one no fixture reached: the checked `rm` and
+# the quoted `find $roots` both fixed the REMOVAL half, while both `find` calls that feed
+# the sweep still ended `2>/dev/null || true` — discarding the difference between "no links
+# to retire" and "could not read the directory". Mode 0300 (writable, UNREADABLE — a `chmod`
+# typo, or an odd umask) measured on the real in-place upgrade: exit 0, 11 `retire`, "Those
+# 11 path(s) … they moved", 0 fail, 0 warn, and TEN dangling commands still registered. It
+# is the worse of the two modes precisely because it is silent: at mode 500 the `rm` at
+# least failed. Every directory the sweep must list is probed by name before anything is
+# counted; `find`'s own status is kept as a backstop, and reports only when the probe found
+# nothing, so one cause is never counted twice. BOTH HALVES ARE PINNED, by mutation on this
+# one fixture: disable the probe and it stays red but nameless (1 failure, the
+# "names the directory" assertion); disable the probe AND discard `find`'s status the way it
+# used to be discarded, and the exit code and the warning go too (3 failures). Neither guard
+# is therefore held up by the other.
+D22="$(newdest 22)"; T11="$TMP/tpl-unreadable"; make_tpl "$T11"
+run_cfg "$D22" "$T11" >/dev/null
+SRC12="$(cd "$T11" && pwd)"
+for old in commands/grill.md commands/acp.md; do
+  mkdir -p "$D22/$(dirname "$old")"
+  ln -s "$SRC12/config/opinionated/$old" "$D22/$old"   # target never existed: same as removed
+done
+ln -s "$SRC12/config/opinionated/MEMORY.md" "$D22/MEMORY.md"
+chmod 0300 "$D22/commands"
+rc22="$(run_cfg "$D22" "$T11")"
+chmod 700 "$D22/commands"
+ok "an unreadable sweep root: exits non-zero" "$([ "$rc22" != 0 ] && echo yes || echo no)" yes
+ok "…names the directory it could not list"  "$(said 'commands — cannot list this directory')" yes
+ok "…still retires what it COULD see"        "$(said 'retire MEMORY.md')" yes
+ok "…and counts only that one"               "$(said 'Those 1 path(s)')" yes
+ok "…warning that the sweep is unfinished"   "$(said 'could not finish')" yes
+ok "…while the unseen links are still there" "$(find "$D22/commands" -type l | wc -l | tr -d ' ')" 2
+
+# --------------------------------------------------------------------------- #
+echo "-- …and a root ANOTHER installer moved aside is swept too"
+# NO UNUSUAL PERMISSIONS, AND IT IS THE ORDER THIS REPO RECOMMENDS. ai-setup links each
+# top-level entry as a whole unit, moving the real directory to `<root>.bak.<epoch>` first.
+# So on the normal machine `$CONFIG_DEST/commands` becomes a SYMLINK — which the roots loop
+# skips, correctly, since we never write through one — and the links this layer must retire
+# are now inside a `.bak.<epoch>` DIRECTORY that the top-level `-maxdepth 1` scan does not
+# see. Measured on the real upgrade in that order: `--config` retired 2 of 21 and reported
+# "Those 2 path(s)", leaving 19 dangling and unmentioned; `--config --uninstall` exited 0
+# with three links still LIVE into the checkout the user had just detached from.
+D21="$(newdest 21)"; T10="$TMP/tpl-movedaside"; make_tpl "$T10"
+run_cfg "$D21" "$T10" >/dev/null
+SRC11="$(cd "$T10" && pwd)"
+mkdir -p "$D21/commands"
+for old in commands/grill.md commands/acp.md; do
+  ln -s "$SRC11/config/opinionated/$old" "$D21/$old"
+done
+mkdir -p "$TMP/asetup2/commands"
+while IFS= read -r a; do
+  [ -n "$a" ] || continue
+  printf 'ai-setup copy of %s\n' "$a" > "$TMP/asetup2/agents/$a"
+done <<AGENTS2
+$(mkdir -p "$TMP/asetup2/agents"; cd "$T10/config/required/agents" && ls)
+AGENTS2
+# Exactly what ai-setup's link() does: mv the real root aside, then link the root.
+mv "$D21/commands" "$D21/commands.bak.1700000001"; ln -s "$TMP/asetup2/commands" "$D21/commands"
+mv "$D21/agents"   "$D21/agents.bak.1700000002";   ln -s "$TMP/asetup2/agents"   "$D21/agents"
+rc21="$(run_cfg "$D21" "$T10")"
+ok "after another installer took the roots: exits 0" "$rc21" 0
+ok "…the dangling links it moved aside are gone" "$(find "$D21/commands.bak.1700000001" -type l | wc -l | tr -d ' ')" 0
+ok "…named with the directory they are in"   "$(said 'retire commands.bak.1700000001/grill.md')" yes
+ok "…so the handover count is 2, not 0"      "$(said 'Those 2 path(s)')" yes
+ok "…and our three are reported as provided" "$(said 'provided by another config layer')" yes
+# The LIVE links of ours inside the moved-aside root are not an install's business — they
+# point at files this layer still ships. They are very much an UNINSTALL's.
+ourslive() { # <dir> <template root> → how many live links there point into that template
+  local n=0 x
+  while IFS= read -r x; do
+    [ -n "$x" ] || continue
+    case "$(readlink "$x")" in "$2"/config/*) n=$((n+1)) ;; esac
+  done <<INNER
+$(find "$1" -type l -exec test -e {} \; -print 2>/dev/null)
+INNER
+  printf '%s' "$n"
+}
+ok "…live links of ours survive the install"  "$(ourslive "$D21/agents.bak.1700000002" "$SRC11")" 3
+rc21u="$(run_cfg "$D21" "$T10" --uninstall)"
+ok "--uninstall from that state exits 0"      "$rc21u" 0
+ok "…and NOTHING still points into the checkout" "$(ourslive "$D21" "$SRC11")" 0
+ok "…each detached link named"                 "$(grep -cE '^  detach ' "$TMP/out" | tr -d ' ')" 3
+# One link, one line: the entries loop and the sweep must not both claim the same path.
+D21b="$(newdest 29)"; run_cfg "$D21b" "$TPL" >/dev/null
+run_cfg "$D21b" "$TPL" --uninstall >/dev/null
+ok "a plain uninstall reports each link once"  "$(grep -cE '^  (rm|detach) ' "$TMP/out" | tr -d ' ')" 3
+ok "…through the entries loop, not the sweep"  "$(grep -cE '^  detach ' "$TMP/out" | tr -d ' ')" 0
+
+# --------------------------------------------------------------------------- #
+echo "-- …and the sweep RECURSES, which one shipped path was ever deep enough to prove"
+# `-maxdepth 1` on the roots `find` keeps this suite green: the only real path deeper than
+# one level under a root is `skills/test-locators/SKILL.md`, and nothing had a fixture for
+# it. A skill is a directory of files by construction, so this is the shape of every future
+# one.
+D23="$(newdest 23)"; T12="$TMP/tpl-deep"; make_tpl "$T12"
+run_cfg "$D23" "$T12" >/dev/null
+SRC13="$(cd "$T12" && pwd)"
+mkdir -p "$D23/skills/test-locators"
+ln -s "$SRC13/config/opinionated/skills/test-locators/SKILL.md" "$D23/skills/test-locators/SKILL.md"
+ok "a dangling link two levels down: exits 0" "$(run_cfg "$D23" "$T12")" 0
+ok "…is retired as well"                      "$(yn test -L "$D23/skills/test-locators/SKILL.md")" no
+ok "…and it said so"                          "$(said 'retire skills/test-locators/SKILL.md')" yes
+
+# --------------------------------------------------------------------------- #
+echo "-- …and the dead-backup rm is checked like every other write"
+# Same rule, third caller. The fixture ISOLATES it: `agents/` stays writable so the link
+# half succeeds completely, and the only thing that can fail is the `rm` of a dead backup
+# under `commands/` — otherwise the non-zero exit would be supplied by a sibling, which is
+# the defect shape this whole section exists to prevent.
+D24="$(newdest 24)"; T13="$TMP/tpl-deadbak"; make_tpl "$T13"
+run_cfg "$D24" "$T13" >/dev/null
+SRC14="$(cd "$T13" && pwd)"
+mkdir -p "$D24/commands"
+# A dead backup is `.bak.<digits>` + a dangling symlink + the entry it backs up existing
+# again as a link of ours. All three, or dead_backup() declines — see its comment.
+# The backup's target is the checkout's OLD path — that is the only way this debris is
+# created (one `mv` of the checkout, then one repair install) and the reason the sweep's
+# first branch cannot see it: `ours` tests the target against the template's CURRENT
+# location, which a moved link fails by construction.
+ln -s "$SRC14/config/required/agents/code-architect.md" "$D24/commands/grill.md"
+ln -s "$TMP/moved-away/config/opinionated/commands/grill.md" "$D24/commands/grill.md.bak.1700000003"
+chmod 500 "$D24/commands"
+rc24="$(run_cfg "$D24" "$T13")"
+chmod 700 "$D24/commands"
+ok "an unremovable dead backup: exits non-zero" "$([ "$rc24" != 0 ] && echo yes || echo no)" yes
+ok "…says what it could not remove"            "$(said 'cannot remove this dead backup')" yes
+ok "…and it is still on disk"                  "$(yn test -L "$D24/commands/grill.md.bak.1700000003")" yes
+ok "…no link write supplied that status"       "$(grep -cE '^  fail +agents/' "$TMP/out" | tr -d ' ')" 0
+rc24b="$(run_cfg "$D24" "$T13")"
+ok "with the directory writable: exits 0"      "$rc24b" 0
+ok "…the dead backup is swept"                 "$(yn test -L "$D24/commands/grill.md.bak.1700000003")" no
+ok "…and it printed where it had pointed"      "$(said 'dead backup of a relinked file')" yes
+
+# --------------------------------------------------------------------------- #
+echo "-- …and 'ours' is decided by TARGET, not by a prefix that looks like ours"
+# `case "$tgt" in "$CONFIG_SRC"/*)` — the trailing slash is the whole guard, in config_ours
+# and in the sweep's first branch. What it excludes is a path that EXTENDS `config`'s name
+# inside this very checkout: `config.bak/`, which is exactly what a human makes by hand
+# before a migration like this one. Without the slash such a link is "ours", so the sweep
+# retires it and an uninstall removes it — deleting somebody's own backup of the layer they
+# were about to lose.
+D25="$(newdest 25)"; run_cfg "$D25" "$TPL" >/dev/null
+# Spelled the way the INSTALLER spells its own root (`cd && pwd`), which normalises away the
+# `//` that $TMPDIR carries — otherwise this link is one no real install could produce and
+# the prefix test is never reached at all. Same trap as the handover fixture above.
+SRCTPL="$(cd "$TPL" && pwd)"
+ln -s "$SRCTPL/config.bak/required/agents/code-architect.md" "$D25/agents/lookalike.md"
+ok "a dangling link into config.bak/: exits 0" "$(run_cfg "$D25" "$TPL")" 0
+ok "…is NOT retired"                          "$(yn test -L "$D25/agents/lookalike.md")" yes
+run_cfg "$D25" "$TPL" --uninstall >/dev/null
+ok "…nor removed by an uninstall"             "$(yn test -L "$D25/agents/lookalike.md")" yes
+ok "…while ours in the same directory went"   "$(yn test -L "$D25/agents/code-architect.md")" no
+
+# --------------------------------------------------------------------------- #
+echo "-- …and 'provided' means a FILE, which is what the consumer probes for"
+# `[ -f ]`, not `[ -e ]`: `-e` is true for a DIRECTORY, so a directory named
+# `code-architect.md` in the provider's tree would be reported as provided — this run writes
+# nothing, exits 0, and `test -f ~/.claude/agents/code-architect.md` in
+# `symlink/.claude/agents/qa-reviewer.md` still fails, silently, in a session. That line is
+# the entire content of its own commit and nothing covered it.
+D26="$(newdest 26)"; mkdir -p "$TMP/asetup3/agents/code-architect.md"
+for a in deep-bug-scan.md plan-architect.md; do printf 'ai-setup copy\n' > "$TMP/asetup3/agents/$a"; done
+ln -s "$TMP/asetup3/agents" "$D26/agents"
+rc26="$(run_cfg "$D26" "$TPL")"
+ok "a DIRECTORY in the provider's slot: refused" "$([ "$rc26" != 0 ] && echo yes || echo no)" yes
+ok "…not counted as provided"                 "$(grep -c 'agents/code-architect.md (provided by' "$TMP/out" | tr -d ' ')" 0
+ok "…while the two real files are"            "$(grep -c '(provided by' "$TMP/out" | tr -d ' ')" 2
+ok "…and nothing was written into that tree"  "$(find "$TMP/asetup3/agents/code-architect.md" -mindepth 1 | wc -l | tr -d ' ')" 0
+# The remediation it prints must not tell the user to break the provider that owns the dir:
+# ai-setup links these roots as units BY DESIGN, so a bare `mv` there deactivates everything
+# it ships and its next run moves the replacement aside again — the two installers ping-pong.
+ok "…it points at the provider's installer first" "$(said 'run ITS')" yes
+ok "…and offers the mv only for an unowned link"  "$(said 'belongs to no installer')" yes
+
+# --------------------------------------------------------------------------- #
+echo "-- …and a config dir that cannot be created is a refusal"
+# The last unchecked write in the link half. Its failure was reported only by the per-entry
+# `mkdir -p "$dstdir"` below it, and only because every shipped entry happens to live in a
+# subdirectory — an incidental guarantee, not a stated one.
+NOPARENT="$TMP/noparent"; mkdir -p "$NOPARENT"; chmod 500 "$NOPARENT"
+rc27="$(run_cfg "$NOPARENT/cfg" "$TPL")"
+chmod 700 "$NOPARENT"
+ok "an uncreatable config dir: exits non-zero" "$([ "$rc27" != 0 ] && echo yes || echo no)" yes
+ok "…and says nothing was written"             "$(said 'Nothing was written')" yes
+ok "…having created no config dir at all"      "$(yn test -d "$NOPARENT/cfg")" no
+
+# --------------------------------------------------------------------------- #
+echo "-- …and a settings.json that reappears under config/ is still not linked"
+# The exclusion in `config_entries` is not decoration: `~/.claude/settings.json` is the one
+# file in the config dir that can already hold permissions a human tuned by hand, it belongs
+# to ai-setup, and this layer must not link, back up, edit or mention it. A re-forked copy
+# appearing under `config/` is how it would come back — silently linked on the next run.
+T14="$TMP/tpl-sjs"; make_tpl "$T14"
+printf '{"permissions":{"deny":["Read(**/.env)"]}}\n' > "$T14/config/required/settings.json"
+D28="$(newdest 28)"
+ok "a settings.json under config/: exits 0"   "$(run_cfg "$D28" "$T14")" 0
+ok "…is NOT linked"                           "$(yn test -e "$D28/settings.json")" no
+ok "…and is not even mentioned"               "$(said 'settings.json')" no
+ok "…while the agents still are linked"       "$(find "$D28/agents" -type l | wc -l | tr -d ' ')" 3
 
 # =========================================================================== #
 echo "-- an instance carrying the old import is told, not edited"
