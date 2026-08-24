@@ -37,8 +37,8 @@ move it here intact instead.
 | 12 | [Three behaviours against a silent wrong answer](#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) | `push-state.sh`, `answered_questions`, `maxPrLoc` |
 | 13 | [A shared instance is three no-ops and one gate](sharing.md) | `task-owner.sh`, config split, derived indexes |
 | 14 | [`knowledge/references/` is the fifth knowledge kind](#14-knowledgereferences-is-the-fifth-knowledge-kind) | `validate-bundle.sh`, `SCHEMA.md` |
+| 15 | [The config layer is one tier, and the arrow stays one-way](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way) | `install.sh --config`, `config/` |
 | 16 | [The kill switch is one hook, and it fails open](#16-the-kill-switch-is-one-hook-and-it-fails-open) | `agent-control.sh`, `control.sh` |
-| 15 | [The config layer is two tiers, and the arrow stays one-way](#15-the-config-layer-is-two-tiers-and-the-arrow-stays-one-way) | `install.sh --config`, `config/` |
 | 17 | [An instruction is executable only if the agent *holds* the tool](#17-an-instruction-addressed-to-an-agent-is-executable-only-if-that-agent-holds-the-tool) | every agent body, `symlink/CONVENTIONS.md`, `seed/CLAUDE.md` |
 | 18 | [The allowlist check is pinned from both sides](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure) | `agent-tool-allowlist.test.sh` |
 
@@ -47,7 +47,7 @@ move it here intact instead.
 ## Layout
 
 - **This repo** — a **reusable OKF control-panel template**. `symlink/` holds generic machinery (SCHEMA, `AUTONOMY.md` — the deletable delegated-autonomy capability, `CONVENTIONS.md` — the shared role-agent conventions, read on dispatch because they govern the target repos, which no `paths:` glob can reach, role agents, `/pm-loop`, `/new-project`, `/close-project`, `/pr-review-request`, `/answer`, `/fanout`, `/audit`, `commit-as.sh`, `required-checks.sh`, `task-owner.sh`, `prune-worktrees.sh`, `validate-bundle.sh`, `migrate-bundle.sh`, `write-snapshot.sh`, `build-board.sh`, `print-board.sh`, `watch-board.sh`, `index-kb.sh`, `link-repos.sh`, a `SessionStart` hook for tasks-awaiting-you, a `UserPromptSubmit` hook pushing current instance state) symlinked into per-group **instances**; `seed/` holds starting content copied once; `install.sh` stamps out / refreshes an instance and manages its gitignore; `RETIRED` declares seed paths the template has stopped shipping, which are reported and never deleted. Each instance is its own repo under `~/workspace/<group>/_ai-bridge-<group>/` (leading underscore, named distinctly from this template dir). Keep machinery generic — org/repo/path/team/channel literals live in an instance's `instance.config.json` / `CLAUDE.md`, never in `symlink/`. <!-- This bullet was duplicated three times by conflict resolutions; it is now ONE line carrying the union of all three. If you resolve a conflict here, merge into this line — never append a second copy. -->
-- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root `install.sh` is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery is symlinked from *this* checkout, and `ai-setup`'s installer has nothing to do with it. `ai-setup` still carries the old subtree as a deliberate rollback point — it is frozen, and a path under `ai-setup/ai-bridge/` is the stale copy. `ai-setup`'s *config* layer has since been folded in here under `config/`, behind a second install target (`install.sh --config`) — see [15](#15-the-config-layer-is-two-tiers-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
+- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root `install.sh` is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery is symlinked from *this* checkout, and `ai-setup`'s installer has nothing to do with it. **`ai-setup` no longer carries that subtree at all** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69) removed it, and its last state is in git history only (`git -C ai-setup show f8b09a4:ai-bridge/`), so a path under `ai-setup/ai-bridge/` does not exist rather than being stale. This sentence used to say the subtree was still there and frozen — which contradicted `README.md` and pointed maintainers at a checkout path that is gone. That is the same "documentation describes a deleted thing as live" defect that removing the subtree was meant to end, and the third instance of it corrected in this PR. `ai-setup`'s *config* layer briefly lived here too — forked wholesale under `config/` behind a second install target (`install.sh --config`) — but that fork is what caused 24 colliding `~/.claude` paths with 14 diverged, so it has since been handed back: `config/` now ships only the three agents ai-bridge itself probes for, and `~/.claude` is `ai-setup`'s alone again — see [15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
 
 ---
 
@@ -145,7 +145,7 @@ The gate is on the wrong verb if you get it backwards. The full reasoning — ow
 
 **…and promoting it was a two-line change because the location filter was never a list of four names.** `validate-bundle.sh` collects `knowledge/<kind>/*.md` as a *shape*, so the one live instance's 7 `type: Reference` documents were already being checked for `type`, `timestamp` and dangling refs — measured, 0 findings. The only gap was `status`, unchecked because `Reference` had no enum, which left invisible exactly the drift class the script was built for (one type's enum applied to another: `open` on a Reference reads as a Finding). So the fix is `Reference) echo "current superseded"` plus the `SCHEMA.md` section — all 7 already carry `current`, so it is a no-op on live data and a real check on the next edit. Declaring the enum also makes `status` **required** there; root documents typed `Reference` (`SCHEMA.md`, `AUTONOMY.md`) carry none and are unaffected, because they sit outside every schema-defined location. Relocating those documents into `findings/` was rejected: they are specs and contracts, not one decision each, and moving someone's content to satisfy a validator that already reads it is the wrong direction.
 
-## 15. The config layer is two tiers, and the arrow stays one-way
+## 15. The config layer is one tier, and the arrow stays one-way
 
 **ai-bridge depended on a separate repo for four things, and all four failed silently.**
 The measurement that forced this: **nine** top-level entries of the live `~/.claude` were
@@ -167,12 +167,37 @@ when absent, though, so an instance stamped earlier keeps the dead import foreve
 is instance data the human owns and has very likely edited around. Report-only, the same
 contract as `RETIRED`.
 
-**Two tiers, because they answer different questions.** `config/required/` is what
-ai-bridge itself probes for, and it must stay generic. `config/opinionated/` is one
-person's commands, output style, hooks and scripts, and is the only place in this repo
-where a company's internal tool may be named (`/dave`); an adopter takes it, forks it, or
-deletes the directory. **Deleting either tier is safe** — the `AUTONOMY.md` pattern applied
-to a whole directory, with `--config` linking whatever is there and erroring nowhere.
+**One tier now, and it ships only what ai-bridge itself needs.** `config/required/` — the
+three agents (`code-architect`, `deep-bug-scan`, `plan-architect`) ai-bridge's own role
+agents probe for with `test -f` — is the entire config layer. `config/opinionated/`, the
+second tier this section used to describe (one person's commands, output style, hooks and
+scripts, the only place in this repo a company's internal tool could be named — `/dave`),
+is **gone**: it was a fork of `ai-setup`'s `.claude/` tree, 24 of its 26 installable
+entries collided with ai-setup's own, 14 had diverged in both directions, and ownership was
+decided by whichever installer ran last. `ai-setup` now owns
+`${CLAUDE_CONFIG_DIR:-~/.claude}` outright and received every fix the fork had made that it
+lacked; see [`docs/claude-config-ownership.md`](claude-config-ownership.md) for the full
+accounting. **Deleting the tier is still safe** — the `AUTONOMY.md` pattern applied to the
+one directory that is left, with `--config` linking whatever files remain and erroring
+nowhere. (Deleting `config/` *itself* is a different thing and exits 2: a refusal to do
+nothing, not a breakage.)
+
+**"Deleting the tier" means removing the DIRECTORY, and the distinction is now load-bearing
+rather than pedantic.** `--config` retires a link by asking whether its target is still in
+the discovered source set, so an *empty* set reads as "retire everything" — and a source
+directory that cannot be listed produces exactly the same empty set as one that is gone.
+Measured on a real upgrade fixture, three permission modes, all identical: **exit 0, every
+link retired including the ones this layer still ships, none left, no warning**, and the
+quietest mode printed nothing on stderr at all. Keeping `find`'s exit status does not close
+that: `find . -type f` in a directory that is unreadable but executable exits **0** with no
+output. So the guard is stated over the two sets instead — *discovery returned nothing while
+links into `config/` still exist* ⇒ **refuse, name it, exit non-zero, retire nothing** — and
+a tier directory that is **absent** is what distinguishes the legitimate `rm -rf
+config/required` from a tier we merely could not read. A tier emptied but left in place
+therefore lands on the refusing side, and says so: remove the directory, or run
+`--config --uninstall`, if that is what you meant. A second refusal covers the case the set
+statement structurally cannot see — one unreadable subdirectory among several readable ones
+still yields files, so the set is not empty while the links beneath it read as dangling.
 
 **The arrow stays one-way, and that is what makes this modular rather than merely
 bundled.** `symlink/` must never *require* `config/`: the role agents keep probing with
@@ -190,26 +215,52 @@ git repo. Not hypothetical: it is how four uninvited skills got committed to `ai
 repo — dead links its installer would then have pushed into every consumer's config dir.
 Two fixes were available: carry that repo's `.gitignore` allow-list (`.claude/skills/*`
 denied, one `!` per shipped skill) plus its test, or link per **file**. **Per-file linking
-was chosen because it removes the hazard instead of policing it** — the config dir's
-directories stay real directories that own their own contents, so a drop-in cannot reach
-this checkout at all and no allow-list has to be maintained as skills come and go. It also
+was chosen because it removes the hazard instead of policing it** — nothing this installer
+creates is a directory link, so a drop-in cannot reach *this* checkout at all and no
+allow-list has to be maintained as skills come and go. It does not make every directory in
+the config dir real: `ai-setup` links `~/.claude/agents` as a unit, so on a machine that ran
+its installer the parent of our three agents is a symlink, which is why (a) below is a
+conditional refusal rather than a flat one. It also
 gives back the slot the allow-list approach costs: a personal global command can live in
 `~/.claude/commands/` beside the linked ones, which a whole-dir link makes impossible.
 
-**Two refusals and one abstention complete it.** (a) `--config` refuses to write *through*
-a symlinked directory — if `~/.claude/agents` is a link into another checkout, writing
-`agents/x.md` would create a file **inside that other repo**, silently, and leave the
-config dir with nothing of its own; it names the directory, prints the `mv` that fixes it,
-and exits non-zero. (b) Both tiers declaring the same relative path is refused **before any
-write**, because whichever ran second would move the first aside as a `.bak` and shadow it,
-and a shadowed default is the exact silent failure this change exists to remove. (c)
-`settings.json` is linked only when there is none: it can hold permissions, env vars and
-plugin choices somebody tuned by hand, and it is the one file here where a merge could
-widen what Claude is allowed to *do* rather than how it reports. `ai-setup`'s installer
-merges two display-only keys into a real one; that is deliberately **not** ported, so
-`--config` stays purely additive — every write it makes is a symlink it created itself. The
-trade is stated out loud rather than hidden: the status line and the `Brief` style reach an
-established install only when the human runs the two printed commands.
+**A conditional refusal, a retired guard, and an abstention complete it.** (a) `--config`
+never writes *through* a symlinked directory — if `~/.claude/agents` is a link into another
+checkout, writing `agents/x.md` would create a file **inside that other repo**, silently,
+and leave the config dir with nothing of its own. The answer depends on whether the entry
+already resolves through that link, and both halves matter: `ai-setup` links
+`~/.claude/agents` as a whole directory, so a symlinked parent is **the normal
+configuration** on any machine that ran its installer, not an error. When the path resolves,
+that provider is shipping it — the required tier's contract is that the file EXISTS on this
+machine, not that our copy is the one used — so it is **reported and nothing is written**,
+exit 0. When it does not resolve, nobody ships it and we cannot write it: refuse, name the
+directory, print the `mv` that fixes it, exit non-zero. Refusing in *both* cases would make
+`--config` fail on the normal setup and make the two installers order-dependent, which is
+the whole thing this split removes. (b) The old refusal for two tiers declaring the same
+relative path — whichever ran second would move the first aside as a `.bak` and shadow
+it — is **gone**, not because the risk went away but because it cannot fire any more: there
+is one tier. What holds the invariant now is `tests/config-ownership.test.sh`, which derives
+the whole shippable set from the `test -f` probes in `symlink/` and cannot name the tier
+directories it scans, with the tier names pinned separately against `install.sh`'s own
+`CONFIG_TIERS` in both directions — so a second tier could not reappear here unnoticed, under
+its old name or a new one. (c) **`settings.json` is not this layer's file at all.** It is not
+shipped, not linked, not backed up, not merged, and not reported on; `tests/config-layer.test.sh`
+asserts a real one is left untouched and **not even mentioned**. It is the one path in the
+config dir that can already hold permissions, env vars and plugin choices somebody tuned by
+hand — the only place where writing a value could widen what Claude is allowed to *do* rather
+than how it reports — so two installers writing it is exactly the collision the ownership
+split removes. `ai-setup` owns it, including the display-only merge into an established real
+one, and — from [`ai-setup#71`](https://github.com/cbmono/ai-setup/pull/71), which lands
+before this change for exactly this reason — it **adopts a `settings.json` that is a symlink
+into some other checkout**: a symlink holds a path rather than a file, so there is nothing
+of the human's there to protect, and declining left the path installed by nobody once this
+layer retired its own link. Stated with the source because the tense matters: *before* that
+change ai-setup declined, and this is the sentence a reader would otherwise use to conclude
+the loss cannot happen. `tests/config-ownership.test.sh`'s cross-repo group runs ai-setup's
+own installer from that starting state and fails if it declines, so the claim is checked
+against the code rather than asserted here. `--config` therefore stays purely additive — every write it makes is a symlink it
+created itself — and the paths it retires are not left unexplained: it names `cbmono/ai-setup`
+as where they went.
 
 The worktree guard covers both halves, because it runs before the flags are parsed — a
 config install from a worktree fails identically, every link pointing into a checkout that

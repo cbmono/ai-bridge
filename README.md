@@ -463,44 +463,60 @@ existed only in the subtree, while this repo was ahead by 4 scripts, 1 hook, 9 t
 The two repos are independent by design: `ai-setup`'s user-wide installer is scoped to
 `.claude` and never touched this template.
 
-**Its config layer now lives here**, under `config/` — see [The config layer](#the-config-layer)
-below. The `@~/.claude/claude-defaults.md` import that every instance used to inherit is
-gone: that section is inlined in `seed/CLAUDE.md`, so nothing can dangle.
+**`~/.claude` belongs to that repo**, not this one — see
+[The config layer](#the-config-layer) below and
+[docs/claude-config-ownership.md](docs/claude-config-ownership.md) for why. This repo
+installs only the three agents its own role agents probe for. The
+`@~/.claude/claude-defaults.md` import that every instance used to inherit is gone: that
+section is inlined in `seed/CLAUDE.md`, so nothing can dangle.
 
 ---
 
 ## The config layer
 
-ai-bridge can also install the **`~/.claude` layer**: the agents, commands, output style,
-hooks and scripts a Claude Code session loads *outside* any instance. A fresh laptop is
-one clone and one install.
+**`${CLAUDE_CONFIG_DIR:-~/.claude}` is owned by
+[`cbmono/ai-setup`](https://github.com/cbmono/ai-setup)** — the commands, hooks, output
+style, skills and `settings.json` all install from there. Run *that* repo's `install.sh`
+for those.
+
+ai-bridge installs into that directory too, but only the paths **it probes for**: three
+agents (`code-architect`, `deep-bug-scan`, `plan-architect`), so a fresh laptop works after
+one clone and one install without needing a second repo.
+
+It used to install 21 more, as a fork of ai-setup's tree — two installers claiming the same
+paths, 14 of them diverged, ownership decided by whichever ran last. Two of the fixes that
+existed only in the fork closed *secret-exposure* paths the public repo was still shipping.
+[docs/claude-config-ownership.md](docs/claude-config-ownership.md) is the full record, and
+`tests/config-ownership.test.sh` fails if the fork starts growing back.
 
 ```bash
 ~/workspace/ai-bridge/install.sh --config
 ```
 
 It links **one file at a time** into `${CLAUDE_CONFIG_DIR:-~/.claude}`. A real file in the
-way is backed up as `<name>.bak.<epoch>` — **except `settings.json`, which is left exactly
-as it is.** That one holds your permissions, so it is never moved aside: an installer that
-replaced it could widen what agents are allowed to do, and no convenience is worth that. Restart Claude Code afterwards so it re-scans
-agents and commands.
+way is backed up as `<name>.bak.<epoch>`. It **never touches `settings.json`** — that is
+ai-setup's file, it holds your permissions, and an installer that replaced it could widen
+what agents are allowed to do. Restart Claude Code afterwards so it re-scans agents and
+commands.
 
-### Two tiers
+### What it ships
 
-| Tier | Holds | Why it is its own tier |
+| Path | Holds | Why it is here and not in ai-setup |
 |---|---|---|
-| **`config/required/`** | `code-architect`, `deep-bug-scan`, `plan-architect` | the only three agents this repo's own role agents look for. Without them `qa-reviewer` loses the escalation behind its cheap second opinion and the PM loses its plan critic — **silently**, which is why they ship here now |
-| **`config/opinionated/`** | 10 commands (`/plan`, `/grill`, `/verify`, `/acp`, `/scan`, `/stack`, `/techdebt`, `/rabbit`, `/dave`, `/codex-handoff`), 3 more agents (`build-validator`, `oncall-guide`, `stack-navigator`), the `Brief` output style, 2 hooks (status line, format-on-write), 2 scripts, `MEMORY.md`, `settings.json`, two `*.example.json` | one person's setup. Take it, fork it, or delete the directory. `/dave` calls one company's internal tool — that is exactly the kind of thing this tier is for |
+| **`config/required/`** | `code-architect`, `deep-bug-scan`, `plan-architect` | the only three agents this repo's own role agents look for. Without them `qa-reviewer` loses the escalation behind its cheap second opinion and the PM loses its plan critic — **silently**. ai-setup ships them too, so on a machine that installed both, either copy satisfies the probe; this copy is what makes ai-setup optional |
 
-Delete either directory and `--config` still works: it links whatever is there, and errors
-nowhere.
+That is the whole list, and it is enforced rather than documented:
+`tests/config-ownership.test.sh` derives the expected set from the `test -f` probes in
+`symlink/` and fails on anything else under `config/`. Delete `config/required/` and
+`--config` links nothing and exits 0; delete `config/` itself and an **instance** stamp is
+completely unaffected (`--config` then exits 2 saying there is nothing to link).
 
 ### Five rules it follows
 
 1. **Never a whole-directory symlink.** `agents/`, `commands/` and `skills/` are *drop-in* directories — any skill or plugin installer can write a new subdirectory into them at any moment. Linking one as a unit aims it at this checkout, so every drop-in lands inside a public git repo. That is how four uninvited skills once got committed to the parent repo, three of them dead links. Per-file links keep `~/.claude/<dir>` a real directory that owns its own contents.
-2. **It refuses to write *through* a symlinked directory.** If `~/.claude/agents` is itself a link into some other checkout, `--config` skips it, names it, prints the `mv` that fixes it, and exits non-zero. It never writes into the other repo.
-3. **`settings.json` stays yours.** It is linked only when you have none. Otherwise the installer prints the two commands to adopt the baseline and stops — it never edits your file, not even to merge one key.
-4. **A retired file's link is swept.** Delete something from `config/` and the next `--config` removes the dangling link. A dangling command still registers with Claude Code; a dangling hook exits 127 every launch.
+2. **It never writes *through* a symlinked directory.** ai-setup links `~/.claude/agents` as a whole directory, so on a machine that ran its installer every entry here has a symlinked parent. When the file already resolves through it, the requirement — *this agent exists on this machine* — is met, so `--config` reports `provided by …` and writes nothing. When it does **not** resolve, nobody ships it and writing would land inside the other checkout: `--config` skips it, names it, prints the `mv` that fixes it, and exits non-zero. Either way the two installers compose in any order.
+3. **`settings.json` is not ours at all.** This layer does not ship one, does not link one, and does not report on one. A link left over from when it did is retired by the sweep in rule 4.
+4. **A retired file's link is swept — and it says where the file went.** Delete something from `config/` and the next `--config` removes the dangling link. Delete or hide *everything* and it does the opposite: an empty source list is refused rather than acted on, loudly and non-zero, because "nothing is shipped" and "I could not read the checkout" produce the same empty list and only the first licenses a delete. Removing the tier **directory** is the way to mean the first. A dangling command still registers with Claude Code; a dangling hook exits 127 every launch. The sweep is also what performs the **handover**: this layer used to ship ~21 more paths, so an existing machine's first run on the new layer retires them all at once, and it prints that they moved to [`cbmono/ai-setup`](https://github.com/cbmono/ai-setup) rather than leaving a user told only what vanished. Steady-state runs stay quiet.
 5. **Nothing here is required.** An instance never needs the config layer, and the config layer never needs an instance. `install.sh <dir>` behaves exactly as it always did.
 
 ### Uninstall
@@ -509,8 +525,11 @@ nowhere.
 ~/workspace/ai-bridge/install.sh --config --uninstall
 ```
 
-Removes only the symlinks it created. Real files, `*.bak.*` backups and your runtime state
-(`plugins/`, `projects/`, history) are left alone.
+Removes only the symlinks it created — everywhere it created them, which includes a
+`<root>.bak.<epoch>` directory another installer moved aside (ai-setup does that when it
+takes `~/.claude/agents` over as a whole directory, and three links used to survive there,
+still resolving into the checkout you had just detached from). Real files, `*.bak.*` backup
+*files*, and your runtime state (`plugins/`, `projects/`, history) are left alone.
 
 ### Coming from the separate `ai-setup` repo
 
