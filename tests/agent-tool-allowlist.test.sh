@@ -79,7 +79,12 @@ ok() { # <name> <actual> <expected>
 # Including it would flag the bundle's core vocabulary as a tool reference — the exact
 # cry-wolf failure that gets a check deleted. `Agent` is the name that decides dispatch
 # here and it carries no such collision.
-VOCAB='Agent|Workflow|Skill|Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep|Bash|BashOutput|KillShell|KillBash|WebFetch|WebSearch|TodoWrite|ToolSearch|SlashCommand|ExitPlanMode|EnterWorktree|mcp__[A-Za-z0-9_*-]+'
+# `Artifact` joined the list when the PM tick began publishing the board with it — the
+# fifth instance this file's header predicted, arriving exactly as predicted: a capability
+# that only a tool can perform, named in an agent body. The collision test it has to pass
+# is OKF's `artifacts:` field, and it does: that is lowercase and plural, and a mention
+# only counts inside backticks as this exact identifier.
+VOCAB='Agent|Artifact|Workflow|Skill|Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep|Bash|BashOutput|KillShell|KillBash|WebFetch|WebSearch|TodoWrite|ToolSearch|SlashCommand|ExitPlanMode|EnterWorktree|mcp__[A-Za-z0-9_*-]+'
 MENTION_RE="\`($VOCAB)\`"
 
 # ------------------------------------------------------------------ the primitives

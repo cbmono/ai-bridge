@@ -270,5 +270,28 @@ assert "build-artifact-board.sh is gone"             "$(yes_if test ! -e "$REPO/
 # merged into it, and a comment recording that is not a caller.
 assert "…and no machinery still tells anyone to run it" "$(yes_if bash -c "! grep -rlF scripts/build-artifact-board '$REPO/symlink' >/dev/null 2>&1")"
 
+# THE DOCS WERE THE HALF THAT ROTTED, so they are asserted too. Deleting the script and
+# sweeping symlink/ left FIVE live instructions to run it: four in docs/operations.md (a
+# copy-pasteable command block, the renderer comparison table, the "which renderer"
+# decision table, and the paragraph under it) and one inside seed/instance.config.json's
+# own `$board` explanation. Each was a reader's entry point, no test looked outside
+# symlink/, and the assertion above passed the entire time.
+#
+# THE BARE NAME here, not the runnable form as above: prose names a script without a
+# `scripts/` prefix as often as with one, and a doc has no reason to carry retired
+# machinery at all — that history belongs in build-board.sh's header and in git. So the
+# rule for these three trees is the simple one: don't name it.
+# install.sh is deliberately NOT in this list — tests/retire-machinery.test.sh owns that
+# file, beside the sweep behaviour it is about.
+for tree in docs README.md seed; do
+  assert "no retired renderer named in $tree" \
+    "$(yes_if bash -c "! grep -rlF build-artifact-board '$REPO/$tree' >/dev/null 2>&1")"
+done
+# NON-VACUITY: the same expression must FIND a planted mention, or it checks nothing.
+mkdir -p "$TMP/tree"; printf 'run scripts/build-artifact-board.sh\n' > "$TMP/tree/doc.md"
+assert "…and the same check finds a planted one" \
+  "$(yes_if bash -c "grep -rlF build-artifact-board '$TMP/tree' >/dev/null 2>&1")"
+rm -rf "$TMP/tree"
+
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
