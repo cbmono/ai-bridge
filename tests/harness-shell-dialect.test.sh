@@ -58,7 +58,7 @@ declares_bash="$(grep -ci 'bash' "$CFG" || true)"
 ok "config names bash somewhere"     "$([ "$declares_bash" -gt 0 ] && echo yes || echo no)" yes
 
 # --- Non-vacuity: the checker must actually fail on broken input -----------------
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/dialect.XXXXXX")"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/dialect.XXXXXX")" || { echo "dialect: mktemp -d failed" >&2; exit 2; }
 tmp="$(cd "$tmp" && pwd)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/tests"
