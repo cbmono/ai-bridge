@@ -175,7 +175,8 @@ to a whole directory, with `--config` linking whatever is there and erroring now
 **The arrow stays one-way, and that is what makes this modular rather than merely
 bundled.** `symlink/` must never *require* `config/`: the role agents keep probing with
 `test -f`, so an instance stamped on a machine that never ran `--config` still works — it
-loses a second opinion, not a feature. The bare `install.sh <dir>` interface is unchanged
+loses `qa-reviewer`'s Opus **escalation** (the cheap `/code-review low` second opinion needs
+nothing installed) and the PM's plan critic, not a feature. The bare `install.sh <dir>` interface is unchanged
 for the same reason: three live instances and `upgrade.sh` call it that way, so
 `--instance` is only its explicit spelling and never a new requirement.
 
