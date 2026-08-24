@@ -552,8 +552,13 @@ FRESH_TTY="$( cd "$INST" && bash "$PRINT" --width 0 2>/dev/null )"
 assert "the terminal board names the instance"     "$(yes_if sh -c 'printf "%s\n" "$1" | grep -q "^stamped "' _ "$FRESH_TTY")"
 assert "…and never labels a row \".\""              "$(yes_if sh -c 'printf "%s\n" "$1" | grep -qv "^\. "' _ "$FRESH_TTY")"
 ( cd "$INST" && bash "$BOARD" --out "$TMP/fresh.html" >/dev/null 2>&1 )
-assert "the HTML board names it too"                "$(fhas '>stamped ' "$TMP/fresh.html")"
-assert "…and carries no \".\" tab label"            "$(fhasnt '>. <' "$TMP/fresh.html")"
+# The HTML board puts the name in its masthead, title-cased ("stamped" -> "Stamped").
+# The "." bug shows there as a LEADING SPACE, not as a dot: the title is built from
+# `group.split(".")[0]`, so a group of "." would title the page " Bridge Board" — which
+# looks like a stray space and reads as no instance name at all. Both halves are
+# asserted, because either alone passes on the other's failure.
+assert "the HTML board names it too"                "$(fhas '<h1>Stamped Bridge Board</h1>' "$TMP/fresh.html")"
+assert "…and never an empty name in the masthead"   "$(fhasnt '<h1> Bridge Board' "$TMP/fresh.html")"
 
 # The renderers must be linked into an instance, or nobody can run them there.
 assert "install.sh links print-board.sh"       "$(yes_if test -L "$INST/scripts/print-board.sh")"
