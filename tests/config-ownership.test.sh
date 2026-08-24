@@ -230,6 +230,86 @@ else
   sort -u -o "$TMP/shipped-fix" "$TMP/shipped-fix"
   ok "…and a re-forked path would widen it" \
      "$(comm -12 "$TMP/shipped-fix" "$TMP/as-shipped" | grep -c 'commands/grill.md' || true)" 1
+
+  # ======================================================================= #
+  echo "-- cross-repo: and no root this layer hands over is installed by NOBODY"
+  #
+  # A DANGLING-LINK AUDIT CANNOT SEE THIS CLASS, WHICH IS WHY IT NEEDS ITS OWN ASSERTION.
+  # `~/.claude/settings.json` really was lost, order-dependently: on a machine carrying the
+  # old layer's link, running ai-setup's installer (which declined — "already exists") and
+  # then this layer's `--config` (which retired its own now-dangling link) left the file
+  # ABSENT, exit 0, and **0 dangling**. Every audit used as evidence for criterion 1 counted
+  # dangling links, and a path that was never linked is absent, not dangling — so the number
+  # that was supposed to prove nothing was lost is structurally incapable of seeing the loss.
+  # Twice now the recorded rationale has been wrong about this in opposite directions ("23
+  # paths installed by nobody", then "the only risk is content regression"). Prose cannot be
+  # relied on to stay right about it; set membership can.
+  #
+  # THE INVARIANT: every root in `CONFIG_MANAGED_TOPS` — the roots this layer's sweep
+  # retires links under — is either still shipped HERE, or installed by ai-setup.
+  MTOPS="$(sed -n 's/^CONFIG_MANAGED_TOPS="\(.*\)"$/\1/p' "$REPO/install.sh")"
+  ok "this layer's managed-root list was found" "$([ -n "$MTOPS" ] && echo yes || echo no)" yes
+
+  # ai-setup's EXCLUDE means "the generic link loop skips this". It does NOT mean "this is
+  # not installed": ai-setup installs `settings.json` from a dedicated branch at the end of
+  # its installer, precisely because it is the one file that may already hold permissions a
+  # human tuned by hand. So a set derived from EXCLUDE alone MISSES it — and settings.json is
+  # exactly the path that got lost. The add-back is detected from that installer (an excluded
+  # path it names as a destination of its own), never hardcoded here, so it follows the code.
+  ( cd "$AS" && git ls-files .claude 2>/dev/null ) | sed 's#^\.claude/##' | while IFS= read -r rel; do
+      [ -n "$rel" ] || continue
+      case " $EXCL " in *" $rel "*) ;; *) continue ;; esac
+      grep -q "DEST/$rel" "$AS/install.sh" && printf '%s\n' "$rel"
+    done | sort -u > "$TMP/as-special"
+  # Both halves of the reasoning error, pinned: the EXCLUDE-only set does not have it, and
+  # the corrected set does. Delete the add-back and the second goes red; delete the special
+  # branch from ai-setup's installer and the first stops being a near miss.
+  ok "settings.json is absent from the EXCLUDE-only set" \
+     "$(grep -cx 'settings.json' "$TMP/as-shipped" || true)" 0
+  ok "…and present once the installer's own branch is read" \
+     "$(grep -cx 'settings.json' "$TMP/as-special" || true)" 1
+  cat "$TMP/as-shipped" "$TMP/as-special" | cut -d/ -f1 | sort -u > "$TMP/as-tops"
+  cut -d/ -f1 "$TMP/shipped" | sort -u > "$TMP/ab-tops"
+
+  # A root neither layer installs is a loss ONLY if this layer ever shipped anything under
+  # it. `rules` is in CONFIG_MANAGED_TOPS and in neither installed set, and it is not a
+  # loss: git says nothing was ever shipped under `config/*/rules/`, so the sweep looks
+  # there and finds nothing of ours. Asking git rather than listing an exception here is
+  # what keeps this from going stale — add a root that WAS shipped and it is not exempt.
+  # `grep -c .`, NOT `grep -q .`: this file runs under `set -o pipefail`, and `grep -q`
+  # exits the moment it matches, closing the pipe and killing `git log` with SIGPIPE — so
+  # the pipeline's status is non-zero on SUCCESS and the predicate answered "no" for every
+  # root, including the ones that were shipped. It made the two non-vacuity assertions below
+  # go green by never firing, which is the same vacuity this whole file exists to prevent.
+  # `grep -c` drains its input, so there is no SIGPIPE to invert the answer.
+  ever_shipped() { # <top> → yes if config/<tier>/<top>/ ever existed on any ref
+    local n
+    n="$( ( cd "$REPO" && git log --all --pretty=format: --name-only \
+              -- "config/*/$1" "config/*/$1/*" 2>/dev/null ) | grep -c . || true )"
+    [ "$n" -gt 0 ] && echo yes || echo no
+  }
+  orphan_roots() { # <as-tops file> → the roots installed by nobody, one per line
+    local top
+    for top in $MTOPS; do
+      grep -qx "$top" "$TMP/ab-tops" && continue
+      grep -qx "$top" "$1" && continue
+      [ "$(ever_shipped "$top")" = yes ] && printf '%s\n' "$top"
+    done
+  }
+  ok "no root this layer hands over is installed by nobody" \
+     "$(orphan_roots "$TMP/as-tops" | tr '\n' ' ' | sed 's/ *$//')" ""
+  # …and `rules` is the reason that is a real 0 and not an empty loop.
+  ok "…and rules/ was skipped because it was never shipped here" "$(ever_shipped rules)" no
+  ok "…while commands/ WAS shipped here"  "$(ever_shipped commands)" yes
+  # NON-VACUITY, from the state the defect was actually in: ai-setup's set without
+  # settings.json is the pre-#71 world, and the check must name it. Then the same for a
+  # whole directory, so it is not settings.json-specific.
+  grep -vx 'settings.json' "$TMP/as-tops" > "$TMP/as-tops-nosj"
+  ok "…and it names settings.json if ai-setup drops it" \
+     "$(orphan_roots "$TMP/as-tops-nosj" | tr '\n' ' ' | sed 's/ *$//')" "settings.json"
+  grep -vx 'commands' "$TMP/as-tops" > "$TMP/as-tops-nocmd"
+  ok "…and names a whole directory the same way" \
+     "$(orphan_roots "$TMP/as-tops-nocmd" | tr '\n' ' ' | sed 's/ *$//')" "commands"
 fi
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"

@@ -75,15 +75,43 @@ config layer.
    ships the ported fixes leaves paths installed by nobody — silently, because an absent
    agent is a failed `test -f` and an absent command is a slash command that simply does
    not exist. The two PRs land together.
+6. **A DANGLING-LINK AUDIT CANNOT SEE A PATH INSTALLED BY NOBODY.** This is the point in
+   this document most likely to be re-derived the hard way, because the audit *looks* like
+   the right check and it reports zero. A path that was never linked is **absent**, not
+   dangling — so `find … -type l ! -exec test -e {} \;` returning 0 is not evidence that
+   nothing was lost. It is not hypothetical, and the order that produces it is specific:
+
+   > on a machine carrying the old layer's link, run **ai-setup's installer first** — it
+   > saw a `settings.json`, said "already exists, left alone", and declined — then
+   > `git pull` and `--config`, which retired its own now-dangling link. Result:
+   > **`~/.claude/settings.json` absent, exit 0, 0 dangling.**
+
+   Gone with it: the whole `permissions.deny` block (`.env*`, ssh keys,
+   `.aws/credentials`, `sudo`, `rm -rf ~`), `statusLine`, `outputStyle` and the
+   `PostToolUse` hook — recoverable only by re-running ai-setup's installer, which nothing
+   prompts. The rule that fixed it lives in ai-setup: **a symlink is not your
+   `settings.json`.** It holds a path, not content, so there is nothing of the user's to
+   protect, and it is adopted rather than declined.
+
+   The checks that *can* see this class are **presence over an enumerated owned set**, and
+   there is now one on each side. **Never measure order-independence from an empty config
+   dir**, either: that is the one starting state in which this failure cannot appear.
 
 ## What holds the line
 
 | Check | Where | What it fails on |
 |---|---|---|
-| `tests/config-ownership.test.sh` | here | a `~/.claude` path shipped from this repo that nothing probes for; a path probed for that is not shipped; `config/opinionated/` coming back; and — when an ai-setup checkout is reachable — an overlap wider than the three agents |
-| `tests/claude-config-ownership.test.sh` | ai-setup | a path handed over that stops being *installable* from there (its `EXCLUDE`, its top-level linking), and a new entry the manifest has not been told about |
+| `tests/config-ownership.test.sh` | here | a `~/.claude` path shipped from this repo that nothing probes for; a path probed for that is not shipped; `config/opinionated/` coming back; and — when an ai-setup checkout is reachable — an overlap wider than the three agents, **or a root in `CONFIG_MANAGED_TOPS` that neither layer installs** (the absent-path class of point 6, checked by set membership because no dangling-link audit can see it) |
+| `tests/claude-config-ownership.test.sh` | ai-setup | a path handed over that stops being *installable* from there (its `EXCLUDE`, its top-level linking), and a new entry the manifest has not been told about; and `settings.json` specifically, in all three states a config dir can be in — foreign link, dangling link, real file |
 | `tests/config-hardening.test.sh` | ai-setup | any of the ten ported fixes regressing |
-| `tests/config-layer.test.sh` | here | the arrow turning two-way, a whole-directory link for a drop-in dir, absence stopping being safe |
+| `tests/config-layer.test.sh` | here | the arrow turning two-way, a whole-directory link for a drop-in dir, absence stopping being safe, and a write that fails being counted as done — on **both** the link and the sweep halves, on install and on uninstall |
+
+One note on the first row, because it is a trap the derivation itself fell into:
+ai-setup's `EXCLUDE` means *"the generic link loop skips this"*, **not** *"this is not
+installed"*. `settings.json` is in that list and is installed by a dedicated branch, so a
+set derived from `EXCLUDE` alone misses precisely the path that went missing. The harness
+reads ai-setup's installer for excluded paths it names as a destination of its own, and
+asserts both halves of that reasoning.
 
 The expected set in the first of those is **derived from the probes**, not hardcoded: add
 or delete a `test -f ~/.claude/agents/<x>.md` in `symlink/` and the expectation moves with

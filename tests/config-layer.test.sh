@@ -324,6 +324,18 @@ ok "…and the three we own are still there" "$(find "$D15/agents" -type l | wc 
 # Asserted on the handover run specifically, and asserted ABSENT on a steady-state run, so
 # it cannot become unconditional noise.
 ok "…and it names the repo they moved to"  "$(said 'cbmono/ai-setup')" yes
+# A DANGLING-LINK AUDIT SCORES THIS HANDOVER PERFECT AND A FILE IS GONE. Asserted as two
+# numbers in one place, because "0 dangling" was cited twice as evidence that nothing was
+# lost and it cannot be that: a path that was never linked is ABSENT, not dangling, so the
+# count is structurally blind to exactly the failure it was quoted against. On a real
+# machine this is not hypothetical — `settings.json`, carrying the 25-rule permissions.deny
+# block, went missing in the ai-setup-first order with 0 dangling and exit 0. The check that
+# CAN see it is presence over an enumerated owned set: `tests/config-ownership.test.sh`'s
+# cross-repo group does it by membership here, and ai-setup's own harness does it per path.
+ok "…the dangling audit reports a clean handover" \
+   "$(find "$D15" -type l ! -exec test -e {} \; -print | wc -l | tr -d ' ')" 0
+ok "…while a path it retired is simply ABSENT" "$(yn test -e "$D15/settings.json")" no
+ok "…so 0 dangling is not 0 lost"          "$(yn test -L "$D15/settings.json")" no
 run_cfg "$D15" "$T7" >/dev/null
 ok "a steady-state run stays quiet about it" "$(said 'cbmono/ai-setup')" no
 
