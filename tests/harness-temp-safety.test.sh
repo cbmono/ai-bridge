@@ -57,7 +57,15 @@
 #       && pwd)"; TMP="$A"`) — only the trapped name's own assignments are read; and
 #   (d) joining can over-reach as well as reach — see `logical_lines`, which carries two
 #       tripwires for it, both asserted non-vacuously, and which states exactly how far
-#       its lexer follows the shell and where it stops.
+#       its lexer follows the shell and where it stops; and
+#   (e) the assignment must be at the START of its statement. This needs no join to bite:
+#       `A=1 ; TMP="$(cd "$(mktemp …)" && pwd)"` is one physical line of ordinary shell,
+#       destructive for real (measured: it emptied a throwaway directory and exited 0), and
+#       reported by NEITHER this scanner nor the line-wise one it replaced. Splitting
+#       statements at `;` wants judgement about `case` arms and `for x; do` that a text scan
+#       cannot make, so it is recorded in task-025 for a decision rather than guessed at
+#       here. Measured over this directory: no harness assigns a trap-deleted path anywhere
+#       but at a statement start, so nothing is hiding behind it today.
 # Every harness in this directory satisfies all of these today. (b) and (c) are the honest
 # ceiling of this approach, not oversights: closing them wants a shell parser. The corpus
 # assertions below fail loudly if the scanner stops finding traps at all, or if any
@@ -144,16 +152,39 @@ ok() { # <name> <actual> <expected>
 #         `lex` subsumes it and also handles the trailing case it missed);
 #   \c    escapes, in code and in double quotes alike, so `\$(` is not an opener.
 #
-# WHERE IT STOPS, AND WHY THERE. Quote state is reset at every physical line boundary; only
-# the substitution depth carries across lines. So a single-quoted string spanning physical
-# lines is read as code from its second line on. That is chosen, not overlooked: carrying an
-# open quote across lines would make a bare `X='`, the offending line, and a closing `'` join
-# into one statement beginning `X=` — the same bypass with a longer fuse. Misreading the
-# inside of a multi-line string costs at most an extra statement boundary, which means MORE
-# places the predicates look, never fewer. Also not tracked, deliberately: heredoc bodies
-# (a body line that looks like an opener over-joins — that is what the two tripwires below
-# are for), backtick substitution (no harness here uses it), and `$((…))`, which needs no
-# case of its own because its two closers net out against its one opener.
+# WHERE IT STOPS, AND WHY THERE — measured, not assumed. Quote state is reset at every
+# physical line boundary; only the substitution depth (and its `qs` stack) carries across
+# lines. So a single-quoted string that really does span physical lines is read as code from
+# its second line on. That happens in this directory: agent-tool-allowlist.test.sh:349 opens
+# a four-line quoted fixture, and this normaliser reports it as four statements rather than
+# one. It is harmless in the only direction that matters — extra statement boundaries are
+# MORE places the predicates look, never fewer, and the whole-tree diff against the counting
+# version reports the same offences either way.
+#
+# Carrying quote state across lines was tried and rejected on evidence. It is only coherent
+# if an unterminated quote also CONTINUES the statement — lexing as though quotes span lines
+# while splitting statements as though they do not is simply a third behaviour, and measured,
+# it changes no finding anywhere. The coherent version does change one: it loses a LIVE
+# offence. The `bad-heredoc` fixture below is a real one, an apostrophe in a heredoc body,
+# and measured in a throwaway directory with a TMPDIR that does not exist it deleted every
+# file there and exited 0. With quotes carried, that apostrophe holds the statement open
+# across `EOF`, the assignment and the trap, and the scan reports 0 findings where this lexer
+# reports 2. All that variant gets is the runaway alarm — which names neither the offence nor
+# the variable — and it trips that same alarm on 2 of the 31 real harnesses here, which this
+# lexer trips on none.
+#
+# The cost of the reset, written down because it is a real one: destructive-LOOKING text
+# inside a multi-line single-quoted string is read as code and flagged, though it never
+# executes. Nothing in this directory does that today. It is the direction chosen on purpose
+# — a false positive is loud and a human clears it in a minute, while a false negative is a
+# deleted checkout — but it IS a false positive, so it is stated rather than left to be
+# discovered.
+#
+# Also not tracked, deliberately: heredoc bodies (a body line that looks like an opener
+# over-joins — that is what the two tripwires below are for); backtick substitution, which
+# is read as ordinary characters (measured: every backtick in this directory outside a
+# comment is literal text inside a string, so nothing here turns on it); and `$((…))`, which
+# needs no case of its own because its two closers net out against its one opener.
 #
 # It still does not parse, and its remaining error is over-joining rather than
 # under-joining: it errs toward reading MORE text, not less. That direction is the safer one
@@ -353,7 +384,19 @@ fx_trap() { printf 'trap %s EXIT\n' "'rm -rf \"\$FTMP\"'"; }
   printf '%s\n' "echo 'a \$( inside a literal'" 'echo "a ) inside a string"  # and a ) in a comment'
   fx_trap; } > "$FX/good-noisy.test.sh"
 
-for k in bad-nested bad-unguarded bad-multiline bad-continued bad-bypass good-twostep good-plain good-multiline good-noisy; do
+# (j) A LIVE offence standing behind an apostrophe in a heredoc body — and the fixture that
+#     pins the line-boundary decision taken at `logical_lines`. Destructive for real, not by
+#     analogy: measured in a throwaway directory with a TMPDIR that does not exist, this file
+#     deleted every entry there and exited 0. The counting version catches it too, so it is
+#     NOT evidence for `lex`; it is a guard against the refactor that looks like an
+#     improvement — carrying quote state across physical lines, where `don't` holds the
+#     statement open across the assignment and the trap and the scan reports NOTHING
+#     (measured: 0 findings against 2). A decision deserves a test, not just a paragraph.
+{ fx_head
+  printf '%s\n' 'cat <<EOF' "don't" 'EOF' 'FTMP="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/fx.XXXXXX")" && pwd)"'
+  fx_trap; } > "$FX/bad-heredoc.test.sh"
+
+for k in bad-nested bad-unguarded bad-multiline bad-continued bad-bypass bad-heredoc good-twostep good-plain good-multiline good-noisy; do
   o="$(scan "$FX/$k.test.sh")"
   case "$k" in
     bad-nested)
@@ -368,13 +411,14 @@ for k in bad-nested bad-unguarded bad-multiline bad-continued bad-bypass good-tw
       ok "fixture $k is flagged UNGUARDED"  "$(printf '%s' "$o" | grep -c '^UNGUARDED' || true)" 1
       ok "fixture $k is reported at its first physical line" \
          "$(printf '%s' "$o" | grep -c ':3:' || true)" 2 ;;
-    bad-bypass)
-      # The same two classes as (a) — and reported at line 4, the offence's OWN line,
-      # not the line of the literal that used to swallow it.
+    bad-bypass|bad-heredoc)
+      # The same two classes as (a) — and reported at the assignment's OWN physical line,
+      # not at the line of the literal or the heredoc body that used to swallow it.
+      case "$k" in bad-bypass) at=4 ;; bad-heredoc) at=6 ;; esac
       ok "fixture $k is flagged NESTED-CD"  "$(printf '%s' "$o" | grep -c '^NESTED-CD' || true)" 1
       ok "fixture $k is flagged UNGUARDED"  "$(printf '%s' "$o" | grep -c '^UNGUARDED' || true)" 1
-      ok "fixture $k is reported at its own physical line" \
-         "$(printf '%s' "$o" | grep -c ':4:' || true)" 2
+      ok "fixture $k is reported at line $at, where the assignment is" \
+         "$(printf '%s' "$o" | grep -c ":$at:" || true)" 2
       # And it is caught by SEEING it, not by tripping a diagnostic: a bypass that merely
       # set off the runaway alarm would still leave the offence unnamed.
       ok "fixture $k trips no runaway diagnostic" \
