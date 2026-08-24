@@ -476,6 +476,11 @@ fi
 # The `[$]` in both patterns is what stops each grep from matching its own line — a
 # self-matching pattern would make this pair unequal for a reason that has nothing to do
 # with the property.
+# …and this one keeps the pair above from passing vacuously: if `$0` were unreadable both
+# greps would print nothing, two empty strings would compare equal, and the check would be a
+# hidden pass — the shape this file exists to prevent.
+ok "…and there were invocations to check" \
+   "$([ "$(grep -c 'bash "[$]ASFIX' "$0" | tr -d ' ')" -ge 2 ] && echo yes || echo no)" yes
 ok "every installer invocation is prefixed with a throwaway config dir" \
    "$(grep -c 'bash "[$]ASFIX' "$0" | tr -d ' ')" \
    "$(grep -c 'CLAUDE_CONFIG_DIR="[$]ASD[0-9]*" bash "[$]ASFIX' "$0" | tr -d ' ')"
