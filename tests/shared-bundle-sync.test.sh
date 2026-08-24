@@ -70,9 +70,9 @@ in_str() { printf '%s' "$1" | grep -qF -- "$2" && echo yes || echo no; } # <text
 # =================================================================================
 # Property 1 — a bundle WITH a remote pulls --rebase before re-deriving state
 # =================================================================================
-ok "step 0: pulls with rebase+autostash"     "$(in_str "$S0" 'git pull --rebase --autostash origin')" yes
+ok "step 0: pulls with rebase"             "$(in_str "$S0" 'git pull --rebase origin')" yes
 ok "step 0: pull precedes the re-derive"     "$(in_str "$S0" 'Why before step 0.5 and not after it')" yes
-ok "guardrail: names the pull"               "$(in_str "$G" '--rebase --autostash')" yes
+ok "guardrail: names the pull"               "$(in_str "$G" '--rebase')" yes
 ok "guardrail: pull precedes the read"       "$(in_str "$G" 'before it re-derives anything from disk')" yes
 
 # =================================================================================
@@ -122,7 +122,7 @@ good_step0() {
    the single-machine case behaving exactly as it always has, never an error.
 
    ```
-   git pull --rebase --autostash origin <default-branch>
+   git pull --rebase origin <default-branch>
    ```
 
    **Why before step 0.5 and not after it.** re-derives from disk.
@@ -135,7 +135,7 @@ EOF
 }
 ok "fixture: good step 0 passes every check" \
    "$(g="$(good_step0 | awk '/^0\. \*\*Sync the bundle first/{p=1;next} /^0\.5\. /{p=0} p')"; \
-      a=$(in_str "$g" 'git pull --rebase --autostash origin'); \
+      a=$(in_str "$g" 'git pull --rebase origin'); \
       b=$(in_str "$g" 'git remote get-url origin'); \
       c=$(in_str "$g" 'never an error'); \
       d=$(in_str "$g" 'A conflict STOPS the tick'); \
@@ -147,8 +147,8 @@ mut_check() { # <mutated-step0-text> <needle-that-should-now-be-absent>
   in_str "$body" "$2"
 }
 
-no_pull="$(good_step0 | grep -v 'git pull --rebase --autostash origin')"
-ok "…and FAILS when the pull command is dropped" "$(mut_check "$no_pull" 'git pull --rebase --autostash origin')" no
+no_pull="$(good_step0 | grep -v 'git pull --rebase origin')"
+ok "…and FAILS when the pull command is dropped" "$(mut_check "$no_pull" 'git pull --rebase origin')" no
 
 no_remote_gate="$(good_step0 | grep -v 'git remote get-url origin')"
 ok "…and FAILS when the no-remote gate is dropped" "$(mut_check "$no_remote_gate" 'git remote get-url origin')" no
@@ -162,7 +162,7 @@ good_push_para() {
    **Then push, if this bundle has a remote.** `git push origin <default-branch>`.
    Same condition as step 0: no remote => no push, silently. If the push is
    rejected because the remote moved while you worked, `git pull --rebase
-   --autostash` and push once more; if THAT conflicts, stop and report exactly
+   origin <default-branch>` and push once more; if THAT conflicts, stop and report exactly
    as in step 0. **Never force-push a shared bundle.**
 
    **Refresh the awaiting-you queue**
@@ -211,6 +211,37 @@ ok "launcher cites step 0.5 for the re-derive property" \
 # must not have survived the renumbering.
 ok "launcher no longer claims re-derive is the tick's own first step" \
    "$(has "$LAUNCHER" "is the tick's own first step")" no
+
+
+# --- REGRESSION: --autostash must never come back -------------------------------
+# Measured 2026-08-24: with the rebase clean but the stash re-apply conflicting,
+# `git pull --rebase --autostash` EXITS 0 with HEAD already moved and the tree left
+# UU-conflicted, and `git rebase --abort` then fails "no rebase in progress". A tick
+# trusting that exit code parses task documents full of conflict markers and acts on
+# them. So the flag is banned as a COMMAND, the dirty-tree refusal that replaces it is
+# required, and the exit code is explicitly not trusted.
+# Ban it as a COMMAND, not as a word: step 0's prose names the flag on purpose to
+# explain why it is absent, so a bare substring check would fail on its own warning.
+S0_CMDS="$(printf '%s\n' "$S0" | grep -E '^\s{3,}git ' || true)"
+ok "step 0: no --autostash in any command it tells you to run" \
+   "$(in_str "$S0_CMDS" '--autostash')" no
+ok "push retry: does NOT pull with --autostash" \
+   "$(in_str "$PUSH" '--rebase --autostash')" no
+ok "launcher: does NOT describe an --autostash pull" \
+   "$(in_str "$G$LAUNCHER" 'pulls `--rebase --autostash`')" no
+ok "step 0: refuses a dirty tree before pulling" \
+   "$(in_str "$S0" 'git status --porcelain')" yes
+ok "step 0: says why --autostash is absent (so nobody re-adds it)" \
+   "$(in_str "$S0" 'exits 0')" yes
+ok "step 0: does not trust the pull exit code" \
+   "$(in_str "$S0" 'Do not trust the pull')" yes
+# Non-vacuity: each check above must be able to fail.
+bad_cmds="$(printf '%s\n' "$S0_CMDS" | sed 's/git pull --rebase origin/git pull --rebase --autostash origin/')"
+ok "…and the --autostash ban FAILS on a reintroduced flag" \
+   "$(in_str "$bad_cmds" '--autostash')" yes
+no_dirty="$(printf '%s\n' "$S0" | grep -v 'git status --porcelain')"
+ok "…and the dirty-tree check FAILS when the guard is dropped" \
+   "$(in_str "$no_dirty" 'git status --porcelain')" no
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

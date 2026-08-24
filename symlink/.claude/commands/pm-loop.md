@@ -45,7 +45,7 @@ package store and no shared working tree. The third — double-dispatch — is w
 (`scripts/task-owner.sh`; see the guardrails below). What remains is racing pushes
 to the bundle's `main`, which is an ordinary git conflict on ordinary git files,
 not corruption: pull before you push. **The tick now does that itself, not as a
-human habit** — step 0 pulls `--rebase --autostash` before it re-derives anything
+human habit** — step 0 refuses a dirty tree, then pulls `--rebase` (never `--autostash`) before it re-derives anything
 from disk, and step 8 pushes right after it commits, both conditioned on the
 bundle having a remote at all; a pull conflict stops the tick and reports the
 contested paths rather than resolving them, and nothing here ever force-pushes.
@@ -302,7 +302,7 @@ ticks, regardless of how long a tick runs.
   the one artifact that narrows to this human's decisions; the tick report still
   names the other human's work. See `SCHEMA.md` → "Ownership on a shared instance".
 - **The tick syncs the bundle around its own work — when there is a remote to sync
-  with.** It pulls `--rebase --autostash` before it re-derives anything from disk
+  with.** It refuses a dirty tree, then pulls `--rebase` — never `--autostash`, which can exit 0 with a conflicted tree — before it re-derives anything from disk
   (step 0) and pushes right after it commits (step 8); a bundle with no `origin`
   does neither, silently, which is the single-machine case behaving exactly as it
   always has. A pull conflict **stops the tick**: it aborts the rebase, writes
