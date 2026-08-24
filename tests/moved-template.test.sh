@@ -29,6 +29,9 @@
 #       moved aside, and that distinction is the whole safety property;
 #     · a dangling `.bak.*` symlink whose original is NOT ours survives;
 #     · a `.bak.*` symlink that still resolves survives;
+#     · the epoch suffix must be ALL digits, not merely start with one — `.bak.<epoch>` is
+#       swept, but `.bak.<epoch>.manual`, `.bak.notdigits` and `.bak.` (empty suffix) are
+#       someone else's name and must survive even when the original is ours again;
 #     · an uninstall sweeps nothing, so "backups were left untouched" stays true.
 #
 # assert(): 0 is a PASS, matching the other harnesses here.
@@ -181,6 +184,34 @@ bash "$TPL2/install.sh" "$INST" >/dev/null 2>&1
 assert "'.backup' is left alone"         "$(yes_if test -L "$INST/SCHEMA.md.backup")"
 assert "'.bak' with no epoch is too"     "$(yes_if test -L "$INST/SCHEMA.md.bak")"
 assert "'.bak.old' likewise"             "$(yes_if test -L "$INST/SCHEMA.md.bak.old")"
+
+echo "== the epoch suffix must be ALL digits, not merely start with one =="
+# The regression this pins: the shape check alone (*.bak.[0-9]*) only requires the FIRST
+# character after ".bak." to be a digit, so "…bak.1700000000.manual" passes it — a name
+# this installer never writes. Each decoy below starts with a digit (so the OLD, unfixed
+# check would have accepted it) but is rejected once the whole suffix must be digits-only.
+# SCHEMA.md is already ours-and-resolved at this point (relinked earlier in this file), so
+# if any of these were mistaken for a real backup, the sweep below would remove it.
+ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.1700000004.manual"  # digit start, trailing ext
+ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.notdigits"          # no leading digit at all
+ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak."                   # empty suffix
+bash "$TPL2/install.sh" "$INST" >"$TMP/epoch-guard" 2>&1
+assert "'.bak.<epoch>.manual' is left alone" "$(yes_if test -L "$INST/SCHEMA.md.bak.1700000004.manual")"
+assert "'.bak.notdigits' is left alone"      "$(yes_if test -L "$INST/SCHEMA.md.bak.notdigits")"
+assert "'.bak.' (empty suffix) is too"       "$(yes_if test -L "$INST/SCHEMA.md.bak.")"
+assert "…none of the three was swept"        "$(no_if grep -q '^  sweep ' "$TMP/epoch-guard")"
+
+echo "== …while a genuine all-digit .bak.<epoch> is still swept =="
+# The positive control for the assertion above: prove the guard rejects the malformed
+# names on their shape, not by accident sweeping nothing at all this run.
+ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.1700000005"
+bash "$TPL2/install.sh" "$INST" >"$TMP/real-bak" 2>&1
+assert "a real .bak.<epoch> backup is swept" "$(no_if test -L "$INST/SCHEMA.md.bak.1700000005")"
+assert "…and the sweep is logged"            "$(yes_if grep -q '^  sweep ' "$TMP/real-bak")"
+# The three malformed decoys from the block above must still be untouched by this run too.
+assert "…the manual-suffixed decoy still survives" "$(yes_if test -L "$INST/SCHEMA.md.bak.1700000004.manual")"
+assert "…the notdigits decoy still survives"       "$(yes_if test -L "$INST/SCHEMA.md.bak.notdigits")"
+assert "…the empty-suffix decoy still survives"    "$(yes_if test -L "$INST/SCHEMA.md.bak.")"
 
 echo "== uninstall sweeps nothing, so its promise stays true =="
 # The sweep requires the original to exist again as a link of OURS. An uninstall removes

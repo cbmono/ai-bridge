@@ -248,6 +248,12 @@ config_link_parent() {
 # rule: the debris is identical because the backup path that creates it is.
 dead_backup() { # <ownership-predicate> <relative path> <absolute path>
   case "$2" in *.bak.[0-9]*) ;; *) return 1 ;; esac
+  # The glob above only requires the FIRST character after ".bak." to be a digit, so
+  # "SCHEMA.md.bak.1700000000.manual" — not this installer's format at all — would
+  # otherwise pass. Require the WHOLE suffix after the last ".bak." to be digits only;
+  # anything else (letters, punctuation, a further extension, or nothing) is somebody
+  # else's name, not ours to remove.
+  case "${2##*.bak.}" in ''|*[!0-9]*) return 1 ;; esac
   [ -L "$3" ] && [ ! -e "$3" ] || return 1
   "$1" "${2%.bak.*}"
 }

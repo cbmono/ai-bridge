@@ -93,7 +93,17 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # does not discharge that; it enlarges it. The largest remaining candidates are the four
 # board scripts — build-board, print-board, watch-board, write-snapshot, 2,342 lines
 # between them — and nothing this task touched.
-CEILING_TOTAL=6187
+#
+# RAISED AGAIN 2026-08-24, +3 total / +0 code, fixing a CodeRabbit review comment on
+# check-machinery.sh: the printed repair command interpolated $tmpl and $root unquoted, so
+# a path with whitespace or a shell metacharacter would paste into a different, wrong
+# command. Two `echo` lines became `printf '%q'` (same code-line count, now quoting-safe)
+# plus a 3-line comment explaining why — all three of those are comment lines, which is
+# the entire +3.
+#
+#   6,187 / 3,447   18 files   what task-021 pinned for the detector
+#   6,190 / 3,447   18 files   +3 total, +0 code — quoting fix only, no new logic
+CEILING_TOTAL=6190
 CEILING_CODE=3447
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a

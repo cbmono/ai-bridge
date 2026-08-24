@@ -99,10 +99,13 @@ echo "    Assume every other machinery link is dead too — scripts, role agents
 echo "    SCHEMA.md. Nothing has been changed here."
 if [ -n "$tmpl" ]; then
   echo "    REPAIR (idempotent, safe to re-run, once per instance):"
-  echo "        bash $tmpl/install.sh $root"
+  # %q shell-quotes only what needs it — a plain path (the common case) still prints
+  # bare and copy-pastes as-is; a path with whitespace or a shell metacharacter comes
+  # out quoted instead of pasting into a different, wrong command.
+  printf '        bash %q %q\n' "$tmpl/install.sh" "$root"
 else
   echo "    REPAIR: re-run install.sh from wherever the ai-bridge template now lives:"
-  echo "        bash <ai-bridge>/install.sh $root"
+  printf '        bash <ai-bridge>/install.sh %q\n' "$root"
 fi
 echo "    Report this and the repair command to the human before doing anything else. A"
 echo "    /pm-loop tick started now fails mid-dispatch, with agents already briefed."
