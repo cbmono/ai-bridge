@@ -37,8 +37,8 @@ move it here intact instead.
 | 12 | [Three behaviours against a silent wrong answer](#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) | `push-state.sh`, `answered_questions`, `maxPrLoc` |
 | 13 | [A shared instance is three no-ops and one gate](sharing.md) | `task-owner.sh`, config split, derived indexes |
 | 14 | [`knowledge/references/` is the fifth knowledge kind](#14-knowledgereferences-is-the-fifth-knowledge-kind) | `validate-bundle.sh`, `SCHEMA.md` |
+| 15 | [The config layer is one tier, and the arrow stays one-way](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way) | `install.sh --config`, `config/` |
 | 16 | [The kill switch is one hook, and it fails open](#16-the-kill-switch-is-one-hook-and-it-fails-open) | `agent-control.sh`, `control.sh` |
-| 15 | [The config layer is two tiers, and the arrow stays one-way](#15-the-config-layer-is-two-tiers-and-the-arrow-stays-one-way) | `install.sh --config`, `config/` |
 | 17 | [An instruction is executable only if the agent *holds* the tool](#17-an-instruction-addressed-to-an-agent-is-executable-only-if-that-agent-holds-the-tool) | every agent body, `symlink/CONVENTIONS.md`, `seed/CLAUDE.md` |
 | 18 | [The allowlist check is pinned from both sides](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure) | `agent-tool-allowlist.test.sh` |
 
@@ -47,7 +47,7 @@ move it here intact instead.
 ## Layout
 
 - **This repo** — a **reusable OKF control-panel template**. `symlink/` holds generic machinery (SCHEMA, `AUTONOMY.md` — the deletable delegated-autonomy capability, `CONVENTIONS.md` — the shared role-agent conventions, read on dispatch because they govern the target repos, which no `paths:` glob can reach, role agents, `/pm-loop`, `/new-project`, `/close-project`, `/pr-review-request`, `/answer`, `/fanout`, `/audit`, `commit-as.sh`, `required-checks.sh`, `task-owner.sh`, `prune-worktrees.sh`, `validate-bundle.sh`, `migrate-bundle.sh`, `write-snapshot.sh`, `build-board.sh`, `print-board.sh`, `watch-board.sh`, `index-kb.sh`, `link-repos.sh`, a `SessionStart` hook for tasks-awaiting-you, a `UserPromptSubmit` hook pushing current instance state) symlinked into per-group **instances**; `seed/` holds starting content copied once; `install.sh` stamps out / refreshes an instance and manages its gitignore; `RETIRED` declares seed paths the template has stopped shipping, which are reported and never deleted. Each instance is its own repo under `~/workspace/<group>/_ai-bridge-<group>/` (leading underscore, named distinctly from this template dir). Keep machinery generic — org/repo/path/team/channel literals live in an instance's `instance.config.json` / `CLAUDE.md`, never in `symlink/`. <!-- This bullet was duplicated three times by conflict resolutions; it is now ONE line carrying the union of all three. If you resolve a conflict here, merge into this line — never append a second copy. -->
-- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root `install.sh` is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery is symlinked from *this* checkout, and `ai-setup`'s installer has nothing to do with it. `ai-setup` still carries the old subtree as a deliberate rollback point — it is frozen, and a path under `ai-setup/ai-bridge/` is the stale copy. `ai-setup`'s *config* layer has since been folded in here under `config/`, behind a second install target (`install.sh --config`) — see [15](#15-the-config-layer-is-two-tiers-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
+- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root `install.sh` is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery is symlinked from *this* checkout, and `ai-setup`'s installer has nothing to do with it. `ai-setup` still carries the old subtree as a deliberate rollback point — it is frozen, and a path under `ai-setup/ai-bridge/` is the stale copy. `ai-setup`'s *config* layer briefly lived here too — forked wholesale under `config/` behind a second install target (`install.sh --config`) — but that fork is what caused 23 colliding `~/.claude` paths with 14 diverged, so it has since been handed back: `config/` now ships only the three agents ai-bridge itself probes for, and `~/.claude` is `ai-setup`'s alone again — see [15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
 
 ---
 
@@ -145,7 +145,7 @@ The gate is on the wrong verb if you get it backwards. The full reasoning — ow
 
 **…and promoting it was a two-line change because the location filter was never a list of four names.** `validate-bundle.sh` collects `knowledge/<kind>/*.md` as a *shape*, so the one live instance's 7 `type: Reference` documents were already being checked for `type`, `timestamp` and dangling refs — measured, 0 findings. The only gap was `status`, unchecked because `Reference` had no enum, which left invisible exactly the drift class the script was built for (one type's enum applied to another: `open` on a Reference reads as a Finding). So the fix is `Reference) echo "current superseded"` plus the `SCHEMA.md` section — all 7 already carry `current`, so it is a no-op on live data and a real check on the next edit. Declaring the enum also makes `status` **required** there; root documents typed `Reference` (`SCHEMA.md`, `AUTONOMY.md`) carry none and are unaffected, because they sit outside every schema-defined location. Relocating those documents into `findings/` was rejected: they are specs and contracts, not one decision each, and moving someone's content to satisfy a validator that already reads it is the wrong direction.
 
-## 15. The config layer is two tiers, and the arrow stays one-way
+## 15. The config layer is one tier, and the arrow stays one-way
 
 **ai-bridge depended on a separate repo for four things, and all four failed silently.**
 The measurement that forced this: **nine** top-level entries of the live `~/.claude` were
@@ -167,12 +167,19 @@ when absent, though, so an instance stamped earlier keeps the dead import foreve
 is instance data the human owns and has very likely edited around. Report-only, the same
 contract as `RETIRED`.
 
-**Two tiers, because they answer different questions.** `config/required/` is what
-ai-bridge itself probes for, and it must stay generic. `config/opinionated/` is one
-person's commands, output style, hooks and scripts, and is the only place in this repo
-where a company's internal tool may be named (`/dave`); an adopter takes it, forks it, or
-deletes the directory. **Deleting either tier is safe** — the `AUTONOMY.md` pattern applied
-to a whole directory, with `--config` linking whatever is there and erroring nowhere.
+**One tier now, and it ships only what ai-bridge itself needs.** `config/required/` — the
+three agents (`code-architect`, `deep-bug-scan`, `plan-architect`) ai-bridge's own role
+agents probe for with `test -f` — is the entire config layer. `config/opinionated/`, the
+second tier this section used to describe (one person's commands, output style, hooks and
+scripts, the only place in this repo a company's internal tool could be named — `/dave`),
+is **gone**: it was a fork of `ai-setup`'s `.claude/` tree, 23 of its 25 installable
+entries collided with ai-setup's own, 14 had diverged in both directions, and ownership was
+decided by whichever installer ran last. `ai-setup` now owns
+`${CLAUDE_CONFIG_DIR:-~/.claude}` outright and received every fix the fork had made that it
+lacked; see [`docs/claude-config-ownership.md`](claude-config-ownership.md) for the full
+accounting. **Deleting the tier is still safe** — the `AUTONOMY.md` pattern applied to the
+one directory that is left, with `--config` linking whatever three files remain and
+erroring nowhere.
 
 **The arrow stays one-way, and that is what makes this modular rather than merely
 bundled.** `symlink/` must never *require* `config/`: the role agents keep probing with
@@ -196,14 +203,17 @@ this checkout at all and no allow-list has to be maintained as skills come and g
 gives back the slot the allow-list approach costs: a personal global command can live in
 `~/.claude/commands/` beside the linked ones, which a whole-dir link makes impossible.
 
-**Two refusals and one abstention complete it.** (a) `--config` refuses to write *through*
-a symlinked directory — if `~/.claude/agents` is a link into another checkout, writing
-`agents/x.md` would create a file **inside that other repo**, silently, and leave the
-config dir with nothing of its own; it names the directory, prints the `mv` that fixes it,
-and exits non-zero. (b) Both tiers declaring the same relative path is refused **before any
-write**, because whichever ran second would move the first aside as a `.bak` and shadow it,
-and a shadowed default is the exact silent failure this change exists to remove. (c)
-`settings.json` is linked only when there is none: it can hold permissions, env vars and
+**A refusal, a retired guard, and an abstention complete it.** (a) `--config` refuses to
+write *through* a symlinked directory — if `~/.claude/agents` is a link into another
+checkout, writing `agents/x.md` would create a file **inside that other repo**, silently,
+and leave the config dir with nothing of its own; it names the directory, prints the `mv`
+that fixes it, and exits non-zero. (b) The old refusal for two tiers declaring the same
+relative path — whichever ran second would move the first aside as a `.bak` and shadow
+it — is **gone**, not because the risk went away but because it cannot fire any more: there
+is one tier. What holds the invariant now is `tests/config-ownership.test.sh`, which derives
+the whole shippable set from the `test -f` probes in `symlink/`, so a second tier could not
+reappear here unnoticed in the first place. (c) `settings.json` is linked only when there is
+none: it can hold permissions, env vars and
 plugin choices somebody tuned by hand, and it is the one file here where a merge could
 widen what Claude is allowed to *do* rather than how it reports. `ai-setup`'s installer
 merges two display-only keys into a real one; that is deliberately **not** ported, so
