@@ -28,8 +28,30 @@ reviews:
     # while iterating, and the single review lands on `ready for review`.
     drafts: false
   # Don't narrate the diff back at us in prose+mermaid — the walkthrough and
-  # high-level summary already cover it, and this repo is markdown + POSIX shell.
+  # high-level summary already cover it. (This is not about shell dialect: this
+  # repo's `tests/**` harnesses are bash, not POSIX sh — see path_instructions
+  # below, which is the fact a reviewer should act on instead of inferring one
+  # from this comment.)
   sequence_diagrams: false
+  # FACT, not preference: every `*.sh` under `tests/` — the whole scope declared
+  # below, at any depth and whatever the filename suffix — starts with exactly
+  # `#!/usr/bin/env bash` and uses bash-only constructs (`pipefail`, `local`,
+  # process substitution), and none is ever invoked via `sh`. Census:
+  # `find tests -name '*.sh' -exec head -1 {} \; | sort | uniq -c` — see the PR
+  # that added this line for the exact run. Bash is the standard here; do not
+  # ask for a POSIX `sh` rewrite of anything under `tests/`.
+  # `tests/harness-shell-dialect.test.sh` keeps this comment honest: it scans
+  # exactly the glob below, fails on any file whose first line is not that
+  # shebang, and fails if the glob here and the one it scans stop matching.
+  path_instructions:
+    - path: "tests/**/*.sh"
+      instructions: >
+        These are bash harnesses, not POSIX sh: every one carries a
+        `#!/usr/bin/env bash` shebang and relies on bash-only constructs
+        (`pipefail`, `local`, process substitution). None is ever invoked via
+        `sh`. Bash is this repo's declared standard for `tests/**` — do not
+        raise a finding asking for POSIX `sh` compatibility or a `dash -n`
+        pass here; that guideline does not apply to this path.
 chat:
   # "Let CodeRabbit reply automatically without requiring a mention/tag."
   # On (the default) every comment in a review thread wakes the bot up — including
