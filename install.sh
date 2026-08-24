@@ -318,11 +318,27 @@ config_ours() {
 # THE LOOP RUNS IN THIS SHELL, not down a pipe, so $CONFIG_RETIRED survives it. The count
 # is what lets the caller point at cbmono/ai-setup: a user whose 19 links just vanished is
 # owed the name of the repo that ships them now.
+#
+# EVERY `rm` HERE IS CHECKED, and $CONFIG_SWEEP_FAIL is why. The same defect that made
+# `config_install` print "3 linked" having linked nothing lived in this function for one
+# more round: `rm -f` ran unchecked while the counter and the `retire` line ran regardless,
+# and errexit is suspended for the whole call by `config_install || config_rc=$?`. A config
+# dir whose `commands/` is not writable — mode 500, or root-owned after a `sudo` install —
+# measured **21 `retire` lines and "Those 21 path(s) … moved" for 11 actual removals, exit
+# 0, ten dangling commands still registered**, and on `--uninstall` three links still LIVE
+# into the checkout the user had just detached from. The only signal was `rm:` on stderr,
+# under a success epilogue. This function IS the handover for ~21 paths, so a count printed
+# regardless of what it did is the worst possible thing for it to print: the user is told
+# the migration completed and given a repo to re-install from, while a dangling command
+# stays registered. The counter now moves only after the write succeeded, and the caller
+# turns any failure into a non-zero exit through config_sweep_warn.
 CONFIG_RETIRED=0
+CONFIG_SWEEP_FAIL=0
 config_sweep() {
   local t l rel was n_roots=0
   local roots=()
   CONFIG_RETIRED=0
+  CONFIG_SWEEP_FAIL=0
   while IFS= read -r t; do
     [ -n "$t" ] || continue
     if [ -d "$CONFIG_DEST/$t" ] && [ ! -L "$CONFIG_DEST/$t" ]; then
@@ -337,7 +353,11 @@ EOF
     case "$(readlink "$l")" in
       "$CONFIG_SRC"/*)
         if [ ! -e "$l" ]; then
-          rm -f "$l"; CONFIG_RETIRED=$((CONFIG_RETIRED+1))
+          if ! rm -f "$l" 2>/dev/null; then
+            echo "  fail   $rel — cannot retire this dangling link" >&2
+            CONFIG_SWEEP_FAIL=$((CONFIG_SWEEP_FAIL+1)); continue
+          fi
+          CONFIG_RETIRED=$((CONFIG_RETIRED+1))
           echo "  retire $rel (no longer shipped by the config layer)"
         fi
         continue ;;
@@ -347,7 +367,11 @@ EOF
     # thing safe to delete here. The config layer accumulates this debris exactly as the
     # instance half does: 24 links dangled in ~/.claude when the checkout moved.
     if dead_backup config_ours "$rel" "$l"; then
-      was="$(readlink "$l")"; rm -f "$l"
+      was="$(readlink "$l")"
+      if ! rm -f "$l" 2>/dev/null; then
+        echo "  fail   $rel — cannot remove this dead backup (was -> $was)" >&2
+        CONFIG_SWEEP_FAIL=$((CONFIG_SWEEP_FAIL+1)); continue
+      fi
       echo "  sweep  $rel (dead backup of a relinked file, was -> $was)"
     fi
   done <<EOF
@@ -367,6 +391,21 @@ config_handover_note() {
   echo "      cbmono/ai-setup owns $CONFIG_DEST now and installs them: clone it and run"
   echo "      its install.sh to get them back. Why, and what not to re-add here:"
   echo "        docs/claude-config-ownership.md"
+}
+
+# What the sweep could NOT do, said out loud, and non-zero so a script can see it.
+#
+# Called by both halves — `config_install` and `config_uninstall` share the sweep, and the
+# earlier fix for this defect class landed on `config_install`'s own writes only, leaving
+# its sibling to report a full retirement it had not performed. A partial handover is worse
+# than a refused one: the paths that survived are dangling links Claude Code still
+# registers, and the epilogue has already pointed the user at another repo to install from.
+config_sweep_warn() {
+  [ "$CONFIG_SWEEP_FAIL" -gt 0 ] || return 0
+  echo "warn  $CONFIG_SWEEP_FAIL retired link(s) could NOT be removed (named above) — they" >&2
+  echo "      are still registered and still dangling. The counts above exclude them. Make" >&2
+  echo "      $CONFIG_DEST and its subdirectories writable and re-run." >&2
+  return 1
 }
 
 config_require_src() {
@@ -393,7 +432,17 @@ config_install() {
   # unreachable guard is one no test can cover. What replaced it is stronger and does fire:
   # `tests/config-ownership.test.sh` derives the whole shippable set from the `test -f`
   # probes in `symlink/`, so a second tier cannot appear here unnoticed in the first place.
-  mkdir -p "$CONFIG_DEST"
+  # The LAST unchecked write in this half, and it is checked for the reason blocker A
+  # existed: fixing the writes one loop noticed and leaving the sibling it did not is how a
+  # false success survives a round of review. Its failure is currently reported per file by
+  # the `mkdir -p "$dstdir"` guard below, but only because every shipped entry happens to
+  # live in a subdirectory — an incidental guarantee, not a stated one. A config dir that
+  # cannot be created is a refusal, not a run with nothing to do.
+  if ! mkdir -p "$CONFIG_DEST" 2>/dev/null; then
+    echo "error: cannot create $CONFIG_DEST." >&2
+    echo "       Nothing was written. Check the permissions on its parent directory." >&2
+    return 1
+  fi
   echo "Linking the ai-bridge config layer into $CONFIG_DEST"
   while IFS=$'\t' read -r tier rel; do
     [ -n "$rel" ] || continue
@@ -483,16 +532,23 @@ EOF
   # another layer's, and conflating them would hide the fact that this run wrote nothing.
   [ "$n_else" -eq 0 ] || echo "      $n_else already provided by another config layer — nothing written for those."
   config_handover_note
+  # ACCUMULATED, not returned from the first branch that fires. An unwritable config dir
+  # produces link failures AND sweep failures at once, and returning on the first would
+  # hide the second — leaving the "still registered and still dangling" line unprinted in
+  # exactly the run where it matters most.
+  local rc=0
   if [ "$n_fail" -gt 0 ]; then
     echo "warn  $n_fail file(s) could not be written (above) — the config dir is not writable" >&2
     echo "      for them. Nothing here is partially applied: each failure is per file." >&2
-    return 1
+    rc=1
   fi
   if [ "$n_refused" -gt 0 ]; then
     echo "warn  $n_refused file(s) NOT linked: a directory in the way is a symlink (above)." >&2
     echo "      Fix those directories and re-run; nothing was written through them." >&2
-    return 1
+    rc=1
   fi
+  config_sweep_warn || rc=1
+  [ "$rc" -eq 0 ] || return "$rc"
   echo "Next: restart Claude Code (/exit, then \`claude\`) so it re-scans agents and commands."
   return 0
 }
@@ -500,10 +556,23 @@ EOF
 config_uninstall() {
   config_require_src
   echo "Removing ai-bridge config-layer symlinks from $CONFIG_DEST"
-  local tier rel
+  # `rm` IS CHECKED HERE for the same reason it is in config_install: `rm` failing on an
+  # unwritable directory printed "  rm  <path>" anyway, because errexit is suspended by
+  # `config_uninstall || config_rc=$?` and nothing looked at the status. Measured with
+  # `commands/` and `agents/` at mode 500: three `rm` lines, 21 `retire` lines, 8 removals,
+  # exit 0 — and THREE LINKS STILL LIVE into the checkout the user had just detached from.
+  # An uninstall that says it detached and did not is worse than one that refuses.
+  local tier rel n_fail=0
   while IFS=$'\t' read -r tier rel; do
     [ -n "$rel" ] || continue
-    if config_ours "$rel"; then rm "$CONFIG_DEST/$rel"; echo "  rm    $rel"; fi
+    if config_ours "$rel"; then
+      if rm "$CONFIG_DEST/$rel" 2>/dev/null; then
+        echo "  rm    $rel"
+      else
+        echo "  fail  $rel — cannot remove this link; it is STILL pointing into this checkout" >&2
+        n_fail=$((n_fail+1))
+      fi
+    fi
   done <<EOF
 $(config_entries)
 EOF
@@ -513,7 +582,15 @@ EOF
   config_sweep
   echo "Done. Your runtime state, real files, and *.bak.* backups were left untouched."
   config_handover_note
-  return 0
+  local rc=0
+  if [ "$n_fail" -gt 0 ]; then
+    echo "warn  $n_fail link(s) into this checkout could NOT be removed (named above) — this" >&2
+    echo "      uninstall is INCOMPLETE and those paths still resolve into it. Make" >&2
+    echo "      $CONFIG_DEST and its subdirectories writable and re-run." >&2
+    rc=1
+  fi
+  config_sweep_warn || rc=1
+  return "$rc"
 }
 
 if [ "$LAYER" = "config" ]; then

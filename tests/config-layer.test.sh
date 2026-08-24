@@ -366,6 +366,46 @@ ok "…names each file it could not write"   "$(grep -c '  fail  agents/' "$TMP/
 ok "…and created no link at all"           "$(find "$D17" -type l | wc -l | tr -d ' ')" 0
 chmod 700 "$D17/agents"
 
+# --------------------------------------------------------------------------- #
+echo "-- …and the SWEEP is a write too, so it is counted the same way"
+# The group above is titled for a RULE and covered one caller. `config_install`'s three
+# writes were checked while `config_sweep`'s `rm -f` was not — same round, same script, and
+# in the half this split promotes from a tidiness pass to THE handover mechanism for ~21
+# paths. Measured on a real in-place upgrade with `commands/` at mode 500: 21 `retire` lines
+# and "Those 21 path(s) … moved" for 11 actual removals, exit 0, and ten dangling commands
+# (/acp, /grill, /plan, /verify …) still registered with Claude Code. The only signal was
+# `rm:` on stderr, under a success epilogue naming a repo to reinstall from. So this group
+# repeats the same three assertions — non-zero exit, a count that matches reality, a named
+# failure per path — plus the one only a sweep needs: what it could not retire is still on
+# disk, and it said so.
+D18="$(newdest 18)"; T9="$TMP/tpl-sweep-fail"; make_tpl "$T9"
+run_cfg "$D18" "$T9" >/dev/null
+SRC9="$(cd "$T9" && pwd)"
+# Three under the directory that will be unwritable and four elsewhere: a fixture where the
+# sweep fails on EVERYTHING cannot distinguish an accurate count from a suppressed one.
+for old in commands/grill.md commands/acp.md commands/plan.md \
+           hooks/statusline.sh output-styles/brief.md MEMORY.md settings.json; do
+  mkdir -p "$D18/$(dirname "$old")"
+  ln -s "$SRC9/config/opinionated/$old" "$D18/$old"   # target never existed: same as removed
+done
+dangling18() { find "$D18" -type l ! -exec test -e {} \; -print | wc -l | tr -d ' '; }
+before18="$(dangling18)"
+chmod 500 "$D18/commands"
+rc18="$(run_cfg "$D18" "$T9")"
+after18="$(dangling18)"
+ok "an unwritable sweep root: exits non-zero" "$([ "$rc18" != 0 ] && echo yes || echo no)" yes
+ok "…names each link it could not retire"    "$(grep -cE '^  fail +commands/' "$TMP/out" | tr -d ' ')" 3
+# The defect verbatim: a `retire` line for a link that is still on disk. Asserted on the
+# very file it printed one for before the fix, so the assertion names the lie.
+ok "…claims no retirement it did not perform" "$(said 'retire commands/grill.md')" no
+# The handover count must equal what actually left the disk — computed, never a literal, so
+# it cannot drift with the fixture and cannot be satisfied by suppressing the note.
+ok "…its count matches what it really did"   "$(said "Those $((before18 - after18)) path(s)")" yes
+ok "…which is 4 of the 7, not all 7"         "$((before18 - after18))" 4
+ok "…the un-retired links are still there"   "$(find "$D18/commands" -type l | wc -l | tr -d ' ')" 3
+ok "…and it warns they still register"       "$(said 'still registered and still dangling')" yes
+chmod 700 "$D18/commands"
+
 # =========================================================================== #
 echo "-- uninstall removes only what it created"
 D12="$(newdest 12)"; run_cfg "$D12" "$TPL" >/dev/null
@@ -377,6 +417,56 @@ ok "…our links are gone"                  "$(yn test -e "$D12/agents/code-arch
 ok "…a real file survives"                "$(yn test -f "$D12/agents/mine.md")" yes
 ok "…a foreign link survives"             "$(yn test -L "$D12/agents/foreign.md")" yes
 ok "…a backup survives"                   "$(yn test -f "$D12/agents/keep.bak.1")" yes
+
+# --------------------------------------------------------------------------- #
+echo "-- …and an uninstall that could not detach says so"
+# The worst measured instance of the unchecked-write defect, because of what it leaves:
+# `--config --uninstall` with `commands/` and `agents/` at mode 500 printed three `rm` lines
+# and 21 `retire` lines for 8 actual removals, exited 0, and left THREE LINKS STILL LIVE
+# into the checkout the user had just detached from. An uninstall that reports success and
+# did not detach is worse than one that refuses: nothing will prompt a second run, and the
+# links keep resolving until the checkout is deleted, at which point they dangle. Both
+# halves fail in this fixture — the `rm` of live links AND the sweep of dangling ones — so
+# it pins that neither is reported through the other's counter.
+D19="$(newdest 19)"; run_cfg "$D19" "$TPL" >/dev/null
+SRC10="$(cd "$TPL" && pwd)"
+for old in commands/grill.md commands/acp.md; do
+  mkdir -p "$D19/$(dirname "$old")"
+  ln -s "$SRC10/config/opinionated/$old" "$D19/$old"
+done
+ln -s "$SRC10/config/opinionated/MEMORY.md" "$D19/MEMORY.md"   # removable: top level is writable
+chmod 500 "$D19/agents" "$D19/commands"
+rc19="$(run_cfg "$D19" "$TPL" --uninstall)"
+ok "an unwritable uninstall: exits non-zero" "$([ "$rc19" != 0 ] && echo yes || echo no)" yes
+ok "…names each link it could not remove"   "$(grep -cE '^  fail +agents/' "$TMP/out" | tr -d ' ')" 3
+ok "…and each one the sweep could not"      "$(grep -cE '^  fail +commands/' "$TMP/out" | tr -d ' ')" 2
+# The lie, verbatim: "rm agents/code-architect.md" for a link that is still live.
+ok "…prints no rm line for a link it kept"  "$(grep -cE '^  rm +agents/' "$TMP/out" | tr -d ' ')" 0
+ok "…says the uninstall is incomplete"      "$(said 'uninstall is INCOMPLETE')" yes
+ok "…the three links are still live"        "$(find "$D19/agents" -type l -exec test -e {} \; -print | wc -l | tr -d ' ')" 3
+# What it COULD do, it still did — a failure elsewhere must not turn the whole run into a
+# no-op, or the next run has more to clean up than this one did.
+ok "…and the writable ones were retired"    "$(yn test -L "$D19/MEMORY.md")" no
+chmod 700 "$D19/agents" "$D19/commands"
+
+# The fixture above proves the MESSAGES but not the EXIT CODE, because its `rm` half fails
+# too and either counter alone makes the run non-zero. Mutation-tested: deleting
+# `config_sweep_warn || rc=1` from config_uninstall left it at 112 passed, 0 failed. That is
+# the shape of every defect in this group — an assertion satisfied by a sibling — so the
+# sweep's own contribution to the exit status gets a fixture where nothing else can supply
+# it: the `rm` half succeeds completely, and only the sweep fails.
+D20="$(newdest 20)"; run_cfg "$D20" "$TPL" >/dev/null
+for old in commands/grill.md commands/acp.md; do
+  mkdir -p "$D20/$(dirname "$old")"
+  ln -s "$SRC10/config/opinionated/$old" "$D20/$old"
+done
+chmod 500 "$D20/commands"
+rc20="$(run_cfg "$D20" "$TPL" --uninstall)"
+ok "sweep alone failing: exits non-zero"    "$([ "$rc20" != 0 ] && echo yes || echo no)" yes
+ok "…the rm half fully succeeded"           "$(grep -cE '^  rm +agents/' "$TMP/out" | tr -d ' ')" 3
+ok "…so no rm failure supplied that status" "$(grep -cE '^  fail +agents/' "$TMP/out" | tr -d ' ')" 0
+ok "…only the sweep did"                    "$(grep -cE '^  fail +commands/' "$TMP/out" | tr -d ' ')" 2
+chmod 700 "$D20/commands"
 
 # =========================================================================== #
 echo "-- an instance carrying the old import is told, not edited"
