@@ -103,8 +103,32 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 #
 #   6,187 / 3,447   18 files   what task-021 pinned for the detector
 #   6,190 / 3,447   18 files   +3 total, +0 code — quoting fix only, no new logic
-CEILING_TOTAL=6190
-CEILING_CODE=3447
+#
+# RAISED 2026-08-24 for show-board-link.sh, and here is the bill:
+#
+#   6,190 / 3,447   18 files   what task-021 pinned above
+#   6,224 / 3,454   19 files   +34 total, +7 code — a third SessionStart hook, printing
+#                              the published board's URL (`boardArtifactUrl` in
+#                              instance.config.json, the same key task-014's tick reads)
+#                              so a human opens it without hunting for it
+#
+# WHAT THE 7 CODE LINES BUY. One `[ -f ] && [ -d ]` instance guard (the same signature
+# check-machinery.sh and push-state.sh use), one `sed` read of a single top-level string
+# field, an empty/null check, and one `echo`. The other 27 of the 34 are comments —
+# largely the "why this reads that key, and only that key" and "why it prints nothing
+# else" reasoning, because criterion 3 (exactly one place the URL lives) and criterion 4
+# (never anything task-derived) are both invisible in a diff without it.
+#
+# NOT PAID DOWN ELSEWHERE, and said plainly rather than left implicit. This task's scope
+# is a 7-line reader; the board scripts named above as the real reduction candidates
+# (2,342 lines) are untouched here and remain someone else's task. THIS PROJECT STILL
+# OWES A REDUCTION, unchanged from the note above — this raise enlarges the debt it is
+# describing, not the other way around.
+#
+#   6,190 / 3,447   18 files   what task-021 pinned for the detector
+#   6,224 / 3,454   19 files   +34 total, +7 code — show-board-link.sh
+CEILING_TOTAL=6224
+CEILING_CODE=3454
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is
