@@ -13,13 +13,21 @@
 # the sentence fixes the instance; it does not fix the CLASS, which is that a declaration
 # of the repo's shell dialect lived in free-text prose nothing could contradict.
 #
+# THE FIRST FIX (below, CONFIG SIDE) COVERED `.coderabbit.yaml` ALONE, AND THAT IS WHY THE
+# SAME CLAIM SURVIVED ELSEWHERE. The same "markdown + POSIX shell" sentence also shipped in
+# `CLAUDE.md` (twice — read by every agent on every turn) and `.claude/rules/tests.md`
+# (read on any read under `tests/`), and this check verified only the one place someone had
+# just fixed. `CLAIM_FILES` below is every file this repo has shipped the claim in, so the
+# config side is no longer one file.
+#
 # So this asserts the invariant directly, on both sides of the drift:
 #   1. every `*.sh` beneath `tests/` — the config's own scope, recursively, whatever the
 #      filename suffix — starts with exactly the shebang the config names (the CODE side);
-#   2. `.coderabbit.yaml` does not re-assert the false "POSIX shell" claim, still names
-#      bash, still spells out that exact shebang, and still scopes its instruction to the
-#      exact path this file scans (the CONFIG side — catches both a "revert" of the
-#      correction and a config whose scope silently outgrows this check).
+#   2. NONE of `CLAIM_FILES` re-asserts the false "POSIX shell" claim, `.coderabbit.yaml`
+#      still names bash, still spells out that exact shebang, and still scopes its
+#      instruction to the exact path this file scans (the CONFIG side — catches a "revert"
+#      of the correction in any claim file, a config whose scope silently outgrows this
+#      check, and a new doc re-asserting the claim).
 #
 # THE SCOPE AND THE SHEBANG ARE NOT FREE PARAMETERS. `SHEBANG` and `SCOPE_GLOB` below are
 # asserted to appear verbatim in `.coderabbit.yaml`, so this check cannot claim to enforce
@@ -29,6 +37,14 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CFG="$REPO/.coderabbit.yaml"
+
+# Every file this repo has shipped the "POSIX shell" claim in. Extend this array — not a
+# fresh mechanism — the next time a doc states the repo's shell dialect.
+CLAIM_FILES=(
+  "$CFG"
+  "$REPO/CLAUDE.md"
+  "$REPO/.claude/rules/tests.md"
+)
 
 # The single source of truth for both sides, verified against the config below.
 SHEBANG='#!/usr/bin/env bash'
@@ -70,11 +86,43 @@ EOF
 ok "shell files found under tests/"   "$([ "$total" -gt 0 ] && echo yes || echo no)" yes
 ok "every tests/**/*.sh starts with $SHEBANG" "$non_bash" 0
 
+# claim_scan <file>... — echoes how many of the given files case-insensitively
+# (re)assert "POSIX shell" (0 for a file that does not, or does not exist).
+#
+# THIS IS THE SCANNER: the real per-file loop right below and every synthetic fixture
+# further down call this exact function — never a copy of its logic — so a fixture
+# proves the shipped check rather than a stand-in that can silently drift out from
+# under it. A later change to the matching logic itself (not just to CLAIM_FILES) now
+# shows up in the real assertions and the synthetic ones together, because there is
+# only one scanner.
+claim_scan() {
+  local cf hits flagged=0
+  for cf in "$@"; do
+    hits="$(grep -ci 'posix shell' "$cf" 2>/dev/null || true)"
+    [ "$hits" -gt 0 ] && flagged=$((flagged+1))
+  done
+  printf '%s\n' "$flagged"
+}
+
 # --- 2. CONFIG side: the declaration this check enforces is really in the config ----
 ok ".coderabbit.yaml exists"          "$([ -f "$CFG" ] && echo yes || echo no)" yes
 
-reasserted="$(grep -ci 'posix shell' "$CFG" || true)"
-ok "config no longer claims POSIX shell" "$reasserted" 0
+# Every claim file, not just .coderabbit.yaml, must not (re)assert "POSIX shell". Each
+# assertion calls claim_scan on a single file so a regression is pinned to the
+# offending file, not just to an aggregate count.
+for cf in "${CLAIM_FILES[@]}"; do
+  rel="${cf#"$REPO"/}"
+  ok "$rel does not (re)assert POSIX shell" "$(claim_scan "$cf")" 0
+done
+
+# REGRESSION GUARD on the real scope itself, not a fixture: if CLAIM_FILES is ever
+# narrowed back to `("$CFG")` alone — the exact drift this task exists to close — this
+# count drops from 3 to 1 and this assertion fails. That is the in-repo, repeatable
+# proof that narrowing the real scope fails the test. See "pre-task-026 config side …
+# would have caught only 1 of the 3" below for the same scenario played out against
+# fixtures that still carry the claim, so the discriminating power is shown too, not
+# just the array length.
+ok "config side covers more than .coderabbit.yaml alone" "${#CLAIM_FILES[@]}" 3
 
 declares_bash="$(grep -ci 'bash' "$CFG" || true)"
 ok "config names bash somewhere"      "$([ "$declares_bash" -gt 0 ] && echo yes || echo no)" yes
@@ -142,6 +190,31 @@ ok "checker flags a config that never spells the shebang" "$fake_shebang" 0
 
 fake_scope="$(grep -cF -- "path: \"$SCOPE_GLOB\"" "$FAKE_CFG" || true)"
 ok "checker flags a config narrowed off the scanned scope" "$fake_scope" 0
+
+# --- Non-vacuity for the EXTENDED config side: this is the regression task-026 exists to
+# close. Two synthetic docs, each carrying the exact false claim CLAUDE.md and
+# .claude/rules/tests.md shipped, plus the synthetic drifted config above — three sites,
+# only one of which (.coderabbit.yaml) the pre-task-026 CLAIM_FILES scope would have seen.
+fake_claude="$tmp/fake-CLAUDE.md"
+printf '%s\n' '- tests/ -- POSIX shell harnesses.' > "$fake_claude"
+fake_rules="$tmp/fake-tests-rule.md"
+printf '%s\n' 'POSIX shell harnesses, no framework, no build step.' > "$fake_rules"
+
+FAKE_CLAIM_FILES=("$FAKE_CFG" "$fake_claude" "$fake_rules")
+
+# Calls claim_scan — the exact function the real CLAIM_FILES loop above calls, not a
+# reimplementation of it — so this proves the shipped scanner, not a copy that could
+# silently drift from it.
+ok "extended config side flags all 3 synthetic re-assertions" "$(claim_scan "${FAKE_CLAIM_FILES[@]}")" 3
+
+# REGRESSION GUARD: the pre-task-026 config side scanned `.coderabbit.yaml` ALONE — the
+# exact scope that let the claim survive in CLAUDE.md and .claude/rules/tests.md. Run the
+# same claim_scan, narrowed to that one-file scope, over the same three synthetic
+# fixtures (all three of which carry the claim): it catches only the one file it ever
+# looked at. Widen CLAIM_FILES back down to one entry and this is the number — 1, not 3 —
+# that a real narrowing would produce.
+legacy_claim_files=("$FAKE_CFG")
+ok "pre-task-026 config side (.coderabbit.yaml alone) would have caught only 1 of the 3" "$(claim_scan "${legacy_claim_files[@]}")" 1
 
 printf '\n%s passed, %s failed  (%s shell file(s) checked under tests/)\n' "$pass" "$fail" "$total"
 [ "$fail" -eq 0 ]
