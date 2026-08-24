@@ -5,7 +5,7 @@ paths:
 
 # Test conventions
 
-Loads when you read anything under `tests/`. POSIX shell harnesses, no framework, no
+Loads when you read anything under `tests/`. bash harnesses, no framework, no
 build step. Run them all before pushing:
 
 ```bash

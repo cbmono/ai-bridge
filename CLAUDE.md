@@ -12,7 +12,7 @@ its own git repo under `~/workspace/<group>/_ai-bridge-<group>/`.
 - `seed/` — starting content, copied into an instance **once, only if absent**. A change here reaches nothing automatically.
 - `install.sh` — stamps out / refreshes an instance. `upgrade.sh` — walks a pull's four cases and reports what's left for the human.
 - `RETIRED` — seed paths the template has stopped shipping; reported, never deleted.
-- `tests/` — POSIX shell harnesses. **There is a test suite and it must pass**: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. No build step, no lint.
+- `tests/` — bash harnesses. **There is a test suite and it must pass**: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. No build step, no lint.
 - `docs/` — human-facing depth. `.claude/rules/` — the same prohibitions, path-scoped for agents.
 
 **Keep machinery generic.** No org, repo, path, team or channel literals under `symlink/` —
@@ -66,5 +66,5 @@ shorten a "why" — relocate it intact.
 
 ## Out of scope
 
-- Don't add CI, a build step, or a `package.json`. This is markdown + POSIX shell.
+- Don't add CI, a build step, or a `package.json`. This is markdown + bash.
 - Don't vendor the machinery into an instance. It is symlinked from this checkout by design, so a clone on another machine has dangling machinery until `install.sh` runs there.
