@@ -66,7 +66,8 @@
 # stamped from) is covered instead, and `upgrade.sh` is the route for existing ones.
 #
 # Agents that declare NO `tools:` key inherit the full tool set and are therefore
-# unconstrained — `config/required/agents/` and `config/opinionated/agents/`. They are
+# unconstrained — every agent shipped under `config/*/agents/` (found dynamically below,
+# not by naming a tier, so this stays correct as tiers are added or removed). They are
 # skipped, and that skip is asserted rather than assumed: if one of them ever grows a
 # `tools:` key, the assertion below fails and points here.
 #
