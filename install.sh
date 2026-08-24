@@ -5,7 +5,7 @@
 #   Usage:
 #     install.sh [TARGET]              # install/refresh an instance at TARGET (default: cwd)
 #     install.sh --instance [TARGET]   # the same thing, stated explicitly
-#     install.sh --config              # link config/ into ~/.claude (CLAUDE_CONFIG_DIR wins)
+#     install.sh --config              # link config/required/ into ~/.claude (CLAUDE_CONFIG_DIR wins)
 #     install.sh --uninstall [TARGET]  # remove only the instance symlinks this created
 #     install.sh --config --uninstall  # remove only the config-layer symlinks this created
 #     install.sh --help
@@ -27,12 +27,14 @@
 #      confirm it. Skipped (with the instruction printed) when stdin is not a terminal,
 #      never asked on a refresh, and it never overwrites a value already there.
 #
-# CONFIG mode links the two tiers of `config/` into the Claude Code config dir, one
-# FILE at a time — never a whole directory (see the CONFIG LAYER block below):
-#   · config/required/     — the agents ai-bridge's own role agents probe for.
-#   · config/opinionated/  — one human's commands, output style, hooks and scripts.
-# Either tier may be deleted; absence is safe. An instance never needs either, and the
-# config layer never needs an instance.
+# CONFIG mode links `config/required/` into the Claude Code config dir, one FILE at a
+# time — never a whole directory (see the CONFIG LAYER block below). That is the WHOLE
+# set: three agents this repo's own role agents probe for by absolute path
+# (`code-architect`, `deep-bug-scan`, `plan-architect`). Everything else under
+# `~/.claude` belongs to `cbmono/ai-setup` and is installed from there — see
+# docs/claude-config-ownership.md for why, and for what not to re-add here.
+# `config/` may be deleted; absence is safe. An instance never needs it, and the config
+# layer never needs an instance.
 #
 # Idempotent: re-running relinks cleanly and reports already-linked entries.
 # Backs up any conflicting real file as <name>.bak.<epoch> before linking.
@@ -116,7 +118,7 @@ for arg in "$@"; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/config-layer.test.sh asserts the flags appear in the output, which is
       # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,38p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,40p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
     *)
@@ -140,11 +142,20 @@ fi
 # three probed-for agents — `code-architect`, `deep-bug-scan`, `plan-architect`. A fresh
 # laptop is now one clone and one install.
 #
+# AND WHY IT IS NOW ONLY THREE FILES. Closing those four dependencies by forking the
+# whole of `cbmono/ai-setup`'s `.claude/` tree bought a second problem: two installers
+# claiming `${CLAUDE_CONFIG_DIR:-~/.claude}`, 23 entries shipped by both, 14 diverged, and
+# ownership decided by whichever ran last. ai-setup owns that directory now. This layer
+# keeps exactly the paths ai-bridge itself PROBES for and nothing else — the smallest set
+# that makes a fresh laptop work without cloning another repo. Re-adding anything here
+# re-creates the collision; `tests/config-ownership.test.sh` fails if you do.
+# Full reasoning: docs/claude-config-ownership.md.
+#
 # THE ARROW IS ONE-WAY. `symlink/` must never *require* `config/`. The role agents keep
 # probing with `test -f`, so an instance stamped on a machine that never ran `--config`
 # works — it loses a second opinion, not a feature. `tests/config-layer.test.sh` asserts
-# a config-less stamp. Both tiers are deletable: `rm -rf config/opinionated` (or
-# `config/required`) must break nothing and error nowhere.
+# a config-less stamp. The tier is deletable: `rm -rf config` (or `config/required`) must
+# break nothing and error nowhere.
 #
 # EVERY LINK IS PER FILE, NEVER PER DIRECTORY. agents/, commands/, hooks/, scripts/ and
 # skills/ are DROP-IN directories — a skill or plugin installer can write a new
@@ -157,11 +168,11 @@ fi
 # no .gitignore allow-list is needed to keep it out. Do not "simplify" this to whole-dir
 # links — `tests/config-layer.test.sh` asserts a fresh drop-in stays outside the repo.
 CONFIG_SRC="$TEMPLATE_DIR/config"
-CONFIG_TIERS="required opinionated"
+CONFIG_TIERS="required"
 # Honour CLAUDE_CONFIG_DIR: when it is set, Claude Code reads settings, agents and hooks
 # from there instead of ~/.claude, so installing into $HOME would put the layer somewhere
-# nothing loads it from. It is also the same expression config/opinionated/settings.json
-# uses to reference its hooks, so the installer and the hook command cannot disagree.
+# nothing loads it from. It is the same expression ai-setup's settings.json uses to
+# reference its hooks, so the two installers cannot disagree about where the config dir is.
 CONFIG_DEST="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 
 # Every linkable file, as "<tier><TAB><relative path>".
@@ -169,8 +180,11 @@ CONFIG_DEST="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 # Three kinds of file are never linked, at any depth: `README.md` (a repo doc — and in
 # commands/ Claude Code would register it as the command `/README`), `*.example.json`
 # (copy-from templates: a linked one is clutter that dangles if this checkout moves), and
-# settings.json, which is linked by its own block below because it is the one file that
-# can already hold permissions and plugins a human tuned by hand.
+# `settings.json`. This layer no longer ships a settings.json at all — it is ai-setup's,
+# and it is the one file that can already hold permissions and plugins a human tuned by
+# hand, so a second installer must never touch it. The exclusion stays because it is
+# cheap and because a settings.json appearing under `config/` would otherwise be linked
+# silently; a stale link from when this layer DID ship one is retired by config_sweep.
 config_entries() {
   local tier
   for tier in $CONFIG_TIERS; do
@@ -190,7 +204,7 @@ config_entries() {
 
 # Top-level entries the config layer manages — the roots of the dangling-link sweep.
 # Roots to sweep for retired links. Deliberately NOT just the roots present in the
-# current source tree: if the last file under `config/opinionated/commands/` is removed,
+# current source tree: if the last file under `config/required/commands/` is removed,
 # that root disappears from `config_entries`, the sweep stops searching
 # `$CONFIG_DEST/commands`, and its dangling links stay registered — a retired command that
 # still shows up, or a retired hook that exits 127 on every startup. The whole point of the
@@ -199,16 +213,25 @@ config_entries() {
 # The fixed list is the set this installer has ever managed. Add to it when a new root
 # ships; never prune it, for the same reason RETIRED is never pruned — an install from
 # years ago still has the directory.
+# It is ALSO what performs the handover to ai-setup: this layer used to ship commands/,
+# hooks/, output-styles/, scripts/, skills/, MEMORY.md and settings.json, so the roots
+# stay listed and `--config` retires those now-dangling links on the next run. Pruning
+# them would strand a retired command that still registers and a retired hook that exits
+# 127 on every launch.
 CONFIG_MANAGED_TOPS="agents commands hooks output-styles scripts skills rules claude-defaults.md MEMORY.md settings.json"
 config_tops() { { config_entries | cut -f2 | sed 's#/.*##'; printf '%s\n' $CONFIG_MANAGED_TOPS; } | sort -u; }
 
 # Print the first DIRECTORY component of $1 that is a symlink under the config dir.
 #
 # This guard is what keeps the per-file fix honest. A whole-directory symlink left over
-# from another setup (this machine's ~/.claude/agents pointed into the parent config repo
-# for a year) turns "$CONFIG_DEST/agents/x.md" into a write INSIDE that other checkout —
-# modifying a repo nobody asked us to touch, silently, and leaving the config dir with no
-# file of its own. So refuse the entry and say what to do about it.
+# from another setup turns "$CONFIG_DEST/agents/x.md" into a write INSIDE that other
+# checkout — modifying a repo nobody asked us to touch, silently, and leaving the config
+# dir with no file of its own. So this layer NEVER writes through one.
+#
+# It is not hypothetical and it is not rare: ai-setup — which owns this directory — links
+# `~/.claude/agents` as a whole directory. So on any machine that ran its installer, every
+# entry here has a symlinked parent, by design rather than by accident. That is why
+# "refuse" is no longer the only answer; see config_install.
 config_link_parent() {
   local rel="$1" dir cur part
   case "$rel" in */*) dir="${rel%/*}" ;; *) return 1 ;; esac
@@ -322,28 +345,36 @@ config_require_src() {
 }
 
 config_install() {
-  local tier rel src dst bak off tgt n_link=0 n_ok=0 n_moved=0 n_refused=0 reported=" " dups
+  local tier rel src dst bak off tgt n_link=0 n_ok=0 n_moved=0 n_refused=0 n_else=0 reported=" "
   config_require_src
 
-  # Refuse BEFORE any write when both tiers claim the same relative path: whichever ran
-  # second would move the first aside as a .bak and shadow it, and a shadowed default is
-  # exactly the silent failure this whole layer exists to remove.
-  dups="$(config_entries | cut -f2 | sort | uniq -d)"
-  if [ -n "$dups" ]; then
-    echo "error: config/required and config/opinionated both declare:" >&2
-    while IFS= read -r rel; do [ -n "$rel" ] && echo "         $rel" >&2; done <<EOF
-$dups
-EOF
-    echo "       Each path must live in exactly one tier. Nothing was linked." >&2
-    exit 2
-  fi
-
+  # NO two-tier duplicate refusal any more. It guarded the case where `required` and
+  # `opinionated` both declared one path — whichever ran second would move the first aside
+  # as a .bak and shadow it. There is one tier now, so the check could not fire, and an
+  # unreachable guard is one no test can cover. What replaced it is stronger and does fire:
+  # `tests/config-ownership.test.sh` derives the whole shippable set from the `test -f`
+  # probes in `symlink/`, so a second tier cannot appear here unnoticed in the first place.
   mkdir -p "$CONFIG_DEST"
   echo "Linking the ai-bridge config layer into $CONFIG_DEST"
   while IFS=$'\t' read -r tier rel; do
     [ -n "$rel" ] || continue
     src="$CONFIG_SRC/$tier/$rel"; dst="$CONFIG_DEST/$rel"
     off="$(config_link_parent "$rel" || true)"
+    # A symlinked parent means another config provider owns this directory. Two cases, and
+    # only one of them is a problem:
+    #
+    #   · THE ENTRY ALREADY RESOLVES THROUGH IT. That provider ships this path — which is
+    #     ai-setup, shipping the same three probed-for agents. Our contract for the
+    #     required tier is that the file EXISTS on this machine, not that our copy is the
+    #     one used, so the guarantee is already met: report it and write nothing. Without
+    #     this, `--config` would exit non-zero on every machine that ran ai-setup's
+    #     installer — the normal configuration, not an edge case — and the order the two
+    #     installers ran in would change the outcome.
+    #   · IT DOES NOT RESOLVE. Nobody ships it, and we cannot write it without writing
+    #     into someone else's checkout. Refuse, name the directory, print the fix.
+    if [ -n "$off" ] && [ -e "$CONFIG_DEST/$rel" ]; then
+      echo "  ok    $rel (provided by $off -> $(readlink "$off"))"; n_else=$((n_else+1)); continue
+    fi
     if [ -n "$off" ]; then
       n_refused=$((n_refused+1))
       case "$reported" in
@@ -379,34 +410,20 @@ EOF
 $(config_entries)
 EOF
 
-  # settings.json is per-machine sensitive — it can carry permissions, env vars and
-  # plugin choices somebody tuned by hand, and it is the one file here where replacing
-  # a value could widen what Claude is allowed to *do* rather than how it reports. So:
-  # adopt the baseline only when there is nothing to lose, and otherwise print the two
-  # commands and stop. This install never edits a real settings.json — deliberately not
-  # even to merge a display-only key, which keeps `--config` purely additive: every
-  # write it makes is a new named file or a symlink it created itself.
-  local sjs="$CONFIG_SRC/opinionated/settings.json" sjd="$CONFIG_DEST/settings.json"
-  if [ -f "$sjs" ]; then
-    if [ -L "$sjd" ] && [ "$(readlink "$sjd")" = "$sjs" ]; then
-      echo "  ok    settings.json (already linked)"
-    elif [ -L "$sjd" ] && [ ! -e "$sjd" ]; then
-      rm "$sjd"; ln -s "$sjs" "$sjd"; echo "  relink settings.json (was dangling)"
-    elif [ -e "$sjd" ] || [ -L "$sjd" ]; then
-      echo "  keep  settings.json (yours — permissions and plugins left alone)"
-      echo "        To adopt this layer's baseline instead, back yours up and link it:"
-      echo "          mv $(printf '%q' "$sjd") $(printf '%q' "$sjd").bak.\$(date +%s)"
-      echo "          ln -s $(printf '%q' "$sjs") $(printf '%q' "$sjd")"
-      echo "        Or copy just the display-only keys across by hand: statusLine,"
-      echo "        outputStyle (\"Brief\"), and the format-on-write PostToolUse hook."
-    else
-      ln -s "$sjs" "$sjd"; echo "  link  settings.json"
-    fi
-  fi
+  # NO settings.json BLOCK, deliberately. This layer used to link its own baseline here.
+  # It is ai-setup's file now, and it is the one file in the config dir that can already
+  # hold permissions and plugins a human tuned by hand — the only place where replacing a
+  # value could widen what Claude is allowed to *do*. Two installers writing it is exactly
+  # the collision this split removes, so ai-bridge does not write, merge, or even report on
+  # it. A link left over from when this layer DID ship one dangles the moment
+  # config/opinionated/settings.json goes, and config_sweep below retires it.
 
   config_sweep
 
   echo "Done. $n_link linked, $n_ok already in place, $n_moved moved aside."
+  # Counted and reported separately from "already in place": those are OUR links, these are
+  # another layer's, and conflating them would hide the fact that this run wrote nothing.
+  [ "$n_else" -eq 0 ] || echo "      $n_else already provided by another config layer — nothing written for those."
   if [ "$n_refused" -gt 0 ]; then
     echo "warn  $n_refused file(s) NOT linked: a directory in the way is a symlink (above)." >&2
     echo "      Fix those directories and re-run; nothing was written through them." >&2
@@ -426,7 +443,9 @@ config_uninstall() {
   done <<EOF
 $(config_entries)
 EOF
-  if config_ours settings.json; then rm "$CONFIG_DEST/settings.json"; echo "  rm    settings.json"; fi
+  # No explicit settings.json removal: this layer does not ship one, and a link left from
+  # when it did is dangling — config_sweep retires it by target, along with every other
+  # link into this checkout whose file is gone.
   config_sweep
   echo "Done. Your runtime state, real files, and *.bak.* backups were left untouched."
   return 0
