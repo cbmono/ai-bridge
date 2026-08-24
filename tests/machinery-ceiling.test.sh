@@ -68,8 +68,43 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 #
 # So the cut this objective wants has NOT happened, and this constant does not pretend
 # otherwise. What has changed is that it can no longer fail to happen quietly.
-CEILING_TOTAL=6078
-CEILING_CODE=3410
+#
+# RAISED 2026-08-23 for check-machinery.sh, and here is the bill:
+#
+#   6,078 / 3,410   17 files   what task-001 pinned
+#   6,187 / 3,447   18 files   +109 total, +37 code — check-machinery.sh, a SessionStart
+#                              detector for machinery symlinks that have gone dangling
+#
+# WHAT THE 109 LINES BUY. A plain `mv` of this checkout dangled 185 symlinks across three
+# instances and the ~/.claude config layer, and nothing detected it: every script, role
+# agent, command and SCHEMA.md in all three pointed at a path that no longer existed while
+# the instances looked fine from the outside. The failure surfaces when something executes
+# a link, which for a /pm-loop tick is mid-dispatch with agents already briefed.
+#
+# Only 37 of the 109 are code — four probes, the dangling test, and the template's live
+# path read out of the hook's own location so the printed repair is pasteable. The other 72
+# are the reasoning, including the hole this hook CANNOT close: settings.json is itself one
+# of the symlinks, so a wholesale move leaves nothing registered to run any detector. That
+# ratio is the argument for pinning two numbers rather than one — the growth this objective
+# actually cares about is +37.
+#
+# AND THIS PROJECT STILL OWES A REDUCTION. The objective's second criterion is that a
+# project serving it LOWERS one of these two constants before it closes. Raising them here
+# does not discharge that; it enlarges it. The largest remaining candidates are the four
+# board scripts — build-board, print-board, watch-board, write-snapshot, 2,342 lines
+# between them — and nothing this task touched.
+#
+# RAISED AGAIN 2026-08-24, +3 total / +0 code, fixing a CodeRabbit review comment on
+# check-machinery.sh: the printed repair command interpolated $tmpl and $root unquoted, so
+# a path with whitespace or a shell metacharacter would paste into a different, wrong
+# command. Two `echo` lines became `printf '%q'` (same code-line count, now quoting-safe)
+# plus a 3-line comment explaining why — all three of those are comment lines, which is
+# the entire +3.
+#
+#   6,187 / 3,447   18 files   what task-021 pinned for the detector
+#   6,190 / 3,447   18 files   +3 total, +0 code — quoting fix only, no new logic
+CEILING_TOTAL=6190
+CEILING_CODE=3447
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

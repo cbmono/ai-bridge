@@ -221,6 +221,43 @@ config_link_parent() {
   return 1
 }
 
+# Is a `.bak.<epoch>` entry a superseded copy of a link this run has just recreated?
+#
+# WHY IT IS NEEDED. Both halves of this installer move a conflicting entry aside as
+# `<name>.bak.<epoch>` before linking. When the conflict was itself a symlink of OURS
+# pointing into a template that has MOVED, the backup is a dangling symlink whose entire
+# content is the old, wrong path — and neither retire sweep can remove it, because
+# `ours`/`config_ours` test the target against the template's CURRENT location and a moved
+# link fails that test by construction. Measured: one plain `mv` of the checkout followed
+# by one repair install left 38 dead `.bak.*` links in a single fixture instance, and the
+# real move left 122 across two. Each one is noise that makes the next dangling-link
+# report unreadable, which is how this class of failure stays invisible.
+#
+# THE THREE CONDITIONS ARE THE WHOLE SAFETY PROPERTY, and the middle one most of all:
+#   · the NAME is one this installer writes — `.bak.<digits>` — and nothing else;
+#   · it is a dangling SYMLINK, never a regular file. A `.bak.*` FILE is a human's own
+#     content that this installer moved aside, and deleting that would spend the property
+#     the whole script rests on. A dangling symlink holds no content at all, only a path
+#     string — which is printed as it goes rather than dropped;
+#   · the entry it backs up EXISTS AGAIN as a link of ours, i.e. this run has already
+#     recreated the thing the backup is a copy of. That is what makes it *superseded*
+#     rather than merely dead, and it is why an uninstall — which removes the link instead
+#     of recreating it — sweeps nothing and leaves every backup where it is.
+#
+# Takes the ownership predicate as an argument so the instance and config halves share one
+# rule: the debris is identical because the backup path that creates it is.
+dead_backup() { # <ownership-predicate> <relative path> <absolute path>
+  case "$2" in *.bak.[0-9]*) ;; *) return 1 ;; esac
+  # The glob above only requires the FIRST character after ".bak." to be a digit, so
+  # "SCHEMA.md.bak.1700000000.manual" — not this installer's format at all — would
+  # otherwise pass. Require the WHOLE suffix after the last ".bak." to be digits only;
+  # anything else (letters, punctuation, a further extension, or nothing) is somebody
+  # else's name, not ours to remove.
+  case "${2##*.bak.}" in ''|*[!0-9]*) return 1 ;; esac
+  [ -L "$3" ] && [ ! -e "$3" ] || return 1
+  "$1" "${2%.bak.*}"
+}
+
 # True only when CONFIG_DEST/$1 is a symlink we created (points into this checkout's
 # config/), decided by the target rather than by name — the same `ours` test the instance
 # half uses, and the reason an uninstall can never remove somebody else's link.
@@ -240,7 +277,7 @@ config_ours() {
 # too. Scoped to the entries this layer manages, never the whole config dir: ~/.claude
 # also holds plugins/, projects/ and sessions/, none of it ours to walk.
 config_sweep() {
-  local t roots=""
+  local t roots="" rel was
   while IFS= read -r t; do
     [ -n "$t" ] || continue
     if [ -d "$CONFIG_DEST/$t" ] && [ ! -L "$CONFIG_DEST/$t" ]; then roots="$roots $CONFIG_DEST/$t"; fi
@@ -253,9 +290,20 @@ EOF
     if [ -n "$roots" ]; then find $roots -type l -print 2>/dev/null || true; fi
   } | sort -u | while IFS= read -r l; do
     [ -n "$l" ] || continue
+    rel="${l#"$CONFIG_DEST"/}"
     case "$(readlink "$l")" in
-      "$CONFIG_SRC"/*) if [ ! -e "$l" ]; then rm -f "$l"; echo "  retire ${l#"$CONFIG_DEST"/} (no longer shipped by the config layer)"; fi ;;
+      "$CONFIG_SRC"/*)
+        if [ ! -e "$l" ]; then rm -f "$l"; echo "  retire $rel (no longer shipped by the config layer)"; fi
+        continue ;;
     esac
+    # Not ours by target, so the branch above cannot see it — but it may be OUR OWN dead
+    # backup of a link we relinked a moment ago. See dead_backup() for why that is the one
+    # thing safe to delete here. The config layer accumulates this debris exactly as the
+    # instance half does: 24 links dangled in ~/.claude when the checkout moved.
+    if dead_backup config_ours "$rel" "$l"; then
+      was="$(readlink "$l")"; rm -f "$l"
+      echo "  sweep  $rel (dead backup of a relinked file, was -> $was)"
+    fi
   done
 }
 
@@ -556,9 +604,15 @@ fi
 # WHAT THIS DOES NOT CHANGE, and the distinction matters for a no-PII instance:
 # SNAPSHOT.json is a LOCAL, gitignored file. Having one puts an instance on the
 # TERMINAL board and makes a page renderable — it does not publish anything. Publishing
-# is a separate, deliberate act (build-artifact-board.sh + an Artifact URL), and
-# question TEXT needs SNAPSHOT_QUESTION_TEXT=1 on top of that. On-by-default is
-# therefore safe for an instance that must not publish.
+# is a separate, deliberate act (rendering the board to HTML, then hosting that page at
+# an Artifact URL), and question TEXT needs SNAPSHOT_QUESTION_TEXT=1 on top of that.
+# On-by-default is therefore safe for an instance that must not publish.
+#
+# NO SCRIPT IS NAMED HERE, ON PURPOSE. This comment used to name the renderer it meant,
+# and when that renderer was folded into another the name went stale — install.sh never
+# calls it, so nothing noticed until retire-machinery.test.sh (which asserts install.sh
+# carries no machinery name at all) went red. Name the capability; leave the entry point
+# to docs/operations.md, which is checked against the tree.
 #
 # It is deliberately generated ROOT content and not a file under symlink/: machinery is
 # re-linked unconditionally on every run, so a deletable capability built out of a
@@ -601,7 +655,8 @@ done <<EOF
 $(machinery_paths)
 EOF
 
-# 2b. Retire machinery the template no longer ships.
+# 2b/2c. Retire machinery the template no longer ships, and sweep the dead backups
+# step 2 above has just made.
 #
 # When a capability is removed from symlink/, an instance stamped earlier keeps a symlink
 # pointing at a path that no longer exists. A dangling command or hook is worse than an
@@ -633,6 +688,13 @@ while IFS= read -r dst; do
   if ours "$rel" && [ ! -e "$dst" ]; then
     rm -f "$dst"
     echo "  retire $rel (no longer shipped by the template)"
+  elif dead_backup ours "$rel" "$dst"; then
+    # 2c. The backups step 2 itself just made. A moved template dangles every link, so
+    # step 2 moves each one aside and relinks — leaving one dead `.bak.*` symlink per
+    # machinery file, invisible to the retire test above because it points at the OLD
+    # template. dead_backup() carries the reasoning and the three conditions.
+    was="$(readlink "$dst")"; rm -f "$dst"
+    echo "  sweep  $rel (dead backup of a relinked file, was -> $was)"
   fi
 done <<EOF
 $(find "$TARGET" -name .git -prune -o -type l -print 2>/dev/null | sort)
