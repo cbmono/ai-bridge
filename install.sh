@@ -320,12 +320,14 @@ config_ours() {
 # owed the name of the repo that ships them now.
 CONFIG_RETIRED=0
 config_sweep() {
-  local t rel was
+  local t l rel was n_roots=0
   local roots=()
   CONFIG_RETIRED=0
   while IFS= read -r t; do
     [ -n "$t" ] || continue
-    if [ -d "$CONFIG_DEST/$t" ] && [ ! -L "$CONFIG_DEST/$t" ]; then roots+=("$CONFIG_DEST/$t"); fi
+    if [ -d "$CONFIG_DEST/$t" ] && [ ! -L "$CONFIG_DEST/$t" ]; then
+      roots+=("$CONFIG_DEST/$t"); n_roots=$((n_roots+1))
+    fi
   done <<EOF
 $(config_tops)
 EOF
@@ -350,7 +352,7 @@ EOF
     fi
   done <<EOF
 $( { find "$CONFIG_DEST" -maxdepth 1 -type l -print 2>/dev/null || true
-     if [ ${#roots[@]} -gt 0 ]; then find "${roots[@]}" -type l -print 2>/dev/null || true; fi
+     if [ "$n_roots" -gt 0 ]; then find "${roots[@]}" -type l -print 2>/dev/null || true; fi
    } | sort -u )
 EOF
 }
@@ -382,7 +384,7 @@ config_require_src() {
 }
 
 config_install() {
-  local tier rel src dst bak off tgt n_link=0 n_ok=0 n_moved=0 n_refused=0 n_else=0 n_fail=0 reported=" "
+  local tier rel src dst dstdir bak off tgt n_link=0 n_ok=0 n_moved=0 n_refused=0 n_else=0 n_fail=0 reported=" "
   config_require_src
 
   # NO two-tier duplicate refusal any more. It guarded the case where `required` and
@@ -444,8 +446,9 @@ config_install() {
     # links created. The consumers of this layer are `test -f` probes, so a false "3 linked"
     # is invisible for the rest of the session — the role agent simply skips its fan-out.
     # A failure is now named per file, counted separately from success, and returns 1.
-    if ! mkdir -p "$(dirname "$dst")" 2>/dev/null; then
-      echo "  fail  $rel — cannot create ${rel%/*}/ under $CONFIG_DEST" >&2
+    dstdir="$(dirname "$dst")"
+    if ! mkdir -p "$dstdir" 2>/dev/null; then
+      echo "  fail  $rel — cannot create $dstdir" >&2
       n_fail=$((n_fail+1)); continue
     fi
     if [ -e "$dst" ] || [ -L "$dst" ]; then
