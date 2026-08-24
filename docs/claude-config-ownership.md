@@ -15,14 +15,14 @@ Measured 2026-08-23:
 
 | | |
 |---|---|
-| ai-setup's installable entries | 25 |
-| …also shipped by ai-bridge | **23** |
+| ai-setup's installable entries | 26 |
+| …also shipped by ai-bridge | **24** |
 | …of those, diverged | **14**, in *both* directions |
 | who decided which copy a machine got | **whichever installer ran last** |
 
 Both installers linked into `${CLAUDE_CONFIG_DIR:-~/.claude}`. Neither knew about the
 other. The machine that found this was on ai-bridge's side of the fork — the newer one — so
-nothing looked broken; running ai-setup's installer would silently have flipped 23 entries
+nothing looked broken; running ai-setup's installer would silently have flipped 24 entries
 back to older copies.
 
 **It was not found by review. It was found because two of the fixes that existed only in
@@ -89,19 +89,33 @@ config layer.
    Gone with it: the whole `permissions.deny` block (`.env*`, ssh keys,
    `.aws/credentials`, `sudo`, `rm -rf ~`), `statusLine`, `outputStyle` and the
    `PostToolUse` hook — recoverable only by re-running ai-setup's installer, which nothing
-   prompts. The rule that fixed it lives in ai-setup: **a symlink is not your
-   `settings.json`.** It holds a path, not content, so there is nothing of the user's to
-   protect, and it is adopted rather than declined.
+   prompts. The rule that fixed it lives in ai-setup — **a symlink is not your
+   `settings.json`**: it holds a path, not content, so there is nothing of the user's to
+   protect, and it is adopted rather than declined. That is
+   [`ai-setup#71`](https://github.com/cbmono/ai-setup/pull/71), and it is why that PR lands
+   **first**; at ai-setup `main` the installer still declines, so the sentence above is true
+   of the pair and not of either half. Checked rather than asserted: the cross-repo group in
+   `tests/config-ownership.test.sh` runs ai-setup's own installer from that starting state
+   and goes red if the file does not end up pointing at ai-setup.
 
    The checks that *can* see this class are **presence over an enumerated owned set**, and
-   there is now one on each side. **Never measure order-independence from an empty config
-   dir**, either: that is the one starting state in which this failure cannot appear.
+   there is now one on each side. **A set is still not enough on its own**, and that is the
+   sharpest thing in this document: the loss was not a path leaving a list — the file was
+   tracked, named by ai-setup's installer and in its manifest throughout — it was a
+   **conditional decline**, a branch taken because our link happened to be sitting there. A
+   membership check over derived paths is identical in the broken state and the fixed one,
+   and no stricter grep of an installer repairs that: matching `ln -s … DEST/settings.json`
+   matches the version that declines too. Only *running* the other installer, from the state
+   an existing machine is in, can tell the two apart — which is what the cross-repo group in
+   `tests/config-ownership.test.sh` now does. **Never measure order-independence from an
+   empty config dir**, either: that is the one starting state in which this failure cannot
+   appear.
 
 ## What holds the line
 
 | Check | Where | What it fails on |
 |---|---|---|
-| `tests/config-ownership.test.sh` | here | a `~/.claude` path shipped from this repo that nothing probes for; a path probed for that is not shipped; `config/opinionated/` coming back; and — when an ai-setup checkout is reachable — an overlap wider than the three agents, **or a root in `CONFIG_MANAGED_TOPS` that neither layer installs** (the absent-path class of point 6, checked by set membership because no dangling-link audit can see it) |
+| `tests/config-ownership.test.sh` | here | a `~/.claude` path shipped from this repo that nothing probes for — `settings.json` included, which is the one the scan used to filter out before comparing; a path probed for that is not shipped; `config/opinionated/` coming back, or a tier under a new name; and — when an ai-setup checkout is reachable — an overlap wider than the three agents, a root in `CONFIG_MANAGED_TOPS` that neither layer installs, **and ai-setup's own installer, actually run from the state an existing machine is in, failing to end up providing every root handed to it** (the absent-path class of point 6: no dangling-link audit can see it, and no set can see the conditional decline that caused it) |
 | `tests/claude-config-ownership.test.sh` | ai-setup | a path handed over that stops being *installable* from there (its `EXCLUDE`, its top-level linking), and a new entry the manifest has not been told about; and `settings.json` specifically, in all three states a config dir can be in — foreign link, dangling link, real file |
 | `tests/config-hardening.test.sh` | ai-setup | any of the ten ported fixes regressing |
 | `tests/config-layer.test.sh` | here | the arrow turning two-way, a whole-directory link for a drop-in dir, absence stopping being safe, and a write that fails being counted as done — on **both** the link and the sweep halves, on install and on uninstall |

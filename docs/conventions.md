@@ -47,7 +47,7 @@ move it here intact instead.
 ## Layout
 
 - **This repo** — a **reusable OKF control-panel template**. `symlink/` holds generic machinery (SCHEMA, `AUTONOMY.md` — the deletable delegated-autonomy capability, `CONVENTIONS.md` — the shared role-agent conventions, read on dispatch because they govern the target repos, which no `paths:` glob can reach, role agents, `/pm-loop`, `/new-project`, `/close-project`, `/pr-review-request`, `/answer`, `/fanout`, `/audit`, `commit-as.sh`, `required-checks.sh`, `task-owner.sh`, `prune-worktrees.sh`, `validate-bundle.sh`, `migrate-bundle.sh`, `write-snapshot.sh`, `build-board.sh`, `print-board.sh`, `watch-board.sh`, `index-kb.sh`, `link-repos.sh`, a `SessionStart` hook for tasks-awaiting-you, a `UserPromptSubmit` hook pushing current instance state) symlinked into per-group **instances**; `seed/` holds starting content copied once; `install.sh` stamps out / refreshes an instance and manages its gitignore; `RETIRED` declares seed paths the template has stopped shipping, which are reported and never deleted. Each instance is its own repo under `~/workspace/<group>/_ai-bridge-<group>/` (leading underscore, named distinctly from this template dir). Keep machinery generic — org/repo/path/team/channel literals live in an instance's `instance.config.json` / `CLAUDE.md`, never in `symlink/`. <!-- This bullet was duplicated three times by conflict resolutions; it is now ONE line carrying the union of all three. If you resolve a conflict here, merge into this line — never append a second copy. -->
-- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root `install.sh` is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery is symlinked from *this* checkout, and `ai-setup`'s installer has nothing to do with it. **`ai-setup` no longer carries that subtree at all** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69) removed it, and its last state is in git history only (`git -C ai-setup show f8b09a4:ai-bridge/`), so a path under `ai-setup/ai-bridge/` does not exist rather than being stale. This sentence used to say the subtree was still there and frozen — which contradicted `README.md` and pointed maintainers at a checkout path that is gone. That is the same "documentation describes a deleted thing as live" defect that removing the subtree was meant to end, and the third instance of it corrected in this PR. `ai-setup`'s *config* layer briefly lived here too — forked wholesale under `config/` behind a second install target (`install.sh --config`) — but that fork is what caused 23 colliding `~/.claude` paths with 14 diverged, so it has since been handed back: `config/` now ships only the three agents ai-bridge itself probes for, and `~/.claude` is `ai-setup`'s alone again — see [15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
+- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root `install.sh` is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery is symlinked from *this* checkout, and `ai-setup`'s installer has nothing to do with it. **`ai-setup` no longer carries that subtree at all** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69) removed it, and its last state is in git history only (`git -C ai-setup show f8b09a4:ai-bridge/`), so a path under `ai-setup/ai-bridge/` does not exist rather than being stale. This sentence used to say the subtree was still there and frozen — which contradicted `README.md` and pointed maintainers at a checkout path that is gone. That is the same "documentation describes a deleted thing as live" defect that removing the subtree was meant to end, and the third instance of it corrected in this PR. `ai-setup`'s *config* layer briefly lived here too — forked wholesale under `config/` behind a second install target (`install.sh --config`) — but that fork is what caused 24 colliding `~/.claude` paths with 14 diverged, so it has since been handed back: `config/` now ships only the three agents ai-bridge itself probes for, and `~/.claude` is `ai-setup`'s alone again — see [15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
 
 ---
 
@@ -172,7 +172,7 @@ three agents (`code-architect`, `deep-bug-scan`, `plan-architect`) ai-bridge's o
 agents probe for with `test -f` — is the entire config layer. `config/opinionated/`, the
 second tier this section used to describe (one person's commands, output style, hooks and
 scripts, the only place in this repo a company's internal tool could be named — `/dave`),
-is **gone**: it was a fork of `ai-setup`'s `.claude/` tree, 23 of its 25 installable
+is **gone**: it was a fork of `ai-setup`'s `.claude/` tree, 24 of its 26 installable
 entries collided with ai-setup's own, 14 had diverged in both directions, and ownership was
 decided by whichever installer ran last. `ai-setup` now owns
 `${CLAUDE_CONFIG_DIR:-~/.claude}` outright and received every fix the fork had made that it
@@ -233,10 +233,15 @@ config dir that can already hold permissions, env vars and plugin choices somebo
 hand — the only place where writing a value could widen what Claude is allowed to *do* rather
 than how it reports — so two installers writing it is exactly the collision the ownership
 split removes. `ai-setup` owns it, including the display-only merge into an established real
-one, and it now also **adopts a `settings.json` that is a symlink into some other checkout**:
-a symlink holds a path rather than a file, so there is nothing of the human's there to
-protect, and declining left the path installed by nobody once this layer retired its own
-link. `--config` therefore stays purely additive — every write it makes is a symlink it
+one, and — from [`ai-setup#71`](https://github.com/cbmono/ai-setup/pull/71), which lands
+before this change for exactly this reason — it **adopts a `settings.json` that is a symlink
+into some other checkout**: a symlink holds a path rather than a file, so there is nothing
+of the human's there to protect, and declining left the path installed by nobody once this
+layer retired its own link. Stated with the source because the tense matters: *before* that
+change ai-setup declined, and this is the sentence a reader would otherwise use to conclude
+the loss cannot happen. `tests/config-ownership.test.sh`'s cross-repo group runs ai-setup's
+own installer from that starting state and fails if it declines, so the claim is checked
+against the code rather than asserted here. `--config` therefore stays purely additive — every write it makes is a symlink it
 created itself — and the paths it retires are not left unexplained: it names `cbmono/ai-setup`
 as where they went.
 
