@@ -443,6 +443,13 @@ td:first-child{overflow-wrap:break-word}
 .qbtn:hover{border-color:var(--signal);background:color-mix(in srgb,var(--signal) 18%,transparent)}
 button.ghost{font-size:.72rem;padding:.28rem .5rem;color:var(--muted)}
 .deps{white-space:normal!important}
+/* Two refs must not wrap: reserve button.dep's own box (3ch digits + .7rem pad +
+   2px border, each) times two, a ", " separator in that same monospace context,
+   and this td's own .9rem horizontal padding (box-sizing:border-box counts it) —
+   sized from the pill's and td's own CSS, not eyeballed. 3+ refs may still wrap
+   past that width, and a single ref never sees this min-width. */
+.deps:has(button.dep:nth-of-type(2)){font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.74rem;min-width:calc(2*(3ch + .7rem + 2px) + 2ch + .9rem)}
 button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.74rem;
   padding:.08rem .35rem;color:var(--muted);background:var(--sunk);border-color:transparent;
   font-variant-numeric:tabular-nums}
