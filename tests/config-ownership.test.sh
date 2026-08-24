@@ -4,7 +4,7 @@
 # probes for. Everything else in that directory belongs to `cbmono/ai-setup`.
 #
 # WHY THIS FILE EXISTS. `config/` was a fork of ai-setup's `.claude/` tree. Both
-# installers linked into `${CLAUDE_CONFIG_DIR:-~/.claude}`, 23 of ai-setup's 25 installable
+# installers linked into `${CLAUDE_CONFIG_DIR:-~/.claude}`, 24 of ai-setup's 26 installable
 # entries were shipped by both, 14 had diverged in BOTH directions, and which copy a
 # machine ended up with was decided by whichever installer ran last. It was not found by
 # review — it was found because two of the fixes that existed only here closed
@@ -46,6 +46,11 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# Read BEFORE anything here could set it, so the assertion at the bottom compares this
+# harness's own effect against the environment it inherited. A contributor who exports
+# CLAUDE_CONFIG_DIR must not turn that assertion red — the property is "nothing here
+# exported one", not "nobody anywhere has one".
+CCD_IN_ENV_AT_START="$(env | grep -c '^CLAUDE_CONFIG_DIR=' || true)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/cfgown.XXXXXX")"
 if [ -z "$TMP" ] || [ ! -d "$TMP" ]; then
   echo "error: mktemp produced no directory (is TMPDIR set to a path that does not exist?)" >&2
@@ -75,13 +80,26 @@ yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 #
 # -mindepth 2 mirrors config_entries(): it scans `config/<tier>/...`, so a loose file at
 # `config/x.md` is shipped by nobody and belongs to neither set.
+#
+# settings.json IS NOT FILTERED HERE, and that is where this scan deliberately STOPS
+# mirroring config_entries(). It used to be — the exclusion list was copied from the
+# installer — and that made criterion 3's check blind to the single highest-value path in the
+# directory: re-forking `config/required/commands/grill.md` produces 5 named failures, while
+# re-forking `config/required/settings.json` left this file at 33 passed, 0 failed. The two
+# lists answer different questions. config_entries() answers *what does `--config` LINK*,
+# and it must skip settings.json because that file is ai-setup's and can already hold
+# permissions a human tuned by hand. This answers *what `~/.claude` path does this repo
+# SHIP*, and a copy of ai-setup's settings.json under `config/` is the fork growing back
+# whether or not a link is ever made from it — worse unlinked, because then no config dir
+# anywhere reveals it and the next "sync from the fork" picks it up. README.md,
+# `*.example.json` and `.DS_Store` stay filtered: none of the three is a `~/.claude` path.
 shipped() { # <template root>
   local root="$1"
   [ -d "$root/config" ] || return 0
   ( cd "$root/config" && find . -mindepth 2 -type f -print ) | sed 's#^\./[^/]*/##' \
   | while IFS= read -r rel; do
       [ -n "$rel" ] || continue
-      case "${rel##*/}" in README.md|settings.json|*.example.json|.DS_Store) continue ;; esac
+      case "${rel##*/}" in README.md|*.example.json|.DS_Store) continue ;; esac
       printf '%s\n' "$rel"
     done | sort -u
 }
@@ -181,6 +199,27 @@ ok "…and the legitimate three still are not" \
 # The same for the "outside agents/" corollary, so it cannot pass by never matching.
 ok "the outside-agents check fires on the fixture" \
    "$([ "$(grep -cv '^agents/' "$TMP/shipped-fix" || true)" -ge 1 ] && echo yes || echo no)" yes
+# THE PATH THAT ACTUALLY GOT LOST, as a re-fork. It is the one file whose reappearance the
+# installer would NOT reveal — config_entries() skips it, so `--config` links nothing and no
+# config dir anywhere shows it — which is exactly why the scan must not skip it too. This
+# assertion is the control for the filter above: with settings.json back in the filter, the
+# fixture below reports an empty set and the group goes green having seen nothing.
+SJFIX="$TMP/refork-sj"
+mkdir -p "$SJFIX/config/required/agents"
+cp "$REPO/config/required/agents/"*.md "$SJFIX/config/required/agents/"
+printf '{"permissions":{"deny":["Read(**/.env)"]}}\n' > "$SJFIX/config/required/settings.json"
+shipped "$SJFIX" > "$TMP/shipped-sj"
+ok "a re-forked settings.json is reported" \
+   "$(comm -23 "$TMP/shipped-sj" "$TMP/expected" | tr '\n' ' ' | sed 's/ *$//')" "settings.json"
+ok "…and the legitimate three still are not" \
+   "$(comm -13 "$TMP/shipped-sj" "$TMP/expected" | tr '\n' ' ' | sed 's/ *$//')" ""
+# It is not filtered for being at the top level either: one under a subdirectory too.
+SJFIX2="$TMP/refork-sj2"
+mkdir -p "$SJFIX2/config/required/agents"
+cp "$REPO/config/required/agents/"*.md "$SJFIX2/config/required/agents/"
+printf '{}\n' > "$SJFIX2/config/required/agents/settings.json"
+ok "…at any depth"  \
+   "$(shipped "$SJFIX2" | grep -cx 'agents/settings.json' || true)" 1
 
 # =========================================================================== #
 echo "-- the decision is written down where the next reader looks"
@@ -208,15 +247,26 @@ else
   echo "        using $AS"
   # ai-setup's installable set, computed from ITS installer's own EXCLUDE list rather than
   # a copy of it here, so the two cannot drift apart.
+  #
+  # BOTH DERIVATIONS ARE FUNCTIONS OF THEIR INPUTS, which is what lets the non-vacuity checks
+  # below re-run them against a MUTATED installer instead of editing a derived file by hand.
+  # That distinction is not cosmetic: the previous version proved its membership check could
+  # report a missing root by deleting a line from the derived list, which exercises the
+  # comparison and never the derivation — and the derivation was the half that was blind.
   EXCL="$(sed -n 's/^EXCLUDE="\(.*\)"$/\1/p' "$AS/install.sh")"
   ok "ai-setup's EXCLUDE list was found"  "$([ -n "$EXCL" ] && echo yes || echo no)" yes
-  ( cd "$AS" && git ls-files .claude 2>/dev/null ) | sed 's#^\.claude/##' | while IFS= read -r rel; do
-    [ -n "$rel" ] || continue
-    top="${rel%%/*}"
-    case " $EXCL " in *" $top "*) continue ;; esac
-    case " $EXCL " in *" $rel "*) continue ;; esac
-    printf '%s\n' "$rel"
-  done | sort -u > "$TMP/as-shipped"
+  ( cd "$AS" && git ls-files .claude 2>/dev/null ) | sed 's#^\.claude/##' | sort -u > "$TMP/as-tracked"
+  as_generic() { # <tracked list> <EXCLUDE> → what the generic link loop links
+    local rel top
+    while IFS= read -r rel; do
+      [ -n "$rel" ] || continue
+      top="${rel%%/*}"
+      case " $2 " in *" $top "*) continue ;; esac
+      case " $2 " in *" $rel "*) continue ;; esac
+      printf '%s\n' "$rel"
+    done < "$1" | sort -u
+  }
+  as_generic "$TMP/as-tracked" "$EXCL" > "$TMP/as-shipped"
   ok "…and it has an installable set to compare" \
      "$([ "$(grep -c . "$TMP/as-shipped")" -ge 20 ] && echo yes || echo no)" yes
   # THE criterion-3 assertion: the intersection is exactly the three probed agents. One
@@ -256,11 +306,15 @@ else
   # human tuned by hand. So a set derived from EXCLUDE alone MISSES it — and settings.json is
   # exactly the path that got lost. The add-back is detected from that installer (an excluded
   # path it names as a destination of its own), never hardcoded here, so it follows the code.
-  ( cd "$AS" && git ls-files .claude 2>/dev/null ) | sed 's#^\.claude/##' | while IFS= read -r rel; do
+  as_special() { # <tracked list> <installer> <EXCLUDE> → excluded paths it installs anyway
+    local rel
+    while IFS= read -r rel; do
       [ -n "$rel" ] || continue
-      case " $EXCL " in *" $rel "*) ;; *) continue ;; esac
-      grep -q "DEST/$rel" "$AS/install.sh" && printf '%s\n' "$rel"
-    done | sort -u > "$TMP/as-special"
+      case " $3 " in *" $rel "*) ;; *) continue ;; esac
+      grep -q "DEST/$rel" "$2" && printf '%s\n' "$rel"
+    done < "$1" | sort -u
+  }
+  as_special "$TMP/as-tracked" "$AS/install.sh" "$EXCL" > "$TMP/as-special"
   # Both halves of the reasoning error, pinned: the EXCLUDE-only set does not have it, and
   # the corrected set does. Delete the add-back and the second goes red; delete the special
   # branch from ai-setup's installer and the first stops being a near miss.
@@ -301,16 +355,132 @@ else
   # …and `rules` is the reason that is a real 0 and not an empty loop.
   ok "…and rules/ was skipped because it was never shipped here" "$(ever_shipped rules)" no
   ok "…while commands/ WAS shipped here"  "$(ever_shipped commands)" yes
-  # NON-VACUITY, from the state the defect was actually in: ai-setup's set without
-  # settings.json is the pre-#71 world, and the check must name it. Then the same for a
-  # whole directory, so it is not settings.json-specific.
-  grep -vx 'settings.json' "$TMP/as-tops" > "$TMP/as-tops-nosj"
-  ok "…and it names settings.json if ai-setup drops it" \
+  # NON-VACUITY, AND IT MUST EXERCISE THE DERIVATION, NOT A HAND-BUILT SET. This used to
+  # delete a line from the derived file and check that the comparison noticed — which proves
+  # `orphan_roots` can subtract, and nothing about whether the set feeding it can ever lose a
+  # path. It cannot, for the case that mattered: `settings.json` is tracked, excluded, and
+  # named as a `DEST/` destination at ai-setup `main` too, so the derived set was
+  # BYTE-IDENTICAL before and after the fix that made the file survive. So the mutation goes
+  # into the INPUT — a copy of ai-setup's installer with its settings.json destinations
+  # removed — and the derivation is re-run over it.
+  sed '/DEST\/settings\.json/d' "$AS/install.sh" > "$TMP/as-installer-nosj"
+  ok "the installer mutation applied" \
+     "$([ "$(grep -c 'DEST/settings.json' "$AS/install.sh" || true)" -gt 0 ] \
+        && [ "$(grep -c 'DEST/settings.json' "$TMP/as-installer-nosj" || true)" -eq 0 ] \
+        && echo yes || echo no)" yes
+  as_special "$TMP/as-tracked" "$TMP/as-installer-nosj" "$EXCL" > "$TMP/as-special-nosj"
+  ok "…the derivation then drops settings.json" \
+     "$(grep -cx 'settings.json' "$TMP/as-special-nosj" || true)" 0
+  cat "$TMP/as-shipped" "$TMP/as-special-nosj" | cut -d/ -f1 | sort -u > "$TMP/as-tops-nosj"
+  ok "…and the membership check names it" \
      "$(orphan_roots "$TMP/as-tops-nosj" | tr '\n' ' ' | sed 's/ *$//')" "settings.json"
-  grep -vx 'commands' "$TMP/as-tops" > "$TMP/as-tops-nocmd"
+  # The same for a whole directory, so none of this is settings.json-specific. `commands` is
+  # not excluded, so the mutation belongs in the OTHER derivation's input: EXCLUDE it and the
+  # generic link loop stops linking all eleven paths under it.
+  as_generic "$TMP/as-tracked" "$EXCL commands" > "$TMP/as-shipped-nocmd"
+  ok "excluding commands drops it from the generic set" \
+     "$(cut -d/ -f1 "$TMP/as-shipped-nocmd" | grep -cx commands || true)" 0
+  cat "$TMP/as-shipped-nocmd" "$TMP/as-special" | cut -d/ -f1 | sort -u > "$TMP/as-tops-nocmd"
   ok "…and names a whole directory the same way" \
      "$(orphan_roots "$TMP/as-tops-nocmd" | tr '\n' ' ' | sed 's/ *$//')" "commands"
+
+  # ======================================================================= #
+  echo "-- cross-repo: and ai-setup really does install them, from the state a machine is in"
+  #
+  # SET MEMBERSHIP CANNOT SEE A CONDITIONAL DECLINE, and that is what the defect was. Every
+  # assertion above compares derived lists of paths, and the loss of `~/.claude/settings.json`
+  # was not a path leaving a list: the file was tracked, named by the installer, and in the
+  # manifest throughout. What went wrong was a BRANCH — "a settings.json already exists, left
+  # alone" — taken because this layer's own link was sitting there. So the set was identical
+  # in the broken state and the fixed one, and no stricter grep repairs that: `ln -s.*
+  # DEST/settings.json` matches ai-setup `main` on two lines. Grepping an installer for a
+  # destination proves it mentions the path, never that it installs it in every starting
+  # state. Only running it does.
+  #
+  # THE STATE IS THE POINT. From an empty config dir every order works — that is the one
+  # starting state in which "installed by nobody" cannot appear, and it is the state the
+  # original order-independence measurement used. This starts from the state every existing
+  # machine is in: this layer's link already there, resolving into a checkout of ours.
+  ASFIX="$TMP/as-fixture"; mkdir -p "$ASFIX"
+  ( cd "$AS" && git ls-files .claude install.sh 2>/dev/null ) | while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      mkdir -p "$ASFIX/$(dirname "$f")"
+      cp "$AS/$f" "$ASFIX/$f"
+    done
+  # A git copy, never the checkout: ai-setup's installer refuses to run from a worktree, and
+  # nothing here may write into a tree another agent or harness is reading.
+  ( cd "$ASFIX" && git init -q . && git add -A && git -c user.name=t -c user.email=t@t commit -qm fixture ) >/dev/null 2>&1
+  ASFIXR="$(cd "$ASFIX" && pwd)"
+  ok "the ai-setup fixture is a git checkout" "$(yn test -d "$ASFIX/.git")" yes
+  ASD="$TMP/as-dest"; mkdir -p "$ASD" "$TMP/old-bridge/config/opinionated"
+  printf '{"permissions":{"deny":["Read(**/.env)"]}}\n' > "$TMP/old-bridge/config/opinionated/settings.json"
+  ln -s "$TMP/old-bridge/config/opinionated/settings.json" "$ASD/settings.json"
+  CLAUDE_CONFIG_DIR="$ASD" bash "$ASFIX/install.sh" >"$TMP/as-out" 2>&1
+  ok "ai-setup's installer exits 0 from that state" "$?" 0
+  ok "…and did not fall back to its hardcoded list" \
+     "$(grep -cF 'FALLBACK_DEFAULTS' "$TMP/as-out" || true)" 0
+  # PROVIDED BY ai-setup means the entry resolves INTO the ai-setup tree. Not merely
+  # "resolves": at `main` the settings.json link still resolves — into the old ai-bridge
+  # checkout it was already pointing at — which is precisely the state that becomes an absent
+  # file the moment `--config` retires that link.
+  provided_by_as() { # <top>
+    case "$(readlink "$ASD/$1" 2>/dev/null)" in "$ASFIXR/.claude"/*) echo yes ;; *) echo no ;; esac
+  }
+  notprov=""
+  for top in $MTOPS; do
+    grep -qx "$top" "$TMP/ab-tops" && continue          # still shipped here
+    [ "$(ever_shipped "$top")" = yes ] || continue       # never ours, so never a loss
+    [ "$(provided_by_as "$top")" = yes ] || notprov="$notprov $top"
+  done
+  ok "every root handed over is installed by ai-setup" "${notprov# }" ""
+  ok "…settings.json among them, pointing at ai-setup" \
+     "$(readlink "$ASD/settings.json")" "$ASFIXR/.claude/settings.json"
+  ok "…and the old link's path is recoverable"  \
+     "$(find "$ASD" -maxdepth 1 -name 'settings.json.bak.*' | wc -l | tr -d ' ')" 1
+  ok "…without writing into the other checkout" \
+     "$(cat "$TMP/old-bridge/config/opinionated/settings.json")" \
+     '{"permissions":{"deny":["Read(**/.env)"]}}'
+  # NON-VACUITY, on the installer that is actually run: narrow its adopt branch back to
+  # dangling links only — the pre-fix condition — and the probe must go red naming the file.
+  ASFIX2="$TMP/as-fixture-nofix"; cp -R "$ASFIX" "$ASFIX2"
+  sed -e 's#^elif \[ -L "\$DEST/settings\.json" \]; then$#elif [ -L "$DEST/settings.json" ] \&\& [ ! -e "$DEST/settings.json" ]; then#' \
+      "$ASFIX/install.sh" > "$ASFIX2/install.sh"
+  ok "the adopt-branch mutation applied" \
+     "$(grep -c '! -e "\$DEST/settings.json" \]; then' "$ASFIX2/install.sh" | tr -d ' ')" 1
+  ASD2="$TMP/as-dest-nofix"; mkdir -p "$ASD2"
+  ln -s "$TMP/old-bridge/config/opinionated/settings.json" "$ASD2/settings.json"
+  CLAUDE_CONFIG_DIR="$ASD2" bash "$ASFIX2/install.sh" >"$TMP/as-out2" 2>&1
+  ok "without the adopt branch it declines"    \
+     "$(readlink "$ASD2/settings.json")" "$TMP/old-bridge/config/opinionated/settings.json"
+  ok "…which is a path THIS layer is retiring" \
+     "$(printf '%s' "$(readlink "$ASD2/settings.json")" | grep -c '/config/opinionated/' || true)" 1
+
+  # ======================================================================= #
+  echo "-- cross-repo: the number the ownership doc quotes is the number derived here"
+  # B4: the doc's headline figure was 25/23, derived from EXCLUDE alone and therefore off by
+  # exactly `settings.json` — inside the document whose own point 6 warns against that
+  # derivation, and repeated in four other files. A number in prose that nothing recomputes
+  # drifts from the code the moment the code moves. When this fails because ai-setup
+  # legitimately gained or lost an installable entry, update the doc's table (and its date):
+  # that is the assertion doing its job, not noise.
+  DERIVED="$(cat "$TMP/as-shipped" "$TMP/as-special" | sort -u | grep -c . || true)"
+  DOCN="$(sed -n 's/^| ai-setup.s installable entries | \([0-9]*\) |$/\1/p' "$DOC")"
+  ok "the doc quotes an installable-entry count" "$([ -n "$DOCN" ] && echo yes || echo no)" yes
+  ok "…and it is the count derived from the installer" "$DOCN" "$DERIVED"
 fi
+
+# The harness runs another repo's installer, so the rule that keeps that safe is asserted
+# rather than trusted: every invocation is prefixed with a throwaway CLAUDE_CONFIG_DIR, and
+# nothing here exports one. Both are falsifiable — drop a prefix, or add an `export`, and
+# this goes red — which the previous form of the same idea in ai-setup's harness was not.
+# The `[$]` in both patterns is what stops each grep from matching its own line — a
+# self-matching pattern would make this pair unequal for a reason that has nothing to do
+# with the property.
+ok "every installer invocation is prefixed with a throwaway config dir" \
+   "$(grep -c 'bash "[$]ASFIX' "$0" | tr -d ' ')" \
+   "$(grep -c 'CLAUDE_CONFIG_DIR="[$]ASD[0-9]*" bash "[$]ASFIX' "$0" | tr -d ' ')"
+ok "…and this harness exported no CLAUDE_CONFIG_DIR" \
+   "$(env | grep -c '^CLAUDE_CONFIG_DIR=' || true)" "$CCD_IN_ENV_AT_START"
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
