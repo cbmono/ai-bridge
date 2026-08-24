@@ -86,16 +86,42 @@ EOF
 ok "shell files found under tests/"   "$([ "$total" -gt 0 ] && echo yes || echo no)" yes
 ok "every tests/**/*.sh starts with $SHEBANG" "$non_bash" 0
 
+# claim_scan <file>... — echoes how many of the given files case-insensitively
+# (re)assert "POSIX shell" (0 for a file that does not, or does not exist).
+#
+# THIS IS THE SCANNER: the real per-file loop right below and every synthetic fixture
+# further down call this exact function — never a copy of its logic — so a fixture
+# proves the shipped check rather than a stand-in that can silently drift out from
+# under it. A later change to the matching logic itself (not just to CLAIM_FILES) now
+# shows up in the real assertions and the synthetic ones together, because there is
+# only one scanner.
+claim_scan() {
+  local cf hits flagged=0
+  for cf in "$@"; do
+    hits="$(grep -ci 'posix shell' "$cf" 2>/dev/null || true)"
+    [ "$hits" -gt 0 ] && flagged=$((flagged+1))
+  done
+  printf '%s\n' "$flagged"
+}
+
 # --- 2. CONFIG side: the declaration this check enforces is really in the config ----
 ok ".coderabbit.yaml exists"          "$([ -f "$CFG" ] && echo yes || echo no)" yes
 
-# Every claim file, not just .coderabbit.yaml, must not (re)assert "POSIX shell".
+# Every claim file, not just .coderabbit.yaml, must not (re)assert "POSIX shell". Each
+# assertion calls claim_scan on a single file so a regression is pinned to the
+# offending file, not just to an aggregate count.
 for cf in "${CLAIM_FILES[@]}"; do
   rel="${cf#"$REPO"/}"
-  hits="$(grep -ci 'posix shell' "$cf" 2>/dev/null || true)"
-  ok "$rel does not (re)assert POSIX shell" "$hits" 0
+  ok "$rel does not (re)assert POSIX shell" "$(claim_scan "$cf")" 0
 done
 
+# REGRESSION GUARD on the real scope itself, not a fixture: if CLAIM_FILES is ever
+# narrowed back to `("$CFG")` alone — the exact drift this task exists to close — this
+# count drops from 3 to 1 and this assertion fails. That is the in-repo, repeatable
+# proof that narrowing the real scope fails the test. See "pre-task-026 config side …
+# would have caught only 1 of the 3" below for the same scenario played out against
+# fixtures that still carry the claim, so the discriminating power is shown too, not
+# just the array length.
 ok "config side covers more than .coderabbit.yaml alone" "${#CLAIM_FILES[@]}" 3
 
 declares_bash="$(grep -ci 'bash' "$CFG" || true)"
@@ -176,24 +202,19 @@ printf '%s\n' 'POSIX shell harnesses, no framework, no build step.' > "$fake_rul
 
 FAKE_CLAIM_FILES=("$FAKE_CFG" "$fake_claude" "$fake_rules")
 
-fake_claim_flagged=0
-for cf in "${FAKE_CLAIM_FILES[@]}"; do
-  hits="$(grep -ci 'posix shell' "$cf" 2>/dev/null || true)"
-  [ "$hits" -gt 0 ] && fake_claim_flagged=$((fake_claim_flagged+1))
-done
-ok "extended config side flags all 3 synthetic re-assertions" "$fake_claim_flagged" 3
+# Calls claim_scan — the exact function the real CLAIM_FILES loop above calls, not a
+# reimplementation of it — so this proves the shipped scanner, not a copy that could
+# silently drift from it.
+ok "extended config side flags all 3 synthetic re-assertions" "$(claim_scan "${FAKE_CLAIM_FILES[@]}")" 3
 
 # REGRESSION GUARD: the pre-task-026 config side scanned `.coderabbit.yaml` ALONE — the
-# exact scope that let the claim survive in CLAUDE.md and .claude/rules/tests.md. Pin what
-# that narrower scope catches of the same three synthetic fixtures: only the one file it
-# ever looked at. Widen CLAIM_FILES back down to one entry and this count is what moves.
+# exact scope that let the claim survive in CLAUDE.md and .claude/rules/tests.md. Run the
+# same claim_scan, narrowed to that one-file scope, over the same three synthetic
+# fixtures (all three of which carry the claim): it catches only the one file it ever
+# looked at. Widen CLAIM_FILES back down to one entry and this is the number — 1, not 3 —
+# that a real narrowing would produce.
 legacy_claim_files=("$FAKE_CFG")
-legacy_claim_flagged=0
-for cf in "${legacy_claim_files[@]}"; do
-  hits="$(grep -ci 'posix shell' "$cf" 2>/dev/null || true)"
-  [ "$hits" -gt 0 ] && legacy_claim_flagged=$((legacy_claim_flagged+1))
-done
-ok "pre-task-026 config side (.coderabbit.yaml alone) would have caught only 1 of the 3" "$legacy_claim_flagged" 1
+ok "pre-task-026 config side (.coderabbit.yaml alone) would have caught only 1 of the 3" "$(claim_scan "${legacy_claim_files[@]}")" 1
 
 printf '\n%s passed, %s failed  (%s shell file(s) checked under tests/)\n' "$pass" "$fail" "$total"
 [ "$fail" -eq 0 ]
