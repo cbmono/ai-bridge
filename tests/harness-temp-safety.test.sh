@@ -54,7 +54,8 @@
 #       guessing;
 #   (b) PERMANENT. the trap must name the path inline (`trap 'rm -rf "$TMP"' EXIT`) — a
 #       trap that calls a cleanup function hides the path from a text scan. Reproduced:
-#         cleanup() { rm -rf "$FTMP"; }; trap cleanup EXIT
+#         cleanup() { rm -rf "$FTMP"; }
+#         trap cleanup EXIT
 #       over an FTMP built by the destructive `cd "$(mktemp …)"` shape on its own, ordinary,
 #       unguarded statement. `scan`'s `vars` list is only populated from a statement that
 #       contains BOTH `trap` and `rm -rf` together, and here they sit in two different
