@@ -170,7 +170,7 @@ ok "checker flags a config narrowed off the scanned scope" "$fake_scope" 0
 # .claude/rules/tests.md shipped, plus the synthetic drifted config above — three sites,
 # only one of which (.coderabbit.yaml) the pre-task-026 CLAIM_FILES scope would have seen.
 fake_claude="$tmp/fake-CLAUDE.md"
-printf '%s\n' '- `tests/` — POSIX shell harnesses.' > "$fake_claude"
+printf '%s\n' '- tests/ -- POSIX shell harnesses.' > "$fake_claude"
 fake_rules="$tmp/fake-tests-rule.md"
 printf '%s\n' 'POSIX shell harnesses, no framework, no build step.' > "$fake_rules"
 
