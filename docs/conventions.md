@@ -33,12 +33,14 @@ move it here intact instead.
 | 8 | [`validate-bundle.sh` was scoped by measuring](#8-validate-bundlesh-was-scoped-by-measuring-first-and-that-is-the-point) | `validate-bundle.sh` |
 | 9 | [`migrate-bundle.sh` fixes only what has one right answer](#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) | `migrate-bundle.sh` |
 | 10 | [The scaffold review is a three-stage chain](#10-the-scaffold-review-is-a-three-stage-chain-with-a-declared-fallback-never-a-skip) | `/new-project` step 8 |
-| 11 | [The board's five invariants](#11-the-cross-instance-board-is-two-scripts-and-one-deletable-generated-file) | `write-snapshot.sh`, `build-board.sh`, `print-board.sh`, `watch-board.sh` |
+| 11 | [The board's five invariants](#11-the-cross-instance-board-is-a-writer-three-renderers-and-one-deletable-generated-file) | `write-snapshot.sh`, `build-board.sh`, `print-board.sh`, `watch-board.sh` |
 | 12 | [Three behaviours against a silent wrong answer](#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) | `push-state.sh`, `answered_questions`, `maxPrLoc` |
 | 13 | [A shared instance is three no-ops and one gate](sharing.md) | `task-owner.sh`, config split, derived indexes |
 | 14 | [`knowledge/references/` is the fifth knowledge kind](#14-knowledgereferences-is-the-fifth-knowledge-kind) | `validate-bundle.sh`, `SCHEMA.md` |
 | 16 | [The kill switch is one hook, and it fails open](#16-the-kill-switch-is-one-hook-and-it-fails-open) | `agent-control.sh`, `control.sh` |
 | 15 | [The config layer is two tiers, and the arrow stays one-way](#15-the-config-layer-is-two-tiers-and-the-arrow-stays-one-way) | `install.sh --config`, `config/` |
+| 17 | [An instruction is executable only if the agent *holds* the tool](#17-an-instruction-addressed-to-an-agent-is-executable-only-if-that-agent-holds-the-tool) | every agent body, `symlink/CONVENTIONS.md`, `seed/CLAUDE.md` |
+| 18 | [The allowlist check is pinned from both sides](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure) | `agent-tool-allowlist.test.sh` |
 
 ---
 
@@ -106,7 +108,7 @@ Writes through a temp file **beside** the target carrying the target's mode, nev
 
 `/new-project` step 8 runs `validate-bundle.sh` first (deterministic, free, and the consistency class is exactly what a fresh scaffold gets wrong — an external reviewer re-deriving a dangling path from prose spends a whole session reaching a conclusion `grep` already had), then an **external reviewer** (CodeRabbit or equivalent), then **`qa-reviewer` mode C** when no *usable* external reviewer is available — absent, unauthenticated or erroring alike. Step 8 used to skip to nothing there, which contradicted `SCHEMA.md`'s merge-time gate — that has always read "an external one when the repo configures it, **else the `qa-reviewer` agent**" — and left a project scaffolded on a CLI-less machine with no second opinion at all. **Mode C is not mode B with the PR removed:** there is no PR, no CI and no target repo, so it reads `git diff <pre-commit-sha>..HEAD -- projects/<slug>` and writes its verdict into the project's `log.md`. Because it reads `SCHEMA.md`, it must **not** raise step 8c's by-design findings (empty `acceptance_criteria`, `draft` status, empty `pr:`, committing to `main`) — one of those appearing is a bug in the agent, not a finding to triage. Keep every stage advisory: none of them gates project creation. One environment trap worth keeping documented: CodeRabbit needs a base branch, and a remote-less instance has no `origin/HEAD` to infer one from, so it fails with "Unable to determine base branch" until `git config coderabbit.baseBranch` is set — and falls back to the free CLI allowance regardless.
 
-## 11. The cross-instance board is two scripts and one deletable, generated file
+## 11. The cross-instance board is a writer, three renderers and one deletable, generated file
 
 **…and every piece of that is deliberate.** `write-snapshot.sh` derives `SNAPSHOT.json` at the bundle root from the schema-defined locations; three renderers turn one or more snapshots into a page or a table. Five invariants.
 
@@ -341,6 +343,143 @@ need it. **No circuit breaker was built**: the cost-velocity / no-progress escal
 ladder needs a resident process to run its beat, and ai-bridge has none.
 
 Covered by `tests/agent-control.test.sh` (133 assertions, most of them refusals).
+
+## 17. An instruction addressed to an agent is executable only if that agent *holds* the tool
+
+**Possession, not installation — and the difference is invisible in the prose.** A `tools:`
+allowlist lives in frontmatter the instruction never mentions, so `CONVENTIONS.md` read
+perfectly for months while telling `software-engineer` to "dispatch `code-architect` **if
+it's installed in `~/.claude/agents/`**". `code-architect` *is* installed, so the condition
+evaluated **true** — and `software-engineer` holds no `Agent` tool, so the branch it chose
+could not run. That is the worst shape a defect can take: **it reads as satisfied.** Three
+more sat beside it (`Workflow` in `auditor.md`, `qa-reviewer.md`, `software-engineer.md`;
+`EnterWorktree` in `CONVENTIONS.md`), and a condition on *installation* can never detect
+the thing that decides the outcome. So: **never write an instruction that depends on a
+tool absent from the addressed agent's `tools:` list, and never condition on what is
+installed when what decides is what is held.** Three consequences worth keeping. **For a
+shared doc the addressed agent is a SET, and the constraint is the intersection** — an
+instruction in a doc read by four agents must be executable by all four, or the same
+sentence silently means two different things. **Stating an absence beats deleting the
+mention**: deleting is cheaper but loses the reason and the clause comes back, so name the
+missing tool *and* the route to take instead — which is also what makes it checkable.
+**Widening an allowlist is a standalone decision**, never something a convenience clause
+settles; `Workflow` is in no role agent's list and stayed out, with the honest statement of
+absence written in its place. Enforced by [18](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure).
+
+## 18. The tool-allowlist check is pinned from both sides, and silence is a failure
+
+**…because the first version of it failed in exactly the shape it was built to catch.**
+`tests/agent-tool-allowlist.test.sh` matches a **backticked identifier** from a tool
+vocabulary — backticks are already how this codebase means "the identifier, not the word",
+and without that restriction ordinary English ("never *write* to the bundle", "the *agent*
+roster", "*workflow* structure", "the *task* document") fools the sweep. `Task` stays out
+of the vocabulary on purpose: OKF's own document type is `Task` and the bundle backticks it
+constantly, so including it would flag the core vocabulary and earn the check a deletion.
+Four things then make it hold, and each exists because the version without it was measurably
+weaker.
+
+- **(a) The vocabulary is pinned from BOTH sides, because a closed list leaks silently.** A
+  tool missing from it is not treated as prose — it is **invisible**, and the check passes,
+  which is indistinguishable from there being nothing to find. `AskUserQuestion`,
+  `ExitWorktree` and `Artifact` were all missing at once, and `Artifact` surfaced only
+  because a PM tick happened to start granting it. So: every tool a shipped agent
+  **grants** must appear in the vocabulary (a new harness tool becomes real here at the
+  moment it is granted, which is the one event that cannot be missed), **and** a backticked
+  capitalised name that no classification rule recognises **fails as unclassified**. That
+  second guard first shipped scoped to *multi-word* CamelCase, on the argument that the
+  grant guard covered the single-word residue — and **that argument is false for the case
+  that matters most**, which was reproduced rather than debated: `` Use the `Deploy` tool ``
+  in an agent body left the harness at 62 passed, 0 failed. The grant guard only ever covers
+  a tool some agent **actually grants**, never a hallucinated name granted nowhere, which is
+  precisely what a prose-vs-allowlist check exists to catch. So the guard now fires on every
+  backticked capitalised identifier, and the 61 legitimate non-tool mentions in the scanned
+  set are kept quiet **by rule, not by list** — of FOUR rules, two are derived or
+  shape-based: OKF's document types come from `symlink/SCHEMA.md`'s own `type:` headings, so
+  a new type classifies itself (43 mentions); an all-capitals name is a literal output token,
+  which is a shape and needs no upkeep (17); and a fourth, hand-maintained residual list
+  (`NOT_A_TOOL`) covers what neither derivation nor shape reaches. **A hand-maintained list
+  of non-tools is the same closed-list problem one level over — except for the direction it
+  leaks:** an unclassified name here produces a **build failure** naming the file, the line
+  and the routes to classify it, where the closed vocabulary produced **silence**. Noise a
+  maintainer fixes is not the same defect as silence nobody can see, and that asymmetry is
+  the whole argument for accepting this direction and not the other. Residual, stated because
+  it is real: no harness tool has ever been named in all capitals, which is what the shape
+  rule rests on and is asserted — so `` `DEPLOY` `` would still be missed where `` `Deploy` ``
+  is now caught. **The fourth rule is a recognition route too, and it is not exempt from its
+  own asymmetry:** a hand-maintained list can rot silently the same way `VOCAB` did if an
+  entry is added before anything actually names it — which happened. The whole Claude Code
+  hook-event family was pre-populated into `NOT_A_TOOL` (11 names) on the argument that "the
+  next one documented must not break the build", and a live check against the real tree
+  found **9 of the 11 had zero backticked mentions anywhere in `symlink/`, `.claude/` or
+  `CLAUDE.md`** — each a silent classification route for exactly the shape this file exists
+  to catch (`` `Notification` ``, `` `PreToolUse` ``, `` `PreCompact` `` and
+  `` `SubagentStop` `` were reproduced as invisible against a live head). So the fourth rule
+  now asserts what it grants: every `NOT_A_TOOL` entry must be **JUSTIFIED BY A REAL
+  MENTION** in that same tree, or the build fails naming the dead entry. The 9 un-earned
+  names are gone; two remain, each backed by a mention — `SessionStart` (a real hook event)
+  and `Makefile` — and a name can only be added back in the same commit as the mention that
+  justifies it.
+- **(b) The scanned set is DERIVED, never listed.** Two paths were hardcoded, so the check
+  could only ever look at the two someone remembered — and `symlink/SCHEMA.md`'s
+  browser-access section named `mcp__claude-in-chrome__*` to five readers whose allowlist
+  intersection is `Bash Glob Grep Read`, unseen. A doc addresses an agent when an agent is
+  **told to read it**, so that is what is derived: the `*.md` references in restricted agent
+  bodies, resolved against `symlink/` then `seed/`. Adding a doc reference to an agent body
+  puts the doc in scope by itself. `seed/CLAUDE.md` keeps an explicit override — it loads
+  into every session whether an agent names it or not, so every restricted agent is a
+  reader and deriving a smaller set would *widen* the intersection.
+- **(c) A waiver carries a budget AND has to state the absence — the count is not what
+  decides.** Naming an absent tool is often correct (`oncall-guide.md` names `Skill`
+  precisely to record that the invocation must not come back), so a file may declare
+  `<!-- tool-mention: Workflow(2), Agent(2) — why -->`. A **bare** declaration was measured
+  too weak: re-introducing the original defect verbatim still passed, because a per-file
+  waiver covers every future mention. The `(N)` budget fixed that. But a budget is a
+  **count**, and a count is exactly what a reword holds constant — swap one honest statement
+  of absence for a live instruction and it stays green. So the deciding condition is the
+  prose, and it is **two-sided**, because requiring a possession cue alone tests only half of
+  what the rule says — "states the absence **instead of instructing the use**". The half that
+  was missing was defeated **0-for-2** by ordinary prose: "You can author a `Workflow` for
+  wide work — the `Workflow` idiom is available … deliberately not written here … granting it
+  is a standalone decision" clears on *available*, *not* and *granting* while telling the
+  reader to do the forbidden thing. A declared mention must therefore state the absence
+  **and** not be governed by a non-negated directive verb in the five words before it. A
+  **negated** directive is a statement of absence, not an instruction ("don't rely on the
+  `EnterWorktree` tool"), and a verb two clauses away governs something else, so both stay
+  green. `only` and `available` were **deleted** from the cue list on the same evidence:
+  neither is about possession, both were the masking word in a reproduced counter-example,
+  and no real mention needs them. The budget is kept for the different hole it catches (an
+  *added* mention) and is no longer what decides. **`if` is deliberately not an absence
+  cue** — accepting it would bless the original installation-conditioned defect. A
+  declaration with no reason, or a name with no `(N)`, exempts nothing; stale (tool no longer
+  named) and redundant (tool actually granted) declarations are flagged so a waiver cannot
+  rot into a rubber stamp. Per-mention markers were rejected as too brittle for reflowing
+  prose. **Residual, measured not argued:** the directive verb list is a deny list, so a
+  mention carrying a possession cue and governed by no listed verb can still read as an
+  instruction — "a `Workflow` fan-out is the route for wide work, since nothing else is
+  granted" is not caught. It is a second requirement layered on the first, never the sole
+  decider, and the task's acceptance criterion was narrowed to exactly that promise.
+- **(d) Assert the quiet cases, not only the loud ones.** The four prose words, a backticked
+  `Task`, the OKF types, the SCREAMING tokens, the hook-event names, an MCP wildcard covering
+  its own prefix and nothing else, a same-count reword that *still* states the absence, a
+  negated directive verb — all are fixtures. A checker for this class is only trustworthy if
+  "it stays quiet on ordinary English" is a test rather than a claim, and every new guard is
+  paired with the input it must reject. **Demonstrate by mutation on real prose, and on more
+  than one shape.** One successful mutation proves a mechanism *can* fail loud; it does not
+  prove every equivalent mutation does, which is how "one is enough to fail" and "the grant
+  guard covers the residue" both got into a PR body and both turned out to be properties of
+  the single example that had been tried. Three structurally different rewords of the same
+  real `CONVENTIONS.md` sentences are run against this check, each failing, alongside a
+  same-count control that must stay green.
+
+**Out of reach from this repo, and stated rather than hidden:** a live instance's own
+`CLAUDE.md` is a real file per bundle, not a symlink, so a rule that drifts into it cannot
+be checked from here. `seed/CLAUDE.md` is covered instead and `upgrade.sh` is the route for
+existing instances — which is exactly how one instance kept the defective wording after the
+template had already been fixed. Any rule duplicated between `CONVENTIONS.md` and an
+instance `CLAUDE.md` needs **both** edits, and only the template side is testable. Agents
+declaring no `tools:` key (`config/*/agents/`) inherit everything and are skipped — and
+that skip is asserted, not assumed, so one of them growing a `tools:` key fails here.
+Covered by `tests/agent-tool-allowlist.test.sh` (86 assertions).
 
 ---
 
