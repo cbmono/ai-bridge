@@ -62,7 +62,48 @@ When in doubt, act as `gated`.
 Each tick must be safe to repeat — derive everything from the bundle + live `gh`
 state, and act only on deltas.
 
-0. **Re-derive the in-flight set from disk, then open the tick ledger entry — before
+0. **Sync the bundle first — pull before you read anything.**
+
+   **Only when this bundle has a remote.** `git remote get-url origin` failing means a
+   local-only instance: skip this silently and skip the push in step 8 too. Absence is
+   the single-machine case behaving exactly as it always has, never an error.
+
+   **Refuse to pull into a dirty tree — do not `--autostash` it.** Check first:
+
+   ```
+   git status --porcelain            # any output => STOP, report, change nothing
+   git pull --rebase origin <default-branch>
+   ```
+
+   `--autostash` is deliberately absent, and this is the one instruction here you must
+   not "simplify" back. **Measured:** when the rebase succeeds but re-applying the
+   stash conflicts, `git pull --rebase --autostash` **exits 0** with `HEAD` already
+   moved and the tree left `UU`-conflicted — and `git rebase --abort` then fails with
+   *fatal: no rebase in progress*, because the rebase is over. A tick reading that exit
+   code sees a clean pull, then parses task documents full of conflict markers and acts
+   on them. A dirty control-panel tree at tick start is anomalous anyway (the derived
+   files are gitignored), so it means a human or a sibling agent is mid-edit — which is
+   its own reason not to run.
+
+   **Why before step 0.5 and not after it.** The next step re-derives the in-flight set
+   *from disk*, and on a bundle shared by two humans the disk is a stale mirror until you
+   fetch: a task the other human promoted, answered, or finished is simply not there yet.
+   Re-deriving first and pulling later would have you act on last hour's world and then
+   discover it — which is the failure this whole ordering exists to prevent.
+
+   **A conflict STOPS the tick. Do not resolve it.** Conflicted task documents are
+   contested state between two humans, and a tick that guesses at a resolution writes a
+   status nobody chose. `git rebase --abort`, change nothing, and report the conflicting
+   paths for the human. Reporting a blocked tick costs one tick; a silently mis-resolved
+   `status:` costs the trust in every status after it.
+
+   **Do not trust the pull's exit code — verify the tree.** After it returns, run
+   `git status --porcelain` again and treat **any** `U` line as a conflict even if the
+   pull exited 0. If a rebase is still in progress, abort it; if none is, abort would
+   fail, so leave the tree untouched instead and report it. Either way the rule is the
+   same: **change nothing, dispatch nothing, report.**
+
+0.5. **Re-derive the in-flight set from disk, then open the tick ledger entry — before
    dispatching anything.**
 
    **Read it from disk, never from your brief and never from anyone's memory.** The loop
@@ -367,6 +408,16 @@ state, and act only on deltas.
    agent-role commit that doesn't say what it is committing).
    This keeps loop provenance visible in `git log`. Never use the helper in target
    product repos.
+
+   **Then push, if this bundle has a remote.** `git push origin <default-branch>`.
+   Same condition as step 0: no remote ⇒ no push, silently. A tick that commits and
+   never pushes is invisible to the other clone, so on a shared bundle the work only
+   half-happened — and the divergence grows quietly until someone hits a conflict.
+   If the push is rejected because the remote moved while you worked, `git pull --rebase
+   origin <default-branch>` (again **no** `--autostash`, for the reason in step 0) and
+   push once more; if THAT conflicts, stop and report exactly as in step 0 — including
+   re-checking `git status --porcelain` rather than trusting the exit code.
+   **Never force-push a shared bundle.**
 
    **Refresh the awaiting-you queue — only if it already exists.** If `AWAITING.md`
    is present at the bundle root, rewrite it with the layout below. If it is

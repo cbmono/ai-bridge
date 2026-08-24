@@ -44,7 +44,12 @@ package store and no shared working tree. The third — double-dispatch — is w
 `owner` prevents, since each loop dispatches only its own human's tasks
 (`scripts/task-owner.sh`; see the guardrails below). What remains is racing pushes
 to the bundle's `main`, which is an ordinary git conflict on ordinary git files,
-not corruption: pull before you push. **Two loops against one clone is still the
+not corruption: pull before you push. **The tick now does that itself, not as a
+human habit** — step 0 refuses a dirty tree, then pulls `--rebase` (never `--autostash`) before it re-derives anything
+from disk, and step 8 pushes right after it commits, both conditioned on the
+bundle having a remote at all; a pull conflict stops the tick and reports the
+contested paths rather than resolving them, and nothing here ever force-pushes.
+See the guardrails below. **Two loops against one clone is still the
 bug; two loops against one bundle from two clones is the design.**
 
 **Diagnosing it: suspect your own second tick first.** Interleaved writers on one
@@ -147,12 +152,13 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    look up.** This loop is long-lived and its context gets summarised; the in-flight
    set is answered from session history, which is exactly what compaction discards.
    **Do not go read the disk here to reconstruct it.** Dispatch a tick and let it
-   answer: re-deriving the in-flight set from disk is the tick's own first step,
-   which it takes whether or not you ask — the root `log.md` tick ledger (whose
-   open-with-no-close entry is the only thing on disk that distinguishes
-   "dispatched, waiting" from "never ran"), then the task documents' own `status:`,
-   then `git log` / `gh pr list`, each outranking anything anyone remembers. See
-   `.claude/agents/project-manager.md` step 0, which owns that property in full.
+   answer: re-deriving the in-flight set from disk is one of the tick's opening steps
+   — right after it syncs the bundle — which it takes whether or not you ask — the
+   root `log.md` tick ledger (whose open-with-no-close entry is the only thing on
+   disk that distinguishes "dispatched, waiting" from "never ran"), then the task
+   documents' own `status:`, then `git log` / `gh pr list`, each outranking anything
+   anyone remembers. See `.claude/agents/project-manager.md` step 0.5, which owns
+   that property in full (step 0 is the bundle sync that now runs ahead of it).
    A tick that finds an open entry **reports it and holds** rather than
    re-dispatching, so the failure this protects against — re-dispatching a task
    sequence that already finished, the most expensive failure observed in loops of
@@ -295,6 +301,14 @@ ticks, regardless of how long a tick runs.
   loops dispatching the same task, not two loops running at once. `AWAITING.md` is
   the one artifact that narrows to this human's decisions; the tick report still
   names the other human's work. See `SCHEMA.md` → "Ownership on a shared instance".
+- **The tick syncs the bundle around its own work — when there is a remote to sync
+  with.** It refuses a dirty tree, then pulls `--rebase` — never `--autostash`, which can exit 0 with a conflicted tree — before it re-derives anything from disk
+  (step 0) and pushes right after it commits (step 8); a bundle with no `origin`
+  does neither, silently, which is the single-machine case behaving exactly as it
+  always has. A pull conflict **stops the tick**: it aborts the rebase, writes
+  nothing, and reports the conflicting paths — a tick never resolves contested
+  state between two humans on its own. And nothing here ever force-pushes a shared
+  bundle.
 - **An answered question is MOVED, never deleted.** Folding an answer in shifts that
   `open_questions` entry into the task's `answered_questions` list — one flat line,
   `<ISO 8601> · <the entry verbatim>` (see `SCHEMA.md`). `open_questions` must still
