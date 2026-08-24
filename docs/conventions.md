@@ -385,13 +385,26 @@ weaker.
   because a PM tick happened to start granting it. So: every tool a shipped agent
   **grants** must appear in the vocabulary (a new harness tool becomes real here at the
   moment it is granted, which is the one event that cannot be missed), **and** a backticked
-  multi-word CamelCase name in neither half of the lexicon **fails as unclassified**. That
-  second guard is scoped to multi-word CamelCase **by measurement, not taste**: over the
-  scanned set, 18 distinct backticked single capitalised words are not tools (`Finding`,
-  `Service`, `Runbook`, `Team`, `Reference`, `APPROVED`, `DISMISSED`, `HEAD`, `Makefile`…)
-  against **two** multi-word names, while every multi-word tool the harness has stays
-  covered. Failing on the 18 is the cry-wolf failure; the grant guard covers the single-word
-  residue where the noun collisions live.
+  capitalised name that no classification rule recognises **fails as unclassified**. That
+  second guard first shipped scoped to *multi-word* CamelCase, on the argument that the
+  grant guard covered the single-word residue — and **that argument is false for the case
+  that matters most**, which was reproduced rather than debated: `` Use the `Deploy` tool ``
+  in an agent body left the harness at 62 passed, 0 failed. The grant guard only ever covers
+  a tool some agent **actually grants**, never a hallucinated name granted nowhere, which is
+  precisely what a prose-vs-allowlist check exists to catch. So the guard now fires on every
+  backticked capitalised identifier, and the 61 legitimate non-tool mentions in the scanned
+  set are kept quiet **by rule, not by list** — of three rules, two are derived or
+  shape-based: OKF's document types come from `symlink/SCHEMA.md`'s own `type:` headings, so
+  a new type classifies itself (43 mentions); an all-capitals name is a literal output token,
+  which is a shape and needs no upkeep (17); and one name (`Makefile`) is the entire
+  hand-maintained residue. **A hand-maintained list of non-tools is the same closed-list
+  problem one level over — except for the direction it leaks:** an unclassified name here
+  produces a **build failure** naming the file, the line and the routes to classify it,
+  where the closed vocabulary produced **silence**. Noise a maintainer fixes is not the same
+  defect as silence nobody can see, and that asymmetry is the whole argument for accepting
+  this direction and not the other. Residual, stated because it is real: no harness tool has
+  ever been named in all capitals, which is what the shape rule rests on and is asserted —
+  so `` `DEPLOY` `` would still be missed where `` `Deploy` `` is now caught.
 - **(b) The scanned set is DERIVED, never listed.** Two paths were hardcoded, so the check
   could only ever look at the two someone remembered — and `symlink/SCHEMA.md`'s
   browser-access section named `mcp__claude-in-chrome__*` to five readers whose allowlist
@@ -408,19 +421,41 @@ weaker.
   too weak: re-introducing the original defect verbatim still passed, because a per-file
   waiver covers every future mention. The `(N)` budget fixed that. But a budget is a
   **count**, and a count is exactly what a reword holds constant — swap one honest statement
-  of absence for a live instruction and it stays green. So the deciding condition is now
-  that each declared mention **says something about possession** near itself; the budget is
-  kept for the different hole it catches (an *added* mention) and is no longer what decides.
-  **`if` is deliberately not an absence cue** — accepting it would bless the original
-  installation-conditioned defect. A declaration with no reason, or a name with no `(N)`,
-  exempts nothing; stale (tool no longer named) and redundant (tool actually granted)
-  declarations are flagged so a waiver cannot rot into a rubber stamp. Per-mention markers
-  were rejected as too brittle for reflowing prose.
+  of absence for a live instruction and it stays green. So the deciding condition is the
+  prose, and it is **two-sided**, because requiring a possession cue alone tests only half of
+  what the rule says — "states the absence **instead of instructing the use**". The half that
+  was missing was defeated **0-for-2** by ordinary prose: "You can author a `Workflow` for
+  wide work — the `Workflow` idiom is available … deliberately not written here … granting it
+  is a standalone decision" clears on *available*, *not* and *granting* while telling the
+  reader to do the forbidden thing. A declared mention must therefore state the absence
+  **and** not be governed by a non-negated directive verb in the five words before it. A
+  **negated** directive is a statement of absence, not an instruction ("don't rely on the
+  `EnterWorktree` tool"), and a verb two clauses away governs something else, so both stay
+  green. `only` and `available` were **deleted** from the cue list on the same evidence:
+  neither is about possession, both were the masking word in a reproduced counter-example,
+  and no real mention needs them. The budget is kept for the different hole it catches (an
+  *added* mention) and is no longer what decides. **`if` is deliberately not an absence
+  cue** — accepting it would bless the original installation-conditioned defect. A
+  declaration with no reason, or a name with no `(N)`, exempts nothing; stale (tool no longer
+  named) and redundant (tool actually granted) declarations are flagged so a waiver cannot
+  rot into a rubber stamp. Per-mention markers were rejected as too brittle for reflowing
+  prose. **Residual, measured not argued:** the directive verb list is a deny list, so a
+  mention carrying a possession cue and governed by no listed verb can still read as an
+  instruction — "a `Workflow` fan-out is the route for wide work, since nothing else is
+  granted" is not caught. It is a second requirement layered on the first, never the sole
+  decider, and the task's acceptance criterion was narrowed to exactly that promise.
 - **(d) Assert the quiet cases, not only the loud ones.** The four prose words, a backticked
-  `Task`, the OKF types, the hook-event names, an MCP wildcard covering its own prefix and
-  nothing else, a same-count reword that *still* states the absence — all are fixtures. A
-  checker for this class is only trustworthy if "it stays quiet on ordinary English" is a
-  test rather than a claim, and every new guard is paired with the input it must reject.
+  `Task`, the OKF types, the SCREAMING tokens, the hook-event names, an MCP wildcard covering
+  its own prefix and nothing else, a same-count reword that *still* states the absence, a
+  negated directive verb — all are fixtures. A checker for this class is only trustworthy if
+  "it stays quiet on ordinary English" is a test rather than a claim, and every new guard is
+  paired with the input it must reject. **Demonstrate by mutation on real prose, and on more
+  than one shape.** One successful mutation proves a mechanism *can* fail loud; it does not
+  prove every equivalent mutation does, which is how "one is enough to fail" and "the grant
+  guard covers the residue" both got into a PR body and both turned out to be properties of
+  the single example that had been tried. Three structurally different rewords of the same
+  real `CONVENTIONS.md` sentences are run against this check, each failing, alongside a
+  same-count control that must stay green.
 
 **Out of reach from this repo, and stated rather than hidden:** a live instance's own
 `CLAUDE.md` is a real file per bundle, not a symlink, so a rule that drifts into it cannot
@@ -430,7 +465,7 @@ template had already been fixed. Any rule duplicated between `CONVENTIONS.md` an
 instance `CLAUDE.md` needs **both** edits, and only the template side is testable. Agents
 declaring no `tools:` key (`config/*/agents/`) inherit everything and are skipped — and
 that skip is asserted, not assumed, so one of them growing a `tools:` key fails here.
-Covered by `tests/agent-tool-allowlist.test.sh` (62 assertions).
+Covered by `tests/agent-tool-allowlist.test.sh` (86 assertions).
 
 ---
 
