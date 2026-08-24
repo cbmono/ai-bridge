@@ -559,6 +559,8 @@ in this order:
 
 # Browser access (`browser: claude-for-chrome`)
 
+<!-- tool-mention: mcp__claude-in-chrome__*(1) — five agents are told to read this file and only `qa-reviewer` holds any browser tool, so for most readers the name below states a capability they do not have. It is named once, to explain that the tools are injected rather than configured and that their absence is normal; rule 1 is the route for a reader without them. Enforced by tests/agent-tool-allowlist.test.sh. -->
+
 A project may let its agents **drive a real browser** — read a logged-in page, click
 through a flow, screenshot — via **Claude for Chrome**. Opt in per project with
 `browser: claude-for-chrome` on `project.md` (default `off`).

@@ -50,6 +50,15 @@
 # instruction in that same file would not be flagged. Per-mention markers were rejected
 # as too brittle for reflowing prose; the stale/redundant assertions are the mitigation.
 #
+# WHICH FILES ARE SCANNED IS DERIVED, NOT LISTED. The first version named two shared docs
+# by hand (`symlink/CONVENTIONS.md`, `seed/CLAUDE.md`) and so could only ever check the
+# two someone remembered — `symlink/SCHEMA.md:567` named `mcp__claude-in-chrome__*` to
+# five readers whose allowlist intersection is `Bash Glob Grep Read`, and the check was
+# silent because the file was not on the list. A doc addresses an agent when an agent is
+# TOLD TO READ IT, so that is what is derived: every `*.md` reference in a restricted
+# agent's body, resolved against the trees this repo ships (`symlink/`, then `seed/`).
+# Adding a doc reference to an agent body therefore puts the doc in scope by itself.
+#
 # OUT OF REACH FROM THIS REPO: a live instance's own `CLAUDE.md`. It is a real file in
 # each bundle, not a symlink to anything here, so a copy of a rule that drifts into it
 # cannot be checked from here — `seed/CLAUDE.md` (the template every new instance is
@@ -70,22 +79,60 @@ ok() { # <name> <actual> <expected>
   else printf '  FAIL  %-58s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
 }
 
-# ------------------------------------------------------------------ the vocabulary
-# Closed list of harness tool names, plus a pattern for MCP tools (which cannot be
-# enumerated). A name absent from here is prose, by construction.
-# `Task` is DELIBERATELY EXCLUDED even though it is the dispatch tool's name in some
-# harness versions: OKF's own document type is also `Task`, and this bundle backticks that
-# type constantly (`symlink/SCHEMA.md:441`, `docs/schema.md:27`, `new-project.md:58`).
-# Including it would flag the bundle's core vocabulary as a tool reference — the exact
-# cry-wolf failure that gets a check deleted. `Agent` is the name that decides dispatch
-# here and it carries no such collision.
-# `Artifact` joined the list when the PM tick began publishing the board with it — the
-# fifth instance this file's header predicted, arriving exactly as predicted: a capability
-# that only a tool can perform, named in an agent body. The collision test it has to pass
-# is OKF's `artifacts:` field, and it does: that is lowercase and plural, and a mention
-# only counts inside backticks as this exact identifier.
-VOCAB='Agent|Artifact|Workflow|Skill|Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep|Bash|BashOutput|KillShell|KillBash|WebFetch|WebSearch|TodoWrite|ToolSearch|SlashCommand|ExitPlanMode|EnterWorktree|mcp__[A-Za-z0-9_*-]+'
+# =================================================================== THE LEXICON
+# ONE place classifies every identifier this check reasons about, and it has two halves
+# because a name is either a harness tool or it is not. Both halves are maintained here
+# and nowhere else.
+#
+# WHY THIS IS NOT JUST A CLOSED LIST ANY MORE. It was, and the closed list leaked in the
+# one direction that cannot be seen: a tool absent from `VOCAB` is not "prose", it is
+# INVISIBLE — the check passes, which is indistinguishable from there being nothing to
+# find. That is the same shape as the defect this whole file exists to catch, one level
+# up. `AskUserQuestion`, `ExitWorktree` and `Artifact` were all missing at once; `Artifact`
+# was found only because a PM tick happened to start granting it. So the list is now
+# pinned from BOTH sides by two guards below, and neither is a count:
+#
+#   GUARD A (§0a) — every tool GRANTED by a shipped agent's `tools:` list must appear in
+#   `VOCAB`. The bundle adopts a new harness tool by granting it, so this is the moment a
+#   new tool exists here at all, and the lexicon fails until it is told. This is the guard
+#   that would have caught `Artifact` on the commit that granted it, before any prose.
+#
+#   GUARD B (§0b) — a backticked MULTI-WORD CamelCase identifier in a scanned file that is
+#   in NEITHER half FAILS as unclassified. So an unrecognised name is loud, not ignored.
+#
+# WHY GUARD B IS SCOPED TO MULTI-WORD CamelCase, WHICH IS THE WHOLE DESIGN. Measured over
+# the derived scanned set: backticked identifiers starting with a capital that are NOT
+# tools number 18 distinct names and 60-odd mentions — `Finding`, `Service`, `Runbook`,
+# `Team`, `Reference` and `Project` (OKF document types), `APPROVED`, `DISMISSED`, `KEEP`,
+# `RECLAIMABLE`, `STALE`, `TICK` (literal output tokens), `HEAD`, `Makefile`. Failing on
+# all of those is the cry-wolf failure that gets a check deleted. Restrict to two or more
+# capitalised words joined with no separator and the same measurement returns exactly TWO
+# non-tools — `SessionStart` and `EnterWorktree` (a tool) — while still covering
+# `AskUserQuestion`, `ExitWorktree`, `MultiEdit`, `NotebookEdit`, `BashOutput`,
+# `SlashCommand`, `ExitPlanMode`, `TodoWrite`, `ToolSearch`, `WebFetch`, `WebSearch`,
+# `KillShell`, `KillBash`: every multi-word tool name the harness has, and the shape a new
+# one takes. The single-word residue (`Read`, `Edit`, `Skill`, `Artifact`) is exactly where
+# the noun collisions live, and Guard A is what covers it.
+#
+# `Task` is DELIBERATELY EXCLUDED from `VOCAB` even though it is the dispatch tool's name
+# in some harness versions: OKF's own document type is also `Task`, and this bundle
+# backticks that type constantly (`symlink/SCHEMA.md:441`, `docs/schema.md:27`,
+# `new-project.md:58`). Including it would flag the bundle's core vocabulary as a tool
+# reference. `Agent` is the name that decides dispatch here and carries no such collision.
+# `Artifact` is on the list because a PM tick publishes the board with it; the collision
+# it has to survive is OKF's `artifacts:` field, and it does — that is lowercase and
+# plural, and a mention only counts inside backticks as this exact identifier.
+VOCAB='Agent|Artifact|AskUserQuestion|Workflow|Skill|Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep|Bash|BashOutput|KillShell|KillBash|WebFetch|WebSearch|TodoWrite|ToolSearch|SlashCommand|ExitPlanMode|EnterWorktree|ExitWorktree|mcp__[A-Za-z0-9_*-]+'
 MENTION_RE="\`($VOCAB)\`"
+
+# The other half of the lexicon: multi-word CamelCase identifiers this bundle backticks
+# that are NOT tools, so Guard B stays quiet on them. Claude Code's hook EVENTS are the
+# whole family — they read exactly like tool names and are named all over the machinery
+# docs — so all of them are listed, not only the one measured in the tree today, because
+# the next one to be documented must not turn into a build failure for a maintainer who
+# has no way to know why. Add a name here ONLY after checking it is not a tool.
+NOT_A_TOOL='SessionStart|SessionEnd|UserPromptSubmit|PreToolUse|PostToolUse|SubagentStart|SubagentStop|PreCompact|InstructionsLoaded|Notification'
+CAMEL_RE='`[A-Z][a-z0-9]+([A-Z][a-z0-9]*)+`'
 
 # ------------------------------------------------------------------ the primitives
 body() { # <file> — everything after the closing frontmatter delimiter
@@ -113,6 +160,58 @@ mention_lines() { # <file> <tool> — line numbers (of the body) naming <tool>
 
 mention_count() { # <file> <tool> — how many times the body names <tool>
   body "$1" | grep -oF "\`$2\`" | grep -c .
+}
+
+# ------------------------------------------------------- the lexicon's two classifiers
+in_vocab() { # <name> — is this a harness tool name? (echoes yes/no)
+  printf '%s\n' "$1" | grep -qxE "$VOCAB" && echo yes || echo no
+}
+
+unclassified_camel() { # <file> — backticked multi-word CamelCase names in neither half
+  body "$1" | grep -oE "$CAMEL_RE" | tr -d '`' | sort -u \
+    | grep -vxE "$VOCAB" | grep -vxE "$NOT_A_TOOL"
+}
+
+# THE CONDITION THAT DECIDES THE OUTCOME, and the reason this is not a count.
+#
+# A declaration says "this file names a tool a reader lacks, deliberately". What makes
+# that legitimate is never HOW MANY times it does so — it is that the prose STATES THE
+# ABSENCE instead of instructing the use. The budget `(N)` cannot see the difference, so
+# a reword holding the count constant could swap an honest statement of absence for a
+# live instruction and stay green: `tests/` measured the gap and the harness even
+# asserted it ("rewording within budget stays green"). The budget is kept — it still
+# catches an ADDED mention, which is a different hole — but it is no longer what decides.
+#
+# So each mention of a declared, unheld tool must SAY SOMETHING ABOUT POSSESSION. The cue
+# list below is the presence/absence vocabulary these docs actually use, matched over the
+# mention's line and its two neighbours so ordinary reflowing prose does not break it.
+# Checked against all ten declared mention sites in the tree, which pass on: "**No role
+# agent's allowlist contains `Workflow`**", "you hold neither `Workflow` nor `Agent`",
+# "you cannot fan out", "only `qa-reviewer` holds `Agent`", "don't rely on the
+# `EnterWorktree` tool", "no restricted role agent holds `Skill`", "the
+# `mcp__claude-in-chrome__*` tools are actually present".
+#
+# `if` IS DELIBERATELY NOT A CUE, and that exclusion is the point of the whole rule: the
+# original defect was "dispatch `code-architect` **if it's installed**", a condition on
+# INSTALLATION that reads as satisfied while deciding nothing. Accepting `if` would bless
+# it. A cue has to be about possession, not about a condition.
+#
+# RESIDUAL GAP, stated honestly: this is a lexical test, so a directive sentence that
+# happens to contain a cue word passes. It is strictly stronger than the count it backs
+# up — it rejects every re-arming reword measured, including the verbatim original defect
+# — and a per-mention marker was rejected upstream as too brittle for reflowing prose.
+ABSENCE_CUE='(^|[^a-z])([Nn]o|[Nn]ot|[Nn]one|[Nn]ever|[Nn]either|[Nn]or|[Cc]annot|[Hh]old|[Hh]olds|[Hh]olding|[Ll]ack|[Ll]acks|[Ll]acking|[Aa]bsent|[Aa]bsence|[Ww]ithout|[Uu]navailable|[Aa]vailable|[Mm]issing|[Dd]ead|[Uu]nexecutable|[Oo]nly|[Pp]resent|[Gg]rant|[Gg]ranted|[Gg]ranting|allowlist|[Dd]on|[Dd]oesn|[Cc]an|[Ww]on|[Ii]sn|[Aa]ren)([^a-z]|$)'
+
+mentions_without_absence() { # <file> <tool> — body line numbers whose window states none
+  # The declaration's own reason is blanked (not removed — line numbers must still line up
+  # with the other reports), because a cue written inside the waiver would let the waiver
+  # vouch for itself. The absence has to be stated in the PROSE a reader reads.
+  body "$1" | sed -E 's/<!--[[:space:]]*tool-mention:[^>]*-->//' > "$TMP/mwa.body"
+  grep -nF "\`$2\`" "$TMP/mwa.body" | cut -d: -f1 | while IFS= read -r n; do
+    lo=$(( n > 1 ? n - 1 : 1 ))
+    sed -n "${lo},$(( n + 1 ))p" "$TMP/mwa.body" | tr '\n' ' ' \
+      | grep -qE "$ABSENCE_CUE" || printf '%s\n' "$n"
+  done
 }
 
 # A declaration is `<!-- tool-mention: <Tool>(<N>), ... — <reason> -->`, where N is how
@@ -183,7 +282,7 @@ FINDINGS=""
 note() { [ -n "$FINDINGS" ] && printf '%s\n' "$1" >> "$FINDINGS"; }
 audit() {
   local file="$1" allow="$2" label="$3"
-  local v=0 d=0 s=0 r=0 tool budget actual
+  local v=0 d=0 s=0 r=0 tool budget actual silent unknown
   local -a mentioned=() declared=()
   while IFS= read -r tool; do [ -n "$tool" ] && mentioned+=("$tool"); done < <(mentions_of "$file")
   while IFS= read -r tool; do [ -n "$tool" ] && declared+=("$tool"); done < <(declared_of "$file")
@@ -198,6 +297,14 @@ audit() {
       if [ "$actual" != "$budget" ]; then
         v=$((v+1))
         note "        OVER BUDGET  ${label} names \`${tool}\` ${actual}x (body line(s) $(mention_lines "$file" "$tool")) but declares ${budget} — fold the new mention into the reason, or make it executable"
+      fi
+      # The deciding condition, not the count: a declared mention has to state the
+      # absence. A reword that keeps `budget` intact but turns the sentence back into an
+      # instruction fails here, which is the hole the budget alone could not see.
+      silent="$(mentions_without_absence "$file" "$tool" | paste -sd, - 2>/dev/null)"
+      if [ -n "$silent" ]; then
+        v=$((v+1))
+        note "        NOT AN ABSENCE ${label} names \`${tool}\` at body line(s) ${silent} without saying anywhere near it that a reader may not hold it — a declaration covers a STATEMENT of absence, never an instruction to use the tool"
       fi
     else
       v=$((v+1))
@@ -214,6 +321,14 @@ audit() {
       note "        STALE        ${label} declares \`${tool}\`, which it no longer names"
     fi
   done
+  # GUARD B. A backticked multi-word CamelCase name in neither half of the lexicon is not
+  # "prose that happens to look like a tool" — it is a name nobody has classified, and the
+  # closed list's whole failure mode was treating that case as silence.
+  while IFS= read -r unknown; do
+    [ -n "$unknown" ] || continue
+    v=$((v+1))
+    note "        UNCLASSIFIED ${label} names \`${unknown}\` (body line(s) $(mention_lines "$file" "$unknown")) — in neither half of the lexicon. Add it to VOCAB if it is a harness tool, to NOT_A_TOOL if it is not; do not leave it unclassified, because silence here is what let AskUserQuestion and Artifact through"
+  done < <(unclassified_camel "$file")
   echo "$v $d $s $r"
 }
 
@@ -223,6 +338,27 @@ FINDINGS="$TMP/findings"; : > "$FINDINGS"
 # ============================================================ 1. the shipped agents
 AGENTS="$(find "$REPO/symlink/.claude/agents" -maxdepth 1 -type f -name '*.md' | sort)"
 ok "shipped agent files found" "$([ -n "$AGENTS" ] && echo yes || echo no)" yes
+
+# GUARD A. The `tools:` lists are the single maintained source the lexicon is pinned to:
+# a harness tool becomes real HERE the moment an agent is granted it, so a granted name
+# the lexicon does not know is a tool nobody told this file about. It is the guard that
+# closes the closed list from the side nobody can see — had it existed, `Artifact` would
+# have failed on the commit that granted it to `project-manager`, instead of being noticed
+# later by a reviewer reading prose.
+UNKNOWN_GRANTS=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  while IFS= read -r t; do
+    [ -n "$t" ] || continue
+    if [ "$(in_vocab "$t")" = no ]; then
+      UNKNOWN_GRANTS=$((UNKNOWN_GRANTS+1))
+      printf '        GRANTED, UNKNOWN  %s grants `%s`, absent from VOCAB — add it, or this file cannot see a mention of it\n' "${f#$REPO/}" "$t"
+    fi
+  done < <(tools_of "$f")
+done <<EOF
+$AGENTS
+EOF
+ok "every granted tool is in the lexicon" "$UNKNOWN_GRANTS" 0
 
 V=0; D=0; S=0; R=0; SCANNED=0; SKIPPED=0
 while IFS= read -r f; do
@@ -243,29 +379,59 @@ EOF
 ok "every shipped agent declares tools:" "$SKIPPED" 0
 ok "shipped agents scanned"              "$([ "$SCANNED" -ge 8 ] && echo yes || echo no)" yes
 
-# ====================================================== 2. the shared conventions docs
-# `symlink/CONVENTIONS.md` — readers derived from the agent bodies that reference it.
-# `seed/CLAUDE.md` — the instance-wide contract, so every restricted agent is a reader.
+# =============================================== 2. the shared docs an agent is told to read
+# DERIVED, NOT LISTED. Two paths used to be hardcoded here, and a hardcoded list can only
+# check what someone remembered to add — `symlink/SCHEMA.md` named a browser MCP tool to
+# five readers who mostly cannot hold it, and was simply not looked at. So the set is the
+# `*.md` references in the restricted agents' own bodies, resolved against the trees this
+# repo ships. Adding a doc reference to an agent puts that doc in scope by itself, which
+# is the same self-tightening property the reader derivation below already had.
+doc_refs_of() { # <agent-file> — every `*.md` reference in its body, normalised
+  body "$1" | grep -oE '[A-Za-z0-9_./-]*[A-Za-z0-9_-]\.md' \
+    | sed -E 's#^(\.\./)+##; s#^/+##' | sort -u
+}
+
+resolve_doc() { # <reference> — repo-relative path of the shipped doc, or nothing
+  local ref="$1" cand
+  for cand in "symlink/$ref" "seed/$ref"; do
+    # An agent file is audited against its OWN allowlist in §1, never as a shared doc, and
+    # a slash command is run by the main session, which holds every tool and so cannot
+    # have this defect. Both are skipped by path rather than by name.
+    case "$cand" in symlink/.claude/agents/*|symlink/.claude/commands/*) continue ;; esac
+    [ -f "$REPO/$cand" ] && { printf '%s\n' "$cand"; return 0; }
+  done
+  return 1
+}
+
+shared_docs() { # — every shipped doc a restricted agent is told to read
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ "$(has_tools_key "$f")" = yes ] || continue
+    while IFS= read -r ref; do
+      [ -n "$ref" ] && resolve_doc "$ref"
+    done < <(doc_refs_of "$f")
+  done <<EOF
+$AGENTS
+EOF
+}
+
 readers_of() { # <shared-doc-relpath> — agent files that read it
-  case "$1" in
-    symlink/CONVENTIONS.md)
-      while IFS= read -r f; do
-        [ -n "$f" ] || continue
-        [ "$(has_tools_key "$f")" = yes ] || continue
-        body "$f" | grep -q 'CONVENTIONS\.md' && echo "$f"
-      done <<EOF
+  # `seed/CLAUDE.md` is the instance-wide contract: it is loaded into EVERY session
+  # whether or not an agent body names it, so every restricted agent is a reader and the
+  # intersection must not be widened by deriving a smaller set. Every other doc is read by
+  # exactly the agents that point at it.
+  local doc="$1" f ref
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    [ "$(has_tools_key "$f")" = yes ] || continue
+    if [ "$doc" = seed/CLAUDE.md ]; then printf '%s\n' "$f"; continue; fi
+    while IFS= read -r ref; do
+      [ -n "$ref" ] || continue
+      [ "$(resolve_doc "$ref")" = "$doc" ] && { printf '%s\n' "$f"; break; }
+    done < <(doc_refs_of "$f")
+  done <<EOF
 $AGENTS
 EOF
-      ;;
-    seed/CLAUDE.md)
-      while IFS= read -r f; do
-        [ -n "$f" ] || continue
-        [ "$(has_tools_key "$f")" = yes ] && echo "$f"
-      done <<EOF
-$AGENTS
-EOF
-      ;;
-  esac
 }
 
 intersect_tools() { # <agent-file>... — the tools EVERY reader holds, one per line
@@ -279,8 +445,10 @@ intersect_tools() { # <agent-file>... — the tools EVERY reader holds, one per 
   cat "$TMP/isect"
 }
 
+SHARED_DOCS="$(shared_docs | sort -u)"
 SHARED_SCANNED=0
-for rel in symlink/CONVENTIONS.md seed/CLAUDE.md; do
+while IFS= read -r rel; do
+  [ -n "$rel" ] || continue
   f="$REPO/$rel"
   [ -f "$f" ] || { note "        MISSING      ${rel} not found"; V=$((V+1)); continue; }
   readers=(); while IFS= read -r r; do [ -n "$r" ] && readers+=("$r"); done < <(readers_of "$rel")
@@ -296,12 +464,23 @@ for rel in symlink/CONVENTIONS.md seed/CLAUDE.md; do
     note "        NO REASON    ${rel} has ${M} tool-mention declaration(s) without a reason"
     V=$((V+M))
   fi
+done <<EOF
+$SHARED_DOCS
+EOF
+ok "shared docs scanned" "$([ "$SHARED_SCANNED" -ge 5 ] && echo yes || echo no)" yes
+
+# The DERIVATION is the check here, so name the docs it must reach. The first two are what
+# the hardcoded list used to hold; `symlink/SCHEMA.md` is the one it missed, and naming it
+# means a derivation that silently narrows back to the old pair fails instead of passing.
+for must in symlink/CONVENTIONS.md seed/CLAUDE.md symlink/SCHEMA.md; do
+  ok "derived set reaches $must" "$(printf '%s\n' "$SHARED_DOCS" | grep -cxF "$must")" 1
 done
-ok "shared conventions docs scanned" "$SHARED_SCANNED" 2
 
 # The reader derivation must find the real set, or the intersection is meaningless.
 CONV_READERS="$(readers_of symlink/CONVENTIONS.md | wc -l | tr -d ' ')"
 ok "CONVENTIONS.md readers derived"  "$([ "$CONV_READERS" -ge 3 ] && echo yes || echo no)" yes
+SCHEMA_READERS="$(readers_of symlink/SCHEMA.md | wc -l | tr -d ' ')"
+ok "SCHEMA.md readers derived"       "$([ "$SCHEMA_READERS" -ge 3 ] && echo yes || echo no)" yes
 
 [ -s "$FINDINGS" ] && cat "$FINDINGS"
 ok "no unavailable tool named"        "$V" 0
@@ -375,11 +554,32 @@ You hold no `Workflow`. But for wide work, author a `Workflow` fan-out anyway.'
 read -r v d s r <<<"$(run_fx overbudget)"
 ok "an extra mention breaks the budget"      "$v" 1
 ok "...and is still counted as declared"     "$d" 1
-# ...while a reworded file with the same number of mentions stays green.
-fixture rewordedok 'Read, Grep' '<!-- tool-mention: Workflow(1) — one mention, deliberately -->
-Completely different prose, still exactly one `Workflow`.'
-read -r v d s r <<<"$(run_fx rewordedok)"
-ok "rewording within budget stays green"     "$v" 0
+# 4e-bis. THE BUDGET IS NOT WHAT DECIDES, and this pair is the proof. Both fixtures
+# declare `Workflow(1)` and both name it exactly once, so the count cannot separate them —
+# and the count is precisely what a reword holds constant. What separates them is whether
+# the prose STATES THE ABSENCE or ISSUES AN INSTRUCTION, so that is what is asserted.
+fixture reworded_absence 'Read, Grep' '<!-- tool-mention: Workflow(1) — one mention, deliberately -->
+Prose rewritten from scratch: fanning out is not open to you, since no role agent
+is granted `Workflow`. Work through the edges in sequence and say so in the PR body.'
+read -r v d s r <<<"$(run_fx reworded_absence)"
+ok "reword that still states the absence is green" "$v" 0
+ok "...and its count is unchanged"            "$(mention_count "$FX/reworded_absence.md" Workflow)" 1
+# The same file, same declaration, SAME COUNT — reworded into an instruction. This is the
+# mutation the reported gap was about, and it must fail.
+fixture reworded_directive 'Read, Grep' '<!-- tool-mention: Workflow(1) — one mention, deliberately -->
+Prose rewritten from scratch: for wide, independent work, author a `Workflow` fan-out
+and let each subagent take one edge, then synthesize the results yourself.'
+read -r v d s r <<<"$(run_fx reworded_directive)"
+ok "reword into an instruction fails"        "$v" 1
+ok "...on the same count as the green one"   "$(mention_count "$FX/reworded_directive.md" Workflow)" 1
+ok "...and its budget still matches"         "$(declared_budget "$FX/reworded_directive.md" Workflow)" 1
+# And the verbatim original defect — a condition on INSTALLATION, which reads as satisfied
+# and decides nothing — is rejected too, which is why `if` is not an absence cue.
+fixture reworded_installed 'Read, Grep' '<!-- tool-mention: Agent(1) — one mention, deliberately -->
+Self-review your diff: dispatch `code-architect` with the `Agent` tool if it is installed
+in the usual location, else do a careful pass yourself.'
+read -r v d s r <<<"$(run_fx reworded_installed)"
+ok "the installation-conditioned defect fails" "$v" 1
 
 # 4f. a declaration missing its reason, or missing its budget, is not a declaration.
 fixture noreason 'Read, Grep' '<!-- tool-mention: Workflow(1) -->
@@ -427,6 +627,51 @@ ok "shared doc flags a tool one reader lacks" "$v" 1
 intersect_tools "$FX/reader_with_agent.md" "$FX/reader_with_agent.md" > "$TMP/allow.fx2"
 : > "$FINDINGS"; read -r v d s r <<<"$(audit "$FX/shared.md" "$TMP/allow.fx2" "fx/shared")"
 ok "shared doc green when all readers hold it" "$v" 0
+
+# 4k. GUARD A's classifier, on both answers. The tree-wide assertion above reads 0 today,
+# which is exactly the shape that cannot tell "nothing to find" from "not looking", so the
+# classifier is exercised directly: a real tool is known, an invented one is not, and the
+# three names this task was dispatched to close are known now.
+ok "lexicon knows a granted tool"            "$(in_vocab Artifact)" yes
+ok "lexicon knows the MCP wildcard grant"    "$(in_vocab 'mcp__claude-in-chrome__*')" yes
+ok "lexicon rejects an invented tool"        "$(in_vocab SummonDragon)" no
+for t in AskUserQuestion ExitWorktree Artifact; do
+  ok "lexicon now knows \`$t\`"              "$(in_vocab "$t")" yes
+done
+# The OKF document type must still NOT be a tool — the collision that keeps `Task` out.
+ok "lexicon still rejects the OKF type"      "$(in_vocab Task)" no
+
+# 4l. GUARD B: an unclassified multi-word CamelCase name FAILS instead of being ignored.
+# This is the hole itself — before this guard, `AskUserQuestion` in an agent body produced
+# silence, which is indistinguishable from a clean file.
+fixture unknowntool 'Read, Grep' 'When you need the human, ask via `AskUserQuestion` and wait.'
+read -r v d s r <<<"$(run_fx unknowntool)"
+ok "a name missing from the lexicon is not silent" "$([ "$v" -ge 1 ] && echo yes || echo no)" yes
+fixture invented 'Read, Grep' 'Escalate by calling `SummonDragon` on the failing job.'
+read -r v d s r <<<"$(run_fx invented)"
+ok "an unclassified CamelCase name fails"    "$v" 1
+ok "...and is reported as unclassified"      "$(unclassified_camel "$FX/invented.md")" SummonDragon
+# ...while the non-tool half of the lexicon keeps it quiet, and single capitalised words
+# are left alone deliberately: 18 of them in this tree are OKF types and output tokens.
+fixture hookevent 'Read, Grep' 'The `SessionStart` hook injects the queue; `PreToolUse` gates a call.'
+read -r v d s r <<<"$(run_fx hookevent)"
+ok "a declared non-tool stays quiet"         "$v" 0
+fixture okftypes 'Read, Grep' 'Write a `Finding`, cite a `Service`, link a `Runbook`, name a `Team`.
+The verdict prints `APPROVED` or `DISMISSED`; a worktree may be `RECLAIMABLE`.'
+read -r v d s r <<<"$(run_fx okftypes)"
+ok "single capitalised words are not tools"  "$v" 0
+
+# 4m. the DERIVED scanned set: resolution is what decides which files are looked at, so
+# assert the resolver rather than only the list it produced.
+ok "resolves a symlink/ doc"                 "$(resolve_doc SCHEMA.md)" symlink/SCHEMA.md
+ok "falls through to seed/ for CLAUDE.md"    "$(resolve_doc CLAUDE.md)" seed/CLAUDE.md
+ok "an instance-only doc resolves to nothing" "$(resolve_doc AWAITING.md)" ""
+ok "an agent file is never a shared doc"     "$(resolve_doc .claude/agents/qa-reviewer.md)" ""
+ok "a slash command is never a shared doc"   "$(resolve_doc .claude/commands/pm-loop.md)" ""
+# Agent bodies write `../../CONVENTIONS.md`, so the reference normaliser is load-bearing:
+# without it the file this whole check was built for leaves the derived set silently.
+ok "the ../.. reference an agent writes normalises" \
+  "$(doc_refs_of "$REPO/symlink/.claude/agents/software-engineer.md" | grep -cx 'CONVENTIONS.md')" 1
 
 printf '\n%s passed, %s failed  (%s agent file(s) + %s shared doc(s); %s declared mention(s))\n' \
   "$pass" "$fail" "$SCANNED" "$SHARED_SCANNED" "$D"
