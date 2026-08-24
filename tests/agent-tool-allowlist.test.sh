@@ -257,13 +257,17 @@ unclassified_names() { # <file> — backticked capitalised names no rule classif
 # `symlink/`, `.claude/` and `CLAUDE.md` — not `docs/` — to match the measurement this guard
 # is pinned to; scoped to `*.md` because that is where a backticked identifier means
 # anything here.
-NOT_A_TOOL_TREE="$REPO/symlink $REPO/.claude $REPO/CLAUDE.md"
+NOT_A_TOOL_TREE=("$REPO/symlink" "$REPO/.claude" "$REPO/CLAUDE.md")
 not_a_tool_uses() { # <name> — count of backticked exact mentions across NOT_A_TOOL_TREE
   # $REPO-anchored, not cwd-relative: this runs the same regardless of where the harness
   # is invoked from, unlike a bare `symlink .claude CLAUDE.md` which resolves against
   # whatever directory the caller happens to be in when it runs `bash tests/*.test.sh`.
-  # shellcheck disable=SC2086
-  grep -rhoE "\`$1\`" --include='*.md' $NOT_A_TOOL_TREE 2>/dev/null | grep -c .
+  # An ARRAY, expanded quoted — not a space-joined string expanded bare. `$REPO` can
+  # contain a space (a common macOS checkout location); unquoted, each path word-splits
+  # apart, every lookup silently finds nothing, and Guard C then declares every entry —
+  # including the two legitimate ones — dead. Quoting removes the bug rather than just
+  # disclosing it.
+  grep -rhoE "\`$1\`" --include='*.md' "${NOT_A_TOOL_TREE[@]}" 2>/dev/null | grep -c .
 }
 
 dead_not_a_tool_entries() { # <pipe-separated list> — entries with zero real mentions
@@ -973,6 +977,20 @@ ok "the disclosed Makefile entry is justified" "$([ "$(not_a_tool_uses Makefile)
 ok "an unearned candidate has zero uses"     "$(not_a_tool_uses TotallyFictitiousHookEventNine)" 0
 ok "dead_not_a_tool_entries catches it"      "$(dead_not_a_tool_entries 'SessionStart|TotallyFictitiousHookEventNine|Makefile')" TotallyFictitiousHookEventNine
 ok "...and stays silent when every entry is earned" "$(dead_not_a_tool_entries "$NOT_A_TOOL")" ""
+
+# ...and NOT_A_TOOL_TREE itself must survive a path containing a space — common on macOS
+# checkouts — plus a glob metacharacter for good measure. A bare space-joined string
+# expanded unquoted word-splits apart on the space and then glob-expands the `*`, so the
+# lookup below would silently see zero mentions and declare a real entry dead; the array
+# form, expanded quoted, is what keeps this honest.
+SPACED_TREE_DIR="$TMP/spaced dir with * and [glob]"
+mkdir -p "$SPACED_TREE_DIR"
+printf 'Uses the `SpacedPathFixtureTool` tool.\n' > "$SPACED_TREE_DIR/note.md"
+SAVED_NOT_A_TOOL_TREE=("${NOT_A_TOOL_TREE[@]}")
+NOT_A_TOOL_TREE=("$SPACED_TREE_DIR")
+ok "a NOT_A_TOOL_TREE entry with a space+glob path is still found" \
+  "$(not_a_tool_uses SpacedPathFixtureTool)" 1
+NOT_A_TOOL_TREE=("${SAVED_NOT_A_TOOL_TREE[@]}")
 # The nine names removed from NOT_A_TOOL by this fix are the reproduced proof: each has
 # zero real mentions, which is exactly why they were silent before and unclassified now.
 for unearned in SessionEnd UserPromptSubmit PreToolUse PostToolUse SubagentStart SubagentStop PreCompact InstructionsLoaded Notification; do
