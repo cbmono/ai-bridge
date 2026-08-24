@@ -139,7 +139,7 @@ while [[ $# -gt 0 ]]; do
     # passes it is refused BY NAME rather than by the generic unknown-flag line
     # below: every such caller was written when the flag chose between two pages, so
     # "unknown flag" would leave a human wondering which page they are now getting.
-    --layout|--layout=*) echo "build-board: --layout was removed — there is one board now (the table). Drop the flag." >&2; exit 2 ;;
+    --layout|--layout=*) echo "build-board: --layout was removed — there is only one board now. Drop the flag." >&2; exit 2 ;;
     --standalone) STANDALONE=1 ;;
     --list-instances) LIST_ONLY=1 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit 0 ;;

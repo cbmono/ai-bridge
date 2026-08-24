@@ -302,9 +302,14 @@ JSON in its own `_sensitivity` key. **No customer PII belongs in a task title in
 place.** Read that header before adding a field: `tests/snapshot.test.sh` fails on any key
 outside the documented set.
 
-The page makes **zero external requests** (no fonts, no CDN, no `<script>` at all — the
-instance tabs are CSS-only), is theme-aware, and the default output is an Artifact page
-body; `--standalone` gives you a file to open yourself. `build-board.sh` needs `python3`
+The page's only external request is **one declared webfont** (two `<link>`s to Google's
+font hosts, asserted verbatim in `tests/snapshot.test.sh`) — no CDN, no `src=`, no
+`url()` in the stylesheet. It carries **one `<script>`**, a clipboard helper, and nothing
+from a snapshot ever reaches it: collapsing is `<details>`, not JavaScript. (Until
+2026-08-24 this paragraph said "zero external requests, no `<script>` at all". That was
+true of the kanban `columns` page and never of the one that got published; `columns` has
+since been deleted, so the promise is now stated against the page that ships.) The page
+is theme-aware, and the default output is an Artifact page body; `--standalone` gives you a file to open yourself. `build-board.sh` needs `python3`
 (stdlib only) — JSON parsing and HTML-escaping are the two things a hand-rolled awk reader
 gets wrong on exactly this input. `print-board.sh` needs it for the same two reasons with
 a different sink: a terminal's metacharacters are ANSI escapes and newlines, and a title
