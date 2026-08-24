@@ -123,7 +123,7 @@ ok() { # <name> <actual> <expected>
 # population it has to survive is the whole difficulty. Measured over the derived scanned
 # set (17 files): 18 distinct non-tool names, 61 mentions. Failing all of them is the
 # cry-wolf failure that gets a check deleted, so each is classified by a RULE rather than by
-# being listed, and three of the four rules are derived or shape-based — which is the answer
+# being listed, and two of the four rules are derived or shape-based — which is the answer
 # to "a hand-maintained list of non-tools is the same closed-list problem one level over":
 #
 #   1. IT IS A HARNESS TOOL — `VOCAB` below, pinned by Guard A. (24 names plus `mcp__*`.)
@@ -252,9 +252,11 @@ unclassified_names() { # <file> — backticked capitalised names no rule classif
 
 # GUARD C's primitive. `NOT_A_TOOL_TREE` is wider than the audited agent+shared-doc set on
 # purpose: the machinery this residue documents (hook events, build files) is named all over
-# `.claude/rules/`, `docs/operations.md` and slash commands that the possession audit never
-# opens, and a name earning its keep there is just as real as one earning it in an audited
-# file. Scoped to `*.md` because that is where a backticked identifier means anything here.
+# `.claude/rules/` and slash commands that the possession audit never opens, and a name
+# earning its keep there is just as real as one earning it in an audited file. Scoped to
+# `symlink/`, `.claude/` and `CLAUDE.md` — not `docs/` — to match the measurement this guard
+# is pinned to; scoped to `*.md` because that is where a backticked identifier means
+# anything here.
 NOT_A_TOOL_TREE="$REPO/symlink $REPO/.claude $REPO/CLAUDE.md"
 not_a_tool_uses() { # <name> — count of backticked exact mentions across NOT_A_TOOL_TREE
   # $REPO-anchored, not cwd-relative: this runs the same regardless of where the harness
@@ -495,9 +497,10 @@ audit() {
       note "        STALE        ${label} declares \`${tool}\`, which it no longer names"
     fi
   done
-  # GUARD B. A backticked multi-word CamelCase name in neither half of the lexicon is not
-  # "prose that happens to look like a tool" — it is a name nobody has classified, and the
-  # closed list's whole failure mode was treating that case as silence.
+  # GUARD B. A backticked capitalised name — single word included — that no classification
+  # rule below recognises is not "prose that happens to look like a tool": it is a name
+  # nobody has classified, and the closed list's whole failure mode was treating that case
+  # as silence.
   while IFS= read -r unknown; do
     [ -n "$unknown" ] || continue
     v=$((v+1))
