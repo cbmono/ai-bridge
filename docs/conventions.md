@@ -182,6 +182,23 @@ one directory that is left, with `--config` linking whatever files remain and er
 nowhere. (Deleting `config/` *itself* is a different thing and exits 2: a refusal to do
 nothing, not a breakage.)
 
+**"Deleting the tier" means removing the DIRECTORY, and the distinction is now load-bearing
+rather than pedantic.** `--config` retires a link by asking whether its target is still in
+the discovered source set, so an *empty* set reads as "retire everything" — and a source
+directory that cannot be listed produces exactly the same empty set as one that is gone.
+Measured on a real upgrade fixture, three permission modes, all identical: **exit 0, every
+link retired including the ones this layer still ships, none left, no warning**, and the
+quietest mode printed nothing on stderr at all. Keeping `find`'s exit status does not close
+that: `find . -type f` in a directory that is unreadable but executable exits **0** with no
+output. So the guard is stated over the two sets instead — *discovery returned nothing while
+links into `config/` still exist* ⇒ **refuse, name it, exit non-zero, retire nothing** — and
+a tier directory that is **absent** is what distinguishes the legitimate `rm -rf
+config/required` from a tier we merely could not read. A tier emptied but left in place
+therefore lands on the refusing side, and says so: remove the directory, or run
+`--config --uninstall`, if that is what you meant. A second refusal covers the case the set
+statement structurally cannot see — one unreadable subdirectory among several readable ones
+still yields files, so the set is not empty while the links beneath it read as dangling.
+
 **The arrow stays one-way, and that is what makes this modular rather than merely
 bundled.** `symlink/` must never *require* `config/`: the role agents keep probing with
 `test -f`, so an instance stamped on a machine that never ran `--config` still works — it
