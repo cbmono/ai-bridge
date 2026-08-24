@@ -33,14 +33,29 @@
 #   UNGUARDED  the path is canonicalised through `cd`, but the `mktemp` that created it
 #              carries no `||` abort, so a failed mktemp reaches the `cd` empty.
 #
-# TWO LIMITS, STATED RATHER THAN GUESSED AT. The scanner reads one line at a time, so
-# (a) the `||` abort must sit on the `mktemp` assignment line — chasing a guard onto a
-# following line would mean deciding which nearby test counts, which is guessing; and
-# (b) the trap must name the path inline (`trap 'rm -rf "$TMP"' EXIT`), because a trap
-# that calls a cleanup function hides the path from a line-wise read. Every harness in
-# this directory does both today, and the corpus assertions below fail loudly if the
-# scanner ever stops finding traps at all — which is the failure mode that would let a
-# blind spot pass as clean.
+# PHYSICAL LAYOUT IS NOT A DODGE, AND IT USED TO BE. The first cut of this scanner read
+# one PHYSICAL line, so the identical destructive assignment wrapped for readability was
+# invisible to it while staying exactly as destructive at runtime. It now normalises each
+# harness to LOGICAL lines first (`logical_lines` below: backslash continuations and a
+# `$( … )` left open at end of line are joined into one statement) and applies the same
+# predicates to whole statements, so every layout of the shape reads the same.
+#
+# THE LIMITS THAT REMAIN, STATED RATHER THAN GUESSED AT — the scanner is a text scan over
+# statements, not a shell parser:
+#   (a) the `||` abort must sit on the same STATEMENT as the `mktemp` — chasing a guard
+#       into a following statement would mean deciding which nearby test counts, which is
+#       guessing;
+#   (b) the trap must name the path inline (`trap 'rm -rf "$TMP"' EXIT`) — a trap that
+#       calls a cleanup function hides the path from a text scan; and
+#   (c) the path must not be laundered through another variable (`A="$(cd "$(mktemp …)"
+#       && pwd)"; TMP="$A"`) — only the trapped name's own assignments are read; and
+#   (d) joining can over-reach as well as reach — see `logical_lines`, which carries two
+#       tripwires for it, both asserted non-vacuously.
+# Every harness in this directory satisfies all three today. (b) and (c) are the honest
+# ceiling of this approach, not oversights: closing them wants a shell parser. The corpus
+# assertions below fail loudly if the scanner stops finding traps at all, or if any
+# harness ends mid-statement — the two failure modes that would let a blind spot pass as
+# clean.
 #
 # Both are asserted NON-VACUOUSLY, over synthetic harnesses that do and do not carry each
 # shape: a static check that passes on everything is indistinguishable from no check. The
@@ -48,7 +63,7 @@
 # its body at line start, where this file's own scanner would read the deliberately broken
 # fixture lines as this file's own code.
 #
-# The two once-destructive harnesses are then exercised FOR REAL, in a throwaway copy of
+# The three once-destructive harnesses are then exercised FOR REAL, in a throwaway copy of
 # the checkout: run with a TMPDIR that does not exist, each must abort AND the copy must
 # still be there afterwards. That is the actual regression, and it is why the copy is
 # entered with `cd` first — an unfixed harness deletes its own cwd, so the blast radius
@@ -80,18 +95,71 @@ ok() { # <name> <actual> <expected>
   else printf '  FAIL  %-62s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
 }
 
+# --- logical lines ------------------------------------------------------------
+# logical_lines <file> — prints `<first-physical-line>:<statement>`, one per LOGICAL
+# line. Comment lines are dropped (a comment explaining this very hazard would
+# otherwise read as the hazard), and a statement spanning physical lines is joined
+# into one before any predicate looks at it: a trailing backslash continues, and so
+# does a `$( … )` still open at end of line, tracked by counting openers against
+# closers and clamped at zero so the `)` of a `case` pattern or an `f()` definition
+# cannot drive it negative.
+#
+# THIS FUNCTION IS THE FIX FOR A REAL HOLE, not a tidy-up. Without it,
+#
+#   TMP="$(
+#     cd "$(mktemp -d "${TMPDIR:-/tmp}/x.XXXXXX")" && pwd
+#   )"
+#
+# reads as three lines none of which carries the whole shape, so an anchored
+# `^TMP=` match never reaches the `cd`/`mktemp` tokens on the second — and the
+# assignment is exactly as destructive as the one-liner. The `bad-multiline` fixture
+# below fails if this function is removed — measured, not assumed — which is the only
+# thing that keeps the promise honest.
+#
+# It does not parse. A trailing inline comment carrying an unbalanced `)` can close a
+# statement early, and a `$(` inside a single-quoted string counts as an opener — which
+# over-joins rather than under-joins, so it errs toward reading MORE text, not less. That
+# direction is the safer one but it is not free: an over-join swallows the following
+# statement, and an offending assignment that is no longer at the START of its statement
+# is not matched. Both diagnostics below exist for exactly that failure mode, because it
+# is the one way this function could hand the scanner a clean-looking file:
+#   UNCLOSED-STATEMENT-AT-<n>   the file ended mid-statement — a join that never closed.
+#   WIDE-STATEMENT-AT-<n>       a statement spanning more than MAXSPAN physical lines.
+# MAXSPAN is 12 against a measured maximum of 7 real lines across this whole directory
+# (pm-loop-launcher.test.sh:80, a five-stage pipeline of backslash continuations), so it
+# is headroom for honest formatting and a tripwire for a runaway.
+logical_lines() {
+  awk -v maxspan=12 '
+    /^[[:space:]]*#/ { next }
+    {
+      if (buf == "") { start = FNR; buf = $0; span = 1 } else { buf = buf " " $0; span++ }
+      t = $0; opens  = gsub(/\$\(/, "", t)
+      t = $0; closes = gsub(/\)/,   "", t)
+      depth += opens - closes
+      if (depth < 0) depth = 0
+      if (depth == 0 && $0 !~ /\\$/) {
+        print start ":" buf
+        if (span > maxspan) print "0:WIDE-STATEMENT-AT-" start "-SPAN-" span
+        buf = ""
+      }
+    }
+    END { if (buf != "") { print start ":" buf; print "0:UNCLOSED-STATEMENT-AT-" start } }
+  ' "$1"
+}
+
 # --- the scanner --------------------------------------------------------------
 # scan <file> — prints one line per offence, class first, and nothing when clean.
-# Comments are skipped throughout: a comment explaining this very hazard would
-# otherwise read as the hazard.
+# It reads the statements `logical_lines` produces, so the offence is reported at
+# the true physical line the statement starts on.
 scan() {
-  local f="$1" body vars v asg
-  body="$(grep -v '^[[:space:]]*#' "$f")"
+  local f="$1" stmts vars v asg
+  stmts="$(logical_lines "$f")"
   # Which paths does a trap delete? Names only, both $V and ${V} spellings.
-  vars="$(printf '%s\n' "$body" | grep 'trap' | grep -F 'rm -rf' \
+  vars="$(printf '%s\n' "$stmts" | grep 'trap' | grep -F 'rm -rf' \
           | grep -oE '\$\{?[A-Za-z_][A-Za-z_0-9]*\}?' | tr -d '${}' | sort -u)"
   for v in $vars; do
-    asg="$(printf '%s\n' "$body" | grep -nE "^[[:space:]]*$v=")"
+    # `^[0-9]+:` steps over the line number logical_lines prefixes.
+    asg="$(printf '%s\n' "$stmts" | grep -E "^[0-9]+:[[:space:]]*$v=")"
     [ -n "$asg" ] || continue
     # (1) the destructive shape. The leading class keeps `cd` a word: without it,
     #     a variable or function ending in "cd" would read as the builtin.
@@ -110,12 +178,16 @@ HARNESSES="$(find "$TESTS" -maxdepth 1 -type f -name '*.test.sh' | sort)"
 n_harness="$(printf '%s\n' "$HARNESSES" | grep -c '.')"
 ok "harnesses found to scan" "$([ "$n_harness" -ge 20 ] && echo "yes ($n_harness)" || echo "no ($n_harness)")" "yes ($n_harness)"
 
-offences=""; trapped=0
+offences=""; trapped=0; unclosed=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   # Non-vacuity of the extractor itself: at least one harness must be seen to trap a
   # path, or every scan below is trivially clean because nothing was ever looked at.
   grep -v '^[[:space:]]*#' "$f" | grep 'trap' | grep -qF 'rm -rf' && trapped=$((trapped+1))
+  # And the normaliser must not have run away: a file that ends mid-statement, or that
+  # joins an implausible number of lines into one, has had text swallowed into a buffer —
+  # which would read as clean for the wrong reason.
+  logical_lines "$f" | grep -qE '^0:(UNCLOSED|WIDE)-STATEMENT-AT-' && unclosed=$((unclosed+1))
   out="$(scan "$f")"
   [ -n "$out" ] && offences="${offences}${out}
 "
@@ -124,6 +196,7 @@ $HARNESSES
 EOF
 
 ok "harnesses seen to trap-delete a path" "$([ "$trapped" -ge 10 ] && echo "yes ($trapped)" || echo "no ($trapped)")" "yes ($trapped)"
+ok "harnesses whose statements ran away when joined" "$unclosed" 0
 
 n_off="$(printf '%s' "$offences" | grep -c '.' || true)"
 [ -n "$(printf '%s' "$offences" | tr -d '[:space:]')" ] && printf '%s' "$offences" | sed 's/^/        /'
@@ -165,7 +238,32 @@ fx_trap() { printf 'trap %s EXIT\n' "'rm -rf \"\$FTMP\"'"; }
   printf 'FTMP="$(mktemp -d)"\n'
   fx_trap; } > "$FX/good-plain.test.sh"
 
-for k in bad-nested bad-unguarded good-twostep good-plain; do
+# (e) THE SAME DESTRUCTIVE ASSIGNMENT AS (a), WRAPPED ACROSS THREE LINES. Identical at
+#     runtime, invisible to an anchored per-line grep: this is the fixture that fails
+#     without `logical_lines`. Emitted with one `printf '%s\n' …` per fixture rather than
+#     one printf per line, so the unbalanced `$(` stays inside a single physical line of
+#     THIS file and cannot make this file's own normaliser join the surrounding code.
+{ fx_head
+  printf '%s\n' 'FTMP="$(' '  cd "$(mktemp -d "${TMPDIR:-/tmp}/fx.XXXXXX")" && pwd' ')"'
+  fx_trap; } > "$FX/bad-multiline.test.sh"
+
+# (f) and the other layout: one backslash continuation instead of an open substitution.
+#     MEASURED, AND WORTH SAYING: the physical-line scanner caught THIS one already, by
+#     luck — `cd`, `mktemp` and the assignment all land on its first line, and only the
+#     `&& pwd` moved. It is kept as a regression guard that joining does not lose a shape
+#     the old read happened to get, not as evidence for the normaliser.
+{ fx_head
+  printf '%s\n' 'FTMP="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/fx.XXXXXX")" \' '  && pwd)"'
+  fx_trap; } > "$FX/bad-continued.test.sh"
+
+# (g) the control that keeps (e) and (f) from being "joining flags everything": the SAFE
+#     two-step idiom, also wrapped. Joining puts the `||` abort on the same statement as
+#     the `mktemp`, which is precisely why this one must come out clean.
+{ fx_head
+  printf '%s\n' 'FTMP="$(' '  mktemp -d "${TMPDIR:-/tmp}/fx.XXXXXX"' ')" || { echo "fx: mktemp -d failed" >&2; exit 2; }' 'FTMP="$(cd "$FTMP" && pwd)"'
+  fx_trap; } > "$FX/good-multiline.test.sh"
+
+for k in bad-nested bad-unguarded bad-multiline bad-continued good-twostep good-plain good-multiline; do
   o="$(scan "$FX/$k.test.sh")"
   case "$k" in
     bad-nested)
@@ -173,10 +271,37 @@ for k in bad-nested bad-unguarded good-twostep good-plain; do
     bad-unguarded)
       ok "fixture $k is flagged UNGUARDED"  "$(printf '%s' "$o" | grep -c '^UNGUARDED' || true)" 1
       ok "fixture $k is not flagged NESTED-CD" "$(printf '%s' "$o" | grep -c '^NESTED-CD' || true)" 0 ;;
+    bad-multiline|bad-continued)
+      # The whole point: the same shape, a different physical layout, still caught —
+      # and reported at the line the statement STARTS on, which is line 3 in both.
+      ok "fixture $k is flagged NESTED-CD"  "$(printf '%s' "$o" | grep -c '^NESTED-CD' || true)" 1
+      ok "fixture $k is flagged UNGUARDED"  "$(printf '%s' "$o" | grep -c '^UNGUARDED' || true)" 1
+      ok "fixture $k is reported at its first physical line" \
+         "$(printf '%s' "$o" | grep -c ':3:' || true)" 2 ;;
     good-*)
       ok "fixture $k is clean" "$(printf '%s' "$o" | grep -c '.' || true)" 0 ;;
   esac
 done
+
+# --- non-vacuity: the normaliser's own two tripwires --------------------------
+# The corpus asserts that no harness trips either marker, which is an assertion about
+# nothing until the markers are shown to fire. So they are fired: a statement left open
+# at end of file, and one joined past MAXSPAN.
+# These two fixtures need an opener with NO closer, which no physical line of this file
+# may carry — an unbalanced `$(` here would over-join this file exactly as described
+# above, and the first draft of this block did: it swallowed 19 lines, and the WIDE
+# tripwire caught it. So the `$` is passed as an argument and the line reads `%s(`,
+# leaving no `$(` sequence in this file at all.
+{ printf '%s\n' '#!/usr/bin/env bash'; printf 'FTMP="%s(mktemp -d\n' '$'; } \
+  > "$FX/unclosed.test.sh"
+ok "an unclosed statement is reported" \
+   "$(logical_lines "$FX/unclosed.test.sh" | grep -c '^0:UNCLOSED-STATEMENT-AT-' || true)" 1
+
+{ printf '%s\n' '#!/usr/bin/env bash'; printf 'FTMP="%s(\n' '$'
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do printf '  echo %s\n' "$i"; done
+  printf '%s\n' ')"'; } > "$FX/wide.test.sh"
+ok "a statement joined past MAXSPAN is reported" \
+   "$(logical_lines "$FX/wide.test.sh" | grep -c '^0:WIDE-STATEMENT-AT-' || true)" 1
 
 # --- the guarded idiom, at runtime, across the three TMPDIR states ------------
 IDIOM="$FX/good-twostep.test.sh"
@@ -200,10 +325,21 @@ ok "TMPDIR absent: says why"          "$(printf '%s' "$out" | grep -qi 'mktemp' 
 ok "TMPDIR absent: created nothing"   "$([ -e "$ABSENT" ] && echo no || echo yes)" yes
 
 # --- the real regression, in a throwaway copy of the checkout -----------------
-# The two harnesses that carried the destructive form, run the way that destroyed a
+# The three harnesses that carried the destructive form, run the way that destroyed a
 # verification tree: cwd inside a checkout, TMPDIR naming a directory that is not there.
 # An unfixed harness deletes its cwd, so the cwd is a copy and the copy is rebuilt for
 # each one.
+#
+# `moved-template` is the third because THIS CHECK FOUND IT, not a human: it landed on main
+# in parallel, carrying the UNGUARDED shape (`mktemp -d` with no `||`, then
+# `cd "$TMP" && pwd -P`), and measured on a throwaway clone of main it deleted every one of
+# the 17 top-level entries of its own checkout while reporting `pass=53 fail=0` and exiting
+# 0. So the check turned `main` RED the moment it merged, on a file it did not ship.
+#
+# Credit where it is due, because this file is about not overclaiming: the LINE-WISE version
+# caught this one too — the offending assignment sits on a single physical line. Logical
+# lines are not what found it. What the join changed here is only the reported location,
+# from line 4 (a position in a comment-stripped copy) to line 41, the line a human opens.
 #
 # NEVER copy `.` wholesale here. TMPDIR may legitimately sit INSIDE the repo — this
 # instance tells its agents to isolate their scratch space, which is the very habit that
@@ -224,7 +360,7 @@ fresh_copy() { # <dest>
   return 0
 }
 
-for h in board-renderers snapshot; do
+for h in board-renderers snapshot moved-template; do
   COPY="$TMP/checkout-$h"
   fresh_copy "$COPY" || die "could not copy the checkout for $h"
   ok "$h: fixture copy is a checkout" \
