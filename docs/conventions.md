@@ -178,8 +178,9 @@ decided by whichever installer ran last. `ai-setup` now owns
 `${CLAUDE_CONFIG_DIR:-~/.claude}` outright and received every fix the fork had made that it
 lacked; see [`docs/claude-config-ownership.md`](claude-config-ownership.md) for the full
 accounting. **Deleting the tier is still safe** — the `AUTONOMY.md` pattern applied to the
-one directory that is left, with `--config` linking whatever three files remain and
-erroring nowhere.
+one directory that is left, with `--config` linking whatever files remain and erroring
+nowhere. (Deleting `config/` *itself* is a different thing and exits 2: a refusal to do
+nothing, not a breakage.)
 
 **The arrow stays one-way, and that is what makes this modular rather than merely
 bundled.** `symlink/` must never *require* `config/`: the role agents keep probing with
@@ -197,29 +198,47 @@ git repo. Not hypothetical: it is how four uninvited skills got committed to `ai
 repo — dead links its installer would then have pushed into every consumer's config dir.
 Two fixes were available: carry that repo's `.gitignore` allow-list (`.claude/skills/*`
 denied, one `!` per shipped skill) plus its test, or link per **file**. **Per-file linking
-was chosen because it removes the hazard instead of policing it** — the config dir's
-directories stay real directories that own their own contents, so a drop-in cannot reach
-this checkout at all and no allow-list has to be maintained as skills come and go. It also
+was chosen because it removes the hazard instead of policing it** — nothing this installer
+creates is a directory link, so a drop-in cannot reach *this* checkout at all and no
+allow-list has to be maintained as skills come and go. It does not make every directory in
+the config dir real: `ai-setup` links `~/.claude/agents` as a unit, so on a machine that ran
+its installer the parent of our three agents is a symlink, which is why (a) below is a
+conditional refusal rather than a flat one. It also
 gives back the slot the allow-list approach costs: a personal global command can live in
 `~/.claude/commands/` beside the linked ones, which a whole-dir link makes impossible.
 
-**A refusal, a retired guard, and an abstention complete it.** (a) `--config` refuses to
-write *through* a symlinked directory — if `~/.claude/agents` is a link into another
+**A conditional refusal, a retired guard, and an abstention complete it.** (a) `--config`
+never writes *through* a symlinked directory — if `~/.claude/agents` is a link into another
 checkout, writing `agents/x.md` would create a file **inside that other repo**, silently,
-and leave the config dir with nothing of its own; it names the directory, prints the `mv`
-that fixes it, and exits non-zero. (b) The old refusal for two tiers declaring the same
+and leave the config dir with nothing of its own. The answer depends on whether the entry
+already resolves through that link, and both halves matter: `ai-setup` links
+`~/.claude/agents` as a whole directory, so a symlinked parent is **the normal
+configuration** on any machine that ran its installer, not an error. When the path resolves,
+that provider is shipping it — the required tier's contract is that the file EXISTS on this
+machine, not that our copy is the one used — so it is **reported and nothing is written**,
+exit 0. When it does not resolve, nobody ships it and we cannot write it: refuse, name the
+directory, print the `mv` that fixes it, exit non-zero. Refusing in *both* cases would make
+`--config` fail on the normal setup and make the two installers order-dependent, which is
+the whole thing this split removes. (b) The old refusal for two tiers declaring the same
 relative path — whichever ran second would move the first aside as a `.bak` and shadow
 it — is **gone**, not because the risk went away but because it cannot fire any more: there
 is one tier. What holds the invariant now is `tests/config-ownership.test.sh`, which derives
-the whole shippable set from the `test -f` probes in `symlink/`, so a second tier could not
-reappear here unnoticed in the first place. (c) `settings.json` is linked only when there is
-none: it can hold permissions, env vars and
-plugin choices somebody tuned by hand, and it is the one file here where a merge could
-widen what Claude is allowed to *do* rather than how it reports. `ai-setup`'s installer
-merges two display-only keys into a real one; that is deliberately **not** ported, so
-`--config` stays purely additive — every write it makes is a symlink it created itself. The
-trade is stated out loud rather than hidden: the status line and the `Brief` style reach an
-established install only when the human runs the two printed commands.
+the whole shippable set from the `test -f` probes in `symlink/` and cannot name the tier
+directories it scans, with the tier names pinned separately against `install.sh`'s own
+`CONFIG_TIERS` in both directions — so a second tier could not reappear here unnoticed, under
+its old name or a new one. (c) **`settings.json` is not this layer's file at all.** It is not
+shipped, not linked, not backed up, not merged, and not reported on; `tests/config-layer.test.sh`
+asserts a real one is left untouched and **not even mentioned**. It is the one path in the
+config dir that can already hold permissions, env vars and plugin choices somebody tuned by
+hand — the only place where writing a value could widen what Claude is allowed to *do* rather
+than how it reports — so two installers writing it is exactly the collision the ownership
+split removes. `ai-setup` owns it, including the display-only merge into an established real
+one, and it now also **adopts a `settings.json` that is a symlink into some other checkout**:
+a symlink holds a path rather than a file, so there is nothing of the human's there to
+protect, and declining left the path installed by nobody once this layer retired its own
+link. `--config` therefore stays purely additive — every write it makes is a symlink it
+created itself — and the paths it retires are not left unexplained: it names `cbmono/ai-setup`
+as where they went.
 
 The worktree guard covers both halves, because it runs before the flags are parsed — a
 config install from a worktree fails identically, every link pointing into a checkout that
