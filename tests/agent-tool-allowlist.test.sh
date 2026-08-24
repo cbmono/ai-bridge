@@ -141,15 +141,26 @@ ok() { # <name> <actual> <expected>
 #      `VOCAB` carries a lowercase letter, and that is asserted — so a hallucinated
 #      `` `DEPLOY` `` would still
 #      be missed where `` `Deploy` `` is now caught. Measured, disclosed, not hidden.
-#   4. IT IS ON THE `NOT_A_TOOL` LIST — the residue, and only the residue: the hook-event
-#      family plus `Makefile`. 11 names, and the ONE name in the real tree that needed a
-#      list entry rather than a rule.
+#   4. IT IS ON THE `NOT_A_TOOL` LIST, AND IS JUSTIFIED BY USE — the residue rule 1-3 cannot
+#      reach, and a hand-maintained list rots the exact way `VOCAB` did if an entry is
+#      pre-populated rather than earned. So EVERY entry must have at least one real
+#      backticked mention somewhere in the machinery it documents (`symlink/`, `.claude/`,
+#      `CLAUDE.md`) or the build fails naming the dead entry — a fourth recognition route,
+#      and it is asserted rather than trusted. This is the route a prior pass of this same
+#      guard got wrong: it pre-populated the whole Claude Code hook-event family (10 names)
+#      on the argument that "the next one documented must not break the build", measured
+#      NONE of them against the real tree, and the un-earned 9 were exactly as silent as the
+#      closed `VOCAB` this file replaced — `` `Notification` ``, `` `PreToolUse` ``,
+#      `` `PreCompact` `` and `` `SubagentStop` `` were all reproduced as invisible.
+#      Two names earn their keep today: `SessionStart` (a real hook event, mentioned once in
+#      the scanned set) and `Makefile` (mentioned once). Both are asserted, not assumed.
 #
 # Anything else fails. The upkeep that leaves is real but it points the other way from the
 # closed list this guard replaced: a name nobody classified produces a BUILD FAILURE naming
 # the file, the line and the four routes — noise, which a maintainer fixes — where the
 # closed `VOCAB` produced SILENCE, which nobody can see. That asymmetry is the whole reason
-# this direction is acceptable and the other was not.
+# this direction is acceptable and the other was not — and it now applies to rule 4 itself,
+# not only to what rule 4 exempts.
 #
 # `Task` is DELIBERATELY NOT IN `VOCAB` even though it is the dispatch tool's name in some
 # harness versions: OKF's own document type is also `Task`, and this bundle backticks that
@@ -165,14 +176,20 @@ VOCAB='Agent|Artifact|AskUserQuestion|Workflow|Skill|Read|Write|Edit|MultiEdit|N
 MENTION_RE="\`($VOCAB)\`"
 
 # The other half of the lexicon: identifiers this bundle backticks that are NOT tools and
-# that no RULE classifies, so Guard B stays quiet on them. Claude Code's hook EVENTS are
-# the whole family — they read exactly like tool names and are named all over the machinery
-# docs — so all of them are listed, not only the one measured in the tree today, because
-# the next one to be documented must not turn into a build failure for a maintainer who
-# has no way to know why. `Makefile` is the one name in the real tree that no rule reaches.
-# Add a name here ONLY after checking it is not a tool, and only when no rule can classify
-# it — this list is the residue, and it is kept small on purpose.
-NOT_A_TOOL='SessionStart|SessionEnd|UserPromptSubmit|PreToolUse|PostToolUse|SubagentStart|SubagentStop|PreCompact|InstructionsLoaded|Notification|Makefile'
+# that no other RULE classifies, so Guard B stays quiet on them. This is a HAND-MAINTAINED
+# list, so it is the one route that can rot the way the closed `VOCAB` did — an entry added
+# here speculatively, before anything in the tree actually names it, is dead configuration
+# that classifies nothing and is indistinguishable from an entry that is doing real work.
+# That happened once already: the whole Claude Code hook-EVENT family was pre-populated on
+# the argument that "the next one documented must not break the build" — 9 of the 11 names
+# below turned out to have ZERO real mentions anywhere in `symlink/`, `.claude/` or
+# `CLAUDE.md`, and each is a silent classification route for exactly the shape this file
+# exists to catch. GUARD C, below, makes that self-correcting: every entry here must be
+# JUSTIFIED BY A REAL MENTION or the build fails naming it, so an entry can only be added in
+# the same commit that adds the mention it is for. Add a name here ONLY after checking it is
+# not a tool and no other rule can classify it — this list is the residue, and Guard C keeps
+# it honest as the tree changes.
+NOT_A_TOOL='SessionStart|Makefile'
 
 # Rule 2, DERIVED: OKF's document types, from the schema that defines them. `symlink/SCHEMA.md`
 # writes each as a `## type: <Name>` heading, so the registry is machine-readable and a new
@@ -231,6 +248,24 @@ unclassified_names() { # <file> — backticked capitalised names no rule classif
     | grep -vxE "$OKF_TYPES" \
     | grep -vxE "$SCREAMING_RE" \
     | grep -vxE "$NOT_A_TOOL"
+}
+
+# GUARD C's primitive. `NOT_A_TOOL_TREE` is wider than the audited agent+shared-doc set on
+# purpose: the machinery this residue documents (hook events, build files) is named all over
+# `.claude/rules/`, `docs/operations.md` and slash commands that the possession audit never
+# opens, and a name earning its keep there is just as real as one earning it in an audited
+# file. Scoped to `*.md` because that is where a backticked identifier means anything here.
+NOT_A_TOOL_TREE='symlink .claude CLAUDE.md'
+not_a_tool_uses() { # <name> — count of backticked exact mentions across NOT_A_TOOL_TREE
+  # shellcheck disable=SC2086
+  grep -rhoE "\`$1\`" --include='*.md' $NOT_A_TOOL_TREE 2>/dev/null | grep -c .
+}
+
+dead_not_a_tool_entries() { # <pipe-separated list> — entries with zero real mentions
+  local entry
+  for entry in $(printf '%s' "$1" | tr '|' ' '); do
+    [ "$(not_a_tool_uses "$entry")" -eq 0 ] && printf '%s\n' "$entry"
+  done
 }
 
 # THE CONDITION THAT DECIDES THE OUTCOME, and the reason this is not a count.
@@ -498,6 +533,21 @@ done <<EOF
 $AGENTS
 EOF
 ok "every granted tool is in the lexicon" "$UNKNOWN_GRANTS" 0
+
+# GUARD C. The residual `NOT_A_TOOL` list is the one route rules 1-3 cannot pin from a
+# derivation or a shape, so it is pinned from USE instead: an entry with zero real
+# backticked mentions anywhere in the machinery it documents is dead configuration that
+# classifies nothing, and is exactly as silent as the closed `VOCAB` this file replaced.
+# This is the guard that would have caught the un-earned hook-event pre-population before
+# any reviewer had to reproduce it by hand.
+DEAD_NOT_A_TOOL="$(dead_not_a_tool_entries "$NOT_A_TOOL")"
+if [ -n "$DEAD_NOT_A_TOOL" ]; then
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    printf '        DEAD NOT_A_TOOL ENTRY  `%s` has zero backticked mentions in symlink/, .claude/ or CLAUDE.md — delete it, or add it in the same commit as the mention that justifies it\n' "$entry"
+  done <<<"$DEAD_NOT_A_TOOL"
+fi
+ok "every NOT_A_TOOL entry is justified by a real mention" "$([ -z "$DEAD_NOT_A_TOOL" ] && echo yes || echo no)" yes
 
 V=0; D=0; S=0; R=0; SCANNED=0; SKIPPED=0
 while IFS= read -r f; do
@@ -863,9 +913,25 @@ ok "...and is reported as unclassified"      "$(unclassified_names "$FX/invented
 ok "...and Guard A cannot see it"            "$(in_vocab Deploy)" no
 # ...while every rule that keeps the 61 real non-tool mentions quiet is asserted on both
 # answers, because a rule that exempts everything looks identical to a guard that works.
-fixture hookevent 'Read, Grep' 'The `SessionStart` hook injects the queue; `PreToolUse` gates a call.'
+# Both names used here are the two that survive Guard C's use-check (below): `SessionStart`
+# and `Makefile`, not the nine hook events that were pre-populated and never earned it.
+fixture hookevent 'Read, Grep' 'The `SessionStart` hook injects the queue; the build runs `Makefile` targets.'
 read -r v d s r <<<"$(run_fx hookevent)"
 ok "a declared non-tool stays quiet"         "$v" 0
+# THE FOUR NAMES THE SECOND REVIEW REPRODUCED LIVE AS INVISIBLE. Each was pre-populated in
+# `NOT_A_TOOL` with zero real mentions anywhere this file's tree reaches, a silent
+# classification route for exactly the shape this guard exists to catch — worse than
+# `Deploy` above, because it was never disclosed at all. Guard C's removal of the 9
+# un-earned entries is what makes each of these fail here now; before the fix, all four
+# were `86 passed, 0 failed`, reproduced live against ai-bridge#19 at `7a9ecb2`.
+for hallucinated in Notification PreToolUse PreCompact SubagentStop; do
+  body="Use the \`${hallucinated}\` tool to alert the team."
+  fixture "hallucinated_${hallucinated}" 'Read, Grep' "$body"
+  read -r v d s r <<<"$(run_fx "hallucinated_${hallucinated}")"
+  ok "un-earned NOT_A_TOOL candidate \`${hallucinated}\` now fails" "$v" 1
+  ok "...and is reported as unclassified, not silent" \
+    "$(unclassified_names "$FX/hallucinated_${hallucinated}.md")" "$hallucinated"
+done
 fixture okftypes 'Read, Grep' 'Write a `Finding`, cite a `Service`, link a `Runbook`, name a `Team`.
 The verdict prints `APPROVED` or `DISMISSED`; a worktree may be `RECLAIMABLE`.'
 read -r v d s r <<<"$(run_fx okftypes)"
@@ -890,6 +956,22 @@ ok "a capitalised word is not SCREAMING"     "$(printf 'Deploy\n' | grep -cxE "$
 # exemption cannot swallow one. This is the residual gap, asserted so it stays true.
 UPPER_TOOLS="$(printf '%s' "$VOCAB" | tr '|' '\n' | grep -cxE "$SCREAMING_RE")"
 ok "no tool in VOCAB is all-capitals"        "$UPPER_TOOLS" 0
+
+# Rule 4 (GUARD C) is a USE-CHECK, so assert both answers directly on the primitive, the
+# way rule 3's SHAPE was asserted above — the tree-wide "$DEAD_NOT_A_TOOL" result reading
+# empty today is exactly the shape that cannot tell "nothing to find" from "not looking".
+ok "a real NOT_A_TOOL entry is justified"    "$([ "$(not_a_tool_uses SessionStart)" -ge 1 ] && echo yes || echo no)" yes
+ok "the disclosed Makefile entry is justified" "$([ "$(not_a_tool_uses Makefile)" -ge 1 ] && echo yes || echo no)" yes
+# ...and an entry with no real mention is caught, on a name invented for this fixture so
+# the assertion cannot pass by accident if this name is ever legitimately documented.
+ok "an unearned candidate has zero uses"     "$(not_a_tool_uses TotallyFictitiousHookEventNine)" 0
+ok "dead_not_a_tool_entries catches it"      "$(dead_not_a_tool_entries 'SessionStart|TotallyFictitiousHookEventNine|Makefile')" TotallyFictitiousHookEventNine
+ok "...and stays silent when every entry is earned" "$(dead_not_a_tool_entries "$NOT_A_TOOL")" ""
+# The nine names removed from NOT_A_TOOL by this fix are the reproduced proof: each has
+# zero real mentions, which is exactly why they were silent before and unclassified now.
+for unearned in SessionEnd UserPromptSubmit PreToolUse PostToolUse SubagentStart SubagentStop PreCompact InstructionsLoaded Notification; do
+  ok "removed entry \`$unearned\` had zero real mentions" "$(not_a_tool_uses "$unearned")" 0
+done
 
 # 4m. the DERIVED scanned set: resolution is what decides which files are looked at, so
 # assert the resolver rather than only the list it produced.

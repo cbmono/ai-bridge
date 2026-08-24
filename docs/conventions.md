@@ -393,18 +393,32 @@ weaker.
   a tool some agent **actually grants**, never a hallucinated name granted nowhere, which is
   precisely what a prose-vs-allowlist check exists to catch. So the guard now fires on every
   backticked capitalised identifier, and the 61 legitimate non-tool mentions in the scanned
-  set are kept quiet **by rule, not by list** — of three rules, two are derived or
+  set are kept quiet **by rule, not by list** — of FOUR rules, two are derived or
   shape-based: OKF's document types come from `symlink/SCHEMA.md`'s own `type:` headings, so
   a new type classifies itself (43 mentions); an all-capitals name is a literal output token,
-  which is a shape and needs no upkeep (17); and one name (`Makefile`) is the entire
-  hand-maintained residue. **A hand-maintained list of non-tools is the same closed-list
-  problem one level over — except for the direction it leaks:** an unclassified name here
-  produces a **build failure** naming the file, the line and the routes to classify it,
-  where the closed vocabulary produced **silence**. Noise a maintainer fixes is not the same
-  defect as silence nobody can see, and that asymmetry is the whole argument for accepting
-  this direction and not the other. Residual, stated because it is real: no harness tool has
-  ever been named in all capitals, which is what the shape rule rests on and is asserted —
-  so `` `DEPLOY` `` would still be missed where `` `Deploy` `` is now caught.
+  which is a shape and needs no upkeep (17); and a fourth, hand-maintained residual list
+  (`NOT_A_TOOL`) covers what neither derivation nor shape reaches. **A hand-maintained list
+  of non-tools is the same closed-list problem one level over — except for the direction it
+  leaks:** an unclassified name here produces a **build failure** naming the file, the line
+  and the routes to classify it, where the closed vocabulary produced **silence**. Noise a
+  maintainer fixes is not the same defect as silence nobody can see, and that asymmetry is
+  the whole argument for accepting this direction and not the other. Residual, stated because
+  it is real: no harness tool has ever been named in all capitals, which is what the shape
+  rule rests on and is asserted — so `` `DEPLOY` `` would still be missed where `` `Deploy` ``
+  is now caught. **The fourth rule is a recognition route too, and it is not exempt from its
+  own asymmetry:** a hand-maintained list can rot silently the same way `VOCAB` did if an
+  entry is added before anything actually names it — which happened. The whole Claude Code
+  hook-event family was pre-populated into `NOT_A_TOOL` (11 names) on the argument that "the
+  next one documented must not break the build", and a live check against the real tree
+  found **9 of the 11 had zero backticked mentions anywhere in `symlink/`, `.claude/` or
+  `CLAUDE.md`** — each a silent classification route for exactly the shape this file exists
+  to catch (`` `Notification` ``, `` `PreToolUse` ``, `` `PreCompact` `` and
+  `` `SubagentStop` `` were reproduced as invisible against a live head). So the fourth rule
+  now asserts what it grants: every `NOT_A_TOOL` entry must be **JUSTIFIED BY A REAL
+  MENTION** in that same tree, or the build fails naming the dead entry. The 9 un-earned
+  names are gone; two remain, each backed by a mention — `SessionStart` (a real hook event)
+  and `Makefile` — and a name can only be added back in the same commit as the mention that
+  justifies it.
 - **(b) The scanned set is DERIVED, never listed.** Two paths were hardcoded, so the check
   could only ever look at the two someone remembered — and `symlink/SCHEMA.md`'s
   browser-access section named `mcp__claude-in-chrome__*` to five readers whose allowlist
