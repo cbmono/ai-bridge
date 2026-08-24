@@ -33,13 +33,16 @@ reviews:
   # below, which is the fact a reviewer should act on instead of inferring one
   # from this comment.)
   sequence_diagrams: false
-  # FACT, not preference: every `tests/*.test.sh` harness carries a bash shebang
-  # and uses bash-only constructs (`pipefail`, `local`, process substitution),
-  # and none is ever invoked via `sh`. Census: `for f in tests/*.test.sh; do
-  # head -1 "$f"; done | sort | uniq -c` — see the PR that added this line for
-  # the exact run. Bash is the standard here; do not ask for a POSIX `sh`
-  # rewrite of anything under `tests/`. `tests/harness-shell-dialect.test.sh`
-  # keeps this comment honest — it fails if this claim and the code stop matching.
+  # FACT, not preference: every `*.sh` under `tests/` — the whole scope declared
+  # below, at any depth and whatever the filename suffix — starts with exactly
+  # `#!/usr/bin/env bash` and uses bash-only constructs (`pipefail`, `local`,
+  # process substitution), and none is ever invoked via `sh`. Census:
+  # `find tests -name '*.sh' -exec head -1 {} \; | sort | uniq -c` — see the PR
+  # that added this line for the exact run. Bash is the standard here; do not
+  # ask for a POSIX `sh` rewrite of anything under `tests/`.
+  # `tests/harness-shell-dialect.test.sh` keeps this comment honest: it scans
+  # exactly the glob below, fails on any file whose first line is not that
+  # shebang, and fails if the glob here and the one it scans stop matching.
   path_instructions:
     - path: "tests/**/*.sh"
       instructions: >
