@@ -196,7 +196,7 @@ status, with the same 🔴 awaiting-you queue on top.
 derives each instance's `SNAPSHOT.json`; every renderer reads that file and none of them
 reads the bundle. That separation is the whole reason each renderer after the first was
 cheap — see
-[conventions.md invariant 11](conventions.md#11-the-cross-instance-board-is-two-scripts-and-one-deletable-generated-file).
+[conventions.md invariant 11](conventions.md#11-the-cross-instance-board-is-a-writer-three-renderers-and-one-deletable-generated-file).
 The two HTML views are one script and a flag, not two scripts: `--layout columns` (the
 default) is the kanban page, `--layout table` is the collapsed page meant for publishing.
 
@@ -315,7 +315,7 @@ category C (ESC and the other controls, the bidi overrides). Nothing from a snap
 sets a colour.
 
 Full reasoning, including why one drifted instance must not blank the board for the rest:
-[conventions.md invariant 11](conventions.md#11-the-cross-instance-board-is-two-scripts-and-one-deletable-generated-file).
+[conventions.md invariant 11](conventions.md#11-the-cross-instance-board-is-a-writer-three-renderers-and-one-deletable-generated-file).
 
 ---
 
