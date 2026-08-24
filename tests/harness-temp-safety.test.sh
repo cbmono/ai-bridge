@@ -46,30 +46,70 @@
 # delimiters are now read by a small lexer that skips what the shell skips, so no text a
 # harness writes about this hazard can stop the scanner from seeing the hazard.
 #
-# THE LIMITS THAT REMAIN, STATED RATHER THAN GUESSED AT — the scanner is a text scan over
-# statements, not a shell parser:
+# THE LIMITS THAT REMAIN — (b) THROUGH (e) ARE DECIDED PERMANENT (task-027, 2026-08-24), NOT
+# TODO. The scanner is a text scan over statements, not a shell parser, and the owner chose
+# to stop extending it rather than close a fourth one — see the paragraph after the list:
 #   (a) the `||` abort must sit on the same STATEMENT as the `mktemp` — chasing a guard
 #       into a following statement would mean deciding which nearby test counts, which is
 #       guessing;
-#   (b) the trap must name the path inline (`trap 'rm -rf "$TMP"' EXIT`) — a trap that
-#       calls a cleanup function hides the path from a text scan; and
-#   (c) the path must not be laundered through another variable (`A="$(cd "$(mktemp …)"
-#       && pwd)"; TMP="$A"`) — only the trapped name's own assignments are read; and
-#   (d) joining can over-reach as well as reach — see `logical_lines`, which carries two
-#       tripwires for it, both asserted non-vacuously, and which states exactly how far
-#       its lexer follows the shell and where it stops; and
-#   (e) the assignment must be at the START of its statement. This needs no join to bite:
-#       `A=1 ; TMP="$(cd "$(mktemp …)" && pwd)"` is one physical line of ordinary shell,
-#       destructive for real (measured: it emptied a throwaway directory and exited 0), and
-#       reported by NEITHER this scanner nor the line-wise one it replaced. Splitting
-#       statements at `;` wants judgement about `case` arms and `for x; do` that a text scan
-#       cannot make, so it is recorded in task-025 for a decision rather than guessed at
-#       here. Measured over this directory: no harness assigns a trap-deleted path anywhere
-#       but at a statement start, so nothing is hiding behind it today.
-# Every harness in this directory satisfies all of these today. (b) and (c) are the honest
-# ceiling of this approach, not oversights: closing them wants a shell parser. The corpus
-# assertions below fail loudly if the scanner stops finding traps at all, or if any
-# harness ends mid-statement — the two failure modes that would let a blind spot pass as
+#   (b) PERMANENT. the trap must name the path inline (`trap 'rm -rf "$TMP"' EXIT`) — a
+#       trap that calls a cleanup function hides the path from a text scan. Reproduced:
+#         cleanup() { rm -rf "$FTMP"; }; trap cleanup EXIT
+#       over an FTMP built by the destructive `cd "$(mktemp …)"` shape on its own, ordinary,
+#       unguarded statement. `scan`'s `vars` list is only populated from a statement that
+#       contains BOTH `trap` and `rm -rf` together, and here they sit in two different
+#       statements, so the destructive assignment is never even looked up. Measured, run for
+#       real: in a throwaway checkout with a TMPDIR that does not exist, this shape deleted
+#       the checkout and exited 0, while `scan` reported 0 findings against it;
+#   (c) PERMANENT. the path must not be laundered through another variable
+#       (`A="$(cd "$(mktemp …)" && pwd)"; FTMP="$A"`) — only the trapped name's own
+#       assignments are read, and `FTMP="$A"` carries none of the destructive shape itself.
+#       Measured the same way: real deletion, real exit 0, 0 findings from `scan`;
+#   (d) PERMANENT. joining can over-reach as well as reach: `logical_lines` carries two
+#       tripwires for a runaway join (UNCLOSED/WIDE, both asserted non-vacuously below), but
+#       a SHORT over-join that closes within MAXSPAN trips neither, and if it swallows a
+#       following assignment the joined statement no longer STARTS with that assignment, so
+#       the anchored `^FTMP=` selector misses it even though the assignment is real,
+#       unguarded, and runs at top level. Reproduced with a `\`-continuation (which joins two
+#       physical lines for real bash too, unlike a `$( … )`, which would fork a subshell and
+#       the assignment would never reach the trap's scope):
+#         A=1 \
+#         FTMP="$(cd "$(mktemp …)" && pwd)"
+#       joins into one statement beginning `A=1 \ FTMP=…` — the same displacement as (e)
+#       below, reached through the JOIN mechanism instead of a bare `;`. Measured: real
+#       deletion, real exit 0, 0 findings from `scan`;
+#   (e) PERMANENT. the assignment must be at the START of its statement even with no join
+#       involved. `A=1 ; TMP="$(cd "$(mktemp …)" && pwd)"` is one physical line of ordinary
+#       shell, destructive for real (measured: it emptied a throwaway directory and exited
+#       0), and reported by NEITHER this scanner nor the line-wise one it replaced.
+#       Splitting statements at `;` wants judgement about `case` arms and `for x; do` that a
+#       text scan cannot make. Measured over this directory: no harness assigns a
+#       trap-deleted path anywhere but at a statement start, so nothing is hiding behind it
+#       today.
+#
+# task-027 (2026-08-24) answered the question these four raised — keep extending the text
+# scan limit by limit, replace it with a real shell parser, or stop and narrow the promise —
+# with STOP: task-022's original criterion 2 promised the check fires for `any harness under
+# tests/`, and that promise is narrowed here to the class actually covered (stated
+# positively in the next paragraph), with (b)–(e) recorded as permanent rather than pending.
+# The practical stake was, and remains, ZERO — no harness in this directory hides behind any
+# of the four today, which the corpus assertions below fail loudly the moment one does. A
+# real shell parser (the option that closes (b), (c) and (e) AS A CLASS, not one at a time)
+# is DEFERRED as a possible future iteration and explicitly NOT rejected: three rounds of
+# extending this text scan have each closed one class and revealed another, and that
+# recurring cost was judged not worth paying again for a promise nothing in this repo
+# currently needs.
+#
+# WHAT THIS SCANNER DOES COVER, stated positively rather than left to be inferred from the
+# limits above: a trap that names the deleted path INLINE, built by a `cd` into a command
+# substitution, on its OWN statement, at the START of that statement — however that
+# statement is laid out across physical lines (one line, backslash-continued, or an open
+# `$( … )` spanning lines) and however it is dressed in surrounding quotes or comments
+# engineered to look like delimiters. That is the class task-022 shipped a fix for and the
+# class this file protects; the promise stops there.
+#
+# The corpus assertions below fail loudly if the scanner stops finding traps at all, or if
+# any harness ends mid-statement — the two failure modes that would let a blind spot pass as
 # clean.
 #
 # Both are asserted NON-VACUOUSLY, over synthetic harnesses that do and do not carry each
