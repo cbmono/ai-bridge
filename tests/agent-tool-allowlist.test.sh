@@ -255,8 +255,11 @@ unclassified_names() { # <file> — backticked capitalised names no rule classif
 # `.claude/rules/`, `docs/operations.md` and slash commands that the possession audit never
 # opens, and a name earning its keep there is just as real as one earning it in an audited
 # file. Scoped to `*.md` because that is where a backticked identifier means anything here.
-NOT_A_TOOL_TREE='symlink .claude CLAUDE.md'
+NOT_A_TOOL_TREE="$REPO/symlink $REPO/.claude $REPO/CLAUDE.md"
 not_a_tool_uses() { # <name> — count of backticked exact mentions across NOT_A_TOOL_TREE
+  # $REPO-anchored, not cwd-relative: this runs the same regardless of where the harness
+  # is invoked from, unlike a bare `symlink .claude CLAUDE.md` which resolves against
+  # whatever directory the caller happens to be in when it runs `bash tests/*.test.sh`.
   # shellcheck disable=SC2086
   grep -rhoE "\`$1\`" --include='*.md' $NOT_A_TOOL_TREE 2>/dev/null | grep -c .
 }
