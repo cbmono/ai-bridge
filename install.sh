@@ -187,6 +187,13 @@ CONFIG_DEST="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 # hand, so a second installer must never touch it. The exclusion stays because it is
 # cheap and because a settings.json appearing under `config/` would otherwise be linked
 # silently; a stale link from when this layer DID ship one is retired by config_sweep.
+#
+# ITS STATUS CANNOT TRAVEL OUT OF HERE, and that is a property of the interface, not an
+# oversight left to fix later. Its stdout IS the payload, every caller consumes it as
+# `$(config_entries)` inside a here-doc, and the `cd`/`find` statuses vanish into a
+# pipeline whose status is `sort`'s. So no caller can ask "did discovery succeed?" — which
+# is why the destructive consumer does not ask. `config_src_probe` names the cause once
+# per run, and `config_sweep`'s refusal is stated over the RESULT instead. See both.
 config_entries() {
   local tier
   for tier in $CONFIG_TIERS; do
@@ -202,6 +209,55 @@ config_entries() {
         printf '%s\t%s\n' "$tier" "$rel"
       done
   done
+}
+
+# Can this run LOOK at its own source tree? Named per directory, once per run, before
+# anything is counted — the mirror of the probe config_sweep runs over the DESTINATION,
+# and for the same reason: "nothing is shipped" and "I could not read the shipment" must
+# never print the same thing.
+#
+# This is the cheap half of the repair, not the fix. It reports the CAUSE where the cause
+# is a permission on a directory, which is every mode measured — but it is a cause-based
+# check, so it can only ever cover the causes someone thought of. The guard that does not
+# depend on that is in config_sweep, stated over the result.
+CONFIG_SRC_FAIL=0
+config_src_probe() {
+  local tier d
+  CONFIG_SRC_FAIL=0
+  for tier in $CONFIG_TIERS; do
+    [ -d "$CONFIG_SRC/$tier" ] || continue
+    while IFS= read -r d; do
+      [ -n "$d" ] || continue
+      { [ -r "$d" ] && [ -x "$d" ]; } && continue
+      echo "  fail  ${d#"$TEMPLATE_DIR"/} — cannot list this source directory; the files" >&2
+      echo "        under it were NOT discovered, so nothing here can act on their absence." >&2
+      CONFIG_SRC_FAIL=$((CONFIG_SRC_FAIL+1))
+    done <<EOF
+$( printf '%s\n' "$CONFIG_SRC/$tier"
+   find "$CONFIG_SRC/$tier" -type d -print 2>/dev/null || true )
+EOF
+    # `find`'s own status, kept rather than discarded — the backstop for a traversal that
+    # fails some way a per-directory probe cannot predict. Reported only when the probe
+    # found nothing, so one cause is never counted twice.
+    if [ "$CONFIG_SRC_FAIL" -eq 0 ] \
+       && ! find "$CONFIG_SRC/$tier" -type f -print >/dev/null 2>&1; then
+      echo "  fail  config/$tier — could not be traversed; its file list is INCOMPLETE." >&2
+      CONFIG_SRC_FAIL=$((CONFIG_SRC_FAIL+1))
+    fi
+  done
+  [ "$CONFIG_SRC_FAIL" -eq 0 ]
+}
+
+# What the source probe could not do, said out loud. Separate from config_sweep_warn
+# because the two failures have opposite remedies: that one asks you to fix the CONFIG
+# DIR, this one asks you to fix the CHECKOUT.
+config_src_warn() {
+  [ "$CONFIG_SRC_FAIL" -gt 0 ] || return 0
+  echo "warn  $CONFIG_SRC_FAIL source directory/ies could not be listed (named above), so the" >&2
+  echo "      set of files this layer ships was discovered INCOMPLETE. Nothing was retired" >&2
+  echo "      on the strength of it. Make $CONFIG_SRC readable and listable (r-x)," >&2
+  echo "      then re-run." >&2
+  return 1
 }
 
 # Top-level entries the config layer manages — the roots of the dangling-link sweep.
@@ -365,7 +421,7 @@ CONFIG_SWEEP_FAIL=0
 # not counted and named twice — once by config_uninstall's entries loop and once here.
 CONFIG_SWEEP_SKIP=""
 config_sweep() { # [retire|detach]
-  local mode="${1:-retire}" t b d l rel was n_roots=0 blind=0 find_rc=0 scan="" part=""
+  local mode="${1:-retire}" t b d l rel was n_roots=0 blind=0 find_rc=0 scan="" part="" sorted=""
   local roots=()
   CONFIG_RETIRED=0
   CONFIG_DETACHED=0
@@ -416,6 +472,94 @@ $part"
     echo "  fail   . — could not fully traverse $CONFIG_DEST; this sweep is INCOMPLETE" >&2
     CONFIG_SWEEP_FAIL=$((CONFIG_SWEEP_FAIL+1))
   fi
+
+  # AN EMPTY SOURCE SET IS NOT A LICENCE TO DELETE, and this is the guard that says so.
+  #
+  # `config_sweep` decides what to retire by asking "is this link's target still in the
+  # source set?". An empty source set therefore does not mean "the source is gone, retire
+  # everything" — it can equally mean "I could not look", and until this guard existed the
+  # function took the destructive reading of both. Measured on a real in-place upgrade,
+  # three ways — `config/required` at 0400, `config/required/agents` at 0000, and
+  # `config/required/agents` at 0400 — each identical: exit 0, a `retire` line for every
+  # link including the three this layer still ships, ZERO left, and no warning. The 0400
+  # subdirectory case produced no stderr at all. `retire` is a success word printed for a
+  # data loss.
+  #
+  # WHY THIS IS NOT A STATUS CHECK. `find . -type f` in a directory that is unreadable but
+  # executable exits 0 and prints nothing. There is no error to propagate, so `pipefail`,
+  # keeping `find`'s status, or checking the subshell would every one of them pass cleanly
+  # on the exact input that empties the layer. config_src_probe above catches the causes we
+  # know; this catches the consequence, whatever caused it.
+  #
+  # WHAT IT ASSERTS, over two sets rather than over an exit code:
+  #     discovery returned NO entries, while links into $CONFIG_SRC still exist
+  #     => a refusal, not a retirement.
+  # The one state where an empty source set really does mean "nothing is shipped" is a
+  # tier directory that is GONE — `rm -rf config/required`, the AUTONOMY.md contract this
+  # file documents, where retiring those links is exactly right. So a tier that is still
+  # PRESENT and yielded nothing is the discriminator, and it is checked here rather than
+  # inferred from a status. A tier deliberately emptied but left in place lands on the
+  # refusing side: it is the rarer intent, the message says how to express it, and being
+  # wrong in that direction costs a re-run instead of a layer.
+  #
+  # TWO REFUSALS, AND NEITHER SUBSUMES THE OTHER. The probe's fires on an INCOMPLETE list
+  # even when it is non-empty — one unreadable subdirectory among several readable ones
+  # still yields files, so the set-emptiness test below is structurally blind to it while
+  # the links under that directory read as dangling and get retired. The set test fires on
+  # an EMPTY list whatever the cause, including causes no probe was written for. Each
+  # covers the other's blind spot; both are pinned by mutation in config-layer.test.sh.
+  # It is also what makes config_src_warn's "nothing was retired on the strength of it"
+  # true rather than merely likely — a warning that overstates is the same defect again.
+  #
+  # RETIRE MODE ONLY, both of them. On `--uninstall` the removals are what the user asked
+  # for, not an inference from the source set, so a blind read must not stop them.
+  if [ "$mode" != detach ] && [ "${CONFIG_SRC_FAIL:-0}" -gt 0 ]; then
+    echo "  fail   . — REFUSING to retire: the source list is INCOMPLETE (the directory it" >&2
+    echo "         could not read is named above). This sweep retires whatever is MISSING" >&2
+    echo "         from that list, so acting on it would retire files that are present and" >&2
+    echo "         merely unlisted. Nothing was retired." >&2
+    CONFIG_SWEEP_FAIL=$((CONFIG_SWEEP_FAIL+1))
+    return 0
+  fi
+  if [ "$mode" != detach ]; then
+    local n_src=0 n_ours=0 tier src_present=0
+    for tier in $CONFIG_TIERS; do
+      [ -d "$CONFIG_SRC/$tier" ] && src_present=1
+    done
+    while IFS= read -r l; do [ -n "$l" ] && n_src=$((n_src+1)); done <<EOF
+$(config_entries)
+EOF
+    if [ "$n_src" -eq 0 ] && [ "$src_present" -eq 1 ]; then
+      while IFS= read -r l; do
+        [ -n "$l" ] || continue
+        case "$(readlink "$l")" in "$CONFIG_SRC"/*) n_ours=$((n_ours+1)) ;; esac
+      done <<EOF
+$scan
+EOF
+      if [ "$n_ours" -gt 0 ]; then
+        echo "  fail   . — REFUSING to retire: this run discovered no files under" >&2
+        echo "         $CONFIG_SRC, yet $n_ours link(s) here still point into it." >&2
+        echo "         A source directory that exists and lists nothing is 'I could not" >&2
+        echo "         look', not 'nothing is shipped', and only the second one licenses a" >&2
+        echo "         delete. Nothing was retired. Make $CONFIG_SRC" >&2
+        echo "         readable and listable (r-x) and re-run; if you really meant to drop" >&2
+        echo "         the layer, remove the tier directory or run --config --uninstall." >&2
+        CONFIG_SWEEP_FAIL=$((CONFIG_SWEEP_FAIL+1))
+        return 0
+      fi
+    fi
+  fi
+
+  # De-duplicated into a variable first, so `sort`'s status is looked at rather than
+  # discarded into the here-doc that consumes it. A failed `sort` leaves `$sorted` empty
+  # and the loop below therefore removes nothing, which is the safe direction — but it
+  # used to do that silently, and silence is the whole defect class this function keeps
+  # meeting. Cheap and correct; it is not the guard above, which does not need a status.
+  if ! sorted="$(printf '%s\n' "$scan" | sort -u)"; then
+    echo "  fail   . — could not de-duplicate the link scan; this sweep is INCOMPLETE" >&2
+    CONFIG_SWEEP_FAIL=$((CONFIG_SWEEP_FAIL+1))
+    sorted=""
+  fi
   while IFS= read -r l; do
     [ -n "$l" ] || continue
     rel="${l#"$CONFIG_DEST"/}"
@@ -463,7 +607,7 @@ $l
       echo "  sweep  $rel (dead backup of a relinked file, was -> $was)"
     fi
   done <<EOF
-$(printf '%s\n' "$scan" | sort -u)
+$sorted
 EOF
 }
 
@@ -515,6 +659,10 @@ config_require_src() {
 config_install() {
   local tier rel src dst dstdir bak off tgt n_link=0 n_ok=0 n_moved=0 n_refused=0 n_else=0 n_fail=0 reported=" "
   config_require_src
+  # BEFORE the link loop and before the sweep, so a source tree this run cannot read is
+  # named while the run still has everything it needs to name it — and so the two writes
+  # that follow are already known to be acting on a partial list.
+  config_src_probe || true
 
   # NO two-tier duplicate refusal any more. It guarded the case where `required` and
   # `opinionated` both declared one path — whichever ran second would move the first aside
@@ -595,7 +743,15 @@ config_install() {
       # Ours, but aimed at the other tier: the file changed tier between two runs. Our
       # own link is not worth preserving, so relink rather than leave a .bak symlink
       # behind — the backup path below is for a REAL file, which is never ours to lose.
-      case "$tgt" in "$CONFIG_SRC"/*) rm "$dst" ;; esac
+      #
+      # The one `rm` here that does not report, and deliberately so: a failure FALLS
+      # THROUGH to the `mv`-aside below, which is checked, names the file and counts a
+      # failure — so the outcome is already reported, once, by the write that actually
+      # matters. Silencing the duplicate `rm:` line is the only change; with one tier the
+      # branch is unreachable anyway ($tgt can only be $src). Flagged in review as an
+      # unchecked write, kept explicit here so the next reader does not have to re-derive
+      # that it is the one place where falling through IS the check.
+      case "$tgt" in "$CONFIG_SRC"/*) rm -f "$dst" 2>/dev/null || true ;; esac
     fi
     # EVERY WRITE IS CHECKED, and the reason is that none of them used to be. `mkdir -p`,
     # `mv` and `ln -s` all ran unchecked while the `link`/counter lines ran regardless — and
@@ -658,6 +814,7 @@ EOF
     rc=1
   fi
   config_sweep_warn || rc=1
+  config_src_warn || rc=1
   [ "$rc" -eq 0 ] || return "$rc"
   echo "Next: restart Claude Code (/exit, then \`claude\`) so it re-scans agents and commands."
   return 0
@@ -665,6 +822,7 @@ EOF
 
 config_uninstall() {
   config_require_src
+  config_src_probe || true
   echo "Removing ai-bridge config-layer symlinks from $CONFIG_DEST"
   # `rm` IS CHECKED HERE for the same reason it is in config_install: `rm` failing on an
   # unwritable directory printed "  rm  <path>" anyway, because errexit is suspended by
@@ -723,6 +881,7 @@ EOF
     rc=1
   fi
   config_sweep_warn || rc=1
+  config_src_warn || rc=1
   return "$rc"
 }
 

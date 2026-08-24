@@ -527,6 +527,162 @@ ok "…warning that the sweep is unfinished"   "$(said 'could not finish')" yes
 ok "…while the unseen links are still there" "$(find "$D22/commands" -type l | wc -l | tr -d ' ')" 2
 
 # --------------------------------------------------------------------------- #
+echo "-- …and the SOURCE side of the same question, which is the destructive one"
+# THE TWIN OF THE FIXTURE ABOVE, AND THE WORSE HALF. That one is about a destination
+# directory the sweep cannot read: it under-retires, loudly since the fix. This one is
+# about the SOURCE tree the keep-set is derived from, and it over-retires — silently, and
+# it takes the layer with it.
+#
+# `config_sweep` decides what to retire by asking "is this link's target still in the
+# source set?". `config_entries` builds that set with `( cd … && find . -type f )` inside a
+# pipeline consumed as `$(config_entries)` in a here-doc, so BOTH statuses are unreachable
+# by construction. When discovery came back empty because it could not LOOK, every live
+# link of ours read as dangling — `test -e` follows the link into the directory it cannot
+# stat — and the sweep deleted them, printed `retire` for each, and exited 0.
+#
+# Measured on this fixture at the parent commit, three modes, all identical: exit 0, a
+# `retire` line for each of the 5 links, ZERO links left, the three agents this layer
+# still ships among them. `config/required/agents` at 0400 produced NO STDERR AT ALL.
+#
+# WHY THIS IS NOT A STATUS FIXTURE. `find . -type f` in a directory that is unreadable but
+# executable exits 0 and prints nothing, so `pipefail`, keeping `find`'s status, or
+# checking the subshell would all pass on the input that empties the layer. The guard is
+# stated over two SETS — "discovery returned nothing while links into $CONFIG_SRC still
+# exist" — and the tier still being present is what separates it from the legitimate
+# `rm -rf config/required`, which is the control below and must still retire.
+#
+# THERE ARE TWO GUARDS AND NEITHER SUBSUMES THE OTHER, so both are pinned separately,
+# by mutation on these fixtures, one at a time:
+#   * delete the SET guard (empty discovery + live links + a tier still present) and the
+#     EMPTY-BUT-PRESENT fixture below goes exit 0 / 5 retired / 0 links left — 5 failures.
+#     It is the fixture that pins it, and it deliberately uses no unusual permission:
+#     under an unreadable directory the probe fires too, so those fixtures cannot tell you
+#     which guard held. Measured while writing this: with the set guard deleted, the three
+#     unreadable modes below stay entirely GREEN — same exit code, same message, layer
+#     intact — because the probe covers them. A fixture that only ever exercises a
+#     permission error therefore proves nothing about this guard, which is the trap this
+#     line exists to record.
+#   * delete the PROBE's refusal and the partial fixture — one unreadable subdirectory
+#     among two, so discovery is non-empty and the set guard is structurally blind —
+#     retires the three agents this layer still ships: 3 failures, while the exit code
+#     stays non-zero. That is the same silent loss under a red exit.
+#   * neuter config_src_probe entirely and the refusal still holds; it just stops naming
+#     the directory (3 failures).
+blind_src() { # <label> <mode> <path under the template> <expect the cause named>
+  local label="$1" mode="$2" rel="$3" named="$4" d t src rc old
+  d="$(newdest 23)"; t="$TMP/tpl-blindsrc-$label"; rm -rf "$t"; make_tpl "$t"
+  run_cfg "$d" "$t" >/dev/null            # the three agents this layer ships are now linked
+  src="$(cd "$t" && pwd)"
+  for old in commands/grill.md MEMORY.md; do   # …plus what the OLD layer left behind
+    mkdir -p "$d/$(dirname "$old")"
+    ln -s "$src/config/opinionated/$old" "$d/$old"
+  done
+  ok "[$label] the upgrade fixture is in place" "$(find "$d" -type l | wc -l | tr -d ' ')" 5
+  chmod "$mode" "$t/$rel"
+  rc="$(run_cfg "$d" "$t")"
+  chmod 0700 "$t/$rel"
+  ok "[$label] exits non-zero"                 "$([ "$rc" != 0 ] && echo yes || echo no)" yes
+  ok "[$label] …refuses instead of retiring"   "$(said 'REFUSING to retire')" yes
+  ok "[$label] …and retires NOTHING"           "$(said 'no longer shipped')" no
+  # The assertion that would have caught this at the parent commit, and the only one that
+  # cannot be satisfied by a message: the links are still on disk afterwards.
+  ok "[$label] …so every link is still there"  "$(find "$d" -type l | wc -l | tr -d ' ')" 5
+  ok "[$label] …the 3 we ship among them"      "$(find "$d/agents" -type l | wc -l | tr -d ' ')" 3
+  ok "[$label] …names the source directory"    "$(said "$named")" yes
+  ok "[$label] …and no success epilogue"       "$(said 'Next: restart')" no
+}
+# The silent one first: at the parent commit this run printed nothing on stderr whatsoever.
+blind_src subdir-0400 0400 config/required/agents 'cannot list this source directory'
+blind_src subdir-0000 0000 config/required/agents 'cannot list this source directory'
+# The tier itself, where the `cd` is what fails rather than the `find`.
+blind_src tier-0400   0400 config/required       'cannot list this source directory'
+
+# --------------------------------------------------------------------------- #
+echo "-- …and PARTIAL blindness, which the set guard structurally cannot see"
+# The case the two-set statement does NOT cover, and the reason there are two guards.
+# With a second readable directory under the tier, discovery comes back NON-EMPTY — one
+# file, from the readable half — so "no entries while links still exist" is simply false
+# and the set guard correctly stays out of the way. Meanwhile every link under the
+# unreadable half still fails `test -e` and reads as retired. Today `config/required`
+# holds one directory, so this shape is one `mkdir` away rather than hypothetical, and a
+# guard written only over the two sets would ship a hole that opens the day a second
+# directory is added. The probe's refusal is what closes it; delete that refusal and the
+# three agents this layer ships are retired here with the exit code still non-zero.
+D25="$(newdest 25)"; T14="$TMP/tpl-partialsrc"; make_tpl "$T14"
+mkdir -p "$T14/config/required/rules"; printf 'x\n' > "$T14/config/required/rules/keep.md"
+run_cfg "$D25" "$T14" >/dev/null
+SRC14="$(cd "$T14" && pwd)"
+mkdir -p "$D25/commands"; ln -s "$SRC14/config/opinionated/commands/grill.md" "$D25/commands/grill.md"
+ok "3 agents + a second dir + one stale link" "$(find "$D25" -type l | wc -l | tr -d ' ')" 5
+chmod 0000 "$T14/config/required/agents"
+rc25="$(run_cfg "$D25" "$T14")"
+chmod 0700 "$T14/config/required/agents"
+# Proves the fixture is the partial case and not another empty one: the readable half was
+# discovered, so the emptiness test below could never have fired.
+ok "…discovery was NOT empty: rules/keep.md seen" "$(said 'rules/keep.md')" yes
+ok "…exits non-zero"                          "$([ "$rc25" != 0 ] && echo yes || echo no)" yes
+ok "…refuses on an INCOMPLETE list"            "$(said 'source list is INCOMPLETE')" yes
+ok "…and retires NOTHING"                      "$(said 'no longer shipped')" no
+ok "…so the 3 agents are still linked"         "$(find "$D25/agents" -type l | wc -l | tr -d ' ')" 3
+ok "…and the stale link is still there too"    "$(yn test -L "$D25/commands/grill.md")" yes
+ok "…and no success epilogue"                  "$(said 'Next: restart')" no
+
+# --------------------------------------------------------------------------- #
+echo "-- …and an EMPTY-but-present tier, where only the set guard can fire"
+# THE FIXTURE THAT PINS THE SET GUARD, and it needs no unusual permission at all. Every
+# directory is readable, so the probe finds nothing to report and its refusal cannot fire;
+# discovery is empty because the tier holds no linkable file. That is the same observable
+# state an unreadable tier produces, and the installer genuinely cannot tell the two
+# apart — which is the argument for refusing both. Delete the set guard and this fixture
+# goes exit 0 / 5 retired / 0 left, with nothing else in the suite noticing.
+#
+# CONTRAST IT WITH "an empty tier: exits 0" further up, which is the SAME source state and
+# stays green: there are no links there. The refusal is about the pair of sets, never about
+# the source alone, and these two fixtures are the two sides of that.
+#
+# `README.md` rather than a truly empty directory, so the fixture also proves the count is
+# taken AFTER the never-linked exclusions rather than from a raw `find`.
+D26="$(newdest 26)"; T15="$TMP/tpl-emptied"; make_tpl "$T15"
+run_cfg "$D26" "$T15" >/dev/null
+SRC15="$(cd "$T15" && pwd)"
+for old in commands/grill.md MEMORY.md; do
+  mkdir -p "$D26/$(dirname "$old")"
+  ln -s "$SRC15/config/opinionated/$old" "$D26/$old"
+done
+ok "the same 5 links, nothing unreadable"    "$(find "$D26" -type l | wc -l | tr -d ' ')" 5
+rm -f "$T15/config/required/agents/"*.md; printf 'x\n' > "$T15/config/required/agents/README.md"
+rc26="$(run_cfg "$D26" "$T15")"
+ok "an emptied but PRESENT tier: non-zero"   "$([ "$rc26" != 0 ] && echo yes || echo no)" yes
+ok "…and the probe reported nothing"         "$(said 'cannot list this source directory')" no
+ok "…so it is the set guard that refused"    "$(said 'discovered no files under')" yes
+ok "…retiring NOTHING"                       "$(said 'no longer shipped')" no
+ok "…leaving all five links in place"        "$(find "$D26" -type l | wc -l | tr -d ' ')" 5
+ok "…and it says how to mean it for real"    "$(said 'remove the tier directory')" yes
+
+# --------------------------------------------------------------------------- #
+echo "-- …while a source tree that is genuinely GONE still retires, which is the control"
+# THE OTHER HALF OF THE GUARD, and the reason it is stated the way it is. A human running
+# `rm -rf config/required` produces the same empty source set, and there retiring every
+# link IS correct — it is the AUTONOMY.md contract this installer documents: delete the
+# directory, lose the capability, break nothing. A guard that refused here would be a
+# different bug, so the control is asserted with the same fixture and the same five links.
+D24="$(newdest 24)"; T13="$TMP/tpl-gonesrc"; make_tpl "$T13"
+run_cfg "$D24" "$T13" >/dev/null
+SRC13="$(cd "$T13" && pwd)"
+for old in commands/grill.md MEMORY.md; do
+  mkdir -p "$D24/$(dirname "$old")"
+  ln -s "$SRC13/config/opinionated/$old" "$D24/$old"
+done
+ok "the same 5 links, the legitimate case"   "$(find "$D24" -type l | wc -l | tr -d ' ')" 5
+rm -rf "$T13/config/required"; mkdir -p "$T13/config"
+rc24="$(run_cfg "$D24" "$T13")"
+ok "a REMOVED tier: exits 0"                 "$rc24" 0
+ok "…retires every one of them"              "$(find "$D24" -type l | wc -l | tr -d ' ')" 0
+ok "…and says that is what it did"           "$(said 'no longer shipped')" yes
+ok "…refusing nothing"                       "$(said 'REFUSING')" no
+ok "…and nothing is reported as an error"    "$(said 'error')" no
+
+# --------------------------------------------------------------------------- #
 echo "-- …and a root ANOTHER installer moved aside is swept too"
 # NO UNUSUAL PERMISSIONS, AND IT IS THE ORDER THIS REPO RECOMMENDS. ai-setup links each
 # top-level entry as a whole unit, moving the real directory to `<root>.bak.<epoch>` first.
