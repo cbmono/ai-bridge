@@ -38,7 +38,13 @@
 set -uo pipefail
 
 TPLSRC="$(cd "$(dirname "$0")/.." && pwd)"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/moved-tpl.XXXXXX")"
+# GUARDED, because the canonicalisation below is destructive over an empty TMP: when
+# $TMPDIR names a directory that does not exist, `mktemp -d` fails, this substitution is
+# EMPTY, `cd ""` SUCCEEDS WITHOUT MOVING, `pwd -P` returns this script's own cwd — the
+# checkout — and the EXIT trap below deletes it. tests/harness-temp-safety.test.sh fails
+# on that shape anywhere in tests/, and it is what caught this file.
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/moved-tpl.XXXXXX")" || {
+  echo "moved-template.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 # PHYSICAL path, before anything is built under it. On macOS $TMPDIR lives under /var,
 # which is a symlink to /private/var, and install.sh derives its own location with
 # cd+pwd — so the link it writes records the RESOLVED path. The hook then prints that
