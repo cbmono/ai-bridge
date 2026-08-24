@@ -301,24 +301,43 @@ config_ours() {
 # whose script is gone exits 127 on every launch — so retiring a config file has to sweep
 # too. Scoped to the entries this layer manages, never the whole config dir: ~/.claude
 # also holds plugins/, projects/ and sessions/, none of it ours to walk.
+#
+# THE ROOT LIST IS AN ARRAY, AND THAT IS LOAD-BEARING. It used to be a space-separated
+# string expanded as `find $roots`, with a `# shellcheck disable=SC2086` above it so lint
+# could not object. `CLAUDE_CONFIG_DIR` is a path a human chooses — `~/Library/Application
+# Support/claude` is an ordinary thing to pick — and one space in it split every root into
+# fragments that exist nowhere. `find` then printed its errors to the /dev/null this
+# function already redirects, returned non-zero into the `|| true`, and the sweep reported
+# NOTHING while exiting 0. Measured on the handover fixture: 21 retired / 0 dangling
+# without a space in the path, 2 retired / 19 dangling with one — the two survivors being
+# the top-level entries, whose `find` was already quoted. Everything under `commands/`,
+# `hooks/`, `scripts/`, `output-styles/` and `agents/` stayed registered and dangling,
+# which is precisely the "retired command still shows up, retired hook exits 127" failure
+# the comment above describes. Pinned by a fixture whose config dir has a space in it.
+#
+# THE LOOP RUNS IN THIS SHELL, not down a pipe, so $CONFIG_RETIRED survives it. The count
+# is what lets the caller point at cbmono/ai-setup: a user whose 19 links just vanished is
+# owed the name of the repo that ships them now.
+CONFIG_RETIRED=0
 config_sweep() {
-  local t roots="" rel was
+  local t rel was
+  local roots=()
+  CONFIG_RETIRED=0
   while IFS= read -r t; do
     [ -n "$t" ] || continue
-    if [ -d "$CONFIG_DEST/$t" ] && [ ! -L "$CONFIG_DEST/$t" ]; then roots="$roots $CONFIG_DEST/$t"; fi
+    if [ -d "$CONFIG_DEST/$t" ] && [ ! -L "$CONFIG_DEST/$t" ]; then roots+=("$CONFIG_DEST/$t"); fi
   done <<EOF
 $(config_tops)
 EOF
-  {
-    find "$CONFIG_DEST" -maxdepth 1 -type l -print 2>/dev/null || true
-    # shellcheck disable=SC2086
-    if [ -n "$roots" ]; then find $roots -type l -print 2>/dev/null || true; fi
-  } | sort -u | while IFS= read -r l; do
+  while IFS= read -r l; do
     [ -n "$l" ] || continue
     rel="${l#"$CONFIG_DEST"/}"
     case "$(readlink "$l")" in
       "$CONFIG_SRC"/*)
-        if [ ! -e "$l" ]; then rm -f "$l"; echo "  retire $rel (no longer shipped by the config layer)"; fi
+        if [ ! -e "$l" ]; then
+          rm -f "$l"; CONFIG_RETIRED=$((CONFIG_RETIRED+1))
+          echo "  retire $rel (no longer shipped by the config layer)"
+        fi
         continue ;;
     esac
     # Not ours by target, so the branch above cannot see it — but it may be OUR OWN dead
@@ -329,7 +348,23 @@ EOF
       was="$(readlink "$l")"; rm -f "$l"
       echo "  sweep  $rel (dead backup of a relinked file, was -> $was)"
     fi
-  done
+  done <<EOF
+$( { find "$CONFIG_DEST" -maxdepth 1 -type l -print 2>/dev/null || true
+     if [ ${#roots[@]} -gt 0 ]; then find "${roots[@]}" -type l -print 2>/dev/null || true; fi
+   } | sort -u )
+EOF
+}
+
+# Where the paths this layer just retired went. Printed only when something WAS retired, so
+# a steady-state run stays quiet. Without it the handover tells a user what vanished and
+# not where it went: on the machine this split was measured on, one `--config` run retired
+# 19 live links and named `cbmono/ai-setup` zero times in anything it printed.
+config_handover_note() {
+  [ "$CONFIG_RETIRED" -gt 0 ] || return 0
+  echo "      Those $CONFIG_RETIRED path(s) are not gone from your setup — they moved."
+  echo "      cbmono/ai-setup owns $CONFIG_DEST now and installs them: clone it and run"
+  echo "      its install.sh to get them back. Why, and what not to re-add here:"
+  echo "        docs/claude-config-ownership.md"
 }
 
 config_require_src() {
@@ -347,7 +382,7 @@ config_require_src() {
 }
 
 config_install() {
-  local tier rel src dst bak off tgt n_link=0 n_ok=0 n_moved=0 n_refused=0 n_else=0 reported=" "
+  local tier rel src dst bak off tgt n_link=0 n_ok=0 n_moved=0 n_refused=0 n_else=0 n_fail=0 reported=" "
   config_require_src
 
   # NO two-tier duplicate refusal any more. It guarded the case where `required` and
@@ -401,12 +436,30 @@ config_install() {
       # behind — the backup path below is for a REAL file, which is never ours to lose.
       case "$tgt" in "$CONFIG_SRC"/*) rm "$dst" ;; esac
     fi
-    mkdir -p "$(dirname "$dst")"
+    # EVERY WRITE IS CHECKED, and the reason is that none of them used to be. `mkdir -p`,
+    # `mv` and `ln -s` all ran unchecked while the `link`/counter lines ran regardless — and
+    # `set -e` cannot catch it, because the only caller is `config_install || config_rc=$?`,
+    # which suspends errexit for the whole function by construction. Measured with `agents/`
+    # at mode 500: three `Permission denied` on stderr, `Done. 3 linked`, exit 0, and zero
+    # links created. The consumers of this layer are `test -f` probes, so a false "3 linked"
+    # is invisible for the rest of the session — the role agent simply skips its fan-out.
+    # A failure is now named per file, counted separately from success, and returns 1.
+    if ! mkdir -p "$(dirname "$dst")" 2>/dev/null; then
+      echo "  fail  $rel — cannot create ${rel%/*}/ under $CONFIG_DEST" >&2
+      n_fail=$((n_fail+1)); continue
+    fi
     if [ -e "$dst" ] || [ -L "$dst" ]; then
-      bak="$dst.bak.$(date +%s)"; mv "$dst" "$bak"
+      bak="$dst.bak.$(date +%s)"
+      if ! mv "$dst" "$bak" 2>/dev/null; then
+        echo "  fail  $rel — cannot move the entry in the way aside" >&2
+        n_fail=$((n_fail+1)); continue
+      fi
       echo "  moved $rel -> ${bak##*/}"; n_moved=$((n_moved+1))
     fi
-    ln -s "$src" "$dst"
+    if ! ln -s "$src" "$dst" 2>/dev/null; then
+      echo "  fail  $rel — cannot create the symlink" >&2
+      n_fail=$((n_fail+1)); continue
+    fi
     echo "  link  $rel"; n_link=$((n_link+1))
   done <<EOF
 $(config_entries)
@@ -426,6 +479,12 @@ EOF
   # Counted and reported separately from "already in place": those are OUR links, these are
   # another layer's, and conflating them would hide the fact that this run wrote nothing.
   [ "$n_else" -eq 0 ] || echo "      $n_else already provided by another config layer — nothing written for those."
+  config_handover_note
+  if [ "$n_fail" -gt 0 ]; then
+    echo "warn  $n_fail file(s) could not be written (above) — the config dir is not writable" >&2
+    echo "      for them. Nothing here is partially applied: each failure is per file." >&2
+    return 1
+  fi
   if [ "$n_refused" -gt 0 ]; then
     echo "warn  $n_refused file(s) NOT linked: a directory in the way is a symlink (above)." >&2
     echo "      Fix those directories and re-run; nothing was written through them." >&2
@@ -450,6 +509,7 @@ EOF
   # link into this checkout whose file is gone.
   config_sweep
   echo "Done. Your runtime state, real files, and *.bak.* backups were left untouched."
+  config_handover_note
   return 0
 }
 
