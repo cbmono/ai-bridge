@@ -33,8 +33,10 @@
 # (`code-architect`, `deep-bug-scan`, `plan-architect`). Everything else under
 # `~/.claude` belongs to `cbmono/ai-setup` and is installed from there — see
 # docs/claude-config-ownership.md for why, and for what not to re-add here.
-# `config/` may be deleted; absence is safe. An instance never needs it, and the config
-# layer never needs an instance.
+# Absence is safe in the direction that matters: an instance stamp never needs `config/`,
+# and the config layer never needs an instance. Deleting `config/required/` leaves
+# `--config` linking nothing, exit 0; deleting `config/` itself makes `--config` exit 2
+# saying there is nothing to link, which is a refusal to do nothing, not a breakage.
 #
 # Idempotent: re-running relinks cleanly and reports already-linked entries.
 # Backs up any conflicting real file as <name>.bak.<epoch> before linking.
@@ -118,7 +120,7 @@ for arg in "$@"; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/config-layer.test.sh asserts the flags appear in the output, which is
       # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,40p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,42p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
     *)
@@ -154,8 +156,8 @@ fi
 # THE ARROW IS ONE-WAY. `symlink/` must never *require* `config/`. The role agents keep
 # probing with `test -f`, so an instance stamped on a machine that never ran `--config`
 # works — it loses a second opinion, not a feature. `tests/config-layer.test.sh` asserts
-# a config-less stamp. The tier is deletable: `rm -rf config` (or `config/required`) must
-# break nothing and error nowhere.
+# a config-less stamp. `rm -rf config/required` must leave `--config` at exit 0 with
+# nothing linked; `rm -rf config` must leave an INSTANCE stamp completely unaffected.
 #
 # EVERY LINK IS PER FILE, NEVER PER DIRECTORY. agents/, commands/, hooks/, scripts/ and
 # skills/ are DROP-IN directories — a skill or plugin installer can write a new
@@ -372,7 +374,7 @@ config_install() {
     #     installers ran in would change the outcome.
     #   · IT DOES NOT RESOLVE. Nobody ships it, and we cannot write it without writing
     #     into someone else's checkout. Refuse, name the directory, print the fix.
-    if [ -n "$off" ] && [ -e "$CONFIG_DEST/$rel" ]; then
+    if [ -n "$off" ] && [ -f "$CONFIG_DEST/$rel" ]; then
       echo "  ok    $rel (provided by $off -> $(readlink "$off"))"; n_else=$((n_else+1)); continue
     fi
     if [ -n "$off" ]; then

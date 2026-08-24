@@ -507,8 +507,9 @@ commands.
 
 That is the whole list, and it is enforced rather than documented:
 `tests/config-ownership.test.sh` derives the expected set from the `test -f` probes in
-`symlink/` and fails on anything else under `config/`. `rm -rf config` and `--config` still
-works — it links whatever is there and errors nowhere.
+`symlink/` and fails on anything else under `config/`. Delete `config/required/` and
+`--config` links nothing and exits 0; delete `config/` itself and an **instance** stamp is
+completely unaffected (`--config` then exits 2 saying there is nothing to link).
 
 ### Five rules it follows
 

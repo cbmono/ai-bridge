@@ -13,8 +13,11 @@
 #      machine that never ran `--config` — or from a checkout with no `config/` at all —
 #      must produce a working instance. That is what makes this modular and not merely
 #      bundled, so it is asserted directly rather than inferred from the probes.
-#   2. ABSENCE IS SAFE. `rm -rf config/required` (or the whole of `config/`) must break
-#      nothing and error nowhere. Same contract as AUTONOMY.md, applied to a directory.
+#   2. ABSENCE IS SAFE, in the direction that matters. `rm -rf config/required` leaves
+#      `--config` at exit 0 with nothing to link. `rm -rf config` leaves an INSTANCE stamp
+#      completely unaffected — that is the AUTONOMY.md contract here — while `--config`
+#      itself exits 2 naming what is missing, which is a refusal to do nothing rather than
+#      a breakage, and is asserted as such further down.
 #   3. NO WHOLE-DIRECTORY LINK FOR A DROP-IN DIRECTORY. agents/, commands/, skills/ and
 #      friends receive new subdirectories from skill and plugin installers at any time.
 #      Linking one as a unit aims it at this repo's working tree: that is how four
