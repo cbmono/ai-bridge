@@ -291,17 +291,17 @@ are doing, not by which is newest.
 | You want | Run | Costs |
 |---|---|---|
 | a look right now, in the terminal you are in | `scripts/print-board.sh` | nothing |
-| a page to open locally, or to publish for the team | `scripts/build-board.sh` — `--layout columns` (the default) or `--layout table` | a re-run to refresh |
+| a page to open locally, or to publish for the team | `scripts/build-board.sh` | a re-run to refresh |
 | a page that updates itself as you work | `scripts/watch-board.sh` | **a process you keep running** |
 
 ```bash
 scripts/print-board.sh                      # columns: instance, project, phases, tasks, awaiting
 scripts/build-board.sh --standalone         # ./board.html, openable in a browser
-scripts/build-board.sh --layout table       # the same data, collapsed — for publishing as an Artifact
+scripts/build-board.sh                      # the same page as a BODY — for publishing as an Artifact
 scripts/watch-board.sh                      # ./.board-live/board.html, re-rendered on every change
 ```
 
-**A published page can keep itself current.** Publish the `--layout table` page once,
+**A published page can keep itself current.** Publish the page once,
 record its URL as `boardArtifactUrl` in `instance.config.json`, and every `/pm-loop` tick
 re-renders and republishes it *there* — no key, and no tick ever publishes anything
 ([docs/operations.md § publishing it from each tick](docs/operations.md#publishing-it-from-each-tick)).

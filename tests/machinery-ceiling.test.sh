@@ -50,7 +50,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # ---------------------------------------------------------------- the ceiling
 #
 # Measured 2026-08-23 in this repo, after build-artifact-board.sh was folded into
-# build-board.sh behind --layout (18 files -> 17). Pre-consolidation, at 68479c1, the same
+# build-board.sh, its markup selected by a flag (18 files -> 17). Pre-consolidation, at 68479c1, the same
 # two expressions read 6,061 and 3,408, so the honest arithmetic is:
 #
 #   6,061 / 3,408   before                 18 files

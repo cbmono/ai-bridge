@@ -197,16 +197,17 @@ derives each instance's `SNAPSHOT.json`; every renderer reads that file and none
 reads the bundle. That separation is the whole reason each renderer after the first was
 cheap — see
 [conventions.md invariant 11](conventions.md#11-the-cross-instance-board-is-a-writer-three-renderers-and-one-deletable-generated-file).
-The two HTML views are one script and a flag, not two scripts: `--layout columns` (the
-default) is the kanban page, `--layout table` is the collapsed page meant for publishing.
+There is **one** HTML page, not two behind a flag: projects collapsed to a summary line,
+expandable to their task table. The kanban `columns` layout was rejected by the owner as
+unreadable and deleted — `build-board.sh` refuses `--layout` by name, so a caller written
+against the old flag fails loudly rather than rendering a different page.
 
 ```bash
 scripts/write-snapshot.sh                                    # in an instance: refresh its SNAPSHOT.json
 scripts/print-board.sh                                       # the terminal board
-scripts/build-board.sh                                       # one HTML page from every snapshot (columns)
-scripts/build-board.sh --standalone --out /tmp/board.html    # ...to open in a browser
+scripts/build-board.sh                                       # an Artifact page BODY, for publishing
+scripts/build-board.sh --standalone --out /tmp/board.html    # ...the same page, to open in a browser
 scripts/watch-board.sh                                       # a local page, re-rendered on every change
-scripts/build-board.sh --layout table                        # an Artifact page BODY, for publishing
 ```
 
 Each `/pm-loop` tick refreshes the snapshot at the end of the tick, so on a looping
@@ -215,13 +216,13 @@ tick re-renders and republishes the page ([below](#publishing-it-from-each-tick)
 
 ### Which renderer to reach for
 
-| | `print-board.sh` | `build-board.sh` | `build-board.sh --layout table` | `watch-board.sh` |
+| | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` |
 |---|---|---|---|---|
-| Output | columns in your terminal | one HTML file, the kanban view | one HTML page **body**, projects collapsed | one HTML file, kept fresh |
+| Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, for publishing | the same page, kept fresh |
 | Freshness | the moment you ran it | the moment you ran it | the moment you ran it — or every tick, once published | live, to the second |
 | Shareable | paste the text | you publish it yourself | **yes** — publish it, read it on a phone | no, local only |
 | Costs | nothing | a re-run to refresh | a re-run, or a looping instance | **a resident process** |
-| Reach for it | by default, when you are already in a terminal | you want the kanban view, locally | someone else needs to see it | while actively working a queue |
+| Reach for it | by default, when you are already in a terminal | you want to look at it locally | someone else needs to see it | while actively working a queue |
 
 **The watcher needs a process you keep alive, and that is a real cost, not a detail.**
 ai-bridge deliberately has no resident process: its agents are ephemeral subagents inside
@@ -474,19 +475,19 @@ preference.
 | | Reach | Process | Use it when |
 |---|---|---|---|
 | `print-board.sh` | this terminal | none | you are already in the terminal. The default. |
-| `build-board.sh` | a local HTML file | none | you want the kanban view, or to publish it yourself |
-| `build-board.sh --layout table` | **published, shareable** | none | a teammate needs to see it, or you want it on a phone |
+| `build-board.sh --standalone` | a local HTML file | none | you want to open the page yourself |
+| `build-board.sh` | **published, shareable** | none | a teammate needs to see it, or you want it on a phone |
 | `watch-board.sh` | this machine only | **a resident one** | the board **must not leave the machine** |
 
 The last row is not a fallback, it is the compliant path. Publishing sends every task
 **title** to claude.ai; the snapshot's own `_sensitivity` field says it is "as sensitive
 as the task documents it comes from". For an instance whose `CLAUDE.md` carries no-PII
 rules, `watch-board.sh` is the only renderer that answers "nowhere" — which is why it
-was NOT retired when the publishable layout arrived. (The reasoning was recorded as a
+was NOT retired when the publishable page arrived. (The reasoning was recorded as a
 Finding in the private instance that raised it, so it is not linkable from this public
 repo; the short version is the paragraph you just read.)
 
-`--layout table` emits a page **body** — no `<!doctype>`, `<html>`, `<head>` or
+`build-board.sh` emits a page **body** — no `<!doctype>`, `<html>`, `<head>` or
 `<body>`, because the publish step wraps the file in exactly those. Opening it directly
 in a browser lands in quirks mode; that is expected, and `build-board.sh --standalone`
 is the one to open locally.
@@ -495,7 +496,7 @@ is the one to open locally.
 
 A published board is a **static page**: three things have to happen for it to move, and
 only two of them are a script. `write-snapshot.sh` refreshes the data,
-`build-board.sh --layout table` re-renders the page — and then somebody has to publish
+`build-board.sh` re-renders the page — and then somebody has to publish
 it, which no script can do, because publishing is a tool the agent holds and not a
 command on the machine. Left there, the page goes stale with only its masthead timestamp
 to admit it.

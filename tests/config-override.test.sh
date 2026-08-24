@@ -99,22 +99,27 @@ assert "codegraphSkip is extracted from \$CONFIG only" \
 echo
 echo "== build-board.sh: boardInstances =="
 if command -v python3 >/dev/null 2>&1; then
-  mk_inst() { mkdir -p "$1"; printf '{"group":"%s","counts":{"projects":0,"tasks":0,"awaiting":0},"projects":[]}\n' "$2" > "$1/SNAPSHOT.json"; }
+  # The fixture carries a PROJECT whose title is the group name, and the assertions read
+  # that title off the page. An instance with no projects renders nothing that names it
+  # (the masthead title is derived and title-cased), so a bare `has '<group>'` on an
+  # empty snapshot would be asserting against a page the group never reaches — green
+  # whichever list won.
+  mk_inst() { mkdir -p "$1"; printf '{"group":"%s","counts":{"projects":1,"tasks":0,"awaiting":0},"projects":[{"slug":"p","title":"%s","status":"active","tasks":[]}]}\n' "$2" "$2" > "$1/SNAPSHOT.json"; }
   mk_inst "$TMP/inst-tracked" tracked-group
   mk_inst "$TMP/inst-local"   local-group
   printf '{\n  "org": "o",\n  "boardInstances": ["%s"]\n}\n' "$TMP/inst-tracked" > "$INST/instance.config.json"
   no_local
   ( cd "$INST" && bash "$SCRIPTS/build-board.sh" --out "$TMP/b1.html" >/dev/null 2>&1 )
-  assert "no local file -> the tracked list"     "$(has 'tracked-group' "$(cat "$TMP/b1.html" 2>/dev/null)")"
+  assert "no local file -> the tracked list"     "$(has 'class="ptitle">tracked-group' "$(cat "$TMP/b1.html" 2>/dev/null)")"
   local_cfg "{ \"boardInstances\": [\"$TMP/inst-local\"] }"
   ( cd "$INST" && bash "$SCRIPTS/build-board.sh" --out "$TMP/b2.html" >/dev/null 2>&1 )
   B2="$(cat "$TMP/b2.html" 2>/dev/null)"
-  assert "with the override -> the local list"   "$(has 'local-group' "$B2")"
-  assert "…and not the tracked one"              "$(hasnt 'tracked-group' "$B2")"
+  assert "with the override -> the local list"   "$(has 'class="ptitle">local-group' "$B2")"
+  assert "…and not the tracked one"              "$(hasnt 'class="ptitle">tracked-group' "$B2")"
   # An unreadable local file must not blank the board: the tracked list still answers.
   local_cfg '{ not json at all'
   ( cd "$INST" && bash "$SCRIPTS/build-board.sh" --out "$TMP/b3.html" >"$TMP/b3.out" 2>&1 )
-  assert "an unreadable local file falls back"   "$(has 'tracked-group' "$(cat "$TMP/b3.html" 2>/dev/null)")"
+  assert "an unreadable local file falls back"   "$(has 'class="ptitle">tracked-group' "$(cat "$TMP/b3.html" 2>/dev/null)")"
   assert "…and says so without claiming more"    "$(has 'ignoring it' "$(cat "$TMP/b3.out")")"
   no_local
   tracked

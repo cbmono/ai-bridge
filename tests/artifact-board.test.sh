@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# artifact-board.test.sh — `scripts/build-board.sh --layout table` renders an Artifact
-# page BODY, from the snapshot only, and leaks nothing the snapshot does not carry.
+# artifact-board.test.sh — `scripts/build-board.sh` renders an Artifact page BODY, from
+# the snapshot only, and leaks nothing the snapshot does not carry.
 #
-# WHY THIS EXISTS SEPARATELY from board-renderers.test.sh: this LAYOUT targets a
+# WHY THIS EXISTS SEPARATELY from board-renderers.test.sh: this renderer targets a
 # different medium. The other renderers write a terminal table or a standalone HTML
 # file; this one writes a fragment the artifact host wraps in
 # <!doctype>/<html>/<head>/<body>. So the assertion that matters most here is the one no
@@ -11,9 +11,18 @@
 # them gets double-nested.
 #
 # It was its own SCRIPT (`build-artifact-board.sh`) until the two HTML renderers were
-# consolidated behind `--layout`; every assertion below is the one it made then, run
-# against the surviving entry point. Nothing was dropped in the move, which is the whole
-# point of keeping this file rather than folding it into another one.
+# consolidated behind `--layout`, and became the only one when the kanban `columns`
+# layout was deleted; every assertion below is the one it made as a separate script, run
+# against the surviving entry point. Nothing was dropped in either move, which is the
+# whole point of keeping this file rather than folding it into another one.
+#
+# THE FLAG IS GONE, AND ITS ABSENCE IS ASSERTED HERE. `--layout` chose between this page
+# and a kanban `columns` one; the owner rejected `columns` as unreadable, so it was
+# deleted rather than defaulted away. Two consequences are pinned below: the script
+# refuses `--layout` BY NAME (a stale caller must fail loudly, never render silently),
+# and NO tracked file in this repo invokes build-board.sh with it — checked over every
+# tracked file rather than just symlink/, because README.md and docs/ were the half that
+# rotted last time (see the retired-renderer block at the bottom of this file).
 #
 # The escaping assertions are not duplicated effort either. Escaping is per MEDIUM: the
 # terminal renderer guards ESC and newline, this one guards `<`, `&` and `"` in an
@@ -25,8 +34,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-# Every render below passes `--layout table` explicitly: the DEFAULT is `columns`, so a
-# missing flag would assert the table layout's properties against the kanban page.
+# No render below passes a layout flag: there is one page, and `--layout` now exits 2
+# rather than selecting anything.
 GEN="$REPO/symlink/scripts/build-board.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/artboard.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
@@ -84,7 +93,7 @@ json.dump(d, open(p, "w"))
 PYS
 
 OUT="$TMP/page.html"
-rc=0; bash "$GEN" --layout table --out "$OUT" "$TMP/alpha" >/dev/null 2>&1 || rc=$?
+rc=0; bash "$GEN" --out "$OUT" "$TMP/alpha" >/dev/null 2>&1 || rc=$?
 assert "it renders and exits 0"                      "$(eq "$rc" 0)"
 assert "…and wrote the page"                         "$(yes_if test -s "$OUT")"
 
@@ -145,13 +154,13 @@ assert "body paints its own background"               "$(fhas 'background:var(--
 
 echo "== absence is safe =="
 mkdir -p "$TMP/nosnap"
-rc2=0; bash "$GEN" --layout table --out "$TMP/none.html" "$TMP/nosnap" >/dev/null 2>&1 || rc2=$?
+rc2=0; bash "$GEN" --out "$TMP/none.html" "$TMP/nosnap" >/dev/null 2>&1 || rc2=$?
 assert "an instance with no snapshot exits 0"        "$(eq "$rc2" 0)"
 assert "…and writes nothing"                         "$(fhasnt x "$TMP/none.html" 2>/dev/null || echo 0)"
 
 echo "== one drifted instance must not blank the board =="
 mkdir -p "$TMP/bad"; printf 'not json at all\n' > "$TMP/bad/SNAPSHOT.json"
-rc3=0; bash "$GEN" --layout table --out "$TMP/mixed.html" "$TMP/bad" "$TMP/alpha" >/dev/null 2>&1 || rc3=$?
+rc3=0; bash "$GEN" --out "$TMP/mixed.html" "$TMP/bad" "$TMP/alpha" >/dev/null 2>&1 || rc3=$?
 assert "a broken snapshot is skipped, not fatal"     "$(eq "$rc3" 0)"
 assert "…and the good instance still renders"        "$(fhas 'Alpha Bridge Board' "$TMP/mixed.html")"
 assert "…and it is a VISIBLE note, not a silent absence" "$(fhas 'Unreadable snapshot' "$TMP/mixed.html")"
@@ -162,7 +171,7 @@ assert "…and never by its path"                      "$(fhasnt "$TMP/bad" "$TM
 # string was then iterated as a list of task dicts and `.get` raised AttributeError,
 # which meant NO FILE WAS WRITTEN AT ALL. One drifted instance blanked the published
 # board for every healthy one. Measured against the pre-consolidation script; it is why
-# both layouts now share one toint()/tolist()/todict() path.
+# every count and every container here goes through toint()/tolist()/todict().
 mkdir -p "$TMP/drift"
 drift_case() { # <label> <snapshot json>
   printf '%s\n' "$2" > "$TMP/drift/SNAPSHOT.json"
@@ -170,7 +179,7 @@ drift_case() { # <label> <snapshot json>
   # "still renders" half even if this case wrote nothing at all.
   rm -f "$TMP/drift.html"
   local rc=0 out
-  out="$(bash "$GEN" --layout table --out "$TMP/drift.html" "$TMP/alpha" "$TMP/drift" 2>&1)" || rc=$?
+  out="$(bash "$GEN" --out "$TMP/drift.html" "$TMP/alpha" "$TMP/drift" 2>&1)" || rc=$?
   assert "$1: exits 0"                           "$(eq "$rc" 0)"
   assert "$1: no traceback"                      "$(printf '%s\n' "$out" | grep -qF Traceback && echo 1 || echo 0)"
   # alpha's own project, not the page title: with two instances on the board the title
@@ -205,7 +214,7 @@ mk "$TMP/manyq" "manyq" '[
             "depends_on":[],"in_flight":false,"prs":[]}]}]'
 QOUT="$TMP/manyq.html"
 qrc=0
-( bash "$GEN" --layout table --out "$QOUT" "$TMP/manyq" >/dev/null 2>&1 ) &
+( bash "$GEN" --out "$QOUT" "$TMP/manyq" >/dev/null 2>&1 ) &
 qpid=$!
 for _ in $(seq 1 30); do kill -0 "$qpid" 2>/dev/null || break; sleep 1; done
 if kill -0 "$qpid" 2>/dev/null; then kill -9 "$qpid" 2>/dev/null; qrc=1; fi
@@ -224,7 +233,7 @@ mk "$TMP/hostile" "hostile" '[
             "prs":[{"repo":"o/r","number":41,"url":"https://github.com/o/r/pull/41"},
                    {"repo":"o/r","number":9,"url":"javascript:alert(1)"}]}]}]'
 OUT2="$TMP/scheme.html"
-bash "$GEN" --layout table --out "$OUT2" "$TMP/hostile" >/dev/null 2>&1
+bash "$GEN" --out "$OUT2" "$TMP/hostile" >/dev/null 2>&1
 # The other rule this layout did not carry: it wrote the snapshot's URL straight into
 # the href, so a `javascript:` PR URL became a live link on a page meant for publishing.
 assert "a javascript: URL is never an href"          "$(fhasnt 'href="javascript:' "$OUT2")"
@@ -235,26 +244,29 @@ echo "== flags =="
 assert "an unknown flag is refused"                  "$(yes_if bash -c "bash '$GEN' --nope 2>/dev/null; [ \$? -eq 2 ]")"
 assert "--help prints the header"                    "$(yes_if bash -c "bash '$GEN' --help 2>&1 | grep -q 'Artifact page body'")"
 
-echo "== --layout picks the markup, and refuses to guess =="
-# The consolidation's contract. `columns` is the DEFAULT so that no existing caller
-# changed when the second script was deleted; an unknown value must refuse rather than
-# fall back, because falling back would publish the wrong page silently.
-assert "an unknown layout exits 2"                   "$(yes_if bash -c "bash '$GEN' --layout kanban --out '$TMP/x.html' '$TMP/alpha' 2>/dev/null; [ \$? -eq 2 ]")"
-assert "…naming both layouts on stderr"              "$(yes_if bash -c "bash '$GEN' --layout kanban --out '$TMP/x.html' '$TMP/alpha' 2>&1 >/dev/null | grep -q 'columns|table'")"
+echo "== --layout is REMOVED, and is refused by name =="
+# WHY A REFUSAL AND NOT AN IGNORED FLAG. Every caller that passed `--layout` was written
+# when the flag chose between two DIFFERENT pages, so accepting-and-ignoring it would
+# hand that caller a page it did not ask for, silently — which is the exact failure the
+# deletion exists to close (the tick published `table` while watch-board.sh rendered
+# `columns`). Exit 2, and say the flag was REMOVED rather than "unknown", so the stderr
+# line tells a human what happened instead of looking like a typo.
+for form in "--layout table" "--layout columns" "--layout=table" "--layout"; do
+  assert "\`$form\` exits 2"                          "$(yes_if bash -c "bash '$GEN' $form --out '$TMP/x.html' '$TMP/alpha' 2>/dev/null; [ \$? -eq 2 ]")"
+  assert "…saying the flag was REMOVED"                "$(yes_if bash -c "bash '$GEN' $form --out '$TMP/x.html' '$TMP/alpha' 2>&1 >/dev/null | grep -q 'was removed'")"
+done
 assert "…and writes no page"                         "$(fhasnt x "$TMP/x.html" 2>/dev/null || echo 0)"
-assert "--layout with no value exits 2"              "$(yes_if bash -c "bash '$GEN' --layout 2>/dev/null; [ \$? -eq 2 ]")"
-bash "$GEN" --layout=table --out "$TMP/eq.html" "$TMP/alpha" >/dev/null 2>&1
-assert "--layout=table is the same page as --layout table" "$(yes_if cmp -s "$TMP/eq.html" "$OUT")"
-DEF="$TMP/default.html"
-bash "$GEN" --out "$DEF" "$TMP/alpha" >/dev/null 2>&1
-assert "the default layout is columns — the kanban strip"  "$(fhas 'class="cols"' "$DEF")"
-assert "…not the table's decision rail"                    "$(fhasnt 'class="rail"' "$DEF")"
-assert "…and it is what --layout columns emits"            "$(yes_if bash -c "bash '$GEN' --layout columns --out '$TMP/cols.html' '$TMP/alpha' >/dev/null 2>&1; cmp -s '$TMP/cols.html' '$DEF'")"
+# The rejected page is DELETED, not merely unreachable: nothing selects it and nothing
+# renders it, so the markup and its selector are both gone from the script.
+assert "the kanban strip is not in the page"         "$(fhasnt 'class="cols"' "$OUT")"
+assert "…and the decision rail IS"                   "$(fhas 'class="rail"' "$OUT")"
+assert "…no columns renderer in the script"          "$(fhasnt 'render_columns' "$REPO/symlink/scripts/build-board.sh")"
+assert "…and no layout variable to select one"       "$(fhasnt 'BOARD_LAYOUT' "$REPO/symlink/scripts/build-board.sh")"
 
-echo "== --standalone is orthogonal to --layout: wrapping, not markup =="
+echo "== --standalone is wrapping, not markup =="
 SA="$TMP/sa.html"
-bash "$GEN" --layout table --standalone --out "$SA" "$TMP/alpha" >/dev/null 2>&1
-assert "the table layout can be standalone too"      "$(yes_if sh -c 'head -1 "$1" | grep -qF "<!doctype html>"' _ "$SA")"
+bash "$GEN" --standalone --out "$SA" "$TMP/alpha" >/dev/null 2>&1
+assert "--standalone opens with a doctype"           "$(yes_if sh -c 'head -1 "$1" | grep -qF "<!doctype html>"' _ "$SA")"
 assert "…with exactly one <body>"                    "$(eq "$(grep -cF '<body>' "$SA")" 1)"
 assert "…the <style> in <head> and the board in <body>" "$(yes_if python3 -c "
 import sys
@@ -263,6 +275,75 @@ head=t[t.index('<head>'):t.index('</head>')]
 body=t[t.index('<body>'):t.index('</body>')]
 sys.exit(0 if '<style>' in head and 'class=\"board\"' in body and '<h1>' not in head else 1)")"
 assert "…and the same markup as the page body"       "$(fhas 'class="rail"' "$SA")"
+
+echo "== no caller anywhere in the repo passes the removed flag =="
+# THE INVARIANT IS "NO CALLER", NOT "NO CALLER UNDER symlink/". The obvious check here is
+# `grep -rn -- --layout symlink/`, and it would have passed on a tree carrying three live
+# instructions to run the flag — README.md's command block, docs/operations.md's two
+# tables, and seed/instance.config.json's own `$board` note. That is the same shape as
+# the retired-renderer rot pinned at the bottom of this file: the check's SCOPE was
+# narrower than the promise it stood for.
+#
+# It is also not a line-scoped grep. `.claude/commands/pm-loop.md` wrapped one invocation
+# across a newline (`build-board.sh --layout` / `table`), so a scanner that reads a file
+# line by line can miss the half of an invocation that sits on the next line. Whitespace
+# is flattened first, and fixture (c) below is that exact shape.
+#
+# ONE scanner serves the real check and every fixture: a fixture that re-implements the
+# rule proves the copy, not the shipped check.
+layout_callers() { # <root> -> one path per line that INVOKES build-board.sh with --layout
+  python3 - "$1" <<'PYL'
+import re, sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+# The only two files where the flag's NAME may still appear: the script that refuses it
+# (its header records why it went, and its arg loop names it to refuse it) and this
+# harness, which asserts that refusal. Neither is a caller. Nothing else is exempt.
+SKIP = {"symlink/scripts/build-board.sh", "tests/artifact-board.test.sh"}
+# An INVOCATION, not a mention: `build-board.sh` followed by whitespace and then only
+# argument-shaped tokens up to `--layout`. Prose about the removal ("`build-board.sh`
+# refuses `--layout` by name") cannot match, because a backtick is not an argument
+# character and the run of tokens has to be unbroken.
+INVOKE = re.compile(r"""build-board\.sh(?:\s+(?!--layout)[-\w=./$"'{}\[\]:]+){0,6}\s+--layout""")
+
+for f in sorted(root.rglob("*")):
+    if not f.is_file() or f.is_symlink():
+        continue
+    rel = f.relative_to(root).as_posix()
+    if rel.split("/")[0].startswith(".") and rel.split("/")[0] != ".claude":
+        continue
+    if rel in SKIP:
+        continue
+    try:
+        text = f.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        continue
+    if INVOKE.search(re.sub(r"\s+", " ", text)):
+        print(rel)
+PYL
+}
+CALLERS="$(layout_callers "$REPO")"
+assert "no tracked file invokes build-board.sh --layout${CALLERS:+ (saw: $(printf '%s' "$CALLERS" | tr '\n' ' '))}" \
+  "$(eq "$CALLERS" "")"
+
+# NON-VACUITY, and specifically for what a narrower check would have missed. Each fixture
+# is fed to the SAME function above.
+FIX="$TMP/callers"; mkdir -p "$FIX/docs"
+printf 'run `scripts/build-board.sh --layout table` each tick\n'          > "$FIX/docs/a.md"
+printf 'scripts/build-board.sh --out "$out" --layout table\n'             > "$FIX/b.sh"
+printf 'the tick runs `scripts/build-board.sh --layout\ntable` and publishes\n' > "$FIX/docs/c.md"
+FOUND="$(layout_callers "$FIX")"
+for f in docs/a.md b.sh docs/c.md; do
+  assert "…flags a planted caller in $f" "$(printf '%s\n' "$FOUND" | grep -qx -- "$f" && echo 0 || echo 1)"
+done
+# …and does NOT flag the two shapes that are not callers, or the guard is just a ban on
+# the string and the header explaining the removal could never be written.
+rm -f "$FIX/docs/a.md" "$FIX/b.sh" "$FIX/docs/c.md"
+printf '`build-board.sh` refuses `--layout` by name, so a stale caller fails loudly\n' > "$FIX/docs/d.md"
+printf 'scripts/build-board.sh --out "$out" --standalone\n'               > "$FIX/e.sh"
+assert "…and flags neither prose about the removal nor a clean call" "$(eq "$(layout_callers "$FIX")" "")"
+rm -rf "$FIX"
 
 echo "== there is only ONE HTML renderer now =="
 assert "build-artifact-board.sh is gone"             "$(yes_if test ! -e "$REPO/symlink/scripts/build-artifact-board.sh")"

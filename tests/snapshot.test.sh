@@ -21,9 +21,14 @@
 #     ZERO times raw, and a `javascript:`/`data:` PR URL must render as inert text
 #     rather than a link — the writer already refuses to collect one, and the board
 #     does not trust it to have done so.
-#   · ZERO EXTERNAL REQUESTS. No <script> anywhere, no `@import`, no `src`/`url()`
-#     fetch, and every http(s) href is a PR link. A board is a reporting page; it has
-#     no business phoning anywhere, and a published one must not be able to.
+#   · THE PAGE'S EXTERNAL SURFACE IS EXACTLY ONE DECLARED WEBFONT, and nothing else:
+#     no `@import`, no `src`/`url()` fetch, and every other http(s) href is a PR link.
+#     A board is a reporting page; it has no business phoning anywhere else, and a
+#     published one must not be able to. It carries ONE <script> — a clipboard helper —
+#     and the assertion that matters is that no snapshot text reaches it. Until
+#     2026-08-24 this file read "no <script> anywhere", which was true of the DEFAULT
+#     `columns` page and never of the one that got published; the kanban page has since
+#     been deleted, so the promise is now stated against the page that actually ships.
 #   · A BROKEN INSTANCE CANNOT BLANK THE BOARD. A malformed snapshot is a visible
 #     note and exit 0, with the other instances still rendered.
 #
@@ -446,21 +451,38 @@ assert "alpha is still rendered beside the broken one" "$(fhas 'CI hardening' "$
 assert "delta is still rendered too"                "$(fhas 'Hostile input' "$HTML")"
 assert "an instance with no snapshot is absent entirely" "$(fhasnt '_ai-bridge-gamma' "$HTML")"
 assert "…including its group name"                  "$(fhasnt '>gamma ' "$HTML")"
-assert "a project with no tasks renders empty, not broken" "$(fhas 'No tasks yet.' "$HTML")"
+assert "a project with no tasks renders empty, not broken" "$(fhas 'class="ptitle">Nothing here yet' "$HTML")"
 assert "an unknown status still gets a column"      "$(fhas 'made-up-status' "$HTML")"
-assert "the close proposal is shown, never taken"   "$(fhas 'close?' "$HTML")"
+# Shown as a rail item carrying the command, never run: the page copies a prompt, the
+# bundle is where a decision is recorded.
+assert "the close proposal is shown, never taken"   "$(fhas 'class="verb">close' "$HTML")"
+assert "…carrying the command a human would run"   "$(fhas 'close-project finished' "$HTML")"
 assert "no filesystem path reaches the page"        "$(fhasnt "$TMP" "$HTML")"
 # Belt and braces, because the check above depends on how the fixture path is spelled:
 # an instance is named by its DIRECTORY NAME, so the name must never appear with a
 # leading slash (i.e. as the tail of a path) anywhere on the page.
 assert "…an instance is identified by name, never by path" "$(fhasnt '/_ai-bridge-alpha' "$HTML")"
-assert "…and the name itself is still there"               "$(fhas '_ai-bridge-alpha' "$HTML")"
+# The second half, or the first is vacuous on a page that never names the instance at
+# all. An instance is labelled by its GROUP here — the directory name is the fallback
+# only when the snapshot carries none — so that is what must be present.
+assert "…and the instance is still identified, by group"   "$(fhas 'class="where">alpha › ' "$HTML")"
 
 echo "== untrusted text at an HTML sink =="
 RAW_HITS="$(grep -oF -- '<script>alert(1)</script>' "$HTML" | grep -c . || true)"
 assert "ZERO raw occurrences of the metacharacter title (saw $RAW_HITS)" "$(eq "$RAW_HITS" 0)"
 assert "…and it is present in escaped form"         "$(fhas "$HOSTILE_ESCAPED" "$HTML")"
-assert "no <script> tag anywhere in the page"       "$(fhasnt '<script' "$HTML")"
+# ONE <script>, and no snapshot text in it. "No script at all" was the kanban page's
+# property and never this one's; the honest promise is the boundary, not the tag count,
+# because a clipboard helper that interpolated a title would be an injection whether or
+# not it was the only script on the page.
+assert "exactly one <script> element"              "$(eq "$(grep -cF '<script' "$HTML")" 1)"
+assert "…and NOTHING from a snapshot is inside it" "$(yes_if python3 -c '
+import re, sys
+t = open(sys.argv[1], encoding="utf-8").read()
+blocks = re.findall(r"<script\b[^>]*>(.*?)</script>", t, re.I | re.S)
+needles = sys.argv[2:]
+sys.exit(0 if len(blocks) == 1 and not any(n in b for b in blocks for n in needles) else 1)' \
+  "$HTML" "$HOSTILE_TITLE" 'CI hardening' 'Hostile input' 'made-up-status')"
 assert "no raw <b> from a title either"             "$(fhasnt '<b>bold</b>' "$HTML")"
 assert "an event-handler-shaped title stays text"   "$(fhasnt ' onerror=' "$HTML")"
 assert "a javascript: URL is never an href"         "$(fhasnt 'href="javascript:' "$HTML")"
@@ -473,14 +495,26 @@ for s in "$SECRET_DESC" "$SECRET_BODY" "$SECRET_QUESTION" "$SECRET_BLOCKER" "$SE
   assert "the page carries no '$s'" "$(fhasnt "$s" "$HTML")"
 done
 
-echo "== zero external requests =="
+echo "== the only external request is the declared webfont =="
+# The two font hosts are spelled out here, verbatim, rather than described: a page that
+# started fetching from a third host would otherwise slip through a looser pattern, and
+# this list is the whole declaration of what the published board may reach.
+FONT_HOSTS='https://fonts.gstatic.com https://fonts.googleapis.com/'
 BAD_HREF=""
 while IFS= read -r h; do
   case "$h" in
-    http://*|https://*) case "$h" in *"/pull/"*) ;; *) BAD_HREF="$BAD_HREF $h" ;; esac ;;
+    http://*|https://*)
+      case "$h" in
+        *"/pull/"*) ;;
+        https://fonts.gstatic.com*|https://fonts.googleapis.com/*) ;;
+        *) BAD_HREF="$BAD_HREF $h" ;;
+      esac ;;
   esac
 done < <(grep -oE 'href="[^"]*"' "$HTML" | sed 's/^href="//; s/"$//')
-assert "every http(s) href is a PR link${BAD_HREF:+ (saw:$BAD_HREF)}" "$(eq "$BAD_HREF" "")"
+assert "every http(s) href is a PR link or the webfont${BAD_HREF:+ (saw:$BAD_HREF)}" "$(eq "$BAD_HREF" "")"
+for host in $FONT_HOSTS; do
+  assert "…and the webfont host $host is really there" "$(fhas "$host" "$HTML")"
+done
 assert "no src= attribute at all"       "$(fhasnt 'src=' "$HTML")"
 assert "no @import in the stylesheet"   "$(fhasnt '@import' "$HTML")"
 # EVERY url(), not just an absolute one: `url(assets/icon.svg)` is a fetch too, and
@@ -501,7 +535,9 @@ printf '%s\n' '<style>.a{background:url(assets/icon.svg)}</style>' > "$TMP/relur
 assert "…and a relative url() is now rejected" "$(eq "$(yes_if no_css_url "$TMP/relurl.html")" 1)"
 printf '%s\n' '<style>.a{color:red}</style><p>url(not-in-css)</p>' > "$TMP/txturl.html"
 assert "…while url( outside a <style> block is not a false alarm" "$(yes_if no_css_url "$TMP/txturl.html")"
-assert "no <link rel=stylesheet>"       "$(fhasnt '<link' "$HTML")"
+# Exactly two: the preconnect and the stylesheet, both to the hosts asserted above. A
+# third <link> is a new external dependency and must be a deliberate edit here.
+assert "exactly two <link> elements"    "$(eq "$(grep -cF '<link' "$HTML")" 2)"
 assert "no <iframe>"                    "$(fhasnt '<iframe' "$HTML")"
 
 echo "== output shape =="
@@ -519,33 +555,24 @@ body=t[t.index("<body>"):t.index("</body>")]
 sys.exit(0 if "<style>" in head and "Bridge Board</h1>" in body and "<h1>" not in head else 1)' "$SA")"
 assert "…with exactly one <body> element" "$(eq "$(grep -cF '<body>' "$SA")" 1)"
 
-# The tabs are CSS-only, so their whole behaviour is the pairing between a radio input,
-# a panel with the matching id, and a generated rule joining them. Nothing else on the
-# page can reveal a drift there: a mismatch renders a board where no panel is ever
-# displayed, which looks like "no projects" rather than like a bug.
-# Two, not four: beta is malformed and gamma has no snapshot, so neither is an instance
-# on the board — which is the same fact the absence assertions above assert, read off
-# the tab strip.
-assert "one radio input per RENDERED instance (2 of 4)" "$(eq "$(grep -cE 'input type="radio" name="board-instance" id="tab-[0-9]+"' "$HTML")" 2)"
-assert "exactly one of them is checked" "$(eq "$(grep -cE 'id="tab-[0-9]+" checked' "$HTML")" 1)"
-assert "each tab id has a matching panel" "$(yes_if python3 -c '
-import re,sys
-t=open(sys.argv[1]).read()
-tabs={m for m in re.findall(r"id=\"tab-(\d+)\"", t)}
-panels={m for m in re.findall(r"id=\"panel-(\d+)\"", t)}
-rules={m for m in re.findall(r"#tab-(\d+):checked ~ #panel-\1\{display:block\}", t)}
-sys.exit(0 if tabs and tabs==panels==rules else 1)' "$HTML")"
-assert "each label points at its own tab"  "$(yes_if python3 -c '
-import re,sys
-t=open(sys.argv[1]).read()
-labels={m for m in re.findall(r"<label for=\"tab-(\d+)\"", t)}
-tabs={m for m in re.findall(r"id=\"tab-(\d+)\"", t)}
-sys.exit(0 if labels==tabs else 1)' "$HTML")"
+# THE CSS-ONLY TAB STRIP WAS THE KANBAN PAGE'S, and it went with it. Its assertions
+# lived here because a radio/panel/rule mismatch rendered a board where no panel was
+# ever displayed — a bug that looked like "no projects". Nothing equivalent survives:
+# this page collapses with <details>, which pairs nothing and needs no generated CSS, so
+# there is no drift to pin. tests/artifact-board.test.sh asserts the <details> behaviour
+# (collapsed by default, finished projects under a divider) where the markup lives.
+# Two, not four, is still the fact worth reading off the page: beta is malformed and
+# gamma has no snapshot, so neither is an instance on the board.
+assert "one project block per project of the 2 rendered instances" \
+  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 4)"
 
 echo "== discovery is explicit, never a glob =="
 D1="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d1.html" 2>&1 )"
 assert "no args, no boardInstances -> just this instance" "$(has '1 instance(s)' "$D1")"
-assert "…and the page says where the list came from"      "$(fhas 'this instance' "$TMP/d1.html")"
+# The page carries no "listed from" footer to read, so the source is asserted by what
+# is ON it: alpha's work and not delta's. That is the fact the footer line stood for.
+assert "…and the page carries only that instance's work" \
+  "$(yes_if sh -c 'grep -qF "CI hardening" "$1" && ! grep -qF "Hostile input" "$1"' _ "$TMP/d1.html")"
 python3 - "$ALPHA/instance.config.json" "$DELTA" <<'PY'
 import json,sys
 p=sys.argv[1]; d=json.load(open(p)); d["boardInstances"]=[".",sys.argv[2]]
@@ -553,7 +580,8 @@ json.dump(d,open(p,"w"),indent=2)
 PY
 D2="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d2.html" 2>&1 )"
 assert "boardInstances is used when no dirs are named"   "$(has '2 instance(s)' "$D2")"
-assert "…and the page says the list came from that key"  "$(fhas 'boardInstances' "$TMP/d2.html")"
+assert "…and BOTH instances' work is on the page"        \
+  "$(yes_if sh -c 'grep -qF "CI hardening" "$1" && grep -qF "Hostile input" "$1"' _ "$TMP/d2.html")"
 assert "named dirs override the config"                  "$(has '1 instance(s)' "$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d3.html" "$DELTA" 2>&1 )")"
 printf 'not json at all' > "$TMP/badcfg-cfg"
 cp "$ALPHA/instance.config.json" "$TMP/goodcfg" && cp "$TMP/badcfg-cfg" "$ALPHA/instance.config.json"
@@ -575,7 +603,11 @@ done
 cp "$TMP/goodcfg" "$ALPHA/instance.config.json"
 NOSUCH="$( cd "$TMP" && bash "$BOARD" --out "$TMP/d5.html" "$TMP/no-such-instance" 2>&1 )"
 assert "a named directory that does not exist is skipped, not fatal" "$(has 'no such directory' "$NOSUCH")"
-assert "…and the empty board explains how an instance joins" "$(fhas 'touch SNAPSHOT.json' "$TMP/d5.html")"
+# No readable snapshot ⇒ NOTHING is written, and the run says so. The kanban page used
+# to write an empty-state note here; publishing an empty page is not useful, and the
+# person who can fix it is reading stderr, not the artifact.
+assert "…and no page is written at all"                     "$(yes_if test ! -e "$TMP/d5.html")"
+assert "…while the run says so on stderr"                   "$(has 'nothing written' "$NOSUCH")"
 
 echo "== a drifted snapshot cannot blank the board =="
 # THE MAJOR CASE. These snapshots are syntactically valid JSON, so the malformed-file
@@ -614,11 +646,13 @@ drift_case "a non-numeric phase order" \
 # awaiting item to reach that sort at all, which is why this fixture carries one.
 drift_case "a non-string group" \
   '{"group":5,"counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","tasks":[{"id":"task-001","title":"T","status":"blocked","awaiting":"unblock","open_questions":0,"prs":[]}]}]}'
-# ANCHORED to the tab-label markup on purpose. A bare `fhas 5` passes on any page:
-# the stylesheet alone contains "5" 39 times, so it would report green even if the
-# coercion dropped the group entirely. The assertion has to name where it appears.
-assert "…and the non-string group is rendered as a tab label" \
-  "$(yes_if grep -qE '<label for="tab-[0-9]+"[^>]*>5 ' "$TMP/drift.html")"
+# ANCHORED to the markup that carries a group on purpose. A bare `fhas 5` passes on any
+# page: the stylesheet alone contains "5" dozens of times, so it would report green even
+# if the coercion dropped the group entirely. The assertion has to name where it appears
+# — here the decision rail's "group › project" line, which is why the fixture carries an
+# awaiting item at all.
+assert "…and the coerced group is rendered in the rail" \
+  "$(fhas 'class="where">5 › ' "$TMP/drift.html")"
 rm -rf "$DRIFT"
 
 echo "== installer: on by first stamp, off by deletion, forever =="
@@ -686,8 +720,9 @@ PRJ
 ( cd "$INST" && bash "$TPL/symlink/scripts/write-snapshot.sh" --quiet ) || true
 assert "the writer never resurrects a deleted snapshot" "$(yes_if test ! -e "$INST/SNAPSHOT.json")"
 OFFBOARD="$( cd "$TMP" && bash "$BOARD" --out "$TMP/off.html" "$INST" 2>&1 )"
-assert "…and that instance is off the board"           "$(has '0 instance(s)' "$OFFBOARD")"
-assert "…with nothing of its content on the page"      "$(fhasnt 'After the rm' "$TMP/off.html")"
+assert "…and that instance is off the board"           "$(has 'no SNAPSHOT.json (off the board)' "$OFFBOARD")"
+assert "…so there is nothing to write"                 "$(has 'nothing written' "$OFFBOARD")"
+assert "…and no page carries its content"              "$(yes_if test ! -e "$TMP/off.html")"
 
 echo
 echo "pass=$pass fail=$fail"

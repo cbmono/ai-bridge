@@ -184,14 +184,19 @@ step3() { awk '/^3\. \*\*On completion/{p=1; next} p&&/^4\. /{p=0} p' "$LAUNCHER
 ok "step 3: a republish is not a change" \
   "$(step3 | grep -qF 'A board refresh or a republish is not a change' && echo yes || echo no)" yes
 
-# The tick's half: it holds the grant, renders with the publishable layout, reads the URL
-# from config, and repeats the noop rule where the work happens.
+# The tick's half: it holds the grant, renders the one board, reads the URL from config,
+# and repeats the noop rule where the work happens.
 ok "tick holds the Artifact tool" \
   "$(awk '/^---$/{d++; next} d==1 && /^tools:/{print}' "$TICK" | tr ',' '\n' \
      | sed -e 's/^tools:[[:space:]]*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
      | grep -qx 'Artifact' && echo yes || echo no)" yes
 ok "tick names the config key"           "$(has "$TICK" 'boardArtifactUrl')" yes
-ok "tick renders the publishable layout" "$(has "$TICK" 'build-board.sh --layout table')" yes
+ok "tick renders the board"              "$(has "$TICK" 'build-board.sh --out')" yes
+# `--layout` was DELETED, not defaulted away (see build-board.sh's header): a tick that
+# still passed it would exit 2 and publish nothing, so its absence is the assertion.
+# tests/artifact-board.test.sh makes the same claim repo-wide; this one keeps it beside
+# the step it is about, where a future edit to the tick would be reviewed.
+ok "…and passes no removed --layout flag" "$(has "$TICK" '--layout')" no
 ok "tick skips in silence when unset"    "$(has "$TICK" 'skip the rest of this step in silence')" yes
 ok "tick: publishing without the URL forks" "$(has "$TICK" 'forks a second artifact')" yes
 ok "tick: a republish is not a change"   "$(has "$TICK" 'A republish is not a state change')" yes

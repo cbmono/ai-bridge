@@ -438,15 +438,17 @@ state, and act only on deltas.
       `boardInstances` in agreement, or the one page alternates between two boards.)
    2. Render the publishable body to a temp file:
       `out="$(mktemp "${TMPDIR:-/tmp}/bridge-board.XXXXXX")"` then
-      `scripts/build-board.sh --layout table --out "$out"`. **`--layout table` is the
-      layout meant for publishing** and the default (`columns`) is not; `--standalone` is
-      for opening a file locally and must be omitted here, since the artifact host
-      supplies the `<!doctype>`/`<html>`/`<head>`/`<body>` wrapper itself. A temp path,
+      `scripts/build-board.sh --out "$out"`. There is **one board** and no markup flag
+      to pass — the kanban page was deleted, and the renderer now refuses the flag that
+      used to select it, so a stale command exits 2 and publishes nothing rather than
+      quietly publishing the other page. `--standalone` is for opening a file locally and
+      must be omitted here, since the artifact host supplies the
+      `<!doctype>`/`<html>`/`<head>`/`<body>` wrapper itself. A temp path,
       not a bundle path: the page is consumed by the next line, a bundle path would need
       a new ignore rule, and `board.html` may be a page a human is looking at. Delete it
       once published — nothing else reads it, and a tick every gap otherwise leaves a
       copy behind forever.
-      No readable snapshot on the board ⇒ this layout writes nothing and exits 0 ⇒ there
+      No readable snapshot on the board ⇒ the renderer writes nothing and exits 0 ⇒ there
       is nothing to publish, so stop here, still in silence.
    3. Publish that body with `Artifact`, **updating the artifact at the recorded URL**.
       **Publishing without that URL forks a second artifact instead of updating the
