@@ -103,8 +103,8 @@ it cannot open a task document, the git history or the GitHub API, which is what
 list is closed against.
 
 It is here because **publishing is the one board step no script can do.**
-`scripts/write-snapshot.sh` refreshes the data and `scripts/build-board.sh --layout
-table` renders the page, but neither can put it where a teammate opens it, so without
+`scripts/write-snapshot.sh` refreshes the data and `scripts/build-board.sh` renders the
+page, but neither can put it where a teammate opens it, so without
 this grant a published board goes stale with only its masthead timestamp to admit it.
 
 **The publish happens in the TICK, not here** — see `.claude/agents/project-manager.md`
@@ -359,7 +359,7 @@ ticks, regardless of how long a tick runs.
   board is just this instance.**
 - **A published board is republished by the same tick** — but only where
   `boardArtifactUrl` is set in `instance.config.json`. The tick re-renders with
-  `scripts/build-board.sh --layout table` and publishes to that recorded URL (step 2c);
+  `scripts/build-board.sh` and publishes to that recorded URL (step 2c);
   **no key ⇒ no render, no publish, no mention.** Refreshing the snapshot is local and
   publishes nothing, so the two switches are independent: an instance can be on the
   terminal board and never publish a page.

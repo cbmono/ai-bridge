@@ -1,43 +1,52 @@
 #!/usr/bin/env bash
 #
 # build-board.sh — render every instance's SNAPSHOT.json as ONE self-contained HTML
-# page, in either of two layouts.
+# page: projects collapsed to one summary line, each expandable to its task table,
+# with a decision rail on top. A page a teammate opens on a phone.
 #
 #   Usage:
-#     scripts/build-board.sh [--layout columns|table] [--out FILE] [--standalone] [INSTANCE_DIR ...]
+#     scripts/build-board.sh [--out FILE] [--standalone] [INSTANCE_DIR ...]
 #     scripts/build-board.sh --list-instances [INSTANCE_DIR ...]
 #
 #     INSTANCE_DIR ...  the instances to render. With none given, the list comes
 #                       from `boardInstances` in ./instance.config.local.json, else
 #                       ./instance.config.json; if that key
 #                       is absent or empty, just this instance.
-#     --layout NAME     which markup to emit, `columns` (the default) or `table`:
-#                       · columns — instance → project → phase progress → a column per
-#                         task status. Every instance on one page, behind CSS-only tabs.
-#                       · table — projects collapsed to one summary line, expandable to
-#                         their task table, with a decision rail on top. The owner picked
-#                         this one for PUBLISHING as "more readable and easier to act
-#                         upon": a page a teammate opens on a phone, not a wall of
-#                         columns.
-#     --out FILE        where to write (default: ./board.html, for both layouts — it is
-#                       the path an instance's .gitignore already covers)
+#     --out FILE        where to write (default: ./board.html — it is the path an
+#                       instance's .gitignore already covers)
 #     --standalone      wrap the output in <!doctype html>/<head> for opening in a
 #                       browser directly. OMIT for publishing (see OUTPUT SHAPE).
-#                       ORTHOGONAL to --layout, and deliberately so: layout is markup,
-#                       standalone is wrapping. Either layout can be either.
+#                       Wrapping, not markup: the same page either way, which is why
+#                       watch-board.sh can pass it and the publish step can not.
 #     --list-instances  print the resolved instance directories, one per line, and
 #                       exit without writing anything. This exists so watch-board.sh
 #                       can learn WHICH directories to watch without carrying a third
 #                       copy of the discovery rule below — one script owns it.
 #
-# WHY ONE SCRIPT WITH TWO LAYOUTS, AND NOT TWO SCRIPTS. It was two: this file and a
-# `build-artifact-board.sh`, 1,139 lines between them, reading the same snapshot
-# contract, sharing the same instance discovery, and differing only in markup. The
-# duplication was created knowingly, because both layouts were wanted — but two files
-# also meant two copies of the parts a board must not get wrong, and the second copy was
-# the weaker one: it wrote a PR URL into an `href` without checking its scheme and read
-# every count with a bare `.get()`, so both hardening rules below existed in one file and
-# not the other. One script, one hardened path, `--layout` for the markup.
+# WHY ONE SCRIPT WITH ONE LAYOUT — AND WHY THE OTHER ONE IS GONE RATHER THAN OFF.
+# This file has been all three shapes, in this order:
+#   1. two scripts — this one and a `build-artifact-board.sh`, 1,139 lines between them,
+#      reading the same snapshot contract and differing only in markup. Two files meant
+#      two copies of the parts a board must not get wrong, and the second copy was the
+#      weaker one: it wrote a PR URL into an `href` without checking its scheme and read
+#      every count with a bare `.get()`, so both hardening rules below lived in one file
+#      and not the other.
+#   2. one script, two layouts, `--layout` choosing the markup. That fixed the
+#      duplication and left a new problem in its place: a DEFAULT. Every caller now had
+#      to remember the flag, and the /pm-loop tick published with `--layout table` while
+#      watch-board.sh forwarded no layout at all — so the local live page and the
+#      published page were two different boards rendered by one script, and nothing in
+#      the code said so.
+#   3. one script, one layout. The owner saw both rendered from live data and rejected
+#      the kanban `columns` page outright — "not necessary and it's not usable, it's just
+#      not readable" — so it is DELETED: markup, CSS, its queue derivation and its tests.
+#      Not defaulted away. A rejected path kept behind a flag is still maintained, still
+#      tested, and still one forgotten argument away from being what a human sees; the
+#      inconsistency in (2) is exactly that failure, and only deletion closes it by
+#      construction. `--layout` is now refused BY NAME (see the arg loop), so a caller
+#      written against (2) fails loudly instead of silently getting the other page.
+# The rule this file keeps paying for: a second rendering path is a second place for a
+# hardening rule to be missing. Do not add one back without deleting this paragraph.
 #
 # DISCOVERY IS EXPLICIT, NEVER A GLOB. This file is symlinked into every instance,
 # so it may not know where anybody's workspace lives — no `~/workspace/*`, no
@@ -90,46 +99,47 @@
 # directly works but lands in quirks mode with no charset declared; use
 # `--standalone` for a local look, and the plain file for publishing.
 #
-# WHAT IS TRUE OF THE `table` LAYOUT AND NOT THE `columns` ONE. Read this before
-# assuming one set of promises covers both.
-#   · It uses <details>, never script, for collapsing. The first version of it rendered
-#     from JavaScript and toggled with a click handler; two bugs came out of that and
-#     NEITHER WAS DIAGNOSABLE IN PLACE, because the artifact host serves the page in an
-#     iframe that exposes neither its console nor its accessibility tree, so a blank
-#     page had no error to read. <details> needs no script, works with scripting off, is
+# WHAT THIS PAGE DOES AND DOES NOT CARRY. These were once "the table layout's"
+# properties as opposed to the other one's; they are now simply the board's, and every
+# test that reads them reads them off the only page there is.
+#   · It uses <details>, never script, for collapsing. The first version rendered from
+#     JavaScript and toggled with a click handler; two bugs came out of that and NEITHER
+#     WAS DIAGNOSABLE IN PLACE, because the artifact host serves the page in an iframe
+#     that exposes neither its console nor its accessibility tree, so a blank page had no
+#     error to read. <details> needs no script, works with scripting off, is
 #     keyboard-accessible for free, and its open/closed state is per-viewer.
 #   · It DOES carry one <script> and one external <link>: a clipboard helper (a browser
 #     cannot open a local file, so a task copies a SHORT REFERENCE — `<project>/tasks/<id>`
 #     — instead of a link, and every button says what it copied so a failed copy is
-#     visible rather than silent) and a webfont stylesheet. The `columns` layout has
-#     neither, and tests/snapshot.test.sh pins that for it — "zero external requests, no
-#     <script> at all" is a property of the DEFAULT layout, not of this file.
-#   · Its decision rail surfaces one thing the awaiting queue does not: an open question
-#     on a task that is no longer a draft. write-snapshot.sh only emits an `awaiting`
-#     verb for a question while the task IS a draft, so such a question is invisible in
-#     the queue; the rail adds it at the presentation layer, without touching the
-#     AWAITING.md contract that awaiting-queue.test.sh pins. That is why the two layouts
-#     derive their queues separately here rather than sharing one list.
-#   · With no readable snapshot it writes NOTHING and exits 0, where `columns` writes a
-#     page carrying an empty-state note. Publishing an empty board is not useful; being
-#     told locally how to get on the board is.
+#     visible rather than silent) and a webfont stylesheet. Nothing from a snapshot ever
+#     reaches either of them; the escaping rules above are what hold, not "no script".
+#   · Its decision rail surfaces one thing AWAITING.md does not: an open question on a
+#     task that is no longer a draft. write-snapshot.sh only emits an `awaiting` verb for
+#     a question while the task IS a draft, so such a question is invisible in the queue;
+#     the rail adds it at the presentation layer, without touching the AWAITING.md
+#     contract that awaiting-queue.test.sh pins.
+#   · With no readable snapshot it writes NOTHING and exits 0. Publishing an empty board
+#     is not useful, and an instance off the board is a choice, not an error.
 #
 # Deterministic. No network at build time. Verified by tests/snapshot.test.sh (the
-# writer and the columns layout), tests/board-renderers.test.sh (the other renderers,
-# and the table layout) and tests/machinery-ceiling.test.sh (this file's size).
+# writer, plus this renderer's data-governance boundary), tests/artifact-board.test.sh
+# (this renderer's markup and hardening), tests/board-renderers.test.sh (print-board and
+# watch-board) and tests/machinery-ceiling.test.sh (this file's size).
 set -euo pipefail
 
 OUT="board.html"
 STANDALONE=0
 LIST_ONLY=0
-LAYOUT="columns"
 DIRS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --out) shift; [[ $# -gt 0 ]] || { echo "build-board: --out needs a path" >&2; exit 2; }; OUT="$1" ;;
     --out=*) OUT="${1#--out=}" ;;
-    --layout) shift; [[ $# -gt 0 ]] || { echo "build-board: --layout needs columns|table" >&2; exit 2; }; LAYOUT="$1" ;;
-    --layout=*) LAYOUT="${1#--layout=}" ;;
+    # The tombstone. --layout is gone (see the header), and a caller that still
+    # passes it is refused BY NAME rather than by the generic unknown-flag line
+    # below: every such caller was written when the flag chose between two pages, so
+    # "unknown flag" would leave a human wondering which page they are now getting.
+    --layout|--layout=*) echo "build-board: --layout was removed — there is only one board now. Drop the flag." >&2; exit 2 ;;
     --standalone) STANDALONE=1 ;;
     --list-instances) LIST_ONLY=1 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit 0 ;;
@@ -138,31 +148,19 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
-case "$LAYOUT" in
-  columns|table) ;;
-  *) echo "build-board: unknown layout '$LAYOUT' (columns|table)" >&2; exit 2 ;;
-esac
-
 command -v python3 >/dev/null 2>&1 || {
   echo "build-board: needs python3 (standard library only). See this script's header for why." >&2
   exit 2
 }
 
 BOARD_OUT="$OUT" BOARD_STANDALONE="$STANDALONE" BOARD_LIST_ONLY="$LIST_ONLY" \
-BOARD_LAYOUT="$LAYOUT" \
   python3 - "${DIRS[@]+"${DIRS[@]}"}" <<'PY'
 import html, json, os, re, sys
 from pathlib import Path
 
 OUT = Path(os.environ["BOARD_OUT"])
 STANDALONE = os.environ.get("BOARD_STANDALONE") == "1"
-LAYOUT = os.environ.get("BOARD_LAYOUT") or "columns"
 
-# Canonical column order — SCHEMA.md's Task enum. An unknown status still gets a
-# column at the end rather than vanishing: a snapshot from a drifted instance should
-# look wrong on the board, not be silently dropped from it.
-COLUMNS = ["draft", "ready", "in-progress", "in-review", "blocked", "done", "cancelled"]
-VERBS = {"approve": "✅", "answer": "❓", "merge": "🔀", "unblock": "⛔", "close": "🏁"}
 
 def e(v):
     """The single escape point. Everything from a snapshot goes through here."""
@@ -281,310 +279,7 @@ def toint(v, default=0):
     except (TypeError, ValueError):
         return default
 
-# ---------------------------------------------------------------- awaiting queue
-# The AWAITING.md contract, read off the snapshot: one entry per thing a human decision
-# unblocks. Shared by the columns layout and by the summary line both layouts print.
-awaiting = []
-for inst in instances:
-    for proj in tolist(inst.get("projects")):
-        proj = todict(proj)
-        if proj.get("awaiting_close"):
-            awaiting.append({
-                "verb": "close", "group": inst["group"], "project": proj.get("title") or proj.get("slug"),
-                "what": "all tasks terminal", "detail": "/close-project " + str(proj.get("slug") or ""), "prs": [],
-            })
-        for task in tolist(proj.get("tasks")):
-            task = todict(task)
-            verb = task.get("awaiting")
-            if verb in VERBS:
-                awaiting.append({
-                    "verb": verb, "group": inst["group"], "project": proj.get("title") or proj.get("slug"),
-                    "what": task.get("title") or task.get("id"),
-                    "detail": (f"{task.get('open_questions')} open question(s)" if verb == "answer" else ""),
-                    "prs": tolist(task.get("prs")),
-                })
-ORDER = list(VERBS)
-awaiting.sort(key=lambda a: (ORDER.index(a["verb"]), a["group"], str(a["project"])))
-
-# ---------------------------------------------------------------- columns layout
-CSS = """
-/* Full light palette on BARE :root, so no colour is ever defined only inside a
-   media or [data-theme] block. Dark redefines these same tokens twice: once for
-   the system preference (guarded so an explicit light choice wins) and once for an
-   explicit dark choice. */
-:root{
-  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#eef0f4; --border:#d7dbe2;
-  --text:#12161c; --text-dim:#5b6472; --accent:#2f5fd0; --accent-soft:#e6edfb;
-  --warn-bg:#fdf1e3; --warn-border:#e0a94a; --shadow:0 1px 2px rgba(16,22,32,.07);
-  --draft:#8b7bd8; --ready:#2f8f5b; --in-progress:#c98a17; --in-review:#2f5fd0;
-  --blocked:#c5443c; --done:#5b6472; --cancelled:#8a9099; --other:#8a9099;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#0f1216; --surface:#171b21; --surface-2:#1e242c; --border:#2c343e;
-    --text:#e7ebf0; --text-dim:#98a2b0; --accent:#7aa2f7; --accent-soft:#1d2637;
-    --warn-bg:#2a2115; --warn-border:#6b5220; --shadow:0 1px 2px rgba(0,0,0,.4);
-    --draft:#a996f2; --ready:#5cc98c; --in-progress:#e3b04b; --in-review:#7aa2f7;
-    --blocked:#f0776e; --done:#98a2b0; --cancelled:#78818d; --other:#78818d;
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#0f1216; --surface:#171b21; --surface-2:#1e242c; --border:#2c343e;
-  --text:#e7ebf0; --text-dim:#98a2b0; --accent:#7aa2f7; --accent-soft:#1d2637;
-  --warn-bg:#2a2115; --warn-border:#6b5220; --shadow:0 1px 2px rgba(0,0,0,.4);
-  --draft:#a996f2; --ready:#5cc98c; --in-progress:#e3b04b; --in-review:#7aa2f7;
-  --blocked:#f0776e; --done:#98a2b0; --cancelled:#78818d; --other:#78818d;
-}
-*,*::before,*::after{box-sizing:border-box}
-body{
-  margin:0; padding:1rem .85rem 3rem;
-  background:var(--bg); color:var(--text);
-  font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  -webkit-text-size-adjust:100%; overflow-x:hidden;
-}
-img,svg{max-width:100%}
-.wrap{max-width:78rem; margin:0 auto}
-h1{font-size:1.35rem; margin:0 0 .2rem; letter-spacing:-.01em}
-h2{font-size:1.05rem; margin:1.6rem 0 .6rem}
-h3{font-size:.98rem; margin:0}
-.sub{color:var(--text-dim); font-size:.82rem; margin:0 0 1.2rem}
-a{color:var(--accent)}
-.card{background:var(--surface); border:1px solid var(--border); border-radius:.7rem; box-shadow:var(--shadow)}
-.pill{display:inline-block; padding:.08rem .45rem; border-radius:1rem; font-size:.7rem;
-  font-weight:600; text-transform:uppercase; letter-spacing:.03em;
-  background:var(--surface-2); color:var(--text-dim); white-space:nowrap}
-.pill[data-s]{color:var(--surface)}
-.pill[data-s="draft"]{background:var(--draft)} .pill[data-s="ready"]{background:var(--ready)}
-.pill[data-s="in-progress"]{background:var(--in-progress)} .pill[data-s="in-review"]{background:var(--in-review)}
-.pill[data-s="blocked"]{background:var(--blocked)} .pill[data-s="done"]{background:var(--done)}
-.pill[data-s="cancelled"]{background:var(--cancelled)} .pill[data-s="other"]{background:var(--other)}
-
-/* --- awaiting you: the one thing on this page that needs a decision --- */
-.awaiting{border-left:.28rem solid var(--blocked); padding:.85rem .9rem; margin:0 0 1.4rem}
-.awaiting h2{margin:0 0 .55rem; font-size:1rem}
-.awaiting ul{list-style:none; margin:0; padding:0; display:grid; gap:.5rem}
-.awaiting li{display:flex; flex-wrap:wrap; gap:.4rem .55rem; align-items:baseline;
-  padding:.45rem .55rem; background:var(--surface-2); border-radius:.45rem; font-size:.9rem}
-.awaiting .verb{font-weight:700; white-space:nowrap}
-.awaiting .where{color:var(--text-dim); font-size:.78rem; width:100%}
-.none{color:var(--text-dim); font-size:.9rem; margin:0}
-
-/* --- instance tabs: CSS-only, so no script and full keyboard support --- */
-.tabs>input{position:absolute; opacity:0; pointer-events:none; width:0; height:0}
-.tablist{display:flex; flex-wrap:wrap; gap:.4rem; margin:0 0 1rem}
-.tablist label{cursor:pointer; padding:.35rem .7rem; border:1px solid var(--border);
-  border-radius:.5rem; background:var(--surface); font-size:.85rem; font-weight:600}
-.tabs>input:focus-visible+.tablist label[data-first],
-.tablist label:hover{border-color:var(--accent)}
-.panel{display:none}
-
-/* --- a project --- */
-.project{padding:.85rem .9rem; margin:0 0 1rem}
-.phead{display:flex; flex-wrap:wrap; gap:.4rem .6rem; align-items:baseline}
-.pdesc{color:var(--text-dim); font-size:.85rem; margin:.35rem 0 0}
-.progress{margin:.6rem 0 .2rem; font-size:.75rem; color:var(--text-dim)}
-.bar{height:.4rem; border-radius:1rem; background:var(--surface-2); overflow:hidden; margin-top:.25rem}
-.bar>span{display:block; height:100%; background:var(--accent)}
-.phaselist{margin:.45rem 0 0; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:.3rem}
-.phaselist li{font-size:.72rem; color:var(--text-dim); background:var(--surface-2);
-  border-radius:.35rem; padding:.1rem .4rem}
-
-/* --- the columns. Wide content scrolls INSIDE this strip; the body never does. --- */
-.cols{display:flex; gap:.6rem; overflow-x:auto; padding:.7rem .1rem .3rem;
-  scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch}
-.col{flex:0 0 15rem; min-width:15rem; scroll-snap-align:start;
-  background:var(--surface-2); border-radius:.55rem; padding:.5rem}
-@media (min-width:52rem){ .col{flex:1 1 0; min-width:11rem} }
-.colhead{display:flex; justify-content:space-between; align-items:baseline;
-  font-size:.74rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
-  color:var(--text-dim); margin:0 0 .45rem}
-.task{background:var(--surface); border:1px solid var(--border); border-radius:.45rem;
-  padding:.45rem .5rem; margin:0 0 .4rem; font-size:.85rem}
-.task .t{overflow-wrap:anywhere}
-.task .meta{display:flex; flex-wrap:wrap; gap:.3rem; align-items:center; margin-top:.35rem}
-.task .flight{color:var(--in-progress); font-size:.7rem; font-weight:700}
-.task .prs{display:flex; flex-wrap:wrap; gap:.25rem; margin-top:.3rem}
-.task .prs a{font-size:.72rem; background:var(--accent-soft); color:var(--accent);
-  border-radius:.3rem; padding:.05rem .35rem; text-decoration:none; white-space:nowrap}
-.task .inert{font-size:.72rem; color:var(--text-dim); overflow-wrap:anywhere}
-.empty{color:var(--text-dim); font-size:.78rem; padding:.2rem .1rem}
-
-.note{background:var(--warn-bg); border:1px solid var(--warn-border); border-radius:.55rem;
-  padding:.6rem .7rem; margin:0 0 .8rem; font-size:.85rem}
-.note code{overflow-wrap:anywhere}
-footer{color:var(--text-dim); font-size:.75rem; margin-top:2rem; border-top:1px solid var(--border); padding-top:.7rem}
-table{border-collapse:collapse}
-.scroll{overflow-x:auto}
-"""
-
-
-def render_columns():
-    """Two lists, because --standalone has to put each in the right place: HEAD holds
-    <title>/<meta>/<style>, BODY holds the content. Emitting the content inside <head>
-    (with an empty <body> after it) is valid-looking and wrong — the parser recovers by
-    implicitly closing <head>, so it renders while the file lies about its structure."""
-    head, parts = [], []
-    wh = head.append
-    w = parts.append
-
-    wh("<title>Bridge Board</title>")
-    wh('<meta name="viewport" content="width=device-width, initial-scale=1">')
-    wh("<style>" + CSS)
-    # The tab rules are generated: one pair per instance, so the CSS-only tabs need no JS.
-    for i in range(len(instances)):
-        wh(f'.tabs>#tab-{i}:checked ~ #panel-{i}{{display:block}}')
-        wh(f'.tabs>#tab-{i}:checked ~ .tablist label[for="tab-{i}"]'
-           '{background:var(--accent-soft); border-color:var(--accent); color:var(--accent)}')
-    wh("</style>")
-
-    w('<div class="wrap">')
-    w("<h1>Bridge Board</h1>")
-    total_tasks = sum(toint(todict(i.get("counts")).get("tasks")) for i in instances)
-    w('<p class="sub">{} instance(s) · {} project(s) · {} task(s) · {} awaiting you</p>'.format(
-        len(instances),
-        sum(len(tolist(i.get("projects"))) for i in instances),
-        total_tasks, len(awaiting)))
-
-    for d, msg in broken:
-        w('<div class="note"><strong>Unreadable snapshot.</strong> '
-          f'<code>{e(d)}/SNAPSHOT.json</code> could not be parsed, so that instance is not on '
-          f'the board. Re-run <code>scripts/write-snapshot.sh</code> there. <br>{e(msg)}</div>')
-
-    # ---- awaiting you
-    w('<section class="card awaiting">')
-    w(f"<h2>🔴 Awaiting you ({len(awaiting)})</h2>")
-    if awaiting:
-        w("<ul>")
-        for a in awaiting:
-            w("<li>")
-            w(f'<span class="verb">{VERBS[a["verb"]]} {e(a["verb"])}</span>')
-            w(f'<span>{e(a["what"])}</span>')
-            for pr in tolist(a["prs"]):
-                pr = todict(pr)
-                u = href(pr.get("url"))
-                label = f'{pr.get("repo")}#{pr.get("number")}'
-                if u:
-                    w(f'<a href="{e(u)}" rel="noopener noreferrer" target="_blank">{e(label)}</a>')
-                else:
-                    w(f'<span class="inert">{e(label)}</span>')
-            tail = f' · {a["detail"]}' if a["detail"] else ""
-            w(f'<span class="where">{e(a["group"])} › {e(a["project"])}{e(tail)}</span>')
-            w("</li>")
-        w("</ul>")
-    else:
-        w('<p class="none">Nothing needs a decision right now.</p>')
-    w("</section>")
-
-    # ---- instances
-    if not instances:
-        w('<div class="note">No instance on the board. An instance appears here once it has a '
-          '<code>SNAPSHOT.json</code> — <code>touch SNAPSHOT.json</code> in it, then run '
-          '<code>scripts/write-snapshot.sh</code>.</div>')
-    else:
-        w('<div class="tabs">')
-        for i in range(len(instances)):
-            checked = " checked" if i == 0 else ""
-            w(f'<input type="radio" name="board-instance" id="tab-{i}"{checked}>')
-        w('<nav class="tablist">')
-        for i, inst in enumerate(instances):
-            n = len(tolist(inst.get("projects")))
-            w(f'<label for="tab-{i}"{" data-first" if i == 0 else ""}>{e(inst["group"])} '
-              f'<span class="pill">{n}</span></label>')
-        w("</nav>")
-
-        for i, inst in enumerate(instances):
-            w(f'<section class="panel" id="panel-{i}">')
-            w(f'<p class="sub">snapshot generated {e(inst.get("generated_at") or "unknown")} · '
-              f'<code>{e(inst.get("_dir"))}</code></p>')
-            projects = [todict(p) for p in tolist(inst.get("projects"))]
-            if not projects:
-                w('<p class="none">No projects in this instance yet.</p>')
-            for proj in projects:
-                w('<article class="card project">')
-                w('<div class="phead">')
-                w(f'<h3>{e(proj.get("title") or proj.get("slug"))}</h3>')
-                st = proj.get("status") or "other"
-                w(f'<span class="pill" data-s="{e(st if st in COLUMNS or st in ("active","paused","done") else "other")}">{e(st)}</span>')
-                w(f'<span class="pill">{e(proj.get("kind") or "build")}</span>')
-                if (proj.get("autonomy") or "gated") != "gated":
-                    w(f'<span class="pill" data-s="blocked">autonomy: {e(proj.get("autonomy"))}</span>')
-                if proj.get("awaiting_close"):
-                    w('<span class="pill" data-s="ready">🏁 close?</span>')
-                w("</div>")
-                if proj.get("description"):
-                    w(f'<p class="pdesc">{e(proj.get("description"))}</p>')
-
-                prog = todict(proj.get("phase_progress"))
-                ptot = toint(prog.get("total"))
-                pdone = toint(prog.get("done"))
-                if ptot:
-                    pct = max(0, min(100, round(100 * pdone / ptot)))
-                    w(f'<div class="progress">Phases {pdone}/{ptot} done'
-                      f'<div class="bar"><span style="width:{pct}%"></span></div></div>')
-                    w('<ul class="phaselist">')
-                    for ph in sorted((todict(p) for p in tolist(proj.get("phases"))),
-                                     key=lambda p: (toint(p.get("order")), str(p.get("title") or ""))):
-                        w(f'<li>{e(ph.get("order"))}. {e(ph.get("title"))} — {e(ph.get("status"))}</li>')
-                    w("</ul>")
-
-                tasks = [todict(t) for t in tolist(proj.get("tasks"))]
-                if not tasks:
-                    w('<p class="empty">No tasks yet.</p>')
-                else:
-                    buckets = {c: [] for c in COLUMNS}
-                    for t in tasks:
-                        buckets.setdefault(t.get("status") or "other", []).append(t)
-                    order = COLUMNS + [k for k in buckets if k not in COLUMNS]
-                    w('<div class="cols">')
-                    for col in order:
-                        items = buckets.get(col) or []
-                        w('<div class="col">')
-                        label = col if col in COLUMNS else (col or "unknown")
-                        w(f'<div class="colhead"><span>{e(label)}</span><span>{len(items)}</span></div>')
-                        if not items:
-                            w('<div class="empty">—</div>')
-                        for t in items:
-                            w('<div class="task">')
-                            w(f'<div class="t">{e(t.get("title") or t.get("id"))}</div>')
-                            w('<div class="meta">')
-                            w(f'<span class="pill">{e(t.get("id"))}</span>')
-                            if t.get("assignee"):
-                                w(f'<span class="pill">{e(t.get("assignee"))}</span>')
-                            if t.get("in_flight"):
-                                w('<span class="flight">● in flight</span>')
-                            if t.get("awaiting") in VERBS:
-                                w(f'<span class="pill" data-s="blocked">{VERBS[t["awaiting"]]} {e(t["awaiting"])}</span>')
-                            oq = t.get("open_questions") or 0
-                            if isinstance(oq, int) and oq > 0:
-                                w(f'<span class="pill">{oq} question(s)</span>')
-                            w("</div>")
-                            prs = [todict(p) for p in tolist(t.get("prs"))]
-                            if prs:
-                                w('<div class="prs">')
-                                for pr in prs:
-                                    u = href(pr.get("url"))
-                                    label = f'{pr.get("repo")}#{pr.get("number")}'
-                                    if u:
-                                        w(f'<a href="{e(u)}" rel="noopener noreferrer" target="_blank">{e(label)}</a>')
-                                    else:
-                                        w(f'<span class="inert">{e(label)} (link withheld: not http/https)</span>')
-                                w("</div>")
-                            w("</div>")
-                        w("</div>")
-                    w("</div>")
-                w("</article>")
-            w("</section>")
-        w("</div>")
-
-    w("<footer>Generated by <code>scripts/build-board.sh</code> from each instance's "
-      "<code>SNAPSHOT.json</code>. Derived, read-only, and <strong>as sensitive as the task "
-      "documents it comes from</strong> — every title here is human-written free text. "
-      f"Instances listed from: {e(source or 'command line')}.</footer>")
-    w("</div>")
-    return head, parts
-
-
-# ---------------------------------------------------------------- table layout
+# ---------------------------------------------------------------- the board
 TONE = {"blocked": "stop", "review": "signal", "in-review": "signal",
         "done": "ok", "in-progress": "accent"}
 PENDING = ("draft", "ready", "blocked")
@@ -748,6 +443,13 @@ td:first-child{overflow-wrap:break-word}
 .qbtn:hover{border-color:var(--signal);background:color-mix(in srgb,var(--signal) 18%,transparent)}
 button.ghost{font-size:.72rem;padding:.28rem .5rem;color:var(--muted)}
 .deps{white-space:normal!important}
+/* Two refs must not wrap: reserve button.dep's own box (3ch digits + .7rem pad +
+   2px border, each) times two, a ", " separator in that same monospace context,
+   and this td's own .9rem horizontal padding (box-sizing:border-box counts it) —
+   sized from the pill's and td's own CSS, not eyeballed. 3+ refs may still wrap
+   past that width, and a single ref never sees this min-width. */
+.deps:has(button.dep:nth-of-type(2)){font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:.74rem;min-width:calc(2*(3ch + .7rem + 2px) + 2ch + .9rem)}
 button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.74rem;
   padding:.08rem .35rem;color:var(--muted);background:var(--sunk);border-color:transparent;
   font-variant-numeric:tabular-nums}
@@ -1130,18 +832,17 @@ def render_table():
              "buttons copy a prompt; the bundle, not this page, is where a decision is "
              "recorded.</p></footer></div>")
     o.append(TABLE_SCRIPT)
-    return head, o
+    return head, o, len(asks)
 
 
 # ---------------------------------------------------------------- write it out
-if LAYOUT == "table" and not instances:
-    # Publishing an empty page is not useful, so this layout writes nothing at all —
-    # unlike `columns`, whose empty-state note tells a local reader how to get on the
-    # board. Exit 0 either way: an instance off the board is a choice, not an error.
+if not instances:
+    # Publishing an empty page is not useful, so nothing is written at all. Exit 0
+    # anyway: an instance off the board is a choice, not an error.
     print("build-board: no readable snapshot; nothing written.", file=sys.stderr)
     sys.exit(0)
 
-head, parts = render_table() if LAYOUT == "table" else render_columns()
+head, parts, n_awaiting = render_table()
 
 head_html = "\n".join(head)
 body_html = "\n".join(parts)
@@ -1151,6 +852,6 @@ if STANDALONE:
 else:
     doc = head_html + "\n" + body_html + "\n"
 OUT.write_text(doc, encoding="utf-8")
-print(f"build-board: wrote {OUT} ({LAYOUT}) — {len(instances)} instance(s), "
-      f"{len(awaiting)} awaiting, {len(broken)} unreadable snapshot(s).")
+print(f"build-board: wrote {OUT} — {len(instances)} instance(s), "
+      f"{n_awaiting} awaiting, {len(broken)} unreadable snapshot(s).")
 PY

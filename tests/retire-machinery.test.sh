@@ -107,7 +107,7 @@ bash "$TPL/install.sh" "$ODD" >"$TMP/out10" 2>&1
 assert "glob-y path: the link is swept"     "$(no_if test -L "$ODD/DOOMED-TWICE.md")"
 
 # --- the one script this sweep has actually had to retire: build-artifact-board.sh.
-# The two HTML renderers were consolidated behind `build-board.sh --layout table`, which
+# The two HTML renderers were consolidated into `build-board.sh`, which
 # deleted the second one from the template — so every instance stamped before that carries
 # a link to a path that no longer exists. The generic case above already covers it, and
 # that is the claim worth pinning: NO installer edit was needed, so nothing in install.sh

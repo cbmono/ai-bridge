@@ -50,7 +50,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # ---------------------------------------------------------------- the ceiling
 #
 # Measured 2026-08-23 in this repo, after build-artifact-board.sh was folded into
-# build-board.sh behind --layout (18 files -> 17). Pre-consolidation, at 68479c1, the same
+# build-board.sh, its markup selected by a flag (18 files -> 17). Pre-consolidation, at 68479c1, the same
 # two expressions read 6,061 and 3,408, so the honest arithmetic is:
 #
 #   6,061 / 3,408   before                 18 files
@@ -127,8 +127,43 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 #
 #   6,190 / 3,447   18 files   what task-021 pinned for the detector
 #   6,224 / 3,454   19 files   +34 total, +7 code — show-board-link.sh
-CEILING_TOTAL=6224
-CEILING_CODE=3454
+#
+# LOWERED 2026-08-24 — the first time, and the debt above is what it pays down. The owner
+# saw both HTML board layouts rendered from live data and rejected the kanban `columns`
+# one outright ("not usable… just not readable"), so build-board.sh's columns markup, its
+# stylesheet, its queue derivation and the `--layout` flag that selected it were DELETED
+# rather than defaulted away:
+#
+#   6,224 / 3,454   19 files   what show-board-link.sh pinned above
+#   5,918 / 3,167   19 files   -306 total, -287 code — the columns layout, gone
+#
+# THE FILE COUNT DOES NOT MOVE, and that is the point of pinning two numbers. Nothing was
+# retired as a script; one of the four board scripts named as the reduction candidates
+# above (build-board.sh, 1,156 lines) simply stopped carrying a second renderer, and is
+# now 850. The ratio inverts every raise before it: 287 of the 306 lines are CODE, because
+# what went was markup, CSS and a render function — not commentary.
+#
+# RAISED 2026-08-24, same day, folded into the same PR: the owner flagged the Depends-on
+# column wrapping a two-ref cell ("023 ," on one line, "018" on the next) taller than every
+# other row. Fixed with a `min-width` on `.deps` cells holding 2+ pills, sized from the
+# pill's own box model (button.dep's padding/border, digit count via `ch`) plus the td's own
+# padding — not `white-space:nowrap`, which would have pushed a 5-dep cell into the Task
+# column, and scoped with `:has()` so a single-ref or empty cell gains no gutter:
+#
+#   5,918 / 3,167   19 files   what the columns deletion above lowered to
+#   5,925 / 3,174   19 files   +7 total, +7 code — the two-dep column width fix
+#
+# WHAT THIS DISCHARGES, AND WHAT IT DOES NOT. The objective's second criterion asks a
+# project to lower one of these constants, retire a named mechanism, or say plainly that
+# nothing was retireable. The columns deletion above did the first two at once, and it is
+# the first movement in the right direction in v3 (6,078 -> 6,190 -> 6,224 -> 5,918 ->
+# 5,925); even after this small raise it lands 153 BELOW the 6,078 that opened the project,
+# so the aggregate is still negative rather than merely apologised for. It does not touch
+# print-board.sh, watch-board.sh or write-snapshot.sh — a terminal renderer and a local
+# watcher are different MEDIA, not duplicate layouts, and deleting one of those would
+# remove a capability rather than a rejected one.
+CEILING_TOTAL=5925
+CEILING_CODE=3174
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is
