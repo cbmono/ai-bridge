@@ -62,17 +62,37 @@ yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 # mirrors install.sh's config_entries(): both tiers if present, minus the three kinds of
 # file that are never linked. Parameterised by root so the same scan runs over the real
 # checkout and over a synthetic fixture.
+# EVERY tier directory, whatever it happens to be CALLED. This used to read
+# `for tier in required opinionated`, and that hardcoding is what made the whole check
+# weaker than the two-tier duplicate-path guard install.sh dropped when the second tier
+# went: with `CONFIG_TIERS="required personal"` in install.sh and a re-forked
+# `config/personal/commands/grill.md` on disk, `--config` linked the fork and this harness
+# reported 18 passed, 0 failed. The invariant is "this repo ships exactly what it probes
+# for" — a tier under a new name is precisely how the fork grows back, so the scan must not
+# be able to name the tiers it looks in. The tier NAMES are pinned separately below,
+# against install.sh's own CONFIG_TIERS, which closes the other direction: a tier directory
+# install.sh does not link, and a tier install.sh links that has no directory.
+#
+# -mindepth 2 mirrors config_entries(): it scans `config/<tier>/...`, so a loose file at
+# `config/x.md` is shipped by nobody and belongs to neither set.
 shipped() { # <template root>
-  local root="$1" tier
-  for tier in required opinionated; do
-    [ -d "$root/config/$tier" ] || continue
-    ( cd "$root/config/$tier" && find . -type f -print ) | sed 's#^\./##' \
-    | while IFS= read -r rel; do
-        [ -n "$rel" ] || continue
-        case "${rel##*/}" in README.md|settings.json|*.example.json|.DS_Store) continue ;; esac
-        printf '%s\n' "$rel"
-      done
-  done | sort -u
+  local root="$1"
+  [ -d "$root/config" ] || return 0
+  ( cd "$root/config" && find . -mindepth 2 -type f -print ) | sed 's#^\./[^/]*/##' \
+  | while IFS= read -r rel; do
+      [ -n "$rel" ] || continue
+      case "${rel##*/}" in README.md|settings.json|*.example.json|.DS_Store) continue ;; esac
+      printf '%s\n' "$rel"
+    done | sort -u
+}
+
+# The tier directories present on disk, and the ones install.sh is configured to link.
+tier_dirs() { # <template root>
+  [ -d "$1/config" ] || return 0
+  ( cd "$1/config" && find . -mindepth 1 -maxdepth 1 -type d -print ) | sed 's#^\./##' | sort -u
+}
+config_tiers_of() { # <template root> → install.sh's CONFIG_TIERS, one per line
+  sed -n 's/^CONFIG_TIERS="\(.*\)"$/\1/p' "$1/install.sh" | tr ' ' '\n' | grep . | sort -u
 }
 
 # The expected set, derived from what the machinery actually probes for.
@@ -106,6 +126,15 @@ ok "the shipped set is three files"      "$(grep -c . "$TMP/shipped")" 3
 # Two structural corollaries, asserted directly because each has its own way of coming
 # back: a whole second tier, and a non-agents subtree inside the one that stays.
 ok "config/opinionated/ is gone"         "$(yn test -d "$REPO/config/opinionated")" no
+# THE TIER NAMES ARE PINNED, in both directions, because the scan above deliberately cannot
+# see them. One tier is the decision (docs/claude-config-ownership.md); a second one under
+# ANY name is the fork coming back, and a mismatch between the directories on disk and the
+# list install.sh reads is a path shipped by nobody or a path shipped invisibly.
+tier_dirs "$REPO"        > "$TMP/tier-dirs"
+config_tiers_of "$REPO"  > "$TMP/tier-cfg"
+ok "install.sh's CONFIG_TIERS was found" "$([ -s "$TMP/tier-cfg" ] && echo yes || echo no)" yes
+ok "…and it names exactly one tier"     "$(tr '\n' ' ' < "$TMP/tier-cfg" | sed 's/ *$//')" "required"
+ok "the tier dirs on disk match it"     "$(comm -3 "$TMP/tier-dirs" "$TMP/tier-cfg" | tr -d '\t' | tr '\n' ' ' | sed 's/ *$//')" ""
 ok "config/ ships nothing outside agents/" \
    "$(grep -cv '^agents/' "$TMP/shipped" || true)" 0
 
@@ -120,6 +149,33 @@ printf 'a copy of ai-setup\n' > "$FIX/config/opinionated/commands/grill.md"
 shipped "$FIX" > "$TMP/shipped-fix"
 ok "the fixture's extra file is reported" \
    "$(comm -23 "$TMP/shipped-fix" "$TMP/expected" | tr '\n' ' ' | sed 's/ *$//')" "commands/grill.md"
+# THE TIER UNDER A NEW NAME — the case the old hardcoded `required opinionated` loop could
+# not see at all, and the reason this group is not decorative. `personal` is not a name
+# either repo has ever used, which is the point: the scan must be blind to tier names.
+NEWTIER="$TMP/newtier"
+mkdir -p "$NEWTIER/config/required/agents" "$NEWTIER/config/personal/commands"
+cp "$REPO/config/required/agents/"*.md "$NEWTIER/config/required/agents/"
+printf 'a copy of ai-setup\n' > "$NEWTIER/config/personal/commands/grill.md"
+shipped "$NEWTIER" > "$TMP/shipped-newtier"
+ok "a tier under a NEW name is reported too" \
+   "$(comm -23 "$TMP/shipped-newtier" "$TMP/expected" | tr '\n' ' ' | sed 's/ *$//')" "commands/grill.md"
+# …and the tier-name pin sees it from the other side, whether or not install.sh links it.
+# The fixture writes its OWN CONFIG_TIERS line rather than copying the repo's installer, so
+# these two assertions stay meaningful no matter what the real one says — a non-vacuity
+# check that moves with the thing it is checking is not one.
+printf 'CONFIG_TIERS="required"\n' > "$NEWTIER/install.sh"
+ok "…and the tier-dir pin reports the new dir" \
+   "$(comm -3 <(tier_dirs "$NEWTIER") <(config_tiers_of "$NEWTIER") | tr -d '\t' | tr '\n' ' ' | sed 's/ *$//')" "personal"
+# The one loophole worth closing explicitly: an author who adds the tier AND updates
+# install.sh makes the dir/CONFIG_TIERS pin agree again. The "exactly one tier" assertion
+# is what still fires — which is why it is a separate assertion and not folded into the
+# comm above. Reproduced here as the reviewer's exact repro: CONFIG_TIERS="required
+# personal" plus a re-forked commands/grill.md under it.
+printf 'CONFIG_TIERS="required personal"\n' > "$NEWTIER/install.sh"
+ok "…a matching install.sh silences only the dir pin" \
+   "$(comm -3 <(tier_dirs "$NEWTIER") <(config_tiers_of "$NEWTIER") | tr -d '\t' | tr '\n' ' ' | sed 's/ *$//')" ""
+ok "…and the one-tier pin still names it" \
+   "$(config_tiers_of "$NEWTIER" | tr '\n' ' ' | sed 's/ *$//')" "personal required"
 ok "…and the legitimate three still are not" \
    "$(comm -13 "$TMP/shipped-fix" "$TMP/expected" | tr '\n' ' ' | sed 's/ *$//')" ""
 # The same for the "outside agents/" corollary, so it cannot pass by never matching.
