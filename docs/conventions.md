@@ -430,7 +430,7 @@ template had already been fixed. Any rule duplicated between `CONVENTIONS.md` an
 instance `CLAUDE.md` needs **both** edits, and only the template side is testable. Agents
 declaring no `tools:` key (`config/*/agents/`) inherit everything and are skipped — and
 that skip is asserted, not assumed, so one of them growing a `tools:` key fails here.
-Covered by `tests/agent-tool-allowlist.test.sh` (60 assertions).
+Covered by `tests/agent-tool-allowlist.test.sh` (62 assertions).
 
 ---
 

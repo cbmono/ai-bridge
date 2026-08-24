@@ -52,8 +52,9 @@
 #
 # WHICH FILES ARE SCANNED IS DERIVED, NOT LISTED. The first version named two shared docs
 # by hand (`symlink/CONVENTIONS.md`, `seed/CLAUDE.md`) and so could only ever check the
-# two someone remembered — `symlink/SCHEMA.md:567` named `mcp__claude-in-chrome__*` to
-# five readers whose allowlist intersection is `Bash Glob Grep Read`, and the check was
+# two someone remembered — `symlink/SCHEMA.md`'s browser-access section named
+# `mcp__claude-in-chrome__*` to five readers whose intersection is `Bash Glob Grep Read`,
+# and the check was
 # silent because the file was not on the list. A doc addresses an agent when an agent is
 # TOLD TO READ IT, so that is what is derived: every `*.md` reference in a restricted
 # agent's body, resolved against the trees this repo ships (`symlink/`, then `seed/`).
@@ -196,11 +197,19 @@ unclassified_camel() { # <file> — backticked multi-word CamelCase names in nei
 # INSTALLATION that reads as satisfied while deciding nothing. Accepting `if` would bless
 # it. A cue has to be about possession, not about a condition.
 #
+# A NEGATIVE contraction is spelled out rather than stemmed, and the difference matters:
+# a stem of `can` would accept "you **can** author a `Workflow`", which is the instruction
+# this rule exists to reject. Only `can't` counts. (Every apostrophe in the scanned set is
+# the straight one; the curly form is accepted so a later editor cannot break the check by
+# smartening quotes.)
+#
 # RESIDUAL GAP, stated honestly: this is a lexical test, so a directive sentence that
-# happens to contain a cue word passes. It is strictly stronger than the count it backs
-# up — it rejects every re-arming reword measured, including the verbatim original defect
-# — and a per-mention marker was rejected upstream as too brittle for reflowing prose.
-ABSENCE_CUE='(^|[^a-z])([Nn]o|[Nn]ot|[Nn]one|[Nn]ever|[Nn]either|[Nn]or|[Cc]annot|[Hh]old|[Hh]olds|[Hh]olding|[Ll]ack|[Ll]acks|[Ll]acking|[Aa]bsent|[Aa]bsence|[Ww]ithout|[Uu]navailable|[Aa]vailable|[Mm]issing|[Dd]ead|[Uu]nexecutable|[Oo]nly|[Pp]resent|[Gg]rant|[Gg]ranted|[Gg]ranting|allowlist|[Dd]on|[Dd]oesn|[Cc]an|[Ww]on|[Ii]sn|[Aa]ren)([^a-z]|$)'
+# happens to contain a cue word passes — a neighbouring line's "only" covered one of the
+# two mentions in the mutation run below, though the other still failed and one is enough.
+# It is strictly stronger than the count it backs up, rejecting every re-arming reword
+# measured including the verbatim original defect, and a per-mention marker was rejected
+# upstream as too brittle for reflowing prose.
+ABSENCE_CUE='(^|[^a-z])([Nn]o|[Nn]ot|[Nn]one|[Nn]ever|[Nn]either|[Nn]or|[Cc]annot|[Cc]an['"'"'’]t|[Dd]on['"'"'’]t|[Dd]oesn['"'"'’]t|[Ww]on['"'"'’]t|[Ii]sn['"'"'’]t|[Aa]ren['"'"'’]t|[Hh]old|[Hh]olds|[Hh]olding|[Ll]ack|[Ll]acks|[Ll]acking|[Aa]bsent|[Aa]bsence|[Ww]ithout|[Uu]navailable|[Aa]vailable|[Mm]issing|[Dd]ead|[Uu]nexecutable|[Oo]nly|[Pp]resent|[Gg]rant|[Gg]ranted|[Gg]ranting|allowlist)([^a-z]|$)'
 
 mentions_without_absence() { # <file> <tool> — body line numbers whose window states none
   # The declaration's own reason is blanked (not removed — line numbers must still line up
@@ -350,6 +359,9 @@ while IFS= read -r f; do
   [ -n "$f" ] || continue
   while IFS= read -r t; do
     [ -n "$t" ] || continue
+    # A grant may be scoped — `Bash(git:*)` is the same tool as `Bash`, and failing on the
+    # scope would be a spurious build break rather than a missing lexicon entry.
+    t="${t%%(*}"
     if [ "$(in_vocab "$t")" = no ]; then
       UNKNOWN_GRANTS=$((UNKNOWN_GRANTS+1))
       printf '        GRANTED, UNKNOWN  %s grants `%s`, absent from VOCAB — add it, or this file cannot see a mention of it\n' "${f#$REPO/}" "$t"
@@ -580,6 +592,17 @@ Self-review your diff: dispatch `code-architect` with the `Agent` tool if it is 
 in the usual location, else do a careful pass yourself.'
 read -r v d s r <<<"$(run_fx reworded_installed)"
 ok "the installation-conditioned defect fails" "$v" 1
+# A cue has to be NEGATIVE. "you can" is a permission, so it must not clear the mention,
+# while "you can't" must — the pair that decides whether the cue list is stemmed or spelt
+# out, and a stemmed `can` accepts the exact instruction the rule exists to reject.
+fixture reworded_can 'Read, Grep' '<!-- tool-mention: Workflow(1) — one mention, deliberately -->
+For wide work you can author a `Workflow` fan-out and split the edges between subagents.'
+read -r v d s r <<<"$(run_fx reworded_can)"
+ok "a permission is not an absence"          "$v" 1
+fixture reworded_cant 'Read, Grep' '<!-- tool-mention: Workflow(1) — one mention, deliberately -->
+For wide work you can'"'"'t author a `Workflow` fan-out, so take the edges in sequence.'
+read -r v d s r <<<"$(run_fx reworded_cant)"
+ok "...but its negation is"                   "$v" 0
 
 # 4f. a declaration missing its reason, or missing its budget, is not a declaration.
 fixture noreason 'Read, Grep' '<!-- tool-mention: Workflow(1) -->
