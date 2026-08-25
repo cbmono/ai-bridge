@@ -52,7 +52,7 @@ step0_of() { # <file> -> the sync step's body only, stopping at step 0.5
   awk '/^0\. \*\*Sync the bundle first/{p=1;next} /^0\.5\. /{p=0} p' "$1"
 }
 push_para_of() { # <file> -> the step-8 push paragraph only
-  awk '/\*\*Then push, if this bundle has a remote\.\*\*/{p=1} p&&/\*\*Refresh the awaiting-you queue/{p=0} p' "$1"
+  awk '/\*\*Then (push|sync), if this bundle has a remote\.\*\*/{p=1} p&&/\*\*Refresh the awaiting-you queue/{p=0} p' "$1"
 }
 guardrail_of() { # <file> -> the launcher's standing-guardrail bullet only
   awk '/- \*\*The tick syncs the bundle around its own work/{p=1} p&&/- \*\*An answered question is MOVED/{p=0} p' "$1"
@@ -62,7 +62,7 @@ S0="$(step0_of "$TICK")"
 PUSH="$(push_para_of "$TICK")"
 G="$(guardrail_of "$LAUNCHER")"
 ok "tick has a step 0 sync section"       "$([ -n "$S0" ]   && echo yes || echo no)" yes
-ok "tick has a step 8 push paragraph"     "$([ -n "$PUSH" ] && echo yes || echo no)" yes
+ok "tick has a step 8 sync paragraph"     "$([ -n "$PUSH" ] && echo yes || echo no)" yes
 ok "launcher has the sync guardrail bullet" "$([ -n "$G" ]  && echo yes || echo no)" yes
 
 in_str() { printf '%s' "$1" | grep -qF -- "$2" && echo yes || echo no; } # <text> <needle>
@@ -169,7 +169,7 @@ good_push_para() {
 EOF
 }
 ok "fixture: good push paragraph passes every check" \
-   "$(p="$(good_push_para | awk '/\*\*Then push, if this bundle has a remote\.\*\*/{p=1} p&&/\*\*Refresh the awaiting-you queue/{p=0} p')"; \
+   "$(p="$(good_push_para | awk '/\*\*Then (push|sync), if this bundle has a remote\.\*\*/{p=1} p&&/\*\*Refresh the awaiting-you queue/{p=0} p')"; \
       a=$(in_str "$p" 'git push origin'); \
       b=$(in_str "$p" 'Same condition as step 0'); \
       c=$(in_str "$p" 'Never force-push a shared bundle'); \
@@ -177,7 +177,7 @@ ok "fixture: good push paragraph passes every check" \
 
 no_force_push_rule="$(good_push_para | grep -v 'Never force-push a shared bundle')"
 mut_push_check() { # <mutated-push-text> <needle>
-  local body; body="$(printf '%s\n' "$1" | awk '/\*\*Then push, if this bundle has a remote\.\*\*/{p=1} p&&/\*\*Refresh the awaiting-you queue/{p=0} p')"
+  local body; body="$(printf '%s\n' "$1" | awk '/\*\*Then (push|sync), if this bundle has a remote\.\*\*/{p=1} p&&/\*\*Refresh the awaiting-you queue/{p=0} p')"
   in_str "$body" "$2"
 }
 ok "…and FAILS when the never-force-push rule is dropped" \
@@ -229,8 +229,19 @@ ok "push retry: does NOT pull with --autostash" \
    "$(in_str "$PUSH" '--rebase --autostash')" no
 ok "launcher: does NOT describe an --autostash pull" \
    "$(in_str "$G$LAUNCHER" 'pulls `--rebase --autostash`')" no
-ok "step 0: refuses a dirty tree before pulling" \
+ok "step 0: checks the tree before pulling" \
    "$(in_str "$S0" 'git status --porcelain')" yes
+# A dirty tree must DEFER the pull, never halt the tick: concurrent agents share this
+# working tree, so a sibling mid-write is the normal state, not an anomaly. And the
+# check must ignore untracked files, which never obstruct a rebase.
+ok "step 0: ignores untracked files in that check" \
+   "$(in_str "$S0" '--untracked-files=no')" yes
+ok "step 0: a dirty tree DEFERS the pull rather than stopping the tick" \
+   "$(in_str "$S0" 'never blocks the tick')" yes
+ok "step 0: no longer claims a dirty tree is anomalous" \
+   "$(in_str "$S0" 'is anomalous anyway')" no
+ok "step 8: performs the deferred pull before pushing" \
+   "$(in_str "$PUSH" 'deferred its pull')" yes
 ok "step 0: says why --autostash is absent (so nobody re-adds it)" \
    "$(in_str "$S0" 'exits 0')" yes
 ok "step 0: does not trust the pull exit code" \
@@ -240,8 +251,11 @@ bad_cmds="$(printf '%s\n' "$S0_CMDS" | sed 's/git pull --rebase origin/git pull 
 ok "…and the --autostash ban FAILS on a reintroduced flag" \
    "$(in_str "$bad_cmds" '--autostash')" yes
 no_dirty="$(printf '%s\n' "$S0" | grep -v 'git status --porcelain')"
-ok "…and the dirty-tree check FAILS when the guard is dropped" \
+ok "…and the tree check FAILS when the guard is dropped" \
    "$(in_str "$no_dirty" 'git status --porcelain')" no
+no_u="$(printf '%s\n' "$S0" | sed 's/ --untracked-files=no//')"
+ok "…and the untracked exclusion FAILS when the flag is dropped" \
+   "$(in_str "$no_u" '--untracked-files=no')" no
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
