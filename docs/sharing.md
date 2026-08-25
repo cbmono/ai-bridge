@@ -103,8 +103,19 @@ Two rules survive the per-machine override and are checked against the *effectiv
 values: `worktreeRoot` must never sit inside the synced `reposRoot`, and `reposRoot` must
 not be the instance directory itself.
 
-**Pushing is still git.** Ownership stops two loops dispatching the same task. It does
-not stop two humans pushing at once — pull before you push.
+**The tick syncs for you; ownership does not.** Since
+[#26](https://github.com/cbmono/ai-bridge/pull/26) and
+[#27](https://github.com/cbmono/ai-bridge/pull/27), a `/pm-loop` tick pulls `--rebase`
+before it re-derives anything and pushes after it commits, whenever the bundle has a
+remote — so neither human runs git by hand for the loop's own work. A dirty tree
+**defers** that pull to the end of the tick rather than blocking it, because concurrent
+agents share one working tree here and a sibling mid-write is normal.
+
+Two things it deliberately does not do. **A conflict stops the tick** rather than being
+auto-resolved — conflicted task documents are contested state between two humans, and a
+guessed resolution writes a `status:` nobody chose. And **nothing force-pushes**. Work
+*you* commit by hand outside a tick is still yours to push. Ownership stops two loops
+dispatching the same task; it was never a lock on pushing.
 
 ---
 
