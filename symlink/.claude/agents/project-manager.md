@@ -68,22 +68,45 @@ state, and act only on deltas.
    local-only instance: skip this silently and skip the push in step 8 too. Absence is
    the single-machine case behaving exactly as it always has, never an error.
 
-   **Refuse to pull into a dirty tree — do not `--autostash` it.** Check first:
+   **A dirty tree DEFERS the pull — it never blocks the tick.** Check tracked files
+   only:
 
-   ```
-   git status --porcelain            # any output => STOP, report, change nothing
-   git pull --rebase origin <default-branch>
+   ```bash
+   git status --porcelain --untracked-files=no   # non-empty => defer the pull to step 8
+   git pull --rebase origin <default-branch>     # only when the line above is empty
    ```
 
-   `--autostash` is deliberately absent, and this is the one instruction here you must
-   not "simplify" back. **Measured:** when the rebase succeeds but re-applying the
-   stash conflicts, `git pull --rebase --autostash` **exits 0** with `HEAD` already
-   moved and the tree left `UU`-conflicted — and `git rebase --abort` then fails with
-   *fatal: no rebase in progress*, because the rebase is over. A tick reading that exit
-   code sees a clean pull, then parses task documents full of conflict markers and acts
-   on them. A dirty control-panel tree at tick start is anomalous anyway (the derived
-   files are gitignored), so it means a human or a sibling agent is mid-edit — which is
-   its own reason not to run.
+   Empty ⇒ pull and carry on. **The pull can still refuse** — an incoming tracked path
+   may collide with a local *untracked* file (*"untracked working tree file would be
+   overwritten"*), which the check above deliberately cannot see. Treat that refusal
+   exactly like a dirty tree: defer to step 8, report the path, carry on. **Never
+   `git clean`, never delete the untracked file** — on a control panel it is usually a
+   sibling agent's half-written project folder, and deleting it destroys work no commit
+   holds.
+
+   Non-empty ⇒ **skip the pull this tick, say so in one line, and keep going.** Do the
+   sync at step 8 instead, once you have committed your own work and the tree is clean
+   again. You start from a slightly stale bundle — an acceptable cost, and self-correcting
+   the moment step 8 lands.
+
+   **Both halves of that rule are load-bearing, and both were wrong in the first
+   version of this step.**
+
+   *Untracked files are excluded* because they never obstruct a rebase, and an
+   in-progress project folder or a fresh `sources/` drop would otherwise stop every tick.
+
+   *A dirty tree must not stop the tick* because **it is the normal state here, not an
+   anomaly**: concurrent agents share this one working tree — the reason `commit-as.sh`
+   demands explicit paths — so a sibling mid-write is routine. Measured on a live shared
+   instance: `log.md` and a `project.md` were both modified at tick boundary while a
+   sibling was working. A step that halted on that would halt the loop most of the time.
+
+   *And `--autostash` is still banned* as the alternative, because it does not fail
+   loudly: when the rebase succeeds but re-applying the stash conflicts,
+   `git pull --rebase --autostash` **exits 0** with `HEAD` already moved and the tree
+   left `UU`-conflicted, and `git rebase --abort` then fails with *fatal: no rebase in
+   progress*. A tick trusting that exit code parses task documents full of conflict
+   markers and acts on them.
 
    **Why before step 0.5 and not after it.** The next step re-derives the in-flight set
    *from disk*, and on a bundle shared by two humans the disk is a stale mirror until you
@@ -409,7 +432,20 @@ state, and act only on deltas.
    This keeps loop provenance visible in `git log`. Never use the helper in target
    product repos.
 
-   **Then push, if this bundle has a remote.** `git push origin <default-branch>`.
+   **Then sync, if this bundle has a remote.** If step 0 deferred its pull, do it now —
+   but **re-check the tree first, do not assume your commit cleaned it**:
+
+   ```bash
+   git status --porcelain --untracked-files=no
+   ```
+
+   `commit-as.sh` commits only the paths you **name** — that is the entire point of the
+   explicit-path rule, and it means a sibling agent's edits are still sitting in the tree
+   after you commit. So "I committed, therefore it is clean" is false here, and a pull
+   run on that assumption fails exactly as step 0's would have. Empty ⇒
+   `git pull --rebase origin <default-branch>`, applying step 0's conflict rule. Still
+   non-empty ⇒ **skip the pull, still push**, and say the sync was one-way this tick;
+   the next tick picks it up. Then `git push origin <default-branch>`.
    Same condition as step 0: no remote ⇒ no push, silently. A tick that commits and
    never pushes is invisible to the other clone, so on a shared bundle the work only
    half-happened — and the divergence grows quietly until someone hits a conflict.
