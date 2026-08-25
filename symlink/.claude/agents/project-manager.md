@@ -71,12 +71,18 @@ state, and act only on deltas.
    **A dirty tree DEFERS the pull — it never blocks the tick.** Check tracked files
    only:
 
-   ```
+   ```bash
    git status --porcelain --untracked-files=no   # non-empty => defer the pull to step 8
    git pull --rebase origin <default-branch>     # only when the line above is empty
    ```
 
-   Empty ⇒ pull and carry on.
+   Empty ⇒ pull and carry on. **The pull can still refuse** — an incoming tracked path
+   may collide with a local *untracked* file (*"untracked working tree file would be
+   overwritten"*), which the check above deliberately cannot see. Treat that refusal
+   exactly like a dirty tree: defer to step 8, report the path, carry on. **Never
+   `git clean`, never delete the untracked file** — on a control panel it is usually a
+   sibling agent's half-written project folder, and deleting it destroys work no commit
+   holds.
 
    Non-empty ⇒ **skip the pull this tick, say so in one line, and keep going.** Do the
    sync at step 8 instead, once you have committed your own work and the tree is clean
@@ -426,10 +432,20 @@ state, and act only on deltas.
    This keeps loop provenance visible in `git log`. Never use the helper in target
    product repos.
 
-   **Then sync, if this bundle has a remote.** If step 0 deferred its pull because the
-   tree was dirty, do it now — the tree is clean after your commit, so
-   `git pull --rebase origin <default-branch>` first, applying step 0's conflict rule.
-   Then `git push origin <default-branch>`.
+   **Then sync, if this bundle has a remote.** If step 0 deferred its pull, do it now —
+   but **re-check the tree first, do not assume your commit cleaned it**:
+
+   ```bash
+   git status --porcelain --untracked-files=no
+   ```
+
+   `commit-as.sh` commits only the paths you **name** — that is the entire point of the
+   explicit-path rule, and it means a sibling agent's edits are still sitting in the tree
+   after you commit. So "I committed, therefore it is clean" is false here, and a pull
+   run on that assumption fails exactly as step 0's would have. Empty ⇒
+   `git pull --rebase origin <default-branch>`, applying step 0's conflict rule. Still
+   non-empty ⇒ **skip the pull, still push**, and say the sync was one-way this tick;
+   the next tick picks it up. Then `git push origin <default-branch>`.
    Same condition as step 0: no remote ⇒ no push, silently. A tick that commits and
    never pushes is invisible to the other clone, so on a shared bundle the work only
    half-happened — and the divergence grows quietly until someone hits a conflict.

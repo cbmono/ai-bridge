@@ -257,5 +257,37 @@ no_u="$(printf '%s\n' "$S0" | sed 's/ --untracked-files=no//')"
 ok "…and the untracked exclusion FAILS when the flag is dropped" \
    "$(in_str "$no_u" '--untracked-files=no')" no
 
+
+# --- ORDER, not just presence -----------------------------------------------------
+# Both commands being present says nothing about which runs first, and the whole
+# guard is the ordering: status THEN pull. Compare line numbers inside step 0.
+s0_status_ln="$(printf '%s\n' "$S0" | grep -n -- 'git status --porcelain --untracked-files=no' | head -1 | cut -d: -f1)"
+s0_pull_ln="$(printf '%s\n' "$S0" | grep -n -- 'git pull --rebase origin' | head -1 | cut -d: -f1)"
+ok "step 0: the tree check comes BEFORE the pull" \
+   "$([ -n "$s0_status_ln" ] && [ -n "$s0_pull_ln" ] && [ "$s0_status_ln" -lt "$s0_pull_ln" ] && echo yes || echo no)" yes
+# Step 8 must re-check the tree itself rather than assuming the commit cleaned it:
+# commit-as.sh commits only NAMED paths, so a sibling agent's edits survive it.
+p8_status_ln="$(printf '%s\n' "$PUSH" | grep -n -- 'git status --porcelain --untracked-files=no' | head -1 | cut -d: -f1)"
+p8_pull_ln="$(printf '%s\n' "$PUSH" | grep -n -- 'git pull --rebase origin' | head -1 | cut -d: -f1)"
+ok "step 8: re-checks the tree itself" \
+   "$([ -n "$p8_status_ln" ] && echo yes || echo no)" yes
+ok "step 8: that check comes BEFORE its pull" \
+   "$([ -n "$p8_status_ln" ] && [ -n "$p8_pull_ln" ] && [ "$p8_status_ln" -lt "$p8_pull_ln" ] && echo yes || echo no)" yes
+ok "step 8: says why a commit does not imply a clean tree" \
+   "$(in_str "$PUSH" 'only the paths you')" yes
+# An untracked path can still block a rebase, and the response must never be destructive.
+ok "step 0: handles the untracked-path collision the check cannot see" \
+   "$(in_str "$S0" 'would be')" yes
+ok "step 0: forbids git clean as the response" \
+   "$(in_str "$S0" 'never delete the untracked file')" yes
+# Non-vacuity for the ordering checks.
+swapped="$(printf '%s\n' 'git pull --rebase origin main'; printf '%s\n' 'git status --porcelain --untracked-files=no')"
+sw_a="$(printf '%s\n' "$swapped" | grep -n -- 'git status --porcelain --untracked-files=no' | head -1 | cut -d: -f1)"
+sw_b="$(printf '%s\n' "$swapped" | grep -n -- 'git pull --rebase origin' | head -1 | cut -d: -f1)"
+ok "…and the order check FAILS when the two are swapped" \
+   "$([ "$sw_a" -lt "$sw_b" ] && echo yes || echo no)" no
+ok "…and the fence carries a language (MD040)" \
+   "$(in_str "$S0" '```bash')" yes
+
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
