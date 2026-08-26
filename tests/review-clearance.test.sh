@@ -433,7 +433,7 @@ cut_at="$SELFTEST_LINE"
 while [ "$cut_at" -lt "$TOTAL_LINES" ]; do
   head -n "$cut_at" "$SCRIPT" > "$TRUNC"; chmod +x "$TRUNC"
   swept=$((swept + 1))
-  out="$("$TRUNC" --self-test 2>/dev/null)"
+  out="$("$TRUNC" --self-test </dev/null 2>/dev/null)"
   [ "$?" -eq 0 ] && [ "$out" = "review-clearance: self-test ok" ] && {
     survivors=$((survivors + 1)); [ "$survivors" -le 3 ] && printf '        survived cut at line %s\n' "$cut_at"; }
   cut_at=$((cut_at + 1))
@@ -449,7 +449,7 @@ BYTES="$(wc -c < "$SCRIPT" | tr -d ' ')"
 byte_survivors=0
 for frac in 55 65 70 75 80 85 90 95 99; do
   head -c "$((BYTES * frac / 100))" "$SCRIPT" > "$TRUNC"; chmod +x "$TRUNC"
-  out="$("$TRUNC" --self-test 2>/dev/null)"
+  out="$("$TRUNC" --self-test </dev/null 2>/dev/null)"
   [ "$?" -eq 0 ] && [ "$out" = "review-clearance: self-test ok" ] && byte_survivors=$((byte_survivors + 1))
 done
 assert "nor does a copy cut mid-line at nine byte offsets" \

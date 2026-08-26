@@ -372,6 +372,15 @@ sibling_case "truncated in its header comment -> refuse, never clear" \
 SIB_SRC="$(dirname "$SCRIPT")/review-clearance.sh"
 SIB_SELFTEST="$(grep -n -- '--self-test" \]; then' "$SIB_SRC" | head -1 | cut -d: -f1)"
 SIB_LINES="$(wc -l < "$SIB_SRC" | tr -d ' ')"
+# Loudly, not vacuously: if the block can no longer be located, every case below would
+# degenerate into the zero-byte case and pass for the wrong reason.
+if [ -n "$SIB_SELFTEST" ] && [ "$SIB_SELFTEST" -lt "$SIB_LINES" ]; then
+  printf '  PASS  %-56s (line %s of %s)\n' "the sibling's self-test block is located" \
+    "$SIB_SELFTEST" "$SIB_LINES"; pass=$((pass+1))
+else
+  printf '  FAIL  %-56s\n' "the sibling's self-test block could not be located"
+  fail=$((fail+1)); SIB_SELFTEST=1
+fi
 for frac in 5 33 66 99; do
   cut_line=$(( SIB_SELFTEST + (SIB_LINES - SIB_SELFTEST) * frac / 100 ))
   sibling_case "cut ${frac}% past the self-test -> refuse, never clear" \

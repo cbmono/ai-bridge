@@ -847,11 +847,11 @@ if [ -n "$refusal_body" ]; then
     echo "refuse: $refusal_from DECLINED to review PR $pr — this is not clearance, however" >&2
     echo "        green its status check is. It said:" >&2
   fi
-  refusal_hits "$refusal_body" | tr -d '\000-\010\013\014\016-\037' \
+  refusal_hits "$refusal_body" | tr -d '\000-\010\013-\037' \
                                | sed -e 's/^[[:space:]]*\(>[[:space:]]*\)*//' \
                                      -e 's/^[*#[:space:]]*//' -e 's/[*[:space:]]*$//' \
                                      -e 's/^/          | /' >&2
-  when="$(reopen_line "$refusal_body" | tr -d '\000-\010\013\014\016-\037')"
+  when="$(reopen_line "$refusal_body" | tr -d '\000-\010\013-\037')"
   if [ -n "$when" ]; then
     echo "        Reopens: $when" >&2
   else
