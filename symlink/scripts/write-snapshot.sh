@@ -190,16 +190,33 @@ fmenum() { # <frontmatter> <key>
 #
 # A trailing `# comment` after an INLINE list's closing `]` is dropped on the key
 # line itself, before it ever reaches yaml_list_entries. Without this, `k: [ a, b ]
-# # note` swallows " # note" into the last entry — not hypothetical:
-# SCHEMA.md documents `deliverable_paths:` with a trailing comment on that very
-# line, so the documented form used to corrupt the path it names. Only fires when
-# the key line carries a `]` (the inline-list shape); a block-form key line (just
-# `key:` with entries on following `- ` lines) has none and is untouched.
+# # note` swallows " # note" into the last entry — not hypothetical: SCHEMA.md
+# documents `deliverable_paths:` with a trailing comment on that very line, so the
+# documented form used to corrupt the path it names.
+#
+# This is shared by EVERY list key (open_questions, advisor_notes, depends_on, pr,
+# deliverable_paths, ...), so the search for the closing `]` must be QUOTE-AWARE: a
+# `"` toggles quote state, and a `]` while inside quotes is just a character in the
+# entry's own text, not the list terminator. Without this, an open_questions or
+# advisor_notes entry containing ordinary brackets, or a Markdown PR link in the
+# `[repo#N](url)` style this bundle's own CLAUDE.md mandates for citing PRs, was
+# treated as if the list ended mid-entry — silently dropping the rest, including a
+# second question, off a surface (`open_questions`) that gates `draft -> ready` and
+# feeds AWAITING.md. `deliverable_paths` entries are unquoted bare paths and never
+# contain `]`, so this leaves that key's own fix untouched. Only fires when the key
+# line carries a `]` (the inline-list shape); a block-form key line (just `key:`
+# with entries on following `- ` lines) has none and is untouched.
 list_region() { # <frontmatter> <key>
   printf '%s\n' "$1" | awk -v k="$2" '
     $0 ~ "^" k ":" {
       rest=$0; sub(/^[^:]*:/, "", rest)
-      if (rest ~ /\]/) { rest = substr(rest, 1, index(rest, "]")) }
+      n = length(rest); inq = 0; endpos = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(rest, i, 1)
+        if (c == "\"") { inq = !inq }
+        else if (c == "]" && !inq) { endpos = i; break }
+      }
+      if (endpos > 0) { rest = substr(rest, 1, endpos) }
       print rest; inblk=1; next
     }
     inblk && /^[[:space:]]+-[[:space:]]*/ { print; next }

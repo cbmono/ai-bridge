@@ -245,6 +245,26 @@ assignee: software-engineer
 ---
 TSK
 
+# Two open questions, EACH carrying a `]` before the list's own closing bracket: one a
+# Markdown PR link in the `[repo#N](url)` style this bundle's own CLAUDE.md mandates
+# for citing PRs, the other just ordinary brackets. list_region()'s `]`-truncation (added
+# to fix a trailing YAML comment on `deliverable_paths:`) is shared by every list key, so
+# an unquoted-scan version stopped at the FIRST `]` — inside Q1's own text — and silently
+# dropped Q2 off a list that gates draft -> ready and feeds AWAITING.md. Quote-aware
+# scanning is what tells "a `]` that is part of an entry's text" from "the list's own
+# closing bracket".
+cat > "$ALPHA/projects/ci/tasks/task-006.md" <<'TSK'
+---
+type: Task
+title: Fix the bracket-swallowing question count
+kind: build
+status: draft
+assignee: software-engineer
+open_questions: [ "Q1: see [repo#42](https://github.com/acme/x/pull/42) for context", "Q2: bracket [note] mid-question" ]
+pr: []
+---
+TSK
+
 # A project with no tasks at all — must render empty rather than error.
 cat > "$ALPHA/projects/empty/project.md" <<'PRJ'
 ---
@@ -399,6 +419,16 @@ assert "a task description never reaches the snapshot"   "$(fhasnt "$SECRET_DESC
 assert "no document body reaches the snapshot"           "$(fhasnt "$SECRET_BODY" "$SNAP")"
 assert "open-question TEXT never reaches the snapshot"    "$(fhasnt "$SECRET_QUESTION" "$SNAP")"
 assert "…the COUNT does (2 questions on task-001)"        "$(fhas '"open_questions": 2' "$SNAP")"
+# Regression for the shared list_region()'s `]`-truncation swallowing a real second
+# question whenever an entry's own text carries a `]` before the list's closing one —
+# a Markdown PR link (`[repo#N](url)`) in Q1 and bare brackets in Q2. Both entries must
+# still be counted; losing either is the silent-drop this pins (task-007 fix round 2).
+assert "a `]` INSIDE a quoted entry does not end the list early (task-006, 2 questions)" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"]=="task-006"][0]
+sys.exit(0 if t["open_questions"]==2 else 1)' "$SNAP")"
 
 # depends_on is carried as bundle-local task IDs, never as paths. That is the whole
 # reason it sits inside the allowlist rather than being an exception to it: an ID is a
