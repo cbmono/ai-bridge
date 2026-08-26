@@ -267,6 +267,43 @@ assignee: cataloguer
 ---
 TSK
 
+# A DONE project. Its folder survives closeout (`retain: true`), so the writer meets it
+# on every tick — and must stop at this frontmatter. The task below is planted to be
+# LOUD if it is ever read: an open question, a PR, and a blocked status would each move
+# a count and add an awaiting verb, and its title is a sentinel that can only appear in
+# the snapshot by way of `tasks/`.
+mkdir -p "$ALPHA/projects/retained/tasks" "$ALPHA/projects/retained/phases"
+cat > "$ALPHA/projects/retained/project.md" <<'PRJ'
+---
+type: Project
+title: AI adoption research
+description: finished, kept as a reference surface
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/retained/deliverables/deck.md ]
+---
+PRJ
+cat > "$ALPHA/projects/retained/phases/phase-1.md" <<'PH'
+---
+type: Phase
+title: SENTINEL-DONE-PHASE
+order: 1
+status: active
+---
+PH
+cat > "$ALPHA/projects/retained/tasks/task-001.md" <<'TSK'
+---
+type: Task
+title: SENTINEL-DONE-PROJECT-TASK
+kind: research
+status: blocked
+assignee: software-engineer
+open_questions: [ "Q1: would change the awaiting count", "Q2: and the question count" ]
+pr: [ "https://github.com/acme/monorepo/pull/9999" ]
+---
+TSK
+
 echo "== the off switch: absence, on the writer's side =="
 SNAP="$ALPHA/SNAPSHOT.json"
 OFF_RC=0; OFF_OUT="$( cd "$ALPHA" && bash "$WRITER" 2>&1 )" || OFF_RC=$?
@@ -294,9 +331,10 @@ echo "== a real snapshot, once the switch is on =="
 touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
-assert "…with the project count"           "$(has '3 project(s)' "$RUN_OUT")"
+assert "…with the project count"           "$(has '4 project(s)' "$RUN_OUT")"
+# 6, not 7: the done project's task is never counted, because it is never read.
 assert "…and the task count"                "$(has '6 task(s)' "$RUN_OUT")"
-assert "…and the awaiting count (5 verbs across 3 projects)" "$(has '5 awaiting' "$RUN_OUT")"
+assert "…and the awaiting count (5 verbs across 3 live projects)" "$(has '5 awaiting' "$RUN_OUT")"
 assert "the file is non-empty"              "$(yes_if test -s "$SNAP")"
 assert "it parses as JSON"                  "$(yes_if python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$SNAP")"
 assert "no temp file was left behind"       "$(yes_if sh -c '! ls "$1".tmp.* >/dev/null 2>&1' _ "$SNAP")"
@@ -405,6 +443,52 @@ d=json.load(open(sys.argv[1]))
 p={p["slug"]:p for p in d["projects"]}
 sys.exit(0 if p["finished"]["awaiting_close"] and not p["empty"]["awaiting_close"] else 1)' "$SNAP")"
 assert "phase progress counts done vs total"     "$(fhas '"phase_progress": {"done": 1, "total": 2}' "$SNAP")"
+
+echo "== a DONE project is read no further than its frontmatter =="
+# `retain: true` keeps a finished project's folder, so the writer now meets done
+# projects on every tick. The whole justification for keeping them is that they cost ONE
+# frontmatter parse — so what is asserted here is an ABSENCE OF READING, not a filtered
+# output. The two are indistinguishable in the JSON, which is why the fixture's task is
+# planted to be loud: if `tasks/` were opened, its title would appear, the task count
+# would be 7, `open_questions` would be 2, its PR would be collected and `blocked` would
+# add an `unblock` verb. Each of those is a separate way for the read to show itself.
+assert "the done project IS on the board (a retained project is a reference card)" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p={p["slug"]:p for p in d["projects"]}
+r=p["retained"]
+sys.exit(0 if r["status"]=="done" and r["title"]=="AI adoption research" else 1)' "$SNAP")"
+assert "…with tasks[] and phases[] empty — neither directory was walked" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+r=[p for p in d["projects"] if p["slug"]=="retained"][0]
+sys.exit(0 if r["tasks"]==[] and r["phases"]==[] and r["phase_progress"]=={"done":0,"total":0} else 1)' "$SNAP")"
+assert "…and its task's title never reaches the snapshot" \
+  "$(fhasnt 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
+assert "…nor its phase's title (phases are skipped by the same continue)" \
+  "$(fhasnt 'SENTINEL-DONE-PHASE' "$SNAP")"
+assert "…nor its PR, which the task loop would have collected" \
+  "$(fhasnt '/pull/9999' "$SNAP")"
+assert "…and a done project proposes no close (it is already closed)" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+r=[p for p in d["projects"] if p["slug"]=="retained"][0]
+sys.exit(0 if r["awaiting_close"] is False else 1)' "$SNAP")"
+# The negative assertions above hold just as well if the writer never found the project
+# at all, so prove the fixture is real: the same task doc, under a project that is NOT
+# done, moves every one of those numbers.
+cp -R "$ALPHA/projects/retained" "$ALPHA/projects/notdone"
+sed -i.bak 's/^status: done$/status: active/' "$ALPHA/projects/notdone/project.md" && rm -f "$ALPHA/projects/notdone/project.md.bak"
+CTRL_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
+assert "control: the same task under a LIVE project IS read (7 tasks)" "$(has '7 task(s)' "$CTRL_OUT")"
+assert "…and its title does reach the snapshot"  "$(fhas 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
+rm -rf "$ALPHA/projects/notdone"
+( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" --quiet )
+assert "…and the sentinel is gone again once the control project is removed" \
+  "$(fhasnt 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
 
 echo "== the other three instances =="
 printf '{ this is not json' > "$BETA/SNAPSHOT.json"
@@ -562,9 +646,11 @@ assert "…with exactly one <body> element" "$(eq "$(grep -cF '<body>' "$SA")" 1
 # there is no drift to pin. tests/artifact-board.test.sh asserts the <details> behaviour
 # (collapsed by default, finished projects under a divider) where the markup lives.
 # Two, not four, is still the fact worth reading off the page: beta is malformed and
-# gamma has no snapshot, so neither is an instance on the board.
+# gamma has no snapshot, so neither is an instance on the board. Five blocks: alpha's
+# four projects — including the RETAINED done one, which is on the board as a reference
+# card even though its tasks were never read — plus delta's one.
 assert "one project block per project of the 2 rendered instances" \
-  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 4)"
+  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 5)"
 
 echo "== discovery is explicit, never a glob =="
 D1="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d1.html" 2>&1 )"
