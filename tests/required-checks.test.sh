@@ -360,8 +360,23 @@ sibling_case "dead shebang -> refuse, never clear" \
   'printf "#!/nonexistent/interpreter\nexit 0\n"' "$BROKEN"
 sibling_case "syntax error -> refuse, never clear" \
   'printf "#!/usr/bin/env bash\nif [ 1 ; then\n"' "$BROKEN"
-sibling_case "truncated mid-install -> refuse, never clear" \
+sibling_case "truncated in its header comment -> refuse, never clear" \
   'head -c 400 "$(dirname "$SCRIPT")/review-clearance.sh"' "$BROKEN"
+
+# THE TRUNCATION THAT ACTUALLY GETS THROUGH, and the case above cannot show it: a cut at
+# 400 bytes lands inside the sibling's header comment, so the file has no --self-test at
+# all and fails for that. The dangerous cut is BELOW the self-test block — the file still
+# parses, still answers the self-test, and has lost the tables and the classifier the
+# answer was vouching for. Swept over the previous version, 109 such cuts went on to clear
+# an unreviewed PR through this script. These four walk that range end to end.
+SIB_SRC="$(dirname "$SCRIPT")/review-clearance.sh"
+SIB_SELFTEST="$(grep -n -- '--self-test" \]; then' "$SIB_SRC" | head -1 | cut -d: -f1)"
+SIB_LINES="$(wc -l < "$SIB_SRC" | tr -d ' ')"
+for frac in 5 33 66 99; do
+  cut_line=$(( SIB_SELFTEST + (SIB_LINES - SIB_SELFTEST) * frac / 100 ))
+  sibling_case "cut ${frac}% past the self-test -> refuse, never clear" \
+    "head -n $cut_line \"\$SIB_SRC\"" "$BROKEN"
+done
 # Version skew, which is the likely way this happens in a live instance rather than a
 # corrupted file: a sibling from before the self-test contract answers a usage error to
 # `--self-test` and works perfectly otherwise. Refuse anyway — "I cannot confirm this

@@ -218,6 +218,57 @@ add_comment coderabbitai "$(body_file \
 expect "a backtick pair nested in a tilde block stays balanced -> review" 0
 
 echo
+echo "== shape 2b: an artifact that is NEITHER a review nor a refusal clears nothing =="
+# THE DEFAULT-ALLOW THIS SECTION EXISTS TO PIN, and it needed no attacker: positive review
+# evidence was never REQUIRED, so the classifier asked only "is this a refusal" and cleared
+# everything else that named the head. The reviewer publishes exactly such an artifact on
+# essentially every PR, minutes before it has read anything.
+#
+# The placeholder body below is RECONSTRUCTED from the vendor's published wording, not
+# recorded like the two fixtures — the reviewer EDITS that comment into the review when it
+# finishes, so no PR still carries one to record. The cases after it therefore drive the
+# SHAPE rather than the wording: an artifact from the reviewer, naming the head, carrying
+# no evidence a review completed. That shape must not clear whatever it says.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file \
+  '<!-- This is an auto-generated comment: summarize by coderabbit.ai -->' \
+  '> [!NOTE]' \
+  '> Currently processing new changes in this PR. This may take a few minutes, please wait...' \
+  '>' \
+  "> Reviewing files that changed from the base of the PR and between 6fca618a and $CLEAN_HEAD.")"
+expect "the 'currently processing' placeholder -> NOT a review" 1
+says   "  ...and says the reviewer has not finished" "has NOT FINISHED reviewing"
+
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file "I have not reviewed $CLEAN_HEAD yet.")"
+expect "a bot saying it has not reviewed it yet -> NOT a review" 1
+
+# The shape itself, with nothing that reads as a refusal anywhere in it. This is the case
+# the refusal table cannot catch and only required evidence can: friendly, on-topic, naming
+# the head, and no claim that anybody read anything.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file "Thanks for the ping — $CLEAN_HEAD is on my list. 🐰")"
+expect "a reviewer artifact with no evidence of a review -> refuse" 4
+says   "  ...saying what is missing, not that nothing is there" "no evidence"
+
+# THE PASSING CONTROL for all three: the same account, the same head, one line of the
+# reviewer's own evidence marker added. If this ever fails, the cases above are passing
+# because nothing clears rather than because evidence is what clears.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file "Thanks for the ping — $CLEAN_HEAD is on my list." \
+  "No actionable comments were generated in the recent review.")"
+expect "…and the same artifact WITH review evidence still clears" 0
+
+# "I am still working" is a claim about COMPLETION, so it outranks an evidence marker
+# sitting elsewhere in the same body rather than losing to it — unlike refusal PROSE,
+# which loses (the section on the auto-incremental notice, below). Costs a human glance
+# in the worst case; the alternative costs a merge.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file "Currently processing new changes in this PR." \
+  "No actionable comments were generated in the recent review. Reviewed $CLEAN_HEAD.")"
+expect "…but a placeholder outranks an evidence marker beside it" 1
+
+echo
 echo "== shape 3: no reviewer signal at all =="
 setup "$CLEAN_HEAD"
 expect "nothing on the PR -> no review, and no clearance" 3
@@ -320,6 +371,33 @@ match "AI Code Review"          3
 match "review-app deploy"       1   # a Heroku-style review app is a deploy, not a review
 match "Review Docs"             1
 
+# THE OMISSION THIS BLOCK EXISTS TO CATCH. Asserting a list of spellings that already
+# match cannot fail for the reason that matters — a vendor nobody added. These four ship
+# today and all four classified as plain CI: three because the product's name carries no
+# "review" at all, one because a word sat between the vendor and it.
+match "CodeAnt AI"                    3
+match "Korbit AI"                     3
+match "Cursor Bug Bot"                3
+match "Copilot pull request review"   3
+match "Gemini Code Assist review"     3
+
+# ...and the SHAPE, which is what survives the next vendor launch. None of these names
+# exists; each is a plausible check name for a code reviewer, and each must be unknown
+# rather than CI. A table of spellings passes the block above and fails this one.
+for made_up in "Frobnicator AI review" "Acme PR review" "Widget pull request review" \
+               "Nitpicker code review" "Zorp Review Bot" "Quux automated code review" \
+               "Splunge bugbot"; do
+  match "$made_up"              3
+done
+
+# The other half of the shape, and the reason it is not a catch-all: an ordinary CI job
+# whose name merely contains one of those words stays CI. Widen the rows above until one
+# of these turns 3 and a repo has to rename a passing check to merge.
+for ci_job in "Deploy preview" "Review Docs" "docs-review-links" "release-review-notes" \
+              "Preview Deploy" "code-coverage" "reviewdog-lint-report"; do
+  match "$ci_job"               1
+done
+
 echo
 echo "== --self-test proves the script RUNS, which the executable bit does not =="
 # required-checks.sh cannot trust `[ -x ]`: a dead shebang, a syntax error, a zero-byte
@@ -331,6 +409,105 @@ assert "--self-test exits 0"                    "$([ "$st_rc" -eq 0 ] && echo 0 
 assert "…and prints the agreed sentinel"        "$([ "$st_out" = "review-clearance: self-test ok" ] && echo 0 || echo 1)"
 "$SCRIPT" --self-test extra >/dev/null 2>&1; st_rc=$?
 assert "…and takes no arguments"                "$([ "$st_rc" -eq 2 ] && echo 0 || echo 1)"
+
+echo
+echo "== ...and that it is COMPLETE, which running does not prove =="
+# THE HOLE THIS SECTION EXISTS TO PIN, and it was found by sweeping rather than by
+# reading: the self-test sits near the TOP of the script, so a copy truncated anywhere
+# BELOW it still parses, still reaches that exit, and still prints the sentinel while
+# every table and the whole classifier are missing. Swept over the previous version, 112
+# of its 606 truncation points passed the self-test and 109 of those went on to CLEAR an
+# unreviewed PR. The old truncation case cut at `head -c 400` — inside the header comment
+# — so it could not see the class at all.
+#
+# The sweep is every cut point from the self-test's own block to the end, which is exactly
+# the range the old proof was blind to. A cut is a pass only if --self-test exits 0 AND
+# prints the sentinel, which is precisely what required-checks.sh believes.
+SELFTEST_LINE="$(grep -n -- '--self-test" \]; then' "$SCRIPT" | head -1 | cut -d: -f1)"
+TOTAL_LINES="$(wc -l < "$SCRIPT" | tr -d ' ')"
+assert "the self-test block is found, and is not the whole file" \
+  "$([ -n "$SELFTEST_LINE" ] && [ "$SELFTEST_LINE" -lt "$TOTAL_LINES" ] && echo 0 || echo 1)"
+
+TRUNC="$TMP/trunc.sh"; survivors=0; swept=0
+cut_at="$SELFTEST_LINE"
+while [ "$cut_at" -lt "$TOTAL_LINES" ]; do
+  head -n "$cut_at" "$SCRIPT" > "$TRUNC"; chmod +x "$TRUNC"
+  swept=$((swept + 1))
+  out="$("$TRUNC" --self-test 2>/dev/null)"
+  [ "$?" -eq 0 ] && [ "$out" = "review-clearance: self-test ok" ] && {
+    survivors=$((survivors + 1)); [ "$survivors" -le 3 ] && printf '        survived cut at line %s\n' "$cut_at"; }
+  cut_at=$((cut_at + 1))
+done
+printf '  ..... swept %s truncation points from line %s to %s\n' "$swept" "$SELFTEST_LINE" "$TOTAL_LINES"
+assert "the sweep actually cut somewhere (>= 100 points)" \
+  "$([ "$swept" -ge 100 ] && echo 0 || echo 1)"
+assert "NO truncated copy passes --self-test"             "$([ "$survivors" -eq 0 ] && echo 0 || echo 1)"
+
+# Byte-level cuts too: a copy interrupted mid-line is the shape a half-written install or
+# a full disk actually produces, and it can leave a syntactically valid file.
+BYTES="$(wc -c < "$SCRIPT" | tr -d ' ')"
+byte_survivors=0
+for frac in 55 65 70 75 80 85 90 95 99; do
+  head -c "$((BYTES * frac / 100))" "$SCRIPT" > "$TRUNC"; chmod +x "$TRUNC"
+  out="$("$TRUNC" --self-test 2>/dev/null)"
+  [ "$?" -eq 0 ] && [ "$out" = "review-clearance: self-test ok" ] && byte_survivors=$((byte_survivors + 1))
+done
+assert "nor does a copy cut mid-line at nine byte offsets" \
+  "$([ "$byte_survivors" -eq 0 ] && echo 0 || echo 1)"
+
+# THE CONTROL, and the reason the sweep is not vacuous: a BYTE-FOR-BYTE copy of the same
+# file, at the same path shape, self-tests fine. So the refusals above are the truncation.
+cp "$SCRIPT" "$TRUNC"; chmod +x "$TRUNC"
+out="$("$TRUNC" --self-test 2>&1)"; st_rc=$?
+assert "…while a whole copy of the same file passes" \
+  "$([ "$st_rc" -eq 0 ] && [ "$out" = "review-clearance: self-test ok" ] && echo 0 || echo 1)"
+
+echo
+echo "== one malformed pattern must not silently disable a whole table =="
+# `hits()` read grep's OUTPUT and never its STATUS, and grep says 1 for "nothing matched"
+# and 2 for "that is not a regular expression". Conflated, one typo'd row turned the
+# entire refusal table off — every refusal then read as a review. Each case corrupts ONE
+# row of one table in a copy of the script and asserts the copy REFUSES rather than
+# proceeding with a table that cannot fire.
+break_row() { # <name> <sed expression that corrupts a row> [args to the script...]
+  local name="$1" expr="$2"; shift 2
+  local broken="$TMP/broken.$((b_n = ${b_n:-0} + 1)).sh"
+  sed "$expr" "$SCRIPT" > "$broken"; chmod +x "$broken"
+  setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"; write_pr
+  local out rc
+  out="$("$broken" 42 "$@" 2>&1)"; rc=$?
+  if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -Fq "not valid POSIX ERE"; then
+    printf '  PASS  %-58s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
+  else
+    printf '  FAIL  %-58s expected rc=2 + the ERE complaint, got rc=%s: %s\n' \
+      "$name" "$rc" "$(printf '%s' "$out" | head -2 | tr '\n' '|')"
+    fail=$((fail+1))
+  fi
+}
+break_row "a broken REFUSALS row -> refuse, never read it as a review" \
+  's/^review limit reached$/review limit reache[d/'
+break_row "a broken sentinel row -> refuse"        's/^rate\.limited by .*$/rate.limited by [a-z/'
+break_row "a broken REVIEWED row -> refuse"        's/^walkthrough_start$/walkthrough_start(/'
+break_row "a broken NOT_YET row -> refuse"         's/^queued for review$/queued for review[/'
+break_row "a broken REVIEWERS login -> refuse"     's/^coderabbitai  /coderabbitai[   /'
+
+# ...and the same corruption is caught by the two table-only modes, so a caller that only
+# ever runs those still refuses rather than settling a reviewer's check on its bucket.
+BROKEN_TBL="$TMP/broken-suspect.sh"
+sed 's/^code.*review$/code[^a-z0-9]*review[/' "$SCRIPT" > "$BROKEN_TBL"
+chmod +x "$BROKEN_TBL"
+"$BROKEN_TBL" --match-check "Build" >/dev/null 2>&1; rc=$?
+assert "--match-check on a broken table -> 2, not 'it is CI'" \
+  "$([ "$rc" -eq 2 ] && echo 0 || echo 1)"
+"$BROKEN_TBL" --self-test >/dev/null 2>&1; rc=$?
+assert "--self-test on a broken table -> 2, so the caller refuses" \
+  "$([ "$rc" -eq 2 ] && echo 0 || echo 1)"
+# The control: the identical sed with a VALID replacement leaves everything working.
+OK_TBL="$TMP/ok-suspect.sh"
+sed 's/^code.*review$/code[^a-z0-9]*reviews?/' "$SCRIPT" > "$OK_TBL"; chmod +x "$OK_TBL"
+"$OK_TBL" --self-test >/dev/null 2>&1; rc=$?
+assert "…while a valid edit to the same row still self-tests" \
+  "$([ "$rc" -eq 0 ] && echo 0 || echo 1)"
 
 echo
 echo "== --for-check: one vendor's review may not clear another's check =="
@@ -405,18 +582,13 @@ VERDICT_PROSE=(
   "CodeRabbit published a green check whose body reads Review limit reached, and the"
   "comment carries the rate limited by coderabbit.ai sentinel — so no review happened."
 )
-VERDICT_TRAILER=(
-  '<!-- okf-verdict v1'
-  'verdict: changes-requested'
-  'reviewer: qa-reviewer'
-  'lenses: correctness=done security=done repro=done'
-  'unverified_criteria: none'
-  'caveats: none'
-  '-->'
-)
+trailer() { # [head_sha to claim] — the trailer SCHEMA.md defines
+  printf '%s\n' '<!-- okf-verdict v1' 'verdict: changes-requested' 'reviewer: qa-reviewer' \
+    "head_sha: ${1:-$CLEAN_HEAD}" 'lenses: correctness=done security=done repro=done' \
+    'unverified_criteria: none' 'caveats: none' '-->'
+}
 setup "$CLEAN_HEAD"
-add_comment qa-bot "$(body_file "${VERDICT_PROSE[@]}" "I reviewed $CLEAN_HEAD myself." \
-  "${VERDICT_TRAILER[@]}")"
+add_comment qa-bot "$(body_file "${VERDICT_PROSE[@]}" "$(trailer)")"
 expect "a verdict quoting a refusal in prose -> a review" 0 --reviewer qa-bot
 
 # The control, and it is the whole reason the guard is a TRAILER rather than a mood: the
@@ -424,6 +596,54 @@ expect "a verdict quoting a refusal in prose -> a review" 0 --reviewer qa-bot
 setup "$CLEAN_HEAD"
 add_comment qa-bot "$(body_file "${VERDICT_PROSE[@]}" "I reviewed $CLEAN_HEAD myself.")"
 expect "…the same prose with no trailer -> classified as a refusal" 1 --reviewer qa-bot
+
+echo
+echo "== the trailer is PARSED, not grepped: a substring must not outrank anything =="
+# The bypass this section pins. The trailer was one row of a table matched as a substring
+# ANYWHERE in a body, and it outranked the vendor's own machine-readable refusal sentinel.
+# So a single appended line — nineteen characters, no fields, no structure — turned the
+# verbatim recorded refusal from rc=1 into rc=0. The string ships in this repo's own diff,
+# and a reviewer that quotes a diff quotes the string.
+one_liner="$TMP/refusal-plus-trailer-substring.md"
+{ cat "$REFUSAL"; printf '\n<!-- okf-verdict v1 -->\n'; } > "$one_liner"
+assert "the crafted body still names the head verbatim (so it COULD clear)" \
+  "$(yes_if grep -Fq "$REFUSAL_HEAD" "$one_liner")"
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$one_liner"
+expect "one appended okf-verdict substring on the recorded refusal -> still refuses" 1
+says   "  ...still quoting the reviewer's own words" "Review limit reached"
+
+# A WELL-FORMED trailer, from the vendor's own account, must not clear either: the tier is
+# scoped to a reviewer named with --reviewer, which is how the fallback reviewer is reached
+# and is never how a hosted vendor is. Without the scope, anyone able to comment as the
+# vendor — or any diff the vendor quotes — outranks the vendor's own refusal.
+full="$TMP/refusal-plus-full-trailer.md"
+{ cat "$REFUSAL"; printf '\n'; trailer "$REFUSAL_HEAD"; } > "$full"
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$full"
+expect "a well-formed trailer from a TABLE-matched vendor -> still refuses" 1
+
+# ...and the control for both: the same well-formed trailer, at this head, from the
+# reviewer the caller named, is a review. So the refusals above are the scoping and the
+# parsing, not the trailer having stopped working.
+setup "$REFUSAL_HEAD"; add_comment qa-bot "$full"
+expect "…while the named fallback reviewer's own trailer clears" 0 --reviewer qa-bot
+
+# Each required field, one at a time. A trailer missing any of them cannot be evaluated
+# against SCHEMA.md's predicate at all, so it is not a structured claim — it is a comment.
+malformed() { # <name> <sed expression applied to the trailer>
+  local body; body="$TMP/verdict.$((v_n = ${v_n:-0} + 1)).md"
+  { printf '%s\n' "${VERDICT_PROSE[@]}"; trailer | sed "$2"; } > "$body"
+  setup "$CLEAN_HEAD"; add_comment qa-bot "$body"
+  expect "$1" 1 --reviewer qa-bot
+}
+malformed "a trailer with no head_sha -> not a verdict"        '/^head_sha:/d'
+malformed "a trailer for a DIFFERENT head -> not this head's"  's/^head_sha: .*/head_sha: 0123456789abcdef0123456789abcdef01234567/'
+malformed "a trailer with no verdict field -> not a verdict"   '/^verdict:/d'
+malformed "a trailer with no reviewer field -> not a verdict"  '/^reviewer:/d'
+malformed "a trailer nobody closed -> not a block"             '/^-->/d'
+malformed "a verdict value nobody defines -> not a verdict"    's/^verdict: .*/verdict: fine-i-guess/'
+# The marker has to be a line, not a phrase inside one — otherwise the block opener is
+# whatever prose happens to mention it.
+malformed "the marker buried in a sentence -> not a block"     's/^<!-- okf-verdict v1$/as in <!-- okf-verdict v1 -- see SCHEMA.md/'
 
 echo
 echo "== the environment failing is never a clearance =="
