@@ -116,5 +116,66 @@ assert "a non-repo instance exits 0"           "$([[ $RC -eq 0 ]] && echo 0 || e
 assert "…and reports no tracked indexes"       "$(hasnt 'tracked index.md' "$OUT3")"
 
 echo
+echo "== a RETAINED project's index.md: committed, and NOT hidden by check-ignore =="
+# Plain `git check-ignore` skips already-tracked paths and would hide this defect —
+# these assertions use --no-index (or a fresh untracked path) throughout, per the
+# task's own testing trap. A retained project (task-006) stops being rewritten by the
+# tick, so its index.md becomes a permanent, hand-committed file instead of a derived
+# view — it must NOT read as ignored even though the blanket per-project pattern
+# still applies to every OTHER (non-retained) project.
+RET="$TMP/g/_ai-bridge-retain"; mkdir -p "$RET/projects/p1" "$RET/projects/p2"
+bash "$TPL/install.sh" "$RET" >/dev/null 2>&1
+( cd "$RET" && git init -q . && git config user.email t@e.st && git config user.name t )
+printf 'active\n'   > "$RET/projects/p1/index.md"
+printf 'retained\n' > "$RET/projects/p2/index.md"
+noidx() { ( cd "$RET" && git check-ignore --no-index -q "$1" ); }
+assert "before retaining, p2's index also reads ignored (--no-index)" \
+  "$(yes_if noidx projects/p2/index.md)"
+# Retain p2: append the documented negation AFTER the blanket lines (order matters —
+# git applies .gitignore patterns in file order, later wins), then track the file.
+printf '!projects/p2/index.md\n' >> "$RET/.gitignore"
+( cd "$RET" && git add -A >/dev/null 2>&1 && git commit -qm 'retain p2' >/dev/null )
+assert "p1 (not retained) is still ignored (--no-index)" \
+  "$(yes_if noidx projects/p1/index.md)"
+assert "p2 (retained) is NOT ignored (--no-index)" \
+  "$(no_if noidx projects/p2/index.md)"
+assert "p2's index.md is actually tracked" \
+  "$(yes_if bash -c "cd '$RET' && git ls-files --error-unmatch projects/p2/index.md")"
+assert "p1's index.md was never staged" \
+  "$(no_if bash -c "cd '$RET' && git ls-files --error-unmatch projects/p1/index.md")"
+
+echo
+echo "== …and that survives an install.sh RE-STAMP, not just the post-edit state =="
+# This rule has been reversed by a re-stamp at least twice on real instances — assert
+# the state AFTER re-running install.sh, not just right after the edit.
+bash "$TPL/install.sh" "$RET" >/dev/null 2>&1
+assert "the negation line is still present"    \
+  "$(yes_if grep -qxF '!projects/p2/index.md' "$RET/.gitignore")"
+assert "the blanket line is not duplicated"    \
+  "$([[ "$(grep -cxF '/projects/*/index.md' "$RET/.gitignore")" == 1 ]] && echo 0 || echo 1)"
+assert "post-stamp: p2 still reads NOT ignored (--no-index)" \
+  "$(no_if noidx projects/p2/index.md)"
+assert "post-stamp: p1 still reads ignored (--no-index)" \
+  "$(yes_if noidx projects/p1/index.md)"
+
+echo
+echo "== …while a comment-only override (no negation) does NOT survive a re-stamp =="
+# This is the trap the fix documents: overriding by deleting the two blanket lines and
+# asserting "we track these" only in prose does not survive, because install.sh
+# re-adds whichever of the two lines it finds missing and never reads the comment.
+BAD="$TMP/g/_ai-bridge-bad-override"; mkdir -p "$BAD/projects/p1"
+bash "$TPL/install.sh" "$BAD" >/dev/null 2>&1
+grep -vE '^/(index\.md|projects/\*/index\.md)$' "$BAD/.gitignore" > "$BAD/.gi"
+printf '\n# NOT ignoring the navigation indexes, deliberately — this instance tracks them.\n' >> "$BAD/.gi"
+mv "$BAD/.gi" "$BAD/.gitignore"
+assert "the comment-only override really is in place" \
+  "$(yes_if grep -q 'NOT ignoring the navigation indexes' "$BAD/.gitignore")"
+assert "…and the blanket line really is gone"          \
+  "$(no_if grep -qxF '/projects/*/index.md' "$BAD/.gitignore")"
+bash "$TPL/install.sh" "$BAD" >/dev/null 2>&1
+assert "a re-stamp silently reverses a comment-only override" \
+  "$(yes_if grep -qxF '/projects/*/index.md' "$BAD/.gitignore")"
+
+echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]
