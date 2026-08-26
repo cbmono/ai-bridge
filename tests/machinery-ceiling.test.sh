@@ -197,9 +197,56 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # named further up (print-board.sh, watch-board.sh, write-snapshot.sh — the board
 # scripts) are untouched here.
 
-__PENDING_BILL__
-CEILING_TOTAL=0
-CEILING_CODE=0
+# RAISED 2026-08-26 for the per-owner board, and this is the largest single raise in the
+# file. It is written here as a REPAIR, because that is what it is: PR #31 was merged at
+# an intermediate commit whose constants were still a placeholder (`CEILING_TOTAL=0`),
+# which left this gate red on `main` — the one failure mode a ceiling must not have, since
+# a red gate is what gets commented out. The numbers below are measured on `main` AS IT
+# NOW STANDS, with #30 and #31 both in it.
+#
+# RE-MEASURING was necessary anyway. #30 and #31 were each measured independently against
+# 5,925/3,174, so neither PR's number described the tree that results from merging both:
+#
+#   5,925 / 3,174   19 files   the shared base both PRs measured against
+#   6,285 / 3,364   20 files   after #30 (the closeout raise above), main at 0fafbeb
+#   6,648 / 3,587   20 files   after #31 too, main at 2e06c5e — +363 total, +223 code
+#
+# Per file, so the raise can be checked rather than believed:
+#
+#   build-board.sh            857 -> 1,164   +307 total, +214 code
+#   show-board-link.sh         34 ->    63    +29 total,   +7 code
+#   write-snapshot.sh         471 ->   498    +27 total,   +2 code
+#
+# WHAT THE LINES BUY, and why the alternative was not fewer lines but a broken feature.
+# Artifact publishing turned out to be ACCOUNT-SCOPED: exactly one account can update a
+# given artifact, so two humans sharing a bundle cannot share one published board — the
+# second one's publish step had been failing silently for weeks. The fix is one board per
+# owner, which means each page has to carry the OTHER owners' work, which means reading
+# it from the only thing both clones share: the tracked task documents at git HEAD. That
+# is a config read, a git read, a frontmatter parse, a SHA-keyed cache and a rendered
+# section — none of which existed, and none of which the snapshot path could be reused
+# for, because a snapshot is gitignored and no clone ever holds anybody else's.
+#
+# THE SPLIT IS UNUSUALLY UNFLATTERING TO THE CODE FIGURE, and worth reading before
+# concluding this added 223 lines of logic. Of build-board.sh's +214 code lines, **74 are
+# Python docstring lines** — prose by any reasonable reading, but the code measure only
+# excludes whole-line `#` comments, so every one of them counts as code here. The measure
+# is a proxy and deliberately not a parser (see below); it just has to be the same proxy
+# every time. The genuine logic-and-markup remainder is ~140 lines in that file, about
+# half of which is the HTML and CSS of the section itself.
+#
+# THE 2 CODE LINES IN write-snapshot.sh are one `p_owner` read and one field in
+# `project_stanza()`. The owner read sits ABOVE the done-project `continue` on purpose:
+# the stanza builder introduced by the raise above is shared by BOTH loop exits, so a
+# retained project must carry `owner` exactly as a live one does or the board partitions
+# the two differently. It is a field off frontmatter already in memory — it opens no file
+# and does not give back the skip's saving.
+#
+# THE DEBT ABOVE IS UNCHANGED AND THIS ENLARGES IT. write-snapshot.sh and build-board.sh
+# are two of the four board scripts named as the real reduction candidates, and this task
+# grew both. Nothing was retired here. The reduction this objective is owed remains owed.
+CEILING_TOTAL=6648
+CEILING_CODE=3587
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is
