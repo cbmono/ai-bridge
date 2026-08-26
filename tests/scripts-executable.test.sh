@@ -80,17 +80,57 @@ EOF
 }
 
 echo "== symlink/scripts — install.sh chmods these on stamp, but the repo itself must be right =="
-check_group "symlink/scripts/*.sh" 15 symlink/scripts/*.sh
+# The glob below is QUOTED and handed to `git ls-files` as a pathspec, not expanded by
+# this shell against the working tree. An unquoted `symlink/scripts/*.sh` here would be
+# expanded by bash BEFORE check_group ever runs, against whatever happens to exist on
+# disk right now — so a file that is committed 100755 but has since been deleted only
+# from the worktree (still tracked, still in HEAD) would never even reach `git ls-files`
+# and would silently drop out of the check. Quoting routes the pattern through git's own
+# index-backed glob matching instead — the one source this test's header already says to
+# trust. See the "guard D" reproduction below, which pins this exact shape.
+check_group "symlink/scripts/*.sh" 15 'symlink/scripts/*.sh'
 
 echo "== symlink/.claude/hooks — bare paths off settings.json, NO installer chmod at all =="
-check_group "symlink/.claude/hooks/*.sh" 5 symlink/.claude/hooks/*.sh
+check_group "symlink/.claude/hooks/*.sh" 5 'symlink/.claude/hooks/*.sh'
+
+echo "== guard: a failed 'mktemp -d' must abort, not silently run the fixture at the repo root =="
+# Regression test for a real incident shape: if `mktemp -d` fails (e.g. a bogus/unwritable
+# TMPDIR) and the result is used unguarded, `FIX=""` and `cd "$FIX"` SUCCEEDS without
+# moving (bash treats `cd ""` as a no-op), so every "disposable fixture" command below —
+# `git init`, `git commit`, `git config user.name/email` — runs at the repo root of the
+# real checkout under test instead of a scratch directory. That mutates the actual repo
+# (extra commits landing on whatever branch is checked out, local git identity
+# overwritten) and the test still prints a clean `pass=.. fail=0`. Prove the *fixed* guard
+# (below) refuses instead, by re-invoking this same script as a child process with a
+# TMPDIR that cannot be created under, and checking it exits non-zero without moving the
+# real repo's HEAD. `_SCRIPTS_EXEC_TEST_CHILD` stops the child from recursing again.
+if [[ "${_SCRIPTS_EXEC_TEST_CHILD:-0}" != 1 ]]; then
+  BEFORE_HEAD="$(git rev-parse HEAD)"
+  BOGUS_TMPDIR="/nonexistent-scripts-exec-fixture-guard-$$"
+  GUARD_OUT="$(cd "$TPL" && TMPDIR="$BOGUS_TMPDIR" _SCRIPTS_EXEC_TEST_CHILD=1 bash "$HERE/scripts-executable.test.sh" 2>&1)"
+  GUARD_RC=$?
+  AFTER_HEAD="$(git rev-parse HEAD)"
+  assert "a failed mktemp -d makes the harness exit non-zero (refuses, doesn't silently pass)" \
+    "$([ "$GUARD_RC" -ne 0 ] && echo 0 || echo 1)"
+  assert "…and it must not print a clean pass=.. fail=0 summary" \
+    "$(printf '%s\n' "$GUARD_OUT" | grep -Eq '^pass=[0-9]+ fail=0$' && echo 1 || echo 0)"
+  assert "…and the real repo under test must not gain commits from a fixture that ran at its root" \
+    "$([ "$BEFORE_HEAD" == "$AFTER_HEAD" ] && echo 0 || echo 1)"
+fi
 
 echo "== the guard itself: does it catch the reproduction, not just today's repo state? =="
 # A disposable repo reproducing the exact defect this test exists to catch: committed at
 # 100644, then `git update-index --chmod=+x` staged (NOT committed) on top — the exact
 # command close-project-folder.sh was fixed with, stopped one step short of a commit. An
 # index-only read says PASS here; mode_ok() must say FAIL.
-FIX="$(mktemp -d "${TMPDIR:-/tmp}/scripts-exec-fixture.XXXXXX")"
+FIX="$(mktemp -d "${TMPDIR:-/tmp}/scripts-exec-fixture.XXXXXX")" || {
+  echo "scripts-executable.test: mktemp -d failed; refusing to run the fixture in place" >&2
+  exit 1
+}
+if [[ -z "$FIX" || ! -d "$FIX" ]]; then
+  echo "scripts-executable.test: mktemp -d returned an empty/invalid path; refusing to run the fixture in place" >&2
+  exit 1
+fi
 trap 'rm -rf "$FIX"' EXIT
 (
   cd "$FIX" || exit 1
@@ -126,6 +166,60 @@ assert "…but HEAD is still 100644, so HEAD=100644/INDEX=100755 now FAILS ($idx
 
 read -r idx head rc < <(cd "$FIX" && mode_ok good.sh)
 assert "a genuinely committed-755 file still PASSES at index and HEAD" "$rc"
+
+echo "== guard: a file committed 755 then deleted only from the worktree must still be enumerated =="
+# Regression test for check_group's file-list source, not just mode_ok()'s file-mode
+# read. A 16th script committed at 755 and then `rm`ed from disk only (still tracked at
+# 100755 in the index and HEAD) reproduces the exact defect an unquoted call-site glob
+# had: bash expands `d-*.sh` against the fixture's working tree BEFORE git ever sees it,
+# so the deleted-but-tracked file never reaches `git ls-files` at all — the min-count
+# floor does not save it because the other on-disk file(s) still clear it. Quoting the
+# pattern (this test's real fix, applied to the two check_group calls above) routes
+# enumeration through git's index instead.
+(
+  cd "$FIX" || exit 1
+  printf '#!/usr/bin/env bash\necho good\n' > d-good.sh
+  chmod +x d-good.sh
+  git add d-good.sh >/dev/null
+  git update-index --chmod=+x d-good.sh
+  git commit -qm "committed 755, stays on disk" >/dev/null
+
+  printf '#!/usr/bin/env bash\necho gone\n' > d-gone.sh
+  chmod +x d-gone.sh
+  git add d-gone.sh >/dev/null
+  git update-index --chmod=+x d-gone.sh
+  git commit -qm "committed 755, then removed from the worktree only" >/dev/null
+  rm -f d-gone.sh   # tracked 100755 at index+HEAD; absent from the working tree
+)
+
+# Mimics exactly what an unquoted call site does: bash expands the glob into positional
+# args itself, before anything downstream ever runs — no `ls`/ subprocess glob involved.
+UNQUOTED_COUNT="$(
+  cd "$FIX" || exit 1
+  shopt -s nullglob
+  files=(d-*.sh)
+  echo "${#files[@]}"
+)"
+GIT_COUNT="$(cd "$FIX" && git ls-files -- 'd-*.sh' | wc -l | tr -d ' ')"
+assert "an unquoted shell glob only sees the file still present on disk (the old bug shape)" \
+  "$([ "$UNQUOTED_COUNT" == 1 ] && echo 0 || echo 1)"
+assert "…but 'git ls-files' against the quoted pattern finds both, straight from the index/HEAD" \
+  "$([ "$GIT_COUNT" == 2 ] && echo 0 || echo 1)"
+
+pushd "$FIX" >/dev/null || exit 1
+check_group "fixture d-*.sh (quoted call site, the fixed shape)" 2 'd-*.sh'
+popd >/dev/null || exit 1
+
+echo "== guard: the two real call sites above must stay quoted, not just this isolated fixture =="
+# The fixture above proves quoting matters in principle; this proves it's actually applied
+# where it counts. Today's real repo has no worktree-deleted-but-tracked script, so an
+# unquoted call site wouldn't fail the checks above by itself — this static check is what
+# actually catches someone reverting the quoting on the real check_group calls.
+SELF="$HERE/scripts-executable.test.sh"
+assert "the symlink/scripts/*.sh check_group call is still quoted" \
+  "$(grep -qF "check_group \"symlink/scripts/*.sh\" 15 'symlink/scripts/*.sh'" "$SELF" && echo 0 || echo 1)"
+assert "the symlink/.claude/hooks/*.sh check_group call is still quoted" \
+  "$(grep -qF "check_group \"symlink/.claude/hooks/*.sh\" 5 'symlink/.claude/hooks/*.sh'" "$SELF" && echo 0 || echo 1)"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
