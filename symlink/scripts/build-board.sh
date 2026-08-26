@@ -4,6 +4,11 @@
 # page: projects collapsed to one summary line, each expandable to its task table,
 # with a decision rail on top. A page a teammate opens on a phone.
 #
+# THE PAGE IS PER OWNER, AND HAS TWO HALVES. Your own projects come from this clone's
+# SNAPSHOT.json, as they always did. Every OTHER owner's come from the tracked task
+# documents at your current git HEAD, named and collapsed below them. Why it is shaped
+# that way, and why it is not a shared board, is the "OTHER OWNERS" block further down.
+#
 #   Usage:
 #     scripts/build-board.sh [--out FILE] [--standalone] [INSTANCE_DIR ...]
 #     scripts/build-board.sh --list-instances [INSTANCE_DIR ...]
@@ -121,10 +126,12 @@
 #   · With no readable snapshot it writes NOTHING and exits 0. Publishing an empty board
 #     is not useful, and an instance off the board is a choice, not an error.
 #
-# Deterministic. No network at build time. Verified by tests/snapshot.test.sh (the
+# Deterministic. No network at build time — the only subprocess is a local `git` read for
+# the other-owners section, described below. Verified by tests/snapshot.test.sh (the
 # writer, plus this renderer's data-governance boundary), tests/artifact-board.test.sh
-# (this renderer's markup and hardening), tests/board-renderers.test.sh (print-board and
-# watch-board) and tests/machinery-ceiling.test.sh (this file's size).
+# (this renderer's markup and hardening), tests/per-owner-board.test.sh (the two-section
+# split and its HEAD keying), tests/board-renderers.test.sh (print-board and watch-board)
+# and tests/machinery-ceiling.test.sh (this file's size).
 set -euo pipefail
 
 OUT="board.html"
@@ -155,7 +162,7 @@ command -v python3 >/dev/null 2>&1 || {
 
 BOARD_OUT="$OUT" BOARD_STANDALONE="$STANDALONE" BOARD_LIST_ONLY="$LIST_ONLY" \
   python3 - "${DIRS[@]+"${DIRS[@]}"}" <<'PY'
-import html, json, os, re, sys
+import html, json, os, re, subprocess, sys, time
 from pathlib import Path
 
 OUT = Path(os.environ["BOARD_OUT"])
@@ -234,7 +241,11 @@ if os.environ.get("BOARD_LIST_ONLY") == "1":
         print(d)
     sys.exit(0)
 
-instances, broken = [], []
+# `inst_dirs` runs parallel to `instances`: the second section needs the DIRECTORY (to
+# read its git HEAD and its config), while the snapshot itself must never carry a path.
+# Kept as a separate list rather than a key on the parsed data, so there is no way for a
+# filesystem path to be picked up by something that walks the snapshot's own fields.
+instances, inst_dirs, broken = [], [], []
 for d in dirs:
     snap = d / "SNAPSHOT.json"
     if not d.is_dir():
@@ -261,6 +272,7 @@ for d in dirs:
     # then makes the awaiting sort compare int with str, which raises TypeError.
     data["group"] = str(data.get("group") or "") or dirname(d).removeprefix("_ai-bridge-") or str(d)
     instances.append(data)
+    inst_dirs.append(d)
 
 def tolist(v):
     return v if isinstance(v, list) else []
@@ -284,6 +296,232 @@ TONE = {"blocked": "stop", "review": "signal", "in-review": "signal",
         "done": "ok", "in-progress": "accent"}
 PENDING = ("draft", "ready", "blocked")
 RUNNING = ("in-progress", "in-review", "review")
+TERMINAL = ("done", "cancelled")
+
+# ---------------------------------------------------------------- other owners
+#
+# WHY THERE IS A SECOND SECTION AT ALL, AND WHY IT IS NOT A SECOND SNAPSHOT.
+#
+# Artifact publishing is ACCOUNT-SCOPED: the update path needs an artifact the account
+# owns, and no share level grants it, so exactly one account can ever publish to a given
+# URL. Two humans sharing a bundle therefore cannot share one published board — each
+# publishes their own, to their own URL — and a board that shows only its owner's work is
+# half a board. The cross-owner half has to come from something both clones actually
+# have.
+#
+# THAT IS GIT, AND ONLY GIT. `SNAPSHOT.json` is gitignored and untracked, so no clone
+# ever holds another clone's; reaching for one would read a file that is never there.
+# `projects/*/project.md` and `projects/*/tasks/*.md` ARE tracked. Reading those is also
+# one derivation closer to the source of truth than a snapshot is, and reading them at
+# HEAD rather than from the working tree means the section shows what you have PULLED —
+# never your own uncommitted edits to a document you do not own.
+#
+# KEYED TO THE SHA, NOT TO A CLOCK. The instinct here was a 15- or 30-minute refresh, and
+# it is the wrong primary trigger in both directions: this section can only change when
+# HEAD moves, so a timer re-reads for nothing every minute you do not pull and shows a
+# stale section the moment you do. The SHA is exact, free to read and cheap to compare.
+# The wall clock survives as a FALLBACK for one case only, described at `others_for`.
+#
+# THE OWNERS ARE NAMED, ON A PAGE THAT GETS PUBLISHED. That is a decision, not an
+# oversight — see write-snapshot.sh's header, which now carries `owner` for exactly this,
+# and /knowledge/findings/board-owner-identity-named-not-redacted.md. The section is
+# collapsed by default because it is CONTEXT rather than your queue; the names are in the
+# HTML whether it is open or shut, so the collapse is ergonomics and never a privacy
+# control. The footer says so in as many words, because a reader who sees a closed block
+# should not conclude the names are hidden.
+#
+# EVERYTHING READ HERE IS UNTRUSTED TEXT, exactly as a snapshot is: same human-written
+# documents, arriving through git instead of through the writer. It goes through the same
+# e(), it renders only bundle-relative paths, and none of it reaches a <script>.
+OTHERS_CACHE = ".board-others.json"
+OTHERS_SCHEMA = "ai-bridge other-owners cache v1"
+OTHERS_TTL = 900          # seconds — the FALLBACK only; see others_for()
+
+
+def read_obj(path):
+    """A JSON object from a file, or {} — never an exception and never a non-dict.
+
+    Same shape as the config read in resolve_dirs, and for the same reason: a file whose
+    top level is a list or a string parses fine and then has no .get, and an
+    AttributeError here would end the run in a traceback instead of a documented
+    fallback.
+    """
+    try:
+        v = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError, UnicodeDecodeError):
+        return {}
+    return v if isinstance(v, dict) else {}
+
+
+def who_and_default(d):
+    """(this clone's login, defaultOwner) for one instance directory.
+
+    TWO DIFFERENT READS, on purpose, and SCHEMA.md → "Per-machine config overrides" is
+    the one place that set is listed. `ownerGithubUser` answers "who is this clone?", so
+    the gitignored local file wins over the tracked one — on a shared bundle a tracked
+    value would make both clones claim the same identity. `defaultOwner` answers "who
+    owns unowned work?", is only correct while BOTH clones agree, and is therefore read
+    from the TRACKED file only: a local override there is precisely the disagreement it
+    exists to prevent.
+    """
+    tracked = read_obj(d / "instance.config.json")
+    local = read_obj(d / "instance.config.local.json")
+    me = local.get("ownerGithubUser") or tracked.get("ownerGithubUser") or ""
+    return str(me).strip(), str(tracked.get("defaultOwner") or "").strip()
+
+
+def owner_of(p, default_owner):
+    """SCHEMA.md's resolution, steps 2-4: the project's `owner:`, else `defaultOwner`,
+    else nobody.
+
+    Step 1 — a task's own `owner:` — is deliberately not applied. This board partitions
+    by PROJECT, and a per-task override is a dispatch concern; honouring it here would
+    split one project across two sections, which is less readable than the thing it fixes.
+    """
+    return str(p.get("owner") or "").strip() or default_owner
+
+
+def is_mine(owner, me):
+    """Unowned work is everybody's (SCHEMA.md step 4), and the comparison is
+    case-insensitive, as SCHEMA.md requires.
+
+    With no configured human (`me` empty) an OWNED project is NOT mine: this clone cannot
+    prove the name is its own, which is the same refusal the dispatch gate makes. It
+    still renders — under its owner, in the section below — so nothing disappears.
+    """
+    return not owner or owner.lower() == me.lower()
+
+
+def git(d, *args):
+    """One local git read, or None.
+
+    Never raises and never blocks the render: a directory that is not a repository, a git
+    that is not installed, a repository with no commits, and a call that times out are
+    all "no second section", not a failed page.
+    """
+    try:
+        r = subprocess.run(("git", "-C", str(d)) + args,
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout.decode("utf-8", "replace") if r.returncode == 0 else None
+
+
+FM_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(.*)$")
+
+
+def frontmatter(text):
+    """The scalar frontmatter keys of an OKF document.
+
+    Same contract as write-snapshot.sh's awk, so the two halves of the board agree on
+    what "unreadable" means: a document that does not OPEN with `---`, or opens and never
+    closes, yields nothing rather than a guess. Scalars only — this reads four fields
+    (title, status, kind, owner) and has no business parsing lists.
+    """
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return {}
+    fm = {}
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return fm
+        m = FM_LINE.match(line)
+        if not m:
+            continue
+        v = m.group(2).strip()
+        if len(v) > 1 and v[0] == v[-1] and v[0] in "\"'":
+            v = v[1:-1]                      # one layer of quotes, as fmfield() strips
+        if m.group(1) in ("status", "kind", "owner"):
+            v = v.split("#")[0].strip()      # an enum's trailing comment is not the value
+        fm[m.group(1)] = v
+    return {}                                # opened and never closed: unreadable
+
+
+def others_from_head(d, me, default_owner):
+    """Every OTHER owner's projects, read from the tracked documents at this clone's HEAD.
+
+    `-z` on the listing is load-bearing: without it git quotes any path with a non-ASCII
+    or special character, and the quoted form is not a path you can hand back to
+    `git show`. One `show` per document, and only for projects that turn out not to be
+    this clone's — a project.md is read to learn the owner, its tasks only if the answer
+    is somebody else.
+    """
+    listing = git(d, "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", "projects")
+    if listing is None:
+        return None                          # no HEAD to read: no section at all
+    projects, tasks = {}, {}
+    for path in listing.split("\0"):
+        parts = path.split("/")
+        if len(parts) == 3 and parts[2] == "project.md":
+            projects[parts[1]] = path
+        elif (len(parts) == 4 and parts[2] == "tasks" and path.endswith(".md")
+                and parts[3] not in ("index.md", "log.md")):
+            tasks.setdefault(parts[1], []).append(path)
+    out = []
+    for slug in sorted(projects):
+        blob = git(d, "show", "HEAD:" + projects[slug])
+        if blob is None:
+            continue
+        fm = frontmatter(blob)
+        owner = owner_of(fm, default_owner)
+        if is_mine(owner, me):
+            continue                         # rendered above, from the snapshot
+        done = running = pending = 0
+        for tpath in sorted(tasks.get(slug, [])):
+            tblob = git(d, "show", "HEAD:" + tpath)
+            if tblob is None:
+                continue
+            st = frontmatter(tblob).get("status", "")
+            if st in TERMINAL:
+                done += 1
+            elif st in RUNNING:
+                running += 1
+            else:
+                pending += 1
+        out.append({"owner": owner, "slug": slug, "title": fm.get("title") or slug,
+                    "status": fm.get("status", ""),
+                    "done": done, "running": running, "pending": pending})
+    return out
+
+
+def others_for(d, me, default_owner):
+    """The section's data, cached against the HEAD SHA.
+
+    The cache is a gitignored file in the instance directory, and it carries the identity
+    it was computed FOR: a clone that changes its `ownerGithubUser` partitions the board
+    differently, so a cache keyed on the SHA alone would keep answering for the old human.
+
+    THE WALL CLOCK IS HERE, AND ONLY HERE. When the SHA cannot be read — a directory that
+    is not a repository, a git that is not installed, or a transient failure while
+    another process holds `index.lock`, which a /pm-loop tick committing under a running
+    watcher produces routinely — a fresh computation would return nothing, and writing
+    that nothing to the cache would delete every other owner from the published page for
+    a one-second lock. So a recent cached answer is served instead, and a cache entry
+    without a SHA is never written: an unkeyed entry is worth nothing to the next run.
+    """
+    head = (git(d, "rev-parse", "HEAD") or "").strip()
+    cache = d / OTHERS_CACHE
+    hit = read_obj(cache)
+    usable = (hit.get("_schema") == OTHERS_SCHEMA and isinstance(hit.get("owners"), list)
+              and hit.get("me") == me and hit.get("default") == default_owner)
+    if usable and head and hit.get("head") == head:
+        return hit["owners"]
+    if usable and not head and time.time() - toint(hit.get("at")) < OTHERS_TTL:
+        return hit["owners"]
+    owners = others_from_head(d, me, default_owner)
+    if owners is None:
+        return []
+    if head:
+        try:
+            cache.write_text(json.dumps({"_schema": OTHERS_SCHEMA, "head": head,
+                                         "me": me, "default": default_owner,
+                                         "at": int(time.time()), "owners": owners}),
+                             encoding="utf-8")
+        except (OSError, UnicodeEncodeError):
+            pass          # a read-only instance still renders; it just re-reads next time
+    return owners
+
+
 WORDING = {
     "approve": ("Approve", "go", "APPROVED — go ahead."),
     "discuss": ("Let’s discuss", "", "I want to discuss this before you proceed."),
@@ -407,6 +645,13 @@ button.no{border-color:var(--stop);color:var(--stop)}
 .proj.fin .ptitle{color:var(--muted);font-weight:500}
 .proj.fin .phead{opacity:.8}
 .proj.fin[open] .phead{opacity:1}
+/* Another owner's work: the same card, set in mono and dimmed like a finished one,
+   because it is context rather than your queue. It is NOT hidden — the name is in the
+   markup whether this block is open or shut; the collapse is ergonomics. */
+.proj.other{background:transparent;box-shadow:none;border-style:dashed}
+.proj.other .ptitle{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.9rem;
+  color:var(--muted)}
+.proj.other[open] .ptitle{color:var(--ink)}
 .c.q{color:var(--signal);border-color:color-mix(in srgb,var(--signal) 40%,var(--line))}
 .c.q b{color:var(--signal)}
 .c.note{color:var(--dim);border-style:dashed}
@@ -626,12 +871,19 @@ def render_table():
     else:
         title = "Bridge Board"
 
-    rows, asks = [], []
+    rows, asks, others = [], [], []
     n_tasks = n_done = 0
-    for s in instances:
+    for s, d in zip(instances, inst_dirs):
         g = s.get("group", "?")
+        me, default_owner = who_and_default(d)
+        others += [(g, x) for x in others_for(d, me, default_owner)]
         for p in tolist(s.get("projects")):
             p = todict(p)
+            # Somebody else's project renders ONCE, below, from HEAD. Skipping it here is
+            # what stops the two sections from showing the same work twice — the failure
+            # a naive "append a second section" produces, and one that looks fine.
+            if not is_mine(owner_of(p, default_owner), me):
+                continue
             ts = [todict(t) for t in tolist(p.get("tasks"))]
             # "Done" is all-tasks-terminal, or the project saying so. A project with no
             # tasks yet is NOT done — it has not started.
@@ -822,11 +1074,58 @@ def render_table():
                                            else '<span class="dim">—</span>'))
         o.append("</tbody></table></div></div></details>")
 
+    # ---- the other owners, one collapsed block each, from git HEAD ----------
+    # NAMED and COLLAPSED. No `open` attribute, and no script — the same <details> the
+    # projects above use, for the same reasons. The collapse is ergonomics: this is
+    # context, not your queue. It hides nothing, and the footer says so.
+    by_owner = {}
+    for g, x in others:
+        by_owner.setdefault(str(todict(x).get("owner") or "?"), []).append((g, todict(x)))
+    if by_owner:
+        o.append('<h2 class="sep">Other owners · %d</h2>' % len(by_owner))
+        for who in sorted(by_owner, key=lambda s: s.lower()):
+            entries = by_owner[who]
+            nd = sum(toint(x.get("done")) for _, x in entries)
+            nr = sum(toint(x.get("running")) for _, x in entries)
+            nw = sum(toint(x.get("pending")) for _, x in entries)
+            o.append('<details class="proj other"><summary class="phead">')
+            o.append('<span class="ptitle">%s</span><span class="counts">' % e(who))
+            o.append('<span class="c"><b>%d</b> project%s</span>'
+                     % (len(entries), "" if len(entries) == 1 else "s"))
+            o.append('<span class="c ok"><b>%d</b> done</span>' % nd)
+            o.append('<span class="c run"><b>%d</b> in progress</span>' % nr)
+            o.append('<span class="c wait"><b>%d</b> pending</span>' % nw)
+            o.append("</span></summary>")
+            o.append('<div class="body"><div class="scroll"><table><thead><tr>'
+                     "<th>Project</th><th>Where</th><th>State</th>"
+                     "<th class=\"r\">Done</th><th class=\"r\">Running</th>"
+                     "<th class=\"r\">Pending</th></tr></thead><tbody>")
+            for g, x in entries:
+                st = str(x.get("status") or "")
+                # BUNDLE-RELATIVE, always. `/projects/<slug>/` is the same form the copy
+                # buttons above use and the only kind of path allowed to reach this page:
+                # a published board must not carry anybody's home directory.
+                o.append('<tr><td>%s</td><td class="dim"><code>/projects/%s/</code></td>'
+                         '<td><span class="state %s">%s</span></td>'
+                         '<td class="r">%d</td><td class="r">%d</td><td class="r">%d</td></tr>'
+                         % (e(x.get("title")), e(x.get("slug")), TONE.get(st, ""), e(st),
+                            toint(x.get("done")), toint(x.get("running")),
+                            toint(x.get("pending"))))
+            o.append("</tbody></table></div>"
+                     "<p class=\"where\">Read from the tracked documents at this clone’s "
+                     "current <code>HEAD</code> — never from another clone’s snapshot, "
+                     "which is gitignored and never present here. It moves when you pull, "
+                     "and it never shows uncommitted work.</p></div></details>")
+
     o.append('<footer><p>Derived from each instance’s <code>SNAPSHOT.json</code> and '
              "<strong>as sensitive as the task documents it comes from</strong>. Titles are "
              "human-written free text; no customer PII belongs in a task title, and so none "
              "belongs here. Task descriptions, document bodies, question and blocker text, "
-             "author identity and out-of-bundle paths are never carried.</p>"
+             "author email addresses and out-of-bundle paths are never carried.</p>"
+             "<p>Project owners are carried, on purpose, so this board can tell your work "
+             "from theirs — so the <strong>names of other owners are on this page whether "
+             "their section is open or shut</strong>. Collapsing it is for reading comfort, "
+             "not privacy.</p>"
              "<p>A browser cannot open a local file, so a task copies its <em>bundle-relative</em> "
              "path for you to paste — prefix it with your instance directory. Decision "
              "buttons copy a prompt; the bundle, not this page, is where a decision is "

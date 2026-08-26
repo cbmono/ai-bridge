@@ -1192,6 +1192,19 @@ if ! grep -qE '^/?\.board-live/?$' "$gi"; then
 GI
 fi
 
+# The board's other-owners cache (scripts/build-board.sh), appended for exactly the same
+# reason: every instance in existence was stamped before this file existed, and a derived
+# cache of committed state has no business being committed back.
+if ! grep -qE '^/?\.board-others\.json$' "$gi"; then
+  cat >> "$gi" <<'GI'
+
+# The board's other-owners cache (scripts/build-board.sh) — the second half of the page,
+# read from the tracked documents at HEAD and stored against the SHA it was computed for.
+# Derived and per-machine. Delete it freely; the next render rebuilds it.
+/.board-others.json
+GI
+fi
+
 # 3b. Two more ignores, appended once each if missing — OUTSIDE the managed block,
 # for the same reason as /repos/ above.
 #
