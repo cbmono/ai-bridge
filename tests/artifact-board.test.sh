@@ -163,7 +163,7 @@ mk "$TMP/delivs" "delivs" '[
   "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[],"deliverable_paths":[]}]'
 DOUT="$TMP/delivs.html"
-bash "$GEN" --out "$DOUT" "$TMP/delivs" >/dev/null 2>&1
+rc4=0; bash "$GEN" --out "$DOUT" "$TMP/delivs" >/dev/null 2>&1 || rc4=$?
 assert "a bundle-relative deliverable renders as a copy button" \
   "$(fhas 'data-copy="/projects/with-delivs/deliverables/report.md"' "$DOUT")"
 assert "…labelled by filename, not the full path"    "$(fhas '>report.md</button>' "$DOUT")"
@@ -181,7 +181,10 @@ assert "…and never as a data-copy value"              "$(fhasnt 'data-copy="/U
 assert "a traversal attempt is dropped"               "$(fhasnt 'etc/passwd' "$DOUT")"
 assert "a traversal attempt through a nested segment is dropped too" "$(fhasnt 'etc/shadow' "$DOUT")"
 echo "== absent/empty deliverable_paths renders no panel, and no error =="
-assert "it still exits 0"                             "$(yes_if test -s "$DOUT")"
+# The exit code itself, not file non-emptiness — a renderer that wrote partial output
+# and then failed would still pass a `test -s` check.
+assert "it still exits 0"                             "$(eq "$rc4" 0)"
+assert "…and produces non-empty output"               "$(yes_if test -s "$DOUT")"
 assert "no deliverables panel for a project with none" "$(yes_if python3 -c "
 import sys
 t = open('$DOUT').read()
