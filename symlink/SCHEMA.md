@@ -357,6 +357,15 @@ fetched — a truncated fetch looks exactly like a clean review. Clauses 7–9 s
 counts as **no review**, even when a green check is published alongside it. That
 combination is a refusal, not a pass.
 
+**A green check from a reviewer that declined to review is not verification.** Clearance
+requires a review **artifact** — a review object, or a comment whose body is not the
+reviewer's own refusal language — never a status-check conclusion, which reports only
+that the integration ran. A refusal is identified by that **language**, never by the
+commit range it quotes: the refusal comment carries the same `between <base> and <head>`
+line a real review carries, at the same head, so the range cannot tell them apart.
+Unknown or unreadable reviewer state is **unverified**, never clearance.
+`scripts/review-clearance.sh` computes exactly this, and exit 0 is its only clearance.
+
 **One verdict per reviewed head — and a new head needs a new one.** A reviewer posts one
 synthesized verdict for the commit it reviewed, never an early `pass` amended later. When
 the head advances, clause 3 makes the old verdict stale, so that new head must be

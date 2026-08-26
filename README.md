@@ -348,6 +348,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 |---|---|
 | **Independent review** | every PR is cleared by a reviewer with fresh context, never the implementing agent's self-report. [→](docs/autonomy.md#the-verification-gate) |
 | **Merge gate** | `required-checks.sh` — **exit 0 is the only clearance.** Missing, pending, skipped and unreadable all refuse. [→](docs/autonomy.md#required-checks--exit-0-is-the-only-clearance) |
+| **Review gate** | `review-clearance.sh` — a **green check from a reviewer that declined to review is not verification.** It reads the reviewer's artifacts, spots a refusal by its language, and refuses on unknown state. [→](docs/autonomy.md#the-verification-gate) |
 | **Delegated autonomy** | one deletable file. `rm symlink/AUTONOMY.md` and every project is `gated`. [→](docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) |
 | **Worktrees** | `prune-worktrees.sh` **reports, never deletes.** Do not add a delete, not even behind a flag — it destroyed three running agents' worktrees once. [→](docs/conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing) |
 | **Bundle repair** | `migrate-bundle.sh` is report-only by default and fixes only what has one right answer. **A false success is worse than the error it claims to fix.** [→](docs/conventions.md#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) |
@@ -396,6 +397,7 @@ Run from an instance root unless noted.
 | `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
 | `commit-as.sh` | commits as the right agent identity | yes |
 | `required-checks.sh` | resolves a PR's required checks | no |
+| `review-clearance.sh` | asserts a review **artifact** exists on a PR (never a green check) | no |
 | `task-owner.sh` | resolves and compares a task's owner | no |
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
@@ -421,6 +423,7 @@ Run from an instance root unless noted.
 | The live page never updates | the watcher was stopped, or the change was outside `projects/` | restart `scripts/watch-board.sh`; it prints a line per render |
 | A `yolo` project never merges anything | preflight failed: one `gh` identity, no external reviewer, or no required checks | the loop says which; fix that, or merge by hand |
 | `required-checks.sh` exits 2 | the platform probe returned something it cannot classify | that is a refusal by design — read the message, don't loosen the script |
+| A PR is all-green but not merge-eligible | the reviewer published "Review limit reached" behind a green check — `review-clearance.sh` exit 1 | wait for the reopen time it quotes, then ask for a **first** review; nothing re-reviews a skipped PR by itself |
 | CodeRabbit: "Unable to determine base branch" | a remote-less instance has no `origin/HEAD` to infer one from | `git config coderabbit.baseBranch <branch>` |
 | Validator errors right after an upgrade | the machinery updated, the data didn't | `./upgrade.sh <instance>` runs validate → migrate in the right order |
 | Two loops dispatched the same task | `defaultOwner` is not set on a shared bundle | [docs/sharing.md](docs/sharing.md) |

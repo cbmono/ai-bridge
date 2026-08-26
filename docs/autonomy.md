@@ -60,6 +60,7 @@ The merge gate's first precondition is `scripts/required-checks.sh <pr>`.
 | a declared name no check reports | drift, not absence — refuse |
 | missing, pending or **skipped** | refuse |
 | the PR itself edits the list | a human decision — never auto-merged |
+| a required name that is a **reviewer's own check** | not settled by its bucket — handed to `review-clearance.sh` (below) |
 
 Declare only checks that **always run**. Configuring real branch protection later needs
 no change: the script prefers it automatically, and the gate then binds human merges too.
@@ -97,6 +98,24 @@ The predicate also requires a current `head_sha`, the right reviewer identity, n
 unresolved reviewer thread, and — for an external reviewer — a reconciled comment count.
 Each failure class above has cleared a real bug in a real run; this is contract, not
 etiquette.
+
+**The third class is the one you cannot see, so it is a script.** `scripts/review-clearance.sh
+<pr> --head <sha>` answers "did a review happen at this head" from the reviewer's
+**artifacts** — a review object, or a comment whose body is not the reviewer's own
+refusal language — and never from a status check, which is green whether the reviewer
+read the diff or hit its quota. Exit 0 is the only clearance; 1 is a published refusal
+(quoted, with the reopen time), 3 is no reviewer signal at all, 4 is a review that does
+not name the current head, and 2 is a reviewer state it could not read — unverified,
+never a pass. It answers only *whether* a review happened; the clauses above still decide
+whether that review **cleared**.
+
+**Do not detect the refusal by the commit range.** The refusal comment quotes the same
+`between <base> and <head>` line a real review quotes, and on the PR this was found on
+that head matched the PR head exactly — so the range says "reviewed" for both. Only the
+language separates them, which is why the refusal table is matched first and the head
+second. And a skipped PR is **not** re-reviewed on its own: after the quota resets
+someone has to ask for a first review, which is not the discouraged "re-review of
+addressed findings", because no review ever happened.
 
 **Recommended:** set branch protection to require CI green + a review from that reviewer.
 GitHub only enforces *that* CI passed and a review happened — whether the reviewer

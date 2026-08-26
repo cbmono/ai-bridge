@@ -92,6 +92,16 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    `reviewThreads.isResolved` alone is **not** sufficient: a thread the PR
    author/executor resolved itself does not count as cleared unless the reviewer
    re-acknowledged it by re-reviewing the current head without re-raising.
+
+   **That a review happened at all is `scripts/review-clearance.sh <pr> --head
+   <verified-sha>` exiting 0**, and nothing else clears it — in particular not the
+   reviewer's status check, which is green whether it reviewed or declined. It asserts a
+   review **artifact** exists (a review object, or a comment that is not the reviewer's
+   refusal language) and refuses on a refusal (exit 1, quoting it and the reopen time),
+   on no reviewer signal (exit 3), on a review that does not name the current head
+   (exit 4), and on an unreadable reviewer state (exit 2). Exit 0 is only the *first*
+   half of this precondition: the clauses above still decide whether that review
+   **cleared**.
 3. **Every acceptance-criteria box in the PR body is ticked.** An unchecked box is a
    criterion nobody verified (`SCHEMA.md`), and green CI is not evidence for one no check
    covers. This is the condition that catches the class of bug deterministic checks
