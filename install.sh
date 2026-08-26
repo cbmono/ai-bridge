@@ -1234,13 +1234,13 @@ if ! grep -qxF '/index.md' "$gi" || ! grep -qxF '/projects/*/index.md' "$gi"; th
 # The one exception is a RETAINED project (`status: done`, kept instead of closed):
 # the tick stops touching a retained project at all, so its index.md becomes a
 # permanent, hand-committed front door instead of a rewritten view. To retain one,
-# add a negation line directly BELOW the two lines below, then `git add -f` the file
-# once — e.g. `!projects/<slug>/index.md`. Git applies .gitignore patterns in file
-# order, so a LATER negation overrides the blanket pattern above it; putting the
-# override ABOVE these two lines instead, or deleting the two lines and asserting
-# "we track these" only in a comment, does not survive the next `install.sh` run —
-# it re-adds whichever of the two lines below it finds missing, and it neither looks
-# for nor honours a comment-only override.
+# add a negation line AFTER the two blanket lines that follow this comment, then
+# `git add -f` the file once — e.g. `!projects/<slug>/index.md`. Git applies
+# .gitignore patterns in file order, so a LATER negation overrides an earlier blanket
+# pattern; putting the override BEFORE the two blanket lines instead, or deleting
+# the two lines and asserting "we track these" only in a comment, does not survive
+# the next `install.sh` run — it re-adds whichever of the two lines it finds
+# missing, and it neither looks for nor honours a comment-only override.
 GI
   grep -qxF '/index.md' "$gi"             || echo '/index.md' >> "$gi"
   grep -qxF '/projects/*/index.md' "$gi"  || echo '/projects/*/index.md' >> "$gi"
