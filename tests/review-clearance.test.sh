@@ -401,31 +401,28 @@ echo "== a verdict that QUOTES refusal language is not itself a refusal =="
 # — quoting the words, and the sentinel. Prose alone classifies that verdict as a refusal,
 # which is the reviewer disqualifying its own review. The okf-verdict trailer (SCHEMA.md)
 # is the structured self-declaration that settles it, and it outranks every refusal row.
-verdict_body() { # <extra lines...> -> a qa-reviewer verdict quoting a refusal in prose
-  body_file \
-    "CodeRabbit published a green check whose body reads Review limit reached, and the" \
-    "comment carries the rate limited by coderabbit.ai sentinel — so no review happened." \
-    "I reviewed $CLEAN_HEAD myself." \
-    "$@" \
-    '<!-- okf-verdict v1' \
-    'verdict: changes-requested' \
-    "head_sha: $CLEAN_HEAD" \
-    'reviewer: qa-reviewer' \
-    'lenses: correctness=done security=done repro=done' \
-    'unverified_criteria: none' \
-    'caveats: none' \
-    '-->'
-}
-setup "$CLEAN_HEAD"; add_comment qa-bot "$(verdict_body)"
+VERDICT_PROSE=(
+  "CodeRabbit published a green check whose body reads Review limit reached, and the"
+  "comment carries the rate limited by coderabbit.ai sentinel — so no review happened."
+)
+VERDICT_TRAILER=(
+  '<!-- okf-verdict v1'
+  'verdict: changes-requested'
+  'reviewer: qa-reviewer'
+  'lenses: correctness=done security=done repro=done'
+  'unverified_criteria: none'
+  'caveats: none'
+  '-->'
+)
+setup "$CLEAN_HEAD"
+add_comment qa-bot "$(body_file "${VERDICT_PROSE[@]}" "I reviewed $CLEAN_HEAD myself." \
+  "${VERDICT_TRAILER[@]}")"
 expect "a verdict quoting a refusal in prose -> a review" 0 --reviewer qa-bot
 
 # The control, and it is the whole reason the guard is a TRAILER rather than a mood: the
 # identical prose WITHOUT the trailer is still read as a refusal.
 setup "$CLEAN_HEAD"
-add_comment qa-bot "$(body_file \
-  "CodeRabbit published a green check whose body reads Review limit reached, and the" \
-  "comment carries the rate limited by coderabbit.ai sentinel." \
-  "I reviewed $CLEAN_HEAD myself.")"
+add_comment qa-bot "$(body_file "${VERDICT_PROSE[@]}" "I reviewed $CLEAN_HEAD myself.")"
 expect "…the same prose with no trailer -> classified as a refusal" 1 --reviewer qa-bot
 
 echo
