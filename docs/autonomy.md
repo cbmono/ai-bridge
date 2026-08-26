@@ -101,13 +101,25 @@ etiquette.
 
 **The third class is the one you cannot see, so it is a script.** `scripts/review-clearance.sh
 <pr> --head <sha>` answers "did a review happen at this head" from the reviewer's
-**artifacts** — a review object, or a comment whose body is not the reviewer's own
-refusal language — and never from a status check, which is green whether the reviewer
-read the diff or hit its quota. Exit 0 is the only clearance; 1 is a published refusal
-(quoted, with the reopen time), 3 is no reviewer signal at all, 4 is a review that does
-not name the current head, and 2 is a reviewer state it could not read — unverified,
-never a pass. It answers only *whether* a review happened; the clauses above still decide
-whether that review **cleared**.
+**artifacts** — a submitted review object, a body carrying the reviewer's own evidence of
+having looked, or a parseable `okf-verdict` trailer — and never from a status check, which
+is green whether the reviewer read the diff or hit its quota. Exit 0 is the only
+clearance; 1 is a published refusal or a not-yet-reviewed placeholder (quoted, with the
+reopen time), 3 is no reviewer signal at all, 4 is an artifact that evidences no completed
+review or does not name the current head, and 2 is a reviewer state it could not read —
+unverified, never a pass. It answers only *whether* a review happened; the clauses above
+still decide whether that review **cleared**.
+
+**Positive evidence is required, because "not a refusal" is not a review.** The reviewer
+posts a placeholder on nearly every PR the moment it opens — *"Currently processing new
+changes in this PR…"*, quoting the head it is about to read — and a check that clears
+anything it cannot classify as a refusal clears that, on every PR, before anybody has
+looked. So an artifact has to carry evidence a review **completed**; the default is deny.
+The same rule applies to the fallback reviewer's `okf-verdict` trailer, which is **parsed**
+(marker line, closing `-->`, `verdict` / `reviewer` / a `head_sha` equal to the head being
+cleared) and honoured only for the account named with `--reviewer`. As a substring it was a
+one-line bypass that outranked the vendor's own refusal sentinel — and the string ships in
+this repository's diffs, which reviewers quote.
 
 **Do not detect the refusal by the commit range.** The refusal comment quotes the same
 `between <base> and <head>` line a real review quotes, and on the PR this was found on
@@ -118,7 +130,7 @@ someone has to ask for a first review, which is not the discouraged "re-review o
 addressed findings", because no review ever happened.
 
 **Expect exit 4 to be the common answer, and read it as what it is.** Scored across all
-35 pull requests on this repository: 16 carry a CodeRabbit review object and exactly
+35 pull requests on this repository: 17 carry a CodeRabbit review object and exactly
 **one** of them was made at that PR's final head. The reviewer reads the first push, the
 agent then pushes fixes, and `.coderabbit.yaml` here sets `auto_incremental_review:
 false` on purpose (the "one review per PR" cost rule), so nothing re-reads them. Those

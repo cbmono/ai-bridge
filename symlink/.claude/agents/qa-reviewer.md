@@ -99,6 +99,15 @@ no PII/secrets. The role-specific procedure is below.
      prose quotes, because a trailer is a structured claim and prose is not. Fencing the
      quote also works and reads better, but do not *rely* on it — fences hold only while
      they stay balanced.
+
+     **The trailer guards you only if it PARSES, so emit the whole block.** It is not a
+     magic string: the marker `<!-- okf-verdict v1` must be alone on its line, `-->` must
+     close it, and `verdict`, `reviewer` and `head_sha` must all be present with
+     `head_sha` equal to the head you reviewed — a trailer for an earlier commit is stale
+     and counts for nothing. It is honoured **only when clearance is scoped to your
+     account** (`--reviewer <your login>`), never for a hosted vendor, because a vendor
+     comment quoting a diff that contains the string would otherwise declare itself
+     reviewed.
    - **d. Genuinely no integration** (and the CLI is installed) — run
      `coderabbit review --base <default-branch> --type committed --agent` (detect the
      default branch — don't hardcode `main`: `git symbolic-ref --short

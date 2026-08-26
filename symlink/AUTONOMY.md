@@ -96,12 +96,14 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    **That a review happened at all is `scripts/review-clearance.sh <pr> --head
    <verified-sha>` exiting 0**, and nothing else clears it — in particular not the
    reviewer's status check, which is green whether it reviewed or declined. It asserts a
-   review **artifact** exists (a review object, or a comment that is not the reviewer's
-   refusal language) and refuses on a refusal (exit 1, quoting it and the reopen time),
-   on no reviewer signal (exit 3), on a review that does not name the current head
-   (exit 4), and on an unreadable reviewer state (exit 2). Exit 0 is only the *first*
-   half of this precondition: the clauses above still decide whether that review
-   **cleared**.
+   review **artifact that evidences a completed review** (a submitted review object, the
+   reviewer's own evidence markers, or a parseable verdict trailer — *not* merely an
+   artifact that fails to read as a refusal, which the reviewer's "currently processing"
+   placeholder does on nearly every PR) and refuses on a refusal or a placeholder (exit 1,
+   quoting it and the reopen time), on no reviewer signal (exit 3), on an artifact that
+   evidences no review or does not name the current head (exit 4), and on an unreadable
+   reviewer state (exit 2). Exit 0 is only the *first* half of this precondition: the
+   clauses above still decide whether that review **cleared**.
 
    **Exit 4 will be the answer most of the time, and it is not exit 1.** Wherever the
    reviewer does not re-review every push — CodeRabbit's `auto_incremental_review:

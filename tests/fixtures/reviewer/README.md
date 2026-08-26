@@ -40,7 +40,7 @@ every assertion built on them passes vacuously. So they are asserted, not assume
    with a single ` ``` ` prepended.
 
 A third shape is deliberately *not* a fixture here, because it is a count rather than a
-body: on this repository **16 of 35 pull requests carry a CodeRabbit review object and
+body: on this repository **17 of 35 pull requests carry a CodeRabbit review object and
 exactly one of them was made at that PR's final head**, since `.coderabbit.yaml` sets
 `auto_incremental_review: false`. Those are **stale** reviews (exit 4), not refusals —
 and 10 of them additionally carry a `Review skipped — Auto incremental reviews are
