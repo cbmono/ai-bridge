@@ -64,6 +64,11 @@
 # script under `scripts/`, so it ships into every instance unchanged. `generated_at`
 # is the only non-deterministic field; set `SNAPSHOT_NOW` to pin it.
 #
+# A `status: done` PROJECT IS READ NO FURTHER THAN ITS FRONTMATTER. Its stanza is
+# emitted from fields already parsed; `phases/` and `tasks/` are never opened. See the
+# `continue` in the assembly loop for why that one line is what makes `retain: true`
+# affordable.
+#
 # Verified by tests/snapshot.test.sh.
 set -euo pipefail
 
@@ -292,6 +297,40 @@ while IFS= read -r pfile; do
   p_kind="$(fmenum "$pfm" kind)";      [[ -n "$p_kind" ]] || p_kind="build"
   p_status="$(fmenum "$pfm" status)"
   p_autonomy="$(fmenum "$pfm" autonomy)"; [[ -n "$p_autonomy" ]] || p_autonomy="gated"
+
+  # ---- a DONE project is read no further than this line.
+  #
+  # A finished project used to be deleted at closeout, and the stated reason was never
+  # disk — it was that "a done folder left live would only cost context on every PM
+  # tick" (SCHEMA.md). `retain: true` keeps the folder, so that cost has to go
+  # somewhere, and here is where it goes: the project frontmatter is ALREADY parsed
+  # above, before anything walks `phases/` or `tasks/`, so skipping here costs exactly
+  # one frontmatter parse per retained project and opens `tasks/` zero times. That is
+  # the trade that makes retention affordable; if this `continue` ever moves below the
+  # task loop it silently gives the cost back.
+  #
+  # The project STANZA is still emitted, from the frontmatter in hand — the skip is of
+  # the phase and task WALKS, not of the project. A retained project is a reference card
+  # on the board (its deliverables are listed from `deliverable_paths:` in project.md),
+  # and a project omitted from the snapshot entirely could not be rendered at all.
+  # `awaiting_close` is false by definition here: a done project is already closed.
+  if [[ "$p_status" == "done" ]]; then
+    projects_n=$((projects_n+1))
+    projects_json="$projects_json${projects_json:+,}
+    {
+      \"slug\": $(jstr "$slug"),
+      \"title\": $(jstr "$p_title"),
+      \"description\": $(jstr "$p_desc"),
+      \"kind\": $(jstr "$p_kind"),
+      \"status\": $(jstr "$p_status"),
+      \"autonomy\": $(jstr "$p_autonomy"),
+      \"awaiting_close\": false,
+      \"phase_progress\": {\"done\": 0, \"total\": 0},
+      \"phases\": [],
+      \"tasks\": []
+    }"
+    continue
+  fi
 
   # ---- phases
   phases_json=""; ph_total=0; ph_done=0
