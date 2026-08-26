@@ -154,10 +154,11 @@ mk "$TMP/delivs" "delivs" '[
   "tasks":[],
   "deliverable_paths":["/projects/with-delivs/deliverables/report.md",
                         "/projects/with-delivs/deliverables/summary.html",
+                        "/projects/with-delivs/deliverables/site/index.html",
                         "/projects/other-project/deliverables/report.md",
                         "/Users/attacker/.ssh/id_rsa",
                         "/projects/with-delivs/deliverables/../../../etc/passwd",
-                        "/projects/with-delivs/deliverables/nested/evil.md"]},
+                        "/projects/with-delivs/deliverables/site/../../../etc/shadow"]},
  {"slug":"no-delivs","title":"Closed with nothing stamped","kind":"build","status":"done",
   "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[],"deliverable_paths":[]}]'
@@ -168,13 +169,17 @@ assert "a bundle-relative deliverable renders as a copy button" \
 assert "…labelled by filename, not the full path"    "$(fhas '>report.md</button>' "$DOUT")"
 assert "…and a second one too"                        "$(fhas 'data-copy="/projects/with-delivs/deliverables/summary.html"' "$DOUT")"
 assert "…reusing the existing data-what convention"   "$(fhas 'data-what="Deliverable path"' "$DOUT")"
-assert "the panel is titled with a count"             "$(fhas 'Deliverables · 2' "$DOUT")"
+assert "a NESTED deliverable renders too, not dropped" \
+  "$(fhas 'data-copy="/projects/with-delivs/deliverables/site/index.html"' "$DOUT")"
+assert "…labelled by its filename only, not its nested path" "$(fhas '>index.html</button>' "$DOUT")"
+assert "the panel is titled with a count that matches what renders" \
+  "$(fhas 'Deliverables · 3' "$DOUT")"
 echo "== every rendered path is bundle-relative to THIS project — nothing else survives =="
 assert "another project's deliverable is dropped"     "$(fhasnt 'other-project/deliverables' "$DOUT")"
 assert "an absolute filesystem path is dropped"       "$(fhasnt 'attacker' "$DOUT")"
 assert "…and never as a data-copy value"              "$(fhasnt 'data-copy="/Users' "$DOUT")"
 assert "a traversal attempt is dropped"               "$(fhasnt 'etc/passwd' "$DOUT")"
-assert "a nested subdirectory is dropped (one segment only)" "$(fhasnt 'nested/evil.md' "$DOUT")"
+assert "a traversal attempt through a nested segment is dropped too" "$(fhasnt 'etc/shadow' "$DOUT")"
 echo "== absent/empty deliverable_paths renders no panel, and no error =="
 assert "it still exits 0"                             "$(yes_if test -s "$DOUT")"
 assert "no deliverables panel for a project with none" "$(yes_if python3 -c "
@@ -184,7 +189,11 @@ i = t.index('Closed with nothing stamped')
 j = t.index('</details>', i)
 sys.exit(0 if 'class=\"delivs\"' not in t[i:j] else 1)")"
 echo "== it reuses the ONE existing clipboard helper — no second <script> =="
-assert "exactly one <script> element on this page too" "$(eq "$(grep -cF '<script' "$DOUT")" 1)"
+# -c counts LINES, not occurrences — a second <script> on the SAME line as the first
+# would still read 1 and pass. -o prints one match per line, so piping to `wc -l` counts
+# occurrences regardless of how many share a line.
+assert "exactly one <script> element on this page too" \
+  "$(eq "$(grep -oF '<script' "$DOUT" | wc -l | tr -d ' ')" 1)"
 
 echo "== both themes are defined on bare :root =="
 assert "no token defined only in a media/theme block" "$(yes_if python3 -c "

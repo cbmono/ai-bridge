@@ -51,7 +51,13 @@
 #       the task doc for the question itself. AWAITING.md carries that text; the
 #       board does not;
 #     · any author identity (`authorEmail`), any filesystem path outside this bundle
-#       (`reposRoot`, `worktreeRoot`), any URL other than a PR URL.
+#       (`reposRoot`, `worktreeRoot`), any URL other than a PR URL. `deliverable_paths`
+#       is the one exception to enforcing this by construction rather than by trust:
+#       this file forwards it VERBATIM (see the CARRIED entry above) and does not
+#       itself check the shape, so a hand-edited project.md could in principle put an
+#       out-of-bundle path into SNAPSHOT.json (gitignored, never published as-is).
+#       The guarantee that no such path reaches a PUBLISHED page is enforced at
+#       render time, by build-board.sh's bundle_deliverable().
 #
 # `owner:` IS CARRIED, AND THAT IS A REVERSAL — read this before "restoring" the rule.
 # Until 2026-08-26 the list above ended with `owner:` on the NEVER side, on the ground
@@ -181,9 +187,21 @@ fmenum() { # <frontmatter> <key>
 # The raw text of a list field, in BOTH YAML forms (inline `k: [ a, b ]` and a block
 # sequence of `- ` lines). Copied in shape from validate-bundle.sh's refs_for, for
 # the same reason: no instance uses block style today, and nothing forbids it.
+#
+# A trailing `# comment` after an INLINE list's closing `]` is dropped on the key
+# line itself, before it ever reaches yaml_list_entries. Without this, `k: [ a, b ]
+# # note` swallows " # note" into the last entry — not hypothetical:
+# SCHEMA.md documents `deliverable_paths:` with a trailing comment on that very
+# line, so the documented form used to corrupt the path it names. Only fires when
+# the key line carries a `]` (the inline-list shape); a block-form key line (just
+# `key:` with entries on following `- ` lines) has none and is untouched.
 list_region() { # <frontmatter> <key>
   printf '%s\n' "$1" | awk -v k="$2" '
-    $0 ~ "^" k ":" { rest=$0; sub(/^[^:]*:/, "", rest); print rest; inblk=1; next }
+    $0 ~ "^" k ":" {
+      rest=$0; sub(/^[^:]*:/, "", rest)
+      if (rest ~ /\]/) { rest = substr(rest, 1, index(rest, "]")) }
+      print rest; inblk=1; next
+    }
     inblk && /^[[:space:]]+-[[:space:]]*/ { print; next }
     inblk && /^[[:space:]]*$/ { next }
     /^[^[:space:]]/ { inblk=0 }
@@ -518,7 +536,7 @@ cat > "$tmp" <<JSON
 {
   "_schema": "ai-bridge board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL, or any path outside this bundle.",
+  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},

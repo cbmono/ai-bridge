@@ -288,7 +288,10 @@ description: finished, kept as a reference surface
 kind: research
 status: done
 retain: true
-deliverable_paths: [ /projects/retained/deliverables/deck.md ]
+# The trailing comment (including its comma) is exactly SCHEMA.md's documented form
+# for this key — a real project.md is allowed to look like this, so the fixture does
+# too rather than the tidier form the writer would produce itself.
+deliverable_paths: [ /projects/retained/deliverables/deck.md ]   # WRITTEN BY CLOSEOUT, not by hand.
 ---
 PRJ
 cat > "$ALPHA/projects/retained/phases/phase-1.md" <<'PH'
@@ -488,6 +491,12 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 r=[p for p in d["projects"] if p["slug"]=="retained"][0]
 sys.exit(0 if r["deliverable_paths"]==["/projects/retained/deliverables/deck.md"] else 1)' "$SNAP")"
+# The fixture's `deliverable_paths:` line carries a trailing YAML comment (SCHEMA.md's
+# own documented form — see the fixture above). An exact single-entry match above
+# already proves the comment was not swallowed into the path; this pins the failure
+# mode directly, so a regression names itself instead of just failing the exact-match.
+assert "…and the trailing comment never reaches the snapshot at all" \
+  "$(fhasnt "WRITTEN BY CLOSEOUT" "$SNAP")"
 assert "a project carrying no deliverable_paths key gets an empty array, not an error" \
   "$(yes_if python3 -c '
 import json,sys
@@ -623,7 +632,11 @@ assert "…and it is present in escaped form"         "$(fhas "$HOSTILE_ESCAPED"
 # deliverables panel (asserted above) — its copy buttons reuse this SAME helper, so this
 # assertion is what pins "no second script was added for it" on the page a real
 # invocation actually writes, not on an isolated fixture.
-assert "exactly one <script> element"              "$(eq "$(grep -cF '<script' "$HTML")" 1)"
+# -c counts LINES, not occurrences — a second <script> sharing a line with the first
+# would still read 1 and pass. -o prints one match per line, so piping to `wc -l` counts
+# occurrences regardless of how many share a line.
+assert "exactly one <script> element" \
+  "$(eq "$(grep -oF '<script' "$HTML" | wc -l | tr -d ' ')" 1)"
 assert "…and NOTHING from a snapshot is inside it" "$(yes_if python3 -c '
 import re, sys
 t = open(sys.argv[1], encoding="utf-8").read()

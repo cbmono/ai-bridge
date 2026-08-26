@@ -245,8 +245,47 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # THE DEBT ABOVE IS UNCHANGED AND THIS ENLARGES IT. write-snapshot.sh and build-board.sh
 # are two of the four board scripts named as the real reduction candidates, and this task
 # grew both. Nothing was retired here. The reduction this objective is owed remains owed.
-CEILING_TOTAL=6648
-CEILING_CODE=3587
+#
+#   6,648 / 3,587   20 files   what #32 repaired the placeholder to, on `main` at e76b9f3
+#
+# RAISED 2026-08-26 for the deliverables panel (task-007), and here is the bill:
+#
+#   6,648 / 3,587   20 files   what #32 pinned above
+#   6,775 / 3,647   20 files   +127 total, +60 code
+#
+# Per file, so the raise can be checked rather than believed:
+#
+#   build-board.sh            1,164 -> 1,234   +70 total, +46 code
+#   write-snapshot.sh           498 ->   555   +57 total, +14 code
+#
+# WHAT THE LINES BUY. write-snapshot.sh's code lines forward `deliverable_paths:` off the
+# frontmatter parse every project already gets, through `project_stanza()`, for BOTH the
+# done-project skip and the live path — the same one-builder-two-exits shape the owner
+# field above already established, kept rather than duplicated so a retained project's
+# deliverables panel and a live project's stay sourced from one place. A second pass
+# (this same PR, addressing independent review) fixed a real parsing defect in the SAME
+# function: an inline list's trailing `# comment` — the exact form SCHEMA.md documents
+# `deliverable_paths:` with — was swallowed into the last path entry; `list_region` now
+# truncates at the closing `]` before a comment can reach it. The rest of the growth here
+# is comments: the field's own CARRIED-allowlist entry, and restating (rather than
+# silently leaving false) the header's "never any path outside this bundle" claim now
+# that `deliverable_paths` is forwarded verbatim and only shape-checked at render time.
+# build-board.sh's code lines are a "Deliverables" section rendered inside the project's
+# existing collapsed `<details>` (no new `<script>` — it reuses the page's one
+# `data-copy`/`data-what` clipboard helper) plus `bundle_deliverable(path, slug)`, a guard
+# that re-checks every entry against `/projects/<slug>/deliverables/<file>` before it can
+# reach a button — the board does not trust the writer to have restricted what it
+# collected, the same rule `href()` already applies to a PR URL's scheme. The same review
+# pass corrected the guard itself: it used to drop a NESTED path (`site/index.html`, e.g.
+# an exported research site) as if it were hostile, silently under-counting a project's
+# real deliverables against what closeout stamped — it now allows any nesting below
+# `deliverables/` and rejects only an empty, `.` or `..` path segment.
+#
+# THE DEBT ABOVE IS UNCHANGED, AGAIN. Nothing here touches print-board.sh or
+# watch-board.sh, and this raise grows two of the four named reduction candidates rather
+# than shrinking any of them.
+CEILING_TOTAL=6775
+CEILING_CODE=3647
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is
