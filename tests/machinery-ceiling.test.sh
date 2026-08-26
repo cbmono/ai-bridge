@@ -284,8 +284,31 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # THE DEBT ABOVE IS UNCHANGED, AGAIN. Nothing here touches print-board.sh or
 # watch-board.sh, and this raise grows two of the four named reduction candidates rather
 # than shrinking any of them.
-CEILING_TOTAL=6775
-CEILING_CODE=3647
+#
+#   6,775 / 3,647   20 files   what the raise above pinned
+#   6,792 / 3,653   20 files   +17 total, +6 code
+#
+# Per file:
+#
+#   write-snapshot.sh           555 ->   572   +17 total, +6 code
+#
+# WHAT THE LINES BUY — still task-007, an independent-review fix round, not new scope.
+# `list_region()`'s `]`-truncation (added above to stop a trailing YAML comment from
+# corrupting `deliverable_paths:`) lives in a function SHARED by every list key, and
+# looked for the closing `]` with no regard for quoting — so an `open_questions` or
+# `advisor_notes` entry containing ordinary brackets, or a Markdown PR link in the
+# `[repo#N](url)` style this bundle's own CLAUDE.md mandates for citing PR links, was
+# mistaken for the list's own end, silently dropping any entry after it. That is
+# `open_questions`, the one field that gates `draft -> ready` and feeds AWAITING.md.
+# The +6 code lines make the scan QUOTE-AWARE (a `"` toggles quote state; a `]` inside
+# quotes no longer closes the list) rather than scoping the fix to the one caller that
+# exposed it, because the same defect would otherwise stay latent in `advisor_notes`,
+# `pr` and any future free-text list key sharing this function. The remaining growth
+# is the comment recording why the fix's scope is "every list key", not one caller.
+#
+# THE DEBT ABOVE IS UNCHANGED, STILL.
+CEILING_TOTAL=6792
+CEILING_CODE=3653
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is
