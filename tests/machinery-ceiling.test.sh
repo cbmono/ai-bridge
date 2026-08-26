@@ -253,14 +253,14 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # expressions rather than by adding up a pre-rebase diff:
 #
 #   6,648 / 3,587   20 files   `main` at e76b9f3, after #32 repaired the placeholder
-#   7,376 / 3,954   21 files   +728 total, +367 code — this change
+#   7,379 / 3,955   21 files   +731 total, +368 code — this change
 #
 # Per file, so the raise can be checked rather than believed:
 #
-#   review-clearance.sh         0 ->  603    +603 total, +301 code   (new file)
+#   review-clearance.sh         0 ->  606    +606 total, +302 code   (new file)
 #   required-checks.sh        212 ->  337    +125 total,  +66 code
 #
-# WHAT THE 301 CODE LINES OF review-clearance.sh BUY. A merge gate that could not tell
+# WHAT THE 302 CODE LINES OF review-clearance.sh BUY. A merge gate that could not tell
 # "reviewed and clean" from "not reviewed". A hosted reviewer that declines exits
 # SUCCESSFULLY, so its status check is green either way; three PRs went out in one tick,
 # one was reviewed, two carried "Review limit reached" and merged unlooked-at, and one of
@@ -284,8 +284,8 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # STILL OWED: the objective's second criterion asks a project to LOWER one of these
 # constants. This raise does not. The reduction candidates named further up
 # (print-board.sh, watch-board.sh, write-snapshot.sh) are untouched.
-CEILING_TOTAL=7376
-CEILING_CODE=3954
+CEILING_TOTAL=7379
+CEILING_CODE=3955
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

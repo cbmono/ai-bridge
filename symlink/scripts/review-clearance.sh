@@ -230,11 +230,14 @@ fold() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 # <check-name>. Empty when no row owns that check. Substring match, case-folded.
 owners_of_check() {
   local needle; needle="$(fold "$1")"
-  local row
+  local row login check
   while IFS= read -r row; do
-    set -- $row
-    [ "$#" -ge 2 ] || continue
-    printf '%s' "$needle" | grep -Eq "$2" 2>/dev/null && printf '%s\n' "$1"
+    # Fields via awk, never `set -- $row`: the rows are EREs and several end in `*`, so
+    # word-splitting them would also pathname-expand them against the caller's cwd.
+    login="$(printf '%s' "$row" | awk '{print $1}')"
+    check="$(printf '%s' "$row" | awk '{print $2}')"
+    [ -n "$login" ] && [ -n "$check" ] || continue
+    printf '%s' "$needle" | grep -Eq "$check" 2>/dev/null && printf '%s\n' "$login"
   done <<EOF
 $(rows "$REVIEWERS")
 EOF
