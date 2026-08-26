@@ -68,6 +68,8 @@ autonomy: gated | <mode>              # optional (default gated). gated = the hu
 clis: [ <name>, ... ]                 # optional: external CLIs/integrations this project's agents may use (e.g. render, supabase). A declaration — agents still verify a CLI works before relying on it. BUILD-SHAPED: research projects dispatch no agents, so `/new-project` never asks for it there (an explicit clis= flag is still recorded).
 browser: off | claude-for-chrome      # optional (default off). claude-for-chrome = agents may drive the browser via the claude-in-chrome tools when present — background role agents included, each with its OWN tab group (not the human's tabs), so navigate explicitly. Absent tools = degrade, don't fail. Writes follow the project's autonomy: ask-first by default, permitted where a delegated mode says so (AUTONOMY.md). See "Browser access" below.
 owner: <github-username>              # optional: which human's work this project is, on an instance shared by more than one. A GitHub USERNAME, never an email. Absent ⇒ nobody in particular, so it is this clone's — see "Ownership on a shared instance" below. Gates DISPATCH only, never promotion.
+retain: true                          # optional (default absent = false). Closeout KEEPS this project's folder instead of `git rm -r`-ing it. Governs the FOLDER ONLY — not the tasks, not the status: a retained project still ends `status: done` with every task terminal. See "Project & objective completion" below.
+deliverable_paths: [ /projects/<slug>/deliverables/<file>, ... ]   # WRITTEN BY CLOSEOUT, not by hand. Bundle-relative paths, resolved once from each task's `artifacts:` and verified on disk at closeout. `[ ]` means closeout looked and found none.
 status: active | paused | done
 timestamp: <ISO 8601>
 ---
@@ -82,6 +84,15 @@ opens no PRs, and is often the **entry point** whose conclusions graduate into
 under `projects/<slug>/deliverables/` (one file per chunk — e.g. per domain/team).
 Research tasks are **human-driven**: the PM refines and tracks them but never
 dispatches them to role agents (see the lifecycle note).
+
+**Retention (`retain: true`) is research-shaped, for a structural reason.** A build
+project's real output is merged PRs, which live in the *product repo's* history and
+are already linked from `log.md` — the folder is scaffolding around work that lives
+elsewhere, so build stays remove-by-default. A research project's output **is** the
+folder. The rule is "retain where the artifact actually lives," and the field is the
+switch. It governs the folder only: a retained project is still `status: done` with
+every task terminal, and it is not reopenable — new work starts as a new project
+seeded from the deliverables.
 
 ## type: Phase  (`projects/<slug>/phases/<n>-<slug>.md`)
 
@@ -534,6 +545,13 @@ becomes a **close candidate**: the PM surfaces it under 🔴 *Awaiting you* and
 removes work from the queue and deletes the folder, so it is a human call, like
 the two task gates.
 
+**Every task that is not terminal at closeout becomes `cancelled`** (a `--force`
+closeout is how one gets there), with a one-line reason in the task body. `cancelled`
+is the existing terminal status — "abandoned, superseded, or decided-against" — and it
+is deliberately reused rather than joined by a "closed-unfinished" sibling: a status
+enum that grows a value per closing mode teaches nothing the reason line does not
+already say.
+
 On the human's OK (in-session, or via `/close-project <slug>`), **closeout** runs
 in this order:
 
@@ -552,10 +570,44 @@ in this order:
    committed); update its objective's project list. When
    **all** projects serving an objective are `done`/`cancelled`, likewise
    **propose** the objective `status: achieved` (human-confirmed).
-4. **Remove the folder.** `git rm -r projects/<slug>/`. **Git history + the KB are
-   the record — there is no `archive/`.** The full task→PR→Finding trail stays
-   recoverable via `git`, and a done folder left live would only cost context on
-   every PM tick. Removal is reversible with `git revert`, but is treated as final.
+4. **Remove the folder — or keep it, if `retain: true`.** Both outcomes are one
+   command, `scripts/close-project-folder.sh <slug> --apply`, so the deletion has a
+   fixed, tested scope instead of being improvised from prose.
+
+   **Without `retain:`** — `git rm -r projects/<slug>/`, exactly as before. **Git
+   history + the KB are the record — there is no `archive/`.** The full
+   task→PR→Finding trail stays recoverable via `git`. Reversible with `git revert`,
+   but treated as final.
+
+   **With `retain: true`** the folder stays, and is *frozen* first:
+
+   * **`deliverable_paths:` is stamped into `project.md`** — every task's `artifacts:`
+     resolved once, each file verified to exist, written back as bundle-relative
+     paths. A declared artifact that does not exist is a warning and is left out, the
+     same call `validate-bundle.sh` makes. This is what lets the board list a retained
+     project's deliverables **without** walking `tasks/`.
+   * **Working files are pruned**, by four explicit paths and never by an extension
+     sweep: `tmp/` and `temp/` directories (case-insensitive, any depth), `.DS_Store`,
+     and **non-markdown** files under `sources/`. `sources/**/*.md` are KEPT, because
+     `index.md` cites them by number and those citations must keep resolving.
+     `tasks/`, `deliverables/`, `log.md`, `index.md` and `project.md` are kept in
+     full — `deliverables/` legitimately holds `.pdf`/`.html`/`.png`, so the prune is
+     pruned out of that subtree entirely.
+   * **The prune is reported**: the command prints what it removed, and the
+     **`log.md` closeout entry names the pruned directories**, so a later reader knows
+     the folder is deliberately partial rather than damaged. `tmp/`/`temp/` are
+     reported as a path and an entry count, never by filename — on the project this
+     rule came from they held employee records, and a filename is content.
+   * **`index.md` is refreshed as the retained project's front door and COMMITTED.**
+     It is the one exception to "the index files are derived, rewritten, never
+     staged": the tick now skips done projects, so nothing will ever regenerate it,
+     and an uncommitted front door exists on exactly one machine.
+
+   **Why keeping it is affordable.** The reason for removal was never disk — it was
+   that a done folder cost context on every PM tick. It no longer does: both readers
+   of the tree, `write-snapshot.sh` and the PM's own project loop, stop at a `status:
+   done` project's **frontmatter**, before `phases/` or `tasks/` is opened. A retained
+   project costs one frontmatter parse.
 
 # Browser access (`browser: claude-for-chrome`)
 

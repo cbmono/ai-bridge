@@ -167,10 +167,22 @@ state, and act only on deltas.
    `status: in-progress` on a task is **task**-scoped and answers
    a different question — whether that task was handed out — not whether this tick is done.
 
-1. **Orient.** Read `index.md` and `SCHEMA.md`. Enumerate `projects/*/tasks/*.md`
-   with their frontmatter; for any task with a `pr`, read its state via
-   `gh pr view`. **All of it, every tick** — nothing upstream oriented for you, and
-   this context is yours alone, so a wide read costs the human nothing here.
+1. **Orient.** Read `index.md` and `SCHEMA.md`. Then, **per project**, read
+   `projects/<slug>/project.md` FIRST and **skip every `status: done` project right
+   there** — do not open its `phases/` or `tasks/`, do not enumerate it, do not report
+   it. For the rest, enumerate `projects/*/tasks/*.md` with their frontmatter; for any
+   task with a `pr`, read its state via `gh pr view`. **All of it, every tick** —
+   nothing upstream oriented for you, and this context is yours alone, so a wide read
+   costs the human nothing here.
+
+   **Why the skip is at the frontmatter and not later.** A closed project used to be
+   deleted, so there was nothing to skip; `retain: true` (SCHEMA.md) keeps a finished
+   research project's folder as a reference surface, and the only thing that makes that
+   affordable is that you and `write-snapshot.sh` both stop at its `project.md`. A done
+   project costs one frontmatter parse. Filtering its tasks out *after* reading them
+   costs the full walk and buys nothing — the point is the read that never happens.
+   Nothing in a done project can need a tick: every task is terminal, no PR is open,
+   and it is not reopenable (new work starts as a new project).
 
 2. **Refine drafts.** For each `draft` whose `acceptance_criteria` are empty/thin
    (not yet refined): enrich it, add concrete `acceptance_criteria`, and record
@@ -390,16 +402,26 @@ state, and act only on deltas.
    and the removing commit SHA; (c) set `project.md` `status: done`, drop it from
    the active `## Projects` list in `index.md`, and update its objective — when
    **all** of an objective's projects are terminal, likewise **propose**
-   `objective status: achieved`; (d) `git rm -r projects/<slug>/`, stage the
-   `log.md` / objective / KB edits from (b) and (c) by explicit path,
-   and commit all of it in one go via `scripts/commit-as.sh project-manager
-   "chore: close <slug> project" -- projects/<slug> log.md
-   objectives/<objective>.md <kb-path>...` — the removal and the roll-up belong in
-   the same commit, or the tree records a closed project still listed as active.
-   (`index.md` is edited but **not** staged: it is derived and gitignored, so it
-   carries no roll-up that needs committing.)
+   `objective status: achieved`; (d) run `scripts/close-project-folder.sh <slug>
+   --apply` — never `git rm` or `rm` the folder yourself. That command reads
+   `retain:` from `project.md` and either `git rm -r`s the folder (the default, and
+   unchanged) or, on `retain: true`, KEEPS it: stamping `deliverable_paths:` into
+   `project.md` and pruning `tmp/`/`temp/`, `.DS_Store` and non-markdown files under
+   `sources/` — never `deliverables/`, never `tasks/`, never `sources/**/*.md`. It
+   prints a `log.md fragment` naming what it pruned; put that in (b)'s entry, so a
+   later reader knows the folder is deliberately partial rather than damaged. Then
+   stage the `log.md` / objective / KB edits from (b) and (c) by explicit path — plus
+   `projects/<slug>` itself when the project is retained, which is what commits the
+   prune, the stamp and that project's `index.md` — and commit all of it in one go via
+   `scripts/commit-as.sh project-manager "chore: close <slug> project" --
+   projects/<slug> log.md objectives/<objective>.md <kb-path>...` — the folder step and
+   the roll-up belong in the same commit, or the tree records a closed project still
+   listed as active. (The ROOT `index.md` is edited but **not** staged: it is derived
+   and gitignored, so it carries no roll-up that needs committing. A retained project's
+   OWN `index.md` is the exception — see step 8.)
    There is
-   **no `archive/`** — git history + the KB are the record. Closing is never
+   **no `archive/`** — git history + the KB are the record, except where `retain: true`
+   says the folder IS the record. Closing is never
    autonomous; like the two gates it waits for the human.
 
 7. **Refresh the knowledge base.** If this tick reflected one or more merges (or a
@@ -414,11 +436,15 @@ state, and act only on deltas.
    This adds no promote/merge behaviour — the two human gates are untouched.
 
 8. **Curate.** Keep `projects/<p>/project.md`, each project's `index.md`, and the
-   `log.md` files current. **The `index.md` files — the root one and each project's —
-   are derived and gitignored: rewrite them, but never stage or commit them**, the
-   same rule as `AWAITING.md` and `SNAPSHOT.json`. Every line of them is
-   re-derivable from the documents they summarise, and a file two loops rewrite
-   every tick is a merge conflict on every push. `knowledge/index.md` is **not** in
+   `log.md` files current — **for the projects you actually read this tick**; a done
+   project was skipped in step 1 and is not curated, ever. **The `index.md` files — the
+   root one and each project's — are derived and gitignored: rewrite them, but never
+   stage or commit them**, the same rule as `AWAITING.md` and `SNAPSHOT.json`. Every
+   line of them is re-derivable from the documents they summarise, and a file two loops
+   rewrite every tick is a merge conflict on every push. **One exception, and only one:
+   a retained project's `index.md` is written once at closeout and IS committed there**
+   (step 6) — "derived" assumes something will re-derive it, and for a done project
+   nothing will. `knowledge/index.md` is **not** in
    that set — it is tracked, curated by the `cataloguer`, and you commit it normally.
    **Close** this tick's ledger entry (you opened it in step 0)
    by rewriting it as a dated one-line summary. **That line is the tick ledger, so make

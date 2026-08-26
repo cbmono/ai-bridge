@@ -19,7 +19,7 @@ You steer; background agents do the work. **The core loop — memorise this:**
 |---|---|
 | See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/pm-loop`** — one safe, idempotent tick. Add `10m` to loop on an interval; say "DRY RUN" to preview without spawning agents. |
 | Start a new project | **`/new-project <description>`** — a build project (code → PRs), or add `kind=research` for docs/decks/assets (no repo). |
-| Close a finished project | **`/close-project <slug>`** — when its tasks are all done/cancelled: final KB consolidation, log the closeout, then **remove the folder** (git history + KB are the record; no archive). The PM flags candidates in the queue; you run it. |
+| Close a finished project | **`/close-project <slug>`** — when its tasks are all done/cancelled: final KB consolidation, log the closeout, then **remove the folder** (git history + KB are the record; no archive) — or **keep** it, frozen and pruned, if `project.md` says `retain: true`. The PM flags candidates in the queue; you run it. |
 | Request grouped PR reviews | **`/pr-review-request <filter>`** |
 | Fan a batch of independent ad-hoc asks out to parallel background agents | **`/fanout`** — or just give the assistant ≥2 independent asks at once and it acts as coordinator: dispatch each, report results as they land (see _Ad-hoc requests vs. the project loop_) |
 
@@ -70,6 +70,10 @@ control panel. -->
   proposal) consolidates its durable knowledge into `knowledge/`, logs a **Project
   closed** entry, sets `status: done`, and **removes the project folder**. Git
   history + the KB are the record — there is **no `archive/`** (see `SCHEMA.md`).
+  **`retain: true` on `project.md` keeps the folder instead** — for a research project,
+  whose output *is* the folder rather than a merged PR. It is frozen at closeout
+  (deliverable paths stamped, working files pruned) and costs the tick one frontmatter
+  parse, because every reader skips a done project at its frontmatter.
 - **Two human authorities** (see `SCHEMA.md`): only the human promotes
   `draft → ready`, and only the human merges PRs. The PM must **never** set
   `ready` and **never** merges.
