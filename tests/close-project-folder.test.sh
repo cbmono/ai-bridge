@@ -388,6 +388,28 @@ assert "no --apply: exits 0"                           "$(eq "$RC" 0)"
 assert "…nothing is staged"                            "$(yes_if sh -c 'cd "$1" && [ -z "$(git diff --cached --name-only)" ]' _ "$ROOT")"
 assert "…and the folder is intact"                     "$(exists "$ROOT/projects/adoption/tasks/task-001.md")"
 
+echo "== the closeout PROSE routes to this script, and invents no status value =="
+# The steps around this script are prose an agent executes, which cannot be driven from
+# a harness — but WHICH MECHANISM the prose names can be, and that is the part that
+# rots. These assertions exist so a future edit cannot quietly put a hand-rolled
+# `git rm -r` back beside a tested script, or grow the status enum a value.
+CMD="$TPL/symlink/.claude/commands/close-project.md"
+PM="$TPL/symlink/.claude/agents/project-manager.md"
+SCH="$TPL/symlink/SCHEMA.md"
+assert "/close-project's folder step calls the script" \
+  "$(yes_if grep -q 'close-project-folder.sh <slug> --apply' "$CMD")"
+assert "…and says not to remove the folder by hand"     "$(yes_if grep -q 'Do not .git rm. or .rm. the folder by hand' "$CMD")"
+assert "…and it is in the command's allowed-tools"      "$(yes_if grep -q 'Bash(scripts/close-project-folder.sh:\*)' "$CMD")"
+assert "the PM's closeout calls the same script"        "$(yes_if grep -q 'close-project-folder.sh <slug>' "$PM")"
+assert "the PM skips done projects at the frontmatter"  "$(yes_if grep -q 'skip every .status: done. project right' "$PM")"
+assert "SCHEMA.md documents retain:"                    "$(yes_if grep -q '^retain: true ' "$SCH")"
+assert "…and deliverable_paths: as closeout-written"    "$(yes_if grep -q '^deliverable_paths: \[ /projects/' "$SCH")"
+assert "…and that non-terminal tasks become cancelled"  "$(yes_if grep -q 'not terminal at closeout becomes .cancelled' "$SCH")"
+# The enum itself, at its enforcement point. A "closed-unfinished" sibling status would
+# show up here first, and the criterion this pins is that none was introduced.
+assert "the Task status enum is unchanged (seven values)" \
+  "$(yes_if grep -qF 'Task)      echo "draft ready in-progress in-review blocked cancelled done" ;;' "$TPL/symlink/scripts/validate-bundle.sh")"
+
 printf '\nclose-project-folder.test: pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]] || exit 1
 exit 0
