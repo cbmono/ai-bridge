@@ -16,8 +16,10 @@
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:
 #
 #   0  a non-empty required set resolved and every member passed
-#   1  a required check is not green — failing, pending, or never reported
-#   2  usage error, or the environment can't answer (no `gh`, unreadable PR)
+#   1  a required check is not green — failing, pending, or never reported; or a
+#      required check belongs to a REVIEWER that declined to review (see below)
+#   2  usage error, or the environment can't answer (no `gh`, unreadable PR, or
+#      `review-clearance.sh` missing so the reviewer state cannot be read at all)
 #   3  no required set could be resolved — the merge authority is NOT exercisable
 #      here (this is the signal AUTONOMY.md's preflight surfaces to the human)
 #   4  this PR edits the declared list itself — changing the gate is a human call
@@ -40,9 +42,17 @@
 # GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
 # instance. It takes no org, repo, or check names: those live in the target repo.
 #
+# A REVIEWER'S CHECK IS NOT A REVIEW. `pass` settles a CI job, because a CI job that ran
+# and succeeded is the whole of what it claims. It does not settle a hosted REVIEWER's
+# check: a reviewer that declines to review (rate-limited, out of quota) exits
+# successfully and publishes exactly the same green. So any required name that belongs to
+# a reviewer is handed to `review-clearance.sh`, which reads the reviewer's artifacts
+# instead of its check, and only a clean answer there clears it.
+#
 # FAILS CLOSED. An empty set, an unparseable answer, a declared name that no check
-# reports (a rename), a skipped check, a pending check — all refuse. A required check
-# the loop cannot see green is a required check that did not pass.
+# reports (a rename), a skipped check, a pending check, a reviewer state that cannot be
+# read — all refuse. A required check the loop cannot see green is a required check that
+# did not pass, and a review the loop cannot see is a review that did not happen.
 set -euo pipefail
 
 DECLARED_PATH=".github/required-checks.txt"
@@ -206,6 +216,60 @@ if [ -n "$problems" ]; then
   printf '%s' "$problems" >&2
   echo "        Only 'pass' clears — pending, skipped and missing all count as not passed." >&2
   exit 1
+fi
+
+# --- a REVIEWER's own check is green whether or not it reviewed --------------
+# The one green check that means nothing. A hosted reviewer that declines to review —
+# rate-limited, out of quota — still exits successfully, so its status check reports
+# success and lands in the loop above as `pass`. Three PRs in one tick proved it: all
+# three green, one reviewed, two carrying "Review limit reached" and merged unlooked-at.
+#
+# So a required check that IS a reviewer's is not settled by its bucket. Hand it to
+# review-clearance.sh, which reads the reviewer's ARTIFACTS instead of its check, and
+# treat anything but a clean answer as not-green. The reviewer-name table lives there,
+# not here — one place per vendor fact, so changing reviewers is one file.
+#
+# MISSING SIBLING ⇒ EXIT 2, not a pass. Without it this script cannot tell a reviewer's
+# check from a CI job, so it cannot know whether the set it just cleared contained one.
+# That is an unknown reviewer state, and unknown fails closed. The two files ship
+# together as one unit; a missing one is a broken install, and it should be loud.
+CLEARANCE="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/review-clearance.sh"
+if [ ! -x "$CLEARANCE" ]; then
+  echo "error: review-clearance.sh not found beside this script ($CLEARANCE)." >&2
+  echo "       Without it, a reviewer's own status check cannot be told from a CI job," >&2
+  echo "       so the reviewer state is unknown and this refuses (fail closed)." >&2
+  exit 2
+fi
+
+reviewer_checks=""
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  if "$CLEARANCE" --match-check "$name" >/dev/null 2>&1; then
+    reviewer_checks="${reviewer_checks}${name}
+"
+  fi
+done <<EOF
+$required
+EOF
+
+if [ -n "$reviewer_checks" ]; then
+  clearance_err="$(mktemp)"
+  trap 'rm -f "$probe_err" "$clearance_err"' EXIT
+  # `set -e` is on: capture the exit code through an `if`, never off a bare `$?`, or a
+  # refusing sibling would kill this script before it could report why.
+  if "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --head "$head_sha" >/dev/null 2>"$clearance_err"
+  then crc=0; else crc=$?; fi
+  if [ "$crc" -ne 0 ]; then
+    echo "refuse: a required check is a reviewer's own, and that reviewer did not clear" >&2
+    echo "        PR $pr (review-clearance.sh exit $crc). Green means the integration" >&2
+    echo "        ran, never that a review happened:" >&2
+    printf '%s\n' "$(cat "$clearance_err")" | sed 's/^/        /' >&2
+    printf '%s' "$reviewer_checks" | sed 's/^/          required, and reviewer-owned: /' >&2
+    # An unreadable reviewer state (exit 2) is a different refusal from a reviewer that
+    # answered and declined — keep the caller's two codes distinguishable.
+    [ "$crc" -eq 2 ] && exit 2
+    exit 1
+  fi
 fi
 
 count="$(printf '%s\n' "$required" | grep -c '^' || true)"
