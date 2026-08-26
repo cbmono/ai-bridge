@@ -491,13 +491,14 @@ def others_for(d, me, default_owner):
     it was computed FOR: a clone that changes its `ownerGithubUser` partitions the board
     differently, so a cache keyed on the SHA alone would keep answering for the old human.
 
-    THE WALL CLOCK IS HERE, AND ONLY HERE. When the SHA cannot be read — a directory that
-    is not a repository, a git that is not installed, or a transient failure while
-    another process holds `index.lock`, which a /pm-loop tick committing under a running
-    watcher produces routinely — a fresh computation would return nothing, and writing
-    that nothing to the cache would delete every other owner from the published page for
-    a one-second lock. So a recent cached answer is served instead, and a cache entry
-    without a SHA is never written: an unkeyed entry is worth nothing to the next run.
+    THE WALL CLOCK IS HERE, AND ONLY HERE, and it is a fallback rather than a schedule.
+    When the SHA cannot be read at all — no git on the machine, a directory that is not a
+    repository, a repository with no commits yet, a `.git` momentarily unavailable under a
+    sync or a worktree operation, or a call that times out under load — recomputing
+    returns nothing, and writing that nothing to the cache would drop every other owner
+    off the published page until the next pull. So a RECENT cached answer is served
+    instead, and a cache entry without a SHA is never written: an unkeyed entry is worth
+    nothing to the next run. Nothing here re-reads on a timer while a SHA is available.
     """
     head = (git(d, "rev-parse", "HEAD") or "").strip()
     cache = d / OTHERS_CACHE
@@ -876,19 +877,25 @@ def render_table():
     for s, d in zip(instances, inst_dirs):
         g = s.get("group", "?")
         me, default_owner = who_and_default(d)
-        others += [(g, x) for x in others_for(d, me, default_owner)]
+        others += others_for(d, me, default_owner)
         for p in tolist(s.get("projects")):
             p = todict(p)
             # Somebody else's project renders ONCE, below, from HEAD. Skipping it here is
             # what stops the two sections from showing the same work twice — the failure
             # a naive "append a second section" produces, and one that looks fine.
+            #
+            # The one thing this drops: a project owned by somebody else that exists in
+            # YOUR working tree and is not committed yet. It is skipped here and HEAD has
+            # never heard of it, so it appears nowhere. That is the honest answer rather
+            # than a gap — an uncommitted document is not something the other clone can
+            # see either, and committing it is what publishes it to both boards.
             if not is_mine(owner_of(p, default_owner), me):
                 continue
             ts = [todict(t) for t in tolist(p.get("tasks"))]
             # "Done" is all-tasks-terminal, or the project saying so. A project with no
             # tasks yet is NOT done — it has not started.
             done_proj = bool(p.get("status") == "done" or (
-                ts and all(t.get("status") in ("done", "cancelled") for t in ts)))
+                ts and all(t.get("status") in TERMINAL for t in ts)))
             rows.append((g, p, done_proj))
             for t in ts:
                 n_tasks += 1
@@ -1079,15 +1086,16 @@ def render_table():
     # projects above use, for the same reasons. The collapse is ergonomics: this is
     # context, not your queue. It hides nothing, and the footer says so.
     by_owner = {}
-    for g, x in others:
-        by_owner.setdefault(str(todict(x).get("owner") or "?"), []).append((g, todict(x)))
+    for x in others:
+        x = todict(x)
+        by_owner.setdefault(str(x.get("owner") or "?"), []).append(x)
     if by_owner:
         o.append('<h2 class="sep">Other owners · %d</h2>' % len(by_owner))
         for who in sorted(by_owner, key=lambda s: s.lower()):
             entries = by_owner[who]
-            nd = sum(toint(x.get("done")) for _, x in entries)
-            nr = sum(toint(x.get("running")) for _, x in entries)
-            nw = sum(toint(x.get("pending")) for _, x in entries)
+            nd = sum(toint(x.get("done")) for x in entries)
+            nr = sum(toint(x.get("running")) for x in entries)
+            nw = sum(toint(x.get("pending")) for x in entries)
             o.append('<details class="proj other"><summary class="phead">')
             o.append('<span class="ptitle">%s</span><span class="counts">' % e(who))
             o.append('<span class="c"><b>%d</b> project%s</span>'
@@ -1100,7 +1108,7 @@ def render_table():
                      "<th>Project</th><th>Where</th><th>State</th>"
                      "<th class=\"r\">Done</th><th class=\"r\">Running</th>"
                      "<th class=\"r\">Pending</th></tr></thead><tbody>")
-            for g, x in entries:
+            for x in entries:
                 st = str(x.get("status") or "")
                 # BUNDLE-RELATIVE, always. `/projects/<slug>/` is the same form the copy
                 # buttons above use and the only kind of path allowed to reach this page:
