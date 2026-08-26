@@ -362,9 +362,9 @@ touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
 assert "…with the project count"           "$(has '4 project(s)' "$RUN_OUT")"
-# 6, not 7: the done project's task is never counted, because it is never read.
-assert "…and the task count"                "$(has '6 task(s)' "$RUN_OUT")"
-assert "…and the awaiting count (5 verbs across 3 live projects)" "$(has '5 awaiting' "$RUN_OUT")"
+# 7, not 8: the done project's task is never counted, because it is never read.
+assert "…and the task count"                "$(has '7 task(s)' "$RUN_OUT")"
+assert "…and the awaiting count (6 verbs across 3 live projects)" "$(has '6 awaiting' "$RUN_OUT")"
 assert "the file is non-empty"              "$(yes_if test -s "$SNAP")"
 assert "it parses as JSON"                  "$(yes_if python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$SNAP")"
 assert "no temp file was left behind"       "$(yes_if sh -c '! ls "$1".tmp.* >/dev/null 2>&1' _ "$SNAP")"
@@ -500,7 +500,7 @@ echo "== a DONE project is read no further than its frontmatter =="
 # frontmatter parse — so what is asserted here is an ABSENCE OF READING, not a filtered
 # output. The two are indistinguishable in the JSON, which is why the fixture's task is
 # planted to be loud: if `tasks/` were opened, its title would appear, the task count
-# would be 7, `open_questions` would be 2, its PR would be collected and `blocked` would
+# would be 8, `open_questions` would be 2, its PR would be collected and `blocked` would
 # add an `unblock` verb. Each of those is a separate way for the read to show itself.
 assert "the done project IS on the board (a retained project is a reference card)" \
   "$(yes_if python3 -c '
@@ -566,7 +566,7 @@ sys.exit(0 if set(p["retained"]) == set(p["ci"]) and "owner" in p["retained"] el
 cp -R "$ALPHA/projects/retained" "$ALPHA/projects/notdone"
 sed -i.bak 's/^status: done$/status: active/' "$ALPHA/projects/notdone/project.md" && rm -f "$ALPHA/projects/notdone/project.md.bak"
 CTRL_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
-assert "control: the same task under a LIVE project IS read (7 tasks)" "$(has '7 task(s)' "$CTRL_OUT")"
+assert "control: the same task under a LIVE project IS read (8 tasks)" "$(has '8 task(s)' "$CTRL_OUT")"
 assert "…and its title does reach the snapshot"  "$(fhas 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
 # deliverable_paths comes off the SAME frontmatter parse every project already gets, not
 # off the done-project skip specifically — so a LIVE project carrying the key forwards it
