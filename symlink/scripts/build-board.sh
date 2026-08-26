@@ -784,7 +784,8 @@ def bundle_deliverable(path, slug):
     which is the guarantee this guard exists to keep, and dropping them would
     silently under-report a project's deliverable count against what closeout
     actually stamped. What is still rejected, segment by segment: an empty
-    segment (a leading, trailing or doubled `/`) and a `.`/`..` segment — the
+    segment (a leading, trailing or doubled `/`), a `.`/`..` segment, and a `#`
+    anywhere below the prefix (a swallowed YAML comment — see below) — the
     same rule href() applies to a PR URL's scheme: closeout already verifies and
     stamps this shape (close-project-folder.sh), but the writer having
     restricted what it collects is never a reason for the reader to trust it — a
@@ -799,6 +800,16 @@ def bundle_deliverable(path, slug):
     if not rest:
         return None
     if any(seg in ("", ".", "..") for seg in rest.split("/")):
+        return None
+    # …and a `#`, which no path closeout stamps can contain but every YAML comment
+    # starts with. A `#` here means a trailing comment on the `deliverable_paths:`
+    # line was swallowed into the value: write-snapshot.sh's list_region() strips
+    # those except in the one case it declines (a comment carrying a `]` of its own),
+    # because ending a list early would silently drop entries. This is where that
+    # declined case stops. The swallowed text is whatever the comment said — up to
+    # and including the publisher's absolute path — and a comment-shaped value must
+    # never become a data-copy on a published page.
+    if "#" in rest:
         return None
     return p
 

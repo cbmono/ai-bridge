@@ -158,7 +158,8 @@ mk "$TMP/delivs" "delivs" '[
                         "/projects/other-project/deliverables/report.md",
                         "/Users/attacker/.ssh/id_rsa",
                         "/projects/with-delivs/deliverables/../../../etc/passwd",
-                        "/projects/with-delivs/deliverables/site/../../../etc/shadow"]},
+                        "/projects/with-delivs/deliverables/site/../../../etc/shadow",
+                        "/projects/with-delivs/deliverables/report.md ]   # from /Users/attacker/notes [old]"]},
  {"slug":"no-delivs","title":"Closed with nothing stamped","kind":"build","status":"done",
   "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[],"deliverable_paths":[]}]'
@@ -180,6 +181,14 @@ assert "an absolute filesystem path is dropped"       "$(fhasnt 'attacker' "$DOU
 assert "…and never as a data-copy value"              "$(fhasnt 'data-copy="/Users' "$DOUT")"
 assert "a traversal attempt is dropped"               "$(fhasnt 'etc/passwd' "$DOUT")"
 assert "a traversal attempt through a nested segment is dropped too" "$(fhasnt 'etc/shadow' "$DOUT")"
+# The last entry is a REAL path with a YAML trailing comment folded into it — the shape
+# write-snapshot.sh's list_region() produces for the one comment it declines to strip
+# (one carrying a `]` of its own, where stripping could end a list early and silently
+# drop entries). Its prefix is this project's, and it has no `..`, so every other rule
+# here passes it; only the `#` says what it is. It leaks an absolute path if rendered.
+assert "a swallowed YAML comment is dropped, not rendered as a path" \
+  "$(fhasnt 'report.md ]' "$DOUT")"
+assert "…so the count still matches what renders"     "$(fhas 'Deliverables · 3' "$DOUT")"
 echo "== absent/empty deliverable_paths renders no panel, and no error =="
 # The exit code itself, not file non-emptiness — a renderer that wrote partial output
 # and then failed would still pass a `test -s` check.

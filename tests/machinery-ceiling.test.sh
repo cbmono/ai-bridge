@@ -307,8 +307,38 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # is the comment recording why the fix's scope is "every list key", not one caller.
 #
 # THE DEBT ABOVE IS UNCHANGED, STILL.
-CEILING_TOTAL=6792
-CEILING_CODE=3653
+#
+# ---- and the round after that, which gives code lines BACK -------------------
+#
+#   6,792 / 3,653   20 files   what the raise above pinned
+#   6,803 / 3,650   20 files   +11 total, -3 CODE
+#
+# Per file:
+#
+#   write-snapshot.sh           572 ->   572    0 total, -6 code
+#   build-board.sh            1,234 -> 1,245   +11 total, +3 code
+#
+# WHAT THE LINES BUY — task-007 again, the third independent-review round on the same
+# PR. The quote-aware scan above was itself wrong, and wrong in the direction that
+# matters: on ODD quote parity it found no unquoted `]`, truncated NOTHING, and folded
+# the trailing YAML comment — a hand edit naming a path on the publisher's own disk —
+# into the deliverable path a copy button carries on the published board. So the
+# parity loop is gone, replaced by ONE `sub()` whose pattern cannot end a
+# list early by construction (`[^]]*$` forces the matched `]` to be the last on the
+# line, and a list's terminator always follows every `]` its entries contain). That is
+# the -6 code in write-snapshot.sh, and the reason this raise is mostly a refund.
+#
+# build-board.sh's +3 code is the price of the one case that strip declines — a comment
+# carrying a `]` of its own, where stripping could end a list early — which leaves the
+# value uncorrected rather than truncated. `bundle_deliverable()` now rejects a path
+# carrying a `#`: no path closeout stamps can contain one, every YAML comment starts
+# with one, and this is the last point before a published page. Fixing the parser and
+# guarding the render are not redundant here — the parser keeps SNAPSHOT.json honest,
+# the guard is what holds when a document is malformed in a way no parser will fix.
+#
+# THE DEBT ABOVE IS UNCHANGED, ONCE MORE.
+CEILING_TOTAL=6803
+CEILING_CODE=3650
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

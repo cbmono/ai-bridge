@@ -96,6 +96,11 @@ SECRET_QUESTION="SECRET-QUESTION-TEXT"
 SECRET_BLOCKER="SECRET-BLOCKER-REASON"
 SECRET_EMAIL="secret-person@example.com"
 OUT_OF_BUNDLE="/tmp/SECRET-OUT-OF-BUNDLE-ROOT"
+# The publisher's own absolute path, planted in exactly one place: a YAML trailing
+# comment on a `deliverable_paths:` line whose value carries an unbalanced quote (a hand
+# edit — see the `finished` fixture). It reaches the snapshot, and from there a copy
+# button on the published board, only if that comment is swallowed into the value.
+SECRET_ABS_PATH="/Users/SECRET-PUBLISHER-HOME/private/notes.md"
 # An HTML-metacharacter title, and the two forms it may appear in on the page.
 HOSTILE_TITLE='<script>alert(1)</script> & <b>bold</b>'
 HOSTILE_ESCAPED='&lt;script&gt;alert(1)&lt;/script&gt;'
@@ -247,12 +252,14 @@ TSK
 
 # Two open questions, EACH carrying a `]` before the list's own closing bracket: one a
 # Markdown PR link in the `[repo#N](url)` style this bundle's own CLAUDE.md mandates
-# for citing PRs, the other just ordinary brackets. list_region()'s `]`-truncation (added
+# for citing PRs, the other just ordinary brackets. list_region()'s comment strip (added
 # to fix a trailing YAML comment on `deliverable_paths:`) is shared by every list key, so
-# an unquoted-scan version stopped at the FIRST `]` — inside Q1's own text — and silently
-# dropped Q2 off a list that gates draft -> ready and feeds AWAITING.md. Quote-aware
-# scanning is what tells "a `]` that is part of an entry's text" from "the list's own
-# closing bracket".
+# a version that truncated at the FIRST `]` stopped inside Q1's own link and dropped Q2
+# off a list that gates draft -> ready and feeds AWAITING.md. The quote-parity version
+# that replaced it stopped at that SAME `]`: Q1's link sits between two ESCAPED quotes,
+# where counting `"` characters reads the parity as "outside a quote". One fixture, both
+# wrong answers — whatever the strip keys on must never be something an entry's own text
+# can spell.
 cat > "$ALPHA/projects/ci/tasks/task-006.md" <<'TSK'
 ---
 type: Task
@@ -260,7 +267,7 @@ title: Fix the bracket-swallowing question count
 kind: build
 status: draft
 assignee: software-engineer
-open_questions: [ "Q1: see [repo#42](https://github.com/acme/x/pull/42) for context", "Q2: bracket [note] mid-question" ]
+open_questions: [ "Q1: keep the \"[repo#42](https://github.com/acme/x/pull/42)\" style?", "Q2: bracket [note] mid-question" ]
 pr: []
 ---
 TSK
@@ -277,12 +284,20 @@ status: active
 PRJ
 
 # Every task terminal ⇒ the board shows a close PROPOSAL, never an action.
-cat > "$ALPHA/projects/finished/project.md" <<'PRJ'
+#
+# Its `deliverable_paths:` line is the HAND-EDITED shape: someone opened a quote and
+# never closed it, and left a trailing comment naming a path on their own disk. YAML
+# reads the value as one entry either way; the only question is where the value ends.
+# A strip that looked for the list's `]` while tracking quote state found no unquoted
+# `]` here, truncated nothing, and the whole comment — absolute path included — became
+# the deliverable path a copy button carries on the published board.
+cat > "$ALPHA/projects/finished/project.md" <<PRJ
 ---
 type: Project
 title: Docs cleanup
 kind: build
 status: active
+deliverable_paths: [ "/projects/finished/deliverables/report.md ]   # hand-edited; taken from $SECRET_ABS_PATH
 ---
 PRJ
 cat > "$ALPHA/projects/finished/tasks/task-001.md" <<'TSK'
@@ -418,12 +433,23 @@ assert "…and one with a space, nested inside a list" "$(eq "$BADKEY2" "documen
 assert "a task description never reaches the snapshot"   "$(fhasnt "$SECRET_DESC" "$SNAP")"
 assert "no document body reaches the snapshot"           "$(fhasnt "$SECRET_BODY" "$SNAP")"
 assert "open-question TEXT never reaches the snapshot"    "$(fhasnt "$SECRET_QUESTION" "$SNAP")"
-assert "…the COUNT does (2 questions on task-001)"        "$(fhas '"open_questions": 2' "$SNAP")"
+# SCOPED TO THE TASK IT NAMES, not a whole-file grep for `"open_questions": 2`. As a
+# file-wide grep this is the positive half of a privacy pair — the text never travels,
+# the count does — and ANY later fixture that happens to carry two questions satisfies
+# it, at which point it certifies nothing about task-001 while still reading green. That
+# is not hypothetical: the task-006 fixture below silently took it over exactly that way.
+assert "…the COUNT does (2 questions on task-001)"        "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="ci"][0]
+t=[t for t in p["tasks"] if t["id"]=="task-001"][0]
+sys.exit(0 if t["open_questions"]==2 else 1)' "$SNAP")"
 # Regression for the shared list_region()'s `]`-truncation swallowing a real second
 # question whenever an entry's own text carries a `]` before the list's closing one —
-# a Markdown PR link (`[repo#N](url)`) in Q1 and bare brackets in Q2. Both entries must
-# still be counted; losing either is the silent-drop this pins (task-007 fix round 2).
-assert "a `]` INSIDE a quoted entry does not end the list early (task-006, 2 questions)" \
+# a Markdown PR link (`[repo#N](url)`) in Q1, bare brackets in Q2, and an escaped `\"`
+# inside Q1 for the quote-parity variant of the same silent drop. All must still be
+# counted; losing any is the drop this pins (task-007 fix rounds 2-3).
+assert "a ] INSIDE an entry does not end the list early (task-006, 2 questions)" \
   "$(yes_if python3 -c '
 import json,sys
 d=json.load(open(sys.argv[1]))
@@ -527,6 +553,20 @@ sys.exit(0 if r["deliverable_paths"]==["/projects/retained/deliverables/deck.md"
 # mode directly, so a regression names itself instead of just failing the exact-match.
 assert "…and the trailing comment never reaches the snapshot at all" \
   "$(fhasnt "WRITTEN BY CLOSEOUT" "$SNAP")"
+# The same defect, reached the other way round — through the VALUE rather than the
+# comment. The `finished` fixture's line opens a quote and never closes it, so a strip
+# that decided where the list ended by tracking quote state found no unquoted `]`, kept
+# the whole line, and folded the comment (with the publisher's absolute path in it) into
+# the entry. Two assertions, because they fail differently: the first says the path is
+# still the path, the second says the absolute path is nowhere in the file at all.
+assert "an unbalanced quote does not let the trailing comment into the value" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="finished"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/finished/deliverables/report.md"] else 1)' "$SNAP")"
+assert "…and the absolute path it hides never reaches the snapshot" \
+  "$(fhasnt "$SECRET_ABS_PATH" "$SNAP")"
 assert "a project carrying no deliverable_paths key gets an empty array, not an error" \
   "$(yes_if python3 -c '
 import json,sys
@@ -641,6 +681,14 @@ assert "…carrying the command a human would run"   "$(fhas 'close-project fini
 assert "a retained project's deliverable is a copy button"  "$(fhas 'data-copy="/projects/retained/deliverables/deck.md"' "$HTML")"
 assert "…labelled by filename"                              "$(fhas '>deck.md</button>' "$HTML")"
 assert "…reusing the existing data-what convention"         "$(fhas 'data-what="Deliverable path"' "$HTML")"
+# Criterion 4, end to end on the page a real invocation writes — not on a hand-written
+# snapshot. The `finished` fixture's hand-edited `deliverable_paths:` line hides an
+# absolute path in a trailing comment, behind an unbalanced quote. What may appear on
+# the page is the clean bundle-relative path, or nothing; the comment is neither.
+assert "a hand-edited line still copies the bundle-relative path" \
+  "$(fhas 'data-copy="/projects/finished/deliverables/report.md"' "$HTML")"
+assert "…and the absolute path in its comment reaches no page"  "$(fhasnt "$SECRET_ABS_PATH" "$HTML")"
+assert "…nor any /Users path as something to copy"             "$(fhasnt 'data-copy="/Users' "$HTML")"
 assert "no filesystem path reaches the page"        "$(fhasnt "$TMP" "$HTML")"
 # Belt and braces, because the check above depends on how the fixture path is spelled:
 # an instance is named by its DIRECTORY NAME, so the name must never appear with a

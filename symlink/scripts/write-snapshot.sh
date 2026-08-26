@@ -194,29 +194,29 @@ fmenum() { # <frontmatter> <key>
 # documents `deliverable_paths:` with a trailing comment on that very line, so the
 # documented form used to corrupt the path it names.
 #
-# This is shared by EVERY list key (open_questions, advisor_notes, depends_on, pr,
-# deliverable_paths, ...), so the search for the closing `]` must be QUOTE-AWARE: a
-# `"` toggles quote state, and a `]` while inside quotes is just a character in the
-# entry's own text, not the list terminator. Without this, an open_questions or
-# advisor_notes entry containing ordinary brackets, or a Markdown PR link in the
-# `[repo#N](url)` style this bundle's own CLAUDE.md mandates for citing PRs, was
-# treated as if the list ended mid-entry — silently dropping the rest, including a
-# second question, off a surface (`open_questions`) that gates `draft -> ready` and
-# feeds AWAITING.md. `deliverable_paths` entries are unquoted bare paths and never
-# contain `]`, so this leaves that key's own fix untouched. Only fires when the key
-# line carries a `]` (the inline-list shape); a block-form key line (just `key:`
-# with entries on following `- ` lines) has none and is untouched.
+# This is shared by EVERY list key (open_questions, acceptance_criteria, advisor_notes,
+# depends_on, pr, deliverable_paths), most of them FREE TEXT — so the strip must never
+# be able to end a list early. An entry may legitimately carry a `]` of its own (plain
+# brackets, or a Markdown PR link in the `[repo#N](url)` style this bundle's CLAUDE.md
+# mandates for citing PRs), and truncating there silently drops every entry after it,
+# including a second question off `open_questions` — the one field that gates
+# `draft -> ready` and feeds AWAITING.md.
+#
+# The pattern below CANNOT do that, by construction: `[^]]*$` forces the `]` it matches
+# to be the LAST one on the line, and a list's terminator always comes after every `]`
+# its entries contain. So either that last `]` IS the terminator and what follows it is
+# the comment (stripped), or the last `]` sits inside the comment — no `#` follows it,
+# nothing matches, and the line survives exactly as YAML wrote it. That second case is
+# the price of a strip that is not a parse, and it is the safe way round: a dropped
+# entry is invisible, while an uncorrected value stays comment-shaped and
+# build-board.sh's bundle_deliverable() rejects it rather than render it. A block-form
+# key line (just `key:`, entries on following `- ` lines) carries no `]` and is
+# untouched.
 list_region() { # <frontmatter> <key>
   printf '%s\n' "$1" | awk -v k="$2" '
     $0 ~ "^" k ":" {
       rest=$0; sub(/^[^:]*:/, "", rest)
-      n = length(rest); inq = 0; endpos = 0
-      for (i = 1; i <= n; i++) {
-        c = substr(rest, i, 1)
-        if (c == "\"") { inq = !inq }
-        else if (c == "]" && !inq) { endpos = i; break }
-      }
-      if (endpos > 0) { rest = substr(rest, 1, endpos) }
+      sub(/\][[:space:]]*#[^]]*$/, "]", rest)
       print rest; inblk=1; next
     }
     inblk && /^[[:space:]]+-[[:space:]]*/ { print; next }
