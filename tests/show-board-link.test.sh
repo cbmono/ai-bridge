@@ -12,6 +12,10 @@
 #   · it reads `boardArtifactUrl` — the exact key task-014's tick reads — and nothing
 #     that merely looks like it (the neighbouring `"$boardArtifactUrl"` doc string in
 #     seed/instance.config.json must never be mistaken for the value);
+#   · the gitignored `instance.config.local.json` wins, because the board is PER OWNER:
+#     publishing is account-scoped, so each human records their own URL. A local file
+#     that does not name the key — or names it empty — is not an override and must not
+#     blank a URL the tracked file has;
 #   · it never prints anything derived from a task document — the link, and only the
 #     link. Proven by planting a hostile AWAITING.md/task title next to a real URL and
 #     asserting neither reaches stdout.
@@ -121,6 +125,36 @@ assert "only the real value is printed"     "$(has "$URL" "$OUT")"
 assert "the doc string never reaches stdout" "$(hasnt 'OFF BY DEFAULT' "$OUT")"
 assert "…nor the word absence" \
   "$(hasnt 'absence is silence' "$OUT")"
+
+echo "== the board is per owner: the local file wins, but only when it says something =="
+# Publishing is ACCOUNT-SCOPED — only the account that owns an artifact can update it —
+# so two humans sharing a bundle cannot share one board and each records their own URL in
+# the gitignored local file. The second half is the subtle one: a local file that does not
+# mention the key (the common case, since it usually carries only `ownerGithubUser`) is
+# NOT an override and must not blank a URL the tracked file has.
+LOCAL_URL="https://claude.ai/public/artifacts/mine-not-theirs"
+cat > "$INST/instance.config.json" <<EOF
+{
+  "boardArtifactUrl": "$URL"
+}
+EOF
+printf '{ "boardArtifactUrl": "%s" }\n' "$LOCAL_URL" > "$INST/instance.config.local.json"
+run
+assert "the local URL wins"                  "$(has "$LOCAL_URL" "$OUT")"
+assert "…and the tracked one is not printed" "$(hasnt "$URL" "$OUT")"
+assert "…still exactly one line"             "$(eq "$(printf '%s\n' "$OUT" | wc -l | tr -d ' ')" 1)"
+printf '{ "ownerGithubUser": "example-user-007" }\n' > "$INST/instance.config.local.json"
+run
+assert "a local file without the key defers" "$(has "$URL" "$OUT")"
+printf '{ "boardArtifactUrl": "" }\n' > "$INST/instance.config.local.json"
+run
+assert "…and an EMPTY local value defers too, rather than switching the board off" \
+  "$(has "$URL" "$OUT")"
+printf 'not json at all\n' > "$INST/instance.config.local.json"
+run
+assert "an unreadable local file falls back rather than failing" "$(has "$URL" "$OUT")"
+assert "…exit 0"                             "$(eq "$RC" 0)"
+rm -f "$INST/instance.config.local.json"
 
 echo "== nothing task-derived ever reaches stdout =="
 # The data-governance line: this hook must print the link and NOTHING else, even when a

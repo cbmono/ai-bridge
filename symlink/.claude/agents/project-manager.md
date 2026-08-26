@@ -540,17 +540,21 @@ state, and act only on deltas.
    something re-renders and re-publishes it, its masthead timestamp is the only clue that
    it is old. So, immediately after the writer:
 
-   1. Read `boardArtifactUrl` from `instance.config.json`. **Absent, empty or `null` ⇒
-      skip the rest of this step in silence** — no render, no publish, no line in your
+   1. Read `boardArtifactUrl` — from `instance.config.local.json` if it names one, else
+      from `instance.config.json`. Absent, empty or `null` in both and you
+      **skip the rest of this step in silence** — no render, no publish, no line in your
       report, and never an error. That absence is how an instance says its board must not
-      leave the machine, which for a bundle carrying no-PII rules is the compliant answer,
-      not a misconfiguration. A value that is present but **not an `https://` URL** is a
+      leave the machine, which for a bundle carrying no-PII rules is the compliant
+      answer, not a misconfiguration. A value that is present but **not an `https://` URL** is a
       different case and gets one line: it is a typo, not a decision, and silence would
-      hide it. It is deliberately **not** in the per-machine override set (`SCHEMA.md` →
-      "Per-machine config overrides"): the URL names one page that a whole team shares, so
-      two clones holding two values would publish two boards that each look like the board.
-      (Two clones holding the *same* value is fine and is the design — but keep their
-      `boardInstances` in agreement, or the one page alternates between two boards.)
+      hide it. It **is** in the per-machine override set (`SCHEMA.md` → "Per-machine
+      config overrides"), and that is a reversal of the earlier rule that kept it tracked:
+      publishing is **account-scoped**, so exactly one account can ever update a given
+      artifact, and a shared URL does not give a team one board — it gives them one
+      working board and one publish step that fails silently forever. **Each human owns
+      and publishes their own.** The cross-owner view is not a shared page at all: it is
+      the *other owners* section `scripts/build-board.sh` reads from the tracked task
+      documents at this clone's current git `HEAD`.
    2. Render the publishable body to a temp file:
       `out="$(mktemp "${TMPDIR:-/tmp}/bridge-board.XXXXXX")"` then
       `scripts/build-board.sh --out "$out"`. There is **one board** and no markup flag

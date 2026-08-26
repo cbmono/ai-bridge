@@ -33,7 +33,8 @@
 # deliberately carries STRICTLY LESS than AWAITING.md does:
 #
 #   CARRIED (the whole allowlist):
-#     project: slug, title, description, kind, status, autonomy
+#     project: slug, title, description, kind, status, autonomy, owner (a GitHub
+#              username — see the reversal below before you remove it)
 #     phase:   file, order, title, status
 #     task:    id, title, kind, status, assignee (a ROLE slug, never a person),
 #              in_flight, awaiting (a verb, not a reason), open_questions (a COUNT),
@@ -47,12 +48,34 @@
 #       the task doc for the question itself. AWAITING.md carries that text; the
 #       board does not;
 #     · any author identity (`authorEmail`), any filesystem path outside this bundle
-#       (`reposRoot`, `worktreeRoot`), any URL other than a PR URL;
-#     · `owner:` — on a bundle shared by two humans this names a PERSON, and the
-#       board's HTML can be published. It is identity, so it belongs with
-#       `authorEmail` on this list, not with `assignee` (which is a role slug and
-#       names nobody). A shared board is read by people who already know whose
-#       project is whose; a published page is not.
+#       (`reposRoot`, `worktreeRoot`), any URL other than a PR URL.
+#
+# `owner:` IS CARRIED, AND THAT IS A REVERSAL — read this before "restoring" the rule.
+# Until 2026-08-26 the list above ended with `owner:` on the NEVER side, on the ground
+# that on a bundle shared by two humans it names a PERSON and the board's HTML can be
+# published. That reasoning is not wrong; it was outweighed. Artifact publishing turned
+# out to be ACCOUNT-SCOPED — exactly one account can ever publish to a given URL — so two
+# humans cannot share one published board, and each one's board has to separate "my
+# projects" from "the other owner's" to be worth opening at all. A board that cannot say
+# whose project is whose cannot do that. So identity is now carried DELIBERATELY, for
+# exactly one field and exactly one purpose: partitioning the page (build-board.sh).
+#
+# The shape of the concession is what keeps it narrow, and it is the shape to preserve:
+#   · it is a GitHub USERNAME, never an email — public, stable, and already what
+#     SCHEMA.md requires of `owner:`. `authorEmail` stays on the NEVER list beside it,
+#     for precisely the difference that an address is a contact detail and a login is a
+#     handle;
+#   · the value is copied VERBATIM from the project document and resolved nowhere here.
+#     The board applies SCHEMA.md's resolution (project `owner:` → `defaultOwner` →
+#     unowned), so this file gains no config reader and no second copy of that rule;
+#   · nothing else moves. Task `owner:` is not carried: the board partitions by PROJECT,
+#     and a per-task override is a dispatch concern, not a rendering one.
+#
+# THE PUBLISHED PAGE NAMES THOSE OWNERS. The other-owners section is collapsed by
+# default, and that is ERGONOMICS, not a privacy control — the names are in the HTML
+# whether the section is open or shut. Do not describe the collapse as redaction, here or
+# on the page. The decision, and the account-scoping fact that forced it, are recorded in
+# /knowledge/findings/board-owner-identity-named-not-redacted.md.
 #
 # Titles ARE carried: a board without them is unreadable. They are written by humans
 # and could say anything, so **this file is exactly as sensitive as the task documents
@@ -288,6 +311,7 @@ project_stanza() { # <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_
       \"kind\": $(jstr "$p_kind"),
       \"status\": $(jstr "$p_status"),
       \"autonomy\": $(jstr "$p_autonomy"),
+      \"owner\": $(jstr "$p_owner"),
       \"awaiting_close\": $1,
       \"phase_progress\": {\"done\": $2, \"total\": $3},
       \"phases\": [$4],
@@ -317,6 +341,9 @@ while IFS= read -r pfile; do
   p_kind="$(fmenum "$pfm" kind)";      [[ -n "$p_kind" ]] || p_kind="build"
   p_status="$(fmenum "$pfm" status)"
   p_autonomy="$(fmenum "$pfm" autonomy)"; [[ -n "$p_autonomy" ]] || p_autonomy="gated"
+  # Identity, carried on purpose — see the reversal in the header. Verbatim and
+  # unresolved: `defaultOwner` is the board's to apply, not this file's.
+  p_owner="$(fmfield "$pfm" owner)"
 
   # ---- a DONE project is read no further than this line.
   #
@@ -452,7 +479,7 @@ cat > "$tmp" <<JSON
 {
   "_schema": "ai-bridge board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy; phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author identity, or any path outside this bundle.",
+  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL, or any path outside this bundle.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},

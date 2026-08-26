@@ -12,10 +12,17 @@
 #   · THE FIELD ALLOWLIST IS A DATA-GOVERNANCE BOUNDARY, not a format. The board's
 #     HTML can be published to a URL, so the snapshot must carry strictly less than
 #     AWAITING.md does: no task `description:`, no document body, no open-question or
-#     blocker TEXT (a count and a verb instead), no author identity, and no path
+#     blocker TEXT (a count and a verb instead), no author EMAIL, and no path
 #     outside the bundle. These cases assert the ABSENCE of each, plus that no key
 #     outside the documented set is emitted at all — so a field added without reading
 #     the header fails here rather than on a published page.
+#     ONE identity field IS carried, by a decision rather than an oversight: a project's
+#     `owner:`, a GitHub username, without which a published board cannot separate this
+#     clone's projects from the other owner's. It is in the allowlist below, the
+#     `authorEmail` absence is still asserted beside it, and the reasoning is in
+#     write-snapshot.sh's header and in
+#     /knowledge/findings/board-owner-identity-named-not-redacted.md. The rendering it
+#     exists for is pinned by tests/per-owner-board.test.sh.
 #   · UNTRUSTED TEXT REACHES AN HTML SINK. A task title is human-written free text
 #     that ends up in markup, so an HTML-metacharacter title must appear escaped and
 #     ZERO times raw, and a `javascript:`/`data:` PR URL must render as inert text
@@ -355,7 +362,10 @@ echo "== the field allowlist =="
 # a check that can be walked around is worse than no check: it certifies the
 # boundary while not testing it. Recursing over the parsed object also covers keys
 # at any depth, which the flat text scan only did by accident.
-ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions advisor_notes depends_on prs repo number url '
+# `owner` is in this set DELIBERATELY and is the only identity field that is — see the
+# header. Removing it here is how the reversal would get silently undone, so the writer's
+# own header, this line, and per-owner-board.test.sh all have to move together.
+ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions advisor_notes depends_on prs repo number url '
 extra_keys() { # <json file> <allowed> -> the keys present but not allowed
   python3 - "$1" "$2" <<'PYK'
 import json, sys

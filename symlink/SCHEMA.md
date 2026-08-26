@@ -404,9 +404,11 @@ Everything between `ready` and `done` is the PM's to drive autonomously.
 # Ownership on a shared instance
 
 An instance may be shared by more than one human: each clones the same bundle repo
-and runs their own `/pm-loop`, so both see one board, one set of projects and one
-knowledge base, and can hand a project or a single task to the other. `owner`
-is what keeps their two loops from doing the same work twice.
+and runs their own `/pm-loop`, so both see one set of projects and one knowledge base,
+and can hand a project or a single task to the other. `owner` is what keeps their two
+loops from doing the same work twice — and, since publishing is account-scoped, it is
+also what lets each human's **own** published board separate their projects from the
+other's (see `boardArtifactUrl` under "Per-machine config overrides").
 
 **Two operations, not one chain.** Deciding whether a task is *this clone's* means
 first **resolving** who owns it (the four steps below), then **comparing** that owner
@@ -495,6 +497,7 @@ means the tracked file answers exactly as it always did.**
 | `reposRoot` | **yes** — an absolute path on this machine | the readers report it as unset and skip; nothing is guessed |
 | `worktreeRoot` | **yes** — an absolute path on this machine | `<reposRoot>/_wt`, which is also still swept as the legacy root |
 | `boardInstances` | **yes** — a list of paths to sibling instances | just this instance |
+| `boardArtifactUrl` | **yes** — the artifact **this human** owns and publishes to | a tick never publishes: no render, no publish, no mention |
 | `defaultOwner` | **no, by design** | step 4 above: unowned, so every clone treats it as its own |
 | `people` | **no** — a shared directory of who is who | no lookup; the `authorEmail` chain answers |
 | everything else | no — shared facts (`org`, `models`, `roleTiers`, `maxAgentsInFlight`, `maxPrLoc`, `defaultRepo`, `externalReviewer`, `codegraphSkip`, …) | as documented per key |
@@ -503,6 +506,21 @@ The rule behind the split: **the tracked file holds facts both clones share; the
 file holds facts about this machine and this human.** A key that must be *the same* on
 both clones to be correct — `defaultOwner`, `people` — is never overridable, because an
 override is exactly the disagreement that breaks it.
+
+**`boardArtifactUrl` moved into this table on 2026-08-26, and the reason is worth
+keeping.** It was *deliberately* not overridable: one URL means one shared page, and two
+clones holding two values would publish two boards that each look like the board. That
+argument assumed two clones can publish to one artifact. **They cannot** — artifact
+publishing is **account-scoped**: the update path requires an artifact the account owns
+and no share level grants it, so exactly one account can ever publish to a given URL.
+Verified live: listing with `scope: all` did not show the other human's board, and
+reading it directly returned *artifact not found — it may have been deleted, or it has
+not been shared with you*. The tracked value therefore did not produce one shared board;
+it produced **one working board and one silently dead publish step** on whichever clone
+did not own the artifact. So each human records **their own** board here, and the
+cross-owner view is not a shared page at all — it is the *other owners* section that
+`scripts/build-board.sh` reads from the tracked task documents at your current git
+`HEAD`, which is the one thing both clones genuinely share.
 
 Two constraints survive the override and must be checked against the *effective*
 values, not the tracked ones:

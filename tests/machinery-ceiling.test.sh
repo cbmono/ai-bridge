@@ -196,8 +196,10 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # to LOWER one of these constants. This raise does not, and the reduction candidates
 # named further up (print-board.sh, watch-board.sh, write-snapshot.sh — the board
 # scripts) are untouched here.
-CEILING_TOTAL=6285
-CEILING_CODE=3364
+
+__PENDING_BILL__
+CEILING_TOTAL=0
+CEILING_CODE=0
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

@@ -1,8 +1,16 @@
 # Sharing one instance between two humans
 
 An ai-bridge bundle can be shared by two humans, each with their own clone and their
-own `/pm-loop`. Both see one board, one set of projects and one knowledge base, and
-either can hand a project or a single task across.
+own `/pm-loop`. Both see one set of projects and one knowledge base, and either can hand
+a project or a single task across.
+
+**The published board is the one thing that is not shared — and cannot be.** Artifact
+publishing is account-scoped: only the account that owns an artifact may update it, so a
+single `boardArtifactUrl` gives a shared bundle one working board and one publish step
+that fails silently forever. Each human records **their own** URL and publishes **their
+own** page: their projects come from their own snapshot, and every *other* owner's is a
+named, collapsed section read from the tracked task documents at their current git
+`HEAD`. Git is what two clones genuinely share; an artifact is not.
 
 **All of it is a no-op on a single-human instance.** Absence means today's behaviour at
 every step — never an error.
@@ -30,6 +38,7 @@ gitignored file on their machine.
 | 4 | Name who owns unowned work — **tracked** | either clone | `defaultOwner` in `instance.config.json` |
 | 5 | Say which login this clone is | **each** clone | `{ "ownerGithubUser": "<login>" }` in `instance.config.local.json` |
 | 6 | Put this machine's paths in the local file | **each** clone | `reposRoot`, `worktreeRoot`, `boardInstances` |
+| 6b | Publish your **own** board and record its URL | **each** clone | `boardArtifactUrl` in `instance.config.local.json` |
 | 7 | Turn the nudges on (a clone is not a first stamp) | second clone | `touch AWAITING.md SNAPSHOT.json` |
 | 8 | Untrack the derived indexes if already committed | either clone | run the `git rm --cached` that `install.sh` prints |
 | 9 | Assign work | either clone | `owner: <github-login>` on a `project.md` or one `tasks/<id>.md` |
@@ -45,6 +54,7 @@ gitignored file on their machine.
 | `reposRoot` | either | required for dispatch | Yes |
 | `worktreeRoot` | either | `<reposRoot>/_wt` | Yes |
 | `boardInstances` | either | the board is just this instance | Yes |
+| `boardArtifactUrl` | either | no tick ever publishes | Yes — **one artifact per owner**; publishing is account-scoped |
 
 The **one** place the overridable set is listed — with what each key means when absent —
 is [`SCHEMA.md` → "Per-machine config overrides"](../symlink/SCHEMA.md). Every reader
@@ -66,7 +76,9 @@ must honour it.
 
 Promotion is deliberately *not* gated: `draft → ready` is the human's, and on a shared board it is *either* human's, so gating it would gate the wrong verb — the natural mistake here. Nor does it gate commits, the KB or `/close-project`. The loop must still **see and report** the other human's tasks (that is the entire point of sharing); only `AWAITING.md` narrows, and its layout is untouched because `show-awaiting.sh` greps for it literally. Say out loud that **it is not a lock** — it stops two loops dispatching the *same* task, not two loops acting in one tick window on tasks they each own; claiming more would claim a guarantee git cannot make.
 
-The value is a **GitHub username, never an email**: public, stable, and it keeps addresses out of tracked documents, which is the no-PII rule applied to identity. `validate-bundle.sh` deliberately gains **no** `owner` check — it names a person outside the bundle, so nothing there can resolve it, and the shape is judged at dispatch where a refusal has somewhere to go. `owner` is also **not** in the board snapshot: that allowlist excludes identity, and `snapshot.test.sh` fails on any key added without reading why.
+The value is a **GitHub username, never an email**: public, stable, and it keeps addresses out of tracked documents, which is the no-PII rule applied to identity. `validate-bundle.sh` deliberately gains **no** `owner` check — it names a person outside the bundle, so nothing there can resolve it, and the shape is judged at dispatch where a refusal has somewhere to go.
+
+**`owner` IS in the board snapshot, and that reverses an earlier rule** which excluded it because the allowlist excludes identity and the board's HTML can be published. It was reversed on 2026-08-26 for one reason: publishing is account-scoped, so each human publishes their own board, and a board that cannot say whose project is whose cannot separate your work from theirs. The concession stays narrow — a *username*, project-level, copied verbatim, with `authorEmail` still excluded — and it is stated in `write-snapshot.sh`'s own header rather than made quietly, so a reader who finds the old rule can tell which is current. `snapshot.test.sh` still fails on any *other* key added without reading why.
 
 **`defaultOwner` is the piece that makes the chain sound, and it must stay tracked-only.** The final "unowned ⇒ every clone's" step is correct on one clone and a **double-dispatch bug** on two: the same task resolves to "mine" on both, so both loops dispatch it — the exact failure ownership exists to prevent. `defaultOwner` names, in the file **both** clones read, who unowned work belongs to, so exactly one matches. That holds only while both clones agree, which is why it is read from the tracked config **only**: a local override is precisely the disagreement that breaks it. It is the one key here deliberately excluded from the override set, and `task-owner.test.sh` pins both halves — one tracked config plus two local `ownerGithubUser` values clears on exactly one clone, and with `defaultOwner` absent it clears on **both** (the hazard, asserted rather than described).
 

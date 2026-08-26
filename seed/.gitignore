@@ -18,6 +18,13 @@ AWAITING.md
 SNAPSHOT.json
 board.html
 
+# The other-owners cache (scripts/build-board.sh) — the board's second half, read from
+# the tracked documents at HEAD and stored against the SHA it was computed for, because
+# that section can only change when HEAD moves. Derived and per-machine; delete it freely
+# and the next render rebuilds it. install.sh appends this line too, so it reaches
+# instances stamped before the cache existed.
+/.board-others.json
+
 # The local live board page (scripts/watch-board.sh) — the same HTML as board.html,
 # regenerated on every task-document change by a watcher you keep running. Derived,
 # per-machine, and safe to delete. install.sh appends this line too, so it reaches

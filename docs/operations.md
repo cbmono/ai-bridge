@@ -290,11 +290,22 @@ The board's HTML can leave the machine, so the snapshot deliberately carries *le
 | Carried | Never carried |
 |---|---|
 | project title / description / kind / status / autonomy | a task `description:` |
+| project `owner` — a GitHub **username** (see below) | phase or task `owner:` overrides |
 | phase title / order / status | any document body |
 | task id / title / kind / status | the **text** of an open question or a blocker reason |
-| assignee **role**, in-flight flag | any author identity (`authorEmail`, `owner`) |
+| assignee **role**, in-flight flag | any author **email** (`authorEmail`) |
 | awaiting **verb**, open-question **count** | any path outside the bundle |
 | PR links | — |
+
+**One identity field is carried, and it was a decision.** `owner` used to be on the right
+of that table, for the obvious reason: on a shared bundle it names a person, and this page
+gets published. It moved because publishing is **account-scoped** — each human publishes
+their own board — so a board that cannot say whose project is whose cannot separate your
+work from theirs, which is the only thing the second section is for. The concession is
+kept narrow: a GitHub username (public, stable — never an email), copied verbatim from the
+project document, project-level only. **The other owners are named in the published HTML
+whether their section is expanded or collapsed** — the collapse is reading comfort, not
+redaction, and the page's own footer says so.
 
 Titles *are* carried, because a board without them is unreadable — which makes the file
 **as sensitive as the task documents it comes from**. That sentence travels inside the
@@ -335,7 +346,7 @@ Full reasoning, including why one drifted instance must not blank the board for 
 | `PRUNE_ACTIVE_MINUTES` | env | the recursive mtime veto in the worktree report |
 | `worktreeRoot` | `instance.config.json` | **`<reposRoot>/_wt`** |
 | `boardInstances` | `instance.config.json` | just this instance |
-| `boardArtifactUrl` | `instance.config.json` | **a tick never publishes** — render and publish by hand, or not at all |
+| `boardArtifactUrl` | `instance.config.local.json`, else `instance.config.json` | **a tick never publishes** — render and publish by hand, or not at all |
 | `codegraphSkip` | `instance.config.json` | index every product repo |
 
 One hard rule holds regardless of `maxAgentsInFlight`: never two package installs against
@@ -509,7 +520,8 @@ to admit it.
 So record the page's URL once and each `/pm-loop` tick keeps it current:
 
 ```jsonc
-// instance.config.json
+// instance.config.local.json on a bundle two humans share (each records their OWN
+// board); the tracked instance.config.json is fine for a single-human instance.
 "boardArtifactUrl": "https://claude.ai/public/artifacts/<the-id-of-your-board>"
 ```
 
@@ -530,11 +542,18 @@ Four properties, and the first is the one to remember:
    page appeared every gap. A tick that publishes to a fresh URL is a bug, not an
    outcome; if the recorded one stops resolving, the tick says so in one line and
    recording a replacement stays yours.
-3. **It is not per-machine.** Unlike `boardInstances`, it is not in the
-   `instance.config.local.json` override set: the URL names one page a whole team shares,
-   and two clones with two values publish two boards that each look like the board. Two
-   clones with the *same* value is the design — just keep their `boardInstances` in
-   agreement, or the one page alternates between two views of the group.
+3. **It IS per-machine, and that reverses an earlier rule.** It used to be tracked-only,
+   on the ground that one URL means one page a whole team shares. That assumed two clones
+   could publish to one artifact, and **they cannot**: publishing is **account-scoped** —
+   the update path needs an artifact the account owns, and no share level grants it, so
+   exactly one account can ever update a given URL. Verified live: listing with
+   `scope: all` did not include the other human's board, and reading it directly returned
+   *artifact not found — it may have been deleted, or it has not been shared with you*. A
+   tracked URL therefore never produced one shared board; it produced one working board
+   and one publish step that failed silently on the other clone forever. So
+   `boardArtifactUrl` is in the `instance.config.local.json` override set and **each human
+   publishes their own page** ([SCHEMA.md → Per-machine config
+   overrides](../symlink/SCHEMA.md)).
 4. **A republish is not a change.** The tick still reports `noop: true` when the
    documents did not move — a board refresh alone must not wake anybody, or an idle loop
    starts scrolling and gets switched off.

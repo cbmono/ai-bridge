@@ -302,9 +302,16 @@ scripts/watch-board.sh                      # ./.board-live/board.html, re-rende
 ```
 
 **A published page can keep itself current.** Publish the page once,
-record its URL as `boardArtifactUrl` in `instance.config.json`, and every `/pm-loop` tick
+record its URL as `boardArtifactUrl` (in `instance.config.local.json` if the bundle has
+more than one human, else the tracked `instance.config.json`), and every `/pm-loop` tick
 re-renders and republishes it *there* — no key, and no tick ever publishes anything
 ([docs/operations.md § publishing it from each tick](docs/operations.md#publishing-it-from-each-tick)).
+
+**The board is per owner.** Publishing is account-scoped — only the account that owns an
+artifact can update it — so two humans cannot share one published page, and each records
+their own URL. Your own projects come from your `SNAPSHOT.json`; every other owner's is a
+collapsed, **named** section below them, read from the tracked task documents at your
+current git `HEAD` (the one thing both clones share) and cached against that SHA.
 
 **The watcher's cost is the real one, so read it before you pick it.** It needs a
 resident process, and ai-bridge deliberately has none — its agents are ephemeral
@@ -370,7 +377,7 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
 | `boardInstances` | the board is just this instance | yes |
-| `boardArtifactUrl` | **no tick ever publishes the board** | **no** — one URL, one shared page |
+| `boardArtifactUrl` | **no tick ever publishes the board** | **yes** — publishing is account-scoped, so each human owns their own board |
 | `codegraphSkip` | index every product repo | yes |
 
 Environment knobs: `PUSH_STATE_MAX` (default **12**), `PRUNE_ACTIVE_MINUTES`,
