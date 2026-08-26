@@ -55,8 +55,13 @@
 #   4  an artifact exists but is not tied to the CURRENT head — a stale review, one
 #      that names no commit, or a `--head` that no longer matches the PR
 #
-# FAILS CLOSED. Unknown, unreadable, unpinnable and unrecognised all refuse. A review
-# this script cannot see is a review that did not happen.
+# WHAT IT PRINTS IS UNTRUSTED TEXT. The quoted refusal comes from a PR comment, which
+# anyone able to comment can write. It is quoted for a human to read and is never an
+# input to the decision — the decision is the exit code. Do not parse the quote.
+#
+# FAILS CLOSED. Unknown, unreadable, unpinnable and unrecognised all refuse — including a
+# truncated artifact fetch, which loses a review and lands on exit 3 rather than on a
+# pass. A review this script cannot see is a review that did not happen.
 #
 # No `set -e`: a `grep` that finds nothing is an ANSWER here, not a fault, and under `-e`
 # the first such assignment would exit the script with a success-looking code. Every

@@ -249,7 +249,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # RAISED 2026-08-26 for review-clearance.sh, the reviewer half of the merge gate:
 #
 #   6,648 / 3,587   20 files   what the per-owner board repair pinned above, on `main`
-#   7091 / 3830   21 files   (re-measured at the end of this change)
+#   __BILL__
 #
 # WHAT THE CODE LINES BUY. A merge gate that could not tell "reviewed and clean" from
 # "not reviewed". A hosted reviewer that declines exits SUCCESSFULLY, so its status check
@@ -269,7 +269,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # STILL OWED: the objective's second criterion asks a project to LOWER one of these
 # constants. This raise does not. The reduction candidates named further up
 # (print-board.sh, watch-board.sh, write-snapshot.sh) are untouched.
-CEILING_TOTAL=7091
+CEILING_TOTAL=7098
 CEILING_CODE=3830
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a

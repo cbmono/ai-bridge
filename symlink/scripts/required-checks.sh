@@ -233,7 +233,7 @@ fi
 # check from a CI job, so it cannot know whether the set it just cleared contained one.
 # That is an unknown reviewer state, and unknown fails closed. The two files ship
 # together as one unit; a missing one is a broken install, and it should be loud.
-CLEARANCE="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/review-clearance.sh"
+CLEARANCE="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/review-clearance.sh"
 if [ ! -x "$CLEARANCE" ]; then
   echo "error: review-clearance.sh not found beside this script ($CLEARANCE)." >&2
   echo "       Without it, a reviewer's own status check cannot be told from a CI job," >&2
@@ -263,11 +263,13 @@ if [ -n "$reviewer_checks" ]; then
     echo "refuse: a required check is a reviewer's own, and that reviewer did not clear" >&2
     echo "        PR $pr (review-clearance.sh exit $crc). Green means the integration" >&2
     echo "        ran, never that a review happened:" >&2
-    printf '%s\n' "$(cat "$clearance_err")" | sed 's/^/        /' >&2
+    sed 's/^/        /' "$clearance_err" >&2
     printf '%s' "$reviewer_checks" | sed 's/^/          required, and reviewer-owned: /' >&2
     # An unreadable reviewer state (exit 2) is a different refusal from a reviewer that
-    # answered and declined — keep the caller's two codes distinguishable.
-    [ "$crc" -eq 2 ] && exit 2
+    # answered and declined — keep the caller's two codes distinguishable. Spelled as an
+    # `if` rather than `[ … ] && exit 2`, whose fall-through under `set -e` is a subtlety
+    # nobody should have to re-derive while reading a merge gate.
+    if [ "$crc" -eq 2 ]; then exit 2; fi
     exit 1
   fi
 fi

@@ -424,6 +424,7 @@ Run from an instance root unless noted.
 | A `yolo` project never merges anything | preflight failed: one `gh` identity, no external reviewer, or no required checks | the loop says which; fix that, or merge by hand |
 | `required-checks.sh` exits 2 | the platform probe returned something it cannot classify | that is a refusal by design — read the message, don't loosen the script |
 | A PR is all-green but not merge-eligible | the reviewer published "Review limit reached" behind a green check — `review-clearance.sh` exit 1 | wait for the reopen time it quotes, then ask for a **first** review; nothing re-reviews a skipped PR by itself |
+| `required-checks.sh` exits 2, "review-clearance.sh not found" | the instance predates the review gate, so the new machinery isn't linked yet | `install.sh <instance>` — until then it refuses rather than clear a reviewer check it cannot interpret |
 | CodeRabbit: "Unable to determine base branch" | a remote-less instance has no `origin/HEAD` to infer one from | `git config coderabbit.baseBranch <branch>` |
 | Validator errors right after an upgrade | the machinery updated, the data didn't | `./upgrade.sh <instance>` runs validate → migrate in the right order |
 | Two loops dispatched the same task | `defaultOwner` is not set on a shared bundle | [docs/sharing.md](docs/sharing.md) |
