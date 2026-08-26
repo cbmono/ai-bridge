@@ -253,11 +253,11 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # expressions rather than by adding up a pre-rebase diff:
 #
 #   6,648 / 3,587   20 files   `main` at e76b9f3, after #32 repaired the placeholder
-#   7,379 / 3,955   21 files   +731 total, +368 code — this change
+#   7,674 / 4,094   21 files   +1,026 total, +507 code — this change
 #
 # Per file, so the raise can be checked rather than believed:
 #
-#   review-clearance.sh         0 ->  606    +606 total, +302 code   (new file)
+#   review-clearance.sh         0 ->  901    +901 total, +441 code   (new file)
 #   required-checks.sh        212 ->  337    +125 total,  +66 code
 #
 # WHAT THE 302 CODE LINES OF review-clearance.sh BUY. A merge gate that could not tell
@@ -281,11 +281,49 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # vendor's refusal). A gate whose failure mode is silent absence is worth more lines than
 # one whose failure mode is a red build.
 #
+# RAISED AGAIN 2026-08-27, same PR, after a second independent review found FIVE more
+# routes to a false clearance. Re-measured on the same base, not added up from a diff:
+#
+#   7,379 / 3,955   21 files   what the first cut of this change pinned
+#   7,674 / 4,094   21 files   +295 total, +139 code — the five fixes
+#
+# All +295 land in review-clearance.sh (606 -> 901), and the split is unusually even —
+# 139 code, 156 comment — because three of the five fixes are structural rather than
+# additive. WHAT THE 139 CODE LINES BUY, each one a route that cleared an UNREVIEWED PR:
+#
+#   1. The classifier was DEFAULT-ALLOW. Positive review evidence was never required, so
+#      any artifact from the reviewer that named the head and did not read as a refusal
+#      cleared — including the "Currently processing new changes in this PR" placeholder
+#      the vendor posts on essentially every PR before reading anything. Clearance now
+#      needs a submitted review object, the reviewer's own evidence markers, or a
+#      validated verdict trailer, and a placeholder is a refusal (a NOT_YET table).
+#   2. The `okf-verdict` trailer was an unvalidated SUBSTRING outranking the vendor's own
+#      refusal sentinel: one appended `<!-- okf-verdict v1 -->` line turned the recorded
+#      rate-limit refusal from exit 1 into exit 0, and that string ships in this repo's
+#      diffs. It is now parsed as a block with required fields and a head_sha that must
+#      match, and honoured only for an account named with --reviewer.
+#   3. `--self-test` proved the file RUNS, not that it is COMPLETE. It sits near the top,
+#      so of this file's truncation points 112 passed it and 109 of those then cleared an
+#      unreviewed PR. The last line is now a completeness sentinel the self-test asserts,
+#      and the test sweeps every cut point past the self-test's own block.
+#   4. One malformed ERE silently disabled a whole table, because the matcher read grep's
+#      output and never its status (1 = no match, 2 = bad pattern). Every row is compiled
+#      up front and every match checks the status; both refuse.
+#   5. SUSPECT_CHECKS missed shipped vendors — `CodeAnt AI`, `Korbit AI`, `Cursor Bug
+#      Bot`, `Copilot pull request review` all read as plain CI. The rows are now by
+#      SHAPE, and the test asserts invented vendor names refuse, which a list of
+#      spellings that already match cannot do.
+#
+# THE ALTERNATIVE WAS NOT FEWER LINES. Four of the five are one-line-of-logic fixes with
+# a paragraph of why; the fifth (required evidence) inverts the classifier's default and
+# is the reason this file's exit 4 now has two shapes. A gate whose failure mode is
+# silent absence is worth more lines than one whose failure mode is a red build.
+#
 # STILL OWED: the objective's second criterion asks a project to LOWER one of these
 # constants. This raise does not. The reduction candidates named further up
 # (print-board.sh, watch-board.sh, write-snapshot.sh) are untouched.
-CEILING_TOTAL=7379
-CEILING_CODE=3955
+CEILING_TOTAL=7674
+CEILING_CODE=4094
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is
