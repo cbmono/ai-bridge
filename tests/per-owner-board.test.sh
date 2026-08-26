@@ -189,6 +189,31 @@ assert "…and it is gitignored by the seed" \
 assert "…and install.sh backfills that line"  \
   "$(yes_if grep -qF '.board-others.json' "$TPL/install.sh")"
 
+# The wall clock is the FALLBACK, and only for the case where there is no SHA to key on.
+# Hiding .git is the cheapest faithful version of that: `git rev-parse HEAD` fails, a
+# fresh computation would return nothing, and serving the recent cached answer is what
+# stops a momentarily unreadable repository from deleting every other owner off a
+# published page.
+mv "$INST/.git" "$INST/.git-off"
+G="$TMP/g.html"; rcg=0
+( cd "$INST" && bash "$GEN" --out "$G" . ) >"$TMP/g.err" 2>&1 || rcg=$?
+assert "no SHA to key on: the render still exits 0"  "$(eq "$rcg" 0)"
+assert "…and the recent cached section is served"    "$(fhas '>bob<' "$G")"
+assert "…with no traceback"                          "$(fhasnt 'Traceback (most recent call last)' "$TMP/g.err")"
+# …and it is a fallback, not a schedule: an EXPIRED entry is not served, so nothing here
+# can quietly become a timer-driven refresh.
+python3 - "$INST/.board-others.json" <<'PYX'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p, encoding="utf-8"))
+d["at"] = 0
+json.dump(d, open(p, "w", encoding="utf-8"))
+PYX
+H="$TMP/h.html"
+( cd "$INST" && bash "$GEN" --out "$H" . ) >/dev/null 2>&1
+assert "…and an EXPIRED entry is not served"         "$(fhasnt 'Other owners' "$H")"
+mv "$INST/.git-off" "$INST/.git"
+
 # A commit that changes another owner's document MUST move the section — the assertion a
 # wall-clock cache fails.
 sed -i.bak 's/^title: Bobs work$/title: Bobs renamed work/' "$INST/projects/bobs/project.md"
