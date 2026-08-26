@@ -1,7 +1,7 @@
 ---
-description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive). Human-gated; run once a project's tasks are all done/cancelled.
+description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. Human-gated; run once a project's tasks are all done/cancelled.
 argument-hint: <project-slug>  [--dry-run] [--force]
-allowed-tools: Bash(date:*), Bash(scripts/commit-as.sh:*), Bash(scripts/prune-worktrees.sh:*), Bash(scripts/validate-bundle.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+allowed-tools: Bash(date:*), Bash(scripts/commit-as.sh:*), Bash(scripts/close-project-folder.sh:*), Bash(scripts/prune-worktrees.sh:*), Bash(scripts/validate-bundle.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
 **Close a completed Project.** This is the human-triggered form of the closeout the
@@ -10,6 +10,13 @@ project's work is finished: it consolidates any remaining knowledge into
 `knowledge/`, records the closeout in the log, rolls up status, and **removes the
 project folder**. The bundle's `git` history and the KB are the durable record —
 there is **no `archive/`**.
+
+**Unless the project carries `retain: true`** (`project.md`), in which case the folder
+is **kept** — frozen, pruned of working files, and committed. Retention is
+research-shaped: a build project's output is merged PRs that live in the product
+repo's history, while a research project's output *is* the folder. Everything else
+about closeout is identical, and the project still ends `status: done`. See
+`SCHEMA.md` → "Project & objective completion" for the full contract.
 
 > **Generic template file** (symlinked from the `ai-bridge` template). Reads the
 > bundle's own `SCHEMA.md` (see "Project & objective completion") and
@@ -27,14 +34,25 @@ candidates) and ask which to close.
 ## Steps
 
 > **`--dry-run` short-circuits every mutation.** Do step 1 (read-only checks),
-> then for steps 2–6 *report exactly what you would do* — do **not** dispatch the
+> then for steps 2–7 *report exactly what you would do* — do **not** dispatch the
 > cataloguer, edit `log.md`/`index.md`/`project.md`/objective, prune worktrees, or
-> commit/remove anything. Only a run without the flag actually changes state.
+> commit/remove anything. Only a run without the flag actually changes state. Step 7's
+> `scripts/close-project-folder.sh <slug>` **without `--apply`** is the one thing you
+> may run: it is report-only by design and prints the exact removal or prune it would
+> perform, which is a better dry-run report than a description of one.
 
 1. **Resolve & check.** Confirm `projects/<slug>/` exists (else stop and report).
-   Read its `project.md` and every `tasks/*.md`. Unless `--force`, verify **all**
-   tasks are terminal (`done` or `cancelled`); if any are still open, **stop** and
-   list the non-terminal ones — the project isn't ready to close.
+   Read its `project.md` — including whether it carries `retain: true`, which decides
+   step 7 — and every `tasks/*.md`. Unless `--force`, verify **all** tasks are terminal
+   (`done` or `cancelled`); if any are still open, **stop** and list the non-terminal
+   ones — the project isn't ready to close.
+
+   **Under `--force`, set every non-terminal task to `cancelled`** with a one-line
+   reason in its body (`# Notes`: "cancelled at closeout 2026-08-26 — the project was
+   closed with this task unfinished"). Use the **existing** terminal status; there is
+   no separate "closed unfinished" value and none is to be invented. A project must
+   not close leaving tasks in a live status: the folder either goes away or stays as a
+   record, and both are lies if a task still reads `in-progress`.
 
 2. **Consolidate knowledge.** Dispatch the `cataloguer` (subagent) for a final pass:
    capture/link any remaining durable `Finding`s from this project, refresh the
@@ -46,12 +64,23 @@ candidates) and ask which to close.
 3. **Record the closeout.** Get a timestamp (`date -u +%Y-%m-%dT%H:%M:%SZ`). Prepend
    a dated **Project closed** entry to the root `log.md` (newest-first) naming the
    project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s) it produced
-   (KB links), and a one-line outcome. (The removing commit SHA is added by step 6's
+   (KB links), and a one-line outcome. (The closing commit SHA is added by step 7's
    commit — reference it as "removed in the closing commit".)
 
+   **For a retained project, say so and name what was pruned** — step 7's command
+   prints a ready-made `log.md fragment` line for exactly this: which directories went
+   and what was kept. Without it a reader six months out cannot tell a deliberately
+   partial folder from a damaged one. Run step 7 first if you want the fragment in
+   hand; the entry is committed in step 7's commit either way.
+
 4. **Roll up status.** Set `project.md` `status: done`. Remove the project's bullet
-   from the active `## Projects` list in `index.md` (derived and gitignored — edit
-   it, but it is not part of step 7's commit). Update its objective's
+   from the active `## Projects` list in the ROOT `index.md` (derived and gitignored —
+   edit it, but it is not part of step 7's commit). **For a retained project, also
+   refresh `projects/<slug>/index.md`** — it is that folder's front door, the file that
+   makes a retained project findable, and it IS committed (step 7). That is the one
+   exception to "the index files are rewritten, never staged": the tick now skips done
+   projects, so nothing will ever regenerate it, and an uncommitted front door exists
+   on exactly one machine. Update its objective's
    "Projects serving this objective" list to mark it delivered; if **all** of that
    objective's projects are now terminal, **ask** whether to set the objective
    `status: achieved` (don't flip it silently).
@@ -64,7 +93,12 @@ candidates) and ask which to close.
    reach this step while they are), **skip this step** and say so — a report that
    races a live dispatch recommends deleting it.
 
-6. **Resolve inbound references — before the folder is removed.** Other documents'
+6. **Resolve inbound references — before the folder is removed.** **Skip this step
+   entirely for a `retain: true` project**: nothing is removed, so nothing dangles, and
+   rewriting a `depends_on:` that still resolves would destroy provenance for no
+   reason. For every other project:
+
+   Other documents'
    frontmatter may point into this project: a task's or a **phase's** `depends_on:`,
    an `objective:`, a `project:`. Removing the folder leaves those refs dangling, and
    they are machine-read, so the PM can no longer evaluate whether a dependency is
@@ -93,18 +127,49 @@ candidates) and ask which to close.
      task `blocked` with the reason in `# Notes`, or record an explicit replacement
      dependency. Never drop it silently.
 
-7. **Remove, validate, then commit.** Unless `--dry-run`: `git rm -r projects/<slug>/`, stage the
-   `log.md` / objective / KB edits by explicit path, and commit via
-   `scripts/commit-as.sh human "chore: close <slug> project" -- <path>...`. **Run
-   `scripts/validate-bundle.sh` after the `git rm` and before committing** — validating
-   beforehand cannot see a reference that only dangles once the folder is gone, which
-   is the whole failure class step 6 exists to prevent. Zero errors is the gate. Print the closing
-   commit SHA and the `log.md` entry. Remind the user the full record stays
-   recoverable via `git log -- projects/<slug>/`.
+7. **Remove — or retain — then validate, then commit.** Unless `--dry-run`, run
+
+   ```bash
+   scripts/close-project-folder.sh <slug> --apply
+   ```
+
+   **Do not `git rm` or `rm` the folder by hand.** That one command is the whole
+   folder step, and it reads `retain:` from `project.md` to decide which of the two
+   outcomes it is. It deletes files, so its scope is fixed in a tested script rather
+   than improvised here: without `retain:` it `git rm -r`s the folder as before; with
+   `retain: true` it stamps `deliverable_paths:` into `project.md` (each task's
+   `artifacts:`, verified on disk) and prunes only `tmp/`/`temp/`, `.DS_Store` and
+   **non-markdown** files under `sources/` — never `deliverables/`, never `tasks/`,
+   never `sources/**/*.md`. Under `--dry-run`, run it **without** `--apply`: it reports the
+   exact removal or prune and changes nothing. Keep its `log.md fragment` line for
+   step 3's entry.
+
+   Then stage and commit:
+
+   * **removed** — the `git rm` already staged the deletion; add the `log.md` /
+     objective / KB edits by explicit path.
+   * **retained** — `git add -A -- projects/<slug>` (explicit path), so the prune's
+     deletions, `status: done`, the `deliverable_paths:` stamp and the refreshed
+     `projects/<slug>/index.md` all land in the one commit. If `git` refuses the index
+     because a stale `/projects/*/index.md` line is still in this instance's
+     `.gitignore`, force it (`git add -f -- projects/<slug>/index.md`) and tell the
+     user to re-stamp: an index the tick will never regenerate and git will never
+     carry exists on exactly one machine.
+
+   Commit via `scripts/commit-as.sh human "chore: close <slug> project" -- <path>...`.
+   **Run `scripts/validate-bundle.sh` after the folder step and before committing** —
+   validating beforehand cannot see a reference that only dangles once the folder is
+   gone, which is the whole failure class step 6 exists to prevent. Zero errors is the
+   gate. Print the closing commit SHA and the `log.md` entry. For a removal, remind the
+   user the full record stays recoverable via `git log -- projects/<slug>/`; for a
+   retention, that the folder is deliberately partial and the log entry says how.
 
 ## Notes
-- **No archive.** Removal is deliberate — a done project left live costs context on
-  every PM tick, and `git` + the KB already hold the record. Recover with
+- **No archive.** Removal is deliberate, and `git` + the KB already hold the record.
+  It used to be justified by tick context too — that argument is spent: both readers of
+  the tree stop at a `status: done` project's frontmatter, so a retained folder costs
+  one parse. What remains is that a build project's record lives in the product repo's
+  history, not here. Recover with
   `git revert <sha>` or `git show <sha>:projects/<slug>/...` if ever needed.
 - This repo commits straight to `main` (see `CLAUDE.md`) — the human gate here is
   *deciding to close*, not a PR.

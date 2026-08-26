@@ -343,7 +343,10 @@ ticks, regardless of how long a tick runs.
 - **Project close is human-gated.** The PM only *proposes* closing a project (all
   tasks terminal) via the 🔴 board; the human confirms (or runs `/close-project`).
   Closeout removes the folder (`git rm -r`) — git history + KB are the record, there
-  is no archive. Never close autonomously.
+  is no archive — **unless `project.md` carries `retain: true`**, which keeps the
+  folder, frozen and pruned, as the record (`SCHEMA.md`). Either way the folder step is
+  `scripts/close-project-folder.sh <slug> --apply`, never a hand-written `rm`. Never
+  close autonomously.
 - Return a tight summary: live-vs-docs deltas, dispatched/reflected, in-flight
   count, and what awaits the human (approvals / answers / merges).
 
