@@ -30,6 +30,7 @@
     "cataloguer",
     "auditor"
   ],
+  "$roles": "Agents the PM may dispatch as TASK ASSIGNEES. Not every configured agent belongs here — `plan-architect` is deliberately absent: `/plan` and the PM's optional critique dispatch it directly, and no task is ever assigned to it. See `$roleTiers` and SCHEMA.md 'type: Agent'.",
   "models": {
     "light": "haiku",
     "standard": "sonnet",
@@ -44,5 +45,6 @@
     "cataloguer": "light",
     "plan-architect": "apex",
     "auditor": "deep"
-  }
+  },
+  "$roleTiers": "The model tier for ANY agent this instance dispatches, including ones no task is ever assigned to — broader than `roles`. `plan-architect: apex` here and nowhere in `roles` is the intentional case: `models.apex` today affects exactly that one agent, which appears in no `roles` list, so 'what does apex cost me?' is unanswerable from `roles` alone. Do not delete this row to make the two lists match; see SCHEMA.md 'type: Agent' and tests/roles-roletiers-asymmetry.test.sh."
 }

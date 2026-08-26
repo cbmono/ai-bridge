@@ -170,6 +170,19 @@ pointer to the finished deliverable(s) on completion).
 Executable definitions live in `.claude/agents/<role>.md`. The roster doc is a
 human-readable routing reference.
 
+**`roles` vs `roleTiers` in `instance.config.json`.** The two lists look like they
+should share membership and deliberately do not. `roles` is the roster the PM may
+dispatch a task to — every agent that can ever be a task's `assignee`. `roleTiers`
+is broader: it maps a model tier to ANY agent this instance dispatches, including
+ones no task is ever assigned to. `plan-architect` is the worked example — it is
+in `roleTiers` and absent from `roles`, because `/plan` and the PM's optional
+critique dispatch it directly and no task is ever assigned to it. The consequence:
+`models.apex` today affects exactly one agent, `plan-architect`, and that agent
+appears in no `roles` list, so "what does `apex` cost me?" is unanswerable from
+`roles` alone — read `roleTiers`. This asymmetry is intentional, not a bug to fix
+by adding `plan-architect` to `roles` or deleting its `roleTiers` row; see
+`tests/roles-roletiers-asymmetry.test.sh`, which pins it.
+
 ## Knowledge base types  (`knowledge/`)
 
 OKF's native use: curated knowledge about systems and decisions. The `knowledge/`
