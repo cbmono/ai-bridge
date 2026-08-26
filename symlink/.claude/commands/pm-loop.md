@@ -221,8 +221,10 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    in the tick summary. An instance that does not publish its board must not acquire a
    broken step.
 
-   **You do not read the config here.** The tick does (`boardArtifactUrl` in
-   `instance.config.json`), and it ends its report with at most one line:
+   **You do not read the config here.** The tick does (`boardArtifactUrl`, from
+   `instance.config.local.json` if it names one, else `instance.config.json` — the board
+   is **per owner**, because publishing is account-scoped and only the account that owns
+   an artifact can update it), and it ends its report with at most one line:
 
    ```
    BOARD: published <url>              # done — nothing for you to do
@@ -242,7 +244,7 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    bookmarked quietly stops moving while a fresh one appears every gap. So the URL is
    read from config and **never invented** — not guessed from a previous tick's output,
    not "recreated" because the old one 404s. A URL that no longer resolves is the human's
-   decision to record a new one in `instance.config.json`, never yours.
+   decision to record a new one in their config, never yours.
 
    **It never blocks, and it is not a state change.** A failed or refused publish is one
    line in the tick summary and the loop goes on to step 3, exactly like the advisor —
@@ -375,7 +377,11 @@ ticks, regardless of how long a tick runs.
   `boardInstances` in `instance.config.json`; **if that key is absent or empty, the
   board is just this instance.**
 - **A published board is republished by the same tick** — but only where
-  `boardArtifactUrl` is set in `instance.config.json`. The tick re-renders with
+  `boardArtifactUrl` is set, in `instance.config.local.json` or the tracked
+  `instance.config.json`. **The board is per owner**: publishing is account-scoped, so
+  each human publishes their own page, and the other owners' projects appear on it as a
+  section read from the tracked task documents at this clone's git `HEAD`.
+  The tick re-renders with
   `scripts/build-board.sh` and publishes to that recorded URL (step 2c);
   **no key ⇒ no render, no publish, no mention.** Refreshing the snapshot is local and
   publishes nothing, so the two switches are independent: an instance can be on the

@@ -139,6 +139,13 @@ for pair in "link-repos.sh:reposRoot" "index-kb.sh:reposRoot" \
   assert "$f reads $k, and knows the local file" \
     "$( grep -q "$k" "$SCRIPTS/$f" && grep -q 'instance.config.local.json' "$SCRIPTS/$f" && echo 0 || echo 1 )"
 done
+# The board URL's reader is a hook, not a script under scripts/ — same rule, other path.
+# It became overridable when artifact publishing turned out to be ACCOUNT-SCOPED: only
+# the account that owns an artifact can update it, so a tracked URL gives a shared bundle
+# one working board and one publish step that fails silently on the other clone.
+HOOK="$TPL/symlink/.claude/hooks/show-board-link.sh"
+assert "show-board-link.sh reads boardArtifactUrl, and knows the local file" \
+  "$( grep -q 'boardArtifactUrl' "$HOOK" && grep -q 'instance.config.local.json' "$HOOK" && echo 0 || echo 1 )"
 # And the two keys that must NOT be overridable are read from the tracked file only.
 assert "task-owner.sh reads defaultOwner from the tracked config" \
   "$(grep -q 'json_string "\$CONFIG" defaultOwner' "$SCRIPTS/task-owner.sh" && echo 0 || echo 1)"
@@ -154,7 +161,7 @@ echo "== the overridable set is documented in ONE place =="
 SCHEMA="$TPL/symlink/SCHEMA.md"
 assert "SCHEMA.md has the override section" \
   "$(grep -q '^## Per-machine config overrides' "$SCHEMA" && echo 0 || echo 1)"
-for k in ownerGithubUser authorEmail reposRoot worktreeRoot boardInstances defaultOwner people; do
+for k in ownerGithubUser authorEmail reposRoot worktreeRoot boardInstances boardArtifactUrl defaultOwner people; do
   assert "…and names $k"  "$(grep -q "\`$k\`" "$SCHEMA" && echo 0 || echo 1)"
 done
 assert "…and states the worktreeRoot fallback" \
