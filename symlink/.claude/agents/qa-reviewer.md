@@ -81,6 +81,24 @@ no PII/secrets. The role-specific procedure is below.
      to a refusal is the most convincing false pass available here; never launder it into
      one, and never spend the CLI to paper over an exhausted quota (that's the same budget
      from the other side — flag it for the human instead).
+
+     **Two readings of that script's output that are easy to get wrong.** Exit **4** is
+     not a refusal — it means a real review exists and it is of an **earlier commit**,
+     which is the ordinary state wherever the reviewer does not re-review every push
+     (CodeRabbit's `auto_incremental_review: false`, which this repo sets on purpose).
+     Report that as *stale*, and ask for a review at the current head; do not quote it as
+     "the reviewer declined". And exit 1 answers for **one** account — read whose
+     clearance you were told about before repeating it.
+
+     **Your own verdict quotes refusal language, so end it with the `okf-verdict`
+     trailer.** Writing "CodeRabbit answered *Review limit reached*" makes your comment
+     match the very table your comment is about, and a `review-clearance.sh` run scoped
+     to your account then reads **your review** as a refusal — the reviewer disqualifying
+     itself for having reported accurately. The trailer is the guard: an artifact
+     carrying a parseable `okf-verdict v1` trailer is treated as a review whatever its
+     prose quotes, because a trailer is a structured claim and prose is not. Fencing the
+     quote also works and reads better, but do not *rely* on it — fences hold only while
+     they stay balanced.
    - **d. Genuinely no integration** (and the CLI is installed) — run
      `coderabbit review --base <default-branch> --type committed --agent` (detect the
      default branch — don't hardcode `main`: `git symbolic-ref --short

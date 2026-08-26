@@ -335,6 +335,10 @@ state, and act only on deltas.
      unverified, never clearance). On a refusal, surface the PR as **not** merge-eligible
      with the quoted refusal and, when published, when the quota reopens — nothing
      re-reviews a skipped PR by itself, so someone must ask once it resets.
+     **Exit 4 is the common answer and it is not exit 1**: where the reviewer does not
+     re-review every push (`auto_incremental_review: false`) the review is real and of an
+     *earlier* commit. Surface that as "reviewed at `<sha>`, head has moved — ask for a
+     review at this head", never as "the reviewer declined".
    - **Fallback when none is configured.** Otherwise dispatch the `qa-reviewer` (its
      own fresh context) to verify the PR against the task's `acceptance_criteria` and
      real CI/test results, and record its verdict. Counts toward the concurrency cap.

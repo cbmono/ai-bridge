@@ -117,6 +117,35 @@ second. And a skipped PR is **not** re-reviewed on its own: after the quota rese
 someone has to ask for a first review, which is not the discouraged "re-review of
 addressed findings", because no review ever happened.
 
+**Expect exit 4 to be the common answer, and read it as what it is.** Scored across all
+35 pull requests on this repository: 16 carry a CodeRabbit review object and exactly
+**one** of them was made at that PR's final head. The reviewer reads the first push, the
+agent then pushes fixes, and `.coderabbit.yaml` here sets `auto_incremental_review:
+false` on purpose (the "one review per PR" cost rule), so nothing re-reads them. Those
+reviews are **stale, not absent** — clause 3 of the predicate — and the operational
+consequence is real: wiring this into a delegated merge gate means most PRs need a review
+requested at the **final** head before they can clear. That is the correct answer rather
+than a threshold to tune; the alternative is merging on a review of a commit that is not
+what would merge. **Do not "fix" it by matching more loosely.** A CodeRabbit review
+comment routinely carries a `Review skipped — Auto incremental reviews are disabled`
+notice *about a later commit*, on 10 of those PRs; the script keys the refusal on the
+reviewer's machine-readable rate-limit sentinel and on prose only where nothing in the
+body evidences a review, so those come back as **4 (stale)** rather than 1 (declined) —
+a different refusal, never a pass.
+
+**Three more ways it fails closed, each of which used to be a way through.** A required
+check whose name reads as a **code reviewer's** while no reviewer in the table owns it
+(`Cursor Bugbot`, `Copilot code review`, `Devin Review`) is not CI — it is unknown, and
+`required-checks.sh` exits 2 rather than settling it on its green bucket. Each
+reviewer-owned required name is cleared **against the reviewer that owns it**
+(`--for-check`), so on a repo with two reviewers one vendor's review cannot clear the
+other vendor's refusing check. And `required-checks.sh` makes the sibling **prove it
+runs** (`review-clearance.sh --self-test`) before believing any answer from it: `[ -x ]`
+tests a mode bit, and a dead shebang, a syntax error, a zero-byte file or a copy
+truncated mid-install all carry the bit while failing every call — which would read as
+"no required check is a reviewer's" and clear an unreviewed PR. The gate would not fail;
+it would silently not be there.
+
 **Recommended:** set branch protection to require CI green + a review from that reviewer.
 GitHub only enforces *that* CI passed and a review happened — whether the reviewer
 actually checked the acceptance criteria is the reviewer's job, not something branch

@@ -366,6 +366,23 @@ line a real review carries, at the same head, so the range cannot tell them apar
 Unknown or unreadable reviewer state is **unverified**, never clearance.
 `scripts/review-clearance.sh` computes exactly this, and exit 0 is its only clearance.
 
+**A verdict that reports a refusal must carry its trailer, or it classifies as one.** The
+fallback reviewer's job on a rate-limited PR is to *say* the hosted reviewer declined —
+quoting the words, and the vendor's own sentinel. That prose matches the refusal language
+the clearance check looks for, so a verdict read against the reviewer's own account
+classifies as a refusal *of itself*: the reviewer disqualified for having reported
+accurately. The `okf-verdict v1` trailer above is the guard, and this is its second job —
+an artifact carrying a parseable trailer is a review whatever its prose quotes, because a
+trailer is a structured claim and prose is never an input (see "Two structured inputs").
+Fencing the quoted refusal also works and reads better, but it is not the guarantee:
+fences hold only while they stay balanced.
+
+**And "not cleared" has more than one shape.** A review that exists but was made at an
+*earlier* commit is **stale** by clause 3, not absent and not a refusal — the ordinary
+state wherever the reviewer does not re-review every push. Say which one you mean when
+you refuse; "the reviewer declined" about a real review of an older head is a false
+report that sends the human looking for a quota that was never exhausted.
+
 **One verdict per reviewed head — and a new head needs a new one.** A reviewer posts one
 synthesized verdict for the commit it reviewed, never an early `pass` amended later. When
 the head advances, clause 3 makes the old verdict stale, so that new head must be

@@ -278,10 +278,70 @@ else
   # proven by leaving the reviewer state unreadable and still clearing.
   setup; checks "pass	Build"; declared "Build"; rm -f "$FIX/pr_json"
   expect "no reviewer among the required names -> unaffected" 0
+
+  # --- one vendor's review may not clear another vendor's check ---------------
+  # Two reviewers required, one rate-limited. A single unscoped clearance call answers
+  # "is there a review on this PR" and the vendor that DID review clears the vendor that
+  # refused — the same substitution as the green check, one level in. Each reviewer-owned
+  # name is now cleared against the reviewer that owns it.
+  two_vendors() { # <coderabbit-body> <sourcery-body>
+    printf 'https://github.com/acme/widgets/pull/42\tmain\t%s\n' "$CR_HEAD" > "$FIX/pr_meta"
+    jq -n --arg h "$CR_HEAD" --rawfile a "$1" --rawfile b "$2" \
+      '{url:"https://github.com/acme/widgets/pull/42", headRefOid:$h,
+        author:{login:"dev"}, reviews:[],
+        comments:[{author:{login:"coderabbitai"}, body:$a},
+                  {author:{login:"sourcery-ai"},  body:$b}]}' > "$FIX/pr_json"
+  }
+
+  setup; checks "pass	Build" "pass	CodeRabbit" "pass	Sourcery review"
+  declared "Build" "CodeRabbit" "Sourcery review"
+  two_vendors "$CR_REFUSAL" "$CR_CLEAN"
+  expect "one vendor reviewed, the other refused -> refuse" 1
+  says   "  ...naming the check whose reviewer refused" "required check 'CodeRabbit'"
+
+  setup; checks "pass	Build" "pass	CodeRabbit" "pass	Sourcery review"
+  declared "Build" "CodeRabbit" "Sourcery review"
+  two_vendors "$CR_CLEAN" "$CR_CLEAN"
+  expect "both vendors reviewed this head -> clear" 0
+
+  # --- a required check named for a reviewer nobody knows ---------------------
+  # The original incident with a different vendor on it: `Cursor Bugbot` is green, no
+  # reviewer row owns it, and it used to be settled on that bucket as if it were CI.
+  setup; checks "pass	Build" "pass	Cursor Bugbot"; declared "Build" "Cursor Bugbot"
+  reviewer_pr "$CR_CLEAN"
+  expect "an unrecognised reviewer's check -> refuse as unknown" 2
+  says   "  ...naming the check it cannot classify" "unrecognised reviewer check: Cursor Bugbot"
 fi
 
+# --- the sibling has to be there AND have to run -----------------------------
 # The two scripts ship as one unit. Without the sibling, this one cannot tell a
 # reviewer's check from a CI job — an unknown reviewer state, which must refuse.
+#
+# AND A PRESENT-BUT-BROKEN SIBLING IS THE WORSE CASE, which is what the rest of this
+# section is. `[ -x ]` tests a mode bit: every variant below carries it and none of them
+# runs, so every `--match-check` call fails, every required name looks like plain CI, no
+# clearance is ever consulted, and the gate reports `ok: N required check(s) pass` on an
+# unreviewed PR. The gate does not fail — it silently is not there. Each case therefore
+# asserts BOTH the exit code and that the output is the sibling complaint, so a pass here
+# cannot come from some unrelated refusal.
+sibling_case() { # <name> <what to write into review-clearance.sh> <expected message>
+  local name="$1" writer="$2" want="$3"
+  local dir="$TMP/sib.$((sib_n = ${sib_n:-0} + 1))"; mkdir -p "$dir"
+  cp "$SCRIPT" "$dir/required-checks.sh"
+  eval "$writer" > "$dir/review-clearance.sh"
+  chmod +x "$dir/review-clearance.sh"           # the mode bit `[ -x ]` would be happy with
+  setup; checks "pass	Build"; declared "Build"
+  local out rc
+  out="$("$dir/required-checks.sh" 42 2>&1)"; rc=$?
+  if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -Fq "$want"; then
+    printf '  PASS  %-56s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
+  else
+    printf '  FAIL  %-56s expected rc=2 + %s, got rc=%s: %s\n' \
+      "$name" "$want" "$rc" "$(printf '%s' "$out" | head -2 | tr '\n' '|')"
+    fail=$((fail+1))
+  fi
+}
+
 LONELY="$TMP/lonely"; mkdir -p "$LONELY"
 cp "$SCRIPT" "$LONELY/required-checks.sh"
 setup; checks "pass	Build"; declared "Build"
@@ -290,6 +350,48 @@ if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -Fq "review-clearance.sh not fou
   printf '  PASS  %-56s (rc=%s)\n' "review-clearance.sh missing -> refuse, never clear" "$rc"; pass=$((pass+1))
 else
   printf '  FAIL  %-56s expected rc=2 got rc=%s\n' "review-clearance.sh missing -> refuse, never clear" "$rc"
+  fail=$((fail+1))
+fi
+
+BROKEN="is present but does not run"
+sibling_case "zero-byte sibling -> refuse, never clear" \
+  'printf ""' "$BROKEN"
+sibling_case "dead shebang -> refuse, never clear" \
+  'printf "#!/nonexistent/interpreter\nexit 0\n"' "$BROKEN"
+sibling_case "syntax error -> refuse, never clear" \
+  'printf "#!/usr/bin/env bash\nif [ 1 ; then\n"' "$BROKEN"
+sibling_case "truncated mid-install -> refuse, never clear" \
+  'head -c 400 "$(dirname "$SCRIPT")/review-clearance.sh"' "$BROKEN"
+# Version skew, which is the likely way this happens in a live instance rather than a
+# corrupted file: a sibling from before the self-test contract answers a usage error to
+# `--self-test` and works perfectly otherwise. Refuse anyway — "I cannot confirm this
+# runs" is the same unknown state whether the cause is corruption or an old copy, and
+# the repair (`install.sh`) is the same one.
+sibling_case "a sibling too old to self-test -> refuse until relinked" \
+  'printf "#!/usr/bin/env bash\n[ \"\$1\" = --match-check ] && exit 1\nexit 2\n"' \
+  "$BROKEN"
+# A liar is deliberately NOT tested here. A sibling that fakes the sentinel and then
+# answers whatever it likes is not a failure mode this gate can detect — it is the gate,
+# and anyone who can rewrite it can rewrite this file beside it. The self-test's job is
+# the accidental break (truncation, syntax error, skew), which is the one that happens.
+# Any answer outside {0,1,3} means the sibling is doing something this script has no
+# reading for. Unknown, so refuse — rather than treating "not 0" as "not a reviewer".
+sibling_case "--match-check answers an unknown code -> refuse" \
+  'printf "#!/usr/bin/env bash\n[ \"\$1\" = --self-test ] && { echo \"review-clearance: self-test ok\"; exit 0; }\n[ \"\$1\" = --match-check ] && exit 7\nexit 0\n"' \
+  "which is not one of"
+
+# The passing control for the whole section: the REAL sibling, same fixture, clears. So
+# the refusals above are the sibling being broken and not the fixture being unclearable.
+REALSIB="$TMP/realsib"; mkdir -p "$REALSIB"
+cp "$SCRIPT" "$REALSIB/required-checks.sh"
+cp "$(dirname "$SCRIPT")/review-clearance.sh" "$REALSIB/review-clearance.sh"
+setup; checks "pass	Build"; declared "Build"
+out="$("$REALSIB/required-checks.sh" 42 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ]; then
+  printf '  PASS  %-56s (rc=%s)\n' "…and an intact sibling clears the same fixture" "$rc"; pass=$((pass+1))
+else
+  printf '  FAIL  %-56s expected rc=0 got rc=%s: %s\n' "…and an intact sibling clears the same fixture" \
+    "$rc" "$(printf '%s' "$out" | head -2 | tr '\n' '|')"
   fail=$((fail+1))
 fi
 

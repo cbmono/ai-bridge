@@ -102,6 +102,14 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    (exit 4), and on an unreadable reviewer state (exit 2). Exit 0 is only the *first*
    half of this precondition: the clauses above still decide whether that review
    **cleared**.
+
+   **Exit 4 will be the answer most of the time, and it is not exit 1.** Wherever the
+   reviewer does not re-review every push — CodeRabbit's `auto_incremental_review:
+   false`, which this template's own repo sets deliberately — it reads the first push,
+   the agent then pushes fixes, and the review is of a commit that is not the head. That
+   is a **stale** review, not a refusal: surface it as "reviewed at `<sha>`, head has
+   moved", and ask for a review at the current head. Reporting it as "the reviewer
+   declined" sends someone looking for a quota that was never exhausted.
 3. **Every acceptance-criteria box in the PR body is ticked.** An unchecked box is a
    criterion nobody verified (`SCHEMA.md`), and green CI is not evidence for one no check
    covers. This is the condition that catches the class of bug deterministic checks

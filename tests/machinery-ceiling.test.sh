@@ -246,31 +246,46 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # are two of the four board scripts named as the real reduction candidates, and this task
 # grew both. Nothing was retired here. The reduction this objective is owed remains owed.
 
-# RAISED 2026-08-26 for review-clearance.sh, the reviewer half of the merge gate:
+# RAISED 2026-08-26 for review-clearance.sh, the reviewer half of the merge gate. ONE
+# bill, for this change only: the 363/223 the per-owner board left unbilled was paid by
+# #32 (`e76b9f3`) and is already inside the base line below, so nothing here is carrying
+# somebody else's number. Re-measured on the rebased tree with this file's own two
+# expressions rather than by adding up a pre-rebase diff:
 #
-#   6,648 / 3,587   20 files   what the per-owner board repair pinned above, on `main`
-#   __BILL__
+#   6,648 / 3,587   20 files   `main` at e76b9f3, after #32 repaired the placeholder
+#   7,376 / 3,954   21 files   +728 total, +367 code — this change
 #
-# WHAT THE CODE LINES BUY. A merge gate that could not tell "reviewed and clean" from
-# "not reviewed". A hosted reviewer that declines exits SUCCESSFULLY, so its status check
-# is green either way; three PRs went out in one tick, one was reviewed, two carried
-# "Review limit reached" and merged unlooked-at, and one of those shipped a shell script
-# at mode 100644 that no caller can execute. review-clearance.sh is the two tables that
-# make the answer provider-agnostic (who is a reviewer, and the language of "I did not
-# review"), the artifact split that treats a review object and a comment alike, the
-# ordering that classifies refusal language BEFORE pinning to the head — the refusal
-# quotes the head too, which is the whole trap — and five exit codes that each name a
-# different way of not being cleared. The lines in required-checks.sh hand it any
-# required check that turns out to be a reviewer's own, PROVE the sibling actually runs
-# before trusting its answers, and refuse when it does not rather than guessing. This was
-# previously a paragraph of prose in SCHEMA.md that every consumer was expected to
-# re-derive by eye, and two consumers in one afternoon did not.
+# Per file, so the raise can be checked rather than believed:
+#
+#   review-clearance.sh         0 ->  603    +603 total, +301 code   (new file)
+#   required-checks.sh        212 ->  337    +125 total,  +66 code
+#
+# WHAT THE 301 CODE LINES OF review-clearance.sh BUY. A merge gate that could not tell
+# "reviewed and clean" from "not reviewed". A hosted reviewer that declines exits
+# SUCCESSFULLY, so its status check is green either way; three PRs went out in one tick,
+# one was reviewed, two carried "Review limit reached" and merged unlooked-at, and one of
+# those shipped a shell script at mode 100644 that no caller can execute. The lines are
+# the tables that make the answer provider-agnostic (who is a reviewer and what its check
+# is called; check names that only LOOK like one; the language of "I did not review"; the
+# evidence that a review DID happen), the artifact split that treats a review object and
+# a comment alike, the ordering that classifies refusal language BEFORE pinning to the
+# head — the refusal quotes the head too, which is the whole trap — and five exit codes
+# that each name a different way of not being cleared.
+#
+# THE 66 IN required-checks.sh ARE MOSTLY THE FOUR WAYS IT STILL FAILED OPEN, found by
+# review of the first cut, each of them a route to `ok: N required check(s) pass` on an
+# unreviewed PR: a present-but-BROKEN sibling (`[ -x ]` tests a mode bit, so the sibling
+# now has to prove it RUNS), a `--match-check` answer outside the three it defines, a
+# required check named for a reviewer no row owns (unknown, not CI), and clearance asked
+# once for the whole PR instead of once per check (so one vendor's review cleared another
+# vendor's refusal). A gate whose failure mode is silent absence is worth more lines than
+# one whose failure mode is a red build.
 #
 # STILL OWED: the objective's second criterion asks a project to LOWER one of these
 # constants. This raise does not. The reduction candidates named further up
 # (print-board.sh, watch-board.sh, write-snapshot.sh) are untouched.
-CEILING_TOTAL=7098
-CEILING_CODE=3830
+CEILING_TOTAL=7376
+CEILING_CODE=3954
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

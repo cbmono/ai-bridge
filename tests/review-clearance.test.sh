@@ -176,6 +176,48 @@ add_comment coderabbitai "$(body_file \
 expect "refusal language inside a code fence -> still a review" 0
 
 echo
+echo "== an UNBALANCED fence must fail closed, not blank the body =="
+# The bypass this section pins: strip_fences used to toggle on every marker with no END
+# check, so an ODD count left everything after the marker "inside a fence" and the
+# stripped body came back empty — no refusal matched, and the raw text still named the
+# head, so the recorded refusal CLEARED. One character, typed into a comment.
+#
+# The control is the assertion above this line: with BALANCED fences the strip still
+# happens, so these cases fail for the unbalance and not because fencing stopped working.
+fenced_refusal="$TMP/refusal-one-fence.md"
+{ printf '```\n'; cat "$REFUSAL"; } > "$fenced_refusal"
+assert "the fenced copy still names the head verbatim (so it COULD clear)" \
+  "$(yes_if grep -Fq "$REFUSAL_HEAD" "$fenced_refusal")"
+assert "…and carries exactly one fence marker" \
+  "$([ "$(grep -c '^```' "$fenced_refusal")" -eq 1 ] && echo 0 || echo 1)"
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$fenced_refusal"
+expect "one prepended fence on the recorded refusal -> still refuses" 1
+says   "  ...still quoting the reviewer's own words" "Review limit reached"
+
+trailing_refusal="$TMP/refusal-trailing-fence.md"
+{ cat "$REFUSAL"; printf '```\n'; } > "$trailing_refusal"
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$trailing_refusal"
+expect "an unclosed fence AFTER the refusal -> still refuses" 1
+
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '~~~' 'Review limit reached.' "at $REFUSAL_HEAD")"
+expect "an unbalanced tilde fence refuses just the same" 1
+
+# The opening marker's type is carried, so a backtick fence inside a tilde block is
+# content rather than a close — otherwise a nested pair drifts the count odd and the case
+# above fires on an ordinary review that quotes one fence style inside another.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file \
+  "Reviewed $CLEAN_HEAD." \
+  '~~~' \
+  '```' \
+  'review limit reached' \
+  '```' \
+  '~~~' \
+  'No further comments.')"
+expect "a backtick pair nested in a tilde block stays balanced -> review" 0
+
+echo
 echo "== shape 3: no reviewer signal at all =="
 setup "$CLEAN_HEAD"
 expect "nothing on the PR -> no review, and no clearance" 3
@@ -265,6 +307,126 @@ match "Sourcery review"         0
 match "Build, Lint & Format"    1
 match "Unit Tests (vitest)"     1
 match "review"                  1   # a CI job merely called "review" is not a reviewer
+
+# ...and the third answer, which is the one that was missing. A check named for a code
+# reviewer the table does not carry used to be indistinguishable from CI, so it was
+# settled on its green bucket — the original incident, with a different vendor's name on
+# it. It is now UNKNOWN, and the caller must refuse. The `1`s above and below are the
+# control: this must not become a catch-all that reads every CI job as a reviewer.
+match "Cursor Bugbot"           3
+match "Copilot code review"     3
+match "Devin Review"            3
+match "AI Code Review"          3
+match "review-app deploy"       1   # a Heroku-style review app is a deploy, not a review
+match "Review Docs"             1
+
+echo
+echo "== --self-test proves the script RUNS, which the executable bit does not =="
+# required-checks.sh cannot trust `[ -x ]`: a dead shebang, a syntax error, a zero-byte
+# file and a truncated copy all carry the mode bit and then fail every call, which reads
+# as "no required check is a reviewer's" and clears an unreviewed PR. So it asks for this
+# proof instead. The exact string is the contract between the two files.
+st_out="$("$SCRIPT" --self-test 2>&1)"; st_rc=$?
+assert "--self-test exits 0"                    "$([ "$st_rc" -eq 0 ] && echo 0 || echo 1)"
+assert "…and prints the agreed sentinel"        "$([ "$st_out" = "review-clearance: self-test ok" ] && echo 0 || echo 1)"
+"$SCRIPT" --self-test extra >/dev/null 2>&1; st_rc=$?
+assert "…and takes no arguments"                "$([ "$st_rc" -eq 2 ] && echo 0 || echo 1)"
+
+echo
+echo "== --for-check: one vendor's review may not clear another's check =="
+# Two reviewers on one repo, one of them rate-limited. Unscoped, "is there a review on
+# this PR" is answered by whichever reviewer did look — so the refusing vendor's required
+# check clears on the other vendor's work. --for-check resolves the check name to the
+# reviewer that owns it and reads only that account.
+two_reviewers() {
+  setup "$CLEAN_HEAD"
+  add_comment coderabbitai "$REFUSAL"      # the rate-limited one
+  add_comment sourcery-ai  "$CLEAN"        # the one that actually reviewed
+}
+two_reviewers; expect "unscoped, ANY reviewer's review answers (the bypass)" 0
+two_reviewers; expect "…but the refusing vendor's own check does not clear" 1 --for-check "CodeRabbit"
+says   "  ...quoting the vendor that refused" "coderabbitai"
+two_reviewers; expect "…while the vendor that reviewed clears its own"     0 --for-check "Sourcery review"
+
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+expect "a check no reviewer owns -> refuse, never widen to everybody" 2 --for-check "Build"
+says   "  ...saying whose review would clear it is unknown" "is unknown"
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+expect "--for-check and --reviewer both name a reviewer -> usage error" 2 \
+  --for-check "CodeRabbit" --reviewer coderabbitai
+
+echo
+echo "== a notice about what was NOT done does not unmake a review that was =="
+# Measured on this repository: 10 of its 20 reviewed PRs carry a real review comment
+# whose header says "Review skipped — Auto incremental reviews are disabled", because
+# .coderabbit.yaml sets auto_incremental_review: false here. Matching refusal prose over
+# the whole body reads those as refusals and quotes the wrong reason at the operator.
+skip_notice=(
+  '> [!IMPORTANT]'
+  '> ## Review skipped'
+  '>'
+  '> Auto incremental reviews are disabled on this repository.'
+  ''
+  '<!-- walkthrough_start -->'
+  '## Walkthrough'
+  ''
+)
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file "${skip_notice[@]}" \
+  "Reviewed between 6fca618a and $CLEAN_HEAD. **Actionable comments posted: 3**")"
+expect "refusal prose beside real review evidence -> a review" 0
+
+# ...and the same notice with NOTHING evidencing a review is still a refusal. This is the
+# control: the narrowing above must key on the evidence, not on the word "skipped".
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file "${skip_notice[@]:0:4}" "at $CLEAN_HEAD")"
+expect "…the same notice with no review evidence -> still a refusal" 1
+
+# The hole this narrowing must not open, asserted on the evidence rather than trusted:
+# the recorded refusal quotes the PR head, so if review evidence could outrank the
+# machine sentinel, #30 would clear. It carries none, and the sentinel outranks anyway.
+assert "the recorded refusal carries NO review-evidence marker" \
+  "$(yes_if bash -c '! grep -Eqi "walkthrough_start|actionable comments" "$1"' _ "$REFUSAL")"
+assert "…and does carry the machine-readable rate-limit sentinel" \
+  "$(yes_if grep -Fq "rate limited by coderabbit.ai" "$REFUSAL")"
+setup "$REFUSAL_HEAD"
+{ cat "$REFUSAL"; printf '\n<!-- walkthrough_start -->\nActionable comments posted: 2\n'; } \
+  > "$TMP/refusal-with-evidence.md"
+add_comment coderabbitai "$TMP/refusal-with-evidence.md"
+expect "the sentinel outranks review evidence -> still a refusal" 1
+
+echo
+echo "== a verdict that QUOTES refusal language is not itself a refusal =="
+# The fallback reviewer's job on a rate-limited PR is to SAY the hosted reviewer refused
+# — quoting the words, and the sentinel. Prose alone classifies that verdict as a refusal,
+# which is the reviewer disqualifying its own review. The okf-verdict trailer (SCHEMA.md)
+# is the structured self-declaration that settles it, and it outranks every refusal row.
+verdict_body() { # <extra lines...> -> a qa-reviewer verdict quoting a refusal in prose
+  body_file \
+    "CodeRabbit published a green check whose body reads Review limit reached, and the" \
+    "comment carries the rate limited by coderabbit.ai sentinel — so no review happened." \
+    "I reviewed $CLEAN_HEAD myself." \
+    "$@" \
+    '<!-- okf-verdict v1' \
+    'verdict: changes-requested' \
+    "head_sha: $CLEAN_HEAD" \
+    'reviewer: qa-reviewer' \
+    'lenses: correctness=done security=done repro=done' \
+    'unverified_criteria: none' \
+    'caveats: none' \
+    '-->'
+}
+setup "$CLEAN_HEAD"; add_comment qa-bot "$(verdict_body)"
+expect "a verdict quoting a refusal in prose -> a review" 0 --reviewer qa-bot
+
+# The control, and it is the whole reason the guard is a TRAILER rather than a mood: the
+# identical prose WITHOUT the trailer is still read as a refusal.
+setup "$CLEAN_HEAD"
+add_comment qa-bot "$(body_file \
+  "CodeRabbit published a green check whose body reads Review limit reached, and the" \
+  "comment carries the rate limited by coderabbit.ai sentinel." \
+  "I reviewed $CLEAN_HEAD myself.")"
+expect "…the same prose with no trailer -> classified as a refusal" 1 --reviewer qa-bot
 
 echo
 echo "== the environment failing is never a clearance =="

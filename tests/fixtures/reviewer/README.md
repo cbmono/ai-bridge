@@ -25,3 +25,24 @@ reads "Review limit reached" as clearance. On #30 that is exactly what happened:
 merged unreviewed and shipped a shell script at mode `100644`. Only the refusal
 *language* separates the two files, which is why the classifier tests language first
 and the head second.
+
+## Two properties of these files that the tests assert before relying on them
+
+Both are the kind of thing that goes quietly untrue when a vendor rewords, at which point
+every assertion built on them passes vacuously. So they are asserted, not assumed.
+
+1. **The refusal carries the machine-readable `rate limited by coderabbit.ai` sentinel
+   and NO review-evidence marker** — no walkthrough, no actionable-comment count. That
+   matters because the refusal quotes the PR head: if review evidence could outrank the
+   sentinel, this exact file would clear.
+2. **Neither file contains a code fence.** So every fence case in the tests is
+   constructed — including the one-character bypass they exist for, which is this refusal
+   with a single ` ``` ` prepended.
+
+A third shape is deliberately *not* a fixture here, because it is a count rather than a
+body: on this repository **16 of 35 pull requests carry a CodeRabbit review object and
+exactly one of them was made at that PR's final head**, since `.coderabbit.yaml` sets
+`auto_incremental_review: false`. Those are **stale** reviews (exit 4), not refusals —
+and 10 of them additionally carry a `Review skipped — Auto incremental reviews are
+disabled` notice *inside a real review comment*, which is why refusal prose is outranked
+by review evidence found in the same body.
