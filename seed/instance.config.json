@@ -13,7 +13,7 @@
   },
   "defaultRepo": null,
   "maxAgentsInFlight": 10,
-  "maxPrLoc": 500,
+  "maxPrLoc": 2000,
   "codegraphSkip": "",
   "externalReviewer": null,
   "prReviewSlackChannel": null,
