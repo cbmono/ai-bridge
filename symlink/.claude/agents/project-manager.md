@@ -541,11 +541,11 @@ state, and act only on deltas.
    it is old. So, immediately after the writer:
 
    1. Read `boardArtifactUrl` — from `instance.config.local.json` if it names one, else
-      from `instance.config.json`. **Absent, empty or `null` in both ⇒ skip the rest of
-      this step in silence** — no render, no publish, no line in your report, and never an
-      error. That absence is how an instance says its board must not leave the machine,
-      which for a bundle carrying no-PII rules is the compliant answer, not a
-      misconfiguration. A value that is present but **not an `https://` URL** is a
+      from `instance.config.json`. Absent, empty or `null` in both and you
+      **skip the rest of this step in silence** — no render, no publish, no line in your
+      report, and never an error. That absence is how an instance says its board must not
+      leave the machine, which for a bundle carrying no-PII rules is the compliant
+      answer, not a misconfiguration. A value that is present but **not an `https://` URL** is a
       different case and gets one line: it is a typo, not a decision, and silence would
       hide it. It **is** in the per-machine override set (`SCHEMA.md` → "Per-machine
       config overrides"), and that is a reversal of the earlier rule that kept it tracked:
