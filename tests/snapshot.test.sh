@@ -487,6 +487,21 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 r=[p for p in d["projects"] if p["slug"]=="retained"][0]
 sys.exit(0 if r["awaiting_close"] is False else 1)' "$SNAP")"
+# THE SKIP AND THE `owner` FIELD ARRIVED IN DIFFERENT PRs and collided in the same hunk,
+# so this is the assertion that keeps them merged rather than merely adjacent. The loop
+# has two exits and one `project_stanza()` builder: a done project must carry the SAME
+# field set as a live one, or a published board partitions retained work away from the
+# human who owns it — and the drift would be invisible, because nobody diffs a board.
+# Comparing the key sets rather than naming `owner` is deliberate: it catches the NEXT
+# field added to one exit and not the other, which is the failure that recurs. Reading
+# `owner:` off frontmatter already in memory opens no file, so it does not give the
+# skip's saving back — the assertions above still hold.
+assert "…and its field set is IDENTICAL to a live project's, `owner` included" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p={x["slug"]:x for x in d["projects"]}
+sys.exit(0 if set(p["retained"]) == set(p["ci"]) and "owner" in p["retained"] else 1)' "$SNAP")"
 # The negative assertions above hold just as well if the writer never found the project
 # at all, so prove the fixture is real: the same task doc, under a project that is NOT
 # done, moves every one of those numbers.
