@@ -64,7 +64,7 @@ candidates) and ask which to close.
 3. **Record the closeout.** Get a timestamp (`date -u +%Y-%m-%dT%H:%M:%SZ`). Prepend
    a dated **Project closed** entry to the root `log.md` (newest-first) naming the
    project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s) it produced
-   (KB links), and a one-line outcome. (The removing commit SHA is added by step 6's
+   (KB links), and a one-line outcome. (The closing commit SHA is added by step 7's
    commit — reference it as "removed in the closing commit".)
 
    **For a retained project, say so and name what was pruned** — step 7's command
@@ -140,8 +140,9 @@ candidates) and ask which to close.
    `retain: true` it stamps `deliverable_paths:` into `project.md` (each task's
    `artifacts:`, verified on disk) and prunes only `tmp/`/`temp/`, `.DS_Store` and
    **non-markdown** files under `sources/` — never `deliverables/`, never `tasks/`,
-   never `sources/**/*.md`. Run it **without** `--apply` first under `--dry-run`; it
-   reports and changes nothing. Keep its `log.md fragment` line for step 3's entry.
+   never `sources/**/*.md`. Under `--dry-run`, run it **without** `--apply`: it reports the
+   exact removal or prune and changes nothing. Keep its `log.md fragment` line for
+   step 3's entry.
 
    Then stage and commit:
 

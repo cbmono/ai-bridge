@@ -390,6 +390,7 @@ Run from an instance root unless noted.
 | `commit-as.sh` | commits as the right agent identity | yes |
 | `required-checks.sh` | resolves a PR's required checks | no |
 | `task-owner.sh` | resolves and compares a task's owner | no |
+| `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) | yes, the output file |
 | `print-board.sh` | prints the board in the terminal | no |

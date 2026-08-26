@@ -275,6 +275,26 @@ question_texts() { # <frontmatter>
   yaml_list_entries "$1" open_questions
 }
 
+# ONE stanza builder, and it is not tidiness. The project loop has TWO exits — the
+# done-project skip and the normal path — so a field added to one and not the other
+# renders a retained project differently from a live one, on a page nobody diffs. It
+# reads the loop's own variables and takes only what differs between the two.
+project_stanza() { # <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_json>
+  printf '%s' "
+    {
+      \"slug\": $(jstr "$slug"),
+      \"title\": $(jstr "$p_title"),
+      \"description\": $(jstr "$p_desc"),
+      \"kind\": $(jstr "$p_kind"),
+      \"status\": $(jstr "$p_status"),
+      \"autonomy\": $(jstr "$p_autonomy"),
+      \"awaiting_close\": $1,
+      \"phase_progress\": {\"done\": $2, \"total\": $3},
+      \"phases\": [$4],
+      \"tasks\": [$5]
+    }"
+}
+
 # ---------------------------------------------------------------- assembly
 tasks_total=0
 awaiting_total=0
@@ -316,19 +336,7 @@ while IFS= read -r pfile; do
   # `awaiting_close` is false by definition here: a done project is already closed.
   if [[ "$p_status" == "done" ]]; then
     projects_n=$((projects_n+1))
-    projects_json="$projects_json${projects_json:+,}
-    {
-      \"slug\": $(jstr "$slug"),
-      \"title\": $(jstr "$p_title"),
-      \"description\": $(jstr "$p_desc"),
-      \"kind\": $(jstr "$p_kind"),
-      \"status\": $(jstr "$p_status"),
-      \"autonomy\": $(jstr "$p_autonomy"),
-      \"awaiting_close\": false,
-      \"phase_progress\": {\"done\": 0, \"total\": 0},
-      \"phases\": [],
-      \"tasks\": []
-    }"
+    projects_json="$projects_json${projects_json:+,}$(project_stanza false 0 0 '' '')"
     continue
   fi
 
@@ -428,19 +436,8 @@ EOF
   fi
 
   projects_n=$((projects_n+1))
-  projects_json="$projects_json${projects_json:+,}
-    {
-      \"slug\": $(jstr "$slug"),
-      \"title\": $(jstr "$p_title"),
-      \"description\": $(jstr "$p_desc"),
-      \"kind\": $(jstr "$p_kind"),
-      \"status\": $(jstr "$p_status"),
-      \"autonomy\": $(jstr "$p_autonomy"),
-      \"awaiting_close\": $awaiting_close,
-      \"phase_progress\": {\"done\": $ph_done, \"total\": $ph_total},
-      \"phases\": [$phases_json],
-      \"tasks\": [$tasks_json]
-    }"
+  projects_json="$projects_json${projects_json:+,}$(project_stanza \
+    "$awaiting_close" "$ph_done" "$ph_total" "$phases_json" "$tasks_json")"
 done <<EOF
 $PROJECT_FILES
 EOF

@@ -400,7 +400,9 @@ state, and act only on deltas.
    prepend a dated **Project closed** entry to the root `log.md` naming the project,
    its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s) produced (KB links),
    and the removing commit SHA; (c) set `project.md` `status: done`, drop it from
-   the active `## Projects` list in `index.md`, and update its objective — when
+   the active `## Projects` list in the ROOT `index.md`, refresh
+   `projects/<slug>/index.md` when the project is retained (its front door, and the
+   one index you DO commit — step 8), and update its objective — when
    **all** of an objective's projects are terminal, likewise **propose**
    `objective status: achieved`; (d) run `scripts/close-project-folder.sh <slug>
    --apply` — never `git rm` or `rm` the folder yourself. That command reads

@@ -165,9 +165,9 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # RAISED 2026-08-26 for close-project-folder.sh, and here is the bill:
 #
 #   5,925 / 3,174   19 files   what the two-dep column fix pinned above
-#   6,288 / 3,372   20 files   +363 total, +198 code — the folder half of closeout
+#   6,285 / 3,364   20 files   +360 total, +190 code — the folder half of closeout
 #                              (324/181 of it) plus write-snapshot.sh's done-project
-#                              skip (39/17)
+#                              skip (+36/+9)
 #
 # WHAT THE 198 CODE LINES BUY, and the honest framing: this is the largest single raise
 # in the file, and 181 of it is a NEW SCRIPT for something that was previously one line
@@ -183,8 +183,11 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # fixture. The alternative was not zero lines; it was the same behaviour with no scope
 # and no test.
 #
-# THE 17 CODE LINES IN write-snapshot.sh are the emitted stanza for a done project plus
-# the `continue`. They are what makes retention affordable at all — a done project now
+# THE 9 CODE LINES IN write-snapshot.sh are the done-project `continue` plus one
+# `project_stanza()` builder. The stanza was duplicated by the first draft of this
+# change — the loop now has two exits, and a field added to one and not the other
+# renders a retained project differently from a live one — so factoring it costs a
+# function and removes the drift; it is why the code figure is +9 rather than +17. They are what makes retention affordable at all — a done project now
 # costs one frontmatter parse instead of a `phases/` + `tasks/` walk — so the tick's
 # per-tick work goes DOWN as this constant goes up. That is worth stating plainly,
 # because a line-count gate cannot see it.
@@ -193,8 +196,8 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # to LOWER one of these constants. This raise does not, and the reduction candidates
 # named further up (print-board.sh, watch-board.sh, write-snapshot.sh — the board
 # scripts) are untouched here.
-CEILING_TOTAL=6288
-CEILING_CODE=3372
+CEILING_TOTAL=6285
+CEILING_CODE=3364
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

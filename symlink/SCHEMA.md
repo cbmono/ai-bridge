@@ -591,8 +591,8 @@ in this order:
      and **non-markdown** files under `sources/`. `sources/**/*.md` are KEPT, because
      `index.md` cites them by number and those citations must keep resolving.
      `tasks/`, `deliverables/`, `log.md`, `index.md` and `project.md` are kept in
-     full — `deliverables/` legitimately holds `.pdf`/`.html`/`.png`, so the prune is
-     pruned out of that subtree entirely.
+     full — `deliverables/` legitimately holds `.pdf`/`.html`/`.png`, so the walk skips
+     that subtree entirely.
    * **The prune is reported**: the command prints what it removed, and the
      **`log.md` closeout entry names the pruned directories**, so a later reader knows
      the folder is deliberately partial rather than damaged. `tmp/`/`temp/` are
