@@ -143,6 +143,49 @@ echo "== a PR is a real link =="
 assert "PR links to GitHub"                          "$(fhas 'href="https://github.com/o/r/pull/41"' "$OUT")"
 assert "…and opens safely"                           "$(fhas 'rel="noopener noreferrer"' "$OUT")"
 
+echo "== a retained project's deliverables panel =="
+# A hand-written SNAPSHOT.json, exactly as write-snapshot.sh would emit it for a
+# `status: done` project carrying `deliverable_paths:` — this harness is about the
+# RENDERER's own shape check, so the hostile entries below are ones a human could
+# still hand-edit into project.md even though closeout never writes them.
+mk "$TMP/delivs" "delivs" '[
+ {"slug":"with-delivs","title":"Shipped review","kind":"research","status":"done",
+  "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[],
+  "deliverable_paths":["/projects/with-delivs/deliverables/report.md",
+                        "/projects/with-delivs/deliverables/summary.html",
+                        "/projects/other-project/deliverables/report.md",
+                        "/Users/attacker/.ssh/id_rsa",
+                        "/projects/with-delivs/deliverables/../../../etc/passwd",
+                        "/projects/with-delivs/deliverables/nested/evil.md"]},
+ {"slug":"no-delivs","title":"Closed with nothing stamped","kind":"build","status":"done",
+  "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[],"deliverable_paths":[]}]'
+DOUT="$TMP/delivs.html"
+bash "$GEN" --out "$DOUT" "$TMP/delivs" >/dev/null 2>&1
+assert "a bundle-relative deliverable renders as a copy button" \
+  "$(fhas 'data-copy="/projects/with-delivs/deliverables/report.md"' "$DOUT")"
+assert "…labelled by filename, not the full path"    "$(fhas '>report.md</button>' "$DOUT")"
+assert "…and a second one too"                        "$(fhas 'data-copy="/projects/with-delivs/deliverables/summary.html"' "$DOUT")"
+assert "…reusing the existing data-what convention"   "$(fhas 'data-what="Deliverable path"' "$DOUT")"
+assert "the panel is titled with a count"             "$(fhas 'Deliverables · 2' "$DOUT")"
+echo "== every rendered path is bundle-relative to THIS project — nothing else survives =="
+assert "another project's deliverable is dropped"     "$(fhasnt 'other-project/deliverables' "$DOUT")"
+assert "an absolute filesystem path is dropped"       "$(fhasnt 'attacker' "$DOUT")"
+assert "…and never as a data-copy value"              "$(fhasnt 'data-copy="/Users' "$DOUT")"
+assert "a traversal attempt is dropped"               "$(fhasnt 'etc/passwd' "$DOUT")"
+assert "a nested subdirectory is dropped (one segment only)" "$(fhasnt 'nested/evil.md' "$DOUT")"
+echo "== absent/empty deliverable_paths renders no panel, and no error =="
+assert "it still exits 0"                             "$(yes_if test -s "$DOUT")"
+assert "no deliverables panel for a project with none" "$(yes_if python3 -c "
+import sys
+t = open('$DOUT').read()
+i = t.index('Closed with nothing stamped')
+j = t.index('</details>', i)
+sys.exit(0 if 'class=\"delivs\"' not in t[i:j] else 1)")"
+echo "== it reuses the ONE existing clipboard helper — no second <script> =="
+assert "exactly one <script> element on this page too" "$(eq "$(grep -cF '<script' "$DOUT")" 1)"
+
 echo "== both themes are defined on bare :root =="
 assert "no token defined only in a media/theme block" "$(yes_if python3 -c "
 import re,sys

@@ -365,7 +365,7 @@ echo "== the field allowlist =="
 # `owner` is in this set DELIBERATELY and is the only identity field that is — see the
 # header. Removing it here is how the reversal would get silently undone, so the writer's
 # own header, this line, and per-owner-board.test.sh all have to move together.
-ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions advisor_notes depends_on prs repo number url '
+ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner deliverable_paths awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions advisor_notes depends_on prs repo number url '
 extra_keys() { # <json file> <allowed> -> the keys present but not allowed
   python3 - "$1" "$2" <<'PYK'
 import json, sys
@@ -417,7 +417,14 @@ assert "…and both entries of a BLOCK-form list"           "$(fhas '"depends_on
 assert "…and a QUOTED path normalises identically"        "$(fhasnt '.md\"' "$SNAP")"
 assert "…while a task with none gets an empty array"      "$(fhas '"depends_on": []' "$SNAP")"
 assert "…and never a path"                                "$(fhasnt '"depends_on": ["/' "$SNAP")"
-assert "…and never keeps the .md suffix"                  "$(fhasnt '.md"]' "$SNAP")"
+# A file-scoped `.md"]` grep would also flag `deliverable_paths`, which legitimately
+# carries a bundle-relative path ending in `.md` — so this checks `depends_on` ARRAYS
+# specifically, not the whole file for that shape.
+assert "…and never keeps the .md suffix"                  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+bad=[dep for p in d["projects"] for t in p["tasks"] for dep in t["depends_on"] if dep.endswith(".md")]
+sys.exit(0 if not bad else 1)' "$SNAP")"
 assert "a blocker reason never reaches the snapshot"      "$(fhasnt "$SECRET_BLOCKER" "$SNAP")"
 assert "…the VERB does (unblock)"                         "$(fhas '"awaiting": "unblock"' "$SNAP")"
 assert "authorEmail never reaches the snapshot"           "$(fhasnt "$SECRET_EMAIL" "$SNAP")"
@@ -475,6 +482,18 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 r=[p for p in d["projects"] if p["slug"]=="retained"][0]
 sys.exit(0 if r["tasks"]==[] and r["phases"]==[] and r["phase_progress"]=={"done":0,"total":0} else 1)' "$SNAP")"
+assert "…and deliverable_paths IS forwarded — from project.md's own frontmatter, never from tasks/" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+r=[p for p in d["projects"] if p["slug"]=="retained"][0]
+sys.exit(0 if r["deliverable_paths"]==["/projects/retained/deliverables/deck.md"] else 1)' "$SNAP")"
+assert "a project carrying no deliverable_paths key gets an empty array, not an error" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="empty"][0]
+sys.exit(0 if p["deliverable_paths"]==[] else 1)' "$SNAP")"
 assert "…and its task's title never reaches the snapshot" \
   "$(fhasnt 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
 assert "…nor its phase's title (phases are skipped by the same continue)" \
@@ -510,6 +529,15 @@ sed -i.bak 's/^status: done$/status: active/' "$ALPHA/projects/notdone/project.m
 CTRL_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "control: the same task under a LIVE project IS read (7 tasks)" "$(has '7 task(s)' "$CTRL_OUT")"
 assert "…and its title does reach the snapshot"  "$(fhas 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
+# deliverable_paths comes off the SAME frontmatter parse every project already gets, not
+# off the done-project skip specifically — so a LIVE project carrying the key forwards it
+# too, proving this is "read project.md's frontmatter", not "a done-project special case".
+assert "…and deliverable_paths is read from a LIVE project's frontmatter too" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+c=[p for p in d["projects"] if p["slug"]=="notdone"][0]
+sys.exit(0 if c["deliverable_paths"]==["/projects/retained/deliverables/deck.md"] else 1)' "$SNAP")"
 rm -rf "$ALPHA/projects/notdone"
 ( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" --quiet )
 assert "…and the sentinel is gone again once the control project is removed" \
@@ -566,6 +594,14 @@ assert "an unknown status still gets a column"      "$(fhas 'made-up-status' "$H
 # bundle is where a decision is recorded.
 assert "the close proposal is shown, never taken"   "$(fhas 'class="verb">close' "$HTML")"
 assert "…carrying the command a human would run"   "$(fhas 'close-project finished' "$HTML")"
+# The retained project's deliverables panel, on the SAME page this real invocation
+# produces — not a fixture built just to exercise the renderer in isolation. See
+# /knowledge/findings/a-flags-default-forked-one-command-into-two-boards.md: a test
+# that only ever exercises an isolated fixture is testing whichever page the fixture
+# happens to name, not the one this call actually writes.
+assert "a retained project's deliverable is a copy button"  "$(fhas 'data-copy="/projects/retained/deliverables/deck.md"' "$HTML")"
+assert "…labelled by filename"                              "$(fhas '>deck.md</button>' "$HTML")"
+assert "…reusing the existing data-what convention"         "$(fhas 'data-what="Deliverable path"' "$HTML")"
 assert "no filesystem path reaches the page"        "$(fhasnt "$TMP" "$HTML")"
 # Belt and braces, because the check above depends on how the fixture path is spelled:
 # an instance is named by its DIRECTORY NAME, so the name must never appear with a
@@ -583,7 +619,10 @@ assert "…and it is present in escaped form"         "$(fhas "$HOSTILE_ESCAPED"
 # ONE <script>, and no snapshot text in it. "No script at all" was the kanban page's
 # property and never this one's; the honest promise is the boundary, not the tag count,
 # because a clipboard helper that interpolated a title would be an injection whether or
-# not it was the only script on the page.
+# not it was the only script on the page. This page also carries a retained project's
+# deliverables panel (asserted above) — its copy buttons reuse this SAME helper, so this
+# assertion is what pins "no second script was added for it" on the page a real
+# invocation actually writes, not on an isolated fixture.
 assert "exactly one <script> element"              "$(eq "$(grep -cF '<script' "$HTML")" 1)"
 assert "…and NOTHING from a snapshot is inside it" "$(yes_if python3 -c '
 import re, sys

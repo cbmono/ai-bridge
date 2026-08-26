@@ -34,7 +34,10 @@
 #
 #   CARRIED (the whole allowlist):
 #     project: slug, title, description, kind, status, autonomy, owner (a GitHub
-#              username — see the reversal below before you remove it)
+#              username — see the reversal below before you remove it),
+#              deliverable_paths (bundle-relative paths, VERBATIM from project.md —
+#              closeout stamps these, this file only forwards them; see task-007's
+#              board panel and the shape check build-board.sh applies before render)
 #     phase:   file, order, title, status
 #     task:    id, title, kind, status, assignee (a ROLE slug, never a person),
 #              in_flight, awaiting (a verb, not a reason), open_questions (a COUNT),
@@ -266,6 +269,25 @@ depends_ids() { # <frontmatter>
   yaml_list_entries "$1" depends_on | sed -e 's#^.*/##' -e 's#\.md$##' | grep -v '^$' || true
 }
 
+# The bundle-relative deliverable paths a done project's closeout stamped into
+# `deliverable_paths:` (close-project-folder.sh). Carried VERBATIM — unlike
+# `depends_ids` above this is not normalised to a bare id, because a deliverable is
+# a file to copy a path TO, not a document to reference by id.
+#
+# WHY THIS COSTS NOTHING EXTRA: it is read from the SAME frontmatter this loop
+# already has in hand for every project, live or done, so it needs no extra parse
+# and no directory walk of its own — `deliverables/` is never listed from disk here
+# (that is exactly the filesystem walk task-007 rejected; see its task doc).
+# Trusting the stamp's shape is not this file's job either: closeout verifies each
+# path exists before writing it, but a human can still hand-edit project.md, so
+# build-board.sh re-checks the `/projects/<slug>/deliverables/<file>` shape at
+# render time before anything reaches a published page — the same "the writer
+# already restricts what it collects; the board does not trust it to have done so"
+# rule href() applies to a PR URL's scheme.
+deliverable_path_entries() { # <frontmatter>
+  yaml_list_entries "$1" deliverable_paths
+}
+
 # The TEXT of each open question — OPT-IN, and off unless SNAPSHOT_QUESTION_TEXT=1.
 #
 # THIS CROSSES THE ALLOWLIST ON PURPOSE, at the bundle owner's explicit instruction
@@ -302,6 +324,12 @@ question_texts() { # <frontmatter>
 # done-project skip and the normal path — so a field added to one and not the other
 # renders a retained project differently from a live one, on a page nobody diffs. It
 # reads the loop's own variables and takes only what differs between the two.
+#
+# `deliverable_paths` is read directly off `$p_deliverable_paths_json` rather than
+# taken as a positional argument like `$4`/`$5`: it is parsed from the frontmatter
+# BOTH exits already have in hand, before the loop forks on `$p_status`, so — unlike
+# the phase/task JSON — it never differs between the two call sites and adding a
+# parameter for it would say otherwise.
 project_stanza() { # <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_json>
   printf '%s' "
     {
@@ -315,7 +343,8 @@ project_stanza() { # <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_
       \"awaiting_close\": $1,
       \"phase_progress\": {\"done\": $2, \"total\": $3},
       \"phases\": [$4],
-      \"tasks\": [$5]
+      \"tasks\": [$5],
+      \"deliverable_paths\": [$p_deliverable_paths_json]
     }"
 }
 
@@ -344,6 +373,16 @@ while IFS= read -r pfile; do
   # Identity, carried on purpose — see the reversal in the header. Verbatim and
   # unresolved: `defaultOwner` is the board's to apply, not this file's.
   p_owner="$(fmfield "$pfm" owner)"
+  # Same frontmatter, same cost as every other project field above — read here so
+  # BOTH exits below carry it, not just the done one. A live project rarely has the
+  # key at all (closeout is what stamps it), so this is `[]` for almost every
+  # project on the board and costs nothing extra to compute.
+  p_deliverable_paths_json=""
+  while IFS= read -r dp; do
+    [[ -n "$dp" ]] || continue
+    [[ -n "$p_deliverable_paths_json" ]] && p_deliverable_paths_json="$p_deliverable_paths_json, "
+    p_deliverable_paths_json="$p_deliverable_paths_json$(jstr "$dp")"
+  done <<< "$(deliverable_path_entries "$pfm")"
 
   # ---- a DONE project is read no further than this line.
   #

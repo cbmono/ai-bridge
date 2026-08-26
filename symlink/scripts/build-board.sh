@@ -117,7 +117,16 @@
 #     cannot open a local file, so a task copies a SHORT REFERENCE — `<project>/tasks/<id>`
 #     — instead of a link, and every button says what it copied so a failed copy is
 #     visible rather than silent) and a webfont stylesheet. Nothing from a snapshot ever
-#     reaches either of them; the escaping rules above are what hold, not "no script".
+#     reaches either of them; the escaping rules above are what hold, not "no script". A
+#     retained project's deliverables panel copies with this SAME helper — every
+#     `[data-copy]` button on the page shares it, and there is no second one.
+#   · A retained project's deliverables panel is built from `deliverable_paths:` in the
+#     project's own SNAPSHOT.json stanza — which write-snapshot.sh reads from
+#     project.md's frontmatter, and ONLY from there. This renderer never opens `tasks/`
+#     and never lists `deliverables/` from disk; that is what keeps it compatible with
+#     the done-project skip (see write-snapshot.sh's header). Every entry is re-checked
+#     against `/projects/<slug>/deliverables/<file>` (bundle_deliverable()) before it can
+#     reach a button — a bundle-relative shape is the only kind of path this page renders.
 #   · Its decision rail surfaces one thing AWAITING.md does not: an open question on a
 #     task that is no longer a draft. write-snapshot.sh only emits an `awaiting` verb for
 #     a question while the task IS a draft, so such a question is invisible in the queue;
@@ -700,6 +709,13 @@ button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.74rem;
   padding:.08rem .35rem;color:var(--muted);background:var(--sunk);border-color:transparent;
   font-variant-numeric:tabular-nums}
 button.dep:hover{color:var(--accent);border-color:var(--accent);background:transparent}
+.delivs{padding:.85rem .95rem 0}
+.delivs h3{margin:0 0 .5rem;font-size:.64rem;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--dim);font-weight:600}
+.delivs ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem}
+button.dlv{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.76rem;
+  padding:.28rem .55rem;color:var(--muted);background:var(--sunk);border-color:transparent}
+button.dlv:hover{color:var(--accent);border-color:var(--accent);background:transparent}
 .state{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
   white-space:nowrap}
 .state.ok{color:var(--ok)} .state.signal{color:var(--signal)}
@@ -755,6 +771,26 @@ TABLE_SCRIPT = r"""<script>
   });
 })();
 </script>"""
+
+
+def bundle_deliverable(path, slug):
+    """A deliverable path reaches the page ONLY if it is exactly
+    `/projects/<slug>/deliverables/<file>` for THIS project's own slug — bundle-
+    relative, one path segment, no traversal. Anything else is dropped rather than
+    guessed at, the same rule href() applies to a PR URL's scheme: closeout already
+    verifies and stamps this shape (close-project-folder.sh), but the writer having
+    restricted what it collects is never a reason for the reader to trust it — a
+    human can still hand-edit project.md, and this is the last point before an
+    absolute filesystem path could reach a published page.
+    """
+    p = str(path or "")
+    prefix = "/projects/%s/deliverables/" % slug
+    if not p.startswith(prefix):
+        return None
+    rest = p[len(prefix):]
+    if not rest or "/" in rest or rest in (".", ".."):
+        return None
+    return p
 
 
 def short_ref(slug, tid):
@@ -991,6 +1027,14 @@ def render_table():
         nr = sum(1 for t in tasks if t.get("status") in RUNNING)
         nw = sum(1 for t in tasks if t.get("status") in PENDING)
         ph = todict(p.get("phase_progress"))
+        # From project.md's `deliverable_paths:` ONLY — never `tasks/`, never a
+        # filesystem listing of `deliverables/`. That is what keeps this panel
+        # compatible with the done-project skip (write-snapshot.sh): a retained
+        # project's `tasks` list above is already empty, and this does not change
+        # that. Reject anything that is not this project's own bundle-relative
+        # shape before it ever reaches a button.
+        dps = [d for d in (bundle_deliverable(x, str(p.get("slug") or ""))
+                           for x in tolist(p.get("deliverable_paths"))) if d]
         o.append('<details class="proj%s"><summary class="phead">' % (" fin" if fin else ""))
         o.append('<span class="ptitle">%s</span><span class="counts">' % e(p.get("title")))
         if fin:
@@ -1014,6 +1058,9 @@ def render_table():
         if toint(ph.get("total")):
             o.append('<span class="tag">%d/%d phases</span>'
                      % (toint(ph.get("done")), toint(ph.get("total"))))
+        if dps:
+            o.append('<span class="tag">%d deliverable%s</span>'
+                     % (len(dps), "" if len(dps) == 1 else "s"))
         o.append("</span></summary>")
 
         o.append('<div class="body"><div class="scroll"><table><thead><tr>'
@@ -1079,7 +1126,20 @@ def render_table():
                                  % e(x.get("number")))
             o.append('<td>%s</td></tr>' % (" ".join(cells) if cells
                                            else '<span class="dim">—</span>'))
-        o.append("</tbody></table></div></div></details>")
+        o.append("</tbody></table></div>")
+        if dps:
+            # Reuses the ONE clipboard helper the page already ships (TABLE_SCRIPT,
+            # `[data-copy]`/`data-what`) — no second script, no new event handler.
+            # The label shown is just the filename; the full bundle-relative path is
+            # both the copied text and the hover title, so a reader can see what a
+            # click will paste before clicking it.
+            o.append('<div class="delivs"><h3>Deliverables · %d</h3><ul>' % len(dps))
+            for dp in dps:
+                fname = dp.rsplit("/", 1)[-1]
+                o.append('<li><button class="dlv" data-copy="%s" data-what="Deliverable path" '
+                         'title="%s">%s</button></li>' % (e(dp), e(dp), e(fname)))
+            o.append("</ul></div>")
+        o.append("</div></details>")
 
     # ---- the other owners, one collapsed block each, from git HEAD ----------
     # NAMED and COLLAPSED. No `open` attribute, and no script — the same <details> the
