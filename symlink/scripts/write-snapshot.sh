@@ -34,7 +34,10 @@
 #
 #   CARRIED (the whole allowlist):
 #     project: slug, title, description, kind, status, autonomy, owner (a GitHub
-#              username — see the reversal below before you remove it)
+#              username — see the reversal below before you remove it),
+#              deliverable_paths (bundle-relative paths, VERBATIM from project.md —
+#              closeout stamps these, this file only forwards them; see task-007's
+#              board panel and the shape check build-board.sh applies before render)
 #     phase:   file, order, title, status
 #     task:    id, title, kind, status, assignee (a ROLE slug, never a person),
 #              in_flight, awaiting (a verb, not a reason), open_questions (a COUNT),
@@ -48,7 +51,20 @@
 #       the task doc for the question itself. AWAITING.md carries that text; the
 #       board does not;
 #     · any author identity (`authorEmail`), any filesystem path outside this bundle
-#       (`reposRoot`, `worktreeRoot`), any URL other than a PR URL.
+#       (`reposRoot`, `worktreeRoot`), any URL other than a PR URL. `deliverable_paths`
+#       is the one exception to enforcing this by construction rather than by trust:
+#       this file forwards it VERBATIM (see the CARRIED entry above) and does not
+#       itself check the shape, so a hand-edited project.md can put an out-of-bundle
+#       path into SNAPSHOT.json (gitignored, never published as-is).
+#       WHAT THIS FILE DOES AND DOES NOT GUARANTEE, stated exactly, because an earlier
+#       version of this paragraph claimed a safety property the code did not have and
+#       an external review walked straight through it: nothing here keeps such a path
+#       out of SNAPSHOT.json. The only thing between it and a PUBLISHED page is
+#       build-board.sh's bundle_deliverable(), which renders an entry only if the WHOLE
+#       value matches one `/projects/<slug>/deliverables/<segment>[/<segment>…]` shape —
+#       not a prefix test with a list of bad characters, which is what four review
+#       rounds each defeated in a new way. It is also SCOPED TO THIS KEY: every other
+#       list key is emitted as parsed, with no consumer that re-checks anything.
 #
 # `owner:` IS CARRIED, AND THAT IS A REVERSAL — read this before "restoring" the rule.
 # Until 2026-08-26 the list above ended with `owner:` on the NEVER side, on the ground
@@ -178,6 +194,16 @@ fmenum() { # <frontmatter> <key>
 # The raw text of a list field, in BOTH YAML forms (inline `k: [ a, b ]` and a block
 # sequence of `- ` lines). Copied in shape from validate-bundle.sh's refs_for, for
 # the same reason: no instance uses block style today, and nothing forbids it.
+#
+# DELIBERATELY COMMENT-AGNOSTIC — read this before stripping a trailing `# comment`
+# here again. Six keys share this helper and five are FREE TEXT, so anything deciding
+# where an inline list ENDS decides it for prose a human wrote, and two attempts from
+# here both ended a list early on real documents: truncate-at-first-`]` stopped inside a
+# Markdown PR link (`[repo#N](url)`, the style this bundle's CLAUDE.md mandates), and
+# quote-parity stopped at that same `]` when the link sat between escaped quotes. Each
+# dropped the second entry off `open_questions` — which gates `draft -> ready` and feeds
+# AWAITING.md — invisibly. Only `deliverable_paths` needs a strip and only it can afford
+# one, so it lives at that consumer: deliverable_path_entries below.
 list_region() { # <frontmatter> <key>
   printf '%s\n' "$1" | awk -v k="$2" '
     $0 ~ "^" k ":" { rest=$0; sub(/^[^:]*:/, "", rest); print rest; inblk=1; next }
@@ -228,10 +254,13 @@ count_questions() { # <frontmatter>
 # never a bare comma — question text routinely contains commas and splitting on those
 # shreds one question into several. An unquoted list (the form `depends_on` uses) has
 # no such hazard, so a bare comma is the right separator there.
-yaml_list_entries() { # <frontmatter> <key>
-  local r inner
-  r="$(list_region "$1" "$2")"
-  inner="$(printf '%s\n' "$r" \
+#
+# Takes the REGION, not the key, so the one caller that pre-processes its own region
+# (deliverable_path_entries) reuses this splitter instead of copying it. Every other
+# caller goes through yaml_list_entries below and passes the region untouched.
+list_entries_from_region() { # <region>
+  local inner
+  inner="$(printf '%s\n' "$1" \
     | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
     | sed -e 's/^-[[:space:]]*//' \
     | sed -e 's/^\[//' -e 's/\]$//' \
@@ -251,6 +280,10 @@ yaml_list_entries() { # <frontmatter> <key>
     | grep -vE '^(\[|\]|\[\])$' || true
 }
 
+yaml_list_entries() { # <frontmatter> <key>
+  list_entries_from_region "$(list_region "$1" "$2")"
+}
+
 # The task IDs a task depends on. Emitted as IDs, not paths: an ID is what a human
 # reads on the board and the full path is derivable from the project slug, so
 # carrying the path would be redundant AND longer. Bundle-relative either way, so
@@ -264,6 +297,103 @@ yaml_list_entries() { # <frontmatter> <key>
 depends_ids() { # <frontmatter>
   # Entries arrive already trimmed and unquoted, so basename-then-suffix is safe.
   yaml_list_entries "$1" depends_on | sed -e 's#^.*/##' -e 's#\.md$##' | grep -v '^$' || true
+}
+
+# The bundle-relative deliverable paths a done project's closeout stamped into
+# `deliverable_paths:` (close-project-folder.sh). Carried VERBATIM — unlike
+# `depends_ids` above this is not normalised to a bare id, because a deliverable is
+# a file to copy a path TO, not a document to reference by id.
+#
+# WHY THIS COSTS NOTHING EXTRA: it is read from the SAME frontmatter this loop
+# already has in hand for every project, live or done, so it needs no extra parse
+# and no directory walk of its own — `deliverables/` is never listed from disk here
+# (that is exactly the filesystem walk task-007 rejected; see its task doc).
+# Trusting the stamp's shape is not this file's job either: closeout verifies each
+# path exists before writing it, but a human can still hand-edit project.md, so
+# build-board.sh's bundle_deliverable() requires every entry to match one whole
+# `/projects/<slug>/deliverables/<segment>[/<segment>…]` shape before it can render —
+# the same "the writer already restricts what it collects; the board does not trust it
+# to have done so" rule href() applies to a PR URL's scheme.
+#
+# THE TRAILING-COMMENT STRIP LIVES HERE, at this one key and nowhere else — and it is
+# about FIDELITY, not safety: what keeps a bad value off the published page is that
+# whole-value shape check, which drops anything a strip left comment-shaped. SCHEMA.md
+# documents this key WITH a trailing `# comment` on the same line, so without a strip
+# the documented form loses its own deliverable — the panel is simply missing an entry
+# a human stamped.
+#
+# Safe at this key and not in list_region() because these entries are bare paths, never
+# prose. THE PROPERTY THE CUT MUST HOLD, stated as the only thing that can settle it:
+# THE CUT REMOVES EXACTLY THE SPAN A YAML PARSER READS AS A COMMENT — no more, so a
+# clean sibling entry can never go with it, and no less, so no comment text can be
+# fabricated into a path. Earlier rounds each stated a weaker proxy for this and each
+# proxy had a hole, because a proxy is checked by argument and this is checked against
+# a parser. Two rules are all YAML needs here, and the scan below is exactly them:
+#   · a `#` opens a comment only when it is preceded by whitespace AND is not inside a
+#     QUOTED scalar. Inside quotes `#` is an ordinary character, which is what
+#     `[ "…/a #1.md", "…/b.md" ]` turns on: YAML reads two entries there, so a cut at
+#     that `#` both fabricates `…/a` and deletes the clean `…/b.md`;
+#   · in the flow (inline) form the sequence ENDS at the first UNQUOTED `]`, so a
+#     comment can only begin after one. `[ …/a] #1.md, …/b.md ]` is therefore ONE
+#     entry, `…/a`, and everything from ` #1.md` on is comment — the reason this is not
+#     a "lost sibling" but the parser's own reading, and `…/b.md` must NOT render.
+#     A quote only opens a scalar where a scalar may START — FOUR positions, which is
+#     what `fresh` below is set from: line start, after whitespace, after `[`, after
+#     `,`. So an apostrophe inside a plain path is not a quote. BOTH of YAML's escapes
+#     are needed to find where a scalar ENDS, and there is exactly one per quote style:
+#     `\"` does not close a double-quoted scalar, and `''` does not close a single-quoted
+#     one — it IS an apostrophe. Handle only the first and
+#     `[ '…/o''brien[draft].md #2', …/clean.md ]` is cut INSIDE one atom: it fabricates
+#     `…/o''brien[draft].md`, and it deletes `…/clean.md`, which is an entry YAML really
+#     does return. A block entry line has no terminator to wait for: its siblings are on
+#     other lines, so the first unquoted whitespace-`#` on it is a comment.
+# Anything the cut declines to remove stays exactly as written, and the render-time
+# shape check drops whichever fragments the comma-split makes of it — a visible drop,
+# never a fabricated path.
+deliverable_path_entries() { # <frontmatter>
+  list_entries_from_region "$(list_region "$1" deliverable_paths | awk '
+    # One left-to-right pass. CCOL = where a comment begins, TCOL = the flow
+    # terminator, OPEN = the line ended inside a quoted scalar; 0 = absent. CCOL
+    # returns early, so TCOL is set only by a `]` that precedes the comment — which
+    # is the whole condition the inline form needs. `noq` ignores quoting entirely.
+    # Testing ONE CHARACTER with a regex is a locale trap, and it cost the whole key:
+    # this awk is byte-oriented, so substr() returns one BYTE of a multi-byte character
+    # and `~ /[[:space:]]/` on that byte aborts the program with "towc: multibyte
+    # conversion failure" — so a legitimately stamped `Übersicht.md` did not merely fail
+    # to render, it took every sibling deliverable with it. index() compares bytes and
+    # cannot fail. YAML separation space is space and tab; the line breaks are in the set
+    # only because a CRLF file leaves a `\r` on the line.
+    function ws(x) { return index(" \t\r\n", x) > 0 }
+    function scan(s, noq,   i, c, q, fresh, n) {
+      CCOL = 0; TCOL = 0; OPEN = 0; q = ""; fresh = 1; n = length(s)
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (q != "") {
+          if (q == "\"" && c == "\\") i++
+          else if (c == q && q == "'\''" && substr(s, i + 1, 1) == "'\''") i++
+          else if (c == q) q = ""
+          continue
+        }
+        if (!noq && fresh && (c == "\"" || c == "'\''")) { q = c; fresh = 0; continue }
+        if (c == "#" && i > 1 && ws(substr(s, i - 1, 1))) { CCOL = i; return }
+        if (c == "]" && TCOL == 0) TCOL = i
+        fresh = (ws(c) || c == "," || c == "[")
+      }
+      OPEN = (q != "")
+    }
+    {
+      scan($0, 0)
+      # A quoted scalar left OPEN is not valid YAML at all — Psych refuses the
+      # document — so there is no parser reading to be faithful to, and quote state
+      # has nothing to say. Fall back to the quote-blind scan (what this cut did
+      # before it was quote-aware) rather than dropping a path a human can still
+      # read: an unterminated scalar already swallows the rest of the line, so the
+      # fallback cannot cost an entry any parser would have returned.
+      if (OPEN) scan($0, 1)
+      if (CCOL > 0 && ($0 ~ /^[[:space:]]*-/ || TCOL > 0)) $0 = substr($0, 1, CCOL - 1)
+      print
+    }
+  ')"
 }
 
 # The TEXT of each open question — OPT-IN, and off unless SNAPSHOT_QUESTION_TEXT=1.
@@ -302,6 +432,12 @@ question_texts() { # <frontmatter>
 # done-project skip and the normal path — so a field added to one and not the other
 # renders a retained project differently from a live one, on a page nobody diffs. It
 # reads the loop's own variables and takes only what differs between the two.
+#
+# `deliverable_paths` is read directly off `$p_deliverable_paths_json` rather than
+# taken as a positional argument like `$4`/`$5`: it is parsed from the frontmatter
+# BOTH exits already have in hand, before the loop forks on `$p_status`, so — unlike
+# the phase/task JSON — it never differs between the two call sites and adding a
+# parameter for it would say otherwise.
 project_stanza() { # <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_json>
   printf '%s' "
     {
@@ -315,7 +451,8 @@ project_stanza() { # <awaiting_close> <ph_done> <ph_total> <phases_json> <tasks_
       \"awaiting_close\": $1,
       \"phase_progress\": {\"done\": $2, \"total\": $3},
       \"phases\": [$4],
-      \"tasks\": [$5]
+      \"tasks\": [$5],
+      \"deliverable_paths\": [$p_deliverable_paths_json]
     }"
 }
 
@@ -344,6 +481,16 @@ while IFS= read -r pfile; do
   # Identity, carried on purpose — see the reversal in the header. Verbatim and
   # unresolved: `defaultOwner` is the board's to apply, not this file's.
   p_owner="$(fmfield "$pfm" owner)"
+  # Same frontmatter, same cost as every other project field above — read here so
+  # BOTH exits below carry it, not just the done one. A live project rarely has the
+  # key at all (closeout is what stamps it), so this is `[]` for almost every
+  # project on the board and costs nothing extra to compute.
+  p_deliverable_paths_json=""
+  while IFS= read -r dp; do
+    [[ -n "$dp" ]] || continue
+    [[ -n "$p_deliverable_paths_json" ]] && p_deliverable_paths_json="$p_deliverable_paths_json, "
+    p_deliverable_paths_json="$p_deliverable_paths_json$(jstr "$dp")"
+  done <<< "$(deliverable_path_entries "$pfm")"
 
   # ---- a DONE project is read no further than this line.
   #
@@ -479,7 +626,7 @@ cat > "$tmp" <<JSON
 {
   "_schema": "ai-bridge board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL, or any path outside this bundle.",
+  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},

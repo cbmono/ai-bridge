@@ -143,6 +143,136 @@ echo "== a PR is a real link =="
 assert "PR links to GitHub"                          "$(fhas 'href="https://github.com/o/r/pull/41"' "$OUT")"
 assert "…and opens safely"                           "$(fhas 'rel="noopener noreferrer"' "$OUT")"
 
+echo "== a retained project's deliverables panel =="
+# A hand-written SNAPSHOT.json, exactly as write-snapshot.sh would emit it for a
+# `status: done` project carrying `deliverable_paths:` — this harness is about the
+# RENDERER's own shape check, so the hostile entries below are ones a human could
+# still hand-edit into project.md even though closeout never writes them.
+mk "$TMP/delivs" "delivs" '[
+ {"slug":"with-delivs","title":"Shipped review","kind":"research","status":"done",
+  "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[],
+  "deliverable_paths":["/projects/with-delivs/deliverables/report.md",
+                        "/projects/with-delivs/deliverables/summary.html",
+                        "/projects/with-delivs/deliverables/site/index.html",
+                        "/projects/other-project/deliverables/report.md",
+                        "/Users/attacker/.ssh/id_rsa",
+                        "/projects/with-delivs/deliverables/../../../etc/passwd",
+                        "/projects/with-delivs/deliverables/site/../../../etc/shadow",
+                        "/projects/with-delivs/deliverables/report.md ]   # from /Users/attacker/notes [old]",
+                        "/projects/with-delivs/deliverables/report.md /Users/attacker/Desktop/report.md",
+                        "/projects/with-delivs/deliverables/see#/Users/attacker/secret",
+                        "/projects/with-delivs/deliverables/report.md\n/Users/attacker/Desktop/notes.md",
+                        "/projects/with-delivs\u0308/deliverables/elsewhere.md"]},
+ {"slug":"..","title":"Hostile slug","kind":"research","status":"done",
+  "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[],
+  "deliverable_paths":["/projects/../deliverables/id_rsa",
+                        "/projects/../../Users/attacker/deliverables/id_rsa"]},
+ {"slug":"no-delivs","title":"Closed with nothing stamped","kind":"build","status":"done",
+  "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[],"deliverable_paths":[]}]'
+DOUT="$TMP/delivs.html"
+rc4=0; bash "$GEN" --out "$DOUT" "$TMP/delivs" >/dev/null 2>&1 || rc4=$?
+assert "a bundle-relative deliverable renders as a copy button" \
+  "$(fhas 'data-copy="/projects/with-delivs/deliverables/report.md"' "$DOUT")"
+assert "…labelled by filename, not the full path"    "$(fhas '>report.md</button>' "$DOUT")"
+assert "…and a second one too"                        "$(fhas 'data-copy="/projects/with-delivs/deliverables/summary.html"' "$DOUT")"
+assert "…reusing the existing data-what convention"   "$(fhas 'data-what="Deliverable path"' "$DOUT")"
+assert "a NESTED deliverable renders too, not dropped" \
+  "$(fhas 'data-copy="/projects/with-delivs/deliverables/site/index.html"' "$DOUT")"
+assert "…labelled by its filename only, not its nested path" "$(fhas '>index.html</button>' "$DOUT")"
+assert "the panel is titled with a count that matches what renders" \
+  "$(fhas 'Deliverables · 3' "$DOUT")"
+echo "== every rendered path is bundle-relative to THIS project — nothing else survives =="
+assert "another project's deliverable is dropped"     "$(fhasnt 'other-project/deliverables' "$DOUT")"
+assert "an absolute filesystem path is dropped"       "$(fhasnt 'attacker' "$DOUT")"
+# LOOK INSIDE THE VALUE. `fhasnt 'data-copy="/Users'` only says no value BEGINS with
+# /Users — and the leak this exists to catch puts the absolute path in the MIDDLE of a
+# value whose first characters are a perfectly good bundle-relative prefix (a swallowed
+# YAML comment, see the last fixture entry). Spelled the first way, this assertion read
+# green on a page that was leaking, which is worse than not having it at all.
+no_copy_value_with() { # <needle> <file>
+  ! grep -o 'data-copy="[^"]*"' "$2" | grep -qF -- "$1"
+}
+assert "…and no /Users ANYWHERE inside a data-copy value" \
+  "$(yes_if no_copy_value_with '/Users' "$DOUT")"
+assert "a traversal attempt is dropped"               "$(fhasnt 'etc/passwd' "$DOUT")"
+assert "a traversal attempt through a nested segment is dropped too" "$(fhasnt 'etc/shadow' "$DOUT")"
+# A REAL path with a YAML trailing comment folded into it. The writer strips that comment
+# before it can ever get this far (write-snapshot.sh's deliverable_path_entries), so what
+# this fixture stands for is the input that never met the writer at all: SNAPSHOT.json is
+# a file on disk, and this renderer reads it back without knowing who wrote it. Its prefix
+# is this project's and it has no `..`, so a guard that only anchors the prefix passes it
+# — and it carries an absolute path.
+assert "a swallowed YAML comment is dropped, not rendered as a path" \
+  "$(fhasnt 'report.md ]' "$DOUT")"
+# THE VECTOR THAT NEEDS NO COMMENT AT ALL, and the reason this guard stopped listing bad
+# characters and started requiring a whole shape. Two paths in one value: correct prefix,
+# no `..`, no `#`, nothing on any denylist — and rendered whole it puts the publisher's
+# home directory in a copy button labelled `report.md`, so the page looks right. What
+# rejects it is that a deliverable path may not contain WHITESPACE, and this value does.
+assert "two paths sharing one value are dropped, not rendered as one" \
+  "$(fhasnt 'Desktop/report.md' "$DOUT")"
+# …and the same shape with no whitespace either, which is why `#` is excluded on its own
+# account and not merely as the character a comment starts with.
+assert "an absolute path glued on after a # is dropped too" \
+  "$(fhasnt 'deliverables/see#' "$DOUT")"
+# A NEWLINE and a second path after an otherwise perfect value. This is what fullmatch()
+# buys over a prefix test plus an end anchor: Python's `$` also matches just before a
+# trailing newline, so "the whole value, with no remainder" has to be the match itself.
+assert "a trailing remainder after a newline is dropped" \
+  "$(fhasnt 'Desktop/notes.md' "$DOUT")"
+# THE SLUG IS CHECKED BY THE SAME RULE AS EVERY OTHER SEGMENT. It used to be interpolated
+# into the prefix and trusted, so a hand-written snapshot claiming its slug was `..` got
+# `/projects/../deliverables/<file>` rendered as this project's own deliverable — the
+# guard compared the value against a prefix the value itself had chosen.
+assert "a hostile slug cannot render a path out of the bundle" \
+  "$(fhasnt 'data-copy="/projects/../' "$DOUT")"
+# THE SLUG AGAIN, THROUGH A COMBINING MARK. bundle_deliverable() strips category-M
+# characters before it tests the SHAPE, so that a macOS-decomposed filename is not
+# dropped. Strip them from the whole value and they come off the SLUG too: `with-delivs`
+# + U+0308 reduces to `with-delivs`, the shape matches, and a button would point at a
+# NEIGHBOURING project's directory while claiming to be this project's deliverable.
+# What rejects it is that the slug is pinned on the ORIGINAL value, not on the stripped
+# one — the mark-tolerance is bought for the filename segments only.
+# Asserted with no_copy_value_with and not a whole-file `fhasnt`, for the reason this
+# file already learned once: a page-wide grep is only an assertion while no OTHER
+# fixture can satisfy it, and the thing being denied here is specifically a data-copy
+# VALUE.
+assert "a combining mark in the slug does not smuggle in another project's path" \
+  "$(yes_if no_copy_value_with 'elsewhere.md' "$DOUT")"
+assert "…and that project gets no deliverables panel at all" "$(yes_if python3 -c "
+import sys
+t = open('$DOUT').read()
+i = t.index('Hostile slug')
+j = t.index('</details>', i)
+sys.exit(0 if 'class=\"delivs\"' not in t[i:j] else 1)")"
+# Not a second `Deliverables · 3` grep — that was byte-identical to the assertion above
+# and could not fail independently of it. Counting the BUTTONS is the half the heading
+# cannot certify: heading and list are built from the same filtered sequence, so a
+# desync between them is exactly what a count of one and not the other would miss.
+DELIV_BTNS="$(grep -oF 'data-what="Deliverable path"' "$DOUT" | grep -c . || true)"
+assert "…and the buttons themselves number 3, matching that heading (saw $DELIV_BTNS)" \
+  "$(eq "$DELIV_BTNS" 3)"
+echo "== absent/empty deliverable_paths renders no panel, and no error =="
+# The exit code itself, not file non-emptiness — a renderer that wrote partial output
+# and then failed would still pass a `test -s` check.
+assert "it still exits 0"                             "$(eq "$rc4" 0)"
+assert "…and produces non-empty output"               "$(yes_if test -s "$DOUT")"
+assert "no deliverables panel for a project with none" "$(yes_if python3 -c "
+import sys
+t = open('$DOUT').read()
+i = t.index('Closed with nothing stamped')
+j = t.index('</details>', i)
+sys.exit(0 if 'class=\"delivs\"' not in t[i:j] else 1)")"
+echo "== it reuses the ONE existing clipboard helper — no second <script> =="
+# -c counts LINES, not occurrences — a second <script> on the SAME line as the first
+# would still read 1 and pass. -o prints one match per line, so piping to `wc -l` counts
+# occurrences regardless of how many share a line.
+assert "exactly one <script> element on this page too" \
+  "$(eq "$(grep -oF '<script' "$DOUT" | wc -l | tr -d ' ')" 1)"
+
 echo "== both themes are defined on bare :root =="
 assert "no token defined only in a media/theme block" "$(yes_if python3 -c "
 import re,sys

@@ -245,8 +245,281 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # THE DEBT ABOVE IS UNCHANGED AND THIS ENLARGES IT. write-snapshot.sh and build-board.sh
 # are two of the four board scripts named as the real reduction candidates, and this task
 # grew both. Nothing was retired here. The reduction this objective is owed remains owed.
-CEILING_TOTAL=6648
-CEILING_CODE=3587
+#
+#   6,648 / 3,587   20 files   what #32 repaired the placeholder to, on `main` at e76b9f3
+#
+# RAISED 2026-08-26 for the deliverables panel (task-007), and here is the bill:
+#
+#   6,648 / 3,587   20 files   what #32 pinned above
+#   6,775 / 3,647   20 files   +127 total, +60 code
+#
+# Per file, so the raise can be checked rather than believed:
+#
+#   build-board.sh            1,164 -> 1,234   +70 total, +46 code
+#   write-snapshot.sh           498 ->   555   +57 total, +14 code
+#
+# WHAT THE LINES BUY. write-snapshot.sh's code lines forward `deliverable_paths:` off the
+# frontmatter parse every project already gets, through `project_stanza()`, for BOTH the
+# done-project skip and the live path — the same one-builder-two-exits shape the owner
+# field above already established, kept rather than duplicated so a retained project's
+# deliverables panel and a live project's stay sourced from one place. A second pass
+# (this same PR, addressing independent review) fixed a real parsing defect in the SAME
+# function: an inline list's trailing `# comment` — the exact form SCHEMA.md documents
+# `deliverable_paths:` with — was swallowed into the last path entry; `list_region` now
+# truncates at the closing `]` before a comment can reach it. The rest of the growth here
+# is comments: the field's own CARRIED-allowlist entry, and restating (rather than
+# silently leaving false) the header's "never any path outside this bundle" claim now
+# that `deliverable_paths` is forwarded verbatim and only shape-checked at render time.
+# build-board.sh's code lines are a "Deliverables" section rendered inside the project's
+# existing collapsed `<details>` (no new `<script>` — it reuses the page's one
+# `data-copy`/`data-what` clipboard helper) plus `bundle_deliverable(path, slug)`, a guard
+# that re-checks every entry against `/projects/<slug>/deliverables/<file>` before it can
+# reach a button — the board does not trust the writer to have restricted what it
+# collected, the same rule `href()` already applies to a PR URL's scheme. The same review
+# pass corrected the guard itself: it used to drop a NESTED path (`site/index.html`, e.g.
+# an exported research site) as if it were hostile, silently under-counting a project's
+# real deliverables against what closeout stamped — it now allows any nesting below
+# `deliverables/` and rejects only an empty, `.` or `..` path segment.
+#
+# THE DEBT ABOVE IS UNCHANGED, AGAIN. Nothing here touches print-board.sh or
+# watch-board.sh, and this raise grows two of the four named reduction candidates rather
+# than shrinking any of them.
+#
+#   6,775 / 3,647   20 files   what the raise above pinned
+#   6,792 / 3,653   20 files   +17 total, +6 code
+#
+# Per file:
+#
+#   write-snapshot.sh           555 ->   572   +17 total, +6 code
+#
+# WHAT THE LINES BUY — still task-007, an independent-review fix round, not new scope.
+# `list_region()`'s `]`-truncation (added above to stop a trailing YAML comment from
+# corrupting `deliverable_paths:`) lives in a function SHARED by every list key, and
+# looked for the closing `]` with no regard for quoting — so an `open_questions` or
+# `advisor_notes` entry containing ordinary brackets, or a Markdown PR link in the
+# `[repo#N](url)` style this bundle's own CLAUDE.md mandates for citing PR links, was
+# mistaken for the list's own end, silently dropping any entry after it. That is
+# `open_questions`, the one field that gates `draft -> ready` and feeds AWAITING.md.
+# The +6 code lines make the scan QUOTE-AWARE (a `"` toggles quote state; a `]` inside
+# quotes no longer closes the list) rather than scoping the fix to the one caller that
+# exposed it, because the same defect would otherwise stay latent in `advisor_notes`,
+# `pr` and any future free-text list key sharing this function. The remaining growth
+# is the comment recording why the fix's scope is "every list key", not one caller.
+#
+# THE DEBT ABOVE IS UNCHANGED, STILL.
+#
+# ---- and the round after that, which gives code lines BACK -------------------
+#
+#   6,792 / 3,653   20 files   what the raise above pinned
+#   6,803 / 3,650   20 files   +11 total, -3 CODE
+#
+# Per file:
+#
+#   write-snapshot.sh           572 ->   572    0 total, -6 code
+#   build-board.sh            1,234 -> 1,245   +11 total, +3 code
+#
+# WHAT THE LINES BUY — task-007 again, the third independent-review round on the same
+# PR. The quote-aware scan above was itself wrong, and wrong in the direction that
+# matters: on ODD quote parity it found no unquoted `]`, truncated NOTHING, and folded
+# the trailing YAML comment — a hand edit naming a path on the publisher's own disk —
+# into the deliverable path a copy button carries on the published board. So the
+# parity loop is gone, replaced by ONE `sub()` whose pattern cannot end a
+# list early by construction (`[^]]*$` forces the matched `]` to be the last on the
+# line, and a list's terminator always follows every `]` its entries contain). That is
+# the -6 code in write-snapshot.sh, and the reason this raise is mostly a refund.
+#
+# build-board.sh's +3 code is the price of the one case that strip declines — a comment
+# carrying a `]` of its own, where stripping could end a list early — which leaves the
+# value uncorrected rather than truncated. `bundle_deliverable()` now rejects a path
+# carrying a `#`: no path closeout stamps can contain one, every YAML comment starts
+# with one, and — this last clause was FALSE, and the two rounds below are what it cost
+# — this is the last point before a published page. Fixing the parser and
+# guarding the render are not redundant here — the parser keeps SNAPSHOT.json honest,
+# the guard is what holds when a document is malformed in a way no parser will fix.
+#
+# THE DEBT ABOVE IS UNCHANGED, ONCE MORE.
+#
+# ---- round four: the strip moves to ONE key, and stops growing the shared helper ----
+#
+#   6,803 / 3,650   20 files   what the raise above pinned
+#   6,812 / 3,649   20 files   +9 total, -1 CODE
+#
+# Per file:
+#
+#   write-snapshot.sh           572 ->   579    +7 total, -1 code
+#   build-board.sh            1,245 -> 1,247    +2 total,  0 code
+#
+# WHAT THE LINES BUY — and read the two rounds above first, because this one UNDOES
+# their code. Both of them fixed a trailing-comment defect from inside list_region(),
+# the helper six keys share, and both broke a free-text key on the way past; the `sub()`
+# the last round settled on then declined the one comment shape SCHEMA.md actually
+# documents (one carrying a `]`), which left the value comment-shaped, and the entries
+# are re-split on COMMAS after that — so `bundle_deliverable()`'s per-entry `#` check
+# saw the `#` in one fragment while an absolute path rode out in the next one and
+# rendered as a copy button. A guard that runs after the split cannot fix a defect that
+# happens during it.
+#
+# So list_region() goes back to BYTE-IDENTICAL to main's — comment-agnostic, five
+# free-text keys out of the blast radius for good — and the strip moves to the one
+# consumer that can afford it, deliverable_path_entries(), whose entries are bare paths
+# rather than prose. That is the -1 code: two sed expressions and a splitter reused by
+# both callers, in place of three rounds of scanning logic in the shared helper.
+#
+# build-board.sh's +2 is comment only. The `#` check stays — SNAPSHOT.json is a file on
+# disk this renderer reads back without knowing who wrote it — but the comment claiming
+# it was what made the declined case safe is gone, because it never was.
+#
+# THE DEBT ABOVE IS UNCHANGED, A FOURTH TIME.
+#
+# ---- round five: the guard becomes a WHITELIST, and gives code lines back ----------
+#
+#   6,812 / 3,649   20 files   what the raise above pinned
+#   6,842 / 3,646   20 files   +30 total, -3 CODE
+#
+# Per file:
+#
+#   write-snapshot.sh           579 ->   599   +20 total, +8 code
+#   build-board.sh            1,247 -> 1,257   +10 total, -11 code
+#
+# WHAT THE LINES BUY, and it is the same task-007 PR a fifth time — but not the same
+# fix. The four rounds above each closed the vector that was reported and left another
+# of its own class, because `bundle_deliverable()` anchored a PREFIX and then listed the
+# characters it knew were bad. The defeating input needed no comment, no quote and no
+# bracket: `[ /projects/p/deliverables/report.md /Users/somebody/Desktop/report.md ]` is
+# two paths in one value, with the right prefix, no `..` and no `#`, and it rendered
+# whole into a copy button labelled `report.md`.
+#
+# So the guard is now ONE positive predicate over the WHOLE value — `/projects/<slug>/
+# deliverables/` then one or more segments, each non-empty, not `.`/`..`, and free of
+# whitespace and `#`, with no trailing remainder — which is why build-board.sh gives 11
+# code lines BACK: one regex and a two-line function replace a prefix test and four
+# separate rejections. The slug is checked by that same rule instead of being
+# interpolated into a prefix and trusted, which also absorbs the open follow-up on an
+# unvalidated slug (task-018) rather than leaving it to a later change.
+#
+# write-snapshot.sh's +8 code is the trailing-comment cut, which is now FIDELITY ONLY —
+# safety lives entirely in the predicate above — and had to regain a property round four
+# dropped: it must never remove text that could still render as a deliverable. It fires
+# on a block entry line (siblings are on other lines), or where the `#` follows the
+# value's closing `]` and either that `]` is whitespace-separated (the terminator shape,
+# which no whitespace-free entry can contain) or nothing removed holds `/projects/`.
+# Two sed expressions became that awk block; the rest of the growth is the reasoning,
+# which is what a sixth round would otherwise have to rediscover.
+#
+# THE DEBT ABOVE IS UNCHANGED, A FIFTH TIME — though the code figure moves the right way
+# for the second round running (3,650 -> 3,649 -> 3,646).
+#
+# ---- round six: the cut stops approximating YAML and starts agreeing with it ----
+#
+#   6,842 / 3,646   20 files   what the raise above pinned
+#   6,876 / 3,660   20 files   +34 total, +14 code
+#
+#   write-snapshot.sh           599 ->   630   +31 total, +14 code
+#   build-board.sh            1,257 -> 1,260    +3 total,   0 code
+#
+# THE PREDICATE IS NOT WHAT MOVED — it survived 65 hostile inputs unchanged and none of
+# these lines touch it. What moved is the trailing-comment cut, and the reason is the
+# through-line of all five rounds above: each stated a PROPERTY the cut was supposed to
+# have ("cannot end a list early", "never removes text that could still render") and
+# checked it by argument. Round five's was false too — measured against Ruby's Psych,
+# the cut disagreed with a real parser on 5 of 35 hand-written shapes, in BOTH
+# directions: `[ "…/a ] #1.md", "…/b.md" ]` has two entries (`]` and `#` are ordinary
+# inside quotes) and the cut deleted the clean `…/b.md` while fabricating `…/a`;
+# `[ …/a] #1.md, …/b.md ]` has ONE entry (an unquoted `]` terminates a flow sequence)
+# and the cut rendered `b.md`, which is comment text.
+#
+# So the property is no longer a proxy for the thing: THE CUT REMOVES EXACTLY THE SPAN A
+# PARSER READS AS A COMMENT — checkable against a parser instead of in review. It takes
+# one left-to-right scan carrying the two facts YAML actually has here (a `#` opens a
+# comment only outside a quoted scalar; a flow sequence ends at its first unquoted `]`),
+# and that scan minus the shape-anchored `sed` pair it replaces is the +14 code.
+# Agreement with Psych goes 27/35 -> 32/35.
+#
+# CORRECTED 2026-08-27, and the correction is what round seven below is about. This
+# paragraph used to end "the three that remain are pre-existing splitter limits (an
+# unprocessed `\"` escape, a `#` glued to `]` with no space, a mixed quoted/unquoted
+# list), each reproducing identically before this change". THAT WAS FALSE, and false in
+# the one direction that matters. The scan handled the `\"` escape but had no case for
+# `''` — YAML's ONLY single-quote escape — so it closed a single-quoted scalar at the
+# first quote of the pair and cut inside one atom: on
+# `[ '…/o''brien[draft].md #2', …/clean.md ]` it rendered a FABRICATED path and deleted
+# the clean sibling, on a shape the previous revision got right. A mixed quoted/unquoted
+# list degraded the same way, from a safe drop to a fabrication. Neither reproduced
+# before that change, so neither was pre-existing.
+#
+# The lesson is not "check harder". A claim about a data format is exactly the kind that
+# cannot be settled in review, and the harness that settled it was never committed — so
+# the property held for one round and nothing guarded it. It is committed now
+# (tests/deliverable-paths-vs-yaml.test.sh), it runs against a real parser whenever the
+# suite is run, and it pins the agreement count. NOT "in CI": this repo has no CI at all
+# — no `.github/`, no `.gitlab-ci.yml`, no `Makefile` — so "committed" is the whole of
+# the guarantee, and a heading here said otherwise until it was measured.
+#
+# build-board.sh's +3 total, 0 code is one header claim narrowed: "a bundle-relative
+# shape is the only kind of path this page renders" overreached — the other-owners
+# section renders a `/projects/<slug>/` from an unvalidated slug, which this guard does
+# not cover (task-020).
+#
+# ---- round seven: a whitelist for the segment too, and the parser check committed ----
+#
+#   6,876 / 3,660   20 files   what the raise above pinned
+#   6,916 / 3,662   20 files   +40 total, +2 code
+#
+#   write-snapshot.sh           630 ->   644   +14 total, +2 code
+#   build-board.sh            1,260 -> 1,286   +26 total,  0 code
+#
+# TWO CODE LINES, and they are the two blockers. One is the `''` case the scan was
+# missing (a peek at the next character, staying inside the scalar). The other is a
+# byte-safe `ws()` helper: this awk is byte-oriented, so substr() hands back one BYTE of
+# a multi-byte character, and testing that byte with `~ /[[:space:]]/` aborted the whole
+# program — a legitimately stamped `Übersicht.md` did not merely fail to render, it took
+# every sibling on the line with it. index() compares bytes and cannot fail.
+#
+# build-board.sh moves 26 lines and NONE of them is code: the segment class went from
+# `[^/\s#]+` to `\w[\w.+-]*`, one line for one line. The denylist form had to have
+# thought of every dangerous byte and had not thought of `:`, so
+# `…/deliverables/deck.md:/Users/victim/.ssh/id_rsa` rendered whole into a copy button.
+# The 26 lines are the class stated in the positive, the two permissions that carry risk
+# named explicitly (`.`, and a word character in any script), and what the class COSTS —
+# because the next reader's temptation is to append one more character to an exclusion
+# list, and that is the move this round exists to end.
+#
+# THE DEBT ABOVE IS UNCHANGED, A SEVENTH TIME. The code figure has now moved by +14, -3,
+# -1, -3, +14, +2 across the six raises — the machinery is not growing, the reasoning is.
+#
+# ---- round eight: the class was Unicode-wide by ARGUMENT, and NFD proved it was not ----
+#
+#   6,916 / 3,662   20 files   what the raise above pinned
+#   6,939 / 3,665   20 files   +23 total, +3 code
+#
+#   build-board.sh            1,286 -> 1,308   +22 total, +3 code
+#   write-snapshot.sh           644 ->   645    +1 total,  0 code
+#
+# THREE CODE LINES, and they close the round-seven raise's own claim. That raise put a
+# POSITIVE segment class in — the right move, and it holds — but justified its width in
+# a comment that said `\w` covers "the combining marks a macOS directory listing
+# decomposes an umlaut into". IT DOES NOT: a combining mark is Unicode category M and
+# `\w` is alphanumerics plus `_`. So a macOS-decomposed `Übersicht.md` — `U` + U+0308,
+# a LEGITIMATELY stamped deliverable, not an attack — was dropped from the panel, with
+# the count tag agreeing with the short list so nothing looked wrong. Marks are now
+# stripped from the string the shape is TESTED on and kept in the string RETURNED, which
+# is complete where NFC-normalising would not have been (Devanagari matras, Thai vowel
+# signs and Hebrew points have no precomposed form). The third code line is the price:
+# stripping marks strips them from the SLUG too, so the slug is pinned on the original
+# value or `/projects/p̈/deliverables/x.md` would render as project `p`'s own.
+#
+# WHY NOTHING CAUGHT IT, which is the part worth carrying: the differential harness
+# committed one round earlier is STRUCTURALLY BLIND to an over-rejecting predicate. It
+# filters the parser's answer through the same extracted predicate, so when the
+# predicate drops an entry both sides drop it and agree — an ASCII-only class leaves
+# that harness 56/0 green while tests/snapshot.test.sh goes red. A differential check
+# bounds DISAGREEMENT with an oracle; it cannot bound agreement that is wrong in the
+# same direction on both sides. That is why the NFD case is pinned in snapshot.test.sh
+# and not here.
+#
+# THE DEBT ABOVE IS UNCHANGED, AN EIGHTH TIME.
+CEILING_TOTAL=6939
+CEILING_CODE=3665
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

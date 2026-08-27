@@ -117,7 +117,21 @@
 #     cannot open a local file, so a task copies a SHORT REFERENCE — `<project>/tasks/<id>`
 #     — instead of a link, and every button says what it copied so a failed copy is
 #     visible rather than silent) and a webfont stylesheet. Nothing from a snapshot ever
-#     reaches either of them; the escaping rules above are what hold, not "no script".
+#     reaches either of them; the escaping rules above are what hold, not "no script". A
+#     retained project's deliverables panel copies with this SAME helper — every
+#     `[data-copy]` button on the page shares it, and there is no second one.
+#   · A retained project's deliverables panel is built from `deliverable_paths:` in the
+#     project's own SNAPSHOT.json stanza — which write-snapshot.sh reads from
+#     project.md's frontmatter, and ONLY from there. This renderer never opens `tasks/`
+#     and never lists `deliverables/` from disk; that is what keeps it compatible with
+#     the done-project skip (see write-snapshot.sh's header). Every entry is re-checked
+#     against `/projects/<slug>/deliverables/<file>` (bundle_deliverable()) before it can
+#     reach a button — so every DELIVERABLE path on this page resolves inside that
+#     project's own `deliverables/`, a NESTED file below it included (an exported site's
+#     `site/index.html`), which is inside the guarantee and rendered, not dropped. Scoped
+#     to deliverables and no wider ON PURPOSE: this page renders a `/projects/<slug>/`
+#     from an unvalidated slug elsewhere (the other-owners section), which this check
+#     does not cover and does not claim to.
 #   · Its decision rail surfaces one thing AWAITING.md does not: an open question on a
 #     task that is no longer a draft. write-snapshot.sh only emits an `awaiting` verb for
 #     a question while the task IS a draft, so such a question is invisible in the queue;
@@ -162,7 +176,7 @@ command -v python3 >/dev/null 2>&1 || {
 
 BOARD_OUT="$OUT" BOARD_STANDALONE="$STANDALONE" BOARD_LIST_ONLY="$LIST_ONLY" \
   python3 - "${DIRS[@]+"${DIRS[@]}"}" <<'PY'
-import html, json, os, re, subprocess, sys, time
+import html, json, os, re, subprocess, sys, time, unicodedata
 from pathlib import Path
 
 OUT = Path(os.environ["BOARD_OUT"])
@@ -700,6 +714,13 @@ button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.74rem;
   padding:.08rem .35rem;color:var(--muted);background:var(--sunk);border-color:transparent;
   font-variant-numeric:tabular-nums}
 button.dep:hover{color:var(--accent);border-color:var(--accent);background:transparent}
+.delivs{padding:.85rem .95rem 0}
+.delivs h3{margin:0 0 .5rem;font-size:.64rem;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--dim);font-weight:600}
+.delivs ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem}
+button.dlv{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.76rem;
+  padding:.28rem .55rem;color:var(--muted);background:var(--sunk);border-color:transparent}
+button.dlv:hover{color:var(--accent);border-color:var(--accent);background:transparent}
 .state{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
   white-space:nowrap}
 .state.ok{color:var(--ok)} .state.signal{color:var(--signal)}
@@ -755,6 +776,105 @@ TABLE_SCRIPT = r"""<script>
   });
 })();
 </script>"""
+
+
+# The shape a deliverable path may have, spelled ONCE and in the positive. Read this
+# before adding another `if <something bad> in p: return None` below.
+#
+# FOUR ROUNDS OF REVIEW DEFEATED THE OTHER DESIGN, which anchored the PREFIX and then
+# listed the characters it knew were bad. That asks "does this START right, and does it
+# lack the one byte I thought of?" — so every round closed the reported vector and left
+# the next one, and the simplest of them needed no exotic input at all:
+#
+#     /projects/p/deliverables/report.md /Users/somebody/Desktop/report.md
+#
+# Correct prefix, no `..`, no `#`, TWO paths in one value — rendered whole into a
+# `data-copy` and labelled `report.md`, so nothing looked wrong. The value was never
+# required to be a single, whole, well-formed path. Now it is:
+#
+#   segment  what a FILENAME may be made of, stated as a set rather than as the set's
+#            complement: a word character (`\w` — Unicode-aware on a `str`, so a letter
+#            in any script, a digit, `_`), then any run of word characters, `.`, `-`
+#            and `+`.
+#   marks    `\w` does NOT include a COMBINING MARK (Unicode category M), and a comment
+#            here once claimed it did. macOS hands back decomposed filenames, so a
+#            stamped `Übersicht.md` can arrive as `U` + U+0308 + `bersicht.md` and was
+#            silently dropped — the "loses a real entry" class three rounds went to
+#            eliminate. Marks are therefore removed from the string the shape is TESTED
+#            on and kept in the string that is RETURNED. Stripping is safe because a
+#            mark is decoration on the preceding base character: category M contains no
+#            separator, no whitespace, no `#`, `:` or `/`, so removing them can only
+#            turn a value the shape would have rejected into one it accepts, never
+#            change what the accepted value points AT. It is also complete where
+#            NFC-normalising is not — Devanagari matras, Thai vowel signs and Hebrew
+#            points have no precomposed form and would still have been dropped.
+#   whole    `/projects/<slug>/deliverables/` then one or more segments — and
+#            fullmatch(), which is what makes "no trailing remainder" part of the shape
+#            instead of one more separate check.
+#
+# WHY POSITIVE AND NOT ONE MORE EXCLUSION. The class here used to be `[^/\s#]+`, which is
+# a denylist wearing a whitelist's clothes: it still had to have thought of every
+# dangerous byte, and it had not thought of `:` —
+#
+#     /projects/p/deliverables/deck.md:/Users/victim/.ssh/id_rsa
+#
+# renders whole into a `data-copy`, labelled `id_rsa`. Appending `:` to the exclusions
+# would be one more round of the same move. Stated positively there is nothing to
+# enumerate: `/`, every kind of whitespace, `#`, `:`, `@`, `\`, ZWSP, BOM, U+2028 and the
+# bidi overrides are all simply not in the set, and the next separator nobody has thought
+# of is not in it either.
+#
+# TWO PERMISSIONS THAT CARRY RISK, NAMED RATHER THAN LEFT IMPLICIT:
+#   · `.` — required (every extension has one). `.` and `..` as WHOLE segments are
+#     impossible by construction, because a segment must begin with a word character,
+#     so traversal needs no rule of its own.
+#   · a word character in any script, plus any combining mark — so two filenames can be
+#     homoglyphs (Cyrillic `а` vs Latin `a`), or differ only by an invisible mark, and
+#     look alike on the page. Containment is unaffected: the value still resolves inside
+#     this project's own `deliverables/`, which is the guarantee this guard makes.
+#     Excluding non-ASCII instead would silently drop a legitimately stamped
+#     `Übersicht.md`, which is the more likely event by far.
+#
+# WHAT IT COSTS, said plainly: a deliverable whose filename contains a space, `&`, `'`,
+# `(`, `%` or `,` is dropped from the panel — visibly, because the count is computed from
+# the same filtered list. Closeout resolves these names from `artifacts:` and a file can
+# be renamed; an absolute path rendered onto a published page cannot be recalled.
+#
+# THE SLUG IS A SEGMENT LIKE ANY OTHER, which is the point: it is checked by the same
+# rule rather than interpolated into a prefix and trusted, so `/projects/../deliverables/x`
+# no longer walks out of the bundle when a hand-written SNAPSHOT.json says its slug is `..`.
+DELIV_SEG = r"\w[\w.+-]*"
+DELIV_PATH = re.compile(
+    r"/projects/(%s)/deliverables/%s(?:/%s)*" % (DELIV_SEG, DELIV_SEG, DELIV_SEG))
+
+
+def bundle_deliverable(path, slug):
+    """The path itself when it is a whole, well-formed deliverable path belonging to
+    THIS project — otherwise None, and the entry is dropped from the panel AND from the
+    count with it, never dropped from one while the other still reports it.
+
+    NESTED paths (a research project shipping an exported site, e.g.
+    `deliverables/site/index.html`) are deliberately allowed: they are still inside this
+    project's own deliverables directory, which is the guarantee this guard keeps.
+
+    Why the renderer re-checks at all, when closeout verified each path on disk before
+    stamping it (close-project-folder.sh): the same rule href() applies to a PR URL's
+    scheme. A writer having restricted what it collects is never a reason for the reader
+    to trust it — a human can hand-edit project.md, and SNAPSHOT.json is a file on disk
+    this renderer reads back without knowing who wrote it.
+    """
+    value = str(path or "")
+    probe = "".join(c for c in value if unicodedata.category(c)[0] != "M")
+    # THE SHAPE IS TESTED ON `probe`, SO THE SLUG IS PINNED ON `value`. Stripping marks
+    # from the whole string also strips them from the slug, and `m.group(1) == slug`
+    # would then read `/projects/p̈/deliverables/x.md` as project `p`'s own deliverable —
+    # a button pointing at a NEIGHBOURING project's directory. Comparing the original
+    # prefix closes that, and the slug is still checked as one well-formed segment by
+    # the fullmatch above (which is what rejects a `..` or a `a/b` slug), so this is an
+    # identity check on top of the shape check, not a return to trusting a prefix.
+    if not DELIV_PATH.fullmatch(probe):
+        return None
+    return value if value.startswith("/projects/%s/deliverables/" % slug) else None
 
 
 def short_ref(slug, tid):
@@ -991,6 +1111,14 @@ def render_table():
         nr = sum(1 for t in tasks if t.get("status") in RUNNING)
         nw = sum(1 for t in tasks if t.get("status") in PENDING)
         ph = todict(p.get("phase_progress"))
+        # From project.md's `deliverable_paths:` ONLY — never `tasks/`, never a
+        # filesystem listing of `deliverables/`. That is what keeps this panel
+        # compatible with the done-project skip (write-snapshot.sh): a retained
+        # project's `tasks` list above is already empty, and this does not change
+        # that. Reject anything that is not this project's own bundle-relative
+        # shape before it ever reaches a button.
+        dps = [d for d in (bundle_deliverable(x, str(p.get("slug") or ""))
+                           for x in tolist(p.get("deliverable_paths"))) if d]
         o.append('<details class="proj%s"><summary class="phead">' % (" fin" if fin else ""))
         o.append('<span class="ptitle">%s</span><span class="counts">' % e(p.get("title")))
         if fin:
@@ -1014,6 +1142,9 @@ def render_table():
         if toint(ph.get("total")):
             o.append('<span class="tag">%d/%d phases</span>'
                      % (toint(ph.get("done")), toint(ph.get("total"))))
+        if dps:
+            o.append('<span class="tag">%d deliverable%s</span>'
+                     % (len(dps), "" if len(dps) == 1 else "s"))
         o.append("</span></summary>")
 
         o.append('<div class="body"><div class="scroll"><table><thead><tr>'
@@ -1079,7 +1210,20 @@ def render_table():
                                  % e(x.get("number")))
             o.append('<td>%s</td></tr>' % (" ".join(cells) if cells
                                            else '<span class="dim">—</span>'))
-        o.append("</tbody></table></div></div></details>")
+        o.append("</tbody></table></div>")
+        if dps:
+            # Reuses the ONE clipboard helper the page already ships (TABLE_SCRIPT,
+            # `[data-copy]`/`data-what`) — no second script, no new event handler.
+            # The label shown is just the filename; the full bundle-relative path is
+            # both the copied text and the hover title, so a reader can see what a
+            # click will paste before clicking it.
+            o.append('<div class="delivs"><h3>Deliverables · %d</h3><ul>' % len(dps))
+            for dp in dps:
+                fname = dp.rsplit("/", 1)[-1]
+                o.append('<li><button class="dlv" data-copy="%s" data-what="Deliverable path" '
+                         'title="%s">%s</button></li>' % (e(dp), e(dp), e(fname)))
+            o.append("</ul></div>")
+        o.append("</div></details>")
 
     # ---- the other owners, one collapsed block each, from git HEAD ----------
     # NAMED and COLLAPSED. No `open` attribute, and no script — the same <details> the

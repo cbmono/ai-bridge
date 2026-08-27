@@ -96,6 +96,31 @@ SECRET_QUESTION="SECRET-QUESTION-TEXT"
 SECRET_BLOCKER="SECRET-BLOCKER-REASON"
 SECRET_EMAIL="secret-person@example.com"
 OUT_OF_BUNDLE="/tmp/SECRET-OUT-OF-BUNDLE-ROOT"
+# The publisher's own absolute path, planted in exactly one place: a YAML trailing
+# comment on a `deliverable_paths:` line whose value carries an unbalanced quote (a hand
+# edit — see the `finished` fixture). It reaches the snapshot, and from there a copy
+# button on the published board, only if that comment is swallowed into the value.
+SECRET_ABS_PATH="/Users/SECRET-PUBLISHER-HOME/private/notes.md"
+# A second one, for the vector that carries no comment at all: a `deliverable_paths:`
+# value holding TWO paths, the second absolute (the `plain` fixture). It is not a parse
+# defect — the writer forwards this key verbatim and the value really is what it says —
+# so unlike the one above it DOES reach SNAPSHOT.json, and the assertion that matters is
+# about the published PAGE. Kept separate for exactly that reason: sharing one sentinel
+# would make "never in the snapshot" and "never on the page" impossible to state apart.
+SECRET_PAGE_PATH="/Users/SECRET-PUBLISHER-HOME/Desktop/report.md"
+# A third, for the vector that needs neither a comment nor whitespace: an absolute path
+# glued to a legitimate one with a `:` (the `colon` fixture). It is its own sentinel
+# because it fails for its own reason — the segment class, not the comment cut — and one
+# shared needle would make "the cut is right" and "the shape check is right" impossible
+# to tell apart when either breaks.
+#
+# EVERY SEGMENT OF IT IS ORDINARY ON PURPOSE. The obvious spelling of this vector ends in
+# `/.ssh/id_rsa`, and that one is rejected by a DIFFERENT rule — a segment may not begin
+# with `.` — so a fixture using it stays green when `:` is put back into the class, which
+# is the mutation it exists to catch. Measured: with `.ssh` in the sentinel, re-admitting
+# `:` passed all three harnesses. Spelled with only word-leading segments after the
+# colon, the `:` exclusion is the only thing dropping it.
+SECRET_COLON_PATH="/Users/SECRET-PUBLISHER-HOME/Desktop/keys.txt"
 # An HTML-metacharacter title, and the two forms it may appear in on the page.
 HOSTILE_TITLE='<script>alert(1)</script> & <b>bold</b>'
 HOSTILE_ESCAPED='&lt;script&gt;alert(1)&lt;/script&gt;'
@@ -112,13 +137,40 @@ echo "== shell portability of the shipped scripts =="
 # escape has not come back. It is the only form of this test that can actually fail.
 # Comment lines are stripped first: the fix's own comment NAMES the escape it removed,
 # and that prose is the record of why. Only executable lines are checked.
+# AND THIS CHECK WAS ITSELF VACUOUS UNTIL 2026-08-27 — the `grep -q` was the bug. Under
+# this file's `set -o pipefail`, `grep -q` exits at the FIRST match and SIGPIPEs whatever
+# is still feeding it, so the pipeline reports the FEEDER's 141 rather than grep's 0: the
+# `&&` never fires and a file that DOES carry the escape is reported clean. Measured,
+# with `\s` on line 808 of a 1,260-line build-board.sh: PASS. It is not fixed by moving
+# the sed into a variable — a `printf … | grep -q` behind it SIGPIPEs exactly the same
+# way, which cost a second attempt here. `grep -c` is the fix, because it consumes ALL of
+# its input and so never signals the writer; the planted-escape assertion below is what
+# stops either vacuous form coming back unnoticed.
 no_gnu_escape() { # <file> <escape letter>
-  sed 's/^[[:space:]]*#.*$//' "$1" | grep -q "\\\\$2" && return 1 || return 0
+  local body hits
+  body="$(sed 's/^[[:space:]]*#.*$//' "$1")"
+  hits="$(printf '%s\n' "$body" | grep -c "\\\\$2" || true)"
+  [[ "$hits" == 0 ]]
 }
 for f in "$WRITER" "$BOARD"; do
   assert "no GNU-only \\b escape in $(basename "$f")" "$(yes_if no_gnu_escape "$f" b)"
   assert "no GNU-only \\s escape in $(basename "$f")" "$(yes_if no_gnu_escape "$f" s)"
 done
+# The check, checked, in both directions — and the FILE SIZE is load-bearing, not
+# decoration. The vacuous form fails only once the pipe FILLS: `grep -q` exits at the
+# first match and SIGPIPEs the sed behind it, and with a small file sed has already
+# finished writing, so a short fixture reproduces nothing and the mutant survives
+# (measured: reverting the fix passed a 1,300-line plant). The escape therefore sits at
+# the TOP with tens of thousands of lines behind it, which is the real shape — the
+# original defect had `\s` on line 808 of a 1,260-line script whose lines are long.
+PLANT="$TMP/plant-escape.sh"
+{ printf 'y=%s\n' '"[^/\s#]+"'; seq 40000 | sed 's/.*/x=1/'; } > "$PLANT"
+PLANT_OK="$TMP/plant-comment-only.sh"
+{ printf '%s\n' '# this comment names the \s escape it removed'; seq 40000 | sed 's/.*/x=1/'; } > "$PLANT_OK"
+assert "…and the check itself sees a planted \\s once the pipe fills" \
+  "$( no_gnu_escape "$PLANT" s && echo 1 || echo 0 )"
+assert "…while an \\s that appears only in a comment is still not a hit" \
+  "$( no_gnu_escape "$PLANT_OK" s && echo 0 || echo 1 )"
 
 # ---------------------------------------------------------------- fixture instances
 new_instance() { # <dir> — the minimum the writer requires of an instance root
@@ -245,6 +297,29 @@ assignee: software-engineer
 ---
 TSK
 
+# Two open questions, EACH carrying a `]` before the list's own closing bracket: one a
+# Markdown PR link in the `[repo#N](url)` style this bundle's own CLAUDE.md mandates
+# for citing PRs, the other just ordinary brackets. This is the fixture that says WHY
+# list_region() is comment-agnostic and the trailing-comment strip lives at the
+# `deliverable_paths` consumer instead. Two attempts to strip from the shared helper
+# both ended this list early: one truncated at the FIRST `]`, inside Q1's own link; the
+# next tracked quote parity and stopped at that SAME `]`, because Q1's link sits between
+# two ESCAPED quotes and counting `"` characters reads the parity as "outside a quote".
+# Either way Q2 vanished off a list that gates draft -> ready and feeds AWAITING.md, and
+# a dropped entry shows up nowhere. One fixture, both wrong answers — whatever decides
+# where a free-text list ends must never be something an entry's own text can spell.
+cat > "$ALPHA/projects/ci/tasks/task-006.md" <<'TSK'
+---
+type: Task
+title: Fix the bracket-swallowing question count
+kind: build
+status: draft
+assignee: software-engineer
+open_questions: [ "Q1: keep the \"[repo#42](https://github.com/acme/x/pull/42)\" style?", "Q2: bracket [note] mid-question" ]
+pr: []
+---
+TSK
+
 # A project with no tasks at all — must render empty rather than error.
 cat > "$ALPHA/projects/empty/project.md" <<'PRJ'
 ---
@@ -256,13 +331,270 @@ status: active
 ---
 PRJ
 
+# The COMMA-SPLIT shape, and it needs its own project because it needs an UNQUOTED
+# value — the `finished` fixture below opens a quote, which sends the splitter down its
+# quote-seam branch and cannot split on a comma at all.
+#
+# What it pins: a swallowed trailing comment is not one bad entry, it is TWO. The
+# entries are re-split on commas after the value is taken, so a comment containing one
+# puts the `#` in the first fragment and everything after the comma in the SECOND — and
+# that second fragment carries this project's own `/projects/<slug>/deliverables/`
+# prefix, no `..`, and no `#`, so every per-entry rule the renderer applies passes it
+# and the publisher's absolute path renders as a copy button. A per-entry guard cannot
+# see this; the comment has to be gone before the split. The `[old]` at the end is not
+# decoration either: it puts a `]` after the comment's `#`, which is exactly the case a
+# strip anchored on the LAST bracket of the line declines to touch.
+mkdir -p "$ALPHA/projects/handedited"
+cat > "$ALPHA/projects/handedited/project.md" <<PRJ
+---
+type: Project
+title: Hand-edited deliverables
+description: someone typed the deliverable_paths line themselves
+kind: research
+status: active
+deliverable_paths: [ /projects/handedited/deliverables/report.md ]   # hand-edited; kept, /projects/handedited/deliverables/see $SECRET_ABS_PATH [old]
+---
+PRJ
+
+# The SAME hazard in the OTHER YAML shape. A block sequence's key line carries no `]`
+# at all, so a cut that waits for a flow terminator cannot fire here and the comment
+# would ride into the entry — where the comma splits it exactly as above. This fixture
+# is the one that says the block case is load-bearing: without it the suite stays green
+# while a block-form list leaks.
+#
+# Its SECOND entry is the block mirror of the `quoted` fixture below: ` #` opens a
+# comment on a block line, but NOT inside a quoted scalar, so Psych reads
+# `b #2.md` whole. Cutting there fabricates `.../b`, a path no parser returned — which
+# is why this entry must survive into the snapshot intact and reach no button.
+mkdir -p "$ALPHA/projects/blockform"
+cat > "$ALPHA/projects/blockform/project.md" <<PRJ
+---
+type: Project
+title: Block-form deliverables
+description: the same key, written as a block sequence
+kind: research
+status: done
+retain: true
+deliverable_paths:
+  - /projects/blockform/deliverables/notes.md  # hand-edited; kept, /projects/blockform/deliverables/see $SECRET_ABS_PATH
+  - "/projects/blockform/deliverables/b #2.md"
+---
+PRJ
+
+# THE VECTOR THAT NEEDS NO COMMENT, no quote and no bracket — the one four review rounds
+# of comment-stripping could not have caught, because there is nothing to strip. Two
+# paths in one value: the first is this project's own, the second is off the publisher's
+# disk, and the whole string carries the correct prefix, no `..` and no `#`. Rendered as
+# one value it is a copy button labelled `report.md`, which looks exactly right.
+#
+# It reaches SNAPSHOT.json verbatim and that is BY DESIGN — this file forwards the key
+# and does not check its shape (see write-snapshot.sh's header), the snapshot is
+# gitignored and never published as-is. Hence a SECOND sentinel: the assertions below
+# say this one must never reach the PAGE, which is the artifact that leaves the machine.
+mkdir -p "$ALPHA/projects/plain"
+cat > "$ALPHA/projects/plain/project.md" <<PRJ
+---
+type: Project
+title: Two paths, one value
+description: no comment, no quote, no bracket — and still not one path
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/plain/deliverables/report.md $SECRET_PAGE_PATH ]
+---
+PRJ
+
+# AN UNQUOTED `]` ENDS THE FLOW SEQUENCE — settled against a real YAML parser, not by
+# eye. Ruby's Psych reads this line as ONE entry, `.../a`: in flow context a plain
+# scalar cannot contain `]`, so the first unquoted one is the terminator and
+# ` #1.md, .../b.md ]` is a COMMENT. `b.md` is therefore not a stamped deliverable at
+# all, and rendering it would invent a path out of comment text — the same defect as
+# truncating one, reached from the other side. An earlier revision did exactly that,
+# and a test written from the eye rather than the parser called it correct.
+#
+# What must happen: `.../a` renders, because it is the entry; `b.md` does not, because
+# it is comment. The fixture whose sibling really IS a sibling is `quoted`, below —
+# quoting is what makes `]` an ordinary character and leaves YAML two entries to keep.
+mkdir -p "$ALPHA/projects/sibling"
+cat > "$ALPHA/projects/sibling/project.md" <<'PRJ'
+---
+type: Project
+title: A bracket inside a filename
+description: an unquoted ] is the flow terminator, so the rest of the line is a comment
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/sibling/deliverables/a] #1.md, /projects/sibling/deliverables/b.md ]
+---
+PRJ
+
+# THE SHAPE WHERE THE SIBLING IS REAL, and the blocker this round exists to close.
+# Inside a QUOTED scalar neither `]` nor `#` is special, so Psych reads TWO entries
+# here: `a ] #1.md` (whitespace in it, so the renderer drops it, visibly) and `b.md`, a
+# perfectly good deliverable a human stamped. A cut that reads that `#` as a comment
+# fails in both directions at once — it fabricates `.../a`, a path no parser ever read,
+# and it deletes `b.md` with nothing to show it ever existed. NOTHING LEAKS either way,
+# which is precisely why only a parser could settle it and five rounds of argument did
+# not.
+mkdir -p "$ALPHA/projects/quoted"
+cat > "$ALPHA/projects/quoted/project.md" <<'PRJ'
+---
+type: Project
+title: A quoted entry carrying ] and #
+description: inside quotes neither is special, so YAML has two entries on this line
+kind: research
+status: done
+retain: true
+deliverable_paths: [ "/projects/quoted/deliverables/a ] #1.md", "/projects/quoted/deliverables/b.md" ]
+---
+PRJ
+
+# A FLOW SEQUENCE THAT NEVER TERMINATES — the shape with no parser answer at all, since
+# Psych refuses the document outright. Which is exactly why it needs pinning: where
+# there is no reading to be faithful to, the cut must fail toward "leave the line alone
+# and let the shape check drop whatever it drops", never toward "cut anyway". Cutting at
+# this line's ` #` hands the renderer `.../a` — a filename truncated into a path nobody
+# wrote, on the one input class that cannot be settled by argument. Declining leaves the
+# comma split to do the honest thing: the fragment carrying whitespace goes, `b.md`
+# stays.
+mkdir -p "$ALPHA/projects/unterminated"
+cat > "$ALPHA/projects/unterminated/project.md" <<'PRJ'
+---
+type: Project
+title: An inline list with no closing bracket
+description: not valid YAML at all, so the cut declines rather than guesses
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/unterminated/deliverables/a #1.md, /projects/unterminated/deliverables/b.md
+---
+PRJ
+
+# THE OTHER QUOTE STYLE, AND YAML'S ONLY SINGLE-QUOTE ESCAPE — the shape a green suite
+# stayed green over. Every deliverable fixture above this one is flow-form and UNQUOTED,
+# so a scan that handled the `\"` escape but had no case for `''` was never exercised:
+# it closed the scalar at the FIRST quote of the pair and cut INSIDE a string Psych reads
+# as a single atom. Psych's reading here is TWO entries — `o'brien[draft].md #2`, which
+# the render-time shape check then drops on its own merits, and `clean.md`, a perfectly
+# good deliverable a human stamped. The defect rendered the first (fabricated) and
+# deleted the second, which is both halves of the failure at once.
+mkdir -p "$ALPHA/projects/sqescaped"
+cat > "$ALPHA/projects/sqescaped/project.md" <<'PRJ'
+---
+type: Project
+title: A single-quoted entry with an escaped apostrophe
+description: a doubled quote inside a single-quoted scalar is an apostrophe, not its end
+kind: research
+status: done
+retain: true
+deliverable_paths: [ '/projects/sqescaped/deliverables/o''brien[draft].md #2', /projects/sqescaped/deliverables/clean.md ]
+---
+PRJ
+
+# The ordinary single-quoted list, which nothing exercised either. It carries no trap at
+# all, and that is the point: the quote handling added for the trap above must not cost
+# the plain case its entries.
+mkdir -p "$ALPHA/projects/sqplain"
+cat > "$ALPHA/projects/sqplain/project.md" <<'PRJ'
+---
+type: Project
+title: An ordinary single-quoted list
+description: both entries are stamped deliverables and both must render
+kind: research
+status: done
+retain: true
+deliverable_paths: [ '/projects/sqplain/deliverables/a.md', '/projects/sqplain/deliverables/b.md' ]
+---
+PRJ
+
+# CRITERION 4, REACHED THROUGH A CHARACTER NO DENYLIST HAD THOUGHT OF. No comment, no
+# whitespace, no `..`, no `#`, prefix perfectly correct — an absolute path glued on with
+# a `:`, rendered whole into a copy button and labelled `id_rsa` so nothing looked wrong.
+# It is the fifth character to defeat the same move, which is why the segment class is
+# now stated as what a filename MAY contain rather than as a list of what it may not.
+mkdir -p "$ALPHA/projects/colon"
+cat > "$ALPHA/projects/colon/project.md" <<PRJ
+---
+type: Project
+title: An absolute path glued on with a colon
+description: prefix-correct, whitespace-free, and still two paths
+kind: research
+status: done
+retain: true
+deliverable_paths: [ "/projects/colon/deliverables/deck.md:$SECRET_COLON_PATH" ]
+---
+PRJ
+
+# A NON-ASCII FILENAME, and it is a fixture rather than a nicety: this awk is
+# byte-oriented, so substr() hands back one BYTE of a multi-byte character, and testing
+# that byte with a regex aborted the whole program — taking the clean sibling on the same
+# line with it and printing a parser error into the run's output. A `deliverables/` full
+# of German or Japanese filenames is not exotic; losing the entire key over one of them
+# is the kind of failure nobody attributes to a comment strip.
+#
+# The MIDDLE entry earns its place separately: it puts a multi-byte character immediately
+# before a `#`, which is the scan's OTHER per-character test — the one deciding whether a
+# `#` opens a comment. Without it that branch is UNPINNED, measured: a mutant reverting
+# only that branch passes all three harnesses. `roh-Ü#1.md` is not a comment (YAML wants
+# whitespace before the `#`), so it survives to the snapshot and is dropped at render on
+# its own merits, leaving the two clean siblings to show the key came through whole.
+mkdir -p "$ALPHA/projects/umlaut"
+cat > "$ALPHA/projects/umlaut/project.md" <<'PRJ'
+---
+type: Project
+title: A deliverable whose name is not ASCII
+description: one multi-byte character must not cost the key its entries
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/umlaut/deliverables/Übersicht.md, /projects/umlaut/deliverables/roh-Ü#1.md, /projects/umlaut/deliverables/plain.md ]
+---
+PRJ
+
+# NFD — the SAME filename macOS hands back DECOMPOSED, which is a legitimately stamped
+# deliverable rather than an exotic input: a macOS directory listing spells `Ü` as
+# `U` + U+0308, so closeout resolving an `artifacts:` entry off one stamps exactly this.
+# The segment class admitted `\w`, which does NOT include a combining mark (Unicode
+# category M) — so the entry was dropped, the project rendered one deliverable short,
+# and the count tag agreed with the short list, so nothing looked wrong. That is the
+# "loses a real entry" class, reached through a filename instead of through a comment.
+#
+# The name is BUILT from an escape rather than typed, because an editor or a formatter
+# that normalises this file would otherwise turn the fixture into its NFC twin silently
+# and leave the assertions green over a case the file no longer contains. The first
+# assertion below is what makes that non-vacuous.
+NFD_UE="$(printf 'U\xcc\x88')"          # U+0055 U+0308 — NOT the single codepoint U+00DC
+NFD_NAME="${NFD_UE}bersicht-nfd.md"
+mkdir -p "$ALPHA/projects/nfd"
+cat > "$ALPHA/projects/nfd/project.md" <<PRJ
+---
+type: Project
+title: A deliverable macOS handed back decomposed
+description: a combining mark belongs to a legitimate filename, not to an attack
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/nfd/deliverables/$NFD_NAME ]
+---
+PRJ
+
 # Every task terminal ⇒ the board shows a close PROPOSAL, never an action.
-cat > "$ALPHA/projects/finished/project.md" <<'PRJ'
+#
+# Its `deliverable_paths:` line is the HAND-EDITED shape: someone opened a quote and
+# never closed it, and left a trailing comment naming a path on their own disk. Psych
+# REFUSES this document — an unterminated quoted scalar is not YAML — so there is no
+# parser reading to defer to here, and the cut falls back to a quote-blind scan rather
+# than dropping a path a human can plainly read. What must not happen is the other
+# thing: a strip that looked for the list's `]` while tracking quote state found no
+# unquoted `]`, truncated nothing, and the whole comment — absolute path included —
+# became the deliverable path a copy button carries on the published board.
+cat > "$ALPHA/projects/finished/project.md" <<PRJ
 ---
 type: Project
 title: Docs cleanup
 kind: build
 status: active
+deliverable_paths: [ "/projects/finished/deliverables/report.md ]   # hand-edited; taken from $SECRET_ABS_PATH
 ---
 PRJ
 cat > "$ALPHA/projects/finished/tasks/task-001.md" <<'TSK'
@@ -288,7 +620,15 @@ description: finished, kept as a reference surface
 kind: research
 status: done
 retain: true
-deliverable_paths: [ /projects/retained/deliverables/deck.md ]
+# The trailing comment is SCHEMA.md:72's documented comment for this key, VERBATIM and
+# whole — commas, backticks and the `[ ]` it names included. A real project.md is
+# allowed to look like this, so the fixture does too rather than the tidier form the
+# writer would produce itself. Copying only its FIRST SENTENCE is what an earlier round
+# did, and it cut the line one word before the `[ ]` that makes it hard: a comment
+# carrying a `]` of its own defeats any strip that decides where the list ends by
+# looking for the LAST bracket on the line. Green over the easy half of the case it
+# names is worse than no test — if you shorten this line, you have deleted the test.
+deliverable_paths: [ /projects/retained/deliverables/deck.md ]   # WRITTEN BY CLOSEOUT, not by hand. Bundle-relative paths, resolved once from each task's `artifacts:` and verified on disk at closeout. `[ ]` means closeout looked and found none.
 ---
 PRJ
 cat > "$ALPHA/projects/retained/phases/phase-1.md" <<'PH'
@@ -338,10 +678,14 @@ echo "== a real snapshot, once the switch is on =="
 touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
-assert "…with the project count"           "$(has '4 project(s)' "$RUN_OUT")"
-# 6, not 7: the done project's task is never counted, because it is never read.
-assert "…and the task count"                "$(has '6 task(s)' "$RUN_OUT")"
-assert "…and the awaiting count (5 verbs across 3 live projects)" "$(has '5 awaiting' "$RUN_OUT")"
+assert "…with the project count"           "$(has '15 project(s)' "$RUN_OUT")"
+# 7, not 8: the done project's task is never counted, because it is never read.
+assert "…and the task count"                "$(has '7 task(s)' "$RUN_OUT")"
+assert "…and the awaiting count (6 verbs across 4 live projects)" "$(has '6 awaiting' "$RUN_OUT")"
+# The run captures stderr too, and an awk that aborts mid-line says so THERE while still
+# exiting 0 and writing a file — a whole `deliverable_paths` key lost with the evidence
+# printed somewhere nobody reads. So the absence of that text is an assertion.
+assert "…and no parser error was printed on the way"     "$(hasnt 'awk:' "$RUN_OUT")"
 assert "the file is non-empty"              "$(yes_if test -s "$SNAP")"
 assert "it parses as JSON"                  "$(yes_if python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$SNAP")"
 assert "no temp file was left behind"       "$(yes_if sh -c '! ls "$1".tmp.* >/dev/null 2>&1' _ "$SNAP")"
@@ -365,7 +709,7 @@ echo "== the field allowlist =="
 # `owner` is in this set DELIBERATELY and is the only identity field that is — see the
 # header. Removing it here is how the reversal would get silently undone, so the writer's
 # own header, this line, and per-owner-board.test.sh all have to move together.
-ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions advisor_notes depends_on prs repo number url '
+ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner deliverable_paths awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions advisor_notes depends_on prs repo number url '
 extra_keys() { # <json file> <allowed> -> the keys present but not allowed
   python3 - "$1" "$2" <<'PYK'
 import json, sys
@@ -395,7 +739,28 @@ assert "…and one with a space, nested inside a list" "$(eq "$BADKEY2" "documen
 assert "a task description never reaches the snapshot"   "$(fhasnt "$SECRET_DESC" "$SNAP")"
 assert "no document body reaches the snapshot"           "$(fhasnt "$SECRET_BODY" "$SNAP")"
 assert "open-question TEXT never reaches the snapshot"    "$(fhasnt "$SECRET_QUESTION" "$SNAP")"
-assert "…the COUNT does (2 questions on task-001)"        "$(fhas '"open_questions": 2' "$SNAP")"
+# SCOPED TO THE TASK IT NAMES, not a whole-file grep for `"open_questions": 2`. As a
+# file-wide grep this is the positive half of a privacy pair — the text never travels,
+# the count does — and ANY later fixture that happens to carry two questions satisfies
+# it, at which point it certifies nothing about task-001 while still reading green. That
+# is not hypothetical: the task-006 fixture below silently took it over exactly that way.
+assert "…the COUNT does (2 questions on task-001)"        "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="ci"][0]
+t=[t for t in p["tasks"] if t["id"]=="task-001"][0]
+sys.exit(0 if t["open_questions"]==2 else 1)' "$SNAP")"
+# Regression for a shared list_region() that decides where a free-text list ENDS and
+# swallows a real second question whenever an entry's own text carries a `]` before the
+# list's closing one — a Markdown PR link (`[repo#N](url)`) in Q1, bare brackets in Q2,
+# and an escaped `\"` inside Q1 for the quote-parity variant of the same silent drop.
+# All must still be counted; losing any is the drop this pins (task-007 rounds 2-4).
+assert "a ] INSIDE an entry does not end the list early (task-006, 2 questions)" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"]=="task-006"][0]
+sys.exit(0 if t["open_questions"]==2 else 1)' "$SNAP")"
 
 # depends_on is carried as bundle-local task IDs, never as paths. That is the whole
 # reason it sits inside the allowlist rather than being an exception to it: an ID is a
@@ -417,7 +782,14 @@ assert "…and both entries of a BLOCK-form list"           "$(fhas '"depends_on
 assert "…and a QUOTED path normalises identically"        "$(fhasnt '.md\"' "$SNAP")"
 assert "…while a task with none gets an empty array"      "$(fhas '"depends_on": []' "$SNAP")"
 assert "…and never a path"                                "$(fhasnt '"depends_on": ["/' "$SNAP")"
-assert "…and never keeps the .md suffix"                  "$(fhasnt '.md"]' "$SNAP")"
+# A file-scoped `.md"]` grep would also flag `deliverable_paths`, which legitimately
+# carries a bundle-relative path ending in `.md` — so this checks `depends_on` ARRAYS
+# specifically, not the whole file for that shape.
+assert "…and never keeps the .md suffix"                  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+bad=[dep for p in d["projects"] for t in p["tasks"] for dep in t["depends_on"] if dep.endswith(".md")]
+sys.exit(0 if not bad else 1)' "$SNAP")"
 assert "a blocker reason never reaches the snapshot"      "$(fhasnt "$SECRET_BLOCKER" "$SNAP")"
 assert "…the VERB does (unblock)"                         "$(fhas '"awaiting": "unblock"' "$SNAP")"
 assert "authorEmail never reaches the snapshot"           "$(fhasnt "$SECRET_EMAIL" "$SNAP")"
@@ -460,7 +832,7 @@ echo "== a DONE project is read no further than its frontmatter =="
 # frontmatter parse — so what is asserted here is an ABSENCE OF READING, not a filtered
 # output. The two are indistinguishable in the JSON, which is why the fixture's task is
 # planted to be loud: if `tasks/` were opened, its title would appear, the task count
-# would be 7, `open_questions` would be 2, its PR would be collected and `blocked` would
+# would be 8, `open_questions` would be 2, its PR would be collected and `blocked` would
 # add an `unblock` verb. Each of those is a separate way for the read to show itself.
 assert "the done project IS on the board (a retained project is a reference card)" \
   "$(yes_if python3 -c '
@@ -475,6 +847,144 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 r=[p for p in d["projects"] if p["slug"]=="retained"][0]
 sys.exit(0 if r["tasks"]==[] and r["phases"]==[] and r["phase_progress"]=={"done":0,"total":0} else 1)' "$SNAP")"
+assert "…and deliverable_paths IS forwarded — from project.md's own frontmatter, never from tasks/" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+r=[p for p in d["projects"] if p["slug"]=="retained"][0]
+sys.exit(0 if r["deliverable_paths"]==["/projects/retained/deliverables/deck.md"] else 1)' "$SNAP")"
+# The fixture's `deliverable_paths:` line carries a trailing YAML comment (SCHEMA.md's
+# own documented form — see the fixture above). An exact single-entry match above
+# already proves the comment was not swallowed into the path; this pins the failure
+# mode directly, so a regression names itself instead of just failing the exact-match.
+assert "…and the trailing comment never reaches the snapshot at all" \
+  "$(fhasnt "WRITTEN BY CLOSEOUT" "$SNAP")"
+# Its TAIL, separately: the comment carries commas, so a swallowed one is re-split into
+# fragments that no longer contain the words the assertion above looks for. Checking the
+# first four words of a comment proves nothing about the fragment that comes after the
+# comma — which is the half that can carry a path.
+assert "…including the fragments after its commas" \
+  "$(fhasnt "means closeout looked and found none" "$SNAP")"
+# The fixture line above claims to be SCHEMA.md's documented form. That claim decayed
+# once already: the comment was copied as a PREFIX, cut one word before the `[ ]` that
+# makes the case hard, while the note beside it still said "exactly". So assert the
+# claim rather than repeating it — the two comments must be byte-identical, and a
+# SCHEMA.md edit that changes the shape of the documented form fails here rather than
+# leaving this fixture quietly testing a form nothing documents.
+doc_comment() { sed -n 's/^deliverable_paths:[^#]*#/#/p' "$1" | head -1; }
+SCHEMA_DP_COMMENT="$(doc_comment "$TPL/symlink/SCHEMA.md")"
+# Non-emptiness first, or the comparison below passes on two empty strings the day
+# SCHEMA.md's documented form loses its comment — which is the same failure this whole
+# assertion exists to catch, arriving from the other side.
+assert "SCHEMA.md still documents this key WITH a trailing comment" \
+  "$(yes_if test -n "$SCHEMA_DP_COMMENT")"
+assert "…and the fixture's trailing comment IS that one, byte for byte" \
+  "$(eq "$(doc_comment "$ALPHA/projects/retained/project.md")" "$SCHEMA_DP_COMMENT")"
+# The comma-split shape (the `handedited` fixture): one entry out, not two, and the
+# absolute path hidden after the comment's comma nowhere in the file.
+assert "a comment's comma does not split a second entry out of the value" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="handedited"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/handedited/deliverables/report.md"] else 1)' "$SNAP")"
+# …and the same for a BLOCK-form list, whose key line carries no `]`. Both entries,
+# exactly as Psych reads them: the comment gone off the first, and the second — a
+# QUOTED scalar whose ` #` is not a comment — carried whole rather than cut to `.../b`.
+assert "…and the same holds for a BLOCK-form list, whose key line carries no ]" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="blockform"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/blockform/deliverables/notes.md",
+                                       "/projects/blockform/deliverables/b #2.md"] else 1)' "$SNAP")"
+# The `sibling` fixture: an UNQUOTED `]` inside what looks like a filename. Psych reads
+# one entry, `.../a`, and treats the rest of the line as a comment — so the property is
+# that the parser is followed in both directions: the entry it returns survives, and the
+# comment text it discarded never becomes a second entry.
+assert "an unquoted ] terminates the list, so the entry before it survives" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="sibling"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/sibling/deliverables/a"] else 1)' "$SNAP")"
+# The `quoted` fixture, and the reason it exists: inside quotes a `]` is an ordinary
+# character, so Psych really does have two entries and the clean one MUST come through.
+# A cut that reads the quoted `#` as a comment loses `b.md` and invents `.../a`.
+assert "a quoted ] is no terminator: the clean sibling entry survives" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="quoted"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/quoted/deliverables/a ] #1.md",
+                                       "/projects/quoted/deliverables/b.md"] else 1)' "$SNAP")"
+# The SINGLE-quoted forms, which nothing exercised until a fabrication shipped past a
+# green suite. `''` is YAML's only single-quote escape, so the first line below is TWO
+# entries and the apostrophe belongs to the first one; a scan that closes the scalar at
+# the first quote of the pair reads the rest as a comment, fabricates the truncation and
+# takes `clean.md` with it. The assertion is the parser's own reading, both entries.
+assert "a doubled quote inside a single-quoted entry does not end it" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="sqescaped"][0]
+sys.exit(0 if len(p["deliverable_paths"])==2
+         and p["deliverable_paths"][1]=="/projects/sqescaped/deliverables/clean.md"
+         and p["deliverable_paths"][0].startswith("/projects/sqescaped/deliverables/o")
+         and p["deliverable_paths"][0].endswith("#2") else 1)' "$SNAP")"
+assert "…and the plain single-quoted list keeps both of its entries" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="sqplain"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/sqplain/deliverables/a.md",
+                                       "/projects/sqplain/deliverables/b.md"] else 1)' "$SNAP")"
+# One multi-byte character used to abort the awk scan outright, so the key came back
+# EMPTY — the `Übersicht.md` entry did not merely fail to render, it took `plain.md`
+# with it. Both entries, and nothing on the run's output about a parser.
+assert "…and a non-ASCII filename costs the key neither of its entries" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="umlaut"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/umlaut/deliverables/\u00dcbersicht.md",
+                                       "/projects/umlaut/deliverables/roh-\u00dc#1.md",
+                                       "/projects/umlaut/deliverables/plain.md"] else 1)' "$SNAP")"
+# The fixture is only a test of NFD while it is still decomposed. Asserted before
+# anything is asserted ABOUT it, so a file that got normalised on its way through an
+# editor fails here rather than passing everything below over its NFC twin.
+assert "the NFD fixture really is decomposed, not its NFC twin" \
+  "$(yes_if python3 -c '
+import sys, unicodedata
+n=sys.argv[1]
+sys.exit(0 if n!=unicodedata.normalize("NFC",n)
+              and any(unicodedata.category(c)[0]=="M" for c in n) else 1)' "$NFD_NAME")"
+assert "…and the decomposed filename reaches the snapshot whole" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="nfd"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/nfd/deliverables/"+sys.argv[2]] else 1)' "$SNAP" "$NFD_NAME")"
+# The same defect, reached the other way round — through the VALUE rather than the
+# comment. The `finished` fixture's line opens a quote and never closes it, so a strip
+# that decided where the list ended by tracking quote state found no unquoted `]`, kept
+# the whole line, and folded the comment (with the publisher's absolute path in it) into
+# the entry. Two assertions, because they fail differently: the first says the path is
+# still the path, the second says the absolute path is nowhere in the file at all.
+assert "an unbalanced quote does not let the trailing comment into the value" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="finished"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/finished/deliverables/report.md"] else 1)' "$SNAP")"
+assert "…and the absolute path it hides never reaches the snapshot" \
+  "$(fhasnt "$SECRET_ABS_PATH" "$SNAP")"
+assert "a project carrying no deliverable_paths key gets an empty array, not an error" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="empty"][0]
+sys.exit(0 if p["deliverable_paths"]==[] else 1)' "$SNAP")"
 assert "…and its task's title never reaches the snapshot" \
   "$(fhasnt 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
 assert "…nor its phase's title (phases are skipped by the same continue)" \
@@ -508,8 +1018,17 @@ sys.exit(0 if set(p["retained"]) == set(p["ci"]) and "owner" in p["retained"] el
 cp -R "$ALPHA/projects/retained" "$ALPHA/projects/notdone"
 sed -i.bak 's/^status: done$/status: active/' "$ALPHA/projects/notdone/project.md" && rm -f "$ALPHA/projects/notdone/project.md.bak"
 CTRL_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
-assert "control: the same task under a LIVE project IS read (7 tasks)" "$(has '7 task(s)' "$CTRL_OUT")"
+assert "control: the same task under a LIVE project IS read (8 tasks)" "$(has '8 task(s)' "$CTRL_OUT")"
 assert "…and its title does reach the snapshot"  "$(fhas 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
+# deliverable_paths comes off the SAME frontmatter parse every project already gets, not
+# off the done-project skip specifically — so a LIVE project carrying the key forwards it
+# too, proving this is "read project.md's frontmatter", not "a done-project special case".
+assert "…and deliverable_paths is read from a LIVE project's frontmatter too" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+c=[p for p in d["projects"] if p["slug"]=="notdone"][0]
+sys.exit(0 if c["deliverable_paths"]==["/projects/retained/deliverables/deck.md"] else 1)' "$SNAP")"
 rm -rf "$ALPHA/projects/notdone"
 ( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" --quiet )
 assert "…and the sentinel is gone again once the control project is removed" \
@@ -566,6 +1085,109 @@ assert "an unknown status still gets a column"      "$(fhas 'made-up-status' "$H
 # bundle is where a decision is recorded.
 assert "the close proposal is shown, never taken"   "$(fhas 'class="verb">close' "$HTML")"
 assert "…carrying the command a human would run"   "$(fhas 'close-project finished' "$HTML")"
+# The retained project's deliverables panel, on the SAME page this real invocation
+# produces — not a fixture built just to exercise the renderer in isolation. See
+# /knowledge/findings/a-flags-default-forked-one-command-into-two-boards.md: a test
+# that only ever exercises an isolated fixture is testing whichever page the fixture
+# happens to name, not the one this call actually writes.
+assert "a retained project's deliverable is a copy button"  "$(fhas 'data-copy="/projects/retained/deliverables/deck.md"' "$HTML")"
+assert "…labelled by filename"                              "$(fhas '>deck.md</button>' "$HTML")"
+assert "…reusing the existing data-what convention"         "$(fhas 'data-what="Deliverable path"' "$HTML")"
+# Criterion 4, end to end on the page a real invocation writes — not on a hand-written
+# snapshot. The `finished` fixture's hand-edited `deliverable_paths:` line hides an
+# absolute path in a trailing comment, behind an unbalanced quote. What may appear on
+# the page is the clean bundle-relative path, or nothing; the comment is neither.
+assert "a hand-edited line still copies the bundle-relative path" \
+  "$(fhas 'data-copy="/projects/finished/deliverables/report.md"' "$HTML")"
+assert "…and the absolute path in its comment reaches no page"  "$(fhasnt "$SECRET_ABS_PATH" "$HTML")"
+# LOOK INSIDE THE VALUE, not at its first characters. `fhasnt 'data-copy="/Users'` only
+# says no value BEGINS with /Users — and the leak this pins puts the path in the MIDDLE
+# of a value whose first characters are a perfectly good bundle-relative prefix. Spelled
+# the first way, this assertion passed on a page that was leaking.
+no_copy_value_with() { # <needle> <file>
+  ! grep -o 'data-copy="[^"]*"' "$2" | grep -qF -- "$1"
+}
+assert "…nor any /Users path ANYWHERE inside something to copy" \
+  "$(yes_if no_copy_value_with '/Users' "$HTML")"
+# Criterion 4 against the shape that needs no comment AND no whitespace: an absolute path
+# glued to a legitimate one with a `:`. The generic sweep above catches it too; this pair
+# names it, so a regression says which vector came back rather than only that one did.
+assert "a colon-glued absolute path is never a copy button" \
+  "$(fhasnt 'data-copy="/projects/colon/deliverables' "$HTML")"
+assert "…and its sentinel reaches no page"                     "$(fhasnt "$SECRET_COLON_PATH" "$HTML")"
+# The single-quote pair, on the same real page. They fail in opposite directions, which
+# is why both are here: the fabrication must NOT be a button, and the clean entry the
+# fabrication used to delete MUST be one.
+assert "an escaped apostrophe does not fabricate a truncated path" \
+  "$(fhasnt 'data-copy="/projects/sqescaped/deliverables/o' "$HTML")"
+assert "…while the clean sibling on that same line is a button" \
+  "$(fhas 'data-copy="/projects/sqescaped/deliverables/clean.md"' "$HTML")"
+assert "…and an ordinary single-quoted list renders both entries" \
+  "$(yes_if sh -c 'grep -qF "data-copy=\"/projects/sqplain/deliverables/a.md\"" "$1" && grep -qF "data-copy=\"/projects/sqplain/deliverables/b.md\"" "$1"' _ "$HTML")"
+assert "…and a non-ASCII filename renders as itself"           \
+  "$(fhas 'data-copy="/projects/umlaut/deliverables/Übersicht.md"' "$HTML")"
+# …and so does the DECOMPOSED spelling of the same name. `\w` matches the NFC form and
+# not the NFD one, so this is the half the fixture above cannot certify: a class that
+# admits `Übersicht.md` still drops what a macOS listing actually hands back.
+assert "…and so does the same name spelled decomposed (NFD)"   \
+  "$(fhas "data-copy=\"/projects/nfd/deliverables/$NFD_NAME\"" "$HTML")"
+# Criterion 4 against the comma-split shape, on the same real page. The `handedited`
+# fixture's comment hides a second, prefix-correct path after a comma; if the comment
+# survives the parse, THIS is the button it becomes.
+assert "the comma-split fragment is never a copy button" \
+  "$(fhasnt 'data-copy="/projects/handedited/deliverables/see' "$HTML")"
+assert "…while the real path on that same line still is"       \
+  "$(fhas 'data-copy="/projects/handedited/deliverables/report.md"' "$HTML")"
+# Criterion 4 against the shape with NO comment in it — the `plain` fixture, two paths in
+# one value. Nothing upstream can strip anything here; the only thing between it and a
+# copy button is the render-time rule that a deliverable path contains no whitespace. It
+# does reach the snapshot (see the sentinel's own note), so this is the assertion that
+# says the page and the snapshot are not the same promise.
+assert "two paths in one value reach the snapshot…"            "$(fhas "$SECRET_PAGE_PATH" "$SNAP")"
+assert "…and neither of them reaches the page"                 "$(fhasnt "$SECRET_PAGE_PATH" "$HTML")"
+assert "…the whole value being dropped, not trimmed to its clean half" \
+  "$(fhasnt 'data-copy="/projects/plain/deliverables' "$HTML")"
+# The other direction, on the same real page, and the pair that says the parser is
+# followed rather than approximated. They fail in OPPOSITE directions — one on a lost
+# entry, one on an invented one — and each names the shape only it can reach:
+#   · `quoted`: quoting makes `]` ordinary, YAML has two entries, so the clean one is a
+#     button and the truncation `.../a` is not;
+#   · `sibling`: an unquoted `]` terminates the list, so `b.md` lives in a COMMENT and
+#     must reach no button — rendering it invents a deliverable out of comment text;
+#   · `blockform`: ` #` inside a quoted BLOCK entry is not a comment either, so no
+#     `.../b` may appear.
+assert "a clean sibling entry is still a copy button"          \
+  "$(fhas 'data-copy="/projects/quoted/deliverables/b.md"' "$HTML")"
+assert "…and no truncated path was fabricated beside it"       \
+  "$(fhasnt 'data-copy="/projects/quoted/deliverables/a"' "$HTML")"
+assert "…nor is comment text past an unquoted ] rendered as an entry" \
+  "$(fhasnt 'data-copy="/projects/sibling/deliverables/b.md"' "$HTML")"
+assert "…while the entry that unquoted ] terminated still is one" \
+  "$(fhas 'data-copy="/projects/sibling/deliverables/a"' "$HTML")"
+assert "…and a quoted # on a BLOCK entry line is truncated into no path" \
+  "$(fhasnt 'data-copy="/projects/blockform/deliverables/b"' "$HTML")"
+# The line no parser will read at all. A cut needs a flow TERMINATOR before it may treat
+# a `#` on a key line as a comment; drop that requirement and this fixture's filename is
+# truncated into `.../a` and rendered. Both directions again, and neither leaks — which
+# is why nothing else on this page can catch it.
+assert "…nor is a filename truncated on a list that never closes" \
+  "$(fhasnt 'data-copy="/projects/unterminated/deliverables/a"' "$HTML")"
+assert "…while its readable clean entry is still a button" \
+  "$(fhas 'data-copy="/projects/unterminated/deliverables/b.md"' "$HTML")"
+# EXACTLY thirteen deliverable buttons on this page — one per fixture whose line yields
+# a whole, well-formed path (retained, finished, handedited, blockform's first entry,
+# `sibling`'s single entry, the clean second entry of `quoted` and `unterminated`,
+# `sqescaped`'s clean sibling, both of `sqplain`'s, both of `umlaut`'s and `nfd`'s one;
+# `plain` and `colon` yield none, each being two paths in one value) — and both failure directions are silent, sitting either
+# side of the same fix. Too FEW is the documented comment form costing a panel: a strip
+# anchored on the line's last bracket leaves SCHEMA.md's own comment in the value, the
+# shape check drops the only entry, and the retained project renders with no
+# deliverables panel at all — green on "nothing leaked", green on "no error", feature
+# gone. It is also a clean entry lost beside a QUOTED bracketed filename. Too MANY is a
+# comment fragment rendering as a path. A `fhas` on any one button sees none of it.
+DELIV_BTNS="$(grep -oF 'data-what="Deliverable path"' "$HTML" | grep -c . || true)"
+assert "exactly one copy button per stamped path, no more and no fewer (saw $DELIV_BTNS)" \
+  "$(eq "$DELIV_BTNS" 13)"
 assert "no filesystem path reaches the page"        "$(fhasnt "$TMP" "$HTML")"
 # Belt and braces, because the check above depends on how the fixture path is spelled:
 # an instance is named by its DIRECTORY NAME, so the name must never appear with a
@@ -583,8 +1205,15 @@ assert "…and it is present in escaped form"         "$(fhas "$HOSTILE_ESCAPED"
 # ONE <script>, and no snapshot text in it. "No script at all" was the kanban page's
 # property and never this one's; the honest promise is the boundary, not the tag count,
 # because a clipboard helper that interpolated a title would be an injection whether or
-# not it was the only script on the page.
-assert "exactly one <script> element"              "$(eq "$(grep -cF '<script' "$HTML")" 1)"
+# not it was the only script on the page. This page also carries a retained project's
+# deliverables panel (asserted above) — its copy buttons reuse this SAME helper, so this
+# assertion is what pins "no second script was added for it" on the page a real
+# invocation actually writes, not on an isolated fixture.
+# -c counts LINES, not occurrences — a second <script> sharing a line with the first
+# would still read 1 and pass. -o prints one match per line, so piping to `wc -l` counts
+# occurrences regardless of how many share a line.
+assert "exactly one <script> element" \
+  "$(eq "$(grep -oF '<script' "$HTML" | wc -l | tr -d ' ')" 1)"
 assert "…and NOTHING from a snapshot is inside it" "$(yes_if python3 -c '
 import re, sys
 t = open(sys.argv[1], encoding="utf-8").read()
@@ -671,11 +1300,13 @@ assert "…with exactly one <body> element" "$(eq "$(grep -cF '<body>' "$SA")" 1
 # there is no drift to pin. tests/artifact-board.test.sh asserts the <details> behaviour
 # (collapsed by default, finished projects under a divider) where the markup lives.
 # Two, not four, is still the fact worth reading off the page: beta is malformed and
-# gamma has no snapshot, so neither is an instance on the board. Five blocks: alpha's
-# four projects — including the RETAINED done one, which is on the board as a reference
-# card even though its tasks were never read — plus delta's one.
+# gamma has no snapshot, so neither is an instance on the board. Sixteen blocks: alpha's
+# fifteen projects — including the RETAINED done ones, which are on the board as
+# reference cards even though their tasks were never read, and the five whose
+# deliverable_paths line is hostile, which are still projects and still render — plus
+# delta's one.
 assert "one project block per project of the 2 rendered instances" \
-  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 5)"
+  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 16)"
 
 echo "== discovery is explicit, never a glob =="
 D1="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d1.html" 2>&1 )"
