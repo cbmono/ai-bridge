@@ -121,6 +121,14 @@ SECRET_PAGE_PATH="/Users/SECRET-PUBLISHER-HOME/Desktop/report.md"
 # `:` passed all three harnesses. Spelled with only word-leading segments after the
 # colon, the `:` exclusion is the only thing dropping it.
 SECRET_COLON_PATH="/Users/SECRET-PUBLISHER-HOME/Desktop/keys.txt"
+# A fourth, for `depends_on`: a trailing comment naming a file off the publisher's own
+# disk (the `ci` project's task-008 fixture). Unlike the three above this is not about
+# a path reaching the page — depends_on carries bare task IDs, never a path, so a
+# leak here would be a FRAGMENT of this string, not the whole thing (see task-008's own
+# comment for the exact fragment and why). Kept as its own sentinel so "the real edge
+# survives" and "no fragment of the comment leaks in its place" stay two assertions,
+# not one guess at a shared string doing both jobs.
+SECRET_DEP_COMMENT_PATH="/Users/SECRET-PUBLISHER-HOME/private/notes[1].md"
 # An HTML-metacharacter title, and the two forms it may appear in on the page.
 HOSTILE_TITLE='<script>alert(1)</script> & <b>bold</b>'
 HOSTILE_ESCAPED='&lt;script&gt;alert(1)&lt;/script&gt;'
@@ -317,6 +325,45 @@ status: draft
 assignee: software-engineer
 open_questions: [ "Q1: keep the \"[repo#42](https://github.com/acme/x/pull/42)\" style?", "Q2: bracket [note] mid-question" ]
 pr: []
+---
+TSK
+
+# `acceptance_criteria: []` with a trailing YAML comment, on a draft with NO open
+# questions. list_filled()'s bracket-and-whitespace strip left the comment text behind
+# and read that leftover as "the list is non-empty" — so a task with NO real criteria
+# at all was reported `awaiting: "approve"`. `approve` is read straight off this field
+# for AWAITING.md, so this invented a queue item out of a comment, which is exactly the
+# one thing that surface's own rule forbids (never invent an item).
+cat > "$ALPHA/projects/ci/tasks/task-007.md" <<'TSK'
+---
+type: Task
+title: Still shaping this one
+kind: build
+status: draft
+assignee: software-engineer
+acceptance_criteria: []  # nothing decided yet, still refining the shape
+open_questions: []
+---
+TSK
+
+# `depends_on` with a trailing comment that itself names a file off the publisher's
+# own disk. Before the fix, the unstripped comma-split treated the WHOLE rest of the
+# line — bracket, comment and all — as the one entry's text, so:
+#   · the real edge (task-001) was lost, and
+#   · `sed 's#^.*/##; s#\.md$##'` (meant to turn a bundle path into a bare ID) instead
+#     took the LAST slash-terminated segment of the comment's own path and stripped
+#     ITS `.md`, fabricating the ID `notes[1]` — a fragment of a local filesystem path,
+#     never in the allowlist, standing in for a real structural reference the board draws.
+cat > "$ALPHA/projects/ci/tasks/task-008.md" <<TSK
+---
+type: Task
+title: Ship the thing task-001 blocks on
+kind: build
+status: draft
+assignee: software-engineer
+depends_on: [ /projects/ci/tasks/task-001.md ]   # blocked by $SECRET_DEP_COMMENT_PATH
+acceptance_criteria: [ "ships" ]
+open_questions: []
 ---
 TSK
 
@@ -679,9 +726,9 @@ touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
 assert "…with the project count"           "$(has '15 project(s)' "$RUN_OUT")"
-# 7, not 8: the done project's task is never counted, because it is never read.
-assert "…and the task count"                "$(has '7 task(s)' "$RUN_OUT")"
-assert "…and the awaiting count (6 verbs across 4 live projects)" "$(has '6 awaiting' "$RUN_OUT")"
+# 9, not 10: the done project's task is never counted, because it is never read.
+assert "…and the task count"                "$(has '9 task(s)' "$RUN_OUT")"
+assert "…and the awaiting count (7 verbs across 4 live projects)" "$(has '7 awaiting' "$RUN_OUT")"
 # The run captures stderr too, and an awk that aborts mid-line says so THERE while still
 # exiting 0 and writing a file — a whole `deliverable_paths` key lost with the evidence
 # printed somewhere nobody reads. So the absence of that text is an assertion.
@@ -790,6 +837,16 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 bad=[dep for p in d["projects"] for t in p["tasks"] for dep in t["depends_on"] if dep.endswith(".md")]
 sys.exit(0 if not bad else 1)' "$SNAP")"
+# task-008: a trailing YAML comment on the depends_on line must neither eat the real
+# edge nor fabricate one out of the comment's own text (see task-008's own comment).
+assert "a trailing comment on depends_on still keeps the real edge (task-008)" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"]=="task-008"][0]
+sys.exit(0 if t["depends_on"]==["task-001"] else 1)' "$SNAP")"
+assert "…and fabricates no ID out of the comment"          "$(fhasnt '"notes[1]"' "$SNAP")"
+assert "…nor any fragment of the leaked path"              "$(fhasnt "$SECRET_DEP_COMMENT_PATH" "$SNAP")"
 assert "a blocker reason never reaches the snapshot"      "$(fhasnt "$SECRET_BLOCKER" "$SNAP")"
 assert "…the VERB does (unblock)"                         "$(fhas '"awaiting": "unblock"' "$SNAP")"
 assert "authorEmail never reaches the snapshot"           "$(fhasnt "$SECRET_EMAIL" "$SNAP")"
@@ -809,6 +866,15 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 t=[t for p in d["projects"] for t in p["tasks"] if t["id"]=="task-004"][0]
 sys.exit(0 if t["awaiting"]=="approve" else 1)' "$SNAP")"
+# task-007: `acceptance_criteria: []` plus a trailing comment, no open questions. This
+# must await NOTHING — not "approve", which is what a comment left over after the
+# bracket-and-whitespace strip used to fake (see task-007's own comment).
+assert "an EMPTY criteria list with a trailing comment awaits nothing (task-007)" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"]=="task-007"][0]
+sys.exit(0 if t["awaiting"]=="" else 1)' "$SNAP")"
 assert "the hostile title round-trips exactly"   "$(yes_if python3 -c '
 import json,sys
 d=json.load(open(sys.argv[1]))
@@ -1018,7 +1084,7 @@ sys.exit(0 if set(p["retained"]) == set(p["ci"]) and "owner" in p["retained"] el
 cp -R "$ALPHA/projects/retained" "$ALPHA/projects/notdone"
 sed -i.bak 's/^status: done$/status: active/' "$ALPHA/projects/notdone/project.md" && rm -f "$ALPHA/projects/notdone/project.md.bak"
 CTRL_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
-assert "control: the same task under a LIVE project IS read (8 tasks)" "$(has '8 task(s)' "$CTRL_OUT")"
+assert "control: the same task under a LIVE project IS read (10 tasks)" "$(has '10 task(s)' "$CTRL_OUT")"
 assert "…and its title does reach the snapshot"  "$(fhas 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
 # deliverable_paths comes off the SAME frontmatter parse every project already gets, not
 # off the done-project skip specifically — so a LIVE project carrying the key forwards it
@@ -1093,6 +1159,14 @@ assert "…carrying the command a human would run"   "$(fhas 'close-project fini
 assert "a retained project's deliverable is a copy button"  "$(fhas 'data-copy="/projects/retained/deliverables/deck.md"' "$HTML")"
 assert "…labelled by filename"                              "$(fhas '>deck.md</button>' "$HTML")"
 assert "…reusing the existing data-what convention"         "$(fhas 'data-what="Deliverable path"' "$HTML")"
+# task-008's edge, end to end on the SAME page this invocation writes — writer through
+# renderer, not the writer's JSON output taken on faith. A `]  # comment` on the
+# depends_on line must still draw the real dependency button pointing at task-001, and
+# must draw no button (and copy no path) for the comment's own fabricated fragment.
+assert "task-008's real dependency renders as a dep button (writer through renderer)" \
+  "$(fhas 'data-copy="ci/tasks/task-001" data-what="Path" title="task-001">001</button>' "$HTML")"
+assert "…and the comment's fabricated fragment renders nothing"    "$(fhasnt 'notes[1]' "$HTML")"
+assert "…nor any fragment of the leaked path reaches the page"     "$(fhasnt "$SECRET_DEP_COMMENT_PATH" "$HTML")"
 # Criterion 4, end to end on the page a real invocation writes — not on a hand-written
 # snapshot. The `finished` fixture's hand-edited `deliverable_paths:` line hides an
 # absolute path in a trailing comment, behind an unbalanced quote. What may appear on
