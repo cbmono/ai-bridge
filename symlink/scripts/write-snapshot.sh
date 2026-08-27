@@ -318,12 +318,16 @@ depends_ids() { # <frontmatter>
 # the comment has to be gone BEFORE the split.
 #
 # Safe here and not in list_region because this key's entries are bare paths, never
-# prose: `]`-then-`#` can only be the terminator plus a comment (first sed), and
-# whitespace-then-`#` on a block entry line can only be a comment (second). Price: a
-# filename with a whitespace-`#` in it, which bundle_deliverable() rejects anyway.
+# prose. One cut per YAML shape, and each is anchored on something only that shape has:
+# an INLINE list ends in `]`, so `]`-then-`#` is the terminator plus a comment; a BLOCK
+# entry line has no `]` at all, so whitespace-then-`#` there is a comment and nothing
+# else. The second cut is held off any line carrying a `]` for exactly that reason — on
+# an inline line it would fire inside the value on a path spelled `.../a #1.md` and
+# hand the renderer a TRUNCATED path that still looks valid, where leaving it alone
+# gets it dropped by bundle_deliverable()'s `#` check instead.
 deliverable_path_entries() { # <frontmatter>
   list_entries_from_region "$(list_region "$1" deliverable_paths \
-    | sed -e 's/\][[:space:]]*#.*$/]/' -e 's/[[:space:]]#.*$//')"
+    | sed -e 's/\][[:space:]]*#.*$/]/' -e '/\]/!s/[[:space:]]#.*$//')"
 }
 
 # The TEXT of each open question — OPT-IN, and off unless SNAPSHOT_QUESTION_TEXT=1.

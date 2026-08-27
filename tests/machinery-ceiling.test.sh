@@ -341,11 +341,11 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # ---- round four: the strip moves to ONE key, and stops growing the shared helper ----
 #
 #   6,803 / 3,650   20 files   what the raise above pinned
-#   6,808 / 3,649   20 files   +5 total, -1 CODE
+#   6,812 / 3,649   20 files   +9 total, -1 CODE
 #
 # Per file:
 #
-#   write-snapshot.sh           572 ->   575    +3 total, -1 code
+#   write-snapshot.sh           572 ->   579    +7 total, -1 code
 #   build-board.sh            1,245 -> 1,247    +2 total,  0 code
 #
 # WHAT THE LINES BUY — and read the two rounds above first, because this one UNDOES
@@ -369,7 +369,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # it was what made the declined case safe is gone, because it never was.
 #
 # THE DEBT ABOVE IS UNCHANGED, A FOURTH TIME.
-CEILING_TOTAL=6808
+CEILING_TOTAL=6812
 CEILING_CODE=3649
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a

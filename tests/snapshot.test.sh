@@ -309,6 +309,25 @@ deliverable_paths: [ /projects/handedited/deliverables/report.md ]   # hand-edit
 ---
 PRJ
 
+# The SAME hazard in the OTHER YAML shape. A block sequence's key line carries no `]`
+# at all, so the cut that handles the inline form cannot fire here and the comment would
+# ride into the entry — where the comma splits it exactly as above. Two shapes, two
+# cuts, and this fixture is the one that says the second cut is load-bearing: without
+# it the suite stays green while a block-form list leaks.
+mkdir -p "$ALPHA/projects/blockform"
+cat > "$ALPHA/projects/blockform/project.md" <<PRJ
+---
+type: Project
+title: Block-form deliverables
+description: the same key, written as a block sequence
+kind: research
+status: done
+retain: true
+deliverable_paths:
+  - /projects/blockform/deliverables/notes.md  # hand-edited; kept, /projects/blockform/deliverables/see $SECRET_ABS_PATH
+---
+PRJ
+
 # Every task terminal ⇒ the board shows a close PROPOSAL, never an action.
 #
 # Its `deliverable_paths:` line is the HAND-EDITED shape: someone opened a quote and
@@ -407,7 +426,7 @@ echo "== a real snapshot, once the switch is on =="
 touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
-assert "…with the project count"           "$(has '5 project(s)' "$RUN_OUT")"
+assert "…with the project count"           "$(has '6 project(s)' "$RUN_OUT")"
 # 7, not 8: the done project's task is never counted, because it is never read.
 assert "…and the task count"                "$(has '7 task(s)' "$RUN_OUT")"
 assert "…and the awaiting count (6 verbs across 4 live projects)" "$(has '6 awaiting' "$RUN_OUT")"
@@ -613,6 +632,12 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 p=[p for p in d["projects"] if p["slug"]=="handedited"][0]
 sys.exit(0 if p["deliverable_paths"]==["/projects/handedited/deliverables/report.md"] else 1)' "$SNAP")"
+assert "…and the same holds for a BLOCK-form list, whose key line carries no ]" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="blockform"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/blockform/deliverables/notes.md"] else 1)' "$SNAP")"
 # The same defect, reached the other way round — through the VALUE rather than the
 # comment. The `finished` fixture's line opens a quote and never closes it, so a strip
 # that decided where the list ended by tracking quote state found no unquoted `]`, kept
@@ -764,8 +789,8 @@ assert "the comma-split fragment is never a copy button" \
   "$(fhasnt 'data-copy="/projects/handedited/deliverables/see' "$HTML")"
 assert "…while the real path on that same line still is"       \
   "$(fhas 'data-copy="/projects/handedited/deliverables/report.md"' "$HTML")"
-# EXACTLY three deliverable buttons on this page — one per fixture that stamps a path
-# (retained, finished, handedited) — because both failure directions are silent and
+# EXACTLY four deliverable buttons on this page — one per fixture that stamps a path
+# (retained, finished, handedited, blockform) — both failure directions are silent and
 # they sit either side of the same fix. Too FEW is the documented comment form costing
 # a panel: a strip anchored on the line's last bracket leaves SCHEMA.md's own comment
 # in the value, the `#` guard drops the only entry, and the retained project renders
@@ -774,7 +799,7 @@ assert "…while the real path on that same line still is"       \
 # button sees neither.
 DELIV_BTNS="$(grep -oF 'data-what="Deliverable path"' "$HTML" | grep -c . || true)"
 assert "exactly one copy button per stamped path, no more and no fewer (saw $DELIV_BTNS)" \
-  "$(eq "$DELIV_BTNS" 3)"
+  "$(eq "$DELIV_BTNS" 4)"
 assert "no filesystem path reaches the page"        "$(fhasnt "$TMP" "$HTML")"
 # Belt and braces, because the check above depends on how the fixture path is spelled:
 # an instance is named by its DIRECTORY NAME, so the name must never appear with a
@@ -887,11 +912,11 @@ assert "…with exactly one <body> element" "$(eq "$(grep -cF '<body>' "$SA")" 1
 # there is no drift to pin. tests/artifact-board.test.sh asserts the <details> behaviour
 # (collapsed by default, finished projects under a divider) where the markup lives.
 # Two, not four, is still the fact worth reading off the page: beta is malformed and
-# gamma has no snapshot, so neither is an instance on the board. Six blocks: alpha's
-# five projects — including the RETAINED done one, which is on the board as a reference
-# card even though its tasks were never read — plus delta's one.
+# gamma has no snapshot, so neither is an instance on the board. Seven blocks: alpha's
+# six projects — including the RETAINED done ones, which are on the board as reference
+# cards even though their tasks were never read — plus delta's one.
 assert "one project block per project of the 2 rendered instances" \
-  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 6)"
+  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 7)"
 
 echo "== discovery is explicit, never a glob =="
 D1="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d1.html" 2>&1 )"
