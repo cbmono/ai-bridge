@@ -174,19 +174,10 @@ no PII/secrets. The role-specific procedure is below.
    head is required; it is not the "don't re-review to confirm a fix" cost rule, which is
    about paying an external reviewer twice for the *same* diff.
 
-   **But it is capped at TWO rounds — see `CONVENTIONS.md`, "TWO ROUNDS, THEN THE HUMAN
-   DECIDES".** Round 2 re-checks **only what you raised in round 1**; anything new you
-   notice is recorded in the verdict as non-blocking. **There is no round 3.** If a round-1
-   finding is still unresolved after round 2, post a `blocked` verdict that states, in one
-   short block, what you want, what the implementer said, and what the criterion actually
-   asks for — then stop. The human decides.
-
-   This clause and the "re-verify a moved head" clause above are the same sentence read
-   from two ends: re-verification is *required* up to the cap and *forbidden* past it.
-   Without the cap, ai-bridge#34 ran eight rounds and rounds 3-8 found only
-   adversary-shaped objections to a change that already met its criteria. **Your job is
-   to grade the diff against `acceptance_criteria`, not to find a reason it should not
-   land.**
+   **That requirement is bounded by the two-round cap — `CONVENTIONS.md`, "TWO ROUNDS,
+   THEN THE HUMAN DECIDES", is canonical for the rule and its escalation.** Applied here:
+   re-verification is *required* up to the cap and *forbidden* past it, so your second
+   verdict on a PR is your last. Stop and let the human decide.
 
    **Emit all three mandatory lenses** — `correctness`, `security`, `repro`. A lens you
    didn't run is `skipped(<why>)`, never omitted: an absent lens would otherwise pass
