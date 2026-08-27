@@ -370,6 +370,45 @@ fetched — a truncated fetch looks exactly like a clean review. Clauses 7–9 s
 counts as **no review**, even when a green check is published alongside it. That
 combination is a refusal, not a pass.
 
+**A green check from a reviewer that declined to review is not verification.** Clearance
+requires a review **artifact that evidences a completed review** — a submitted review
+object, a body carrying the reviewer's own evidence of having looked, or a parseable
+verdict trailer — never a status-check conclusion, which reports only that the integration
+ran. **Not-a-refusal is not evidence**, and that distinction is the whole gate: the
+reviewer publishes an artifact on nearly every PR *before* it has read anything
+("Currently processing new changes in this PR…", quoting the head), so a check that clears
+whatever it cannot classify as a refusal clears that too. A refusal is identified by
+**language**, never by the commit range it quotes: the refusal comment carries the same
+`between <base> and <head>` line a real review carries, at the same head, so the range
+cannot tell them apart. Unknown or unreadable reviewer state is **unverified**, never
+clearance. `scripts/review-clearance.sh` computes exactly this, and exit 0 is its only
+clearance.
+
+**A verdict that reports a refusal must carry its trailer, or it classifies as one.** The
+fallback reviewer's job on a rate-limited PR is to *say* the hosted reviewer declined —
+quoting the words, and the vendor's own sentinel. That prose matches the refusal language
+the clearance check looks for, so a verdict read against the reviewer's own account
+classifies as a refusal *of itself*: the reviewer disqualified for having reported
+accurately. The `okf-verdict v1` trailer above is the guard, and this is its second job —
+an artifact carrying a parseable trailer is a review whatever its prose quotes, because a
+trailer is a structured claim and prose is never an input (see "Two structured inputs").
+Fencing the quoted refusal also works and reads better, but it is not the guarantee:
+fences hold only while they stay balanced.
+
+**"Parseable" is load-bearing, and it is not "the string appears somewhere".** A consumer
+must require the whole block — the `<!-- okf-verdict v1` marker alone on its line, a `-->`
+closing it, and `verdict`, `reviewer` and a `head_sha` **equal to the head being cleared**
+— and must accept it only from the account it was told to read. As a substring it is a
+nineteen-character bypass that outranks every refusal: this repository's own diffs contain
+the string, reviewers quote diffs, and anything that quotes one would otherwise declare
+itself reviewed.
+
+**And "not cleared" has more than one shape.** A review that exists but was made at an
+*earlier* commit is **stale** by clause 3, not absent and not a refusal — the ordinary
+state wherever the reviewer does not re-review every push. Say which one you mean when
+you refuse; "the reviewer declined" about a real review of an older head is a false
+report that sends the human looking for a quota that was never exhausted.
+
 **One verdict per reviewed head — and a new head needs a new one.** A reviewer posts one
 synthesized verdict for the commit it reviewed, never an early `pass` amended later. When
 the head advances, clause 3 makes the old verdict stale, so that new head must be

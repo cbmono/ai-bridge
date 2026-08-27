@@ -72,11 +72,45 @@ no PII/secrets. The role-specific procedure is below.
      cap and rate limits that nothing in this bundle can see — and when it hits one it
      **still publishes a green check** while its comment says it skipped the review. Read
      what the reviewer actually said: any "rate limit reached", "review skipped", plan- or
-     quota-exhausted message means **no review happened**. Treat it exactly like (b) —
+     quota-exhausted message means **no review happened**. `scripts/review-clearance.sh
+     <pr> --repo <org>/<repo>` decides this for you — exit 1 is a refusal and it quotes
+     the words; don't re-derive the judgement by eye. And note the refusal comment names
+     the PR's own head in a `between <base> and <head>` line, so "it mentions the head
+     SHA" is **not** evidence that anything was reviewed. Treat it exactly like (b) —
      pending, an unmet gate — and say so in your verdict's `caveats`. A green check next
      to a refusal is the most convincing false pass available here; never launder it into
      one, and never spend the CLI to paper over an exhausted quota (that's the same budget
      from the other side — flag it for the human instead).
+
+     **Two readings of that script's output that are easy to get wrong.** Exit **4** is
+     not a refusal — it means a real review exists and it is of an **earlier commit**,
+     which is the ordinary state wherever the reviewer does not re-review every push
+     (CodeRabbit's `auto_incremental_review: false`, which this repo sets on purpose).
+     Report that as *stale*, and ask for a review at the current head; do not quote it as
+     "the reviewer declined". And exit 1 answers for **one** account — read whose
+     clearance you were told about before repeating it.
+
+     **Your own verdict quotes refusal language, so end it with the `okf-verdict`
+     trailer.** Writing "CodeRabbit answered *Review limit reached*" makes your comment
+     match the very table your comment is about, and a `review-clearance.sh` run scoped
+     to your account then reads **your review** as a refusal — the reviewer disqualifying
+     itself for having reported accurately. The trailer is the guard: an artifact
+     carrying a parseable `okf-verdict v1` trailer is treated as a review whatever its
+     prose quotes, because a trailer is a structured claim and prose is not. It is
+     honoured only for an account passed to `--reviewer` that is **not** one of the
+     hosted vendors in the script's table, and its `head_sha` must equal the head being
+     cleared — so post the verdict under your own account and name the head you read. Fencing the
+     quote also works and reads better, but do not *rely* on it — fences hold only while
+     they stay balanced.
+
+     **The trailer guards you only if it PARSES, so emit the whole block.** It is not a
+     magic string: the marker `<!-- okf-verdict v1` must be alone on its line, `-->` must
+     close it, and `verdict`, `reviewer` and `head_sha` must all be present with
+     `head_sha` equal to the head you reviewed — a trailer for an earlier commit is stale
+     and counts for nothing. It is honoured **only when clearance is scoped to your
+     account** (`--reviewer <your login>`), never for a hosted vendor, because a vendor
+     comment quoting a diff that contains the string would otherwise declare itself
+     reviewed.
    - **d. Genuinely no integration** (and the CLI is installed) — run
      `coderabbit review --base <default-branch> --type committed --agent` (detect the
      default branch — don't hardcode `main`: `git symbolic-ref --short
