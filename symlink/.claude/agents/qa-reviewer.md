@@ -96,7 +96,10 @@ no PII/secrets. The role-specific procedure is below.
      to your account then reads **your review** as a refusal — the reviewer disqualifying
      itself for having reported accurately. The trailer is the guard: an artifact
      carrying a parseable `okf-verdict v1` trailer is treated as a review whatever its
-     prose quotes, because a trailer is a structured claim and prose is not. Fencing the
+     prose quotes, because a trailer is a structured claim and prose is not. It is
+     honoured only for an account passed to `--reviewer` that is **not** one of the
+     hosted vendors in the script's table, and its `head_sha` must equal the head being
+     cleared — so post the verdict under your own account and name the head you read. Fencing the
      quote also works and reads better, but do not *rely* on it — fences hold only while
      they stay balanced.
 

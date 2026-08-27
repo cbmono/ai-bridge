@@ -116,8 +116,8 @@ HAVE_JQ=0; command -v jq >/dev/null 2>&1 && HAVE_JQ=1
 
 # A cleared PR by default. Clearance is now asked for on EVERY pull request, so a fixture
 # with no reviewer artifact would make every "-> clear" case below refuse for a reason
-# none of them is about. `no_review` and `reviewer_pr` take it away where that is the
-# point being tested.
+# none of them is about. `reviewer_pr` replaces it where the absent review is the point
+# being tested.
 reviewed_pr() {
   [ "$HAVE_JQ" = 1 ] || return 0
   jq -n --arg h "$HEAD_SHA" \
@@ -338,7 +338,7 @@ done
 # a reviewer's" had no answer to give.
 setup; checks "pass	Build"; declared "Build"; reviewer_pr ""
 expect "plain CI names only, and nothing reviewed -> refuse" 1
-says   "  ...saying no independent reviewer cleared it" "no independent reviewer"
+says   "  ...saying no review clears the head" "no independent review clears PR"
 setup; checks "pass	Build"; declared "Build"; reviewer_pr "$CR_CLEAN"
 expect "…and the same set with a real review clears" 0
 

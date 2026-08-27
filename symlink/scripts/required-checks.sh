@@ -316,8 +316,8 @@ clearance_for() { # [--for-check <name>] — 0, or the sibling's refusal code
   then return 0; else return $?; fi
 }
 
-refuse_clearance() { # <what> <exit code of the sibling>
-  echo "refuse: $1 did not clear PR $pr (review-clearance.sh exit $2). A green check" >&2
+refuse_clearance() { # <the whole first clause> <exit code of the sibling>
+  echo "refuse: $1 (review-clearance.sh exit $2). A green check" >&2
   echo "        means the integration ran, never that a review happened:" >&2
   sed 's/^/        /' "$clearance_err" >&2
   [ -n "$reviewer_checks" ] && \
@@ -334,13 +334,14 @@ if [ -n "$reviewer_checks" ]; then
   while IFS= read -r name; do
     [ -n "$name" ] || continue
     if clearance_for --for-check "$name"; then crc=0; else crc=$?; fi
-    [ "$crc" -eq 0 ] || refuse_clearance "required check '$name' is a reviewer's own, and that reviewer" "$crc"
+    [ "$crc" -eq 0 ] || refuse_clearance \
+      "required check '$name' is a reviewer's own, and that reviewer did not clear PR $pr" "$crc"
   done <<EOF
 $reviewer_checks
 EOF
 else
   if clearance_for; then crc=0; else crc=$?; fi
-  [ "$crc" -eq 0 ] || refuse_clearance "no independent reviewer" "$crc"
+  [ "$crc" -eq 0 ] || refuse_clearance "no independent review clears PR $pr" "$crc"
 fi
 
 count="$(printf '%s\n' "$required" | grep -c '^' || true)"

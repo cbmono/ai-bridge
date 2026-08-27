@@ -21,80 +21,60 @@
 # So nothing here reads a check conclusion. It reads the reviewer's ARTIFACTS and asks
 # whether any of them is a review OF THIS COMMIT.
 #
-# THE SHAPE OF THE ANSWER, AND WHY IT CHANGED. Four successive rounds of review found
-# eleven ways to a false clearance, and every one of them was the same primitive:
-# classifying VENDOR PROSE and VENDOR NAMES with regex tables. A table of names and
-# phrasings has to enumerate every vendor and every wording that will ever exist, so it
-# is never finished — the reviewer that found round four's routes reported that its own
-# first battery had the same blind spot as this file's tests. When the reviewer and the
-# implementation share a blind spot, the defect is the primitive.
-#
-# So the primitive moved. EVIDENCE AND PINNING NOW COME FROM THE STRUCTURED API:
+# THE PRIMITIVE CHANGED, AND THAT IS WHAT THIS REVISION IS. Four rounds of review found
+# eleven ways to a false clearance and every one was the same thing: classifying VENDOR
+# PROSE and VENDOR NAMES with regex tables. Such a table must enumerate every vendor and
+# every wording that will ever exist, so it is never finished — the reviewer that found
+# round four's routes reported that its OWN first battery had the same blind spot as this
+# file's tests. When reviewer and implementation share a blind spot, the defect is the
+# primitive. So EVIDENCE AND PINNING NOW COME FROM THE STRUCTURED API:
 # `/repos/{owner}/{repo}/pulls/{n}/reviews` publishes a review's `state` and its
-# `commit_id`, and `gh` is already a hard dependency here. A review object whose state is
-# one of GitHub's own three submitted values, made at the commit being cleared, is a
-# review — with no text read at all. That replaces "does the body happen to mention the
-# head SHA", which was how ALL of the review objects on this repository used to be
-# pinned, and which is exactly the property a refusal ALSO has (see THE TRAP below).
+# `commit_id`, and `gh` was already a hard dependency. That replaces "does the body happen
+# to mention the head SHA", which is how every review object here used to be pinned — and
+# which is precisely the property THE TRAP below gives the REFUSAL too. TEXT MATCHING
+# KEEPS EXACTLY ONE JOB, DETECTING A REFUSAL, where a false positive fails CLOSED (a human
+# looks at a PR that was in fact reviewed): the unbounded matching problem now sits on the
+# side where being wrong is harmless, and nothing here clears a PR for its prose.
 #
-# TEXT MATCHING KEEPS EXACTLY ONE JOB: DETECTING A REFUSAL. There a false positive fails
-# CLOSED — a human looks at a PR that was in fact reviewed — so the unbounded matching
-# problem now sits on the side where being wrong is harmless. Nothing in this file clears
-# a PR because of the prose in an artifact. The one text-driven route that can still
-# clear (below) keys on the reviewer's own machine-emitted HTML marker, not on prose, and
-# it is the same class of signal as the refusal sentinel it is ranked against.
-#
-# THE TRAP, AND WHY THE ORDER OF THE TESTS BELOW IS LOAD-BEARING. The refusal comment
-# ALSO enumerates the commit range it would have reviewed, and on the PR that merged
-# unreviewed that range's head equalled the PR head exactly. "The artifact names the
-# current head" is therefore TRUE OF THE REFUSAL, and any detector keying on that range
-# reads a refusal as a review. Only the refusal LANGUAGE separates the two. Hence:
-# classify against the refusal tables FIRST, and consider clearance only for what
-# survives. `tests/review-clearance.test.sh` drives that exact false positive against the
-# recorded comment body.
+# THE TRAP, AND WHY THE ORDER OF THE TESTS BELOW IS LOAD-BEARING. The refusal comment ALSO
+# enumerates the commit range it would have reviewed, and on the PR that merged unreviewed
+# that range's head equalled the PR head exactly. "The artifact names the current head" is
+# therefore TRUE OF THE REFUSAL. So: classify against the refusal tables FIRST, and
+# consider clearance only for what survives. `tests/review-clearance.test.sh` drives that
+# exact false positive against the recorded comment body.
 #
 # THE THREE ROUTES TO EXIT 0, AND THERE ARE NO OTHERS
 #
-#   A. A REVIEW OBJECT from the API whose `state` is exactly `APPROVED`,
-#      `CHANGES_REQUESTED` or `COMMENTED` — compared case-sensitively against the API's
-#      own spellings, because `pending` and `dismissed` in some other casing used to slip
-#      past a case-sensitive skip list — and whose `commit_id` equals the head being
-#      cleared. Evidence and pin are both structural; the body is read only to see
-#      whether it is a refusal.
-#   B. A validated `okf-verdict` trailer whose `head_sha` equals the head, in an artifact
-#      from an account named with `--reviewer` that is NOT one of the vendors in the
-#      REVIEWERS table (see the tier-4 note).
-#   C. A comment carrying the reviewer's own MACHINE-EMITTED review marker (REVIEW_SENTINEL)
-#      and naming the head. This route exists because the hosted reviewer this was written
-#      against publishes a CLEAN review — "no actionable comments" — as an issue comment
-#      and files no review object at all: measured over the 35 pull requests here, four of
-#      the five reviews that clear are that shape. Dropping the route would not make the
-#      gate stricter, it would make it structurally unable to say yes to a clean review.
-#      It is the weakest route and it is the narrowest: an HTML comment the vendor's own
-#      renderer emits, matched whole, in a body whose fenced AND indented code blocks have
-#      been removed. Prose cannot reach it.
+#   A. a REVIEW OBJECT whose `state` is exactly `APPROVED`, `CHANGES_REQUESTED` or
+#      `COMMENTED` — compared case-sensitively against the API's own spellings, because
+#      `pending`/`dismissed` in another casing used to slip past a case-sensitive skip
+#      list — and whose `commit_id` equals the head. Evidence and pin both structural.
+#   B. a validated `okf-verdict` trailer whose `head_sha` equals the head, from an account
+#      named with `--reviewer` that is NOT a vendor in REVIEWERS (see the tier-4 note).
+#   C. a COMMENT carrying the reviewer's own MACHINE-EMITTED review marker
+#      (REVIEW_SENTINEL) and naming the head. It exists because the reviewer this was
+#      written against publishes a CLEAN review — "no actionable comments" — as an issue
+#      comment and files no review object at all: four of the five reviews that clear the
+#      35 pull requests here are that shape, so dropping the route would not make the gate
+#      stricter, it would make it structurally unable to say yes to a clean review. It is
+#      the weakest and the narrowest: an HTML comment the vendor's own renderer emits, in
+#      a body whose fenced AND indented code blocks are gone. Prose cannot reach it.
 #
-# PROVIDER-AGNOSTIC BY CONSTRUCTION, AND THE TABLES CAN NO LONGER CAUSE A CLEARANCE.
-# Every vendor-specific string lives in one of the tables below: REVIEWERS (whose
-# artifacts count, and what its status check is called), REFUSALS_SENTINEL / NOT_YET /
-# REFUSALS (the language of "I did not review") and REVIEW_SENTINEL (the vendor's own
-# review marker). A missing or wrong row in ANY of them now costs a REFUSAL, never a
-# clearance: an unknown account is ignored, an unknown check name is not settled by its
-# name (see below), an unmatched refusal phrasing still has to get past route A/B/C, and
-# an unmatched review marker lands on exit 4. Column 1 of REVIEWERS is a list of EXACT
-# logins with no wildcards, because `greptile.*` also matched `greptile-evil`.
-#
-# A CHECK NAME NEVER SETTLES ANYTHING, HERE OR IN THE CALLER. `--match-check` used to
-# have a third answer — "this LOOKS like a reviewer's check and no row owns it" — backed
-# by a table of vendor names and review phrasings, so that the caller could refuse rather
-# than settle such a check on its green bucket. That table was route 1 of round four: a
-# required check called `Codex Review`, or bare `Cursor`/`Copilot`/`Devin`/`PR Agent`,
+# THE TABLES CAN NO LONGER CAUSE A CLEARANCE. Every vendor string lives in REVIEWERS
+# (whose artifacts count, and what its check is called), REFUSALS_SENTINEL / NOT_YET /
+# REFUSALS ("I did not review") and REVIEW_SENTINEL (the vendor's own review marker). A
+# missing or wrong row in any of them costs a REFUSAL: an unknown account is ignored, an
+# unmatched refusal phrasing still has to get past A/B/C, an unmatched review marker lands
+# on exit 4. REVIEWERS column 1 is EXACT logins, because `greptile.*` matched
+# `greptile-evil` too. AND A CHECK NAME NEVER SETTLES ANYTHING, HERE OR IN THE CALLER:
+# `--match-check`'s third answer — "looks like a reviewer's, and no row owns it" — rested
+# on a table of vendor names and review phrasings, and that table was round four's route 1
+# (a required check called `Codex Review`, or bare `Cursor`/`Copilot`/`Devin`/`PR Agent`,
 # answered "plain CI" and settled green with zero artifacts read — the original incident
-# verbatim with a 2026 vendor's name. The table is DELETED rather than extended, because
-# `required-checks.sh` no longer conditions on the name at all: it asks for clearance on
-# every PR it is about to clear, whatever the required checks are called. `--match-check`
-# survives with two answers and one job — telling the caller WHICH vendor owns a check, so
-# one vendor's review cannot clear another's.
+# with a 2026 vendor's name on it). It is DELETED rather than extended, because
+# `required-checks.sh` now asks for clearance on every PR whatever its checks are called.
+# `--match-check` keeps two answers and one job: which vendor owns a check, so one
+# vendor's review cannot clear another's.
 #
 # A TABLE THAT DOES NOT COMPILE IS A TABLE THAT MATCHES NOTHING, which for the refusal
 # tables means a refusal reads as a review. One typo'd ERE used to disable a whole table
@@ -135,22 +115,22 @@
 # pass. A review this script cannot see is a review that did not happen.
 #
 # AND A TRUNCATED COPY OF THIS FILE IS UNKNOWN STATE TOO. `--self-test` proved this file
-# RUNS, which is not the same as proving it is COMPLETE: a copy cut off after the
-# self-test block still runs, still prints the sentinel, and then classifies with half its
-# tables — swept over an earlier version, 112 of its truncation points passed the old
-# self-test and 109 of those went on to clear an unreviewed PR. So the last line of this
-# file is a completeness sentinel and the self-test asserts it is still there, which no
-# cut short of the end can satisfy.
+# RUNS, which is not proving it is COMPLETE: a copy cut off after the self-test block
+# still runs, still prints the sentinel, and then classifies with half its tables — swept
+# over an earlier version, 112 of its truncation points passed the old self-test and 109
+# of those went on to clear an unreviewed PR. So the last line of this file is a
+# completeness sentinel and the self-test asserts it, which no cut short of the end can
+# satisfy.
 #
 # EXIT 4 IS THE COMMON ANSWER, NOT AN EXOTIC ONE, wherever the reviewer does not
 # re-review every push. Measured over the 35 pull requests on the repository this was
-# written in: 18 review objects exist across the PRs, and exactly ONE of them was made by
-# the reviewer at its PR's final head, because `.coderabbit.yaml` here sets
+# written in: 18 review objects exist across them, and exactly ONE was made by the
+# reviewer at its PR's final head, because `.coderabbit.yaml` here sets
 # `auto_incremental_review: false` — the agent pushes fixes after the review and nothing
 # re-reads them. Those are stale reviews, not absent ones, and clause 3 of SCHEMA.md's
 # predicate says stale is not cleared. Wiring this into a merge gate therefore means most
-# PRs need a review requested at the FINAL head; that is a real operating cost and it is
-# the correct answer, not a bug to tune out.
+# PRs need a review requested at the FINAL head: a real operating cost, and the correct
+# answer rather than a bug to tune out.
 #
 # No `set -e`: a `grep` that finds nothing is an ANSWER here, not a fault, and under `-e`
 # the first such assignment would exit the script with a success-looking code. Every
@@ -161,20 +141,19 @@ set -uo pipefail
 # Two whitespace-separated fields per row, so neither may contain a space:
 #
 #   1. the account login that publishes the artifacts — an EXACT login, case-folded,
-#      after a trailing "[bot]" is stripped. No wildcards, deliberately: `greptile.*`
-#      and `(qodo|codium).*` were matched whole-string but ended in `.*`, so
-#      `greptile-evil`, `qodo-attacker` and `codiumsquatter` were all read as the vendor
-#      and any stranger who could comment could clear a PR. A login this table spells
-#      wrongly is a login that is IGNORED, which is exit 3 — the safe direction.
+#      after a trailing "[bot]" is stripped. No wildcards, deliberately: `greptile.*` and
+#      `(qodo|codium).*` were matched whole-string but ended in `.*`, so `greptile-evil`,
+#      `qodo-attacker` and `codiumsquatter` all read as the vendor and any stranger who
+#      could comment could clear a PR. A login spelled wrongly here is a login that is
+#      IGNORED, which is exit 3 — the safe direction.
 #   2. a POSIX ERE for the name its status check reports under (substring, case-folded)
 #
-# Column 2 is what `--match-check` answers on, and it exists for ONE purpose: telling the
-# caller which vendor owns a required check, so that vendor's own artifacts are the ones
-# read for it. It never decides whether a review is needed — `required-checks.sh` asks
-# for clearance on every PR regardless of what its checks are called.
+# Column 2 is what `--match-check` answers on, and it exists to tell the caller which
+# vendor owns a required check so that vendor's own artifacts answer for it. It never
+# decides whether a review is needed — `required-checks.sh` asks on every PR.
 #
-# `--reviewer <login>` bypasses this table entirely, which is how a reviewer that has no
-# row yet — or the `qa-reviewer` fallback, posting under a human account — is named.
+# `--reviewer <login>` bypasses this table entirely, which is how a reviewer with no row
+# yet — or the `qa-reviewer` fallback, posting under a human account — is named.
 REVIEWERS='
 coderabbitai            coderabbit
 sourcery-ai             sourcery
@@ -251,31 +230,26 @@ unable to (complete|perform|run) (the |this )?review
 # A row here outranks table 2b — never table 2a — and it is the evidence half of route C.
 #
 # WHY IT OUTRANKS 2b. A reviewer's REVIEW comment routinely carries a notice about
-# something it did NOT do, and table 2b reads the whole body:
+# something it did NOT do, and table 2b reads the whole body: "## Review skipped / Auto
+# incremental reviews are disabled" sits at the top of the same comment that carries the
+# walkthrough of a review that DID happen — on half of this repository's reviewed PRs,
+# because `.coderabbit.yaml` here sets `auto_incremental_review: false` on purpose.
 #
-#   > ## Review skipped
-#   > Auto incremental reviews are disabled on this repository.
+# EVERY ROW IS AN HTML COMMENT THE VENDOR'S RENDERER EMITS, and that is the design. This
+# table used to hold PROSE — `i (have )?reviewed`, `(lgtm|looks good to me)`,
+# `(changes requested|requesting changes)` — matched as unanchored substrings, the exact
+# defect this file had already fixed for the verdict trailer: quoted approvals cleared,
+# negated sentences like "Unreviewed <sha>" and "No changes requested" matched, and a
+# prose quota refusal carrying one such phrase outranked the refusal tier. Prose is gone.
+# What is left is the same CLASS of signal as REFUSALS_SENTINEL — a machine-readable claim
+# by the reviewer, invisible in the rendered page, matched as a whole `<!-- ... -->`
+# construct — ranked against it rather than against prose. That also fixes the asymmetry
+# the prose rows created: a vendor with no sentinel row of its own can no longer have its
+# quota refusal rescued by a phrase in its own body.
 #
-# sits at the top of the same comment that carries the walkthrough of a review that did
-# happen — on this repository it is on half of the reviewed pull requests, because
-# `.coderabbit.yaml` here sets `auto_incremental_review: false` on purpose.
-#
-# EVERY ROW IS AN HTML COMMENT THE VENDOR'S RENDERER EMITS, and that is the whole design.
-# This table used to hold PROSE — `i (have )?reviewed`, `(lgtm|looks good to me)`,
-# `(changes requested|requesting changes)` — matched as unanchored substrings, which is
-# the defect this same file had already fixed for the verdict trailer: a quoted approval
-# cleared, a negated sentence like "Unreviewed <sha>" or "No changes requested" matched,
-# and a prose quota refusal carrying one such phrase outranked the refusal tier. Prose is
-# gone. What is left is the same CLASS of signal as REFUSALS_SENTINEL above — a
-# machine-readable claim by the reviewer, invisible in the rendered page, matched as a
-# whole `<!-- ... -->` construct — ranked against it rather than against prose. That also
-# fixes the asymmetry the rows used to create: with prose gone, a vendor with no sentinel
-# row of its own can no longer have its quota refusal rescued by a phrase in its own body.
-#
-# A MISSING ROW COSTS A REFUSAL. A vendor whose marker is not here files review objects or
-# it does not clear route C — exit 4, a human glance, and `--reviewer` names it explicitly.
-# A row that is too loose costs a clearance, so nothing belongs here that a placeholder,
-# a banner or a bot's boilerplate could carry.
+# A MISSING ROW COSTS A REFUSAL: a vendor whose marker is not here files review objects or
+# lands on exit 4, and `--reviewer` names it explicitly. A row that is too loose costs a
+# CLEARANCE, so nothing belongs here that a placeholder or a banner could carry.
 REVIEW_SENTINEL='
 <!--[[:space:]]*walkthrough_start[[:space:]]*-->
 <!--[[:space:]]*recent_review_start[[:space:]]*-->
@@ -286,37 +260,32 @@ REVIEW_SENTINEL='
 # --- tier 4: an artifact that declares itself a review, structurally ----------
 # The `okf-verdict` trailer (`SCHEMA.md` → "A verdict is a structured claim, not prose")
 # is the fallback reviewer's own machine-readable output, and it outranks EVERY refusal
-# row — including the sentinel.
+# row — including the sentinel. Not a convenience: a `qa-reviewer` verdict on a
+# rate-limited PR has to SAY the hosted reviewer refused, quoting the words and the
+# sentinel, which classifies the verdict itself as a refusal. That happened to the verdict
+# on the PR that introduced this script.
 #
-# WHY, and it is not a convenience: a `qa-reviewer` verdict on a rate-limited PR has to
-# SAY that the hosted reviewer refused, quoting the words and the sentinel, which
-# classifies the verdict itself as a refusal. That happened to the verdict on the PR that
-# introduced this script.
+# SO IT IS PARSED, NOT GREPPED. As one row of substrings, the highest-ranking tier here
+# was a nineteen-character string: one appended `<!-- okf-verdict v1 -->` line turned the
+# recorded rate-limit refusal from exit 1 into exit 0, and "no hosted reviewer emits that
+# string" is untrue of a reviewer QUOTING A DIFF that contains it — this file ships it.
+# `verdict_trailer` requires a well-formed block: the marker alone on its line, `-->`
+# closing it, and the three fields SCHEMA.md's predicate needs, one of which is a
+# `head_sha` equal to the head being cleared.
 #
-# SO IT IS PARSED, NOT GREPPED — this is NOT a table. As one row of substrings, the
-# highest-ranking tier in the file was a nineteen-character string: one appended
-# `<!-- okf-verdict v1 -->` line turned the verbatim recorded rate-limit refusal from
-# exit 1 into exit 0, and "no hosted reviewer emits that string" is not true of a reviewer
-# QUOTING A DIFF that contains it — this very file ships it. `verdict_trailer` below
-# requires a well-formed block: the marker alone on its line, `-->` closing it, and the
-# three fields SCHEMA.md's predicate needs to exist at all, one of which is a `head_sha`
-# equal to the head being cleared.
+# AND THE TEXT IT PARSES IS THE STRICT RENDERING (see strict_body). Three doors reopened
+# the bypass by feeding a sound parser unsound text: an INDENTED code block was never
+# stripped, so a trailer GitHub renders as literal text validated as markup; a trailer
+# NESTED in an outer HTML comment validated while GitHub renders the whole thing blank;
+# and an unbalanced fence handed back the raw body, safe only while that body fed refusal
+# detection. The strict rendering removes indented blocks as well as fenced ones and is
+# EMPTY when the fences do not balance. The parser additionally discards a block
+# containing a nested `<!--`, and one nobody closed, so state cannot leak between blocks.
 #
-# AND THE TEXT IT IS PARSED FROM IS THE STRICT RENDERING (see strict_body). Three doors
-# were reopened by feeding a sound parser unsound text: an INDENTED code block was never
-# stripped, so a trailer GitHub renders as literal text validated as if it were markup; a
-# trailer NESTED inside an outer HTML comment validated while GitHub renders the whole
-# thing blank; and an unbalanced fence handed back the raw body, which was safe only while
-# that body fed refusal detection. The strict rendering removes indented blocks as well as
-# fenced ones, and is EMPTY when the fences do not balance — so an unreadable body clears
-# nothing. The parser additionally discards a block containing a nested `<!--` and a block
-# nobody closed, so state cannot leak from one to the next.
-#
-# IT IS ALSO SCOPED, AND THE SCOPE IS NOT `--reviewer` ALONE. The trailer is OUR fallback
-# reviewer's output, so it is honoured only for an account named with `--reviewer` that is
-# NOT a vendor in the REVIEWERS table. Naming the vendor's own login with `--reviewer`
-# used to re-arm the tier against that vendor's own refusal sentinel, which is precisely
-# the account whose comments quote diffs.
+# IT IS ALSO SCOPED, AND NOT BY `--reviewer` ALONE: honoured only for an account named
+# with `--reviewer` that is NOT a vendor in REVIEWERS. Naming the vendor's own login used
+# to re-arm the tier against that vendor's own refusal sentinel — and that vendor is
+# precisely the account whose comments quote diffs.
 VERDICT_MARKER='^[[:space:]]*<!--[[:space:]]*okf-verdict[[:space:]]+v[0-9]+[[:space:]]*$'
 
 # The three review states GitHub's API publishes for a SUBMITTED review. Compared
@@ -460,25 +429,21 @@ match_reviewer() {
 # --self-test PROVES THIS SCRIPT RUNS, which `[ -x ]` does not. A caller whose whole job
 # is to fail closed cannot ask the filesystem whether this file works: a dead shebang, a
 # syntax error, a zero-byte file and a copy truncated half-way through an install all
-# carry the executable bit, and a caller that reads their non-zero exit as "not a
-# reviewer's check" clears an unreviewed PR. So `required-checks.sh` runs this first and
-# refuses unless it exits 0 AND prints SELFTEST_OK verbatim — that string is the contract
-# between the two files, and it is duplicated there on purpose (a shared constant would
-# have to be sourced, and sourcing a broken file is the failure being tested for).
+# carry the executable bit and then fail every invocation, which used to read as "no
+# required check is a reviewer's" and clear an unreviewed PR. So `required-checks.sh` runs
+# this first and refuses unless it exits 0 AND prints SELFTEST_OK verbatim — that string
+# is the contract between the two files, duplicated there on purpose (a shared constant
+# would have to be sourced, and sourcing a broken file is the failure being tested for).
 #
-# THE CONTROLS ARE THE POINT. Printing a banner would pass for any stub that prints a
-# banner. This drives the table lookup the caller actually depends on, in both directions
-# — a name that MUST classify as a reviewer's and one that MUST NOT — and then classifies
-# two literal bodies through the real refusal and review tables, so a copy whose tables
-# are half-read fails here rather than answering "not a reviewer's" to everything.
+# THE CONTROLS ARE THE POINT: a banner would pass for any stub that prints a banner. This
+# drives the table lookup the caller depends on in both directions, then classifies two
+# literal bodies through the real refusal and review tables.
 #
-# AND "IT RUNS" IS NOT "IT IS COMPLETE" — the hole this block had. The self-test sits near
-# the TOP of this file, so a copy truncated anywhere BELOW it still parses, still reaches
-# this exit, and still prints the sentinel while the tables and the classifier it just
-# vouched for are gone. Swept over an earlier version, 112 truncation points passed the
-# old self-test and 109 of those then cleared an unreviewed PR. The last line of the file
-# is therefore a sentinel, asserted here: no cut short of the end can produce it, and a
-# caller that gets SELFTEST_OK has been told the file is whole, not merely that it started.
+# AND "IT RUNS" IS NOT "IT IS COMPLETE" — the hole this block had. It sits near the TOP of
+# the file, so a copy truncated anywhere BELOW it still parses, still reaches this exit and
+# still prints the sentinel while the tables and the classifier it just vouched for are
+# gone; 112 truncation points passed the old self-test and 109 then cleared an unreviewed
+# PR. The last line of the file is therefore a sentinel, asserted here.
 SELFTEST_OK="review-clearance: self-test ok"
 EOF_SENTINEL="#EOF: review-clearance.sh is complete to here"
 if [ "${1:-}" = "--self-test" ]; then
@@ -641,12 +606,12 @@ fi
 # line then the raw body; awk cuts on the header.
 #
 # THE SEPARATOR IS RANDOM PER RUN, and that is a security property rather than a style.
-# Artifact bodies are attacker-writable text — anyone who can comment on a PR can write
-# anything into one. A fixed sentinel could be typed into a comment to forge a record
-# boundary and so fabricate an artifact with an author, a state and a commit_id of the
-# forger's choosing. Sixteen random bytes cannot be guessed by the text being parsed.
-# The length is asserted EXACTLY (4 + 32 hex digits): a `>` test passes on a separator
-# with six bytes of entropy in it, which is guessable by the text being parsed.
+# Artifact bodies are attacker-writable — anyone who can comment on a PR can write
+# anything into one — so a fixed sentinel could be typed into a comment to forge a record
+# boundary and fabricate an artifact with an author, a state and a commit_id of the
+# forger's choosing. Sixteen random bytes cannot be guessed by the text being parsed. The
+# length is asserted EXACTLY (4 + 32 hex digits): a `>` test passes on a separator with
+# six bytes of entropy in it, which is guessable.
 SEP="okf-$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')"
 [ "${#SEP}" -eq 36 ] || {
   echo "error: could not generate a record separator — refusing (fail closed)" >&2
@@ -688,7 +653,7 @@ awk -v s="$SEP" -v dir="$TMPD" '
 # bypass: a single prepended ``` inverts it, every later line reads as "inside a fence",
 # the stripped body comes back EMPTY and no refusal matches. So an odd count means "this
 # body cannot be read as fenced markdown", and refusal language then counts wherever it
-# sits — a human glance in the worst case, never a merge.
+# sits — a human glance at worst, never a merge.
 strip_fences() {
   awk '
     { raw[NR] = $0
@@ -711,14 +676,12 @@ strip_fences() {
 
 # strict_body() is what the CLEARING side reads — the review marker, the verdict trailer
 # and the head token. It removes fenced blocks AND four-space/tab INDENTED code blocks,
-# and it prints NOTHING when the fences do not balance.
+# and prints NOTHING when the fences do not balance.
 #
 # The asymmetry is the safety property. Strip too much on the refusal side and a refusal
-# disappears (fail open), so that side strips the minimum. Strip too little on the
-# clearing side and text GitHub renders as literal code is read as markup (fail open),
-# so this side strips the maximum: an indented `<!-- okf-verdict v1` block renders as a
-# visible code sample and used to validate as a trailer, and an unbalanced fence handed
-# back a raw body that was only ever safe as refusal input.
+# disappears (fail open), so that side strips the minimum; strip too little on the
+# clearing side and text GitHub renders as literal code is read as markup (fail open), so
+# this side strips the maximum.
 strict_body() {
   awk '
     { line = $0

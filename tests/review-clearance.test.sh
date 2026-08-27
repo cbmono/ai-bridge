@@ -297,6 +297,12 @@ expect "a backtick pair nested in a tilde block stays balanced -> review" 0
 setup "$CLEAN_HEAD"
 add_comment coderabbitai "$(body_file '```' '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD.")"
 expect "an unbalanced fence around a review marker -> evidences nothing" 4
+# ...and with the marker BEFORE the stray fence, which is the case a stripper that merely
+# drops the unterminated tail still clears. "Empty" is the answer, not "everything outside
+# the fence": a body that cannot be rendered is a body nothing can be read out of.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." '```' 'and then nothing closes it')"
+expect "…and with the marker BEFORE the stray fence, still nothing" 4
 
 echo
 echo "== prose no longer clears anything =="

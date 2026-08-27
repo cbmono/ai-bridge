@@ -260,7 +260,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 #   review-clearance.sh         0 ->  901    +901 total, +441 code   (new file)
 #   required-checks.sh        212 ->  337    +125 total,  +66 code
 #
-# WHAT THE 302 CODE LINES OF review-clearance.sh BUY. A merge gate that could not tell
+# WHAT THE CODE LINES OF review-clearance.sh BUY. A merge gate that could not tell
 # "reviewed and clean" from "not reviewed". A hosted reviewer that declines exits
 # SUCCESSFULLY, so its status check is green either way; three PRs went out in one tick,
 # one was reviewed, two carried "Review limit reached" and merged unlooked-at, and one of
@@ -322,8 +322,49 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # STILL OWED: the objective's second criterion asks a project to LOWER one of these
 # constants. This raise does not. The reduction candidates named further up
 # (print-board.sh, watch-board.sh, write-snapshot.sh) are untouched.
-CEILING_TOTAL=7674
-CEILING_CODE=4094
+# RAISED AGAIN 2026-08-27, same PR, after a THIRD independent review. The nine routes it
+# found were not nine defects: every one was the same primitive, classifying vendor prose
+# and vendor NAMES with regex tables, which is a table that can never be finished. So the
+# primitive moved to the structured API rather than being patched again. Re-measured on
+# the same base:
+#
+#   7,674 / 4,094   21 files   what the second cut of this change pinned
+#   7,741 / 4,127   21 files   +67 total, +33 code — the redirect
+#
+# Per file, so the raise can be checked rather than believed:
+#
+#   review-clearance.sh       901 ->  957    +56 total, +37 code
+#   required-checks.sh        337 ->  348    +11 total,  -4 code
+#
+# AND +67 IS THE NET OF A REAL DELETION. Gone: the `SUSPECT_CHECKS` table and
+# `suspect_check()` (a list of vendor names and review phrasings, ~45 lines), the third
+# `--match-check` answer that existed only to serve it, the whole `unknown_checks` block
+# in required-checks.sh, and the nine PROSE rows of the review-evidence table with their
+# reasoning. Added: a second `gh` call (`/repos/{o}/{r}/pulls/{n}/reviews`, the only place
+# a review's `state` and `commit_id` exist), a second rendering of an artifact body
+# (`strict_body`, which strips indented code blocks as well as fenced ones and is empty
+# when the fences do not balance), an exact-membership test on the API's three submitted
+# states, a URL strip before the head token is looked for, and the reasoning for all of it.
+#
+# WHAT THE 33 CODE LINES BUY, and each of these cleared an UNREVIEWED PR before:
+#   1. A required check named for a shipping code reviewer settled on its green bucket
+#      with zero artifacts read — `Codex Review`, bare `Cursor`/`Copilot`/`Devin`/`PR
+#      Agent`. The name is no longer asked: clearance is required on every PR.
+#   2. `greptile.*` and `(qodo|codium).*` were unanchored, so `greptile-evil` was greptile.
+#      Column 1 is exact logins now.
+#   3. Prose evidence cleared quoted approvals and matched negated sentences
+#      (`Unreviewed <sha>`, `No changes requested`), and refusal prose lost to it.
+#   4. A trailer inside an indented code block, or nested in an outer HTML comment, or
+#      after an unbalanced fence, validated; and an unclosed block leaked its fields.
+#   5. Lowercase `pending`/`dismissed` fell through a case-sensitive skip list and were
+#      then treated as submitted reviews.
+#
+# STILL OWED: the objective's second criterion asks a project to LOWER one of these
+# constants. This raise does not, though it is the first round of this PR that deletes
+# more machinery than it adds in one file. The reduction candidates named further up
+# (print-board.sh, watch-board.sh, write-snapshot.sh) are untouched.
+CEILING_TOTAL=7741
+CEILING_CODE=4127
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is
