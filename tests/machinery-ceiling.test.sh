@@ -433,18 +433,59 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # one left-to-right scan carrying the two facts YAML actually has here (a `#` opens a
 # comment only outside a quoted scalar; a flow sequence ends at its first unquoted `]`),
 # and that scan minus the shape-anchored `sed` pair it replaces is the +14 code.
-# Agreement with Psych goes 27/35 -> 32/35; the three that remain are pre-existing
-# splitter limits (an unprocessed `\"` escape, a `#` glued to `]` with no space, a mixed
-# quoted/unquoted list), each reproducing identically before this change.
+# Agreement with Psych goes 27/35 -> 32/35.
+#
+# CORRECTED 2026-08-27, and the correction is what round seven below is about. This
+# paragraph used to end "the three that remain are pre-existing splitter limits (an
+# unprocessed `\"` escape, a `#` glued to `]` with no space, a mixed quoted/unquoted
+# list), each reproducing identically before this change". THAT WAS FALSE, and false in
+# the one direction that matters. The scan handled the `\"` escape but had no case for
+# `''` — YAML's ONLY single-quote escape — so it closed a single-quoted scalar at the
+# first quote of the pair and cut inside one atom: on
+# `[ '…/o''brien[draft].md #2', …/clean.md ]` it rendered a FABRICATED path and deleted
+# the clean sibling, on a shape the previous revision got right. A mixed quoted/unquoted
+# list degraded the same way, from a safe drop to a fabrication. Neither reproduced
+# before that change, so neither was pre-existing.
+#
+# The lesson is not "check harder". A claim about a data format is exactly the kind that
+# cannot be settled in review, and the harness that settled it was never committed — so
+# the property held for one round and nothing guarded it. It is committed now
+# (tests/deliverable-paths-vs-yaml.test.sh), it runs against a real parser on every run,
+# and it pins the agreement count.
 #
 # build-board.sh's +3 total, 0 code is one header claim narrowed: "a bundle-relative
 # shape is the only kind of path this page renders" overreached — the other-owners
 # section renders a `/projects/<slug>/` from an unvalidated slug, which this guard does
 # not cover (task-020).
 #
-# THE DEBT ABOVE IS UNCHANGED, A SIXTH TIME.
-CEILING_TOTAL=6876
-CEILING_CODE=3660
+# ---- round seven: a whitelist for the segment too, and the parser check in CI ----
+#
+#   6,876 / 3,660   20 files   what the raise above pinned
+#   6,916 / 3,662   20 files   +40 total, +2 code
+#
+#   write-snapshot.sh           630 ->   644   +14 total, +2 code
+#   build-board.sh            1,260 -> 1,286   +26 total,  0 code
+#
+# TWO CODE LINES, and they are the two blockers. One is the `''` case the scan was
+# missing (a peek at the next character, staying inside the scalar). The other is a
+# byte-safe `ws()` helper: this awk is byte-oriented, so substr() hands back one BYTE of
+# a multi-byte character, and testing that byte with `~ /[[:space:]]/` aborted the whole
+# program — a legitimately stamped `Übersicht.md` did not merely fail to render, it took
+# every sibling on the line with it. index() compares bytes and cannot fail.
+#
+# build-board.sh moves 26 lines and NONE of them is code: the segment class went from
+# `[^/\s#]+` to `\w[\w.+-]*`, one line for one line. The denylist form had to have
+# thought of every dangerous byte and had not thought of `:`, so
+# `…/deliverables/deck.md:/Users/victim/.ssh/id_rsa` rendered whole into a copy button.
+# The 26 lines are the class stated in the positive, the two permissions that carry risk
+# named explicitly (`.`, and a word character in any script), and what the class COSTS —
+# because the next reader's temptation is to append one more character to an exclusion
+# list, and that is the move this round exists to end.
+#
+# THE DEBT ABOVE IS UNCHANGED, A SEVENTH TIME. The code figure has now moved by +14, -3,
+# -1, -3, +14, +2 across the six raises — the machinery is not growing, the reasoning is.
+CEILING_TOTAL=6916
+CEILING_CODE=3662
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is
