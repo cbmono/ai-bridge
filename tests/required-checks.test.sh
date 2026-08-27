@@ -21,7 +21,8 @@
 set -uo pipefail
 
 SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/required-checks.sh"
-TMP="$(mktemp -d)"
+TMP="$(mktemp -d)" || {
+  echo "required-checks.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 

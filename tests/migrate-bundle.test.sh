@@ -14,7 +14,8 @@ MIGRATE="$HERE/../symlink/scripts/migrate-bundle.sh"
 VALIDATE="$HERE/../symlink/scripts/validate-bundle.sh"
 [[ -f "$MIGRATE" ]] || { echo "migrate-bundle.test: not found at $MIGRATE" >&2; exit 2; }
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/migrate-bundle-fixture.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/migrate-bundle-fixture.XXXXXX")" || {
+  echo "migrate-bundle.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 B="$TMP/bundle"
 mkdir -p "$B"/{objectives,knowledge/findings,knowledge/services}

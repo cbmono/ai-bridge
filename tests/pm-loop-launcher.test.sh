@@ -33,7 +33,8 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LAUNCHER="$REPO/symlink/.claude/commands/pm-loop.md"
 TICK="$REPO/symlink/.claude/agents/project-manager.md"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")" || {
+  echo "pm-loop-launcher.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 ok() { # <name> <actual> <expected>
@@ -213,7 +214,9 @@ ok "checker flags a 2c with no absence rule" \
      | grep -qF 'absence means skip in silence' && echo yes || echo no)" no
 
 # --- non-vacuity: the two mechanical checks must reject a bad file ----------------
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")" || {
+  echo "pm-loop-launcher.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
+trap 'rm -rf "$tmp"' EXIT
 {
   printf -- '---\n'
   printf 'description: fixture\n'

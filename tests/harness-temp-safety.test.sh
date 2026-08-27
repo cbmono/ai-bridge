@@ -309,6 +309,23 @@ scan() {
     if printf '%s\n' "$asg" | grep -qE '(^|[^[:alnum:]_])cd[[:space:]]'; then
       printf '%s\n' "$asg" | grep -F 'mktemp' | grep -vF '||' \
         | sed "s|^|UNGUARDED ${f##*/}:\$$v:|"
+    else
+      # (3) task-017: the PLAIN form, no `cd` anywhere in the assignment — the class
+      #     (2) check above never looks at, because it is gated on `cd` being present.
+      #     `TMP="$(mktemp -d …)"` with no `||` still leaves TMP EMPTY on a failed
+      #     mktemp, same as (2)'s failure, just without a `cd` on this exact statement
+      #     to make it fatal by itself. That does not make it safe: a later statement
+      #     built from the same trapped variable (a bare `cd "$TMP"`, a `-C "$TMP"`, a
+      #     path glued onto it) inherits the empty value with nothing here to stop it.
+      #     Measured 2026-08-27: 24 of the 36 harnesses surveyed carried exactly this
+      #     shape with no accompanying `cd` on the assignment itself, and the fix
+      #     shipped for it was the same `mktemp -d … || { …; exit 2; }` guard used by
+      #     the ALREADY-CORRECT files this scanner has always accepted — a single `||`
+      #     on the creating statement, checked as `grep -vF '||'` here exactly as (2)
+      #     already does, is the whole fix. See tests/harness-temp-safety.test.sh
+      #     fixtures `bad-plain`/`good-plain-mktemp` below for the non-vacuity proof.
+      printf '%s\n' "$asg" | grep -F 'mktemp' | grep -vF '||' \
+        | sed "s|^|BARE-MKTEMP ${f##*/}:\$$v:|"
     fi
   done
 }
@@ -344,6 +361,8 @@ ok "no trap-deleted path built by cd-ing into a substitution" \
    "$(printf '%s' "$offences" | grep -c '^NESTED-CD' || true)" 0
 ok "no cd-canonicalised trap path from an unguarded mktemp" \
    "$(printf '%s' "$offences" | grep -c '^UNGUARDED' || true)" 0
+ok "no bare unguarded mktemp for a trap-deleted path (task-017)" \
+   "$(printf '%s' "$offences" | grep -c '^BARE-MKTEMP' || true)" 0
 ok "no offence of any class under tests/" "$n_off" 0
 
 # --- non-vacuity: the scanner must reject what it is for ----------------------
@@ -373,10 +392,25 @@ fx_trap() { printf 'trap %s EXIT\n' "'rm -rf \"\$FTMP\"'"; }
   fx_trap
   printf 'printf %s "$FTMP"\n' "'%s\\n'"; } > "$FX/good-twostep.test.sh"
 
-# (d) the plain form the other harnesses use: no cd, so nothing to guard against.
+# (d) task-017: THE PLAIN FORM, UNGUARDED — no `cd` anywhere, so classes (1) and (2)
+#     above never look at it, but a failed `mktemp -d` still leaves FTMP EMPTY and
+#     nothing here catches that before the trap is set. This used to be fixture
+#     `good-plain`, on the theory that "no cd, so nothing to guard against" — refuted
+#     by survey on 2026-08-27: 24 of 36 real harnesses in this directory carried exactly
+#     this shape, with no cd anywhere in the creating statement, and every one of them
+#     was still capable of leaving TMP empty for whatever ran next. Renamed to `bad-plain`
+#     and now asserted BARE-MKTEMP, not clean.
 { fx_head
   printf 'FTMP="$(mktemp -d)"\n'
-  fx_trap; } > "$FX/good-plain.test.sh"
+  fx_trap; } > "$FX/bad-plain.test.sh"
+
+# (d') the fix for (d): the same plain form, `||`-guarded on the SAME statement the way
+#     classes (1) and (2) already require of a `cd`-bearing assignment. No `cd` to check
+#     the success of here, so the guard on the creating statement is the whole promise —
+#     matching the idiom this task-017 fix applied to the 24 real harnesses.
+{ fx_head
+  printf 'FTMP="$(mktemp -d "${TMPDIR:-/tmp}/fx.XXXXXX")" || { echo "fx: mktemp -d failed" >&2; exit 2; }\n'
+  fx_trap; } > "$FX/good-plain-mktemp.test.sh"
 
 # (e) THE SAME DESTRUCTIVE ASSIGNMENT AS (a), WRAPPED ACROSS THREE LINES. Identical at
 #     runtime, invisible to an anchored per-line grep: this is the fixture that fails
@@ -437,7 +471,7 @@ fx_trap() { printf 'trap %s EXIT\n' "'rm -rf \"\$FTMP\"'"; }
   printf '%s\n' 'cat <<EOF' "don't" 'EOF' 'FTMP="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/fx.XXXXXX")" && pwd)"'
   fx_trap; } > "$FX/bad-heredoc.test.sh"
 
-for k in bad-nested bad-unguarded bad-multiline bad-continued bad-bypass bad-heredoc good-twostep good-plain good-multiline good-noisy; do
+for k in bad-nested bad-unguarded bad-plain bad-multiline bad-continued bad-bypass bad-heredoc good-twostep good-plain-mktemp good-multiline good-noisy; do
   o="$(scan "$FX/$k.test.sh")"
   case "$k" in
     bad-nested)
@@ -445,6 +479,12 @@ for k in bad-nested bad-unguarded bad-multiline bad-continued bad-bypass bad-her
     bad-unguarded)
       ok "fixture $k is flagged UNGUARDED"  "$(printf '%s' "$o" | grep -c '^UNGUARDED' || true)" 1
       ok "fixture $k is not flagged NESTED-CD" "$(printf '%s' "$o" | grep -c '^NESTED-CD' || true)" 0 ;;
+    bad-plain)
+      # task-017: no `cd` anywhere in the statement — must be caught as BARE-MKTEMP,
+      # not as either cd-shaped class, or the fix is a no-op on the shape it targets.
+      ok "fixture $k is flagged BARE-MKTEMP" "$(printf '%s' "$o" | grep -c '^BARE-MKTEMP' || true)" 1
+      ok "fixture $k is not flagged NESTED-CD" "$(printf '%s' "$o" | grep -c '^NESTED-CD' || true)" 0
+      ok "fixture $k is not flagged UNGUARDED" "$(printf '%s' "$o" | grep -c '^UNGUARDED' || true)" 0 ;;
     bad-multiline|bad-continued)
       # The whole point: the same shape, a different physical layout, still caught —
       # and reported at the line the statement STARTS on, which is line 3 in both.
@@ -584,6 +624,48 @@ for h in board-renderers snapshot moved-template; do
   # canonicalisation would silently break the path assertions these harnesses rest on.
   ok "$h: still canonicalises through cd+pwd" \
      "$(grep -qE 'cd[[:space:]]+"\$TMP"[[:space:]]*&&[[:space:]]*pwd' "$COPY/tests/$h.test.sh" && echo yes || echo no)" yes
+  rm -rf "$COPY"
+done
+
+# --- task-017: the BARE-MKTEMP class, at runtime ------------------------------
+# The three harnesses above all carried a `cd` that made a failed mktemp SELF-DESTRUCTIVE
+# on its own. The far more common shape in this directory — surveyed 2026-08-27 at 24 of
+# 36 harnesses, none of which cd anywhere in the creating statement — never touches its
+# own cwd, so a failed mktemp cannot delete the checkout. It can still leave TMP EMPTY
+# with nothing to catch it, and every "$TMP/…" path built afterwards silently resolves to
+# a filesystem-root path instead of raising — which is criterion 2's actual target: a
+# harness that runs its whole suite to completion and reports a false green rather than
+# refusing. `show-board-link.test.sh` stands in for the class here because it is small,
+# offline (no network, no gh, no python3) and fast, so this regression stays cheap.
+# (Picked over the plainer `TMP="$(mktemp -d)"` form some harnesses use: on macOS that
+# call ignores a nonexistent TMPDIR and falls back to the real system temp directory, so
+# a template-less harness cannot be driven to a failing mktemp this way at all — measured
+# while writing this. `show-board-link.test.sh` gives mktemp an explicit
+# "${TMPDIR:-/tmp}/…" template, the same shape the three cd-bearing harnesses above use,
+# so the bogus-TMPDIR technique actually reaches it.)
+for h in show-board-link; do
+  COPY="$TMP/checkout-$h"
+  fresh_copy "$COPY" || die "could not copy the checkout for $h"
+  ok "$h: fixture copy is a checkout" \
+     "$([ -f "$COPY/tests/$h.test.sh" ] && [ -f "$COPY/install.sh" ] && echo yes || echo no)" yes
+  LOG="$TMP/run-$h.log"; : > "$LOG"
+  ( cd "$COPY" && TMPDIR="$COPY/no-such-tmpdir" bash "tests/$h.test.sh" >"$LOG" 2>&1 ) &
+  pid=$!; waited=0
+  while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 60 ]; do sleep 1; waited=$((waited+1)); done
+  if kill -0 "$pid" 2>/dev/null; then
+    pkill -P "$pid" 2>/dev/null; kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; rc=124
+  else
+    wait "$pid"; rc=$?
+  fi
+  out="$(cat "$LOG")"
+  ok "$h: TMPDIR absent ⇒ exits 2, the refusal status"  "$rc" 2
+  # The actual regression this criterion names: a killed-early run cannot have reached
+  # its own "pass=N fail=0" summary line, which is what an unfixed harness prints while
+  # having quietly run in the wrong place.
+  ok "$h: TMPDIR absent ⇒ never prints a false-green summary" \
+     "$(printf '%s\n' "$out" | grep -c '^pass=[0-9]*[[:space:]]fail=0$' || true)" 0
+  ok "$h: TMPDIR absent ⇒ refuses in its own voice" \
+     "$(printf '%s\n' "$out" | grep -qE "^$h\.test:.*mktemp" && echo yes || echo no)" yes
   rm -rf "$COPY"
 done
 

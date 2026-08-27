@@ -70,7 +70,9 @@ ok "no ./ pattern (matches nothing)"   "$dead" 0
 
 # Non-vacuity: the checker must actually reject a bad pattern, not just pass on good
 # input. Run the same classification over a synthetic frontmatter block.
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/globs.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/globs.XXXXXX")" || {
+  echo "rule-globs-anchored.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
+trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/.claude/rules"
 printf -- '---\npaths:\n  - "symlink/**"\n  - "./x.md"\n  - "/ok/**"\n---\n' > "$tmp/.claude/rules/bad.md"
 b=0; d=0; t=0

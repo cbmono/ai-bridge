@@ -46,7 +46,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/configlayer.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/configlayer.XXXXXX")" || {
+  echo "config-layer.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'git -C "$TMP/wtmain" worktree remove --force "$TMP/wtlinked" 2>/dev/null; rm -rf "$TMP"' EXIT
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

@@ -43,7 +43,8 @@ CLEAN_HEAD="8f40f2ed565a31e141f5ae54a6935ad0810314c4"
 REFUSAL_HEAD="88c106a8dd2b9ae14e001918022d4909e5357460"
 OTHER_SHA="0123456789abcdef0123456789abcdef01234567"
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/review-clearance.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/review-clearance.XXXXXX")" || {
+  echo "review-clearance.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 

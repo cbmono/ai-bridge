@@ -25,7 +25,8 @@ set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPTS="$TPL/symlink/scripts"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/config-override.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/config-override.XXXXXX")" || {
+  echo "config-override.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));

@@ -51,11 +51,8 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 # CLAUDE_CONFIG_DIR must not turn that assertion red — the property is "nothing here
 # exported one", not "nobody anywhere has one".
 CCD_IN_ENV_AT_START="$(env | grep -c '^CLAUDE_CONFIG_DIR=' || true)"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/cfgown.XXXXXX")"
-if [ -z "$TMP" ] || [ ! -d "$TMP" ]; then
-  echo "error: mktemp produced no directory (is TMPDIR set to a path that does not exist?)" >&2
-  exit 1
-fi
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/cfgown.XXXXXX")" || {
+  echo "config-ownership.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

@@ -31,7 +31,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL_SRC="$HERE/.."
 [[ -f "$TPL_SRC/upgrade.sh" ]] || { echo "upgrade.test: not found at $TPL_SRC/upgrade.sh" >&2; exit 2; }
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/upgrade-fixture.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/upgrade-fixture.XXXXXX")" || {
+  echo "upgrade.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 
 pass=0; fail=0

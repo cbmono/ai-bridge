@@ -37,7 +37,8 @@
 set -uo pipefail
 
 SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/task-owner.sh"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/task-owner-fixture.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/task-owner-fixture.XXXXXX")" || {
+  echo "task-owner.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));

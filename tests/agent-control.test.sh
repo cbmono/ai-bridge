@@ -31,7 +31,8 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK_SRC="$REPO/symlink/.claude/hooks/agent-control.sh"
 CTL_SRC="$REPO/symlink/scripts/control.sh"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/agentctl.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/agentctl.XXXXXX")" || {
+  echo "agent-control.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

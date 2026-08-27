@@ -513,7 +513,9 @@ audit() {
   echo "$v $d $s $r"
 }
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/toolallow.XXXXXX")"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/toolallow.XXXXXX")" || {
+  echo "agent-tool-allowlist.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
+trap 'rm -rf "$TMP"' EXIT
 FINDINGS="$TMP/findings"; : > "$FINDINGS"
 
 # ============================================================ 1. the shipped agents
