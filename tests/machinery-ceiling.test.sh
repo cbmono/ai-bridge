@@ -433,7 +433,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # one left-to-right scan carrying the two facts YAML actually has here (a `#` opens a
 # comment only outside a quoted scalar; a flow sequence ends at its first unquoted `]`),
 # and that scan minus the shape-anchored `sed` pair it replaces is the +14 code.
-# Agreement with Psych goes 30/35 -> 32/35; the three that remain are pre-existing
+# Agreement with Psych goes 27/35 -> 32/35; the three that remain are pre-existing
 # splitter limits (an unprocessed `\"` escape, a `#` glued to `]` with no space, a mixed
 # quoted/unquoted list), each reproducing identically before this change.
 #
