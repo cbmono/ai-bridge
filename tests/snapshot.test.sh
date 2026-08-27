@@ -108,6 +108,12 @@ SECRET_ABS_PATH="/Users/SECRET-PUBLISHER-HOME/private/notes.md"
 # about the published PAGE. Kept separate for exactly that reason: sharing one sentinel
 # would make "never in the snapshot" and "never on the page" impossible to state apart.
 SECRET_PAGE_PATH="/Users/SECRET-PUBLISHER-HOME/Desktop/report.md"
+# A third, for the vector that needs neither a comment nor whitespace: an absolute path
+# glued to a legitimate one with a `:` (the `colon` fixture). It is its own sentinel
+# because it fails for its own reason — the segment class, not the comment cut — and one
+# shared needle would make "the cut is right" and "the shape check is right" impossible
+# to tell apart when either breaks.
+SECRET_COLON_PATH="/Users/SECRET-PUBLISHER-HOME/.ssh/id_rsa"
 # An HTML-metacharacter title, and the two forms it may appear in on the page.
 HOSTILE_TITLE='<script>alert(1)</script> & <b>bold</b>'
 HOSTILE_ESCAPED='&lt;script&gt;alert(1)&lt;/script&gt;'
@@ -124,13 +130,32 @@ echo "== shell portability of the shipped scripts =="
 # escape has not come back. It is the only form of this test that can actually fail.
 # Comment lines are stripped first: the fix's own comment NAMES the escape it removed,
 # and that prose is the record of why. Only executable lines are checked.
+# AND THIS CHECK WAS ITSELF VACUOUS UNTIL 2026-08-27 — the pipeline was the bug. Under
+# this file's `set -o pipefail`, `grep -q` exits at the FIRST match and SIGPIPEs the sed
+# still feeding it, so the pipeline's status is sed's 141, not grep's 0: the `&&` never
+# fires and a file that DOES carry the escape is reported clean. Measured, with `\s` on
+# line 808 of a 1,260-line build-board.sh: PASS. The sed output is captured first so
+# exactly one command's exit status decides the answer, and the planted-escape assertion
+# below is what stops the vacuous form coming back unnoticed.
 no_gnu_escape() { # <file> <escape letter>
-  sed 's/^[[:space:]]*#.*$//' "$1" | grep -q "\\\\$2" && return 1 || return 0
+  local body; body="$(sed 's/^[[:space:]]*#.*$//' "$1")"
+  printf '%s\n' "$body" | grep -q "\\\\$2" && return 1 || return 0
 }
 for f in "$WRITER" "$BOARD"; do
   assert "no GNU-only \\b escape in $(basename "$f")" "$(yes_if no_gnu_escape "$f" b)"
   assert "no GNU-only \\s escape in $(basename "$f")" "$(yes_if no_gnu_escape "$f" s)"
 done
+# The check, checked. Both directions, on a file long enough to reproduce the SIGPIPE:
+# a planted escape 900 lines in must be FOUND, and an escape that appears only in a
+# COMMENT must still not be — the comment strip is the other half of what this means.
+PLANT="$TMP/plant-escape.sh"
+{ seq 900 | sed 's/.*/x=1/'; printf 'y=%s\n' '"[^/\s#]+"'; seq 400 | sed 's/.*/z=2/'; } > "$PLANT"
+PLANT_OK="$TMP/plant-comment-only.sh"
+{ seq 900 | sed 's/.*/x=1/'; printf '%s\n' '# this comment names the \s escape it removed'; } > "$PLANT_OK"
+assert "…and the check itself sees a planted \\s 900 lines into a file" \
+  "$( no_gnu_escape "$PLANT" s && echo 1 || echo 0 )"
+assert "…while an \\s that appears only in a comment is still not a hit" \
+  "$( no_gnu_escape "$PLANT_OK" s && echo 0 || echo 1 )"
 
 # ---------------------------------------------------------------- fixture instances
 new_instance() { # <dir> — the minimum the writer requires of an instance root
@@ -430,6 +455,80 @@ deliverable_paths: [ /projects/unterminated/deliverables/a #1.md, /projects/unte
 ---
 PRJ
 
+# THE OTHER QUOTE STYLE, AND YAML'S ONLY SINGLE-QUOTE ESCAPE — the shape a green suite
+# stayed green over. Every deliverable fixture above this one is flow-form and UNQUOTED,
+# so a scan that handled the `\"` escape but had no case for `''` was never exercised:
+# it closed the scalar at the FIRST quote of the pair and cut INSIDE a string Psych reads
+# as a single atom. Psych's reading here is TWO entries — `o'brien[draft].md #2`, which
+# the render-time shape check then drops on its own merits, and `clean.md`, a perfectly
+# good deliverable a human stamped. The defect rendered the first (fabricated) and
+# deleted the second, which is both halves of the failure at once.
+mkdir -p "$ALPHA/projects/sqescaped"
+cat > "$ALPHA/projects/sqescaped/project.md" <<'PRJ'
+---
+type: Project
+title: A single-quoted entry with an escaped apostrophe
+description: a doubled quote inside a single-quoted scalar is an apostrophe, not its end
+kind: research
+status: done
+retain: true
+deliverable_paths: [ '/projects/sqescaped/deliverables/o''brien[draft].md #2', /projects/sqescaped/deliverables/clean.md ]
+---
+PRJ
+
+# The ordinary single-quoted list, which nothing exercised either. It carries no trap at
+# all, and that is the point: the quote handling added for the trap above must not cost
+# the plain case its entries.
+mkdir -p "$ALPHA/projects/sqplain"
+cat > "$ALPHA/projects/sqplain/project.md" <<'PRJ'
+---
+type: Project
+title: An ordinary single-quoted list
+description: both entries are stamped deliverables and both must render
+kind: research
+status: done
+retain: true
+deliverable_paths: [ '/projects/sqplain/deliverables/a.md', '/projects/sqplain/deliverables/b.md' ]
+---
+PRJ
+
+# CRITERION 4, REACHED THROUGH A CHARACTER NO DENYLIST HAD THOUGHT OF. No comment, no
+# whitespace, no `..`, no `#`, prefix perfectly correct — an absolute path glued on with
+# a `:`, rendered whole into a copy button and labelled `id_rsa` so nothing looked wrong.
+# It is the fifth character to defeat the same move, which is why the segment class is
+# now stated as what a filename MAY contain rather than as a list of what it may not.
+mkdir -p "$ALPHA/projects/colon"
+cat > "$ALPHA/projects/colon/project.md" <<PRJ
+---
+type: Project
+title: An absolute path glued on with a colon
+description: prefix-correct, whitespace-free, and still two paths
+kind: research
+status: done
+retain: true
+deliverable_paths: [ "/projects/colon/deliverables/deck.md:$SECRET_COLON_PATH" ]
+---
+PRJ
+
+# A NON-ASCII FILENAME, and it is a fixture rather than a nicety: this awk is
+# byte-oriented, so substr() hands back one BYTE of a multi-byte character, and testing
+# that byte with a regex aborted the whole program — taking the clean sibling on the same
+# line with it and printing a parser error into the run's output. A `deliverables/` full
+# of German or Japanese filenames is not exotic; losing the entire key over one of them
+# is the kind of failure nobody attributes to a comment strip.
+mkdir -p "$ALPHA/projects/umlaut"
+cat > "$ALPHA/projects/umlaut/project.md" <<'PRJ'
+---
+type: Project
+title: A deliverable whose name is not ASCII
+description: one multi-byte character must not cost the key its entries
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/umlaut/deliverables/Übersicht.md, /projects/umlaut/deliverables/plain.md ]
+---
+PRJ
+
 # Every task terminal ⇒ the board shows a close PROPOSAL, never an action.
 #
 # Its `deliverable_paths:` line is the HAND-EDITED shape: someone opened a quote and
@@ -530,10 +629,14 @@ echo "== a real snapshot, once the switch is on =="
 touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
-assert "…with the project count"           "$(has '10 project(s)' "$RUN_OUT")"
+assert "…with the project count"           "$(has '14 project(s)' "$RUN_OUT")"
 # 7, not 8: the done project's task is never counted, because it is never read.
 assert "…and the task count"                "$(has '7 task(s)' "$RUN_OUT")"
 assert "…and the awaiting count (6 verbs across 4 live projects)" "$(has '6 awaiting' "$RUN_OUT")"
+# The run captures stderr too, and an awk that aborts mid-line says so THERE while still
+# exiting 0 and writing a file — a whole `deliverable_paths` key lost with the evidence
+# printed somewhere nobody reads. So the absence of that text is an assertion.
+assert "…and no parser error was printed on the way"     "$(hasnt 'awk:' "$RUN_OUT")"
 assert "the file is non-empty"              "$(yes_if test -s "$SNAP")"
 assert "it parses as JSON"                  "$(yes_if python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$SNAP")"
 assert "no temp file was left behind"       "$(yes_if sh -c '! ls "$1".tmp.* >/dev/null 2>&1' _ "$SNAP")"
@@ -766,6 +869,37 @@ d=json.load(open(sys.argv[1]))
 p=[p for p in d["projects"] if p["slug"]=="quoted"][0]
 sys.exit(0 if p["deliverable_paths"]==["/projects/quoted/deliverables/a ] #1.md",
                                        "/projects/quoted/deliverables/b.md"] else 1)' "$SNAP")"
+# The SINGLE-quoted forms, which nothing exercised until a fabrication shipped past a
+# green suite. `''` is YAML's only single-quote escape, so the first line below is TWO
+# entries and the apostrophe belongs to the first one; a scan that closes the scalar at
+# the first quote of the pair reads the rest as a comment, fabricates the truncation and
+# takes `clean.md` with it. The assertion is the parser's own reading, both entries.
+assert "a doubled quote inside a single-quoted entry does not end it" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="sqescaped"][0]
+sys.exit(0 if len(p["deliverable_paths"])==2
+         and p["deliverable_paths"][1]=="/projects/sqescaped/deliverables/clean.md"
+         and p["deliverable_paths"][0].startswith("/projects/sqescaped/deliverables/o")
+         and p["deliverable_paths"][0].endswith("#2") else 1)' "$SNAP")"
+assert "…and the plain single-quoted list keeps both of its entries" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="sqplain"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/sqplain/deliverables/a.md",
+                                       "/projects/sqplain/deliverables/b.md"] else 1)' "$SNAP")"
+# One multi-byte character used to abort the awk scan outright, so the key came back
+# EMPTY — the `Übersicht.md` entry did not merely fail to render, it took `plain.md`
+# with it. Both entries, and nothing on the run's output about a parser.
+assert "…and a non-ASCII filename costs the key neither of its entries" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="umlaut"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/umlaut/deliverables/\u00dcbersicht.md",
+                                       "/projects/umlaut/deliverables/plain.md"] else 1)' "$SNAP")"
 # The same defect, reached the other way round — through the VALUE rather than the
 # comment. The `finished` fixture's line opens a quote and never closes it, so a strip
 # that decided where the list ended by tracking quote state found no unquoted `]`, kept
@@ -910,6 +1044,23 @@ no_copy_value_with() { # <needle> <file>
 }
 assert "…nor any /Users path ANYWHERE inside something to copy" \
   "$(yes_if no_copy_value_with '/Users' "$HTML")"
+# Criterion 4 against the shape that needs no comment AND no whitespace: an absolute path
+# glued to a legitimate one with a `:`. The generic sweep above catches it too; this pair
+# names it, so a regression says which vector came back rather than only that one did.
+assert "a colon-glued absolute path is never a copy button" \
+  "$(fhasnt 'data-copy="/projects/colon/deliverables' "$HTML")"
+assert "…and its sentinel reaches no page"                     "$(fhasnt "$SECRET_COLON_PATH" "$HTML")"
+# The single-quote pair, on the same real page. They fail in opposite directions, which
+# is why both are here: the fabrication must NOT be a button, and the clean entry the
+# fabrication used to delete MUST be one.
+assert "an escaped apostrophe does not fabricate a truncated path" \
+  "$(fhasnt 'data-copy="/projects/sqescaped/deliverables/o' "$HTML")"
+assert "…while the clean sibling on that same line is a button" \
+  "$(fhas 'data-copy="/projects/sqescaped/deliverables/clean.md"' "$HTML")"
+assert "…and an ordinary single-quoted list renders both entries" \
+  "$(yes_if sh -c 'grep -qF "data-copy=\"/projects/sqplain/deliverables/a.md\"" "$1" && grep -qF "data-copy=\"/projects/sqplain/deliverables/b.md\"" "$1"' _ "$HTML")"
+assert "…and a non-ASCII filename renders as itself"           \
+  "$(fhas 'data-copy="/projects/umlaut/deliverables/Übersicht.md"' "$HTML")"
 # Criterion 4 against the comma-split shape, on the same real page. The `handedited`
 # fixture's comment hides a second, prefix-correct path after a comma; if the comment
 # survives the parse, THIS is the button it becomes.
@@ -953,10 +1104,11 @@ assert "…nor is a filename truncated on a list that never closes" \
   "$(fhasnt 'data-copy="/projects/unterminated/deliverables/a"' "$HTML")"
 assert "…while its readable clean entry is still a button" \
   "$(fhas 'data-copy="/projects/unterminated/deliverables/b.md"' "$HTML")"
-# EXACTLY seven deliverable buttons on this page — one per fixture whose line yields a
+# EXACTLY twelve deliverable buttons on this page — one per fixture whose line yields a
 # whole, well-formed path (retained, finished, handedited, blockform's first entry,
-# `sibling`'s single entry, and the clean second entry of `quoted` and `unterminated`;
-# `plain` yields none, both its halves being one value) — and both failure directions are silent, sitting either
+# `sibling`'s single entry, the clean second entry of `quoted` and `unterminated`,
+# `sqescaped`'s clean sibling, both of `sqplain`'s and both of `umlaut`'s; `plain` and
+# `colon` yield none, each being two paths in one value) — and both failure directions are silent, sitting either
 # side of the same fix. Too FEW is the documented comment form costing a panel: a strip
 # anchored on the line's last bracket leaves SCHEMA.md's own comment in the value, the
 # shape check drops the only entry, and the retained project renders with no
@@ -965,7 +1117,7 @@ assert "…while its readable clean entry is still a button" \
 # comment fragment rendering as a path. A `fhas` on any one button sees none of it.
 DELIV_BTNS="$(grep -oF 'data-what="Deliverable path"' "$HTML" | grep -c . || true)"
 assert "exactly one copy button per stamped path, no more and no fewer (saw $DELIV_BTNS)" \
-  "$(eq "$DELIV_BTNS" 7)"
+  "$(eq "$DELIV_BTNS" 12)"
 assert "no filesystem path reaches the page"        "$(fhasnt "$TMP" "$HTML")"
 # Belt and braces, because the check above depends on how the fixture path is spelled:
 # an instance is named by its DIRECTORY NAME, so the name must never appear with a
@@ -1078,12 +1230,13 @@ assert "…with exactly one <body> element" "$(eq "$(grep -cF '<body>' "$SA")" 1
 # there is no drift to pin. tests/artifact-board.test.sh asserts the <details> behaviour
 # (collapsed by default, finished projects under a divider) where the markup lives.
 # Two, not four, is still the fact worth reading off the page: beta is malformed and
-# gamma has no snapshot, so neither is an instance on the board. Eleven blocks: alpha's
-# ten projects — including the RETAINED done ones, which are on the board as reference
-# cards even though their tasks were never read, and the four whose deliverable_paths
-# line is hostile, which are still projects and still render — plus delta's one.
+# gamma has no snapshot, so neither is an instance on the board. Fifteen blocks: alpha's
+# fourteen projects — including the RETAINED done ones, which are on the board as
+# reference cards even though their tasks were never read, and the five whose
+# deliverable_paths line is hostile, which are still projects and still render — plus
+# delta's one.
 assert "one project block per project of the 2 rendered instances" \
-  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 11)"
+  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 15)"
 
 echo "== discovery is explicit, never a glob =="
 D1="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d1.html" 2>&1 )"
