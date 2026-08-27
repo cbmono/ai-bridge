@@ -792,20 +792,46 @@ TABLE_SCRIPT = r"""<script>
 # `data-copy` and labelled `report.md`, so nothing looked wrong. The value was never
 # required to be a single, whole, well-formed path. Now it is:
 #
-#   segment  one or more characters, none of them `/`, whitespace or `#`, and the
-#            segment is not `.` or `..`. Whitespace is what joins two paths into one
-#            value, and every YAML comment that can ride in starts with `<space>#`, so
-#            both vectors die here rather than in a rule written per vector. `#` is
-#            excluded on its own account as well, because `…/see#/Users/x/secret`
-#            carries an absolute path with no whitespace anywhere in it.
+#   segment  what a FILENAME may be made of, stated as a set rather than as the set's
+#            complement: a word character (`\w` — Unicode-aware on a `str`, so a letter
+#            in any script, a digit, `_`, and the combining marks a macOS directory
+#            listing decomposes an umlaut into), then any run of word characters, `.`,
+#            `-` and `+`.
 #   whole    `/projects/<slug>/deliverables/` then one or more segments — and
 #            fullmatch(), which is what makes "no trailing remainder" part of the shape
 #            instead of one more separate check.
 #
+# WHY POSITIVE AND NOT ONE MORE EXCLUSION. The class here used to be `[^/\s#]+`, which is
+# a denylist wearing a whitelist's clothes: it still had to have thought of every
+# dangerous byte, and it had not thought of `:` —
+#
+#     /projects/p/deliverables/deck.md:/Users/victim/.ssh/id_rsa
+#
+# renders whole into a `data-copy`, labelled `id_rsa`. Appending `:` to the exclusions
+# would be the sixth round of the same move. Stated positively there is nothing to
+# enumerate: `/`, every kind of whitespace, `#`, `:`, `@`, `\`, ZWSP, BOM, U+2028 and the
+# bidi overrides are all simply not in the set, and the next separator nobody has thought
+# of is not in it either.
+#
+# TWO PERMISSIONS THAT CARRY RISK, NAMED RATHER THAN LEFT IMPLICIT:
+#   · `.` — required (every extension has one). `.` and `..` as WHOLE segments are
+#     impossible by construction, because a segment must begin with a word character,
+#     so traversal needs no rule of its own.
+#   · a word character in any script — so two filenames can be homoglyphs (Cyrillic `а`
+#     vs Latin `a`) and look alike on the page. Containment is unaffected: the value
+#     still resolves inside this project's own `deliverables/`, which is the guarantee
+#     this guard makes. Excluding non-ASCII instead would silently drop a legitimately
+#     stamped `Übersicht.md`, which is the more likely event by far.
+#
+# WHAT IT COSTS, said plainly: a deliverable whose filename contains a space, `&`, `'`,
+# `(`, `%` or `,` is dropped from the panel — visibly, because the count is computed from
+# the same filtered list. Closeout resolves these names from `artifacts:` and a file can
+# be renamed; an absolute path rendered onto a published page cannot be recalled.
+#
 # THE SLUG IS A SEGMENT LIKE ANY OTHER, which is the point: it is checked by the same
 # rule rather than interpolated into a prefix and trusted, so `/projects/../deliverables/x`
 # no longer walks out of the bundle when a hand-written SNAPSHOT.json says its slug is `..`.
-DELIV_SEG = r"(?!\.\.?(?:/|\Z))[^/\s#]+"
+DELIV_SEG = r"\w[\w.+-]*"
 DELIV_PATH = re.compile(
     r"/projects/(%s)/deliverables/%s(?:/%s)*" % (DELIV_SEG, DELIV_SEG, DELIV_SEG))
 
