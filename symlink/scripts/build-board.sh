@@ -775,45 +775,55 @@ TABLE_SCRIPT = r"""<script>
 </script>"""
 
 
+# The shape a deliverable path may have, spelled ONCE and in the positive. Read this
+# before adding another `if <something bad> in p: return None` below.
+#
+# FOUR ROUNDS OF REVIEW DEFEATED THE OTHER DESIGN, which anchored the PREFIX and then
+# listed the characters it knew were bad. That asks "does this START right, and does it
+# lack the one byte I thought of?" — so every round closed the reported vector and left
+# the next one, and the simplest of them needed no exotic input at all:
+#
+#     /projects/p/deliverables/report.md /Users/somebody/Desktop/report.md
+#
+# Correct prefix, no `..`, no `#`, TWO paths in one value — rendered whole into a
+# `data-copy` and labelled `report.md`, so nothing looked wrong. The value was never
+# required to be a single, whole, well-formed path. Now it is:
+#
+#   segment  one or more characters, none of them `/`, whitespace or `#`, and the
+#            segment is not `.` or `..`. Whitespace is what joins two paths into one
+#            value, and every YAML comment that can ride in starts with `<space>#`, so
+#            both vectors die here rather than in a rule written per vector. `#` is
+#            excluded on its own account as well, because `…/see#/Users/x/secret`
+#            carries an absolute path with no whitespace anywhere in it.
+#   whole    `/projects/<slug>/deliverables/` then one or more segments — and
+#            fullmatch(), which is what makes "no trailing remainder" part of the shape
+#            instead of one more separate check.
+#
+# THE SLUG IS A SEGMENT LIKE ANY OTHER, which is the point: it is checked by the same
+# rule rather than interpolated into a prefix and trusted, so `/projects/../deliverables/x`
+# no longer walks out of the bundle when a hand-written SNAPSHOT.json says its slug is `..`.
+DELIV_SEG = r"(?!\.\.?(?:/|\Z))[^/\s#]+"
+DELIV_PATH = re.compile(
+    r"/projects/(%s)/deliverables/%s(?:/%s)*" % (DELIV_SEG, DELIV_SEG, DELIV_SEG))
+
+
 def bundle_deliverable(path, slug):
-    """A deliverable path reaches the page ONLY if it is
-    `/projects/<slug>/deliverables/<anything-below-it>` for THIS project's own
-    slug — bundle-relative, no traversal. NESTED paths (a research project that
-    ships an exported site, e.g. `deliverables/site/index.html`) are allowed
-    through: they are still inside this project's own deliverables directory,
-    which is the guarantee this guard exists to keep, and dropping them would
-    silently under-report a project's deliverable count against what closeout
-    actually stamped. What is still rejected, segment by segment: an empty
-    segment (a leading, trailing or doubled `/`), a `.`/`..` segment, and a `#`
-    anywhere below the prefix (a swallowed YAML comment — see below) — the
-    same rule href() applies to a PR URL's scheme: closeout already verifies and
-    stamps this shape (close-project-folder.sh), but the writer having
-    restricted what it collects is never a reason for the reader to trust it — a
-    human can still hand-edit project.md, and SNAPSHOT.json is a file on disk this
-    renderer reads back without knowing who wrote it.
+    """The path itself when it is a whole, well-formed deliverable path belonging to
+    THIS project — otherwise None, and the entry is dropped from the panel AND from the
+    count with it, never dropped from one while the other still reports it.
+
+    NESTED paths (a research project shipping an exported site, e.g.
+    `deliverables/site/index.html`) are deliberately allowed: they are still inside this
+    project's own deliverables directory, which is the guarantee this guard keeps.
+
+    Why the renderer re-checks at all, when closeout verified each path on disk before
+    stamping it (close-project-folder.sh): the same rule href() applies to a PR URL's
+    scheme. A writer having restricted what it collects is never a reason for the reader
+    to trust it — a human can hand-edit project.md, and SNAPSHOT.json is a file on disk
+    this renderer reads back without knowing who wrote it.
     """
-    p = str(path or "")
-    prefix = "/projects/%s/deliverables/" % slug
-    if not p.startswith(prefix):
-        return None
-    rest = p[len(prefix):]
-    if not rest:
-        return None
-    if any(seg in ("", ".", "..") for seg in rest.split("/")):
-        return None
-    # …and a `#`, which no path closeout stamps can contain but every YAML comment
-    # starts with — a swallowed trailing comment on a `deliverable_paths:` line, whose
-    # text is whatever was typed there, up to a path off the publisher's own disk.
-    #
-    # THIS IS NOT WHAT MAKES THAT CASE SAFE — reading it that way is the mistake this
-    # comment exists to prevent. The comment is stripped upstream, in write-snapshot.sh's
-    # deliverable_path_entries(), BEFORE the value is split; it has to be, because this
-    # check sees one ENTRY at a time and a comment containing a comma is split across
-    # two, leaving the `#` in the first and the payload in the second. What this covers
-    # is the input that never met that parser: a hand-written or drifted SNAPSHOT.json.
-    if "#" in rest:
-        return None
-    return p
+    m = DELIV_PATH.fullmatch(str(path or ""))
+    return m.group(0) if m and m.group(1) == slug else None
 
 
 def short_ref(slug, tid):

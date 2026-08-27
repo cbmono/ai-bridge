@@ -54,11 +54,17 @@
 #       (`reposRoot`, `worktreeRoot`), any URL other than a PR URL. `deliverable_paths`
 #       is the one exception to enforcing this by construction rather than by trust:
 #       this file forwards it VERBATIM (see the CARRIED entry above) and does not
-#       itself check the shape, so a hand-edited project.md could in principle put an
-#       out-of-bundle path into SNAPSHOT.json (gitignored, never published as-is).
-#       What keeps such a path off a PUBLISHED page is build-board.sh's
-#       bundle_deliverable(), at render time and SCOPED TO THIS KEY: every other list
-#       key is emitted as parsed, with no consumer that re-checks anything.
+#       itself check the shape, so a hand-edited project.md can put an out-of-bundle
+#       path into SNAPSHOT.json (gitignored, never published as-is).
+#       WHAT THIS FILE DOES AND DOES NOT GUARANTEE, stated exactly, because an earlier
+#       version of this paragraph claimed a safety property the code did not have and
+#       an external review walked straight through it: nothing here keeps such a path
+#       out of SNAPSHOT.json. The only thing between it and a PUBLISHED page is
+#       build-board.sh's bundle_deliverable(), which renders an entry only if the WHOLE
+#       value matches one `/projects/<slug>/deliverables/<segment>[/<segment>…]` shape —
+#       not a prefix test with a list of bad characters, which is what four review
+#       rounds each defeated in a new way. It is also SCOPED TO THIS KEY: every other
+#       list key is emitted as parsed, with no consumer that re-checks anything.
 #
 # `owner:` IS CARRIED, AND THAT IS A REVERSAL — read this before "restoring" the rule.
 # Until 2026-08-26 the list above ended with `owner:` on the NEVER side, on the ground
@@ -304,30 +310,44 @@ depends_ids() { # <frontmatter>
 # (that is exactly the filesystem walk task-007 rejected; see its task doc).
 # Trusting the stamp's shape is not this file's job either: closeout verifies each
 # path exists before writing it, but a human can still hand-edit project.md, so
-# build-board.sh re-checks the `/projects/<slug>/deliverables/<file>` shape at
-# render time before anything reaches a published page — the same "the writer
-# already restricts what it collects; the board does not trust it to have done so"
-# rule href() applies to a PR URL's scheme.
+# build-board.sh's bundle_deliverable() requires every entry to match one whole
+# `/projects/<slug>/deliverables/<segment>[/<segment>…]` shape before it can render —
+# the same "the writer already restricts what it collects; the board does not trust it
+# to have done so" rule href() applies to a PR URL's scheme.
 #
-# THE TRAILING-COMMENT STRIP LIVES HERE, at this one key and nowhere else. SCHEMA.md
-# documents this key WITH a trailing `# comment` on the same line, and left alone that
-# comment is swallowed into the last entry. Not cosmetic: entries are then re-split on
-# commas, so a comment containing one leaves the `#` in one entry and whatever followed
-# it — up to an absolute path off the publisher's disk — in the NEXT, which is shaped
-# like a deliverable and renders as a copy button. A per-entry guard cannot see that, so
-# the comment has to be gone BEFORE the split.
+# THE TRAILING-COMMENT STRIP LIVES HERE, at this one key and nowhere else — and it is
+# about FIDELITY, not safety: what keeps a bad value off the published page is that
+# whole-value shape check, which drops anything a strip left comment-shaped. SCHEMA.md
+# documents this key WITH a trailing `# comment` on the same line, so without a strip
+# the documented form loses its own deliverable — the panel is simply missing an entry
+# a human stamped.
 #
-# Safe here and not in list_region because this key's entries are bare paths, never
-# prose. One cut per YAML shape, and each is anchored on something only that shape has:
-# an INLINE list ends in `]`, so `]`-then-`#` is the terminator plus a comment; a BLOCK
-# entry line has no `]` at all, so whitespace-then-`#` there is a comment and nothing
-# else. The second cut is held off any line carrying a `]` for exactly that reason — on
-# an inline line it would fire inside the value on a path spelled `.../a #1.md` and
-# hand the renderer a TRUNCATED path that still looks valid, where leaving it alone
-# gets it dropped by bundle_deliverable()'s `#` check instead.
+# Safe at this key and not in list_region() because these entries are bare paths, never
+# prose. THE ONE PROPERTY THE CUT MUST HOLD is that it can never remove text that could
+# still render as a deliverable — an earlier round lost a clean sibling entry off
+# `[ …/a] #1.md, …/b.md ]` by cutting at the first `]`-then-`#` it found. So it fires
+# only where something makes that impossible:
+#   · a BLOCK entry line (`- …`), whose siblings are on other lines — a cut there can
+#     only ever truncate this one entry, which is what YAML reads on that line anyway;
+#   · otherwise the `#` must follow the value's closing `]` (a comment cannot begin
+#     inside an unterminated value), AND either that `]` is whitespace-separated — the
+#     shape a flow list's TERMINATOR has, and one no renderable entry can contain,
+#     because a renderable entry has no whitespace in it at all (the render-time shape
+#     check's own rule, reused here) — or the text being removed holds no `/projects/`
+#     and so could not have been an entry whatever else it is.
+# Otherwise the line is left exactly as written, and the shape check drops whichever
+# fragments the comma-split makes of it — a visible drop, never a fabricated path.
 deliverable_path_entries() { # <frontmatter>
-  list_entries_from_region "$(list_region "$1" deliverable_paths \
-    | sed -e 's/\][[:space:]]*#.*$/]/' -e '/\]/!s/[[:space:]]#.*$//')"
+  list_entries_from_region "$(list_region "$1" deliverable_paths | awk '{
+    i = match($0, /[[:space:]]#/)
+    if (i > 0) {
+      head = substr($0, 1, i - 1); tail = substr($0, i)
+      if ($0 ~ /^[[:space:]]*-/ || (head ~ /\][[:space:]]*$/ \
+          && (head ~ /([[:space:]]|\[)[[:space:]]*\][[:space:]]*$/ \
+              || index(tail, "/projects/") == 0))) $0 = head
+    }
+    print
+  }')"
 }
 
 # The TEXT of each open question — OPT-IN, and off unless SNAPSHOT_QUESTION_TEXT=1.
