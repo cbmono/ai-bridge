@@ -1,0 +1,805 @@
+# host-rendering.txt — HOW GITHUB ITSELF RENDERS EACH OF THESE BODIES.
+#
+# Recorded from github.com's Markdown endpoint by `record-host-rendering.sh`, which is
+# checked in beside this file; re-run it to refresh or to verify. Every line below is the
+# HOST's answer, not this repository's — it is the only thing that can prove the block
+# reader in `symlink/scripts/review-clearance.sh` wrong, and `review-clearance.test.sh`
+# asserts against it.
+#
+# Format, one case per block:
+#
+#   @@@ <family> <verdict> <name>
+#   <body, verbatim, byte for byte as the host was asked about it>
+#   @@@ end
+#
+#   family  refusal  the body carries the human-visible refusal heading
+#           marker   the body carries the head SHA and the vendor's own review marker
+#   verdict prose    (refusal) the host puts the refusal on the page as READABLE PROSE.
+#                    The gate MUST report a refusal for these: this is the direction that
+#                    merges an unreviewed PR, and it is asserted.
+#           quoted   (refusal) the host puts it inside a code block. A quoted refusal is
+#                    deliberately read as a DISCUSSION of one, so nothing is asserted —
+#                    but the count is, so the battery cannot pass by refusing everything.
+#           hidden   (refusal) not on the page at all.
+#           visible  (marker) the reader SEES the marker's characters, so it is somebody's
+#                    quotation and not the vendor's machine claim. Must NOT clear.
+#           hidden   (marker) emitted inside an HTML comment: the vendor's own marker.
+#           blank    (content) the page shows no ASCII alphanumeric at all. A review
+#                    object with such a body is NOT a claim, and the gate must not clear
+#                    on it — asserted.
+#           glyph    (content) the page shows a character. May still be read as blank
+#                    (the safe direction), so only the COUNT that clear is asserted.
+#
+# Recorded 2026-08-27T09:27Z against github.com/api/markdown
+@@@ refusal prose plain-text
+Review limit reached
+@@@ end
+@@@ marker hidden plain-text
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+<!-- walkthrough_start -->
+@@@ end
+@@@ refusal quoted fence-top-level
+```
+Review limit reached
+```
+@@@ end
+@@@ marker visible fence-top-level
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+```
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal quoted fence-three-space
+   ```
+   Review limit reached
+   ```
+@@@ end
+@@@ marker visible fence-three-space
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+   ```
+   <!-- walkthrough_start -->
+   ```
+@@@ end
+@@@ refusal prose fence-four-space-literal
+    ```
+Review limit reached
+    ```
+@@@ end
+@@@ marker hidden fence-four-space-literal
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+    ```
+<!-- walkthrough_start -->
+    ```
+@@@ end
+@@@ refusal prose fence-tab-literal
+ 	```
+Review limit reached
+ 	```
+@@@ end
+@@@ marker hidden fence-tab-literal
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+ 	```
+<!-- walkthrough_start -->
+ 	```
+@@@ end
+@@@ refusal quoted fence-closer-shorter
+````
+Review limit reached
+```
+@@@ end
+@@@ marker visible fence-closer-shorter
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+````
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal quoted fence-closer-info-string
+```
+Review limit reached
+```js
+@@@ end
+@@@ marker visible fence-closer-info-string
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+```
+<!-- walkthrough_start -->
+```js
+@@@ end
+@@@ refusal prose fence-backtick-in-info
+```a`b
+Review limit reached
+```
+@@@ end
+@@@ marker hidden fence-backtick-in-info
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+```a`b
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal quoted fence-tilde-vs-backtick
+~~~
+Review limit reached
+```
+@@@ end
+@@@ marker visible fence-tilde-vs-backtick
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+~~~
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal quoted fence-unbalanced
+```
+Review limit reached
+@@@ end
+@@@ marker visible fence-unbalanced
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+```
+<!-- walkthrough_start -->
+@@@ end
+@@@ refusal quoted fence-crlf
+```
+Review limit reached
+```
+@@@ end
+@@@ marker visible fence-crlf
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+```
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal prose fence-crlf-after-close
+```
+x
+```
+Review limit reached
+@@@ end
+@@@ marker hidden fence-crlf-after-close
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+```
+x
+```
+<!-- walkthrough_start -->
+@@@ end
+@@@ refusal prose quote-plain
+> Review limit reached
+@@@ end
+@@@ marker hidden quote-plain
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+> <!-- walkthrough_start -->
+@@@ end
+@@@ refusal quoted quote-fence
+> ```
+> Review limit reached
+> ```
+@@@ end
+@@@ marker visible quote-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+> ```
+> <!-- walkthrough_start -->
+> ```
+@@@ end
+@@@ refusal prose quote-fence-unquoted-body
+> ```
+Review limit reached
+> ```
+@@@ end
+@@@ marker hidden quote-fence-unquoted-body
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+> ```
+<!-- walkthrough_start -->
+> ```
+@@@ end
+@@@ refusal prose quote-depth-2-fence
+> > ```
+> Review limit reached
+> > ```
+@@@ end
+@@@ marker hidden quote-depth-2-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+> > ```
+> <!-- walkthrough_start -->
+> > ```
+@@@ end
+@@@ refusal prose list-sibling-markers
+- ```
+- Review limit reached
+- ```
+@@@ end
+@@@ marker hidden list-sibling-markers
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+- ```
+- <!-- walkthrough_start -->
+- ```
+@@@ end
+@@@ refusal prose list-sibling-star
+* ```
+* Review limit reached
+* ```
+@@@ end
+@@@ marker hidden list-sibling-star
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+* ```
+* <!-- walkthrough_start -->
+* ```
+@@@ end
+@@@ refusal prose list-sibling-ordered
+1. ```
+2. Review limit reached
+3. ```
+@@@ end
+@@@ marker hidden list-sibling-ordered
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+1. ```
+2. <!-- walkthrough_start -->
+3. ```
+@@@ end
+@@@ refusal prose list-sibling-ordered-wide
+10. ```
+11. Review limit reached
+12. ```
+@@@ end
+@@@ marker hidden list-sibling-ordered-wide
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+10. ```
+11. <!-- walkthrough_start -->
+12. ```
+@@@ end
+@@@ refusal prose list-sibling-tab
+-	```
+-	Review limit reached
+-	```
+@@@ end
+@@@ marker hidden list-sibling-tab
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+-	```
+-	<!-- walkthrough_start -->
+-	```
+@@@ end
+@@@ refusal prose list-indented-marker
+  - ```
+  - Review limit reached
+  - ```
+@@@ end
+@@@ marker hidden list-indented-marker
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+  - ```
+  - <!-- walkthrough_start -->
+  - ```
+@@@ end
+@@@ refusal quoted list-continuation
+- ```
+  Review limit reached
+  ```
+@@@ end
+@@@ marker visible list-continuation
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+- ```
+  <!-- walkthrough_start -->
+  ```
+@@@ end
+@@@ refusal prose list-dedent-ends-item
+- ```
+  code
+Review limit reached
+@@@ end
+@@@ marker hidden list-dedent-ends-item
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+- ```
+  code
+<!-- walkthrough_start -->
+@@@ end
+@@@ refusal prose list-sibling-ends-fence
+- ```
+  code
+- Review limit reached
+@@@ end
+@@@ marker hidden list-sibling-ends-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+- ```
+  code
+- <!-- walkthrough_start -->
+@@@ end
+@@@ refusal quoted list-nested-deeper
+- ```
+  - Review limit reached
+  ```
+@@@ end
+@@@ marker visible list-nested-deeper
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+- ```
+  - <!-- walkthrough_start -->
+  ```
+@@@ end
+@@@ refusal quoted list-closes-top-fence
+```
+Review limit reached
+- ```
+@@@ end
+@@@ marker visible list-closes-top-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+```
+<!-- walkthrough_start -->
+- ```
+@@@ end
+@@@ refusal prose html-details
+<details>
+```
+Review limit reached
+```
+</details>
+@@@ end
+@@@ marker hidden html-details
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+<details>
+```
+<!-- walkthrough_start -->
+```
+</details>
+@@@ end
+@@@ refusal quoted html-pre
+<pre>
+Review limit reached
+</pre>
+@@@ end
+@@@ marker hidden html-pre
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+<pre>
+<!-- walkthrough_start -->
+</pre>
+@@@ end
+@@@ refusal quoted html-blank-line-ends
+<details>
+
+```
+Review limit reached
+```
+@@@ end
+@@@ marker visible html-blank-line-ends
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+<details>
+
+```
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal prose html-unknown-tag
+<okf-widget>
+```
+Review limit reached
+```
+@@@ end
+@@@ marker hidden html-unknown-tag
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+<okf-widget>
+```
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal prose html-closing-tag
+</okf-widget>
+```
+Review limit reached
+```
+@@@ end
+@@@ marker hidden html-closing-tag
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+</okf-widget>
+```
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal quoted html-in-quote-then-fence
+> <details>
+
+```
+Review limit reached
+```
+@@@ end
+@@@ marker visible html-in-quote-then-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+> <details>
+
+```
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal prose html-in-quote-list-fence
+> <details>
+- ```
+- Review limit reached
+- ```
+@@@ end
+@@@ marker hidden html-in-quote-list-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+> <details>
+- ```
+- <!-- walkthrough_start -->
+- ```
+@@@ end
+@@@ refusal prose html-in-list-sibling-fence
+- <details>
+- ```
+- Review limit reached
+- ```
+@@@ end
+@@@ marker hidden html-in-list-sibling-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+- <details>
+- ```
+- <!-- walkthrough_start -->
+- ```
+@@@ end
+@@@ refusal prose html-in-quote-then-list
+> <details>
+
+- ```
+- Review limit reached
+- ```
+@@@ end
+@@@ marker hidden html-in-quote-then-list
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+> <details>
+
+- ```
+- <!-- walkthrough_start -->
+- ```
+@@@ end
+@@@ refusal prose html-in-quote-quoted-fence
+> <details>
+> ```
+> Review limit reached
+> ```
+@@@ end
+@@@ marker hidden html-in-quote-quoted-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+> <details>
+> ```
+> <!-- walkthrough_start -->
+> ```
+@@@ end
+@@@ refusal quoted html-in-quote-top-fence
+> <details>
+```
+Review limit reached
+```
+@@@ end
+@@@ marker visible html-in-quote-top-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+> <details>
+```
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal quoted html-type1-pre-blank
+<pre>
+
+Review limit reached
+</pre>
+@@@ end
+@@@ marker hidden html-type1-pre-blank
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+<pre>
+
+<!-- walkthrough_start -->
+</pre>
+@@@ end
+@@@ refusal quoted html-inline-then-fence
+<span>hello
+```
+Review limit reached
+```
+@@@ end
+@@@ marker visible html-inline-then-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+<span>hello
+```
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal quoted list-item-relative-indent
+-   item
+
+    ```
+    Review limit reached
+    ```
+@@@ end
+@@@ marker visible list-item-relative-indent
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+-   item
+
+    ```
+    <!-- walkthrough_start -->
+    ```
+@@@ end
+@@@ refusal quoted span-uneven-runs
+``a`b
+Review limit reached
+c``
+@@@ end
+@@@ marker hidden span-uneven-runs
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+``a`b
+<!-- walkthrough_start -->
+c``
+@@@ end
+@@@ refusal prose span-open-then-probe
+`open
+Review limit reached
+@@@ end
+@@@ marker hidden span-open-then-probe
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+`open
+<!-- walkthrough_start -->
+@@@ end
+@@@ refusal quoted quote-indented-code
+>     Review limit reached
+@@@ end
+@@@ marker visible quote-indented-code
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+>     <!-- walkthrough_start -->
+@@@ end
+@@@ refusal prose list-loose-blank-then-item
+- ```
+
+- Review limit reached
+- ```
+@@@ end
+@@@ marker hidden list-loose-blank-then-item
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+- ```
+
+- <!-- walkthrough_start -->
+- ```
+@@@ end
+@@@ refusal prose fence-in-quote-then-dedent
+> ```
+> code
+
+Review limit reached
+@@@ end
+@@@ marker hidden fence-in-quote-then-dedent
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+> ```
+> code
+
+<!-- walkthrough_start -->
+@@@ end
+@@@ refusal quoted setext-then-fence
+title
+===
+```
+Review limit reached
+```
+@@@ end
+@@@ marker visible setext-then-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+title
+===
+```
+<!-- walkthrough_start -->
+```
+@@@ end
+@@@ refusal quoted indented-code
+    Review limit reached
+@@@ end
+@@@ marker visible indented-code
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+    <!-- walkthrough_start -->
+@@@ end
+@@@ refusal quoted code-span-inline
+`Review limit reached`
+@@@ end
+@@@ marker visible code-span-inline
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+`<!-- walkthrough_start -->`
+@@@ end
+@@@ refusal quoted code-span-multiline
+`start
+Review limit reached
+end`
+@@@ end
+@@@ marker hidden code-span-multiline
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+`start
+<!-- walkthrough_start -->
+end`
+@@@ end
+@@@ refusal hidden html-comment-wraps
+<!--
+Review limit reached
+-->
+@@@ end
+@@@ marker hidden html-comment-wraps
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+<!--
+<!-- walkthrough_start -->
+-->
+@@@ end
+@@@ refusal prose table-cell
+\| a \|
+\| - \|
+\| Review limit reached \|
+@@@ end
+@@@ marker hidden table-cell
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+\| a \|
+\| - \|
+\| <!-- walkthrough_start --> \|
+@@@ end
+@@@ content blank c-empty-comment
+<!-- -->
+@@@ end
+@@@ content blank c-comment-with-text
+<!--x-->
+@@@ end
+@@@ content blank c-comment-multiline
+<!--
+hidden
+-->
+@@@ end
+@@@ content blank c-zero-width-space
+​
+@@@ end
+@@@ content blank c-lrm
+‎
+@@@ end
+@@@ content blank c-rlm
+‏
+@@@ end
+@@@ content blank c-non-breaking-space
+ 
+@@@ end
+@@@ content blank c-function-application
+⁡
+@@@ end
+@@@ content blank c-invisible-plus
+⁤
+@@@ end
+@@@ content blank c-interlinear-anchor
+￹
+@@@ end
+@@@ content blank c-rlo
+‮
+@@@ end
+@@@ content blank c-invisible-times
+⁢
+@@@ end
+@@@ content blank c-mongolian-vowel-sep
+᠎
+@@@ end
+@@@ content blank c-variation-selector
+︀
+@@@ end
+@@@ content blank c-emoji-variation-selector
+️
+@@@ end
+@@@ content blank c-hangul-choseong-filler
+ᅟ
+@@@ end
+@@@ content blank c-hangul-filler
+ㅤ
+@@@ end
+@@@ content blank c-combining-grapheme-joiner
+͏
+@@@ end
+@@@ content blank c-numeric-char-ref
+&#8203;
+@@@ end
+@@@ content blank c-named-char-ref
+&zwnj;
+@@@ end
+@@@ content blank c-empty-element
+<div></div>
+@@@ end
+@@@ content blank c-thematic-break
+---
+@@@ end
+@@@ content blank c-link-ref-def-degenerate
+[//]: # ()
+@@@ end
+@@@ content blank c-link-ref-def-with-text
+[//]: # (a markdown comment)
+@@@ end
+@@@ content blank c-link-ref-def-plain
+[x]: /y
+@@@ end
+@@@ content blank c-empty-link
+[](url)
+@@@ end
+@@@ content blank c-tag-with-gt-in-attribute
+<a href="1>2"></a>
+@@@ end
+@@@ content blank c-tag-with-gt-in-title
+<div title="a>b"></div>
+@@@ end
+@@@ content blank c-doctype
+<!DOCTYPE html>
+@@@ end
+@@@ content blank c-cdata
+<![CDATA[x]]>
+@@@ end
+@@@ content blank c-processing-instruction
+<?php ?>
+@@@ end
+@@@ content blank c-html-declaration
+<!ENTITY x "y">
+@@@ end
+@@@ content blank c-image-no-alt
+![](/x.png)
+@@@ end
+@@@ content glyph c-autolink-only
+<https://example.com/a>
+@@@ end
+@@@ content glyph c-control-glyph-word
+ok
+@@@ end
+@@@ content glyph c-control-word-after-hidden
+<!-- x -->​ok
+@@@ end
+@@@ content glyph c-control-word-in-element
+<div>lgtm</div>
+@@@ end
+@@@ content glyph c-control-hidden-in-word
+no&#8203;1
+@@@ end
+@@@ content glyph c-control-link-with-text
+[see this](url)
+@@@ end
+@@@ content blank c-image-alt-is-not-a-glyph
+![a diagram](/x.png)
+@@@ end
+@@@ content glyph c-control-doctype-then-word
+<!DOCTYPE html>
+reviewed
+@@@ end

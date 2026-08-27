@@ -57,8 +57,7 @@
 #      `APPROVED`/`CHANGES_REQUESTED` is a claim, but neither may outrank a refusal
 #      published at the same head. The old body-SHA pin refused those cases as a side
 #      effect of being wrong; see the note at TEST 2. SAYING NOTHING IS DECIDED BY WHAT
-#      RENDERS, not by whether some byte is not whitespace: one zero-width space, or one
-#      empty HTML comment, is a blank page and used to count as a claim (`renders_content`).
+#      RENDERS (`renders_content`), measured against the host rather than argued.
 #   B. a validated `okf-verdict` trailer whose `head_sha` equals the head, from an account
 #      named with `--reviewer` that is NOT a vendor in REVIEWERS (see the tier-4 note).
 #   C. a COMMENT carrying the reviewer's own MACHINE-EMITTED review marker
@@ -66,21 +65,19 @@
 #      written against publishes a CLEAN review — "no actionable comments" — as an issue
 #      comment and files no review object at all: FIVE OF THE SIX reviews that clear the
 #      35 pull requests here are that shape, so dropping the route would not make the gate
-#      stricter, it would make it structurally unable to say yes to a clean review. It is
-#      the weakest and the narrowest: a WHOLE LINE that is nothing but an HTML comment the
-#      vendor's own renderer emits, in a rendering with fenced blocks, indented blocks and
-#      multi-line code spans removed — three ways for the same reason, since a line that is
-#      only that comment renders as NOTHING, and anything a human can read on that line
-#      stops it matching. That is the precise form of "prose cannot reach the evidence
-#      half", and the loose form was false: matched as a substring, the marker spelled
-#      inside an inline code span is visible text that matched, and a comment merely
-#      discussing this file cleared a pull request. ITS PIN IS THE RESIDUAL, AND IT IS
-#      STATED RATHER THAN GLOSSED: the
-#      head named as a bare token in that body is the only pin an issue comment has —
-#      there is no `commit_id` on a comment anywhere in the API — so route C alone still
-#      rests on what a body happens to mention, which is the property THE TRAP below gives
-#      the refusal too. What makes it survivable is that the pin cannot act alone: the
-#      refusal tiers run first, and the machine marker must be there as well.
+#      stricter, it would make it structurally unable to say yes to a clean review.
+#      IT IS ALSO THE ONLY ROUTE THAT READS PROSE, AND EVERY REMAINING WEAKNESS IN THIS
+#      FILE IS DOWNSTREAM OF IT — kept or dropped is a policy call about how much
+#      verification is required, not one this file can take. It is the narrowest form the
+#      route has: a WHOLE LINE that is nothing but an HTML comment the vendor's own
+#      renderer emits, read from a rendering with fenced blocks, indented blocks and
+#      multi-line code spans removed, so anything a human can read on that line stops it
+#      matching. ITS PIN IS THE RESIDUAL AND IS STATED RATHER THAN GLOSSED: the head named
+#      as a bare token in that body is the only pin an issue comment has — there is no
+#      `commit_id` on a comment anywhere in the API — so route C alone rests on what a body
+#      happens to mention, which is the property THE TRAP below gives the refusal too. What
+#      makes it survivable is that the pin cannot act alone: the refusal tiers run first,
+#      and the machine marker must be there as well.
 #
 # THE TABLES CAN NO LONGER CAUSE A CLEARANCE. Every vendor string lives in REVIEWERS
 # (whose artifacts count, and what its check is called), REFUSALS_SENTINEL / NOT_YET /
@@ -713,14 +710,40 @@ awk -v s="$SEP" -v dir="$TMPD" '
 #   the REFUSAL side keeps a line EITHER reading keeps      (the union)
 #   the CLEARING side keeps a line only if BOTH keep it     (the intersection)
 #
-# so a refusal must be code under every reading to disappear, and a clearance must be
-# markup under every reading to count. Two things follow, and both used to be hopes. The
-# containment `strict ⊆ stripped` is now STRUCTURAL — an intersection is a subset of a
-# union whatever either reading gets wrong. And a reading may be CRUDE, in both
-# directions: crude-open in B costs the clearing side, crude-closed costs the refusal side,
-# and each side takes the other reading. That is why B models a container in three lines
-# rather than in CommonMark section 4.6 in full, and why a THIRD reading is the way to
-# cover the next construct rather than a special case bolted onto these two.
+# WHAT THAT CONSTRUCTION IS AND IS NOT, corrected from the claim it shipped with. It gives
+# exactly one thing, structurally: `strict ⊆ stripped`, because an intersection is a subset
+# of a union whatever either reading gets wrong. IT DOES NOT MAKE THE REFUSAL SIDE SAFE.
+# The claim was that a crude reading can only cost a FALSE REFUSAL, because the other
+# reading covers it. That is false, and the counter-example is three lines:
+#
+#     - ```
+#     - Review limit reached...
+#     - ```
+#
+# The union removes a line only when EVERY reading removes it — it is an AND-gate over the
+# readings, not a safety net over the host. A mistake the readings SHARE is inherited by
+# their union, and here they shared one: A does not model list items, and B ended an item
+# only on a dedent, which a sibling marker is not. Both hid the refusal; the union hid it;
+# the host puts it on the page as an ordinary bullet. A false CLEARANCE is reachable
+# through the refusal side, which is the direction the whole construction was built to
+# rule out.
+#
+# SO THE PROPERTY THAT MATTERS CANNOT BE DERIVED FROM THE READINGS, AND IS MEASURED
+# INSTEAD. No relation between two models of a renderer bounds the distance from either to
+# the renderer. The invariant this file now claims is stated against the host and checked
+# against the host's own answers, recorded in `tests/fixtures/reviewer/host-rendering.txt`:
+#
+#   EVERY LINE GITHUB RENDERS AS READABLE PROSE REACHES THE REFUSAL TABLES, AND NO LINE
+#   WHOSE CHARACTERS GITHUB PUTS ON THE PAGE CAN CLEAR A PULL REQUEST.
+#
+# 145 bodies, each answered by github.com itself and re-recordable by the script beside the
+# fixture. Adding a reading is still how a new construct is covered, and the union still
+# means a reading crude in one direction is covered by the other IN THE CASES WHERE THEY
+# DIFFER — but "a reading was added, so it is safe" is not an argument any more. The case
+# goes in the fixture and the host answers.
+#
+# WHICH IS ALSO WHY EACH READING IS KEPT AS EXACT AS IT IS CHEAP TO BE, rather than left
+# deliberately crude: crude no longer costs only a false refusal.
 #
 # WHAT READING A ALREADY FOLLOWS, each of which cost a round to find: a fence may be
 # indented at most three COLUMNS, tabs advancing to four-column stops; it opens inside the
@@ -787,6 +810,19 @@ function fence_of(   s, c, k, n) {
   F_CHAR = c; F_LEN = k; F_INFO = substr(s, k + 1)
   return 1
 }
+# ended_item(base) — has the LIST ITEM whose content starts at column `base` ended on this
+# line? Two ways, and only one of them used to be here. A line that DEDENTS past the item
+# ends it, which was modelled. A SIBLING MARKER at or before that content column
+# ends it too, which was not. That omission is how a refusal spelled as three sibling
+# bullets — a fence marker, the words, a fence marker — disappeared from BOTH readings and
+# therefore from their union: nothing dedents, so the fence opened in the first item stayed
+# open across the second, while the host closes it at the end of that item and puts the
+# refusal on the page as an ordinary bullet. A DEEPER marker (L_LIST > base) opens a nested
+# item inside this one and ends nothing.
+function ended_item(base) {
+  if (L_LIST >= 0) return (L_LIST <= base)
+  return (!L_BLANK && L_BASE + L_INDENT < base)
+}
 # step(m, containers) — that line through reading m: 0 outside every block, 1 a fence
 # marker line, 2 inside a block. containers=1 adds reading B two rules, and only reading B
 # keeps the HTML-block and list state (HB, LI). BC[m] is non-empty at EOF exactly when that
@@ -795,7 +831,7 @@ function step(m, containers,   f) {
   f = fence_of()
   if (BC[m] != "") {
     if (L_DEPTH < BD[m]) BC[m] = ""
-    else if (containers && BI[m] > 0 && !L_BLANK && L_BASE + L_INDENT < BI[m]) BC[m] = ""
+    else if (containers && BI[m] > 0 && ended_item(BI[m])) BC[m] = ""
     else if (f && F_CHAR == BC[m] && F_LEN >= BL[m] && L_DEPTH == BD[m] \
              && F_INFO ~ /^[[:space:]]*$/) { BC[m] = ""; return 1 }
     else return 2
@@ -809,8 +845,13 @@ function step(m, containers,   f) {
     # can see and not a fence. Any tag opens one and a blank line ends it — deliberately
     # not a list of tag names, because a name this did not know is how the last round
     # reopened. Wrong in either direction, the other reading covers it.
-    if (HB) { if (L_BLANK) HB = 0; else return 0 }
-    else if (L_INDENT <= 3 && L_REST ~ /^<\/?[A-Za-z]/) { HB = 1; return 0 }
+    # …and it ends the way every other container-bound block does: at a blank line, on
+    # leaving the blockquote it opened in, or at the end of the list item that held it.
+    # Ending only at a blank line left it open to the end of the body, and an HTML block
+    # is the one state in this reading that makes it KEEP a line the other reading drops.
+    if (HB && (L_BLANK || L_DEPTH < HBD || (HBI > 0 && ended_item(HBI)))) HB = 0
+    if (HB) return 0
+    if (L_INDENT <= 3 && L_REST ~ /^<\/?[A-Za-z]/) { HB = 1; HBD = L_DEPTH; HBI = LI; return 0 }
   }
   # The info string of a BACKTICK opener may not contain a backtick: the host renders
   # ```a`b as inline code and opens no block at all.
@@ -866,45 +907,107 @@ render_body() { # <body-file> <stripped-out> <strict-out>
 # SEE? Used by route A, where "the object carries a claim" is the difference between a
 # review and a thread reply the host minted a COMMENTED object for.
 #
-# IT IS ASKED THE OTHER WAY ROUND NOW, AND THAT IS THE FIX. Subtracting the invisible needs
-# a complete list of everything invisible, which is the same never-finished enumeration the
-# vendor tables were: the first cut removed six zero-width characters and the HTML comment,
-# and thirteen more code points — plus `&#8203;`, `[//]: # ()` and `<div></div>`, which no
-# character list can catch — walked straight through it and restored the empty-review route
-# verbatim. So nothing is subtracted here for being known-bad. Markup is removed because it
-# is MARKUP — an HTML comment, an HTML tag and a character reference are instructions to a
-# renderer rather than glyphs — and what must be LEFT is an ASCII letter or digit, which is
-# the only thing this script can be certain a human sees.
+# IT ASKS WHAT IS LEFT, NOT WHAT TO TAKE AWAY, AND THAT IS THE FIX. Subtracting the
+# invisible needs a complete list of everything invisible, which is the same never-finished
+# enumeration the vendor tables were: the first cut removed six zero-width characters and
+# the HTML comment; thirteen more code points walked through it; and then a cut that knew
+# two markup SHAPES — the comment and the tag — was walked through by seven more
+# (`[//]: # (a comment)`, `[x]: /y`, `[](url)`, `<a href="1>2"></a>`, `<!DOCTYPE html>`,
+# `<![CDATA[x]]>`, `<?php ?>`). Each round the list got longer and the route stayed open.
+#
+# SO THE THING BEING REMOVED IS NOW A CLOSED SET RATHER THAN A GROWING ONE, and that is the
+# whole difference between deciding and enumerating. CommonMark defines exactly SIX raw-HTML
+# productions — an open tag, a closing tag, a comment, a processing instruction, a
+# declaration and a CDATA section — and there is no seventh to be found next round; knowing
+# two of them was the enumeration, knowing the specification is the decision. Beside them
+# sit the two other places the source carries bytes the page never shows: a LINK REFERENCE
+# DEFINITION, which renders nothing at all, and the DESTINATION of a link or an image
+# (and an image is nothing but a destination, since its alt text is not on the page).
+# Everything else is text, and the question asked of the text is unchanged: is there an
+# ASCII letter or digit, the only thing this script can be certain a human sees.
+#
+# EVERY RULE HERE REMOVES, AND REMOVING FAILS CLOSED. Saying "blank" of a body that does
+# render is exit 4 or a held claim — a human glance. Saying "content" of a blank one is a
+# clearance for a review object that claims nothing, which is the route this function
+# exists to shut. So where a rule is crude it is crude in the removing direction: a line
+# whose bracketed label is followed by a colon is treated as a reference definition
+# whatever else is on it.
 #
 # `print-board.sh` reaches the same conclusion from the other end, sanitising for a terminal
 # by dropping every code point in Unicode general category C — "one rule rather than a
 # blocklist of known-bad sequences". That implementation is not reused, for two reasons
 # rather than by preference: it is python3 + unicodedata, and a merge gate that refuses
 # whenever python3 is missing buys nothing here; and category C would not answer THIS
-# question anyway, since U+115F and U+3164 are LETTERS that render blank and U+FE0F is a
-# mark. Requiring something VISIBLE subsumes every one of them without naming any.
+# question anyway — measured over the thirteen code points that defeated the second cut, it
+# would have missed FIVE, because U+115F and U+3164 are LETTERS that render blank and
+# U+FE00/U+FE0F/U+034F are MARKS. Requiring something visible subsumes all thirteen without
+# naming any.
+#
+# AND IT IS NO LONGER ARGUED, IT IS MEASURED. `tests/fixtures/reviewer/host-rendering.txt`
+# records what github.com itself puts on the page for each of these constructs, and the
+# suite asserts that nothing the host renders blank is read here as a claim.
 #
 # WHAT IT COSTS, stated rather than left to be discovered: a body with no ASCII alphanumeric
 # anywhere in it — written entirely in another script, or in emoji — is read as saying
 # nothing. That is exit 4 or a held claim, never a clearance, so the bill is a human glance.
 renders_content() { # 0 when something renders, 1 when the page stays blank
   LC_ALL=C awk '
-    { line = $0; out = ""
-      while (length(line) > 0) {
-        if (incomment) {
-          p = index(line, "-->")
-          if (p == 0) { line = ""; break }
-          line = substr(line, p + 3); incomment = 0; continue
-        }
-        p = index(line, "<!--")
-        if (p == 0) { out = out line; line = ""; break }
-        out = out substr(line, 1, p - 1); line = substr(line, p + 4); incomment = 1
+    # The terminator of the raw-HTML production starting at `line`, and how many bytes of
+    # it to skip first. Returns "" when the < is just a less-than sign.
+    function opens(line,   name) {
+      if (substr(line, 1, 4) == "<!--")      { SKIP = 4; return "-->" }
+      if (substr(line, 1, 9) == "<![CDATA[") { SKIP = 9; return "]]>" }
+      if (substr(line, 1, 2) == "<?")        { SKIP = 2; return "?>" }
+      if (substr(line, 1, 2) == "<!")        { SKIP = 2; return ">" }
+      name = line; sub(/^<\//, "<", name)
+      # A tag name is a letter then letters, digits and hyphens, and what follows it must
+      # end the name: whitespace, a solidus or the closing bracket. Without that last test
+      # an AUTOLINK — <https://example.com/a>, whose text the page DOES show — reads as a
+      # tag called "https" and the visible URL is thrown away.
+      if (name ~ /^<[A-Za-z][A-Za-z0-9-]*([[:space:]\/>]|$)/) {
+        SKIP = 1; return ">"
       }
-      text = text out
+      return ""
+    }
+    {
+      line = $0
+      # A LINK REFERENCE DEFINITION is the whole line and none of it reaches the page.
+      if (!inhtml && line ~ /^[[:space:]]{0,3}\[[^]]*\]:/) next
+      out = ""
+      while (length(line) > 0) {
+        if (inhtml != "") {
+          p = index(line, inhtml)
+          if (p == 0) { line = ""; break }
+          line = substr(line, p + length(inhtml)); inhtml = ""; continue
+        }
+        p = index(line, "<")
+        if (p == 0) { out = out line; line = ""; break }
+        out = out substr(line, 1, p - 1); line = substr(line, p)
+        term = opens(line)
+        if (term == "") { out = out "<"; line = substr(line, 2); continue }
+        line = substr(line, SKIP + 1); inhtml = term
+        # Inside an OPEN TAG the > that ends it may sit in a quoted attribute value, so the
+        # quotes are honoured rather than the first > taken. <a href="1>2"></a> is one tag
+        # and a blank page; read to the first > it is a tag plus the visible text 2".
+        if (term == ">") {
+          q = ""
+          while (length(line) > 0) {
+            c = substr(line, 1, 1); line = substr(line, 2)
+            if (q != "") { if (c == q) q = "" }
+            else if (c == "\"" || c == "'"'"'") q = c
+            else if (c == ">") { inhtml = ""; break }
+          }
+        }
+      }
+      text = text "\n" out
     }
     END {
+      # A links DESTINATION is an instruction; its label is the text. An IMAGE is all
+      # destination, alt text included, because the page shows a picture and not the words.
+      gsub(/\]\([^)]*\)/, "]", text)          # [label](dest) -> [label]
+      gsub(/\]\[[^]]*\]/, "]", text)          # [label][ref]  -> [label]
+      gsub(/!\[[^]]*\]/, "", text)            # ![alt]        -> nothing
       gsub(/&#?[0-9A-Za-z]+;/, "", text)      # a character reference is one glyph or none
-      gsub(/<\/?[A-Za-z][^>]*>/, "", text)    # a tag is an instruction, never a glyph
       exit(text ~ /[0-9A-Za-z]/ ? 0 : 1)
     }
   ' "$1" 2>/dev/null
@@ -921,9 +1024,25 @@ awk -v h="$head_sha" 'BEGIN { for (i = 7; i <= length(h); i++) print substr(h, 1
 # permalink, an avatar hash) is not the artifact claiming to have read that commit, and it
 # used to count. This is route C's pin ONLY — routes A and B pin on `commit_id` and on the
 # trailer's `head_sha` field, never on what the body happens to mention.
+#
+# A COMMIT HASH IS A WHOLE TOKEN, AND THAT IS NOT WHAT A SUBSTRING SEARCH FINDS. Scanning
+# for a run of 7-40 hex characters finds one inside every UUID: the reviewer stamps its own
+# refusal with `Run ID: f4981ca2-1bc7-4edf-9bb4-fd2f74e3693a`, whose first and last fields
+# are hex runs of 8 and 12. That is the recorded fixture, not a construction — and it fed
+# the one place this answer is consulted in the OPENING direction, `refusal_concerns_head`,
+# where "it names some commit, and not this one" DEMOTES the refusal to an older one. Any
+# refusal carrying a run id therefore read as being about another commit.
+#
+# So the body is cut into tokens FIRST, on everything a hash cannot contain, and a token
+# counts only if the whole of it is hex. A field of a UUID is joined to the rest by `-`,
+# so the token is `f4981ca2-1bc7-4edf-9bb4-fd2f74e3693a` and it is not hex. Both callers
+# get safer: route C loses a pin (no clearance) and a refusal loses its demotion (it is
+# weighed). A 32-hex identifier with no separators is still indistinguishable from a hash,
+# and nothing here can tell them apart.
 names_head() {
   sed -E "s#https?://[^[:space:])\"']*##g" "$1" 2>/dev/null \
-    | grep -Eo '[0-9a-fA-F]{7,40}' | tr '[:upper:]' '[:lower:]' > "$TMPD/toks"
+    | tr -c '0-9A-Za-z_-' '\n' | grep -Ex '[0-9a-fA-F]{7,40}' \
+    | tr '[:upper:]' '[:lower:]' > "$TMPD/toks"
   grep -qxF -f "$TMPD/prefixes" "$TMPD/toks"
 }
 
@@ -1010,7 +1129,7 @@ reopen_line() { # <stripped-body-file> — when the reviewer published a reopen 
 n=0; considered=0; refusal_body=""; refusal_from=""; refusal_kind=""
 stale_from=""; stale_at=""; unproven_from=""
 refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
-cleared_msg=""; held_msg=""
+cleared_msg=""
 while IFS=$'\t' read -r kind login state commit; do
   n=$((n + 1))
   body="$TMPD/body.$n"

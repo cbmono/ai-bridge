@@ -485,8 +485,52 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # this PR is a rounding error, and the reduction candidates named further up (print-board.sh,
 # watch-board.sh, write-snapshot.sh) are still untouched. What changed is the direction, and
 # that the smaller file was also the closed one.
-CEILING_TOTAL=8065
-CEILING_CODE=4233
+
+# RAISED 2026-08-27, same PR, after a SEVENTH independent review. Say it plainly: the
+# previous entry was this objective's first reduction, and this entry gives most of it
+# back and more.
+#
+#   8,065 / 4,233   21 files   what the seventh round pinned
+#   8,184 / 4,267   21 files   +119 total, +34 code — this round
+#
+# All of it in review-clearance.sh (1,280 -> 1,399; code 584 -> 618). required-checks.sh is
+# untouched at 349, for the fifth round running.
+#
+# WHAT THE 34 CODE LINES BUY, and the honest framing is that most of them buy ONE deletion
+# that could not be made without them:
+#   1. `renders_content` KNEW TWO MARKUP SHAPES — an HTML comment and a tag — and eleven
+#      constructs walked through it that github.com renders blank: `[//]: # (a comment)`,
+#      `[x]: /y`, `[](url)`, `![](/x.png)`, `<a href="1>2"></a>`, `<!DOCTYPE html>`,
+#      `<![CDATA[x]]>`, `<?php ?>`, `<!ENTITY x "y">` and two more. Each was a review object
+#      with an empty page that counted as a claim. The replacement is not a longer list: it
+#      removes the SIX raw-HTML productions CommonMark defines and no seventh exists, plus
+#      the two other places the source carries bytes the page never shows (a link reference
+#      definition, and a link or image DESTINATION). That is ~25 of the 34, and it is the
+#      difference between a set that grows every round and one that is closed.
+#   2. A LIST ITEM ENDS TWO WAYS, and only the dedent was modelled. `ended_item()` adds the
+#      sibling marker — 4 lines that close the route that falsified the previous round's
+#      central claim, plus the same test reused to bound a raw-HTML block to its container.
+#   3. A COMMIT HASH IS A WHOLE TOKEN. Cutting the body on separators before matching hex
+#      is 2 lines and stops every UUID reading as a commit reference.
+#
+# AND ~55 COMMENT LINES BUY A RETRACTION. The previous round's stated invariant — reading A
+# is contained in reading B, so the union cannot hide a refusal — was false, and it was the
+# argument the whole two-reading construction rested on. A wrong reason in a header is what
+# stops the next reader looking, so the correction is stated where the claim was, at the
+# length it takes to be believed.
+#
+# THE ONE NUMBER THAT WENT DOWN INSTEAD: `tests/review-clearance.test.sh` lost the 400-body
+# containment sweep and the 22-row invisible-character battery — 60-odd lines of test that
+# could not fail, replaced by 145 recorded answers from github.com's own renderer, which
+# is not measured here because fixtures are not `.sh`. The suite also got 25% faster.
+#
+# STILL OWED: the objective asks a project to LOWER one of these constants and keep it
+# lowered. One round in eight did. The reduction candidates named further up
+# (print-board.sh, watch-board.sh, write-snapshot.sh) remain untouched, and they are where
+# a real reduction has to come from — not from this file, which is now the third thing
+# every round adds to.
+CEILING_TOTAL=8184
+CEILING_CODE=4267
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

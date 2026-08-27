@@ -275,62 +275,34 @@ expect "…nor one whose content is behind an unbalanced fence" 4
 
 echo
 echo "== …and 'says nothing' means the PAGE is blank, not that the bytes are =="
-# THE NARROWEST WAY BACK IN, and it restored the behaviour above exactly. "Content" was any
-# non-whitespace byte, so a body of one ZERO-WIDTH SPACE — or of one empty HTML COMMENT,
-# which is the very shape every machine marker in this file takes — was a claim, and an
-# empty review object cleared over the recorded refusal at that head again.
+# THE NARROWEST WAY BACK IN, and it restored the pre-fix behaviour exactly. "Content" was
+# any non-whitespace byte, so a body of one ZERO-WIDTH SPACE — or of one empty HTML
+# COMMENT, which is the very shape every machine marker in this file takes — was a claim,
+# and an empty review object cleared over the recorded refusal at that head again.
 #
-# THEN THE SECOND CUT SUBTRACTED SIX SUCH CHARACTERS AND THE COMMENT, AND THIRTEEN MORE
-# WALKED THROUGH — plus three constructs no character list can reach. Which is why the
-# battery below is NOT the list the script removes: nothing is removed for being known-bad
-# any more, so every case here has to get past a rule that asks what is LEFT. Each case is
-# the recorded refusal, verbatim, with a review object at that same head whose body renders
-# to a blank page; the answer must be the refusal, at 1.
-ZWSP="$(printf '\342\200\213')"; NBSP="$(printf '\302\240')"
-u() { printf "$1"; }   # a code point as UTF-8, so the case names stay readable
-for blank in "$ZWSP:a zero-width space" "$NBSP:a non-breaking space" \
-             "<!-- -->:an empty HTML comment" "<!--x-->:an HTML comment with text in it" \
-             "$(u '\342\200\216'):U+200E, a left-to-right mark" \
-             "$(u '\342\200\217'):U+200F, a right-to-left mark" \
-             "$(u '\342\200\256'):U+202E, a right-to-left override" \
-             "$(u '\342\201\241'):U+2061, function application" \
-             "$(u '\342\201\242'):U+2062, an invisible times" \
-             "$(u '\342\201\244'):U+2064, an invisible plus" \
-             "$(u '\341\240\216'):U+180E, a Mongolian vowel separator" \
-             "$(u '\357\270\200'):U+FE00, a variation selector" \
-             "$(u '\357\270\217'):U+FE0F, the emoji variation selector" \
-             "$(u '\357\277\271'):U+FFF9, an interlinear annotation anchor" \
-             "$(u '\341\205\237'):U+115F, a Hangul choseong filler" \
-             "$(u '\343\205\244'):U+3164, a Hangul filler" \
-             "$(u '\315\217'):U+034F, a combining grapheme joiner" \
-             "&#8203;:a numeric character reference for one" \
-             "&zwnj;:a NAMED character reference for one" \
-             "[//]: # ():a link reference definition, which draws nothing" \
-             "<div></div>:an empty element" \
-             "---:a thematic break, which is a mark but not a claim"; do
-  setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
-  add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file "${blank%%:*}")"
-  expect "a body of ${blank#*:} -> not a claim" 1
-done
-# …including one spanning lines, which a line-at-a-time reader would miss.
+# THE BATTERY THAT USED TO SIT HERE IS GONE, AND ITS ABSENCE IS THE POINT. It was 22 rows
+# naming a zero-width space, a variation selector, a Hangul filler and so on: the list the
+# script had stopped removing, kept as a test. It could only ever assert that the
+# characters somebody already thought of are handled, which is the enumeration the fix
+# deleted, and it said nothing about the constructs that walked through the fix after it —
+# `[x]: /y`, `[](url)`, `<!DOCTYPE html>`, `<![CDATA[x]]>`, `<?php ?>`, `<a href="1>2">`.
+# All 22 rows and all six of those are now in `host-rendering.txt` as the `content` family,
+# where the verdict is GITHUB'"'"'S, not this repository'"'"'s opinion of what renders — see the
+# host-renderer section below. What stays here is the shape of the route itself, driven
+# end to end, so the reason those cases matter is visible where the behaviour is.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '<!-- -->')"
+expect "a review object whose body renders blank -> not a claim" 1
+says   "  ...and the refusal is what the operator is shown" "DECLINED to review"
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
 add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '<!--' 'hidden' '-->')"
-expect "…and an HTML comment spanning three lines is still blank" 1
-# THE CONTROLS, and they are what keep this a rule about what is LEFT rather than a longer
-# list of what is taken away: the same invisible bytes with one word beside them ARE a
-# claim, an element with a word IN it is a claim, and a character reference the host draws
-# a LETTER for is a claim.
+expect "…including a comment spanning lines, which a line-at-a-time reader misses" 1
+# THE CONTROL, and it is what keeps this a rule about what is LEFT rather than a longer
+# list of what is taken away: one visible word beside the same markup IS a claim.
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
-add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file "<!-- x -->${ZWSP}ok")"
-expect "…while one visible word beside them IS a claim" 0
-setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
-add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '<div>lgtm</div>')"
-expect "…as is an element with a word inside it" 0
-setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
-add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file 'no&#8203;1')"
-expect "…and so is text a zero-width reference is hiding inside" 0
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '<!-- x -->ok')"
+expect "…while one visible word beside it IS a claim" 0
 
-echo
 echo "== a review state must be one the API publishes, case and all =="
 # PENDING was never submitted and DISMISSED has been withdrawn; neither is evidence that
 # anybody looked. They were skipped by a case-SENSITIVE shell `case`, so any other casing
@@ -780,13 +752,194 @@ add_comment coderabbitai "$(crlf "<!-- walkthrough_start -->\r\nReviewed $CLEAN_
 expect "…and a CRLF clean review still clears" 0
 
 echo
-echo "== the containment itself, not only the cases that broke it =="
-# THE FILE STATES A SAFETY PROPERTY — every line the STRICT rendering keeps is a line the
-# STRIPPED one kept (strict ⊆ stripped) — and it is now STRUCTURAL rather than hoped for:
-# stripped is the UNION of two readings of the block structure and strict is their
-# INTERSECTION, and an intersection is a subset of a union whatever either reading gets
-# wrong. This sweep is what proves the shipped code really is that shape, so it slices the
-# real definitions out of the script rather than testing a copy of them.
+echo "== the union is an AND-gate, and both readings were wrong the same way =="
+# THE ROUTE THAT FALSIFIED THE WHOLE CONSTRUCTION. The refusal side keeps a line either
+# reading keeps, which was argued to make a crude reading cost at most a FALSE refusal.
+# It does not: the readings can be wrong together, and then their union is wrong too.
+#
+#     - ```
+#     - Review limit reached...
+#     - ```
+#
+# Reading A does not model list items at all, so its fence stays open. Reading B did model
+# them but ended an item only on a DEDENT, and a sibling marker does not dedent — so B
+# agreed, the union agreed, and the refusal was gone. GitHub closes the fence at the end of
+# the item and renders the middle line as an ordinary bullet, which `host-rendering.txt`
+# records. Every bullet spelling and both ways an item ends:
+SIB_REFUSAL='Review limit reached. Next included review available in 44 minutes.'
+for m in '-:a dash' '*:a star' '+:a plus' '1.:an ordered marker' '10.:a two-digit marker'; do
+  setup "$REFUSAL_HEAD"
+  add_comment coderabbitai "$(body_file "${m%%:*} \`\`\`" "${m%%:*} $SIB_REFUSAL" "${m%%:*} \`\`\`")"
+  expect "a refusal in sibling list items -> refusal (${m#*:})" 1
+done
+# …and the same shape reaching a CLEARANCE, which is what it cost: the refusal vanished, so
+# a contentless approval at that head had nothing to lose to.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '- ```' "- $SIB_REFUSAL" '- ```')"
+add_review coderabbitai APPROVED "$REFUSAL_HEAD" "$EMPTY_BODY"
+expect "…so a held approval no longer clears past it" 1
+# The list item also ends by DEDENT, which is the branch that was already there — asserted
+# so removing either one is red, not just the new one.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '- ```' '  quoted' "$SIB_REFUSAL")"
+expect "…and a dedent out of the item ends it too" 1
+# A blank line does not end a list, so the fence still dies at the next marker.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '- ```' '' "- $SIB_REFUSAL" '- ```')"
+expect "…and a blank line between the bullets changes nothing" 1
+# THE TWO OVER-CORRECTION CONTROLS, because a rule that ends every list item ends the ones
+# the host does not. A DEEPER marker opens a nested item and ends nothing, and a plain
+# continuation line is still inside the fence — the host quotes both, so this file reads
+# both as a discussion of a refusal rather than as one.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '- ```' "  - $SIB_REFUSAL" '  ```')"
+expect "a DEEPER marker nests rather than ending the item -> quoted" 4
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '- ```' "  $SIB_REFUSAL" '  ```')"
+expect "…and a continuation line is still inside the fence -> quoted" 4
+# …and the top-level fence this file has always read as a quotation is untouched.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '```' "$SIB_REFUSAL" '```')"
+expect "…and a plain fenced refusal is still a discussion of one" 4
+
+echo
+echo "== a raw-HTML block ends where its container does =="
+# The other block that outlives its container. `<details>` inside a blockquote opened a
+# raw-HTML block that ended only at a blank line, so it ran to the end of the body — and a
+# raw-HTML block is the one state in reading B that makes it KEEP a line reading A drops,
+# which is the direction that lets something clear.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '> <details>' '- ```' "- $SIB_REFUSAL" '- ```')"
+expect "an HTML block opened in a quote does not outlive the quote" 1
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '- <details>' '- ```' "- $SIB_REFUSAL" '- ```')"
+expect "…nor one opened in a list item outlive the item" 1
+# The control: with no container to leave, it still ends at a blank line and nowhere else.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '<details>' '```' "$SIB_REFUSAL" '```' '</details>')"
+expect "…and inside one that never ends, the fence is still literal HTML" 1
+
+echo
+echo "== a run of hex is not a commit unless the whole token is one =="
+# `refusal_concerns_head` demotes a refusal that names some OTHER commit, so that a PR
+# refused once can recover. It read any 7-40 character hex run as a commit — and the
+# reviewer stamps its own refusals with a UUID run id, whose fields are hex runs of 8 and
+# 12. The recorded fixture carries one. So any refusal with a run id read as being about
+# another commit and was dropped before it was weighed.
+UUID_LINE='**Run ID**: `f4981ca2-1bc7-4edf-9bb4-fd2f74e3693a`'
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file 'Currently processing new changes in this PR.' '' "$UUID_LINE")"
+add_review coderabbitai APPROVED "$REFUSAL_HEAD" "$EMPTY_BODY"
+expect "a UUID does not make a refusal be about another commit" 1
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file 'Review limit reached.' '' "$UUID_LINE")"
+add_review coderabbitai APPROVED "$REFUSAL_HEAD" "$EMPTY_BODY"
+expect "…for the declined tier as well as the placeholder" 1
+# THE CONTROL, and it is the property the demotion exists for: a refusal that really does
+# name another commit still loses to an approval at this head, so a PR can recover.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file 'Review limit reached.' "Reviewing $OTHER_SHA." )"
+add_review coderabbitai APPROVED "$REFUSAL_HEAD" "$EMPTY_BODY"
+expect "…while a refusal naming a REAL other commit still loses" 0
+# …and the same tokenisation is route C's pin, where losing a token costs a clearance and
+# never grants one. A head spelled as one field of a longer identifier is not the head.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "run-$CLEAN_HEAD-2")"
+expect "…and a head embedded in a longer identifier does not pin route C" 4
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "reviewed $CLEAN_HEAD.")"
+expect "…while the head as a token of its own still does" 0
+
+echo "== the block reader against the HOST'"'"'S OWN RENDERER =="
+# WHAT USED TO BE HERE, AND WHY IT WENT. A sweep over 400 generated bodies asserted that
+# every line the STRICT rendering keeps is a line the STRIPPED one kept. That property is
+# true BY CONSTRUCTION — strict is an intersection of two readings and stripped is their
+# union, and an intersection is a subset of a union whatever either reading gets wrong — so
+# the sweep could only ever confirm that the code still has a shape you can read in four
+# lines. It survived every destructive mutant applied to it, which is the definition of an
+# assertion that cannot fail, and it was green on the day a refusal spelled as three
+# sibling bullets was removed by BOTH readings and therefore by their union too.
+#
+# THAT IS THE LESSON THIS SECTION REPLACES IT WITH. The union removes a line only when
+# EVERY reading removes it; it is an AND-gate over the readings and it says nothing about
+# the host. A mistake the readings SHARE is inherited by the union, so no property relating
+# the readings to each other can bound the error — only the renderer being modelled can.
+# `tests/fixtures/reviewer/host-rendering.txt` is github.com'"'"'s own answer for each of these
+# bodies, recorded by the script checked in beside it, and these are the two directions
+# that cost something:
+#
+#   the host renders the refusal as READABLE PROSE  ->  the gate must refuse (rc 1)
+#   the host puts the marker'"'"'s characters ON THE PAGE  ->  the gate must not clear (rc 0)
+#
+# Neither is asserted in the other direction, and deliberately: a refusal the host puts in
+# a code block is read here as a DISCUSSION of one, and a rendering that is too cautious
+# costs a human glance. That asymmetry is also how this battery could pass vacuously — by
+# refusing everything, or by clearing nothing — so the three counters at the end assert
+# that it does not.
+ORACLE="$FIXTURES/host-rendering.txt"
+assert "the recorded host rendering exists" "$(yes_if test -s "$ORACLE")"
+mkdir -p "$TMP/oracle"
+awk -v dir="$TMP/oracle" '
+  /^@@@ end$/ { close(f); f = ""; next }
+  /^@@@ / { n++; f = sprintf("%s/%03d.body", dir, n); printf "" > f
+            printf "%s %s %s %s\n", $2, $3, $4, f; next }
+  f { print >> f }
+' "$ORACLE" > "$TMP/oracle/index"
+assert "…and it holds at least 100 recorded cases" \
+  "$([ "$(wc -l < "$TMP/oracle/index")" -ge 100 ] && echo 0 || echo 1)"
+assert "…in all three families" \
+  "$(yes_if bash -c 'for f in refusal marker content; do grep -q "^$f " "$1" || exit 1; done' _ "$TMP/oracle/index")"
+
+# The counters are the non-vacuity guard, asserted below rather than printed and forgotten.
+o_quoted_kept=0; o_marker_cleared=0; o_glyph_cleared=0
+while read -r family verdict name bodyfile; do
+  case "$family" in
+    refusal)
+      setup "$REFUSAL_HEAD"; add_comment coderabbitai "$bodyfile" ;;
+    marker)
+      setup "$REFUSAL_HEAD"; add_comment coderabbitai "$bodyfile" ;;
+    content)
+      # A review object at the head whose body is the case, with the recorded refusal
+      # beside it: the object clears only if its body is read as carrying a claim.
+      setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+      add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$bodyfile" ;;
+  esac
+  write_pr
+  rc=0; "$SCRIPT" 42 >/dev/null 2>&1 || rc=$?
+  case "$family/$verdict" in
+    refusal/prose)
+      assert "host renders it as prose, so the gate refuses: $name" \
+        "$([ "$rc" -eq 1 ] && echo 0 || echo 1)" ;;
+    refusal/quoted|refusal/hidden)
+      [ "$rc" -ne 1 ] && o_quoted_kept=$((o_quoted_kept + 1)) ;;
+    marker/visible)
+      assert "host shows the marker, so it cannot clear: $name" \
+        "$([ "$rc" -ne 0 ] && echo 0 || echo 1)" ;;
+    marker/hidden)
+      [ "$rc" -eq 0 ] && o_marker_cleared=$((o_marker_cleared + 1)) ;;
+    content/blank)
+      assert "host draws nothing, so it is not a claim: $name" \
+        "$([ "$rc" -eq 1 ] && echo 0 || echo 1)" ;;
+    content/glyph)
+      [ "$rc" -eq 0 ] && o_glyph_cleared=$((o_glyph_cleared + 1)) ;;
+  esac
+done < "$TMP/oracle/index"
+
+# THE THREE WAYS THE BATTERY ABOVE COULD BE GREEN AND WORTHLESS, each closed by a count.
+# Refuse every body and all the `prose` rows pass; clear nothing and all the `visible` and
+# `blank` rows pass. So the opposite answers have to appear too, on cases the host says
+# they belong on.
+assert "…and a refusal the host QUOTES is not read as one ($o_quoted_kept cases)" \
+  "$([ "$o_quoted_kept" -ge 5 ] && echo 0 || echo 1)"
+assert "…and the marker the host HIDES does clear ($o_marker_cleared cases)" \
+  "$([ "$o_marker_cleared" -ge 5 ] && echo 0 || echo 1)"
+assert "…and a body the host DRAWS is a claim ($o_glyph_cleared cases)" \
+  "$([ "$o_glyph_cleared" -ge 5 ] && echo 0 || echo 1)"
+
+# THE ONE STRUCTURAL FACT STILL WORTH ASSERTING, and it is asserted on a real case rather
+# than as a theorem: the shipped script really does hold TWO readings, and on the body that
+# defeated their union the wider one keeps the refusal while the narrower one drops it.
+# Sliced out of the script, so it cannot drift from what ships.
 RENDER="$TMP/render.sh"
 { printf '#!/usr/bin/env bash\nset -u\n'
   sed -n "/^FENCE_AWK='/,/^'\$/p" "$SCRIPT"
@@ -796,51 +949,13 @@ RENDER="$TMP/render.sh"
 chmod +x "$RENDER"
 assert "both renderings could be sliced out of the script" \
   "$(yes_if bash -c 'grep -q "function step(" "$1" && grep -q "render_body() {" "$1"' _ "$RENDER")"
+SIBLING="$(body_file '- ```' '- Review limit reached' '- ```')"
+"$RENDER" "$SIBLING" "$TMP/sib.stripped" "$TMP/sib.strict"
+assert "the wider reading keeps a refusal spelled as sibling bullets" \
+  "$(yes_if grep -Fq 'Review limit reached' "$TMP/sib.stripped")"
+assert "…and the narrower one does not, so nothing clears on it" \
+  "$(yes_if bash -c '! grep -Fq "Review limit reached" "$1"' _ "$TMP/sib.strict")"
 
-# A body from the alphabet the two renderings disagree over — and the alphabet is the test.
-# The previous one held fences of three sizes, an info string, a tilde fence, blockquote
-# prefixes and indents of spaces and tabs, which meant the sweep structurally COULD NOT
-# reach the containers the machine did not model: a raw-HTML block and a list item were not
-# in it, so the property it proved held by construction. Both are in it now, with an inline
-# code span and a fence opener behind a list marker.
-gen_body() { # <seed>
-  awk -v seed="$1" 'BEGIN {
-    srand(seed)
-    nt = split("```@~~~@````@```js@```a`b@``@text@rate limited by coderabbit.ai@" \
-               "<!-- walkthrough_start -->@<details>@<summary>s</summary>@</details>@" \
-               "<pre>@</pre>@<div>@`text@a `b` c@- ```@1. ```@- item@" \
-               "@x", t, "@")
-    np = split("@ @   @    @\t@   \t@> @> > @  > @>\t @- @  @1. ", p, "@")
-    for (i = 0; i < 3 + int(rand() * 10); i++)
-      printf "%s%s\n", p[1 + int(rand() * np)], t[1 + int(rand() * nt)]
-  }'
-}
-# contains <stripped> <strict> — is every line of <strict> a line of <stripped>, in order?
-contains() {
-  awk 'NR == FNR { a[++m] = $0; next }
-       { while (j < m && a[j + 1] != $0) j++
-         if (j >= m) exit 1
-         j++ }' "$1" "$2"
-}
-viol=0; bodies=0; differed=0
-for seed in $(seq 1 400); do
-  gen_body "$seed" > "$TMP/gen.md"
-  "$RENDER" "$TMP/gen.md" "$TMP/gen.stripped" "$TMP/gen.strict"
-  bodies=$((bodies + 1))
-  cmp -s "$TMP/gen.stripped" "$TMP/gen.strict" || differed=$((differed + 1))
-  contains "$TMP/gen.stripped" "$TMP/gen.strict" || {
-    viol=$((viol + 1)); [ "$viol" -le 2 ] && { echo "        containment violated by:"; \
-      sed 's/^/          | /' "$TMP/gen.md"; }
-  }
-done
-assert "strict is a SUBSET of stripped over $bodies generated bodies ($viol violations)" \
-  "$([ "$viol" -eq 0 ] && echo 0 || echo 1)"
-# …over bodies the two renderings really do answer differently on, or the sweep above is a
-# sweep over bodies neither of them touches and proves nothing.
-assert "…and the two renderings differed on $differed of them" \
-  "$([ "$differed" -gt 0 ] && echo 0 || echo 1)"
-
-echo
 echo "== prose no longer clears anything =="
 # ROUTE 3 OF THE FOURTH REVIEW ROUND. The evidence table used to hold PROSE, matched as an
 # unanchored substring: `i (have )?reviewed`, `(lgtm|looks good to me)`,
