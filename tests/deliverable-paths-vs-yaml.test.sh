@@ -154,6 +154,10 @@ CFG
 #
 # The absolute path planted in the hostile shapes is a sentinel, not a real one.
 ABS="/Users/SENTINEL-HOME/.ssh/id_rsa"
+# The same sentinel with only ORDINARY segments. `.ssh` is rejected by the rule that a
+# segment may not begin with `.`, so a colon vector spelled with it stays green when `:`
+# is re-admitted to the class — measured. This spelling isolates the `:` exclusion.
+ORD="/Users/SENTINEL-HOME/Desktop/keys.txt"
 SHAPES=(
   # --- the ordinary forms closeout actually writes ------------------------------
   "flow-one|agree||deliverable_paths: [ /projects/SLUG/deliverables/report.md ]"
@@ -163,6 +167,7 @@ SHAPES=(
   "bare-key|agree||deliverable_paths:"
   "nested|agree||deliverable_paths: [ /projects/SLUG/deliverables/site/index.html ]"
   "unicode|agree||deliverable_paths: [ /projects/SLUG/deliverables/Übersicht.md ]"
+  "unicode-hash|agree||deliverable_paths: [ /projects/SLUG/deliverables/roh-Ü#1.md, /projects/SLUG/deliverables/ok.md ]"
   "dotted|agree||deliverable_paths: [ /projects/SLUG/deliverables/v1.2+final.md ]"
   "block|agree||deliverable_paths:\n  - /projects/SLUG/deliverables/a.md\n  - /projects/SLUG/deliverables/b.md"
   # --- trailing comments, the form SCHEMA.md documents --------------------------
@@ -197,7 +202,8 @@ SHAPES=(
   "mixed-quoting|gap||deliverable_paths: [ \"/projects/SLUG/deliverables/a.md\", /projects/SLUG/deliverables/b.md ]"
   # --- values that must never render, comment or no comment ---------------------
   "two-paths|agree||deliverable_paths: [ /projects/SLUG/deliverables/report.md $ABS ]"
-  "colon-glued|agree||deliverable_paths: [ \"/projects/SLUG/deliverables/deck.md:$ABS\" ]"
+  "colon-glued|agree||deliverable_paths: [ \"/projects/SLUG/deliverables/deck.md:$ORD\" ]"
+  "colon-dotfile|agree||deliverable_paths: [ \"/projects/SLUG/deliverables/deck.md:$ABS\" ]"
   "traversal|agree||deliverable_paths: [ /projects/SLUG/deliverables/../../../etc/passwd ]"
   "wrong-slug|agree||deliverable_paths: [ /projects/somebody-else/deliverables/a.md ]"
   "absolute|agree||deliverable_paths: [ $ABS ]"
@@ -222,7 +228,7 @@ SHAPES=(
 # AGREE_FLOOR is what stops a NEW gap hiding among them. Fixing one of these RAISES the
 # count and stays green, deliberately.
 GAPS=" hash-on-bracket mixed-quoting "
-AGREE_FLOOR=40
+AGREE_FLOOR=42
 
 slug_of() { printf '%s' "$1"; }
 

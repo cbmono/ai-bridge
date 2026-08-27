@@ -113,7 +113,14 @@ SECRET_PAGE_PATH="/Users/SECRET-PUBLISHER-HOME/Desktop/report.md"
 # because it fails for its own reason — the segment class, not the comment cut — and one
 # shared needle would make "the cut is right" and "the shape check is right" impossible
 # to tell apart when either breaks.
-SECRET_COLON_PATH="/Users/SECRET-PUBLISHER-HOME/.ssh/id_rsa"
+#
+# EVERY SEGMENT OF IT IS ORDINARY ON PURPOSE. The obvious spelling of this vector ends in
+# `/.ssh/id_rsa`, and that one is rejected by a DIFFERENT rule — a segment may not begin
+# with `.` — so a fixture using it stays green when `:` is put back into the class, which
+# is the mutation it exists to catch. Measured: with `.ssh` in the sentinel, re-admitting
+# `:` passed all three harnesses. Spelled with only word-leading segments after the
+# colon, the `:` exclusion is the only thing dropping it.
+SECRET_COLON_PATH="/Users/SECRET-PUBLISHER-HOME/Desktop/keys.txt"
 # An HTML-metacharacter title, and the two forms it may appear in on the page.
 HOSTILE_TITLE='<script>alert(1)</script> & <b>bold</b>'
 HOSTILE_ESCAPED='&lt;script&gt;alert(1)&lt;/script&gt;'
@@ -130,29 +137,37 @@ echo "== shell portability of the shipped scripts =="
 # escape has not come back. It is the only form of this test that can actually fail.
 # Comment lines are stripped first: the fix's own comment NAMES the escape it removed,
 # and that prose is the record of why. Only executable lines are checked.
-# AND THIS CHECK WAS ITSELF VACUOUS UNTIL 2026-08-27 — the pipeline was the bug. Under
-# this file's `set -o pipefail`, `grep -q` exits at the FIRST match and SIGPIPEs the sed
-# still feeding it, so the pipeline's status is sed's 141, not grep's 0: the `&&` never
-# fires and a file that DOES carry the escape is reported clean. Measured, with `\s` on
-# line 808 of a 1,260-line build-board.sh: PASS. The sed output is captured first so
-# exactly one command's exit status decides the answer, and the planted-escape assertion
-# below is what stops the vacuous form coming back unnoticed.
+# AND THIS CHECK WAS ITSELF VACUOUS UNTIL 2026-08-27 — the `grep -q` was the bug. Under
+# this file's `set -o pipefail`, `grep -q` exits at the FIRST match and SIGPIPEs whatever
+# is still feeding it, so the pipeline reports the FEEDER's 141 rather than grep's 0: the
+# `&&` never fires and a file that DOES carry the escape is reported clean. Measured,
+# with `\s` on line 808 of a 1,260-line build-board.sh: PASS. It is not fixed by moving
+# the sed into a variable — a `printf … | grep -q` behind it SIGPIPEs exactly the same
+# way, which cost a second attempt here. `grep -c` is the fix, because it consumes ALL of
+# its input and so never signals the writer; the planted-escape assertion below is what
+# stops either vacuous form coming back unnoticed.
 no_gnu_escape() { # <file> <escape letter>
-  local body; body="$(sed 's/^[[:space:]]*#.*$//' "$1")"
-  printf '%s\n' "$body" | grep -q "\\\\$2" && return 1 || return 0
+  local body hits
+  body="$(sed 's/^[[:space:]]*#.*$//' "$1")"
+  hits="$(printf '%s\n' "$body" | grep -c "\\\\$2" || true)"
+  [[ "$hits" == 0 ]]
 }
 for f in "$WRITER" "$BOARD"; do
   assert "no GNU-only \\b escape in $(basename "$f")" "$(yes_if no_gnu_escape "$f" b)"
   assert "no GNU-only \\s escape in $(basename "$f")" "$(yes_if no_gnu_escape "$f" s)"
 done
-# The check, checked. Both directions, on a file long enough to reproduce the SIGPIPE:
-# a planted escape 900 lines in must be FOUND, and an escape that appears only in a
-# COMMENT must still not be — the comment strip is the other half of what this means.
+# The check, checked, in both directions — and the FILE SIZE is load-bearing, not
+# decoration. The vacuous form fails only once the pipe FILLS: `grep -q` exits at the
+# first match and SIGPIPEs the sed behind it, and with a small file sed has already
+# finished writing, so a short fixture reproduces nothing and the mutant survives
+# (measured: reverting the fix passed a 1,300-line plant). The escape therefore sits at
+# the TOP with tens of thousands of lines behind it, which is the real shape — the
+# original defect had `\s` on line 808 of a 1,260-line script whose lines are long.
 PLANT="$TMP/plant-escape.sh"
-{ seq 900 | sed 's/.*/x=1/'; printf 'y=%s\n' '"[^/\s#]+"'; seq 400 | sed 's/.*/z=2/'; } > "$PLANT"
+{ printf 'y=%s\n' '"[^/\s#]+"'; seq 40000 | sed 's/.*/x=1/'; } > "$PLANT"
 PLANT_OK="$TMP/plant-comment-only.sh"
-{ seq 900 | sed 's/.*/x=1/'; printf '%s\n' '# this comment names the \s escape it removed'; } > "$PLANT_OK"
-assert "…and the check itself sees a planted \\s 900 lines into a file" \
+{ printf '%s\n' '# this comment names the \s escape it removed'; seq 40000 | sed 's/.*/x=1/'; } > "$PLANT_OK"
+assert "…and the check itself sees a planted \\s once the pipe fills" \
   "$( no_gnu_escape "$PLANT" s && echo 1 || echo 0 )"
 assert "…while an \\s that appears only in a comment is still not a hit" \
   "$( no_gnu_escape "$PLANT_OK" s && echo 0 || echo 1 )"
@@ -516,6 +531,13 @@ PRJ
 # line with it and printing a parser error into the run's output. A `deliverables/` full
 # of German or Japanese filenames is not exotic; losing the entire key over one of them
 # is the kind of failure nobody attributes to a comment strip.
+#
+# The MIDDLE entry earns its place separately: it puts a multi-byte character immediately
+# before a `#`, which is the scan's OTHER per-character test — the one deciding whether a
+# `#` opens a comment. Without it that branch is UNPINNED, measured: a mutant reverting
+# only that branch passes all three harnesses. `roh-Ü#1.md` is not a comment (YAML wants
+# whitespace before the `#`), so it survives to the snapshot and is dropped at render on
+# its own merits, leaving the two clean siblings to show the key came through whole.
 mkdir -p "$ALPHA/projects/umlaut"
 cat > "$ALPHA/projects/umlaut/project.md" <<'PRJ'
 ---
@@ -525,7 +547,7 @@ description: one multi-byte character must not cost the key its entries
 kind: research
 status: done
 retain: true
-deliverable_paths: [ /projects/umlaut/deliverables/Übersicht.md, /projects/umlaut/deliverables/plain.md ]
+deliverable_paths: [ /projects/umlaut/deliverables/Übersicht.md, /projects/umlaut/deliverables/roh-Ü#1.md, /projects/umlaut/deliverables/plain.md ]
 ---
 PRJ
 
@@ -899,6 +921,7 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 p=[p for p in d["projects"] if p["slug"]=="umlaut"][0]
 sys.exit(0 if p["deliverable_paths"]==["/projects/umlaut/deliverables/\u00dcbersicht.md",
+                                       "/projects/umlaut/deliverables/roh-\u00dc#1.md",
                                        "/projects/umlaut/deliverables/plain.md"] else 1)' "$SNAP")"
 # The same defect, reached the other way round — through the VALUE rather than the
 # comment. The `finished` fixture's line opens a quote and never closes it, so a strip
