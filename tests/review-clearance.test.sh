@@ -862,13 +862,15 @@ expect "…while a comment really does run to its own terminator" 1
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
 add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '[][r]' '' '[r]: /x')"
 expect "…and a reference link with an empty label draws nothing" 1
-# A line can be BOTH a reference definition and the opener of a multi-line construct, so
-# its text is discarded at the end of the line rather than by skipping the line: skipping
-# leaves the construct open forever and reads everything after it as text.
+# A reference definition is SKIPPED, scanner state and all, and reasoning says that is a
+# bug: the line could also open a multi-line construct, which would then never close. The
+# host says otherwise — given `   [a]: /b<!--` the destination swallows the opener and the
+# following lines are VISIBLE — so skipping is what the host does, and preserving the state
+# would read a body the host draws as a blank page. Recorded as `c-link-ref-def-swallows-open`.
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
 add_review coderabbitai COMMENTED "$REFUSAL_HEAD" \
-  "$(body_file '[a]: /b <!--' 'hidden' '-->' 'reviewed')"
-expect "…and dropping a reference definition does not lose the scanner state" 0
+  "$(body_file '   [a]: /b<!--' 'lgtm' '-->')"
+expect "…and the destination swallows an opener, as it does on the host" 0
 
 echo "== a run of hex is not a commit unless the whole token is one =="
 # `refusal_concerns_head` demotes a refusal that names some OTHER commit, so that a PR

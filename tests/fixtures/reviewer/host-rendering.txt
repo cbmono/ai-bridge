@@ -30,7 +30,7 @@
 #           glyph    (content) the page shows a character. May still be read as blank
 #                    (the safe direction), so only the COUNT that clear is asserted.
 #
-# Recorded 2026-08-27T11:19Z against github.com/api/markdown
+# Recorded 2026-08-27T11:35Z against github.com/api/markdown
 @@@ refusal prose plain-text
 Review limit reached
 @@@ end
@@ -787,6 +787,11 @@ hidden
 hidden
 -->
 reviewed
+@@@ end
+@@@ content glyph c-link-ref-def-swallows-open
+   [a]: /b<!--
+lgtm
+-->
 @@@ end
 @@@ content blank c-empty-link
 [](url)

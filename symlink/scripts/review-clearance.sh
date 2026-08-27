@@ -986,11 +986,15 @@ renders_content() { # 0 when something renders, 1 when the page stays blank
     }
     {
       line = $0
-      # A LINK REFERENCE DEFINITION is the whole line and none of it reaches the page. Its
-      # text is dropped at the END of the line rather than by skipping to the next one: a
-      # line can both be a reference definition and open a multi-line construct, and
-      # skipping it would leave that construct open forever and read the rest as text.
-      isref = (!inhtml && line ~ /^[[:space:]]{0,3}\[[^]]*\]:/)
+      # A LINK REFERENCE DEFINITION is the whole line and none of it reaches the page, so
+      # the line is SKIPPED — scanner state and all. That looks wrong (a line could both be
+      # a definition and open a multi-line construct, and skipping it would leave the
+      # construct open forever), and the host says it is right: given `   [a]: /b<!--` the
+      # destination swallows the opener and github.com answers with the FOLLOWING lines
+      # visible, no comment ever opened. Where the opener is instead separated from the
+      # destination the line is not a definition at all and the host shows the whole of it,
+      # which this drops — a false blank, which is the safe direction. Both are recorded.
+      if (!inhtml && line ~ /^[[:space:]]{0,3}\[[^]]*\]:/) next
       out = ""
       while (length(line) > 0) {
         if (inhtml != "") {
@@ -1017,7 +1021,7 @@ renders_content() { # 0 when something renders, 1 when the page stays blank
           }
         }
       }
-      if (!isref) text = text "\n" out
+      text = text "\n" out
     }
     END {
       # The DESTINATION of a link is an instruction; its label is the text. An IMAGE is

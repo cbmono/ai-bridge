@@ -130,6 +130,7 @@ c-link-ref-def-degenerate   |[//]: # ()
 c-link-ref-def-with-text    |[//]: # (a markdown comment)
 c-link-ref-def-plain        |[x]: /y
 c-link-ref-def-opens-html   |[a]: /b <!--\nhidden\n-->\nreviewed
+c-link-ref-def-swallows-open|   [a]: /b<!--\nlgtm\n-->
 c-empty-link                |[](url)
 c-tag-with-gt-in-attribute  |<a href="1>2"></a>
 c-tag-with-gt-in-title      |<div title="a>b"></div>

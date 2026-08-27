@@ -491,9 +491,9 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # back and more.
 #
 #   8,065 / 4,233   21 files   what the seventh round pinned
-#   8,202 / 4,266   21 files   +137 total, +33 code — this round
+#   8,206 / 4,266   21 files   +141 total, +33 code — this round
 #
-# All of it in review-clearance.sh (1,280 -> 1,417; code 584 -> 617). required-checks.sh is
+# All of it in review-clearance.sh (1,280 -> 1,421; code 584 -> 617). required-checks.sh is
 # untouched at 349, for the fifth round running.
 #
 # WHAT THE 34 CODE LINES BUY, and the honest framing is that most of them buy ONE deletion
@@ -536,7 +536,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # (print-board.sh, watch-board.sh, write-snapshot.sh) remain untouched, and they are where
 # a real reduction has to come from — not from this file, which is now the third thing
 # every round adds to.
-CEILING_TOTAL=8202
+CEILING_TOTAL=8206
 CEILING_CODE=4266
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
@@ -619,7 +619,7 @@ echo "== the constant is a measurement, not a round number =="
 # line to get under a guard" is the behaviour this file exists to make visible. What was
 # removed was a sentence duplicated verbatim two paragraphs above it in
 # `review-clearance.sh`, so the trim stands on its own; the collision is why it was noticed
-# and not why it was made. Three later lines from self-review moved the total off it anyway.
+# and not why it was made. Later self-review lines moved the total off it anyway.
 assert "the total ceiling is not a round hundred"    "$([[ $((CEILING_TOTAL % 100)) -ne 0 ]] && echo 0 || echo 1)"
 assert "nor is the code ceiling"                     "$([[ $((CEILING_CODE % 100)) -ne 0 ]] && echo 0 || echo 1)"
 
