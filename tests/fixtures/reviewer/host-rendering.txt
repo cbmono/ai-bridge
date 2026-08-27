@@ -30,7 +30,7 @@
 #           glyph    (content) the page shows a character. May still be read as blank
 #                    (the safe direction), so only the COUNT that clear is asserted.
 #
-# Recorded 2026-08-27T09:27Z against github.com/api/markdown
+# Recorded 2026-08-27T10:06Z against github.com/api/markdown
 @@@ refusal prose plain-text
 Review limit reached
 @@@ end
@@ -595,6 +595,34 @@ Review limit reached
 - <!-- walkthrough_start -->
 - ```
 @@@ end
+@@@ refusal quoted list-blank-inside-item
+- ```
+
+  Review limit reached
+  ```
+@@@ end
+@@@ marker visible list-blank-inside-item
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+- ```
+
+  <!-- walkthrough_start -->
+  ```
+@@@ end
+@@@ refusal quoted html-in-list-then-fence
+- <details>
+- ```
+  Review limit reached
+  ```
+@@@ end
+@@@ marker visible html-in-list-then-fence
+88c106a8dd2b9ae14e001918022d4909e5357460
+
+- <details>
+- ```
+  <!-- walkthrough_start -->
+  ```
+@@@ end
 @@@ refusal prose fence-in-quote-then-dedent
 > ```
 > code
@@ -768,6 +796,17 @@ hidden
 @@@ end
 @@@ content blank c-cdata
 <![CDATA[x]]>
+@@@ end
+@@@ content glyph c-cdata-with-gt
+<![CDATA[a > b]]>
+@@@ end
+@@@ content blank c-comment-with-gt
+<!-- a > b -->
+@@@ end
+@@@ content blank c-reference-link-empty
+[][r]
+
+[r]: /x
 @@@ end
 @@@ content blank c-processing-instruction
 <?php ?>

@@ -820,6 +820,49 @@ add_comment coderabbitai "$(body_file '<details>' '```' "$SIB_REFUSAL" '```' '</
 expect "…and inside one that never ends, the fence is still literal HTML" 1
 
 echo
+echo "== the over-correction guards: a container the host does NOT end =="
+# EVERY RULE ADDED THIS ROUND ENDS SOMETHING EARLIER, and a rule that ends a container the
+# host keeps open turns a quotation into a refusal. That is not a merge, so the battery
+# above does not assert on it — which is exactly why these cases are here by name. Each
+# body is one the host puts in a code block (recorded in `host-rendering.txt` as `quoted`),
+# so the answer must be 4, "an artifact carrying no evidence", and not 1.
+#
+# THEY ARE ALSO WHAT READING B'"'"'S TIGHTENING RULES BUY, and the honest accounting is worth
+# stating: reading B keeping a line only reaches the CLEARING side when reading A keeps it
+# too, and A already reads every fence these rules reveal. So bounding a raw-HTML block
+# closes no route — it removes false refusals, and these assert that it does.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '- ```' '' "  $SIB_REFUSAL" '  ```')"
+expect "a blank line does not end a list item -> still quoted" 4
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '> <details>' '```' "$SIB_REFUSAL" '```')"
+expect "…leaving the quote ends its HTML block, so the fence is a fence" 4
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '- <details>' '- ```' "  $SIB_REFUSAL" '  ```')"
+expect "…and leaving the list item ends its HTML block too" 4
+# The control for all three: the same HTML block with nothing to leave still swallows the
+# fence, so the words really are on the page and this is a refusal.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$(body_file '<details>' '```' "$SIB_REFUSAL" '```')"
+expect "…while an HTML block nobody leaves still makes the fence literal" 1
+
+echo
+echo "== what RENDERS is the host'"'"'s answer, including where it surprises =="
+# Three constructs where the rule "remove the markup, require a letter" needs the host to
+# say where markup ends, and got a different answer than the specification would give.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '<https://example.com/a>')"
+expect "an autolink is a claim: the page shows the URL" 0
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '<![CDATA[a > b]]>')"
+expect "…and so is what the host leaves after a CDATA it does not honour" 0
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '<!-- a > b -->')"
+expect "…while a comment really does run to its own terminator" 1
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '[][r]' '' '[r]: /x')"
+expect "…and a reference link with an empty label draws nothing" 1
+
 echo "== a run of hex is not a commit unless the whole token is one =="
 # `refusal_concerns_head` demotes a refusal that names some OTHER commit, so that a PR
 # refused once can recover. It read any 7-40 character hex run as a commit — and the

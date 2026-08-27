@@ -84,6 +84,8 @@ span-uneven-runs            |``a`b\n%P%\nc``
 span-open-then-probe        |`open\n%P%
 quote-indented-code         |>     %P%
 list-loose-blank-then-item  |- ```\n\n- %P%\n- ```
+list-blank-inside-item      |- ```\n\n  %P%\n  ```
+html-in-list-then-fence     |- <details>\n- ```\n  %P%\n  ```
 fence-in-quote-then-dedent  |> ```\n> code\n\n%P%
 setext-then-fence           |title\n===\n```\n%P%\n```
 indented-code               |    %P%
@@ -132,6 +134,9 @@ c-tag-with-gt-in-attribute  |<a href="1>2"></a>
 c-tag-with-gt-in-title      |<div title="a>b"></div>
 c-doctype                   |<!DOCTYPE html>
 c-cdata                     |<![CDATA[x]]>
+c-cdata-with-gt             |<![CDATA[a > b]]>
+c-comment-with-gt           |<!-- a > b -->
+c-reference-link-empty      |[][r]\n\n[r]: /x
 c-processing-instruction    |<?php ?>
 c-html-declaration          |<!ENTITY x "y">
 c-image-no-alt              |![](/x.png)

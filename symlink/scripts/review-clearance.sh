@@ -819,6 +819,10 @@ function fence_of(   s, c, k, n) {
 # open across the second, while the host closes it at the end of that item and puts the
 # refusal on the page as an ordinary bullet. A DEEPER marker (L_LIST > base) opens a nested
 # item inside this one and ends nothing.
+# A fence opened at TOP LEVEL records base 0 and this answers 0 for every line, which is
+# why there is no guard for it: no list marker has a content column of 0, and no line
+# indents to less than column 0. A guard nothing can make fire is a branch no test can
+# reach, so it is arithmetic rather than a condition.
 function ended_item(base) {
   if (L_LIST >= 0) return (L_LIST <= base)
   return (!L_BLANK && L_BASE + L_INDENT < base)
@@ -831,7 +835,7 @@ function step(m, containers,   f) {
   f = fence_of()
   if (BC[m] != "") {
     if (L_DEPTH < BD[m]) BC[m] = ""
-    else if (containers && BI[m] > 0 && ended_item(BI[m])) BC[m] = ""
+    else if (containers && ended_item(BI[m])) BC[m] = ""
     else if (f && F_CHAR == BC[m] && F_LEN >= BL[m] && L_DEPTH == BD[m] \
              && F_INFO ~ /^[[:space:]]*$/) { BC[m] = ""; return 1 }
     else return 2
@@ -847,8 +851,15 @@ function step(m, containers,   f) {
     # reopened. Wrong in either direction, the other reading covers it.
     # …and it ends the way every other container-bound block does: at a blank line, on
     # leaving the blockquote it opened in, or at the end of the list item that held it.
-    # Ending only at a blank line left it open to the end of the body, and an HTML block
-    # is the one state in this reading that makes it KEEP a line the other reading drops.
+    # Ending only at a blank line left it open to the end of the body.
+    #
+    # WHAT BOUNDING IT BUYS, stated exactly rather than generously, because a header claim
+    # the code does not keep is this files recurring defect. It buys ACCURACY, not a closed
+    # clearing route: reading B keeping a line only matters to the CLEARING side if reading
+    # A keeps it too, and A already reads every fence this rule reveals. What an unbounded
+    # HTML block cost was FALSE REFUSALS — text the host quotes, read here as text a human
+    # can see. The tests for these branches are therefore over-correction guards, and they
+    # assert exit 4 where the host says the words are in a code block.
     if (HB && (L_BLANK || L_DEPTH < HBD || (HBI > 0 && ended_item(HBI)))) HB = 0
     if (HB) return 0
     if (L_INDENT <= 3 && L_REST ~ /^<\/?[A-Za-z]/) { HB = 1; HBD = L_DEPTH; HBI = LI; return 0 }
@@ -956,8 +967,12 @@ renders_content() { # 0 when something renders, 1 when the page stays blank
     # it to skip first. Returns "" when the < is just a less-than sign.
     function opens(line,   name) {
       if (substr(line, 1, 4) == "<!--")      { SKIP = 4; return "-->" }
-      if (substr(line, 1, 9) == "<![CDATA[") { SKIP = 9; return "]]>" }
       if (substr(line, 1, 2) == "<?")        { SKIP = 2; return "?>" }
+      # CommonMark lists a CDATA SECTION as its own production, ending at ]]>. This does
+      # not, because the host does not: asked for `<![CDATA[a > b]]>` github.com answers
+      # ` b]]&gt;`, having ended the construct at the first > exactly as it ends a
+      # declaration. Recorded as `c-cdata-with-gt`. Following the specification here would
+      # remove text the page shows — safe, but wrong, and there is no reason to be wrong.
       if (substr(line, 1, 2) == "<!")        { SKIP = 2; return ">" }
       name = line; sub(/^<\//, "<", name)
       # A tag name is a letter then letters, digits and hyphens, and what follows it must
