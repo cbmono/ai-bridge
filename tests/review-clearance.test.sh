@@ -287,7 +287,7 @@ echo "== …and 'says nothing' means the PAGE is blank, not that the bytes are =
 # deleted, and it said nothing about the constructs that walked through the fix after it —
 # `[x]: /y`, `[](url)`, `<!DOCTYPE html>`, `<![CDATA[x]]>`, `<?php ?>`, `<a href="1>2">`.
 # All 22 rows and all six of those are now in `host-rendering.txt` as the `content` family,
-# where the verdict is GITHUB'"'"'S, not this repository'"'"'s opinion of what renders — see the
+# where the verdict is GITHUB'S, not this repository's opinion of what renders — see the
 # host-renderer section below. What stays here is the shape of the route itself, driven
 # end to end, so the reason those cases matter is visible where the behaviour is.
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
@@ -827,7 +827,7 @@ echo "== the over-correction guards: a container the host does NOT end =="
 # body is one the host puts in a code block (recorded in `host-rendering.txt` as `quoted`),
 # so the answer must be 4, "an artifact carrying no evidence", and not 1.
 #
-# THEY ARE ALSO WHAT READING B'"'"'S TIGHTENING RULES BUY, and the honest accounting is worth
+# THEY ARE ALSO WHAT READING B'S TIGHTENING RULES BUY, and the honest accounting is worth
 # stating: reading B keeping a line only reaches the CLEARING side when reading A keeps it
 # too, and A already reads every fence these rules reveal. So bounding a raw-HTML block
 # closes no route — it removes false refusals, and these assert that it does.
@@ -847,7 +847,7 @@ add_comment coderabbitai "$(body_file '<details>' '```' "$SIB_REFUSAL" '```')"
 expect "…while an HTML block nobody leaves still makes the fence literal" 1
 
 echo
-echo "== what RENDERS is the host'"'"'s answer, including where it surprises =="
+echo "== what RENDERS is the host's answer, including where it surprises =="
 # Three constructs where the rule "remove the markup, require a letter" needs the host to
 # say where markup ends, and got a different answer than the specification would give.
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
@@ -893,7 +893,7 @@ setup "$CLEAN_HEAD"
 add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "reviewed $CLEAN_HEAD.")"
 expect "…while the head as a token of its own still does" 0
 
-echo "== the block reader against the HOST'"'"'S OWN RENDERER =="
+echo "== the block reader against the HOST'S OWN RENDERER =="
 # WHAT USED TO BE HERE, AND WHY IT WENT. A sweep over 400 generated bodies asserted that
 # every line the STRICT rendering keeps is a line the STRIPPED one kept. That property is
 # true BY CONSTRUCTION — strict is an intersection of two readings and stripped is their
@@ -907,12 +907,12 @@ echo "== the block reader against the HOST'"'"'S OWN RENDERER =="
 # EVERY reading removes it; it is an AND-gate over the readings and it says nothing about
 # the host. A mistake the readings SHARE is inherited by the union, so no property relating
 # the readings to each other can bound the error — only the renderer being modelled can.
-# `tests/fixtures/reviewer/host-rendering.txt` is github.com'"'"'s own answer for each of these
+# `tests/fixtures/reviewer/host-rendering.txt` is github.com's own answer for each of these
 # bodies, recorded by the script checked in beside it, and these are the two directions
 # that cost something:
 #
 #   the host renders the refusal as READABLE PROSE  ->  the gate must refuse (rc 1)
-#   the host puts the marker'"'"'s characters ON THE PAGE  ->  the gate must not clear (rc 0)
+#   the host puts the marker's characters ON THE PAGE  ->  the gate must not clear (rc 0)
 #
 # Neither is asserted in the other direction, and deliberately: a refusal the host puts in
 # a code block is read here as a DISCUSSION of one, and a rendering that is too cautious
