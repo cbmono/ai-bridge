@@ -31,7 +31,15 @@
 # ok() compares actual to expected, per this directory's convention.
 set -uo pipefail
 
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# The repo root is handed to `cd` as an ALREADY-RESOLVED variable, never as a nested
+# substitution: this path is named in the EXIT trap below, and tests/harness-temp-safety.sh
+# refuses `cd "$(...)"` for any trap-referenced path (its NESTED-CD class). Splitting the
+# assignment is the shape that file asks for -- "the canonicalising cd must be handed a
+# variable already known good" -- not a way around it.
+REPO_REL="$(dirname "$0")/.."
+[ -d "$REPO_REL" ] || { echo "worktree-suite-parity.test: cannot locate repo root from $0" >&2; exit 2; }
+REPO="$(cd -- "$REPO_REL" && pwd)"
+[ -n "$REPO" ] && [ -d "$REPO" ] || { echo "worktree-suite-parity.test: repo root did not resolve" >&2; exit 2; }
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/worktree-suite-parity.XXXXXX")" || {
   echo "worktree-suite-parity.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 WT="$TMP/wt"
