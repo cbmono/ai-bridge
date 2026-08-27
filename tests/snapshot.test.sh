@@ -101,6 +101,13 @@ OUT_OF_BUNDLE="/tmp/SECRET-OUT-OF-BUNDLE-ROOT"
 # edit — see the `finished` fixture). It reaches the snapshot, and from there a copy
 # button on the published board, only if that comment is swallowed into the value.
 SECRET_ABS_PATH="/Users/SECRET-PUBLISHER-HOME/private/notes.md"
+# A second one, for the vector that carries no comment at all: a `deliverable_paths:`
+# value holding TWO paths, the second absolute (the `plain` fixture). It is not a parse
+# defect — the writer forwards this key verbatim and the value really is what it says —
+# so unlike the one above it DOES reach SNAPSHOT.json, and the assertion that matters is
+# about the published PAGE. Kept separate for exactly that reason: sharing one sentinel
+# would make "never in the snapshot" and "never on the page" impossible to state apart.
+SECRET_PAGE_PATH="/Users/SECRET-PUBLISHER-HOME/Desktop/report.md"
 # An HTML-metacharacter title, and the two forms it may appear in on the page.
 HOSTILE_TITLE='<script>alert(1)</script> & <b>bold</b>'
 HOSTILE_ESCAPED='&lt;script&gt;alert(1)&lt;/script&gt;'
@@ -328,6 +335,52 @@ deliverable_paths:
 ---
 PRJ
 
+# THE VECTOR THAT NEEDS NO COMMENT, no quote and no bracket — the one four review rounds
+# of comment-stripping could not have caught, because there is nothing to strip. Two
+# paths in one value: the first is this project's own, the second is off the publisher's
+# disk, and the whole string carries the correct prefix, no `..` and no `#`. Rendered as
+# one value it is a copy button labelled `report.md`, which looks exactly right.
+#
+# It reaches SNAPSHOT.json verbatim and that is BY DESIGN — this file forwards the key
+# and does not check its shape (see write-snapshot.sh's header), the snapshot is
+# gitignored and never published as-is. Hence a SECOND sentinel: the assertions below
+# say this one must never reach the PAGE, which is the artifact that leaves the machine.
+mkdir -p "$ALPHA/projects/plain"
+cat > "$ALPHA/projects/plain/project.md" <<PRJ
+---
+type: Project
+title: Two paths, one value
+description: no comment, no quote, no bracket — and still not one path
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/plain/deliverables/report.md $SECRET_PAGE_PATH ]
+---
+PRJ
+
+# THE OTHER DIRECTION, and the regression this fixture exists to hold: a cut must never
+# take a CLEAN entry with it. The first `]` here sits inside a filename, not at the end
+# of the list, so a strip that fires on the first `]`-then-`#` it sees swallows the rest
+# of the line — including `b.md`, a perfectly good deliverable a human stamped, which
+# then disappears off the panel with nothing to show it ever existed. Silently losing an
+# entry is a defect even when nothing leaks.
+#
+# What must happen instead: `b.md` renders, and the fragment before it — which contains
+# whitespace, so it is not a whole path — is dropped visibly, never truncated into the
+# fabricated `.../a` that a first-bracket cut produces.
+mkdir -p "$ALPHA/projects/sibling"
+cat > "$ALPHA/projects/sibling/project.md" <<'PRJ'
+---
+type: Project
+title: A bracket inside a filename
+description: the list's own terminator is at the END of the line, not the first ]
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/sibling/deliverables/a] #1.md, /projects/sibling/deliverables/b.md ]
+---
+PRJ
+
 # Every task terminal ⇒ the board shows a close PROPOSAL, never an action.
 #
 # Its `deliverable_paths:` line is the HAND-EDITED shape: someone opened a quote and
@@ -426,7 +479,7 @@ echo "== a real snapshot, once the switch is on =="
 touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
-assert "…with the project count"           "$(has '6 project(s)' "$RUN_OUT")"
+assert "…with the project count"           "$(has '8 project(s)' "$RUN_OUT")"
 # 7, not 8: the done project's task is never counted, because it is never read.
 assert "…and the task count"                "$(has '7 task(s)' "$RUN_OUT")"
 assert "…and the awaiting count (6 verbs across 4 live projects)" "$(has '6 awaiting' "$RUN_OUT")"
@@ -638,6 +691,16 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 p=[p for p in d["projects"] if p["slug"]=="blockform"][0]
 sys.exit(0 if p["deliverable_paths"]==["/projects/blockform/deliverables/notes.md"] else 1)' "$SNAP")"
+# The `sibling` fixture: a `]` inside a filename, with the list's real terminator at the
+# END of the line. A cut anchored on the first `]`-then-`#` reads that filename's bracket
+# as the end of the list and takes `b.md` with it. Assert the CLEAN entry survives —
+# that is the property, not "the comment was handled".
+assert "a ] inside a filename never costs the clean entry beside it" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="sibling"][0]
+sys.exit(0 if "/projects/sibling/deliverables/b.md" in p["deliverable_paths"] else 1)' "$SNAP")"
 # The same defect, reached the other way round — through the VALUE rather than the
 # comment. The `finished` fixture's line opens a quote and never closes it, so a strip
 # that decided where the list ended by tracking quote state found no unquoted `]`, kept
@@ -789,17 +852,36 @@ assert "the comma-split fragment is never a copy button" \
   "$(fhasnt 'data-copy="/projects/handedited/deliverables/see' "$HTML")"
 assert "…while the real path on that same line still is"       \
   "$(fhas 'data-copy="/projects/handedited/deliverables/report.md"' "$HTML")"
-# EXACTLY four deliverable buttons on this page — one per fixture that stamps a path
-# (retained, finished, handedited, blockform) — both failure directions are silent and
-# they sit either side of the same fix. Too FEW is the documented comment form costing
-# a panel: a strip anchored on the line's last bracket leaves SCHEMA.md's own comment
-# in the value, the `#` guard drops the only entry, and the retained project renders
-# with no deliverables panel at all — green on "nothing leaked", green on "no error",
-# feature gone. Too MANY is a comment fragment rendering as a path. A `fhas` on any one
-# button sees neither.
+# Criterion 4 against the shape with NO comment in it — the `plain` fixture, two paths in
+# one value. Nothing upstream can strip anything here; the only thing between it and a
+# copy button is the render-time rule that a deliverable path contains no whitespace. It
+# does reach the snapshot (see the sentinel's own note), so this is the assertion that
+# says the page and the snapshot are not the same promise.
+assert "two paths in one value reach the snapshot…"            "$(fhas "$SECRET_PAGE_PATH" "$SNAP")"
+assert "…and neither of them reaches the page"                 "$(fhasnt "$SECRET_PAGE_PATH" "$HTML")"
+assert "…the whole value being dropped, not trimmed to its clean half" \
+  "$(fhasnt 'data-copy="/projects/plain/deliverables' "$HTML")"
+# The other direction, on the same real page: the clean sibling of a bracketed filename
+# is still a button, and the fabricated truncation a first-bracket cut would produce is
+# not. Two assertions because they fail in opposite directions — one on a lost entry,
+# one on an invented one.
+assert "a clean sibling entry is still a copy button"          \
+  "$(fhas 'data-copy="/projects/sibling/deliverables/b.md"' "$HTML")"
+assert "…and no truncated path was fabricated beside it"       \
+  "$(fhasnt 'data-copy="/projects/sibling/deliverables/a"' "$HTML")"
+# EXACTLY five deliverable buttons on this page — one per fixture whose line yields a
+# whole, well-formed path (retained, finished, handedited, blockform, and `sibling`'s
+# clean second entry; `plain` yields none, both its halves being one value) — and both
+# failure directions are silent, sitting either side of the same fix. Too FEW is the
+# documented comment form costing a panel: a strip anchored on the line's last bracket
+# leaves SCHEMA.md's own comment in the value, the shape check drops the only entry, and
+# the retained project renders with no deliverables panel at all — green on "nothing
+# leaked", green on "no error", feature gone. It is also a clean entry lost beside a
+# bracketed filename. Too MANY is a comment fragment rendering as a path. A `fhas` on any
+# one button sees none of it.
 DELIV_BTNS="$(grep -oF 'data-what="Deliverable path"' "$HTML" | grep -c . || true)"
 assert "exactly one copy button per stamped path, no more and no fewer (saw $DELIV_BTNS)" \
-  "$(eq "$DELIV_BTNS" 4)"
+  "$(eq "$DELIV_BTNS" 5)"
 assert "no filesystem path reaches the page"        "$(fhasnt "$TMP" "$HTML")"
 # Belt and braces, because the check above depends on how the fixture path is spelled:
 # an instance is named by its DIRECTORY NAME, so the name must never appear with a
@@ -912,11 +994,12 @@ assert "…with exactly one <body> element" "$(eq "$(grep -cF '<body>' "$SA")" 1
 # there is no drift to pin. tests/artifact-board.test.sh asserts the <details> behaviour
 # (collapsed by default, finished projects under a divider) where the markup lives.
 # Two, not four, is still the fact worth reading off the page: beta is malformed and
-# gamma has no snapshot, so neither is an instance on the board. Seven blocks: alpha's
-# six projects — including the RETAINED done ones, which are on the board as reference
-# cards even though their tasks were never read — plus delta's one.
+# gamma has no snapshot, so neither is an instance on the board. Nine blocks: alpha's
+# eight projects — including the RETAINED done ones, which are on the board as reference
+# cards even though their tasks were never read, and the two whose deliverable_paths line
+# is hostile, which are still projects and still render — plus delta's one.
 assert "one project block per project of the 2 rendered instances" \
-  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 7)"
+  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 9)"
 
 echo "== discovery is explicit, never a glob =="
 D1="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d1.html" 2>&1 )"

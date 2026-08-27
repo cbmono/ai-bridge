@@ -332,7 +332,8 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # carrying a `]` of its own, where stripping could end a list early — which leaves the
 # value uncorrected rather than truncated. `bundle_deliverable()` now rejects a path
 # carrying a `#`: no path closeout stamps can contain one, every YAML comment starts
-# with one, and this is the last point before a published page. Fixing the parser and
+# with one, and — this last clause was FALSE, and the two rounds below are what it cost
+# — this is the last point before a published page. Fixing the parser and
 # guarding the render are not redundant here — the parser keeps SNAPSHOT.json honest,
 # the guard is what holds when a document is malformed in a way no parser will fix.
 #
@@ -369,8 +370,46 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # it was what made the declined case safe is gone, because it never was.
 #
 # THE DEBT ABOVE IS UNCHANGED, A FOURTH TIME.
-CEILING_TOTAL=6812
-CEILING_CODE=3649
+#
+# ---- round five: the guard becomes a WHITELIST, and gives code lines back ----------
+#
+#   6,812 / 3,649   20 files   what the raise above pinned
+#   6,842 / 3,646   20 files   +30 total, -3 CODE
+#
+# Per file:
+#
+#   write-snapshot.sh           579 ->   599   +20 total, +8 code
+#   build-board.sh            1,247 -> 1,257   +10 total, -11 code
+#
+# WHAT THE LINES BUY, and it is the same task-007 PR a fifth time — but not the same
+# fix. The four rounds above each closed the vector that was reported and left another
+# of its own class, because `bundle_deliverable()` anchored a PREFIX and then listed the
+# characters it knew were bad. The defeating input needed no comment, no quote and no
+# bracket: `[ /projects/p/deliverables/report.md /Users/somebody/Desktop/report.md ]` is
+# two paths in one value, with the right prefix, no `..` and no `#`, and it rendered
+# whole into a copy button labelled `report.md`.
+#
+# So the guard is now ONE positive predicate over the WHOLE value — `/projects/<slug>/
+# deliverables/` then one or more segments, each non-empty, not `.`/`..`, and free of
+# whitespace and `#`, with no trailing remainder — which is why build-board.sh gives 11
+# code lines BACK: one regex and a two-line function replace a prefix test and four
+# separate rejections. The slug is checked by that same rule instead of being
+# interpolated into a prefix and trusted, which also absorbs the open follow-up on an
+# unvalidated slug (task-018) rather than leaving it to a later change.
+#
+# write-snapshot.sh's +8 code is the trailing-comment cut, which is now FIDELITY ONLY —
+# safety lives entirely in the predicate above — and had to regain a property round four
+# dropped: it must never remove text that could still render as a deliverable. It fires
+# on a block entry line (siblings are on other lines), or where the `#` follows the
+# value's closing `]` and either that `]` is whitespace-separated (the terminator shape,
+# which no whitespace-free entry can contain) or nothing removed holds `/projects/`.
+# Two sed expressions became that awk block; the rest of the growth is the reasoning,
+# which is what a sixth round would otherwise have to rediscover.
+#
+# THE DEBT ABOVE IS UNCHANGED, A FIFTH TIME — though the code figure moves the right way
+# for the second round running (3,650 -> 3,649 -> 3,646).
+CEILING_TOTAL=6842
+CEILING_CODE=3646
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

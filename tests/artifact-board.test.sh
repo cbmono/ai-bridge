@@ -159,7 +159,15 @@ mk "$TMP/delivs" "delivs" '[
                         "/Users/attacker/.ssh/id_rsa",
                         "/projects/with-delivs/deliverables/../../../etc/passwd",
                         "/projects/with-delivs/deliverables/site/../../../etc/shadow",
-                        "/projects/with-delivs/deliverables/report.md ]   # from /Users/attacker/notes [old]"]},
+                        "/projects/with-delivs/deliverables/report.md ]   # from /Users/attacker/notes [old]",
+                        "/projects/with-delivs/deliverables/report.md /Users/attacker/Desktop/report.md",
+                        "/projects/with-delivs/deliverables/see#/Users/attacker/secret",
+                        "/projects/with-delivs/deliverables/report.md\n/Users/attacker/Desktop/notes.md"]},
+ {"slug":"..","title":"Hostile slug","kind":"research","status":"done",
+  "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[],
+  "deliverable_paths":["/projects/../deliverables/id_rsa",
+                        "/projects/../../Users/attacker/deliverables/id_rsa"]},
  {"slug":"no-delivs","title":"Closed with nothing stamped","kind":"build","status":"done",
   "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[],"deliverable_paths":[]}]'
@@ -190,15 +198,42 @@ assert "…and no /Users ANYWHERE inside a data-copy value" \
   "$(yes_if no_copy_value_with '/Users' "$DOUT")"
 assert "a traversal attempt is dropped"               "$(fhasnt 'etc/passwd' "$DOUT")"
 assert "a traversal attempt through a nested segment is dropped too" "$(fhasnt 'etc/shadow' "$DOUT")"
-# The last entry is a REAL path with a YAML trailing comment folded into it. The writer
-# strips that comment before it can ever get this far (write-snapshot.sh's
-# deliverable_path_entries), so what this fixture stands for is the input that never met
-# the writer at all: SNAPSHOT.json is a file on disk, and this renderer reads it back
-# without knowing who wrote it. Its prefix is this project's and it has no `..`, so every
-# other rule here passes it; only the `#` says what it is, and it leaks an absolute path
-# if rendered.
+# A REAL path with a YAML trailing comment folded into it. The writer strips that comment
+# before it can ever get this far (write-snapshot.sh's deliverable_path_entries), so what
+# this fixture stands for is the input that never met the writer at all: SNAPSHOT.json is
+# a file on disk, and this renderer reads it back without knowing who wrote it. Its prefix
+# is this project's and it has no `..`, so a guard that only anchors the prefix passes it
+# — and it carries an absolute path.
 assert "a swallowed YAML comment is dropped, not rendered as a path" \
   "$(fhasnt 'report.md ]' "$DOUT")"
+# THE VECTOR THAT NEEDS NO COMMENT AT ALL, and the reason this guard stopped listing bad
+# characters and started requiring a whole shape. Two paths in one value: correct prefix,
+# no `..`, no `#`, nothing on any denylist — and rendered whole it puts the publisher's
+# home directory in a copy button labelled `report.md`, so the page looks right. What
+# rejects it is that a deliverable path may not contain WHITESPACE, and this value does.
+assert "two paths sharing one value are dropped, not rendered as one" \
+  "$(fhasnt 'Desktop/report.md' "$DOUT")"
+# …and the same shape with no whitespace either, which is why `#` is excluded on its own
+# account and not merely as the character a comment starts with.
+assert "an absolute path glued on after a # is dropped too" \
+  "$(fhasnt 'deliverables/see#' "$DOUT")"
+# A NEWLINE and a second path after an otherwise perfect value. This is what fullmatch()
+# buys over a prefix test plus an end anchor: Python's `$` also matches just before a
+# trailing newline, so "the whole value, with no remainder" has to be the match itself.
+assert "a trailing remainder after a newline is dropped" \
+  "$(fhasnt 'Desktop/notes.md' "$DOUT")"
+# THE SLUG IS CHECKED BY THE SAME RULE AS EVERY OTHER SEGMENT. It used to be interpolated
+# into the prefix and trusted, so a hand-written snapshot claiming its slug was `..` got
+# `/projects/../deliverables/<file>` rendered as this project's own deliverable — the
+# guard compared the value against a prefix the value itself had chosen.
+assert "a hostile slug cannot render a path out of the bundle" \
+  "$(fhasnt 'id_rsa' "$DOUT")"
+assert "…and that project gets no deliverables panel at all" "$(yes_if python3 -c "
+import sys
+t = open('$DOUT').read()
+i = t.index('Hostile slug')
+j = t.index('</details>', i)
+sys.exit(0 if 'class=\"delivs\"' not in t[i:j] else 1)")"
 # Not a second `Deliverables · 3` grep — that was byte-identical to the assertion above
 # and could not fail independently of it. Counting the BUTTONS is the half the heading
 # cannot certify: heading and list are built from the same filtered sequence, so a
