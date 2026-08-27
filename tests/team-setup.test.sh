@@ -106,7 +106,7 @@ ok "no placeholder note survives"         "$(yn grep -q 'EXAMPLE ONLY' "$I/insta
 # hard requirement of the prompt itself (guard 4: no verifier, no write), so it is a hard
 # requirement here too rather than a conditional assertion.
 ok "the config still parses as JSON"       "$(yn jq -e . "$I/instance.config.json")" yes
-ok "…and every other key survived"        "$(jq -r '.maxPrLoc, .roleTiers."project-manager"' "$I/instance.config.json" | tr '\n' ' ')" "500 deep "
+ok "…and every other key survived"        "$(jq -r '.maxPrLoc, .roleTiers."project-manager"' "$I/instance.config.json" | tr '\n' ' ')" "2000 deep "
 ok "the local file names this clone"      "$(jq -r '.ownerGithubUser' "$I/instance.config.local.json")" example-user-007
 ok "…and it parses too"                   "$(yn jq -e . "$I/instance.config.local.json")" yes
 ok "…and is gitignored"                   "$(yn grep -qxF 'instance.config.local.json' "$I/.gitignore")" yes
