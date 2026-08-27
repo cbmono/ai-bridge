@@ -381,6 +381,20 @@ add_comment coderabbitai "$(body_file \
   '~~~' \
   'No further comments.')"
 expect "a backtick pair nested in a tilde block stays balanced -> review" 0
+# The same rule where getting it wrong is visible: with the UNCONDITIONAL sentinel between
+# the nested markers, a ``` that closed a ~~~ would leave the sentinel outside every block
+# (rc=1). The case above cannot show that, because the prose tier it uses is outranked by
+# the review marker in the same body whichever side of the fence it lands on.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file \
+  "Reviewed $CLEAN_HEAD." \
+  '<!-- walkthrough_start -->' \
+  '~~~' \
+  '```' \
+  'rate limited by coderabbit.ai' \
+  '```' \
+  '~~~')"
+expect "…and the opener's TYPE is what closes it, so the sentinel stays quoted" 0
 
 # ...and the CLEARING side of an unbalanced body is not "read it raw", which is what the
 # refusal side does. A body whose fences do not balance cannot be rendered, so it
@@ -476,6 +490,15 @@ setup "$CLEAN_HEAD"
 add_comment coderabbitai "$(body_file '> ```' '> make test' \
   '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD.")"
 expect "…and the quote ending ENDS the block, rather than swallowing the rest" 0
+# The third direction of the same rule, and the only one that shows the depths being
+# COMPARED rather than just ordered: inside a code block there is no block structure at
+# all, so a `> ```' DEEPER than the opener is literal content and closes nothing. Read as
+# a close, the real closer below it opens a new block, the body is unbalanced, and the
+# sentinel this one quotes leaves the fence.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '```' 'rate limited by coderabbit.ai' '> ```' '```')"
+expect "…and a closer DEEPER than its opener is content, not a close" 0
 
 # 2. TABS ARE COLUMNS. The host expands a tab to the next four-column stop, so 1-3 spaces
 # then a tab is indented code. This one reaches ROUTE B, which outranks every refusal
@@ -504,6 +527,17 @@ setup "$CLEAN_HEAD"
 add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
   ">$TAB  "'```' ">$TAB  "'rate limited by coderabbit.ai' ">$TAB  "'```')"
 expect "…so one more space is column 4, and the sentinel is literal text" 1
+# The other consumer of the same measurement: four columns in, a `>` is not a quote marker
+# at all, it is a literal `>` inside an indented code block — so a review marker written
+# there is quoted text and evidences nothing.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '    > <!-- walkthrough_start -->' \
+  "    > Reviewed $CLEAN_HEAD.")"
+expect "a > four columns in is literal text, not a blockquote marker" 4
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '> <!-- walkthrough_start -->' \
+  "> Reviewed $CLEAN_HEAD.")"
+expect "…while the same lines merely QUOTED are a review, and clear" 0
 
 # 3. THE CLOSING MARKER IS NOT JUST A MARKER. A closer may be no shorter than its opener
 # and may carry no info string; reading either as a close also turns an odd number of

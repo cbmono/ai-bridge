@@ -118,13 +118,19 @@ HAVE_JQ=0; command -v jq >/dev/null 2>&1 && HAVE_JQ=1
 # with no reviewer artifact would make every "-> clear" case below refuse for a reason
 # none of them is about. `reviewer_pr` replaces it where the absent review is the point
 # being tested.
+#
+# IT CARRIES A BODY, and that is not decoration: an empty-bodied APPROVED clears through the
+# HELD route alone, so with one as the default fixture almost every positive case in this
+# file exercised that one branch and neither of the two the caller actually depends on. This
+# is a submitted review object at the head WITH content — route A, end to end.
 reviewed_pr() {
   [ "$HAVE_JQ" = 1 ] || return 0
   jq -n --arg h "$HEAD_SHA" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
       author:{login:"dev"}, comments:[]}' > "$FIX/pr_json"
   jq -n --arg h "$HEAD_SHA" \
-    '[{user:{login:"coderabbitai"}, state:"APPROVED", commit_id:$h, body:""}]' \
+    '[{user:{login:"coderabbitai"}, state:"APPROVED", commit_id:$h,
+       body:"**Actionable comments posted: 0**"}]' \
     > "$FIX/reviews_json"
 }
 
@@ -405,6 +411,15 @@ reviewer_pr "$CR_CLEAN"
 jq '.comments += [{author:null, body:"anything"}]' "$FIX/pr_json" > "$FIX/pr_json.n" \
   && mv "$FIX/pr_json.n" "$FIX/pr_json"
 expect "an artifact with no author login -> refuse as unknown state" 2
+
+# The default fixture above now clears through route A WITH a body, so the held route — an
+# empty APPROVED at the head, which is a claim the state makes rather than the body — is
+# asserted here explicitly instead of being what every positive case happened to exercise.
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+jq -n --arg h "$HEAD_SHA" \
+  '[{user:{login:"coderabbitai"}, state:"APPROVED", commit_id:$h, body:""}]' \
+  > "$FIX/reviews_json"
+expect "an EMPTY APPROVED at the head, with nothing refusing, still clears" 0
 
 echo
 echo "== the name never settles it =="
