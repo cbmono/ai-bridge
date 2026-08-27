@@ -369,9 +369,9 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # that fixes an approach is the round most likely to be described as free:
 #
 #   7,747 / 4,127   21 files   what the redirect pinned
-#   7,883 / 4,170   21 files   +136 total, +43 code — the three fixes
+#   7,891 / 4,170   21 files   +144 total, +43 code — the three fixes
 #
-# All +136 land in review-clearance.sh (962 -> 1,098; code 478 -> 521). required-checks.sh
+# All +144 land in review-clearance.sh (962 -> 1,106; code 478 -> 521). required-checks.sh
 # is untouched at 349.
 #
 # WHAT THE 43 CODE LINES BUY, each one a route to clearing an UNREVIEWED pull request:
@@ -396,8 +396,8 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 #      comparisons then tested against "", which no login equals, so the reviewer account
 #      could clear a pull request it had authored itself.
 #
-# AND WHAT THE COMMENT LINES BUY, since 93 of the 136 are not code by this file's measure
-# (66 whole-line comments, the rest blanks): two of the three are
+# AND WHAT THE COMMENT LINES BUY, since 101 of the 144 are not code by this file's measure
+# (69 whole-line comments, the rest blanks): two of the three are
 # places where a PREVIOUS round's reasoning in this same file was wrong — the stated
 # asymmetry between the two renderings, and "evidence and pinning are both structural" —
 # so the correction sits where the next reader will hit it rather than in a merged PR body.
@@ -406,7 +406,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # objective's second criterion asks a project to LOWER one of these constants. It has not
 # happened here. The reduction candidates named further up (print-board.sh, watch-board.sh,
 # write-snapshot.sh) are untouched, and the debt is larger than when this PR opened.
-CEILING_TOTAL=7883
+CEILING_TOTAL=7891
 CEILING_CODE=4170
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a

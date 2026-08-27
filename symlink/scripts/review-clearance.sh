@@ -111,12 +111,15 @@
 #      not-yet-reviewed placeholder. Quoted on stderr, with the reopen time when the
 #      reviewer published one
 #   2  usage error, or the environment cannot answer (no `gh`/`jq`, unreadable PR or
-#      review list, the PR's own author named as its reviewer, a pattern table that will
-#      not compile) — an unknown state, never clearance
+#      review list, NO AUTHOR LOGIN on the PR — which would switch off the rule that an
+#      author is not its own reviewer rather than fail — the PR's own author named as its
+#      reviewer, a pattern table that will not compile) — unknown state, never clearance
 #   3  no reviewer signal at all: nothing on this PR from a known reviewer
 #   4  an artifact exists but does not evidence a completed review OF THE CURRENT HEAD —
-#      a review object made at an earlier commit, an artifact carrying no evidence a
-#      review happened at all, or a `--head` that no longer matches the PR
+#      a review object made at an earlier commit, an EMPTY `COMMENTED` review object at
+#      the head (the host mints one for any inline comment or thread reply, so an empty
+#      one claims nothing), an artifact carrying no evidence a review happened at all, or
+#      a `--head` that no longer matches the PR
 #
 # WHAT IT PRINTS IS UNTRUSTED TEXT. The quoted refusal comes from a PR comment, which
 # anyone able to comment can write. It is quoted for a human to read and is never an
@@ -968,6 +971,11 @@ while IFS=$'\t' read -r kind login state commit; do
       # one is HELD and decided after every artifact has been read (see below) rather than
       # exiting here. A PR must still be able to recover from having been refused once,
       # which is why the refusal has to name this head to win rather than merely exist.
+      #
+      # CONTENT IS MEASURED ON THE STRICT RENDERING, so a body that is nothing but a code
+      # block — or nothing but an unbalanced fence — counts as contentless. Refusing a
+      # review whose only content was quoted code is the safe direction, and it is the
+      # same rendering the clearing side reads everywhere else in this file.
       if grep -q '[^[:space:]]' "$TMPD/strict" 2>/dev/null; then
         echo "ok: a submitted review ($state) from $login was made at head $head_sha on PR $pr"
         exit 0
