@@ -98,9 +98,9 @@ jobs:
             # Exit codes are not trusted on their own: a harness can print a clean
             # tally and exit 0 while it has just destroyed its checkout, or print
             # nothing parseable at all. Both are treated as failures here. Two
-            # conventions are in use across tests/*.test.sh (tests/.claude/rules/
-            # tests.md names both: "pass=/fail=" or "N passed, N failed") — both are
-            # tried, in order, and only their absence counts as "no summary".
+            # conventions are in use across tests/*.test.sh (.claude/rules/tests.md
+            # names both: "pass=/fail=" or "N passed, N failed") — both are tried,
+            # in order, and only their absence counts as "no summary".
             summary="$(printf '%s\n' "$out" | grep -oE 'pass=[0-9]+ fail=[0-9]+' | tail -n1 || true)"
             style=dense
             if [ -z "$summary" ]; then
