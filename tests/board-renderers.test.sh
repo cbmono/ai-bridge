@@ -446,7 +446,20 @@ cat > "$STUBDIR/fswatch" <<'STUB'
 while :; do sleep 1; done
 STUB
 chmod +x "$STUBDIR/fswatch"
-briefly() { # <env-prefix...> -- run the watcher for ~2s and print what it said
+# Poll for a NEEDLE rather than sleeping a guessed duration — see `briefly` below for
+# why a fixed sleep here was the actual defect, not a machine-dependent one. Ceiling of
+# 200 * 0.05s = 10s so a genuinely broken watcher still fails in finite time instead of
+# hanging; a healthy one resolves in well under a second.
+wait_for() { # <file> <needle> [max-tries]
+  local file="$1" needle="$2" tries="${3:-200}" n=0
+  while (( n < tries )); do
+    grep -qF -- "$needle" "$file" 2>/dev/null && return 0
+    sleep 0.05
+    n=$((n+1))
+  done
+  return 1
+}
+briefly() { # <env-prefix...> -- run the watcher until it announces itself, then stop it
   local log="$TMP/briefly.log"; : > "$log"
   # `exec`, so the background job IS the watcher and a TERM reaches it rather than the
   # subshell that spawned it. Getting this wrong makes the signal assertions pass for
@@ -454,7 +467,14 @@ briefly() { # <env-prefix...> -- run the watcher for ~2s and print what it said
   # is never read.
   ( cd "$ALPHA" && exec env "$@" bash "$WATCH" --interval 1 "$ALPHA" ) >"$log" 2>&1 &
   local p=$!
-  sleep 2
+  # This used to be a fixed `sleep 2`, racing the initial render — a real subprocess
+  # chain (write-snapshot.sh, then build-board.sh) whose duration is host- and
+  # load-dependent, not a constant. Under load the message below hadn't been printed
+  # yet when the 2s elapsed, and every assertion reading $log came back empty. The
+  # announcement line is printed on EVERY branch (poll, fswatch, or the fswatch-asked-
+  # for-but-absent fallback) right after the mechanism is decided, so waiting for it
+  # is the actual event to wait for rather than a guess at how long it takes.
+  wait_for "$log" "in a browser and reload it" 200 || true
   kill -TERM "$p" 2>/dev/null || true
   wait "$p" 2>/dev/null || true
   cat "$log"
@@ -468,11 +488,13 @@ assert "…and it still stops cleanly"                         "$(has 'stopped. 
 assert "…leaving no fswatch child behind"                    "$(no_if pgrep -f "$STUBDIR/fswatch")"
 FS_ASK="$(briefly WATCH_BOARD_WATCHER=fswatch PATH="/usr/bin:/bin")"
 assert "asking for an absent fswatch falls back, saying why" "$(has 'asked for but is not installed' "$FS_ASK")"
-if command -v fswatch >/dev/null 2>&1; then
-  skipped "the bare probe with no fswatch (this machine has one installed)"
-else
-  assert "the bare probe on a machine without fswatch polls" "$(has 'fswatch not found' "$(briefly WATCH_BOARD_WATCHER=auto)")"
-fi
+# Forced absent via PATH, same as the FS_ASK case above — never asked of the host with a
+# bare `command -v fswatch`. This used to skip itself on any machine that happens to have
+# fswatch installed, which means the "auto, no fswatch" branch went completely untested
+# on exactly the runners most likely to have it (a dev laptop with it brewed in). Both
+# branches must run everywhere, or CI coverage depends on which machine picks up the job.
+assert "the bare probe on a machine without fswatch polls" \
+  "$(has 'fswatch not found' "$(briefly WATCH_BOARD_WATCHER=auto PATH="/usr/bin:/bin")")"
 RC=0; ( cd "$ALPHA" && WATCH_BOARD_WATCHER=nonsense bash "$WATCH" --once >/dev/null 2>&1 ) || RC=$?
 assert "an unknown WATCH_BOARD_WATCHER refuses rather than guessing" "$(eq "$RC" 2)"
 
@@ -484,7 +506,10 @@ rm -rf "$ALPHA/.board-live"
 # subshell's status instead of the watcher's and the exit-0-on-TERM assertion is vacuous.
 ( cd "$ALPHA" && exec bash "$WATCH" --interval 1 "$ALPHA" ) >"$TMP/watch.log" 2>&1 &
 WPID=$!
-sleep 2
+# Same defect as `briefly` above, same fix: wait for the render to actually land in the
+# log instead of a fixed sleep racing it. A `sleep 2` here is exactly the assertion below
+# it — "has rendered once already" — turned into a guess about how long that takes.
+wait_for "$TMP/watch.log" "rendered" 200 || true
 assert "the watcher is running"                 "$(yes_if kill -0 "$WPID")"
 assert "…and has rendered once already"         "$(fhas 'rendered' "$TMP/watch.log")"
 assert "…leaving its stamp file in place"       "$(yes_if test -e "$ALPHA/.board-live/.watch-stamp")"
