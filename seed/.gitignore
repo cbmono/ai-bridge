@@ -18,42 +18,26 @@ AWAITING.md
 SNAPSHOT.json
 board.html
 
-# The other-owners cache (scripts/build-board.sh) — the board's second half, read from
-# the tracked documents at HEAD and stored against the SHA it was computed for, because
-# that section can only change when HEAD moves. Derived and per-machine; delete it freely
-# and the next render rebuilds it. install.sh appends this line too, so it reaches
-# instances stamped before the cache existed.
-/.board-others.json
-
-# The local live board page (scripts/watch-board.sh) — the same HTML as board.html,
-# regenerated on every task-document change by a watcher you keep running. Derived,
-# per-machine, and safe to delete. install.sh appends this line too, so it reaches
-# instances stamped before the directory existed.
-/.board-live/
-
-# Per-machine identity overrides (authorEmail, ownerGithubUser). instance.config.json
-# is tracked and therefore SHARED, so on a bundle two humans clone its authorEmail
-# would author both people's commits as one person. This file wins over it for those
-# identity keys only. Never commit it.
-instance.config.local.json
-
-# The derived navigation indexes (`/index.md`, `/projects/*/index.md`) are ignored
-# too — but the lines live in install.sh, NOT here, and that is not an oversight.
-# THIS FILE IS ITSELF AN ACTIVE .gitignore INSIDE THE ai-bridge TEMPLATE'S OWN
-# `seed/` DIRECTORY, so a `/index.md` line here matches `seed/index.md`
-# and silently stops the template from tracking its own seed file. (Measured: it
-# broke the upgrade.sh fixture, which re-inits a repo over a copy of seed/.) The
-# other entries above are safe because no seed file is named any of them.
-# install.sh appends both lines to an instance's .gitignore if missing, which also
-# reaches instances stamped before they existed. `knowledge/index.md` is
-# deliberately NOT ignored anywhere — it is the KB's curated lookup surface, it
-# changes only when the KB changes, and an agent told to scan it needs it present
-# in a fresh clone.
-
-# Derived view of the group's product repos (scripts/link-repos.sh) — one symlink
-# per repo into reposRoot, never content, and machine-local like the machinery
-# below. Delete it freely; install.sh or that script recreates it.
-/repos/
+# The derived and per-machine paths every instance ignores — the `/repos/` view of the
+# group's product repos, the board's local page and its other-owners cache, the
+# per-machine identity override (`instance.config.local.json`), and the derived
+# navigation indexes. install.sh manages the list between the markers below and
+# REWRITES it on every stamp, so an entry added to the template reaches an instance
+# stamped a year ago and not only a fresh one. Do not edit between the markers by hand;
+# instance-local rules go outside them, where a stamp never touches them.
+#
+# The list lives in install.sh and NOT here, and that is not an oversight. THIS FILE IS
+# ITSELF AN ACTIVE .gitignore INSIDE THE ai-bridge TEMPLATE'S OWN `seed/` DIRECTORY, so
+# a `/index.md` line here matches `seed/index.md` and silently stops the template from
+# tracking its own seed file. (Measured: it broke the upgrade.sh fixture, which re-inits
+# a repo over a copy of seed/.) An EMPTY marker pair carries no pattern and has no such
+# hazard. It also keeps ONE home for the list: seed content lands on a first stamp only,
+# so a line that lived here as well would reach fresh installs twice and old ones never.
+# `knowledge/index.md` is deliberately NOT ignored anywhere — it is the KB's curated
+# lookup surface, it changes only when the KB changes, and an agent told to scan it
+# needs it present in a fresh clone.
+# >>> ai-bridge instance ignores >>>
+# <<< ai-bridge instance ignores <<<
 
 # Generic machinery is symlinked in from the ai-bridge template by
 # install.sh and must NOT be committed here (it dangles on other machines).

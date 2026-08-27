@@ -95,6 +95,12 @@ SYMLINK_SRC="$TEMPLATE_DIR/symlink"
 SEED_SRC="$TEMPLATE_DIR/seed"
 BEGIN_MARK="# >>> ai-bridge machinery (symlinked) >>>"
 END_MARK="# <<< ai-bridge machinery <<<"
+# The instance .gitignore's SECOND managed block: the derived and per-machine paths
+# every instance ignores. Same marker idiom as the machinery block above, and for the
+# same reason — a block a stamp can REWRITE is a block a later template can still
+# change. See step 3a for what that replaced and why it had to.
+IGN_BEGIN="# >>> ai-bridge instance ignores >>>"
+IGN_END="# <<< ai-bridge instance ignores <<<"
 
 MODE="install"
 # Which half of the repo this run is about. `instance` is the default because a BARE
@@ -1153,90 +1159,70 @@ done <<EOF
 $(find "$TARGET" -name .git -prune -o -type l -print 2>/dev/null | sort)
 EOF
 
-# 3. Rewrite the managed machinery block in the instance .gitignore.
+# 3. Rewrite the instance .gitignore's TWO managed blocks: the instance-ignores block
+# (3a) and the machinery block (3b). Both are marker-delimited and both are re-applied
+# in full on every stamp — see 3a for why that is not optional.
 gi="$TARGET/.gitignore"
 [ -f "$gi" ] || printf '%s\n%s\n' "$BEGIN_MARK" "$END_MARK" > "$gi"
 grep -qF "$BEGIN_MARK" "$gi" || printf '\n%s\n%s\n' "$BEGIN_MARK" "$END_MARK" >> "$gi"
-mlist="$(mktemp)"; machinery_paths > "$mlist"
-tmp="$gi.tmp.$$"
-awk -v b="$BEGIN_MARK" -v e="$END_MARK" -v mlist="$mlist" '
-  $0==b { print; while ((getline line < mlist) > 0) print "/" line; close(mlist); inblock=1; next }
-  $0==e { print; inblock=0; next }
-  !inblock { print }
-' "$gi" > "$tmp" && mv "$tmp" "$gi"
-rm -f "$mlist"
 
-# The repos/ view is derived, so it must be ignored too — but OUTSIDE the managed
-# block, which is regenerated from the machinery file list and would drop any line
-# that isn't a machinery path. Appended once; a hand-written `repos/` also counts.
-if ! grep -qE '^/?repos/?$' "$gi"; then
-  cat >> "$gi" <<'GI'
-
+# ===========================================================================
+# 3a. THE INSTANCE-IGNORES BLOCK — the derived and per-machine paths every
+#     instance ignores, rewritten from here on every stamp.
+# ===========================================================================
+#
+# WHY A MARKED BLOCK AND NOT THE FIVE `grep || append` GUARDS THIS REPLACED. Each of
+# those appended its lines "only if missing", and that guard makes the whole block
+# APPEND-ONCE: on an instance that already has the lines it is skipped forever, so every
+# later change — a new entry, a corrected explanation — reaches only FRESH installs. The
+# instances that most need the new entry are precisely the ones that never get it.
+# Measured three times on live instances, not reasoned: a rewritten index comment never
+# arrived; `/.board-others.json` (shipped with the per-owner board and meant to be
+# backfilled here) sat untracked in a bundle's `git status` for a whole working session
+# on an instance re-stamped that same day — a re-stamp is the obvious remedy and it
+# demonstrably did nothing; and `/SNAPSHOT.json` needed its line added by hand.
+#
+# WHAT THIS MAY AND MAY NOT TOUCH — the fix's risk profile is the mirror of the bug's.
+# A stamp that REWRITES a region of a file it used to only append to can eat local
+# edits, and one already did: an instance still carries the comment "Restored
+# 2026-08-23 after an install.sh run reversed it". So the rule is narrow and absolute:
+#
+#   · Nothing OUTSIDE the two markers is ever changed, moved or removed — not a
+#     duplicate of a line the block also carries, not a comment, not a blank. Local
+#     lines survive byte for byte, which is the property that makes this safe.
+#   · INSIDE the markers, prose is regenerated (that is the whole point), but a PATTERN
+#     line the template does not itself emit is never dropped: it is re-emitted
+#     immediately BELOW the end marker and reported, so a hand-added rule survives even
+#     when it was written in the one place this block is allowed to overwrite.
+#
+# Both rules preserve ORDER, and order is the mechanism a retained project depends on:
+# git applies .gitignore patterns in file order, so `!projects/<slug>/index.md` only
+# wins while it stays AFTER the two blanket lines below.
+#
+# STILL SEED-ONLY, and still append-once as a result: `AWAITING.md`, `SNAPSHOT.json`
+# and `board.html` live in seed/.gitignore, which lands on a FIRST stamp only. Moving
+# them in here would close the same gap for them; it is deliberately not done in the
+# change that introduced this block, to keep it to one behaviour.
+instance_ignores() {
+  cat <<'GI'
 # Derived view of the group's product repos (scripts/link-repos.sh) — symlinks
 # into reposRoot, never content, and machine-local like the rest. Delete it
 # freely; the next install or `scripts/link-repos.sh` run recreates it.
 /repos/
-GI
-fi
-
-# The local live board (scripts/watch-board.sh) writes its page here. Appended for the
-# same reason as /repos/ and instance.config.local.json below: seed content is copied
-# only when ABSENT, so an instance stamped before this directory existed — which is
-# every instance in existence — would otherwise commit a generated HTML page.
-if ! grep -qE '^/?\.board-live/?$' "$gi"; then
-  cat >> "$gi" <<'GI'
 
 # The local live board page (scripts/watch-board.sh). Derived output, regenerated on
 # every task-document change, and per-machine. Delete it freely.
 /.board-live/
-GI
-fi
-
-# The board's other-owners cache (scripts/build-board.sh), appended for exactly the same
-# reason: every instance in existence was stamped before this file existed, and a derived
-# cache of committed state has no business being committed back.
-if ! grep -qE '^/?\.board-others\.json$' "$gi"; then
-  cat >> "$gi" <<'GI'
 
 # The board's other-owners cache (scripts/build-board.sh) — the second half of the page,
 # read from the tracked documents at HEAD and stored against the SHA it was computed for.
 # Derived and per-machine. Delete it freely; the next render rebuilds it.
 /.board-others.json
-GI
-fi
-
-# 3b. Two more ignores, appended once each if missing — OUTSIDE the managed block,
-# for the same reason as /repos/ above.
-#
-# Why appended here at all: the seed is copied only if ABSENT, so an instance stamped
-# before these lines existed would never receive them, and both are load-bearing.
-# `instance.config.local.json` holds per-machine IDENTITY (authorEmail,
-# ownerGithubUser) — committing it would push one human's identity into a bundle the
-# other reads, which is the exact failure the file exists to prevent. The derived
-# indexes are rewritten every tick, so on a shared bundle they conflict on every push.
-#
-# And why the INDEX lines live ONLY here, never in seed/.gitignore: that file is an
-# active .gitignore inside the template's own `seed/` directory, so a `/index.md`
-# line in it matches `seed/index.md` and silently stops the template from
-# tracking its own seed file. Measured — it broke the upgrade.sh fixture, which
-# re-inits a repo over a copy of seed/. `instance.config.local.json` has no such
-# collision (no seed file is named that), so it is in both places, harmlessly.
-if ! grep -qxF 'instance.config.local.json' "$gi"; then
-  cat >> "$gi" <<'GI'
 
 # Per-machine identity overrides (authorEmail, ownerGithubUser), winning over the
 # TRACKED instance.config.json for those keys only. Never commit it: a shared bundle
 # would otherwise author both humans' commits as one person.
 instance.config.local.json
-GI
-fi
-# Each line is guarded SEPARATELY. A single guard on the root line would silently
-# skip the per-project one whenever only the root line was already present, and the
-# two are not interchangeable. The match is EXACT (`-qxF`), not `^/?index\.md$` like
-# /repos/ above: a bare `index.md` line is a different pattern that also swallows
-# `knowledge/index.md`, so it must not be read as "already handled".
-if ! grep -qxF '/index.md' "$gi" || ! grep -qxF '/projects/*/index.md' "$gi"; then
-  cat >> "$gi" <<'GI'
 
 # Derived navigation indexes — the root one and each project's, rewritten by every
 # /pm-loop tick from the documents they summarise. A view, not source: on a bundle
@@ -1247,17 +1233,81 @@ if ! grep -qxF '/index.md' "$gi" || ! grep -qxF '/projects/*/index.md' "$gi"; th
 # The one exception is a RETAINED project (`status: done`, kept instead of closed):
 # the tick stops touching a retained project at all, so its index.md becomes a
 # permanent, hand-committed front door instead of a rewritten view. To retain one,
-# add a negation line AFTER the two blanket lines that follow this comment, then
-# `git add -f` the file once — e.g. `!projects/<slug>/index.md`. Git applies
-# .gitignore patterns in file order, so a LATER negation overrides an earlier blanket
-# pattern; putting the override BEFORE the two blanket lines instead, or deleting
-# the two lines and asserting "we track these" only in a comment, does not survive
-# the next `install.sh` run — it re-adds whichever of the two lines it finds
-# missing, and it neither looks for nor honours a comment-only override.
+# add a negation line — e.g. `!projects/<slug>/index.md` — BELOW THE END MARKER of
+# this block, then `git add -f` the file once. Two rules make that work, and both
+# matter: git applies .gitignore patterns in file order, so a negation AFTER the two
+# blanket lines below overrides them while one placed BEFORE them does nothing; and
+# every line between the markers is rewritten by the next `install.sh` run, so only
+# what is outside them is yours to keep. (A pattern line left inside is not thrown
+# away — the stamp moves it just below the end marker and says so. Prose is not:
+# deleting the blanket lines and asserting "we track these" in a comment is reversed
+# by the next stamp, which re-applies the block and never reads a comment.)
+/index.md
+/projects/*/index.md
 GI
-  grep -qxF '/index.md' "$gi"             || echo '/index.md' >> "$gi"
-  grep -qxF '/projects/*/index.md' "$gi"  || echo '/projects/*/index.md' >> "$gi"
+}
+
+# The marker pair, placed if this instance predates the block. WHERE it lands matters:
+# the two blanket index lines must not come to sit BELOW a negation the instance
+# already carries, or the negation silently stops winning. Anchor, in order — above the
+# first negation line if there is one, else above the machinery block (which the seed
+# puts last), else at the end of the file. A comment paragraph directly above the
+# anchor belongs to it and travels with it, rather than being split from its rule.
+if ! grep -qxF "$IGN_BEGIN" "$gi"; then
+  tmp="$gi.tmp.$$"
+  awk -v b="$IGN_BEGIN" -v e="$IGN_END" -v mb="$BEGIN_MARK" '
+    function flush(  i) { for (i = 1; i <= n; i++) print buf[i]; n = 0 }
+    function emit() { print b; print e; print ""; done = 1 }
+    {
+      if (done)                  { print; next }
+      if ($0 == mb || $0 ~ /^!/) { emit(); flush(); print; next }
+      if ($0 ~ /^#/)             { buf[++n] = $0; next }
+      flush(); print
+    }
+    END { flush(); if (!done) { print ""; print b; print e } }
+  ' "$gi" > "$tmp" && mv "$tmp" "$gi"
 fi
+
+# Rewrite it. Only the FIRST marker pair is managed and the block ends at the FIRST end
+# marker (non-greedy) — a second pair, or a line that merely RESEMBLES a marker, is
+# ordinary content and passes through untouched. `$0 ==` is exact for the same reason:
+# `# >>> ai-bridge instance ignores >>> (see below)` is prose, not a marker.
+ilist="$(mktemp)"; instance_ignores > "$ilist"
+ikept="$(mktemp)"
+tmp="$gi.tmp.$$"
+awk -v b="$IGN_BEGIN" -v e="$IGN_END" -v body="$ilist" -v kept="$ikept" '
+  BEGIN { while ((getline l < body) > 0) ours[l] = 1; close(body) }
+  function fill(  l) { while ((getline l < body) > 0) print l; close(body) }
+  function spill(  i) { for (i = 1; i <= nk; i++) { print keep[i]; print keep[i] > kept } }
+  !seen && !inblock && $0 == b { print; fill(); inblock = 1; next }
+  inblock && $0 == e           { print; spill(); inblock = 0; seen = 1; next }
+  inblock {
+    if ($0 ~ /^#/ || $0 ~ /^[[:space:]]*$/) next   # template prose: regenerated
+    if (!($0 in ours)) keep[++nk] = $0             # a pattern we did not write: kept
+    next
+  }
+  { print }
+  # A hand-deleted end marker would otherwise swallow the rest of the file. Close the
+  # block instead, keeping every pattern line it had absorbed.
+  END { if (inblock) { print e; spill() } }
+' "$gi" > "$tmp" && mv "$tmp" "$gi"
+if [ -s "$ikept" ]; then
+  echo "  kept   .gitignore: $(wc -l < "$ikept" | tr -d ' ') line(s) were inside the managed"
+  echo "         ignores block; they are yours, not the template's, so they were moved"
+  echo "         just below its end marker (same order, so a negation still wins):"
+  sed 's/^/           /' "$ikept"
+fi
+rm -f "$ilist" "$ikept"
+
+# 3b. Rewrite the managed machinery block.
+mlist="$(mktemp)"; machinery_paths > "$mlist"
+tmp="$gi.tmp.$$"
+awk -v b="$BEGIN_MARK" -v e="$END_MARK" -v mlist="$mlist" '
+  $0==b { print; while ((getline line < mlist) > 0) print "/" line; close(mlist); inblock=1; next }
+  $0==e { print; inblock=0; next }
+  !inblock { print }
+' "$gi" > "$tmp" && mv "$tmp" "$gi"
+rm -f "$mlist"
 
 # A .gitignore line is INERT for a file git already tracks, so on an instance whose
 # index.md files are committed this change would silently do nothing. Report the exact
