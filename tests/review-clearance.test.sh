@@ -755,6 +755,31 @@ add_comment coderabbitai "$(body_file '<div>' '```' '' '```' '<!-- walkthrough_s
 expect "a marker only reading A calls markup -> not evidence" 4
 
 echo
+echo "== CRLF: the host does not see the carriage return, and neither may this =="
+# A BODY FROM A WINDOWS CLIENT ARRIVES WITH \r ON EVERY LINE, and awk's record is split on
+# \n alone, so the \r is the last character of every line the machine reads. Two rules
+# nearly regressed on it in this round's rewrite, both toward FALSE REFUSALS rather than
+# false clearances — an over-correction is still a defect, and this is where it hides.
+# `\r` is whitespace to a POSIX character class and is not `[ \t]`, which is the difference.
+crlf() { local f; f="$(mktemp "$TMP/crlf.XXXXXX")"; printf "$1" > "$f"; printf '%s' "$f"; }
+setup "$CLEAN_HEAD"
+add_comment coderabbitai \
+  "$(crlf "<!-- walkthrough_start -->\r\nReviewed $CLEAN_HEAD.\r\n\r\n\`\`\`\r\nrate limited by coderabbit.ai\r\n\`\`\`\r\n")"
+expect "a CRLF fence PAIRS, so its refusal is quotation" 0
+setup "$CLEAN_HEAD"
+add_comment coderabbitai \
+  "$(crlf "<!-- walkthrough_start -->\r\nReviewed $CLEAN_HEAD.\r\n\r\n<div>\r\nx\r\n\r\n\`\`\`\r\nrate limited by coderabbit.ai\r\n\`\`\`\r\n")"
+expect "…and a CRLF blank line ENDS a raw-HTML block" 0
+# The other direction is unchanged: CRLF does not weaken any of it.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai \
+  "$(crlf "<!-- walkthrough_start -->\r\nReviewed $CLEAN_HEAD.\r\n\r\n<details>\r\n\`\`\`\r\nrate limited by coderabbit.ai\r\n\`\`\`\r\n</details>\r\n")"
+expect "…while a CRLF refusal inside <details> still refuses" 1
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(crlf "<!-- walkthrough_start -->\r\nReviewed $CLEAN_HEAD.\r\n")"
+expect "…and a CRLF clean review still clears" 0
+
+echo
 echo "== the containment itself, not only the cases that broke it =="
 # THE FILE STATES A SAFETY PROPERTY — every line the STRICT rendering keeps is a line the
 # STRIPPED one kept (strict ⊆ stripped) — and it is now STRUCTURAL rather than hoped for:

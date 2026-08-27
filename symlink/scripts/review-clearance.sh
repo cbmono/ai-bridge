@@ -771,7 +771,7 @@ function scan_line(line,   i, col, base, adv, s, k) {
     if (substr(s, 1, 1) == ">") L_DEPTH++; else L_LIST = base
   }
   ws_scan(line, i, col)
-  L_BASE = base; L_INDENT = W_COL - base; L_REST = substr(line, W_I); L_BLANK = (L_REST == "")
+  L_BASE = base; L_INDENT = W_COL - base; L_REST = substr(line, W_I); L_BLANK = (L_REST ~ /^[[:space:]]*$/)
 }
 # fence_of() — the fence marker on the line scan_line() just read, into F_CHAR (its
 # character), F_LEN (the length of its RUN) and F_INFO (the info string after it). The last
@@ -797,7 +797,7 @@ function step(m, containers,   f) {
     if (L_DEPTH < BD[m]) BC[m] = ""
     else if (containers && BI[m] > 0 && !L_BLANK && L_BASE + L_INDENT < BI[m]) BC[m] = ""
     else if (f && F_CHAR == BC[m] && F_LEN >= BL[m] && L_DEPTH == BD[m] \
-             && F_INFO ~ /^[ \t]*$/) { BC[m] = ""; return 1 }
+             && F_INFO ~ /^[[:space:]]*$/) { BC[m] = ""; return 1 }
     else return 2
   }
   if (containers) {
