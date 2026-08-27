@@ -123,7 +123,7 @@ assert "the renderer's predicate was extracted, not transcribed" \
 
 renderable() { # <json array> <slug> -> one path per line, in order
   PRED="$PREDICATE" python3 - "$1" "$2" <<'PY'
-import sys, json, os, re
+import sys, json, os, re, unicodedata
 exec(os.environ["PRED"])
 for e in json.loads(sys.argv[1]):
     keep = bundle_deliverable(e, sys.argv[2])
@@ -148,7 +148,10 @@ cat > "$INST/instance.config.json" <<CFG
   "authorEmail": "nobody@example.com" }
 CFG
 
-# name | class | expected-when-noyaml | the deliverable_paths YAML, `\n` for a newline.
+# name | class | expected | the deliverable_paths YAML, `\n` for a newline.
+# The third field means one thing per class: for `noyaml` it is the documented fallback
+# the board must render; for `gap` it is the entry that gap is KNOWN to FABRICATE, and
+# empty means it fabricates nothing. Empty for `agree`, which is pinned exactly.
 # `SLUG` is replaced by the shape's own slug, so every shape addresses its own project
 # and a value that renders can only have come from the shape that wrote it.
 #
@@ -199,6 +202,7 @@ SHAPES=(
   # --- the flow sequence really does end at the first UNQUOTED `]` --------------
   "bracket-unquoted|agree||deliverable_paths: [ /projects/SLUG/deliverables/a] #1.md, /projects/SLUG/deliverables/b.md ]"
   "hash-on-bracket|gap||deliverable_paths: [ /projects/SLUG/deliverables/a.md ]#note"
+  "hash-on-bracket-comma|gap|/projects/SLUG/deliverables/ghost.md|deliverable_paths: [ /projects/SLUG/deliverables/a.md ]#kept, /projects/SLUG/deliverables/ghost.md"
   "mixed-quoting|gap||deliverable_paths: [ \"/projects/SLUG/deliverables/a.md\", /projects/SLUG/deliverables/b.md ]"
   # --- values that must never render, comment or no comment ---------------------
   "two-paths|agree||deliverable_paths: [ /projects/SLUG/deliverables/report.md $ABS ]"
@@ -221,13 +225,33 @@ SHAPES=(
 # — never an out-of-bundle one, which is what the sweep at the end of this file pins:
 #   hash-on-bracket `]#note` with no space is not a comment start for the cut (YAML
 #                   ends the sequence at the `]` and reads `#note` as a comment), so the
-#                   comment text survives into the split.
+#                   comment text survives into the split. Spelled with no comma the
+#                   fragments are unrenderable and nothing appears.
+#   hash-on-bracket-comma
+#                   the same gap with a COMMA in the comment, which is the half that
+#                   costs something: the splitter cuts there, so the text after it is a
+#                   whole well-formed path and RENDERS while the real `a.md` — the only
+#                   entry the parser returns — is dropped.
 #   mixed-quoting   the splitter picks ONE separator for the whole line — a quote-comma
 #                   seam if any quote is present — so a list mixing quoted and unquoted
 #                   entries splits on the wrong one.
 # AGREE_FLOOR is what stops a NEW gap hiding among them. Fixing one of these RAISES the
 # count and stays green, deliberately.
-GAPS=" hash-on-bracket mixed-quoting "
+#
+# THE BOUND ON A GAP, CORRECTED. This file used to assert of every gap that "the gap
+# drops entries — it never fabricates one". That bound is FALSE, and it read green only
+# because the one gap that could have contradicted it was spelled without the comma:
+# `]#note` renders nothing at all, so the assertion compared an empty list against an
+# empty list and certified nothing. The comma variant above is the missing case, and it
+# does fabricate. So the bound each gap is now held to is the one that is true and still
+# worth having: a gap may DROP any entry, and may fabricate ONLY the entry named in its
+# own row — anything else it renders fails. What no gap may do, comma or not, is put an
+# out-of-bundle path on the page; that is the sentinel sweep at the end of this file,
+# and it is the property the fabrication here does not touch (`ghost.md` is inside
+# `/projects/<slug>/deliverables/`, which is why it is a defect worth a task rather than
+# a leak worth a round). Attributed: identical at 30c0305, cd44aca and here — a splitter
+# limit this PR neither introduced nor enlarged.
+GAPS=" hash-on-bracket hash-on-bracket-comma mixed-quoting "
 AGREE_FLOOR=42
 
 slug_of() { printf '%s' "$1"; }
@@ -296,17 +320,24 @@ for s in "${SHAPES[@]}"; do
         printf '  NOTE  %s: known gap (parser %s | board %s)\n' \
           "$name" "$(printf '%s' "$want" | tr '\n' ' ')" "$(printf '%s' "$got" | tr '\n' ' ')"
       fi
-      # A gap is allowed to DROP an entry the parser returns. It is never allowed to
-      # RENDER one the parser did not — that is the whole difference between a missing
-      # deliverable a human can see is missing and a FABRICATED path, and it is what six
-      # review rounds of this parser were about. So the gaps are bounded in the one
-      # direction that matters, rather than merely counted.
+      # A gap is allowed to DROP an entry the parser returns. What it renders that the
+      # parser did NOT return is a FABRICATED path — the difference between a missing
+      # deliverable a human can see is missing and an invented one — so every gap is
+      # held to the exact set of fabrications its own row declares, which for two of the
+      # three is none at all. Pinning the set rather than forbidding it outright is what
+      # keeps this honest: forbidding it was the false bound, and it stayed green only
+      # over a shape that rendered nothing.
       extra=""
       while IFS= read -r got_line; do
         [[ -n "$got_line" ]] || continue
         printf '%s\n' "$want" | grep -qxF -- "$got_line" || extra="$extra$got_line "
       done <<< "$got"
-      assert "$name: the gap drops entries — it never fabricates one" "$(eq "$extra" "")"
+      # `${x:+…}` and not `[[ -n ]] && …`, whose exit status would trip `set -e` on
+      # every gap that declares nothing — i.e. on the common case.
+      declared="${expected//SLUG/$slug}"
+      declared="${declared:+$declared }"
+      assert "$name: the gap fabricates exactly what its row declares, and no more" \
+        "$(eq "$extra" "$declared")"
       ;;
     *) assert "$name: the board renders exactly what the parser reads" \
          "$( [[ "$want" == "$got" ]] && echo 0 || { printf '        parser: %s\n        board:  %s\n' \

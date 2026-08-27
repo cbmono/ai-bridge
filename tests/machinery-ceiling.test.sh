@@ -450,15 +450,17 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # The lesson is not "check harder". A claim about a data format is exactly the kind that
 # cannot be settled in review, and the harness that settled it was never committed — so
 # the property held for one round and nothing guarded it. It is committed now
-# (tests/deliverable-paths-vs-yaml.test.sh), it runs against a real parser on every run,
-# and it pins the agreement count.
+# (tests/deliverable-paths-vs-yaml.test.sh), it runs against a real parser whenever the
+# suite is run, and it pins the agreement count. NOT "in CI": this repo has no CI at all
+# — no `.github/`, no `.gitlab-ci.yml`, no `Makefile` — so "committed" is the whole of
+# the guarantee, and a heading here said otherwise until it was measured.
 #
 # build-board.sh's +3 total, 0 code is one header claim narrowed: "a bundle-relative
 # shape is the only kind of path this page renders" overreached — the other-owners
 # section renders a `/projects/<slug>/` from an unvalidated slug, which this guard does
 # not cover (task-020).
 #
-# ---- round seven: a whitelist for the segment too, and the parser check in CI ----
+# ---- round seven: a whitelist for the segment too, and the parser check committed ----
 #
 #   6,876 / 3,660   20 files   what the raise above pinned
 #   6,916 / 3,662   20 files   +40 total, +2 code
@@ -484,8 +486,40 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 #
 # THE DEBT ABOVE IS UNCHANGED, A SEVENTH TIME. The code figure has now moved by +14, -3,
 # -1, -3, +14, +2 across the six raises — the machinery is not growing, the reasoning is.
-CEILING_TOTAL=6916
-CEILING_CODE=3662
+#
+# ---- round eight: the class was Unicode-wide by ARGUMENT, and NFD proved it was not ----
+#
+#   6,916 / 3,662   20 files   what the raise above pinned
+#   6,939 / 3,665   20 files   +23 total, +3 code
+#
+#   build-board.sh            1,286 -> 1,308   +22 total, +3 code
+#   write-snapshot.sh           644 ->   645    +1 total,  0 code
+#
+# THREE CODE LINES, and they close the round-seven raise's own claim. That raise put a
+# POSITIVE segment class in — the right move, and it holds — but justified its width in
+# a comment that said `\w` covers "the combining marks a macOS directory listing
+# decomposes an umlaut into". IT DOES NOT: a combining mark is Unicode category M and
+# `\w` is alphanumerics plus `_`. So a macOS-decomposed `Übersicht.md` — `U` + U+0308,
+# a LEGITIMATELY stamped deliverable, not an attack — was dropped from the panel, with
+# the count tag agreeing with the short list so nothing looked wrong. Marks are now
+# stripped from the string the shape is TESTED on and kept in the string RETURNED, which
+# is complete where NFC-normalising would not have been (Devanagari matras, Thai vowel
+# signs and Hebrew points have no precomposed form). The third code line is the price:
+# stripping marks strips them from the SLUG too, so the slug is pinned on the original
+# value or `/projects/p̈/deliverables/x.md` would render as project `p`'s own.
+#
+# WHY NOTHING CAUGHT IT, which is the part worth carrying: the differential harness
+# committed one round earlier is STRUCTURALLY BLIND to an over-rejecting predicate. It
+# filters the parser's answer through the same extracted predicate, so when the
+# predicate drops an entry both sides drop it and agree — an ASCII-only class leaves
+# that harness 56/0 green while tests/snapshot.test.sh goes red. A differential check
+# bounds DISAGREEMENT with an oracle; it cannot bound agreement that is wrong in the
+# same direction on both sides. That is why the NFD case is pinned in snapshot.test.sh
+# and not here.
+#
+# THE DEBT ABOVE IS UNCHANGED, AN EIGHTH TIME.
+CEILING_TOTAL=6939
+CEILING_CODE=3665
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

@@ -176,7 +176,7 @@ command -v python3 >/dev/null 2>&1 || {
 
 BOARD_OUT="$OUT" BOARD_STANDALONE="$STANDALONE" BOARD_LIST_ONLY="$LIST_ONLY" \
   python3 - "${DIRS[@]+"${DIRS[@]}"}" <<'PY'
-import html, json, os, re, subprocess, sys, time
+import html, json, os, re, subprocess, sys, time, unicodedata
 from pathlib import Path
 
 OUT = Path(os.environ["BOARD_OUT"])
@@ -794,9 +794,20 @@ TABLE_SCRIPT = r"""<script>
 #
 #   segment  what a FILENAME may be made of, stated as a set rather than as the set's
 #            complement: a word character (`\w` — Unicode-aware on a `str`, so a letter
-#            in any script, a digit, `_`, and the combining marks a macOS directory
-#            listing decomposes an umlaut into), then any run of word characters, `.`,
-#            `-` and `+`.
+#            in any script, a digit, `_`), then any run of word characters, `.`, `-`
+#            and `+`.
+#   marks    `\w` does NOT include a COMBINING MARK (Unicode category M), and a comment
+#            here once claimed it did. macOS hands back decomposed filenames, so a
+#            stamped `Übersicht.md` can arrive as `U` + U+0308 + `bersicht.md` and was
+#            silently dropped — the "loses a real entry" class three rounds went to
+#            eliminate. Marks are therefore removed from the string the shape is TESTED
+#            on and kept in the string that is RETURNED. Stripping is safe because a
+#            mark is decoration on the preceding base character: category M contains no
+#            separator, no whitespace, no `#`, `:` or `/`, so removing them can only
+#            turn a value the shape would have rejected into one it accepts, never
+#            change what the accepted value points AT. It is also complete where
+#            NFC-normalising is not — Devanagari matras, Thai vowel signs and Hebrew
+#            points have no precomposed form and would still have been dropped.
 #   whole    `/projects/<slug>/deliverables/` then one or more segments — and
 #            fullmatch(), which is what makes "no trailing remainder" part of the shape
 #            instead of one more separate check.
@@ -817,11 +828,12 @@ TABLE_SCRIPT = r"""<script>
 #   · `.` — required (every extension has one). `.` and `..` as WHOLE segments are
 #     impossible by construction, because a segment must begin with a word character,
 #     so traversal needs no rule of its own.
-#   · a word character in any script — so two filenames can be homoglyphs (Cyrillic `а`
-#     vs Latin `a`) and look alike on the page. Containment is unaffected: the value
-#     still resolves inside this project's own `deliverables/`, which is the guarantee
-#     this guard makes. Excluding non-ASCII instead would silently drop a legitimately
-#     stamped `Übersicht.md`, which is the more likely event by far.
+#   · a word character in any script, plus any combining mark — so two filenames can be
+#     homoglyphs (Cyrillic `а` vs Latin `a`), or differ only by an invisible mark, and
+#     look alike on the page. Containment is unaffected: the value still resolves inside
+#     this project's own `deliverables/`, which is the guarantee this guard makes.
+#     Excluding non-ASCII instead would silently drop a legitimately stamped
+#     `Übersicht.md`, which is the more likely event by far.
 #
 # WHAT IT COSTS, said plainly: a deliverable whose filename contains a space, `&`, `'`,
 # `(`, `%` or `,` is dropped from the panel — visibly, because the count is computed from
@@ -851,8 +863,18 @@ def bundle_deliverable(path, slug):
     to trust it — a human can hand-edit project.md, and SNAPSHOT.json is a file on disk
     this renderer reads back without knowing who wrote it.
     """
-    m = DELIV_PATH.fullmatch(str(path or ""))
-    return m.group(0) if m and m.group(1) == slug else None
+    value = str(path or "")
+    probe = "".join(c for c in value if unicodedata.category(c)[0] != "M")
+    # THE SHAPE IS TESTED ON `probe`, SO THE SLUG IS PINNED ON `value`. Stripping marks
+    # from the whole string also strips them from the slug, and `m.group(1) == slug`
+    # would then read `/projects/p̈/deliverables/x.md` as project `p`'s own deliverable —
+    # a button pointing at a NEIGHBOURING project's directory. Comparing the original
+    # prefix closes that, and the slug is still checked as one well-formed segment by
+    # the fullmatch above (which is what rejects a `..` or a `a/b` slug), so this is an
+    # identity check on top of the shape check, not a return to trusting a prefix.
+    if not DELIV_PATH.fullmatch(probe):
+        return None
+    return value if value.startswith("/projects/%s/deliverables/" % slug) else None
 
 
 def short_ref(slug, tid):

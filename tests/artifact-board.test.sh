@@ -162,7 +162,8 @@ mk "$TMP/delivs" "delivs" '[
                         "/projects/with-delivs/deliverables/report.md ]   # from /Users/attacker/notes [old]",
                         "/projects/with-delivs/deliverables/report.md /Users/attacker/Desktop/report.md",
                         "/projects/with-delivs/deliverables/see#/Users/attacker/secret",
-                        "/projects/with-delivs/deliverables/report.md\n/Users/attacker/Desktop/notes.md"]},
+                        "/projects/with-delivs/deliverables/report.md\n/Users/attacker/Desktop/notes.md",
+                        "/projects/with-delivs\u0308/deliverables/elsewhere.md"]},
  {"slug":"..","title":"Hostile slug","kind":"research","status":"done",
   "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[],
@@ -228,6 +229,19 @@ assert "a trailing remainder after a newline is dropped" \
 # guard compared the value against a prefix the value itself had chosen.
 assert "a hostile slug cannot render a path out of the bundle" \
   "$(fhasnt 'data-copy="/projects/../' "$DOUT")"
+# THE SLUG AGAIN, THROUGH A COMBINING MARK. bundle_deliverable() strips category-M
+# characters before it tests the SHAPE, so that a macOS-decomposed filename is not
+# dropped. Strip them from the whole value and they come off the SLUG too: `with-delivs`
+# + U+0308 reduces to `with-delivs`, the shape matches, and a button would point at a
+# NEIGHBOURING project's directory while claiming to be this project's deliverable.
+# What rejects it is that the slug is pinned on the ORIGINAL value, not on the stripped
+# one — the mark-tolerance is bought for the filename segments only.
+# Asserted with no_copy_value_with and not a whole-file `fhasnt`, for the reason this
+# file already learned once: a page-wide grep is only an assertion while no OTHER
+# fixture can satisfy it, and the thing being denied here is specifically a data-copy
+# VALUE.
+assert "a combining mark in the slug does not smuggle in another project's path" \
+  "$(yes_if no_copy_value_with 'elsewhere.md' "$DOUT")"
 assert "…and that project gets no deliverables panel at all" "$(yes_if python3 -c "
 import sys
 t = open('$DOUT').read()

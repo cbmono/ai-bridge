@@ -551,6 +551,33 @@ deliverable_paths: [ /projects/umlaut/deliverables/Übersicht.md, /projects/umla
 ---
 PRJ
 
+# NFD — the SAME filename macOS hands back DECOMPOSED, which is a legitimately stamped
+# deliverable rather than an exotic input: a macOS directory listing spells `Ü` as
+# `U` + U+0308, so closeout resolving an `artifacts:` entry off one stamps exactly this.
+# The segment class admitted `\w`, which does NOT include a combining mark (Unicode
+# category M) — so the entry was dropped, the project rendered one deliverable short,
+# and the count tag agreed with the short list, so nothing looked wrong. That is the
+# "loses a real entry" class, reached through a filename instead of through a comment.
+#
+# The name is BUILT from an escape rather than typed, because an editor or a formatter
+# that normalises this file would otherwise turn the fixture into its NFC twin silently
+# and leave the assertions green over a case the file no longer contains. The first
+# assertion below is what makes that non-vacuous.
+NFD_UE="$(printf 'U\xcc\x88')"          # U+0055 U+0308 — NOT the single codepoint U+00DC
+NFD_NAME="${NFD_UE}bersicht-nfd.md"
+mkdir -p "$ALPHA/projects/nfd"
+cat > "$ALPHA/projects/nfd/project.md" <<PRJ
+---
+type: Project
+title: A deliverable macOS handed back decomposed
+description: a combining mark belongs to a legitimate filename, not to an attack
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/nfd/deliverables/$NFD_NAME ]
+---
+PRJ
+
 # Every task terminal ⇒ the board shows a close PROPOSAL, never an action.
 #
 # Its `deliverable_paths:` line is the HAND-EDITED shape: someone opened a quote and
@@ -651,7 +678,7 @@ echo "== a real snapshot, once the switch is on =="
 touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
-assert "…with the project count"           "$(has '14 project(s)' "$RUN_OUT")"
+assert "…with the project count"           "$(has '15 project(s)' "$RUN_OUT")"
 # 7, not 8: the done project's task is never counted, because it is never read.
 assert "…and the task count"                "$(has '7 task(s)' "$RUN_OUT")"
 assert "…and the awaiting count (6 verbs across 4 live projects)" "$(has '6 awaiting' "$RUN_OUT")"
@@ -923,6 +950,21 @@ p=[p for p in d["projects"] if p["slug"]=="umlaut"][0]
 sys.exit(0 if p["deliverable_paths"]==["/projects/umlaut/deliverables/\u00dcbersicht.md",
                                        "/projects/umlaut/deliverables/roh-\u00dc#1.md",
                                        "/projects/umlaut/deliverables/plain.md"] else 1)' "$SNAP")"
+# The fixture is only a test of NFD while it is still decomposed. Asserted before
+# anything is asserted ABOUT it, so a file that got normalised on its way through an
+# editor fails here rather than passing everything below over its NFC twin.
+assert "the NFD fixture really is decomposed, not its NFC twin" \
+  "$(yes_if python3 -c '
+import sys, unicodedata
+n=sys.argv[1]
+sys.exit(0 if n!=unicodedata.normalize("NFC",n)
+              and any(unicodedata.category(c)[0]=="M" for c in n) else 1)' "$NFD_NAME")"
+assert "…and the decomposed filename reaches the snapshot whole" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="nfd"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/nfd/deliverables/"+sys.argv[2]] else 1)' "$SNAP" "$NFD_NAME")"
 # The same defect, reached the other way round — through the VALUE rather than the
 # comment. The `finished` fixture's line opens a quote and never closes it, so a strip
 # that decided where the list ended by tracking quote state found no unquoted `]`, kept
@@ -1084,6 +1126,11 @@ assert "…and an ordinary single-quoted list renders both entries" \
   "$(yes_if sh -c 'grep -qF "data-copy=\"/projects/sqplain/deliverables/a.md\"" "$1" && grep -qF "data-copy=\"/projects/sqplain/deliverables/b.md\"" "$1"' _ "$HTML")"
 assert "…and a non-ASCII filename renders as itself"           \
   "$(fhas 'data-copy="/projects/umlaut/deliverables/Übersicht.md"' "$HTML")"
+# …and so does the DECOMPOSED spelling of the same name. `\w` matches the NFC form and
+# not the NFD one, so this is the half the fixture above cannot certify: a class that
+# admits `Übersicht.md` still drops what a macOS listing actually hands back.
+assert "…and so does the same name spelled decomposed (NFD)"   \
+  "$(fhas "data-copy=\"/projects/nfd/deliverables/$NFD_NAME\"" "$HTML")"
 # Criterion 4 against the comma-split shape, on the same real page. The `handedited`
 # fixture's comment hides a second, prefix-correct path after a comma; if the comment
 # survives the parse, THIS is the button it becomes.
@@ -1127,11 +1174,11 @@ assert "…nor is a filename truncated on a list that never closes" \
   "$(fhasnt 'data-copy="/projects/unterminated/deliverables/a"' "$HTML")"
 assert "…while its readable clean entry is still a button" \
   "$(fhas 'data-copy="/projects/unterminated/deliverables/b.md"' "$HTML")"
-# EXACTLY twelve deliverable buttons on this page — one per fixture whose line yields a
-# whole, well-formed path (retained, finished, handedited, blockform's first entry,
+# EXACTLY thirteen deliverable buttons on this page — one per fixture whose line yields
+# a whole, well-formed path (retained, finished, handedited, blockform's first entry,
 # `sibling`'s single entry, the clean second entry of `quoted` and `unterminated`,
-# `sqescaped`'s clean sibling, both of `sqplain`'s and both of `umlaut`'s; `plain` and
-# `colon` yield none, each being two paths in one value) — and both failure directions are silent, sitting either
+# `sqescaped`'s clean sibling, both of `sqplain`'s, both of `umlaut`'s and `nfd`'s one;
+# `plain` and `colon` yield none, each being two paths in one value) — and both failure directions are silent, sitting either
 # side of the same fix. Too FEW is the documented comment form costing a panel: a strip
 # anchored on the line's last bracket leaves SCHEMA.md's own comment in the value, the
 # shape check drops the only entry, and the retained project renders with no
@@ -1140,7 +1187,7 @@ assert "…while its readable clean entry is still a button" \
 # comment fragment rendering as a path. A `fhas` on any one button sees none of it.
 DELIV_BTNS="$(grep -oF 'data-what="Deliverable path"' "$HTML" | grep -c . || true)"
 assert "exactly one copy button per stamped path, no more and no fewer (saw $DELIV_BTNS)" \
-  "$(eq "$DELIV_BTNS" 12)"
+  "$(eq "$DELIV_BTNS" 13)"
 assert "no filesystem path reaches the page"        "$(fhasnt "$TMP" "$HTML")"
 # Belt and braces, because the check above depends on how the fixture path is spelled:
 # an instance is named by its DIRECTORY NAME, so the name must never appear with a
@@ -1253,13 +1300,13 @@ assert "…with exactly one <body> element" "$(eq "$(grep -cF '<body>' "$SA")" 1
 # there is no drift to pin. tests/artifact-board.test.sh asserts the <details> behaviour
 # (collapsed by default, finished projects under a divider) where the markup lives.
 # Two, not four, is still the fact worth reading off the page: beta is malformed and
-# gamma has no snapshot, so neither is an instance on the board. Fifteen blocks: alpha's
-# fourteen projects — including the RETAINED done ones, which are on the board as
+# gamma has no snapshot, so neither is an instance on the board. Sixteen blocks: alpha's
+# fifteen projects — including the RETAINED done ones, which are on the board as
 # reference cards even though their tasks were never read, and the five whose
 # deliverable_paths line is hostile, which are still projects and still render — plus
 # delta's one.
 assert "one project block per project of the 2 rendered instances" \
-  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 15)"
+  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 16)"
 
 echo "== discovery is explicit, never a glob =="
 D1="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d1.html" 2>&1 )"

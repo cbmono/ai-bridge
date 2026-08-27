@@ -337,8 +337,9 @@ depends_ids() { # <frontmatter>
 #     comment can only begin after one. `[ …/a] #1.md, …/b.md ]` is therefore ONE
 #     entry, `…/a`, and everything from ` #1.md` on is comment — the reason this is not
 #     a "lost sibling" but the parser's own reading, and `…/b.md` must NOT render.
-#     A quote only opens a scalar where a scalar may START (line start, or after `[` or
-#     `,`), so an apostrophe inside a plain path is not a quote. BOTH of YAML's escapes
+#     A quote only opens a scalar where a scalar may START — FOUR positions, which is
+#     what `fresh` below is set from: line start, after whitespace, after `[`, after
+#     `,`. So an apostrophe inside a plain path is not a quote. BOTH of YAML's escapes
 #     are needed to find where a scalar ENDS, and there is exactly one per quote style:
 #     `\"` does not close a double-quoted scalar, and `''` does not close a single-quoted
 #     one — it IS an apostrophe. Handle only the first and
