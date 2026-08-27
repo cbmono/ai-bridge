@@ -337,8 +337,40 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # the guard is what holds when a document is malformed in a way no parser will fix.
 #
 # THE DEBT ABOVE IS UNCHANGED, ONCE MORE.
-CEILING_TOTAL=6803
-CEILING_CODE=3650
+#
+# ---- round four: the strip moves to ONE key, and stops growing the shared helper ----
+#
+#   6,803 / 3,650   20 files   what the raise above pinned
+#   6,808 / 3,649   20 files   +5 total, -1 CODE
+#
+# Per file:
+#
+#   write-snapshot.sh           572 ->   575    +3 total, -1 code
+#   build-board.sh            1,245 -> 1,247    +2 total,  0 code
+#
+# WHAT THE LINES BUY — and read the two rounds above first, because this one UNDOES
+# their code. Both of them fixed a trailing-comment defect from inside list_region(),
+# the helper six keys share, and both broke a free-text key on the way past; the `sub()`
+# the last round settled on then declined the one comment shape SCHEMA.md actually
+# documents (one carrying a `]`), which left the value comment-shaped, and the entries
+# are re-split on COMMAS after that — so `bundle_deliverable()`'s per-entry `#` check
+# saw the `#` in one fragment while an absolute path rode out in the next one and
+# rendered as a copy button. A guard that runs after the split cannot fix a defect that
+# happens during it.
+#
+# So list_region() goes back to BYTE-IDENTICAL to main's — comment-agnostic, five
+# free-text keys out of the blast radius for good — and the strip moves to the one
+# consumer that can afford it, deliverable_path_entries(), whose entries are bare paths
+# rather than prose. That is the -1 code: two sed expressions and a splitter reused by
+# both callers, in place of three rounds of scanning logic in the shared helper.
+#
+# build-board.sh's +2 is comment only. The `#` check stays — SNAPSHOT.json is a file on
+# disk this renderer reads back without knowing who wrote it — but the comment claiming
+# it was what made the declined case safe is gone, because it never was.
+#
+# THE DEBT ABOVE IS UNCHANGED, A FOURTH TIME.
+CEILING_TOTAL=6808
+CEILING_CODE=3649
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

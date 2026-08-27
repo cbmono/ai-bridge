@@ -789,8 +789,8 @@ def bundle_deliverable(path, slug):
     same rule href() applies to a PR URL's scheme: closeout already verifies and
     stamps this shape (close-project-folder.sh), but the writer having
     restricted what it collects is never a reason for the reader to trust it — a
-    human can still hand-edit project.md, and this is the last point before an
-    absolute filesystem path or a traversal could reach a published page.
+    human can still hand-edit project.md, and SNAPSHOT.json is a file on disk this
+    renderer reads back without knowing who wrote it.
     """
     p = str(path or "")
     prefix = "/projects/%s/deliverables/" % slug
@@ -802,13 +802,15 @@ def bundle_deliverable(path, slug):
     if any(seg in ("", ".", "..") for seg in rest.split("/")):
         return None
     # …and a `#`, which no path closeout stamps can contain but every YAML comment
-    # starts with. A `#` here means a trailing comment on the `deliverable_paths:`
-    # line was swallowed into the value: write-snapshot.sh's list_region() strips
-    # those except in the one case it declines (a comment carrying a `]` of its own),
-    # because ending a list early would silently drop entries. This is where that
-    # declined case stops. The swallowed text is whatever the comment said — up to
-    # and including the publisher's absolute path — and a comment-shaped value must
-    # never become a data-copy on a published page.
+    # starts with — a swallowed trailing comment on a `deliverable_paths:` line, whose
+    # text is whatever was typed there, up to a path off the publisher's own disk.
+    #
+    # THIS IS NOT WHAT MAKES THAT CASE SAFE — reading it that way is the mistake this
+    # comment exists to prevent. The comment is stripped upstream, in write-snapshot.sh's
+    # deliverable_path_entries(), BEFORE the value is split; it has to be, because this
+    # check sees one ENTRY at a time and a comment containing a comma is split across
+    # two, leaving the `#` in the first and the payload in the second. What this covers
+    # is the input that never met that parser: a hand-written or drifted SNAPSHOT.json.
     if "#" in rest:
         return None
     return p

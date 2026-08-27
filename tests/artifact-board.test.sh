@@ -178,17 +178,34 @@ assert "the panel is titled with a count that matches what renders" \
 echo "== every rendered path is bundle-relative to THIS project — nothing else survives =="
 assert "another project's deliverable is dropped"     "$(fhasnt 'other-project/deliverables' "$DOUT")"
 assert "an absolute filesystem path is dropped"       "$(fhasnt 'attacker' "$DOUT")"
-assert "…and never as a data-copy value"              "$(fhasnt 'data-copy="/Users' "$DOUT")"
+# LOOK INSIDE THE VALUE. `fhasnt 'data-copy="/Users'` only says no value BEGINS with
+# /Users — and the leak this exists to catch puts the absolute path in the MIDDLE of a
+# value whose first characters are a perfectly good bundle-relative prefix (a swallowed
+# YAML comment, see the last fixture entry). Spelled the first way, this assertion read
+# green on a page that was leaking, which is worse than not having it at all.
+no_copy_value_with() { # <needle> <file>
+  ! grep -o 'data-copy="[^"]*"' "$2" | grep -qF -- "$1"
+}
+assert "…and no /Users ANYWHERE inside a data-copy value" \
+  "$(yes_if no_copy_value_with '/Users' "$DOUT")"
 assert "a traversal attempt is dropped"               "$(fhasnt 'etc/passwd' "$DOUT")"
 assert "a traversal attempt through a nested segment is dropped too" "$(fhasnt 'etc/shadow' "$DOUT")"
-# The last entry is a REAL path with a YAML trailing comment folded into it — the shape
-# write-snapshot.sh's list_region() produces for the one comment it declines to strip
-# (one carrying a `]` of its own, where stripping could end a list early and silently
-# drop entries). Its prefix is this project's, and it has no `..`, so every other rule
-# here passes it; only the `#` says what it is. It leaks an absolute path if rendered.
+# The last entry is a REAL path with a YAML trailing comment folded into it. The writer
+# strips that comment before it can ever get this far (write-snapshot.sh's
+# deliverable_path_entries), so what this fixture stands for is the input that never met
+# the writer at all: SNAPSHOT.json is a file on disk, and this renderer reads it back
+# without knowing who wrote it. Its prefix is this project's and it has no `..`, so every
+# other rule here passes it; only the `#` says what it is, and it leaks an absolute path
+# if rendered.
 assert "a swallowed YAML comment is dropped, not rendered as a path" \
   "$(fhasnt 'report.md ]' "$DOUT")"
-assert "…so the count still matches what renders"     "$(fhas 'Deliverables · 3' "$DOUT")"
+# Not a second `Deliverables · 3` grep — that was byte-identical to the assertion above
+# and could not fail independently of it. Counting the BUTTONS is the half the heading
+# cannot certify: heading and list are built from the same filtered sequence, so a
+# desync between them is exactly what a count of one and not the other would miss.
+DELIV_BTNS="$(grep -oF 'data-what="Deliverable path"' "$DOUT" | grep -c . || true)"
+assert "…and the buttons themselves number 3, matching that heading (saw $DELIV_BTNS)" \
+  "$(eq "$DELIV_BTNS" 3)"
 echo "== absent/empty deliverable_paths renders no panel, and no error =="
 # The exit code itself, not file non-emptiness — a renderer that wrote partial output
 # and then failed would still pass a `test -s` check.

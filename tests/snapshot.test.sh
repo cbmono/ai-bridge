@@ -252,14 +252,15 @@ TSK
 
 # Two open questions, EACH carrying a `]` before the list's own closing bracket: one a
 # Markdown PR link in the `[repo#N](url)` style this bundle's own CLAUDE.md mandates
-# for citing PRs, the other just ordinary brackets. list_region()'s comment strip (added
-# to fix a trailing YAML comment on `deliverable_paths:`) is shared by every list key, so
-# a version that truncated at the FIRST `]` stopped inside Q1's own link and dropped Q2
-# off a list that gates draft -> ready and feeds AWAITING.md. The quote-parity version
-# that replaced it stopped at that SAME `]`: Q1's link sits between two ESCAPED quotes,
-# where counting `"` characters reads the parity as "outside a quote". One fixture, both
-# wrong answers — whatever the strip keys on must never be something an entry's own text
-# can spell.
+# for citing PRs, the other just ordinary brackets. This is the fixture that says WHY
+# list_region() is comment-agnostic and the trailing-comment strip lives at the
+# `deliverable_paths` consumer instead. Two attempts to strip from the shared helper
+# both ended this list early: one truncated at the FIRST `]`, inside Q1's own link; the
+# next tracked quote parity and stopped at that SAME `]`, because Q1's link sits between
+# two ESCAPED quotes and counting `"` characters reads the parity as "outside a quote".
+# Either way Q2 vanished off a list that gates draft -> ready and feeds AWAITING.md, and
+# a dropped entry shows up nowhere. One fixture, both wrong answers — whatever decides
+# where a free-text list ends must never be something an entry's own text can spell.
 cat > "$ALPHA/projects/ci/tasks/task-006.md" <<'TSK'
 ---
 type: Task
@@ -280,6 +281,31 @@ title: Nothing here yet
 description: scaffolded, not started
 kind: research
 status: active
+---
+PRJ
+
+# The COMMA-SPLIT shape, and it needs its own project because it needs an UNQUOTED
+# value — the `finished` fixture below opens a quote, which sends the splitter down its
+# quote-seam branch and cannot split on a comma at all.
+#
+# What it pins: a swallowed trailing comment is not one bad entry, it is TWO. The
+# entries are re-split on commas after the value is taken, so a comment containing one
+# puts the `#` in the first fragment and everything after the comma in the SECOND — and
+# that second fragment carries this project's own `/projects/<slug>/deliverables/`
+# prefix, no `..`, and no `#`, so every per-entry rule the renderer applies passes it
+# and the publisher's absolute path renders as a copy button. A per-entry guard cannot
+# see this; the comment has to be gone before the split. The `[old]` at the end is not
+# decoration either: it puts a `]` after the comment's `#`, which is exactly the case a
+# strip anchored on the LAST bracket of the line declines to touch.
+mkdir -p "$ALPHA/projects/handedited"
+cat > "$ALPHA/projects/handedited/project.md" <<PRJ
+---
+type: Project
+title: Hand-edited deliverables
+description: someone typed the deliverable_paths line themselves
+kind: research
+status: active
+deliverable_paths: [ /projects/handedited/deliverables/report.md ]   # hand-edited; kept, /projects/handedited/deliverables/see $SECRET_ABS_PATH [old]
 ---
 PRJ
 
@@ -323,10 +349,15 @@ description: finished, kept as a reference surface
 kind: research
 status: done
 retain: true
-# The trailing comment (including its comma) is exactly SCHEMA.md's documented form
-# for this key — a real project.md is allowed to look like this, so the fixture does
-# too rather than the tidier form the writer would produce itself.
-deliverable_paths: [ /projects/retained/deliverables/deck.md ]   # WRITTEN BY CLOSEOUT, not by hand.
+# The trailing comment is SCHEMA.md:72's documented comment for this key, VERBATIM and
+# whole — commas, backticks and the `[ ]` it names included. A real project.md is
+# allowed to look like this, so the fixture does too rather than the tidier form the
+# writer would produce itself. Copying only its FIRST SENTENCE is what an earlier round
+# did, and it cut the line one word before the `[ ]` that makes it hard: a comment
+# carrying a `]` of its own defeats any strip that decides where the list ends by
+# looking for the LAST bracket on the line. Green over the easy half of the case it
+# names is worse than no test — if you shorten this line, you have deleted the test.
+deliverable_paths: [ /projects/retained/deliverables/deck.md ]   # WRITTEN BY CLOSEOUT, not by hand. Bundle-relative paths, resolved once from each task's `artifacts:` and verified on disk at closeout. `[ ]` means closeout looked and found none.
 ---
 PRJ
 cat > "$ALPHA/projects/retained/phases/phase-1.md" <<'PH'
@@ -376,10 +407,10 @@ echo "== a real snapshot, once the switch is on =="
 touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
-assert "…with the project count"           "$(has '4 project(s)' "$RUN_OUT")"
+assert "…with the project count"           "$(has '5 project(s)' "$RUN_OUT")"
 # 7, not 8: the done project's task is never counted, because it is never read.
 assert "…and the task count"                "$(has '7 task(s)' "$RUN_OUT")"
-assert "…and the awaiting count (6 verbs across 3 live projects)" "$(has '6 awaiting' "$RUN_OUT")"
+assert "…and the awaiting count (6 verbs across 4 live projects)" "$(has '6 awaiting' "$RUN_OUT")"
 assert "the file is non-empty"              "$(yes_if test -s "$SNAP")"
 assert "it parses as JSON"                  "$(yes_if python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$SNAP")"
 assert "no temp file was left behind"       "$(yes_if sh -c '! ls "$1".tmp.* >/dev/null 2>&1' _ "$SNAP")"
@@ -444,11 +475,11 @@ d=json.load(open(sys.argv[1]))
 p=[p for p in d["projects"] if p["slug"]=="ci"][0]
 t=[t for t in p["tasks"] if t["id"]=="task-001"][0]
 sys.exit(0 if t["open_questions"]==2 else 1)' "$SNAP")"
-# Regression for the shared list_region()'s `]`-truncation swallowing a real second
-# question whenever an entry's own text carries a `]` before the list's closing one —
-# a Markdown PR link (`[repo#N](url)`) in Q1, bare brackets in Q2, and an escaped `\"`
-# inside Q1 for the quote-parity variant of the same silent drop. All must still be
-# counted; losing any is the drop this pins (task-007 fix rounds 2-3).
+# Regression for a shared list_region() that decides where a free-text list ENDS and
+# swallows a real second question whenever an entry's own text carries a `]` before the
+# list's closing one — a Markdown PR link (`[repo#N](url)`) in Q1, bare brackets in Q2,
+# and an escaped `\"` inside Q1 for the quote-parity variant of the same silent drop.
+# All must still be counted; losing any is the drop this pins (task-007 rounds 2-4).
 assert "a ] INSIDE an entry does not end the list early (task-006, 2 questions)" \
   "$(yes_if python3 -c '
 import json,sys
@@ -553,6 +584,29 @@ sys.exit(0 if r["deliverable_paths"]==["/projects/retained/deliverables/deck.md"
 # mode directly, so a regression names itself instead of just failing the exact-match.
 assert "…and the trailing comment never reaches the snapshot at all" \
   "$(fhasnt "WRITTEN BY CLOSEOUT" "$SNAP")"
+# Its TAIL, separately: the comment carries commas, so a swallowed one is re-split into
+# fragments that no longer contain the words the assertion above looks for. Checking the
+# first four words of a comment proves nothing about the fragment that comes after the
+# comma — which is the half that can carry a path.
+assert "…including the fragments after its commas" \
+  "$(fhasnt "means closeout looked and found none" "$SNAP")"
+# The fixture line above claims to be SCHEMA.md's documented form. That claim decayed
+# once already: the comment was copied as a PREFIX, cut one word before the `[ ]` that
+# makes the case hard, while the note beside it still said "exactly". So assert the
+# claim rather than repeating it — the two comments must be byte-identical, and a
+# SCHEMA.md edit that changes the shape of the documented form fails here rather than
+# leaving this fixture quietly testing a form nothing documents.
+doc_comment() { sed -n 's/^deliverable_paths:[^#]*#/#/p' "$1" | head -1; }
+assert "the fixture's trailing comment IS SCHEMA.md's own, byte for byte" \
+  "$(eq "$(doc_comment "$ALPHA/projects/retained/project.md")" "$(doc_comment "$TPL/symlink/SCHEMA.md")")"
+# The comma-split shape (the `handedited` fixture): one entry out, not two, and the
+# absolute path hidden after the comment's comma nowhere in the file.
+assert "a comment's comma does not split a second entry out of the value" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="handedited"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/handedited/deliverables/report.md"] else 1)' "$SNAP")"
 # The same defect, reached the other way round — through the VALUE rather than the
 # comment. The `finished` fixture's line opens a quote and never closes it, so a strip
 # that decided where the list ended by tracking quote state found no unquoted `]`, kept
@@ -688,7 +742,33 @@ assert "…reusing the existing data-what convention"         "$(fhas 'data-what
 assert "a hand-edited line still copies the bundle-relative path" \
   "$(fhas 'data-copy="/projects/finished/deliverables/report.md"' "$HTML")"
 assert "…and the absolute path in its comment reaches no page"  "$(fhasnt "$SECRET_ABS_PATH" "$HTML")"
-assert "…nor any /Users path as something to copy"             "$(fhasnt 'data-copy="/Users' "$HTML")"
+# LOOK INSIDE THE VALUE, not at its first characters. `fhasnt 'data-copy="/Users'` only
+# says no value BEGINS with /Users — and the leak this pins puts the path in the MIDDLE
+# of a value whose first characters are a perfectly good bundle-relative prefix. Spelled
+# the first way, this assertion passed on a page that was leaking.
+no_copy_value_with() { # <needle> <file>
+  ! grep -o 'data-copy="[^"]*"' "$2" | grep -qF -- "$1"
+}
+assert "…nor any /Users path ANYWHERE inside something to copy" \
+  "$(yes_if no_copy_value_with '/Users' "$HTML")"
+# Criterion 4 against the comma-split shape, on the same real page. The `handedited`
+# fixture's comment hides a second, prefix-correct path after a comma; if the comment
+# survives the parse, THIS is the button it becomes.
+assert "the comma-split fragment is never a copy button" \
+  "$(fhasnt 'data-copy="/projects/handedited/deliverables/see' "$HTML")"
+assert "…while the real path on that same line still is"       \
+  "$(fhas 'data-copy="/projects/handedited/deliverables/report.md"' "$HTML")"
+# EXACTLY three deliverable buttons on this page — one per fixture that stamps a path
+# (retained, finished, handedited) — because both failure directions are silent and
+# they sit either side of the same fix. Too FEW is the documented comment form costing
+# a panel: a strip anchored on the line's last bracket leaves SCHEMA.md's own comment
+# in the value, the `#` guard drops the only entry, and the retained project renders
+# with no deliverables panel at all — green on "nothing leaked", green on "no error",
+# feature gone. Too MANY is a comment fragment rendering as a path. A `fhas` on any one
+# button sees neither.
+DELIV_BTNS="$(grep -oF 'data-what="Deliverable path"' "$HTML" | grep -c . || true)"
+assert "exactly one copy button per stamped path, no more and no fewer (saw $DELIV_BTNS)" \
+  "$(eq "$DELIV_BTNS" 3)"
 assert "no filesystem path reaches the page"        "$(fhasnt "$TMP" "$HTML")"
 # Belt and braces, because the check above depends on how the fixture path is spelled:
 # an instance is named by its DIRECTORY NAME, so the name must never appear with a
@@ -801,11 +881,11 @@ assert "…with exactly one <body> element" "$(eq "$(grep -cF '<body>' "$SA")" 1
 # there is no drift to pin. tests/artifact-board.test.sh asserts the <details> behaviour
 # (collapsed by default, finished projects under a divider) where the markup lives.
 # Two, not four, is still the fact worth reading off the page: beta is malformed and
-# gamma has no snapshot, so neither is an instance on the board. Five blocks: alpha's
-# four projects — including the RETAINED done one, which is on the board as a reference
+# gamma has no snapshot, so neither is an instance on the board. Six blocks: alpha's
+# five projects — including the RETAINED done one, which is on the board as a reference
 # card even though its tasks were never read — plus delta's one.
 assert "one project block per project of the 2 rendered instances" \
-  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 5)"
+  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 6)"
 
 echo "== discovery is explicit, never a glob =="
 D1="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d1.html" 2>&1 )"

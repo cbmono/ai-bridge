@@ -56,8 +56,9 @@
 #       this file forwards it VERBATIM (see the CARRIED entry above) and does not
 #       itself check the shape, so a hand-edited project.md could in principle put an
 #       out-of-bundle path into SNAPSHOT.json (gitignored, never published as-is).
-#       The guarantee that no such path reaches a PUBLISHED page is enforced at
-#       render time, by build-board.sh's bundle_deliverable().
+#       What keeps such a path off a PUBLISHED page is build-board.sh's
+#       bundle_deliverable(), at render time and SCOPED TO THIS KEY: every other list
+#       key is emitted as parsed, with no consumer that re-checks anything.
 #
 # `owner:` IS CARRIED, AND THAT IS A REVERSAL — read this before "restoring" the rule.
 # Until 2026-08-26 the list above ended with `owner:` on the NEVER side, on the ground
@@ -188,37 +189,18 @@ fmenum() { # <frontmatter> <key>
 # sequence of `- ` lines). Copied in shape from validate-bundle.sh's refs_for, for
 # the same reason: no instance uses block style today, and nothing forbids it.
 #
-# A trailing `# comment` after an INLINE list's closing `]` is dropped on the key
-# line itself, before it ever reaches yaml_list_entries. Without this, `k: [ a, b ]
-# # note` swallows " # note" into the last entry — not hypothetical: SCHEMA.md
-# documents `deliverable_paths:` with a trailing comment on that very line, so the
-# documented form used to corrupt the path it names.
-#
-# This is shared by EVERY list key (open_questions, acceptance_criteria, advisor_notes,
-# depends_on, pr, deliverable_paths), most of them FREE TEXT — so the strip must never
-# be able to end a list early. An entry may legitimately carry a `]` of its own (plain
-# brackets, or a Markdown PR link in the `[repo#N](url)` style this bundle's CLAUDE.md
-# mandates for citing PRs), and truncating there silently drops every entry after it,
-# including a second question off `open_questions` — the one field that gates
-# `draft -> ready` and feeds AWAITING.md.
-#
-# The pattern below CANNOT do that, by construction: `[^]]*$` forces the `]` it matches
-# to be the LAST one on the line, and a list's terminator always comes after every `]`
-# its entries contain. So either that last `]` IS the terminator and what follows it is
-# the comment (stripped), or the last `]` sits inside the comment — no `#` follows it,
-# nothing matches, and the line survives exactly as YAML wrote it. That second case is
-# the price of a strip that is not a parse, and it is the safe way round: a dropped
-# entry is invisible, while an uncorrected value stays comment-shaped and
-# build-board.sh's bundle_deliverable() rejects it rather than render it. A block-form
-# key line (just `key:`, entries on following `- ` lines) carries no `]` and is
-# untouched.
+# DELIBERATELY COMMENT-AGNOSTIC — read this before stripping a trailing `# comment`
+# here again. Six keys share this helper and five are FREE TEXT, so anything deciding
+# where an inline list ENDS decides it for prose a human wrote, and two attempts from
+# here both ended a list early on real documents: truncate-at-first-`]` stopped inside a
+# Markdown PR link (`[repo#N](url)`, the style this bundle's CLAUDE.md mandates), and
+# quote-parity stopped at that same `]` when the link sat between escaped quotes. Each
+# dropped the second entry off `open_questions` — which gates `draft -> ready` and feeds
+# AWAITING.md — invisibly. Only `deliverable_paths` needs a strip and only it can afford
+# one, so it lives at that consumer: deliverable_path_entries below.
 list_region() { # <frontmatter> <key>
   printf '%s\n' "$1" | awk -v k="$2" '
-    $0 ~ "^" k ":" {
-      rest=$0; sub(/^[^:]*:/, "", rest)
-      sub(/\][[:space:]]*#[^]]*$/, "]", rest)
-      print rest; inblk=1; next
-    }
+    $0 ~ "^" k ":" { rest=$0; sub(/^[^:]*:/, "", rest); print rest; inblk=1; next }
     inblk && /^[[:space:]]+-[[:space:]]*/ { print; next }
     inblk && /^[[:space:]]*$/ { next }
     /^[^[:space:]]/ { inblk=0 }
@@ -266,10 +248,13 @@ count_questions() { # <frontmatter>
 # never a bare comma — question text routinely contains commas and splitting on those
 # shreds one question into several. An unquoted list (the form `depends_on` uses) has
 # no such hazard, so a bare comma is the right separator there.
-yaml_list_entries() { # <frontmatter> <key>
-  local r inner
-  r="$(list_region "$1" "$2")"
-  inner="$(printf '%s\n' "$r" \
+#
+# Takes the REGION, not the key, so the one caller that pre-processes its own region
+# (deliverable_path_entries) reuses this splitter instead of copying it. Every other
+# caller goes through yaml_list_entries below and passes the region untouched.
+list_entries_from_region() { # <region>
+  local inner
+  inner="$(printf '%s\n' "$1" \
     | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
     | sed -e 's/^-[[:space:]]*//' \
     | sed -e 's/^\[//' -e 's/\]$//' \
@@ -287,6 +272,10 @@ yaml_list_entries() { # <frontmatter> <key>
     | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
     | grep -v '^$' \
     | grep -vE '^(\[|\]|\[\])$' || true
+}
+
+yaml_list_entries() { # <frontmatter> <key>
+  list_entries_from_region "$(list_region "$1" "$2")"
 }
 
 # The task IDs a task depends on. Emitted as IDs, not paths: an ID is what a human
@@ -319,8 +308,22 @@ depends_ids() { # <frontmatter>
 # render time before anything reaches a published page — the same "the writer
 # already restricts what it collects; the board does not trust it to have done so"
 # rule href() applies to a PR URL's scheme.
+#
+# THE TRAILING-COMMENT STRIP LIVES HERE, at this one key and nowhere else. SCHEMA.md
+# documents this key WITH a trailing `# comment` on the same line, and left alone that
+# comment is swallowed into the last entry. Not cosmetic: entries are then re-split on
+# commas, so a comment containing one leaves the `#` in one entry and whatever followed
+# it — up to an absolute path off the publisher's disk — in the NEXT, which is shaped
+# like a deliverable and renders as a copy button. A per-entry guard cannot see that, so
+# the comment has to be gone BEFORE the split.
+#
+# Safe here and not in list_region because this key's entries are bare paths, never
+# prose: `]`-then-`#` can only be the terminator plus a comment (first sed), and
+# whitespace-then-`#` on a block entry line can only be a comment (second). Price: a
+# filename with a whitespace-`#` in it, which bundle_deliverable() rejects anyway.
 deliverable_path_entries() { # <frontmatter>
-  yaml_list_entries "$1" deliverable_paths
+  list_entries_from_region "$(list_region "$1" deliverable_paths \
+    | sed -e 's/\][[:space:]]*#.*$/]/' -e 's/[[:space:]]#.*$//')"
 }
 
 # The TEXT of each open question — OPT-IN, and off unless SNAPSHOT_QUESTION_TEXT=1.
