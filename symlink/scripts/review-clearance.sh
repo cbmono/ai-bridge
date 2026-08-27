@@ -148,7 +148,7 @@
 #
 # EXIT 4 IS THE COMMON ANSWER, NOT AN EXOTIC ONE, wherever the reviewer does not re-review
 # every push. Measured over the 35 pull requests on the repository this was written in: 18
-# of THE REVIEWER'S review objects exist across them (55 exist in total — most are humans')
+# of THE REVIEWER'S review objects exist across them (59 exist in total — most are humans')
 # and exactly ONE was made at its PR's final head, because `.coderabbit.yaml` here sets
 # `auto_incremental_review: false`. Those are STALE reviews, not absent ones, and clause 3
 # of SCHEMA.md's predicate says stale is not cleared — so wiring this into a merge gate

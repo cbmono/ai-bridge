@@ -695,6 +695,66 @@ add_comment coderabbitai "$(body_file '> <!-- walkthrough_start -->' "> Reviewed
 expect "…and so is one inside the blockquote its notices arrive in" 0
 
 echo
+echo "== the six branches a per-branch mutant sweep found unguarded =="
+# EACH OF THESE WAS A MUTANT THAT SURVIVED, and a survivor is the sweep working: removing
+# the branch left both suites green, so nothing here was asserting it. Two are gaps that
+# would clear an unreviewed PR, two are OVER-correction guards (the refusal side may not
+# start eating quotations), and two are the union/intersection halves themselves.
+#
+# 1. A LIST MARKER'S WIDTH. `1.` and `1)` are two columns, so a fence behind one opens at a
+#    different container column than a fence behind `-`. Spelled with TILDES on purpose: a
+#    backtick version is caught by the code-span parity rule instead, which would make this
+#    a test of the wrong branch.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '1. ~~~' '   <!-- walkthrough_start -->' \
+  "   Reviewed $CLEAN_HEAD." '1. ~~~')"
+expect "an ORDERED marker is as wide as it is written -> not evidence" 4
+
+# 2. A LIST MARKER IS NOT A QUOTE LEVEL. Counting it as one would close a fence at the first
+#    line that is not itself a marker — so a fenced quotation inside one item would leak its
+#    contents to the refusal tables. An OVER-correction guard: this body must still clear.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '- ```' '  rate limited by coderabbit.ai' '  ```' \
+  '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD.")"
+expect "a fence opened BEHIND a marker and closed in the item is quotation" 0
+
+# 3. A LIST ITEM ENDS. If it never did, every later top-level fence would be treated as
+#    living in the last item seen and closed by the first line at column 0 — turning a
+#    perfectly ordinary quotation back into a refusal. The other OVER-correction guard.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '- item' '' '<!-- walkthrough_start -->' \
+  "Reviewed $CLEAN_HEAD." '' '```' 'rate limited by coderabbit.ai' '```')"
+expect "a quotation AFTER a list ends is still a quotation" 0
+
+# 4. A CLOSING TAG OPENS A RAW-HTML BLOCK TOO — CommonMark counts `</x>` as a block start,
+#    and reading it as ordinary text puts the refusal back behind a fence the host does not
+#    render as one.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '' '</div>' '```' 'rate limited by coderabbit.ai' '```')"
+expect "a CLOSING tag opens a raw-HTML block -> refuse" 1
+
+# 5. EITHER READING BEING UNBALANCED IS ENOUGH. Reading B closes the fence at the end of the
+#    list item, which leaves its closing marker to open a block nothing closes — so B cannot
+#    read this body even though A can. An unreadable body clears NOTHING; taking only A's
+#    word for it clears this one.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '' '- item' '  ```' '  x' 'y' '  ```')"
+expect "reading B unbalanced, reading A not -> clears nothing" 4
+
+# 6. THE CLEARING SIDE IS THE INTERSECTION, and this is the shape that proves it is not just
+#    reading A with extra steps. Two raw-HTML blocks each swallow one fence marker, so the
+#    two readings PAIR THE REMAINING MARKERS DIFFERENTLY: the marker and the head sit
+#    OUTSIDE every block in reading A and INSIDE one in reading B. The host agrees with B —
+#    the first block ends at its blank line, so the next ``` really does open a fence and
+#    the marker under it is literal text a human reads.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<div>' '```' '' '```' '<!-- walkthrough_start -->' \
+  "Reviewed $CLEAN_HEAD." '```' '<div>' '```' '' '```' 'z' '```')"
+expect "a marker only reading A calls markup -> not evidence" 4
+
+echo
 echo "== the containment itself, not only the cases that broke it =="
 # THE FILE STATES A SAFETY PROPERTY — every line the STRICT rendering keeps is a line the
 # STRIPPED one kept (strict ⊆ stripped) — and it is now STRUCTURAL rather than hoped for:
@@ -1431,6 +1491,16 @@ LAST_OUT="$("$SCRIPT" 42 2>&1)"; rc=$?
 assert "the review list unreadable -> refuse, not 'no reviews'" \
   "$([ "$rc" -eq 2 ] && echo 0 || echo 1)"
 says   "  ...saying the reviewer state is unknown" "unknown fails closed"
+# AND THE COMMENT LIST IS THE ONE THAT MATTERS MORE, which is why it is fetched the same
+# way. A lost REVIEW costs a refusal; a lost REFUSAL — and the refusal is a comment — is a
+# merge. The recorded refusal is on this PR and the reviewer's clean review is not, so a
+# comment list that silently answered "nothing here" would clear it.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+write_pr; : > "$FIX/comments_broken"
+LAST_OUT="$("$SCRIPT" 42 2>&1)"; rc=$?
+assert "the comment list unreadable -> refuse, not 'no comments'" \
+  "$([ "$rc" -eq 2 ] && echo 0 || echo 1)"
+says   "  ...saying a refusal it cannot see is a merge" "that is a merge"
 setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; : > "$FIX/jq_broken"
 expect "the JSON reader cannot answer -> refuse" 2
 setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
