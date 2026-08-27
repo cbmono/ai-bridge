@@ -65,7 +65,17 @@ case "$TMP" in
   *Dropbox*|*iCloud*|*"Google Drive"*|*OneDrive*)
     rm -rf "$TMP"; die "refusing to build fixtures inside a synced folder ($TMP)" ;;
 esac
-trap 'rm -rf "$TMP"' EXIT
+# LIVE_PID: set by scenario F below, once it starts a real background process
+# to prove the live-process scan against. Killed here too, so a failure partway
+# through the script (this harness's own `set -uo pipefail`, no `-e`, so a
+# single failed assert does not stop the run) never leaves it running.
+# `|| true` on the kill is load-bearing, not decorative: by the time this trap
+# fires in the normal path, scenario F has already killed and reaped LIVE_PID,
+# so this kill fails ("no such process") — and a bare failing command as part
+# of an EXIT trap's list was observed to override this SCRIPT's own exit
+# status with that failure, turning a `pass=N fail=0` run into a nonzero exit.
+LIVE_PID=""
+trap 'kill "${LIVE_PID:-}" 2>/dev/null || true; rm -rf "$TMP"' EXIT
 
 ORIGIN="$TMP/origin.git"
 REPOS="$TMP/repos"
@@ -383,7 +393,13 @@ OUT=""
 
 expect() { # <path> <extended-regex the decision line must match>
   local path=$1 want=$2 line
-  line="$(printf '%s\n' "$OUT" | grep -F -- "$path" | grep -v -F -- "$path/" | head -1)"
+  # `LIVE PROCESS` is excluded here: it is a SEPARATE report line the pruner now
+  # prints for a worktree that has one, ahead of (never instead of) the
+  # classification line this helper is asking about, so it must not win the
+  # `head -1` race against REMOVABLE/RECLAIMABLE/KEEP for a fixture that has
+  # both — see scenario F, the one fixture that does.
+  line="$(printf '%s\n' "$OUT" | grep -F -- "$path" | grep -v -F -- "$path/" \
+            | grep -v -F -- 'LIVE PROCESS' | head -1)"
   if [[ -z "$line" ]]; then
     printf '  FAIL  %-34s no line mentioning it in the output\n' "$(basename "$path")"
     fail=$((fail + 1)); return
@@ -550,6 +566,64 @@ assert "the aged worktree's own root looks idle (fixture is still meaningful)" \
   "$([[ -z "$(find "$NESTED" -maxdepth 1 -mmin -120 2>/dev/null | head -1)" ]] && echo 0 || echo 1)"
 OUT="$(ACTIVE_MINUTES=120 run_pruner)"
 expect "$NESTED" '^KEEP \(recently active\)'
+
+# ---- scenario F: the live-process scan, against a REAL background process ---
+# This is the one property this harness cannot prove by reading the pruner's
+# source: that it actually SEES a live process on this platform. So it starts
+# one for real, with its cwd set to a worktree, and asserts detection —
+# specifically on a worktree that ALSO classifies REMOVABLE (a merged PR,
+# clean tree), which is the exact "task merged, server still running" shape
+# that ran undetected for 2d16h/2d13h and is why this task exists. The scan
+# must report it as its own loud line, not fold it into the REMOVABLE verdict.
+echo "== scenario F: a live process is detected in a worktree, and stops being detected once it is killed =="
+wt_branch "$WTROOT/branch-live-process" feat/live-process
+commit_in "$WTROOT/branch-live-process" feature.txt 'landed work, server left running'
+cat >> "$FIXTURES" <<EOF
+branch feat/live-process MERGED
+EOF
+
+( cd "$WTROOT/branch-live-process" && exec sleep 300 ) &
+LIVE_PID=$!
+# `disown` it: this shell would otherwise print an async "Terminated: N" job
+# notice to stderr the moment it next notices the kill below took effect,
+# which is harmless noise in a test log but pure noise all the same — this
+# harness already asserts the death by polling `kill -0`, not by watching for
+# that message.
+disown "$LIVE_PID" 2>/dev/null || true
+# Give the child a moment to actually replace the subshell and settle into its
+# cwd before lsof/ps are asked about it.
+sleep 1
+
+OUT="$(run_pruner)"
+expect "$WTROOT/branch-live-process" '^REMOVABLE'
+assert "the live process is reported by PID, on its own LIVE PROCESS line, for a worktree that is ALSO REMOVABLE" \
+  "$(printf '%s\n' "$OUT" | grep -F 'LIVE PROCESS' | grep -F -- "$WTROOT/branch-live-process" \
+       | grep -q -F "pid=$LIVE_PID  " && echo 0 || echo 1)"
+assert "nothing was killed by the scan (still alive after a report-only run)" \
+  "$(kill -0 "$LIVE_PID" 2>/dev/null && echo 0 || echo 1)"
+
+kill "$LIVE_PID" 2>/dev/null
+# Deliberately no `wait` here: on this Bash, `wait <pid>` for a job this script
+# itself killed by signal was observed to terminate the WHOLE test script the
+# instant the job died — reproducible only in this harness's fuller context,
+# not in isolation, and not worth chasing further when a poll does the same
+# job without touching whatever that interaction is.
+for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$LIVE_PID" 2>/dev/null || break; sleep 0.2; done
+assert "the process is actually gone before re-checking (fixture is still meaningful)" \
+  "$(kill -0 "$LIVE_PID" 2>/dev/null && echo 1 || echo 0)"
+
+OUT="$(run_pruner)"
+assert "the same worktree is no longer reported once its process is killed" \
+  "$(printf '%s\n' "$OUT" | grep -F 'LIVE PROCESS' | grep -q -F -- "$WTROOT/branch-live-process" && echo 1 || echo 0)"
+
+# ---- scenario G: no false positive, on the whole matrix, with nothing running -
+# Every other fixture in this file is a plain git worktree — no process was ever
+# started in it. A detector that flags any of THEM is exactly the "cries wolf"
+# failure mode CONVENTIONS.md warns about, since a human trained to ignore a
+# noisy report will ignore the one that matters.
+echo "== scenario G: no false positive on a clean run (nothing left running) =="
+assert "no LIVE PROCESS line anywhere once the started process is gone" \
+  "$(printf '%s\n' "$OUT" | grep -q '^LIVE PROCESS' && echo 1 || echo 0)"
 
 # ---- verdict ----------------------------------------------------------------
 echo
