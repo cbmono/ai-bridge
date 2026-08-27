@@ -185,9 +185,31 @@ classify() { # <family> — reads the rendered HTML on stdin
     }'
 }
 
-ask() { # <family> <body-file> — the host's verdict for one case
+ask() { # <family> <body-file> — the host's verdict for one case, or empty on API failure
   jq -Rs '{text: ., mode: "markdown"}' < "$2" > "$TMPD/req.json"
-  gh api -X POST /markdown --input "$TMPD/req.json" 2>/dev/null | classify "$1"
+  # PRINTS NOTHING ON A FAILED OR EMPTY RESPONSE, on purpose: `classify` reads whatever
+  # lands on its stdin and always answers SOMETHING that looks like a verdict — an empty
+  # body reads as "hidden" (refusal/marker) or "blank" (content), which is a real answer
+  # for a REAL empty page and indistinguishable from one for an API call that never
+  # rendered anything at all. So the raw response is validated HERE, before classify ever
+  # sees it, and on every single call — not just checked in aggregate at the end — because
+  # a subset of calls failing this way is the dangerous case: it would silently record a
+  # refusal or marker case as the SAFE verdict instead of erroring, which is exactly the
+  # direction nothing else in this script would notice. stdout and stderr are kept
+  # SEPARATE, on purpose: a gh warning on stderr (a version nag, a deprecation notice)
+  # must never get spliced into the HTML `classify` reads, which merging the two streams
+  # on a SUCCESSFUL call would risk.
+  local raw rc
+  raw="$(gh api -X POST /markdown --input "$TMPD/req.json" 2>"$TMPD/ask.err")"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "ask: gh api /markdown failed for $1 (exit $rc): $(cat "$TMPD/ask.err" 2>/dev/null)" >&2
+    return 1
+  fi
+  if [ -z "$raw" ]; then
+    echo "ask: gh api /markdown returned an EMPTY response for $1 — refusing to classify a body the host was never actually asked about" >&2
+    return 1
+  fi
+  printf '%s' "$raw" | classify "$1"
 }
 
 TMPD="$(mktemp -d)"; trap 'rm -rf "$TMPD"' EXIT

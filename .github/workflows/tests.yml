@@ -139,3 +139,30 @@ jobs:
           fi
 
           echo "ok: all ${#files[@]} harnesses passed — exit code AND reported fail=0 both verified for each"
+
+      # ai-bridge-v4/task-022: `--check` re-asks github.com's own Markdown endpoint what it
+      # does with each recorded body and diffs the answer against
+      # tests/fixtures/reviewer/host-rendering.txt. Before this step it could only be run by
+      # hand, which meant it would not be run — this makes renderer drift visible on every
+      # PR and push instead of invisible until someone thinks to look.
+      #
+      # NOT gated on: this repo's ONE required check is this job (`harness suite`,
+      # .github/required-checks.txt), and github.com's Markdown rendering is not something
+      # this repo controls — a wording change on the host's side is real (see
+      # docs/conventions.md, "the host wins and it is recorded") and would otherwise block
+      # every PR until someone re-records the oracle. So this step is allowed to fail
+      # without failing the job; the annotation still surfaces the drift, and re-recording
+      # (`tests/fixtures/reviewer/record-host-rendering.sh`, no flag) plus a review of the
+      # diff is the human follow-up.
+      - name: Check the recorded host-rendering oracle against github.com's live renderer
+        shell: bash
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          if tests/fixtures/reviewer/record-host-rendering.sh --check; then
+            echo "ok: host-rendering.txt still matches github.com's renderer"
+          else
+            echo "::warning::tests/fixtures/reviewer/host-rendering.txt is STALE — github.com's Markdown renderer now answers at least one recorded case differently. Re-run tests/fixtures/reviewer/record-host-rendering.sh, review the diff, and commit the refreshed fixture."
+          fi

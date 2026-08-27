@@ -49,7 +49,7 @@ by review evidence found in the same body.
 
 ## `host-rendering.txt` — the renderer as the oracle
 
-The two other files here are *bodies*. This one is an **answer**: for each of 152 bodies it
+The two other files here are *bodies*. This one is an **answer**: for each of 154 bodies it
 records what **github.com itself** does with it, fetched from the `/markdown` endpoint by
 `record-host-rendering.sh`, which is checked in beside it.
 
