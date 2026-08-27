@@ -597,8 +597,14 @@ assert "…including the fragments after its commas" \
 # SCHEMA.md edit that changes the shape of the documented form fails here rather than
 # leaving this fixture quietly testing a form nothing documents.
 doc_comment() { sed -n 's/^deliverable_paths:[^#]*#/#/p' "$1" | head -1; }
-assert "the fixture's trailing comment IS SCHEMA.md's own, byte for byte" \
-  "$(eq "$(doc_comment "$ALPHA/projects/retained/project.md")" "$(doc_comment "$TPL/symlink/SCHEMA.md")")"
+SCHEMA_DP_COMMENT="$(doc_comment "$TPL/symlink/SCHEMA.md")"
+# Non-emptiness first, or the comparison below passes on two empty strings the day
+# SCHEMA.md's documented form loses its comment — which is the same failure this whole
+# assertion exists to catch, arriving from the other side.
+assert "SCHEMA.md still documents this key WITH a trailing comment" \
+  "$(yes_if test -n "$SCHEMA_DP_COMMENT")"
+assert "…and the fixture's trailing comment IS that one, byte for byte" \
+  "$(eq "$(doc_comment "$ALPHA/projects/retained/project.md")" "$SCHEMA_DP_COMMENT")"
 # The comma-split shape (the `handedited` fixture): one entry out, not two, and the
 # absolute path hidden after the comment's comma nowhere in the file.
 assert "a comment's comma does not split a second entry out of the value" \
