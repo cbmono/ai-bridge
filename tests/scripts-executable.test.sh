@@ -51,7 +51,10 @@
 # So the fixture is now built so that neither is REPRESENTABLE, rather than merely
 # guarded against:
 #   * nothing in this file `cd`s into a computed path to do git work; every git call
-#     names its repo with `git -C`, so there is no cwd left to be wrong;
+#     names its repo explicitly with `git -C "$repo"` instead — note `git -C ""` is
+#     documented as its own no-op, exactly like `cd ""`, so `-C` alone would not have
+#     closed escape 1; what actually closes it is the mktemp guard below, which never
+#     lets an empty or missing path reach `-C` in the first place;
 #   * every git call goes through `sgit`/`gitq`, which strip the repo-redirecting GIT_*
 #     variables out of the environment with `env -u`;
 #   * `gitq` also pins identity, signing and hooks per-invocation (`-c user.name=…`,
@@ -427,6 +430,17 @@ assert "the symlink/scripts/*.sh check_group call is a real, quoted call at colu
 # shellcheck disable=SC2016
 assert "the symlink/.claude/hooks/*.sh check_group call is a real, quoted call at column 0 (exactly one)" \
   "$([ "$(pin_count '^check_group "\$TPL" "symlink/\.claude/hooks/\*\.sh" [0-9]+ .symlink/\.claude/hooks/\*\.sh.$')" == 1 ] && echo 0 || echo 1)"
+# The two pins above cover the CALL sites, not check_group's own USE of $spec at its one
+# call to `ls-files`. That gap is real, not theoretical: unquoting `$spec` there (`--
+# $spec` instead of `-- "$spec"`) still leaves this whole file at 49/49 today, because
+# neither call site's pathspec currently contains anything a shell would expand
+# differently once split — guard D's own fixture glob (`d-*.sh`) never reaches this line
+# unquoted-and-unmatched in a cwd that would change its outcome. So the inner use site
+# needs its own anchored pin, exactly like the call sites above, or a future edit can
+# unquote it with nothing here going red.
+# shellcheck disable=SC2016
+assert "check_group's own ls-files call keeps \$spec quoted at its use site (exactly one)" \
+  "$([ "$(pin_count '^  files="\$\(sgit -C "\$repo" ls-files -- "\$spec"\)"$')" == 1 ] && echo 0 || echo 1)"
 
 echo "== the repo under test must be exactly as this harness found it =="
 FP_AFTER="$(repo_fingerprint)"
@@ -445,7 +459,7 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # A skipped block is now as red as a failed one. The pin counts every assertion BEFORE
 # itself; add or remove an assertion and this number moves with it, deliberately, in the
 # same commit.
-EXPECTED_ASSERTIONS=48
+EXPECTED_ASSERTIONS=49
 TOTAL=$((pass + fail))
 assert "exactly $EXPECTED_ASSERTIONS assertions ran — a silently skipped block shows up here (got $TOTAL)" \
   "$([ "$TOTAL" -eq "$EXPECTED_ASSERTIONS" ] && echo 0 || echo 1)"
