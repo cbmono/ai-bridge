@@ -12,7 +12,7 @@ its own git repo under `~/workspace/<group>/_ai-bridge-<group>/`.
 - `seed/` — starting content, copied into an instance **once, only if absent**. A change here reaches nothing automatically.
 - `install.sh` — stamps out / refreshes an instance. `upgrade.sh` — walks a pull's four cases and reports what's left for the human.
 - `RETIRED` — seed paths the template has stopped shipping; reported, never deleted.
-- `tests/` — bash harnesses. **There is a test suite and it must pass**: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. No build step, no lint.
+- `tests/` — bash harnesses. **There is a test suite and it must pass**: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. No build step, no lint. CI (`.github/workflows/tests.yml`) runs the same full suite on every PR and push to `main`, and `harness suite` is a required check.
 - `docs/` — human-facing depth. `.claude/rules/` — the same prohibitions, path-scoped for agents.
 
 **Keep machinery generic.** No org, repo, path, team or channel literals under `symlink/` —

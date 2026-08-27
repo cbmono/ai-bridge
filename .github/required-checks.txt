@@ -1,0 +1,13 @@
+# One required check name per line. Comments are whole-line only (# in column 1).
+#
+# Declared here rather than via branch protection because this repo currently has
+# none (verified 2026-08-24/27): a private repo on the free plan answers 403 from
+# both the branch-protection and rulesets APIs. scripts/required-checks.sh reads
+# this file on the PR's BASE branch ONLY when the platform reports no required set
+# at all — the moment branch protection is configured, that source wins and this
+# file becomes dead weight (see the header of required-checks.sh).
+#
+# Must match the job's `name:` in .github/workflows/tests.yml VERBATIM — that is
+# the check-run name GitHub reports, and it is what gh pr checks --required matches
+# against. Rename the job and this line together, in the same commit.
+harness suite

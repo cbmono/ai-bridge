@@ -454,7 +454,7 @@ than shortening it.
 - Machinery goes in `symlink/`. Keep it **generic**: no org, repo, path, team or channel literals — those belong in an instance's `instance.config.json` / `CLAUDE.md`.
 - Starting content goes in `seed/`. Retiring a seed file needs an entry in [`RETIRED`](RETIRED) in the same commit.
 - Tests live in `tests/`, never under `symlink/` — everything there ships into every instance.
-- Run the suite before pushing: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`
+- Run the suite before pushing: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. CI runs the same full suite on every PR and every push to `main` ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)); `harness suite` is a required check declared in [`.github/required-checks.txt`](.github/required-checks.txt).
 - This repo is **public**. Placeholders must be verified unclaimed: `example-user-007` / `example-user-008` and `example.com`.
 
 Agent-facing rules are in [`CLAUDE.md`](CLAUDE.md) and [`.claude/rules/`](.claude/rules).

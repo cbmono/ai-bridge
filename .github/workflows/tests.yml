@@ -1,0 +1,141 @@
+name: Tests
+
+# Runs the FULL tests/*.test.sh suite so a head can be verified without a human or an
+# agent session — ai-bridge-v4/task-001. Fires on every PR against the default branch
+# and on every push that lands on it, so main itself always carries its own signal.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suite:
+    # STABLE, enumerable check name — referenced verbatim by
+    # .github/required-checks.txt and by scripts/required-checks.sh. Renaming this job
+    # is a merge-gate change: update the declared name in the same commit.
+    name: harness suite
+    # macos-latest, not ubuntu-latest: this suite has never had CI, and a first real
+    # run on Linux turned up FOUR harnesses (deliverable-paths-vs-yaml, migrate-bundle,
+    # push-state, reclaim-worktree) failing for reasons that look environment-specific
+    # (GNU vs BSD tool behaviour, a different YAML oracle, PATH/root-permission
+    # differences) rather than defects — on top of the one known, already-fixed-in-#41
+    # failure. This repo's own tests are heavily macOS-authored (BSD stat, macOS
+    # mktemp/symlink quirks, decomposed-filename handling are all named explicitly in
+    # tests/*.test.sh), so macOS is the platform its baseline was actually measured on.
+    # Investigating and fixing each Linux-specific gap is real work belonging to its
+    # own task, not silently absorbed into "wire up CI" — see the PR body.
+    runs-on: macos-latest
+    # One harness alone measures ~7 minutes and the full suite several more on top of
+    # that; this is a generous ceiling, not the measured number (see the PR body for
+    # the measured wall-clock).
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run tests/*.test.sh
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          export TMPDIR="${RUNNER_TEMP:-/tmp}"
+          mkdir -p "$TMPDIR"
+
+          workspace="$GITHUB_WORKSPACE"
+
+          # A harness with a broken TMPDIR guard can rm -rf its OWN checkout while
+          # still printing a clean "pass=N fail=0" and exiting 0 — see
+          # knowledge/findings/suite-cleanup-can-delete-its-own-checkout.md in the
+          # control panel that manages this repo. So neither the exit code nor the
+          # reported tally is trusted alone, and this re-verifies the checkout itself
+          # is still intact after every single harness, stopping immediately (not
+          # limping through the rest of the loop) the moment it is not.
+          verify_checkout() {
+            git -C "$workspace" rev-parse --verify -q HEAD >/dev/null 2>&1 \
+              && [ -d "$workspace/.git" ] \
+              && [ -d "$workspace/tests" ] \
+              && [ -d "$workspace/symlink" ]
+          }
+
+          verify_checkout || {
+            echo "::error::checkout is not intact before the suite even started"
+            exit 2
+          }
+
+          shopt -s nullglob
+          files=(tests/*.test.sh)
+          shopt -u nullglob
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::no tests/*.test.sh files found — refusing to report a vacuous pass"
+            exit 2
+          fi
+
+          total_pass=0
+          total_fail=0
+          bad=()
+          start_ts=$(date +%s)
+
+          for f in "${files[@]}"; do
+            echo "::group::$f"
+            # Captured through an if, never off a bare \$?: this step's default shell
+            # runs with -e, and a bare failing assignment would abort the loop before
+            # the checkout-integrity re-check below ever ran.
+            if out="$(bash "$f" 2>&1)"; then rc=0; else rc=$?; fi
+            printf '%s\n' "$out"
+            echo "::endgroup::"
+
+            if ! verify_checkout; then
+              echo "::error::the checkout was destroyed while running $f — stopping immediately. See knowledge/findings/suite-cleanup-can-delete-its-own-checkout.md in the control panel."
+              exit 2
+            fi
+
+            # Exit codes are not trusted on their own: a harness can print a clean
+            # tally and exit 0 while it has just destroyed its checkout, or print
+            # nothing parseable at all. Both are treated as failures here. Two
+            # conventions are in use across tests/*.test.sh (.claude/rules/tests.md
+            # names both: "pass=/fail=" or "N passed, N failed") — both are tried,
+            # in order, and only their absence counts as "no summary".
+            summary="$(printf '%s\n' "$out" | grep -oE 'pass=[0-9]+ fail=[0-9]+' | tail -n1 || true)"
+            style=dense
+            if [ -z "$summary" ]; then
+              summary="$(printf '%s\n' "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -n1 || true)"
+              style=prose
+            fi
+            if [ -z "$summary" ]; then
+              echo "::error::$f exited $rc but printed no recognised pass/fail summary — the exit code alone is never trusted here"
+              bad+=("$f (no summary, exit $rc)")
+              continue
+            fi
+
+            if [ "$style" = dense ]; then
+              f_pass="$(printf '%s' "$summary" | sed -E 's/pass=([0-9]+).*/\1/')"
+              f_fail="$(printf '%s' "$summary" | sed -E 's/.*fail=([0-9]+)/\1/')"
+            else
+              f_pass="$(printf '%s' "$summary" | sed -E 's/^([0-9]+) passed.*/\1/')"
+              f_fail="$(printf '%s' "$summary" | sed -E 's/.*, ([0-9]+) failed$/\1/')"
+            fi
+            total_pass=$((total_pass + f_pass))
+            total_fail=$((total_fail + f_fail))
+
+            if [ "$rc" -ne 0 ] || [ "$f_fail" -ne 0 ]; then
+              echo "::error::$f — exit=$rc reported fail=$f_fail"
+              bad+=("$f (exit $rc, fail=$f_fail)")
+            fi
+          done
+
+          end_ts=$(date +%s)
+          echo "== ${#files[@]} harness(es) in $((end_ts - start_ts))s — pass=$total_pass fail=$total_fail =="
+
+          if [ "${#bad[@]}" -gt 0 ]; then
+            echo "FAILED harnesses:"
+            printf '  - %s\n' "${bad[@]}"
+            exit 1
+          fi
+
+          echo "ok: all ${#files[@]} harnesses passed — exit code AND reported fail=0 both verified for each"
