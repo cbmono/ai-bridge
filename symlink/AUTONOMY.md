@@ -67,8 +67,9 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
 1. **Every *required* check passes, and a review clears the head** — `scripts/required-checks.sh <pr> --head
    <verified-sha>` exits **0**. It now asks precondition 2 for clearance on every PR
    rather than deciding from a check's *name* whether a reviewer is involved, because a
-   name table cannot enumerate every vendor: `Codex Review` and bare `Cursor` / `Copilot`
-   / `Devin` used to read as plain CI and settle on their green bucket. Only that clears this precondition; don't hand-roll the
+   name table cannot enumerate every vendor: a check called "Codex Review", or one named
+   for any hosted reviewer whose product name carries no word about reviewing, used to
+   read as plain CI and settle on its green bucket. Only that clears this precondition; don't hand-roll the
    `gh` calls, the script exists because the failure modes are subtle enough to get
    wrong (a *failing* required check and *no protection at all* both make `gh pr checks
    --required` exit non-zero, and only one of them is safe to fall back from).
