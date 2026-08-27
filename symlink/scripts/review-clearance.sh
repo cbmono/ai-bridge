@@ -64,7 +64,7 @@
 #      (REVIEW_SENTINEL) and naming the head. It exists because the reviewer this was
 #      written against publishes a CLEAN review — "no actionable comments" — as an issue
 #      comment and files no review object at all: FIVE OF THE SIX reviews that clear the
-#      35 pull requests here are that shape, so dropping the route would not make the gate
+#      37 pull requests here are that shape, so dropping the route would not make the gate
 #      stricter, it would make it structurally unable to say yes to a clean review.
 #      IT IS ALSO THE ONLY ROUTE THAT READS PROSE, AND EVERY REMAINING WEAKNESS IN THIS
 #      FILE IS DOWNSTREAM OF IT — kept or dropped is a policy call about how much
@@ -144,8 +144,9 @@
 # cut short of the end can satisfy.
 #
 # EXIT 4 IS THE COMMON ANSWER, NOT AN EXOTIC ONE, wherever the reviewer does not re-review
-# every push. Measured over the 35 pull requests on the repository this was written in: 18
-# of THE REVIEWER'S review objects exist across them (59 exist in total — most are humans')
+# every push. Measured over the 37 pull requests on the repository this was written in: 18
+# of THE REVIEWER'S review objects exist across 18 of them (62 exist in total — most are
+# humans')
 # and exactly ONE was made at its PR's final head, because `.coderabbit.yaml` here sets
 # `auto_incremental_review: false`. Those are STALE reviews, not absent ones, and clause 3
 # of SCHEMA.md's predicate says stale is not cleared — so wiring this into a merge gate
@@ -276,7 +277,7 @@ unable to (complete|perform|run) (the |this )?review
 # lands on exit 4, and `--reviewer` names it explicitly. A row that is too loose costs a
 # CLEARANCE, so nothing belongs here that a placeholder or a BANNER could carry — which is
 # why `review_stack_entry_start`, which wraps a promotional image and a `utm_campaign`
-# link, was REMOVED rather than kept for symmetry (measured: 0 of 35 outcomes change).
+# link, was REMOVED rather than kept for symmetry (measured: 0 of 37 outcomes change).
 #
 # AND EVERY ROW IS ANCHORED TO A WHOLE LINE, which is the other half of "prose cannot reach
 # the evidence half". Matched as a substring, a row was reachable from text a human READS:
@@ -854,15 +855,15 @@ function step(m, containers,   f) {
     # Ending only at a blank line left it open to the end of the body.
     #
     # WHAT BOUNDING IT BUYS, stated exactly rather than generously, because a header claim
-    # the code does not keep is this files recurring defect. It buys ACCURACY, not a closed
+    # the code does not keep is the recurring defect in this file. It buys ACCURACY, not a closed
     # clearing route: reading B keeping a line only matters to the CLEARING side if reading
     # A keeps it too, and A already reads every fence this rule reveals. What an unbounded
     # HTML block cost was FALSE REFUSALS — text the host quotes, read here as text a human
     # can see. The tests for these branches are therefore over-correction guards, and they
     # assert exit 4 where the host says the words are in a code block.
-    if (HB && (L_BLANK || L_DEPTH < HBD || (HBI > 0 && ended_item(HBI)))) HB = 0
+    if (HB && (L_BLANK || L_DEPTH < HBD || ended_item(HBI))) HB = 0
     if (HB) return 0
-    if (L_INDENT <= 3 && L_REST ~ /^<\/?[A-Za-z]/) { HB = 1; HBD = L_DEPTH; HBI = LI; return 0 }
+    if (L_INDENT <= 3 && L_REST ~ /^<\/?[A-Za-z]/) { HB = 1; HBD = L_DEPTH; HBI = LI + 0; return 0 }
   }
   # The info string of a BACKTICK opener may not contain a backtick: the host renders
   # ```a`b as inline code and opens no block at all.
@@ -958,9 +959,8 @@ render_body() { # <body-file> <stripped-out> <strict-out>
 # records what github.com itself puts on the page for each of these constructs, and the
 # suite asserts that nothing the host renders blank is read here as a claim.
 #
-# WHAT IT COSTS, stated rather than left to be discovered: a body with no ASCII alphanumeric
-# anywhere in it — written entirely in another script, or in emoji — is read as saying
-# nothing. That is exit 4 or a held claim, never a clearance, so the bill is a human glance.
+# WHAT IT COSTS: a body with no ASCII alphanumeric anywhere in it — written entirely in
+# another script, or in emoji — is read as saying nothing, and pays the bill above.
 renders_content() { # 0 when something renders, 1 when the page stays blank
   LC_ALL=C awk '
     # The terminator of the raw-HTML production starting at `line`, and how many bytes of
@@ -986,8 +986,11 @@ renders_content() { # 0 when something renders, 1 when the page stays blank
     }
     {
       line = $0
-      # A LINK REFERENCE DEFINITION is the whole line and none of it reaches the page.
-      if (!inhtml && line ~ /^[[:space:]]{0,3}\[[^]]*\]:/) next
+      # A LINK REFERENCE DEFINITION is the whole line and none of it reaches the page. Its
+      # text is dropped at the END of the line rather than by skipping to the next one: a
+      # line can both be a reference definition and open a multi-line construct, and
+      # skipping it would leave that construct open forever and read the rest as text.
+      isref = (!inhtml && line ~ /^[[:space:]]{0,3}\[[^]]*\]:/)
       out = ""
       while (length(line) > 0) {
         if (inhtml != "") {
@@ -1014,11 +1017,11 @@ renders_content() { # 0 when something renders, 1 when the page stays blank
           }
         }
       }
-      text = text "\n" out
+      if (!isref) text = text "\n" out
     }
     END {
-      # A links DESTINATION is an instruction; its label is the text. An IMAGE is all
-      # destination, alt text included, because the page shows a picture and not the words.
+      # The DESTINATION of a link is an instruction; its label is the text. An IMAGE is
+      # all destination, alt text included: the page shows a picture, not the words.
       gsub(/\]\([^)]*\)/, "]", text)          # [label](dest) -> [label]
       gsub(/\]\[[^]]*\]/, "]", text)          # [label][ref]  -> [label]
       gsub(/!\[[^]]*\]/, "", text)            # ![alt]        -> nothing

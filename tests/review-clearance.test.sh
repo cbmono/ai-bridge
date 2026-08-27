@@ -862,6 +862,13 @@ expect "…while a comment really does run to its own terminator" 1
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
 add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '[][r]' '' '[r]: /x')"
 expect "…and a reference link with an empty label draws nothing" 1
+# A line can be BOTH a reference definition and the opener of a multi-line construct, so
+# its text is discarded at the end of the line rather than by skipping the line: skipping
+# leaves the construct open forever and reads everything after it as text.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" \
+  "$(body_file '[a]: /b <!--' 'hidden' '-->' 'reviewed')"
+expect "…and dropping a reference definition does not lose the scanner state" 0
 
 echo "== a run of hex is not a commit unless the whole token is one =="
 # `refusal_concerns_head` demotes a refusal that names some OTHER commit, so that a PR
