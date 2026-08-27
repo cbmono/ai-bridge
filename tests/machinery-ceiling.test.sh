@@ -408,8 +408,43 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 #
 # THE DEBT ABOVE IS UNCHANGED, A FIFTH TIME — though the code figure moves the right way
 # for the second round running (3,650 -> 3,649 -> 3,646).
-CEILING_TOTAL=6842
-CEILING_CODE=3646
+#
+# ---- round six: the cut stops approximating YAML and starts agreeing with it ----
+#
+#   6,842 / 3,646   20 files   what the raise above pinned
+#   6,876 / 3,660   20 files   +34 total, +14 code
+#
+#   write-snapshot.sh           599 ->   630   +31 total, +14 code
+#   build-board.sh            1,257 -> 1,260    +3 total,   0 code
+#
+# THE PREDICATE IS NOT WHAT MOVED — it survived 65 hostile inputs unchanged and none of
+# these lines touch it. What moved is the trailing-comment cut, and the reason is the
+# through-line of all five rounds above: each stated a PROPERTY the cut was supposed to
+# have ("cannot end a list early", "never removes text that could still render") and
+# checked it by argument. Round five's was false too — measured against Ruby's Psych,
+# the cut disagreed with a real parser on 5 of 35 hand-written shapes, in BOTH
+# directions: `[ "…/a ] #1.md", "…/b.md" ]` has two entries (`]` and `#` are ordinary
+# inside quotes) and the cut deleted the clean `…/b.md` while fabricating `…/a`;
+# `[ …/a] #1.md, …/b.md ]` has ONE entry (an unquoted `]` terminates a flow sequence)
+# and the cut rendered `b.md`, which is comment text.
+#
+# So the property is no longer a proxy for the thing: THE CUT REMOVES EXACTLY THE SPAN A
+# PARSER READS AS A COMMENT — checkable against a parser instead of in review. It takes
+# one left-to-right scan carrying the two facts YAML actually has here (a `#` opens a
+# comment only outside a quoted scalar; a flow sequence ends at its first unquoted `]`),
+# and that scan minus the shape-anchored `sed` pair it replaces is the +14 code.
+# Agreement with Psych goes 30/35 -> 32/35; the three that remain are pre-existing
+# splitter limits (an unprocessed `\"` escape, a `#` glued to `]` with no space, a mixed
+# quoted/unquoted list), each reproducing identically before this change.
+#
+# build-board.sh's +3 total, 0 code is one header claim narrowed: "a bundle-relative
+# shape is the only kind of path this page renders" overreached — the other-owners
+# section renders a `/projects/<slug>/` from an unvalidated slug, which this guard does
+# not cover (task-020).
+#
+# THE DEBT ABOVE IS UNCHANGED, A SIXTH TIME.
+CEILING_TOTAL=6876
+CEILING_CODE=3660
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

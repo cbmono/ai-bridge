@@ -126,9 +126,12 @@
 #     and never lists `deliverables/` from disk; that is what keeps it compatible with
 #     the done-project skip (see write-snapshot.sh's header). Every entry is re-checked
 #     against `/projects/<slug>/deliverables/<file>` (bundle_deliverable()) before it can
-#     reach a button — a bundle-relative shape is the only kind of path this page renders,
-#     including a NESTED file below `deliverables/` (an exported site's `site/index.html`),
-#     which is still inside the guarantee and is rendered rather than dropped.
+#     reach a button — so every DELIVERABLE path on this page resolves inside that
+#     project's own `deliverables/`, a NESTED file below it included (an exported site's
+#     `site/index.html`), which is inside the guarantee and rendered, not dropped. Scoped
+#     to deliverables and no wider ON PURPOSE: this page renders a `/projects/<slug>/`
+#     from an unvalidated slug elsewhere (the other-owners section), which this check
+#     does not cover and does not claim to.
 #   · Its decision rail surfaces one thing AWAITING.md does not: an open question on a
 #     task that is no longer a draft. write-snapshot.sh only emits an `awaiting` verb for
 #     a question while the task IS a draft, so such a question is invisible in the queue;

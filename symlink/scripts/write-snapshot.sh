@@ -323,31 +323,62 @@ depends_ids() { # <frontmatter>
 # a human stamped.
 #
 # Safe at this key and not in list_region() because these entries are bare paths, never
-# prose. THE ONE PROPERTY THE CUT MUST HOLD is that it can never remove text that could
-# still render as a deliverable — an earlier round lost a clean sibling entry off
-# `[ …/a] #1.md, …/b.md ]` by cutting at the first `]`-then-`#` it found. So it fires
-# only where something makes that impossible:
-#   · a BLOCK entry line (`- …`), whose siblings are on other lines — a cut there can
-#     only ever truncate this one entry, which is what YAML reads on that line anyway;
-#   · otherwise the `#` must follow the value's closing `]` (a comment cannot begin
-#     inside an unterminated value), AND either that `]` is whitespace-separated — the
-#     shape a flow list's TERMINATOR has, and one no renderable entry can contain,
-#     because a renderable entry has no whitespace in it at all (the render-time shape
-#     check's own rule, reused here) — or the text being removed holds no `/projects/`
-#     and so could not have been an entry whatever else it is.
-# Otherwise the line is left exactly as written, and the shape check drops whichever
-# fragments the comma-split makes of it — a visible drop, never a fabricated path.
+# prose. THE PROPERTY THE CUT MUST HOLD, stated as the only thing that can settle it:
+# THE CUT REMOVES EXACTLY THE SPAN A YAML PARSER READS AS A COMMENT — no more, so a
+# clean sibling entry can never go with it, and no less, so no comment text can be
+# fabricated into a path. Earlier rounds each stated a weaker proxy for this and each
+# proxy had a hole, because a proxy is checked by argument and this is checked against
+# a parser. Two rules are all YAML needs here, and the scan below is exactly them:
+#   · a `#` opens a comment only when it is preceded by whitespace AND is not inside a
+#     QUOTED scalar. Inside quotes `#` is an ordinary character, which is what
+#     `[ "…/a #1.md", "…/b.md" ]` turns on: YAML reads two entries there, so a cut at
+#     that `#` both fabricates `…/a` and deletes the clean `…/b.md`;
+#   · in the flow (inline) form the sequence ENDS at the first UNQUOTED `]`, so a
+#     comment can only begin after one. `[ …/a] #1.md, …/b.md ]` is therefore ONE
+#     entry, `…/a`, and everything from ` #1.md` on is comment — the reason this is not
+#     a "lost sibling" but the parser's own reading, and `…/b.md` must NOT render.
+#     A quote only opens a scalar where a scalar may START (line start, or after `[` or
+#     `,`), so an apostrophe inside a plain path is not a quote; `\"` does not close a
+#     double-quoted one. A block entry line has no terminator to wait for: its siblings
+#     are on other lines, so the first unquoted whitespace-`#` on it is a comment.
+# Anything the cut declines to remove stays exactly as written, and the render-time
+# shape check drops whichever fragments the comma-split makes of it — a visible drop,
+# never a fabricated path.
 deliverable_path_entries() { # <frontmatter>
-  list_entries_from_region "$(list_region "$1" deliverable_paths | awk '{
-    i = match($0, /[[:space:]]#/)
-    if (i > 0) {
-      head = substr($0, 1, i - 1); tail = substr($0, i)
-      if ($0 ~ /^[[:space:]]*-/ || (head ~ /\][[:space:]]*$/ \
-          && (head ~ /([[:space:]]|\[)[[:space:]]*\][[:space:]]*$/ \
-              || index(tail, "/projects/") == 0))) $0 = head
+  list_entries_from_region "$(list_region "$1" deliverable_paths | awk '
+    # One left-to-right pass. CCOL = where a comment begins, TCOL = the flow
+    # terminator, OPEN = the line ended inside a quoted scalar; 0 = absent. CCOL
+    # returns early, so TCOL is set only by a `]` that precedes the comment — which
+    # is the whole condition the inline form needs. `noq` ignores quoting entirely.
+    function scan(s, noq,   i, c, q, fresh, n) {
+      CCOL = 0; TCOL = 0; OPEN = 0; q = ""; fresh = 1; n = length(s)
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (q != "") {
+          if (q == "\"" && c == "\\") i++
+          else if (c == q) q = ""
+          continue
+        }
+        if (!noq && fresh && (c == "\"" || c == "'\''")) { q = c; fresh = 0; continue }
+        if (c == "#" && i > 1 && substr(s, i - 1, 1) ~ /[[:space:]]/) { CCOL = i; return }
+        if (c == "]" && TCOL == 0) TCOL = i
+        fresh = (c ~ /[[:space:]]/ || c == "," || c == "[")
+      }
+      OPEN = (q != "")
     }
-    print
-  }')"
+    {
+      scan($0, 0)
+      # A quoted scalar left OPEN is not valid YAML at all — Psych refuses the
+      # document — so there is no parser reading to be faithful to, and quote state
+      # has nothing to say. Fall back to the quote-blind scan (what this cut did
+      # before it was quote-aware) rather than dropping a path a human can still
+      # read: an unterminated scalar already swallows the rest of the line, so the
+      # fallback cannot cost an entry any parser would have returned.
+      if (OPEN) scan($0, 1)
+      if (CCOL > 0 && ($0 ~ /^[[:space:]]*-/ || TCOL > 0)) $0 = substr($0, 1, CCOL - 1)
+      print
+    }
+  ')"
 }
 
 # The TEXT of each open question — OPT-IN, and off unless SNAPSHOT_QUESTION_TEXT=1.

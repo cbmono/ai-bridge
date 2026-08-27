@@ -317,10 +317,15 @@ deliverable_paths: [ /projects/handedited/deliverables/report.md ]   # hand-edit
 PRJ
 
 # The SAME hazard in the OTHER YAML shape. A block sequence's key line carries no `]`
-# at all, so the cut that handles the inline form cannot fire here and the comment would
-# ride into the entry — where the comma splits it exactly as above. Two shapes, two
-# cuts, and this fixture is the one that says the second cut is load-bearing: without
-# it the suite stays green while a block-form list leaks.
+# at all, so a cut that waits for a flow terminator cannot fire here and the comment
+# would ride into the entry — where the comma splits it exactly as above. This fixture
+# is the one that says the block case is load-bearing: without it the suite stays green
+# while a block-form list leaks.
+#
+# Its SECOND entry is the block mirror of the `quoted` fixture below: ` #` opens a
+# comment on a block line, but NOT inside a quoted scalar, so Psych reads
+# `b #2.md` whole. Cutting there fabricates `.../b`, a path no parser returned — which
+# is why this entry must survive into the snapshot intact and reach no button.
 mkdir -p "$ALPHA/projects/blockform"
 cat > "$ALPHA/projects/blockform/project.md" <<PRJ
 ---
@@ -332,6 +337,7 @@ status: done
 retain: true
 deliverable_paths:
   - /projects/blockform/deliverables/notes.md  # hand-edited; kept, /projects/blockform/deliverables/see $SECRET_ABS_PATH
+  - "/projects/blockform/deliverables/b #2.md"
 ---
 PRJ
 
@@ -358,22 +364,23 @@ deliverable_paths: [ /projects/plain/deliverables/report.md $SECRET_PAGE_PATH ]
 ---
 PRJ
 
-# THE OTHER DIRECTION, and the regression this fixture exists to hold: a cut must never
-# take a CLEAN entry with it. The first `]` here sits inside a filename, not at the end
-# of the list, so a strip that fires on the first `]`-then-`#` it sees swallows the rest
-# of the line — including `b.md`, a perfectly good deliverable a human stamped, which
-# then disappears off the panel with nothing to show it ever existed. Silently losing an
-# entry is a defect even when nothing leaks.
+# AN UNQUOTED `]` ENDS THE FLOW SEQUENCE — settled against a real YAML parser, not by
+# eye. Ruby's Psych reads this line as ONE entry, `.../a`: in flow context a plain
+# scalar cannot contain `]`, so the first unquoted one is the terminator and
+# ` #1.md, .../b.md ]` is a COMMENT. `b.md` is therefore not a stamped deliverable at
+# all, and rendering it would invent a path out of comment text — the same defect as
+# truncating one, reached from the other side. An earlier revision did exactly that,
+# and a test written from the eye rather than the parser called it correct.
 #
-# What must happen instead: `b.md` renders, and the fragment before it — which contains
-# whitespace, so it is not a whole path — is dropped visibly, never truncated into the
-# fabricated `.../a` that a first-bracket cut produces.
+# What must happen: `.../a` renders, because it is the entry; `b.md` does not, because
+# it is comment. The fixture whose sibling really IS a sibling is `quoted`, below —
+# quoting is what makes `]` an ordinary character and leaves YAML two entries to keep.
 mkdir -p "$ALPHA/projects/sibling"
 cat > "$ALPHA/projects/sibling/project.md" <<'PRJ'
 ---
 type: Project
 title: A bracket inside a filename
-description: the list's own terminator is at the END of the line, not the first ]
+description: an unquoted ] is the flow terminator, so the rest of the line is a comment
 kind: research
 status: done
 retain: true
@@ -381,14 +388,58 @@ deliverable_paths: [ /projects/sibling/deliverables/a] #1.md, /projects/sibling/
 ---
 PRJ
 
+# THE SHAPE WHERE THE SIBLING IS REAL, and the blocker this round exists to close.
+# Inside a QUOTED scalar neither `]` nor `#` is special, so Psych reads TWO entries
+# here: `a ] #1.md` (whitespace in it, so the renderer drops it, visibly) and `b.md`, a
+# perfectly good deliverable a human stamped. A cut that reads that `#` as a comment
+# fails in both directions at once — it fabricates `.../a`, a path no parser ever read,
+# and it deletes `b.md` with nothing to show it ever existed. NOTHING LEAKS either way,
+# which is precisely why only a parser could settle it and five rounds of argument did
+# not.
+mkdir -p "$ALPHA/projects/quoted"
+cat > "$ALPHA/projects/quoted/project.md" <<'PRJ'
+---
+type: Project
+title: A quoted entry carrying ] and #
+description: inside quotes neither is special, so YAML has two entries on this line
+kind: research
+status: done
+retain: true
+deliverable_paths: [ "/projects/quoted/deliverables/a ] #1.md", "/projects/quoted/deliverables/b.md" ]
+---
+PRJ
+
+# A FLOW SEQUENCE THAT NEVER TERMINATES — the shape with no parser answer at all, since
+# Psych refuses the document outright. Which is exactly why it needs pinning: where
+# there is no reading to be faithful to, the cut must fail toward "leave the line alone
+# and let the shape check drop whatever it drops", never toward "cut anyway". Cutting at
+# this line's ` #` hands the renderer `.../a` — a filename truncated into a path nobody
+# wrote, on the one input class that cannot be settled by argument. Declining leaves the
+# comma split to do the honest thing: the fragment carrying whitespace goes, `b.md`
+# stays.
+mkdir -p "$ALPHA/projects/unterminated"
+cat > "$ALPHA/projects/unterminated/project.md" <<'PRJ'
+---
+type: Project
+title: An inline list with no closing bracket
+description: not valid YAML at all, so the cut declines rather than guesses
+kind: research
+status: done
+retain: true
+deliverable_paths: [ /projects/unterminated/deliverables/a #1.md, /projects/unterminated/deliverables/b.md
+---
+PRJ
+
 # Every task terminal ⇒ the board shows a close PROPOSAL, never an action.
 #
 # Its `deliverable_paths:` line is the HAND-EDITED shape: someone opened a quote and
-# never closed it, and left a trailing comment naming a path on their own disk. YAML
-# reads the value as one entry either way; the only question is where the value ends.
-# A strip that looked for the list's `]` while tracking quote state found no unquoted
-# `]` here, truncated nothing, and the whole comment — absolute path included — became
-# the deliverable path a copy button carries on the published board.
+# never closed it, and left a trailing comment naming a path on their own disk. Psych
+# REFUSES this document — an unterminated quoted scalar is not YAML — so there is no
+# parser reading to defer to here, and the cut falls back to a quote-blind scan rather
+# than dropping a path a human can plainly read. What must not happen is the other
+# thing: a strip that looked for the list's `]` while tracking quote state found no
+# unquoted `]`, truncated nothing, and the whole comment — absolute path included —
+# became the deliverable path a copy button carries on the published board.
 cat > "$ALPHA/projects/finished/project.md" <<PRJ
 ---
 type: Project
@@ -479,7 +530,7 @@ echo "== a real snapshot, once the switch is on =="
 touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
-assert "…with the project count"           "$(has '8 project(s)' "$RUN_OUT")"
+assert "…with the project count"           "$(has '10 project(s)' "$RUN_OUT")"
 # 7, not 8: the done project's task is never counted, because it is never read.
 assert "…and the task count"                "$(has '7 task(s)' "$RUN_OUT")"
 assert "…and the awaiting count (6 verbs across 4 live projects)" "$(has '6 awaiting' "$RUN_OUT")"
@@ -685,22 +736,36 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 p=[p for p in d["projects"] if p["slug"]=="handedited"][0]
 sys.exit(0 if p["deliverable_paths"]==["/projects/handedited/deliverables/report.md"] else 1)' "$SNAP")"
+# …and the same for a BLOCK-form list, whose key line carries no `]`. Both entries,
+# exactly as Psych reads them: the comment gone off the first, and the second — a
+# QUOTED scalar whose ` #` is not a comment — carried whole rather than cut to `.../b`.
 assert "…and the same holds for a BLOCK-form list, whose key line carries no ]" \
   "$(yes_if python3 -c '
 import json,sys
 d=json.load(open(sys.argv[1]))
 p=[p for p in d["projects"] if p["slug"]=="blockform"][0]
-sys.exit(0 if p["deliverable_paths"]==["/projects/blockform/deliverables/notes.md"] else 1)' "$SNAP")"
-# The `sibling` fixture: a `]` inside a filename, with the list's real terminator at the
-# END of the line. A cut anchored on the first `]`-then-`#` reads that filename's bracket
-# as the end of the list and takes `b.md` with it. Assert the CLEAN entry survives —
-# that is the property, not "the comment was handled".
-assert "a ] inside a filename never costs the clean entry beside it" \
+sys.exit(0 if p["deliverable_paths"]==["/projects/blockform/deliverables/notes.md",
+                                       "/projects/blockform/deliverables/b #2.md"] else 1)' "$SNAP")"
+# The `sibling` fixture: an UNQUOTED `]` inside what looks like a filename. Psych reads
+# one entry, `.../a`, and treats the rest of the line as a comment — so the property is
+# that the parser is followed in both directions: the entry it returns survives, and the
+# comment text it discarded never becomes a second entry.
+assert "an unquoted ] terminates the list, so the entry before it survives" \
   "$(yes_if python3 -c '
 import json,sys
 d=json.load(open(sys.argv[1]))
 p=[p for p in d["projects"] if p["slug"]=="sibling"][0]
-sys.exit(0 if "/projects/sibling/deliverables/b.md" in p["deliverable_paths"] else 1)' "$SNAP")"
+sys.exit(0 if p["deliverable_paths"]==["/projects/sibling/deliverables/a"] else 1)' "$SNAP")"
+# The `quoted` fixture, and the reason it exists: inside quotes a `]` is an ordinary
+# character, so Psych really does have two entries and the clean one MUST come through.
+# A cut that reads the quoted `#` as a comment loses `b.md` and invents `.../a`.
+assert "a quoted ] is no terminator: the clean sibling entry survives" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+p=[p for p in d["projects"] if p["slug"]=="quoted"][0]
+sys.exit(0 if p["deliverable_paths"]==["/projects/quoted/deliverables/a ] #1.md",
+                                       "/projects/quoted/deliverables/b.md"] else 1)' "$SNAP")"
 # The same defect, reached the other way round — through the VALUE rather than the
 # comment. The `finished` fixture's line opens a quote and never closes it, so a strip
 # that decided where the list ended by tracking quote state found no unquoted `]`, kept
@@ -861,27 +926,46 @@ assert "two paths in one value reach the snapshot…"            "$(fhas "$SECRE
 assert "…and neither of them reaches the page"                 "$(fhasnt "$SECRET_PAGE_PATH" "$HTML")"
 assert "…the whole value being dropped, not trimmed to its clean half" \
   "$(fhasnt 'data-copy="/projects/plain/deliverables' "$HTML")"
-# The other direction, on the same real page: the clean sibling of a bracketed filename
-# is still a button, and the fabricated truncation a first-bracket cut would produce is
-# not. Two assertions because they fail in opposite directions — one on a lost entry,
-# one on an invented one.
+# The other direction, on the same real page, and the pair that says the parser is
+# followed rather than approximated. They fail in OPPOSITE directions — one on a lost
+# entry, one on an invented one — and each names the shape only it can reach:
+#   · `quoted`: quoting makes `]` ordinary, YAML has two entries, so the clean one is a
+#     button and the truncation `.../a` is not;
+#   · `sibling`: an unquoted `]` terminates the list, so `b.md` lives in a COMMENT and
+#     must reach no button — rendering it invents a deliverable out of comment text;
+#   · `blockform`: ` #` inside a quoted BLOCK entry is not a comment either, so no
+#     `.../b` may appear.
 assert "a clean sibling entry is still a copy button"          \
-  "$(fhas 'data-copy="/projects/sibling/deliverables/b.md"' "$HTML")"
+  "$(fhas 'data-copy="/projects/quoted/deliverables/b.md"' "$HTML")"
 assert "…and no truncated path was fabricated beside it"       \
-  "$(fhasnt 'data-copy="/projects/sibling/deliverables/a"' "$HTML")"
-# EXACTLY five deliverable buttons on this page — one per fixture whose line yields a
-# whole, well-formed path (retained, finished, handedited, blockform, and `sibling`'s
-# clean second entry; `plain` yields none, both its halves being one value) — and both
-# failure directions are silent, sitting either side of the same fix. Too FEW is the
-# documented comment form costing a panel: a strip anchored on the line's last bracket
-# leaves SCHEMA.md's own comment in the value, the shape check drops the only entry, and
-# the retained project renders with no deliverables panel at all — green on "nothing
-# leaked", green on "no error", feature gone. It is also a clean entry lost beside a
-# bracketed filename. Too MANY is a comment fragment rendering as a path. A `fhas` on any
-# one button sees none of it.
+  "$(fhasnt 'data-copy="/projects/quoted/deliverables/a"' "$HTML")"
+assert "…nor is comment text past an unquoted ] rendered as an entry" \
+  "$(fhasnt 'data-copy="/projects/sibling/deliverables/b.md"' "$HTML")"
+assert "…while the entry that unquoted ] terminated still is one" \
+  "$(fhas 'data-copy="/projects/sibling/deliverables/a"' "$HTML")"
+assert "…and a quoted # on a BLOCK entry line is truncated into no path" \
+  "$(fhasnt 'data-copy="/projects/blockform/deliverables/b"' "$HTML")"
+# The line no parser will read at all. A cut needs a flow TERMINATOR before it may treat
+# a `#` on a key line as a comment; drop that requirement and this fixture's filename is
+# truncated into `.../a` and rendered. Both directions again, and neither leaks — which
+# is why nothing else on this page can catch it.
+assert "…nor is a filename truncated on a list that never closes" \
+  "$(fhasnt 'data-copy="/projects/unterminated/deliverables/a"' "$HTML")"
+assert "…while its readable clean entry is still a button" \
+  "$(fhas 'data-copy="/projects/unterminated/deliverables/b.md"' "$HTML")"
+# EXACTLY seven deliverable buttons on this page — one per fixture whose line yields a
+# whole, well-formed path (retained, finished, handedited, blockform's first entry,
+# `sibling`'s single entry, and the clean second entry of `quoted` and `unterminated`;
+# `plain` yields none, both its halves being one value) — and both failure directions are silent, sitting either
+# side of the same fix. Too FEW is the documented comment form costing a panel: a strip
+# anchored on the line's last bracket leaves SCHEMA.md's own comment in the value, the
+# shape check drops the only entry, and the retained project renders with no
+# deliverables panel at all — green on "nothing leaked", green on "no error", feature
+# gone. It is also a clean entry lost beside a QUOTED bracketed filename. Too MANY is a
+# comment fragment rendering as a path. A `fhas` on any one button sees none of it.
 DELIV_BTNS="$(grep -oF 'data-what="Deliverable path"' "$HTML" | grep -c . || true)"
 assert "exactly one copy button per stamped path, no more and no fewer (saw $DELIV_BTNS)" \
-  "$(eq "$DELIV_BTNS" 5)"
+  "$(eq "$DELIV_BTNS" 7)"
 assert "no filesystem path reaches the page"        "$(fhasnt "$TMP" "$HTML")"
 # Belt and braces, because the check above depends on how the fixture path is spelled:
 # an instance is named by its DIRECTORY NAME, so the name must never appear with a
@@ -994,12 +1078,12 @@ assert "…with exactly one <body> element" "$(eq "$(grep -cF '<body>' "$SA")" 1
 # there is no drift to pin. tests/artifact-board.test.sh asserts the <details> behaviour
 # (collapsed by default, finished projects under a divider) where the markup lives.
 # Two, not four, is still the fact worth reading off the page: beta is malformed and
-# gamma has no snapshot, so neither is an instance on the board. Nine blocks: alpha's
-# eight projects — including the RETAINED done ones, which are on the board as reference
-# cards even though their tasks were never read, and the two whose deliverable_paths line
-# is hostile, which are still projects and still render — plus delta's one.
+# gamma has no snapshot, so neither is an instance on the board. Eleven blocks: alpha's
+# ten projects — including the RETAINED done ones, which are on the board as reference
+# cards even though their tasks were never read, and the four whose deliverable_paths
+# line is hostile, which are still projects and still render — plus delta's one.
 assert "one project block per project of the 2 rendered instances" \
-  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 9)"
+  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 11)"
 
 echo "== discovery is explicit, never a glob =="
 D1="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d1.html" 2>&1 )"
