@@ -58,9 +58,13 @@ cat > "$TMP/bin/gh" <<STUB
 REAL_JQ="$REAL_JQ"
 STUB
 cat >> "$TMP/bin/gh" <<'STUB'
-# Minimal `gh` for review-clearance.sh: the PR (with its issue comments) from
-# $FIX/pr_json, and the REVIEW OBJECTS from $FIX/reviews_json — a separate endpoint,
-# because only that one carries a review's state AND its commit_id.
+# Minimal `gh` for review-clearance.sh. THREE sources, because the script reads three:
+# the PR's own facts from $FIX/pr_json (`gh pr view`), the REVIEW OBJECTS from
+# $FIX/reviews_json (only that endpoint carries a review's state AND its commit_id), and
+# the ISSUE COMMENTS from $FIX/comments_json. The comments used to ride along inside
+# `gh pr view --json comments`, which answers ONE page: a PR with more comments than that
+# loses the refusal, and a lost refusal is a clearance. Both lists are paginated now, so
+# both arrive through `gh api` and the stub has to tell them apart by path.
 case "${1:-} ${2:-}" in
   "pr view")
     [ -f "$FIX/gh_broken" ] && { echo "could not resolve to a PullRequest" >&2; exit 1; }
@@ -68,15 +72,19 @@ case "${1:-} ${2:-}" in
     cat "$FIX/pr_json"; exit 0 ;;
 esac
 if [ "${1:-}" = "api" ]; then
-  [ -f "$FIX/reviews_broken" ] && { echo "gh: Bad gateway (HTTP 502)" >&2; exit 1; }
-  [ -f "$FIX/reviews_json" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+  src="$FIX/reviews_json"; broken="$FIX/reviews_broken"
+  case "${2:-}" in
+    */issues/*/comments*) src="$FIX/comments_json"; broken="$FIX/comments_broken" ;;
+  esac
+  [ -f "$broken" ] && { echo "gh: Bad gateway (HTTP 502)" >&2; exit 1; }
+  [ -f "$src" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
   filter=""; prev=""
   for a in "$@"; do
     [ "$prev" = "--jq" ] && { filter="$a"; break; }
     prev="$a"
   done
-  if [ -n "$filter" ]; then "$REAL_JQ" -r "$filter" "$FIX/reviews_json"
-  else cat "$FIX/reviews_json"; fi
+  if [ -n "$filter" ]; then "$REAL_JQ" -r "$filter" "$src"
+  else cat "$src"; fi
   exit 0
 fi
 echo "stub: unhandled gh $*" >&2; exit 99
@@ -104,13 +112,13 @@ body_file() { # <text...> -> a file holding it, so every artifact arrives the sa
 
 add_comment() { # <login> <body-file>
   COMMENTS="$("$REAL_JQ" --arg l "$1" --rawfile b "$2" \
-              '. + [{author:{login:$l}, body:$b}]' <<<"$COMMENTS")"
+              '. + [{user:{login:$l}, body:$b}]' <<<"$COMMENTS")"
 }
 
 # The host reports no author at all for an artifact from a deleted account, and `gh` passes
 # that through as `null`. It is not a login the script can compare against anything.
 add_null_comment() { # <body-file>
-  COMMENTS="$("$REAL_JQ" --rawfile b "$1" '. + [{author:null, body:$b}]' <<<"$COMMENTS")"
+  COMMENTS="$("$REAL_JQ" --rawfile b "$1" '. + [{user:null, body:$b}]' <<<"$COMMENTS")"
 }
 
 # A review object as the REST API publishes one: a state, a commit_id and a body. The
@@ -121,10 +129,11 @@ add_review() { # <login> <state> <commit_id> <body-file>
 }
 
 write_pr() {
-  "$REAL_JQ" -n --arg h "$HEAD" --arg a "$AUTHOR" --argjson cm "$COMMENTS" \
+  "$REAL_JQ" -n --arg h "$HEAD" --arg a "$AUTHOR" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-      author:{login:$a}, comments:$cm}' > "$FIX/pr_json"
-  printf '%s' "$REVIEWS" > "$FIX/reviews_json"
+      author:{login:$a}}' > "$FIX/pr_json"
+  printf '%s' "$REVIEWS"  > "$FIX/reviews_json"
+  printf '%s' "$COMMENTS" > "$FIX/comments_json"
 }
 
 # --- assertions ---------------------------------------------------------------
@@ -269,28 +278,57 @@ echo "== …and 'says nothing' means the PAGE is blank, not that the bytes are =
 # THE NARROWEST WAY BACK IN, and it restored the behaviour above exactly. "Content" was any
 # non-whitespace byte, so a body of one ZERO-WIDTH SPACE — or of one empty HTML COMMENT,
 # which is the very shape every machine marker in this file takes — was a claim, and an
-# empty review object cleared over the recorded refusal at that head again. Each case below
-# is that refusal, verbatim, with a review object whose body renders to a blank page.
+# empty review object cleared over the recorded refusal at that head again.
+#
+# THEN THE SECOND CUT SUBTRACTED SIX SUCH CHARACTERS AND THE COMMENT, AND THIRTEEN MORE
+# WALKED THROUGH — plus three constructs no character list can reach. Which is why the
+# battery below is NOT the list the script removes: nothing is removed for being known-bad
+# any more, so every case here has to get past a rule that asks what is LEFT. Each case is
+# the recorded refusal, verbatim, with a review object at that same head whose body renders
+# to a blank page; the answer must be the refusal, at 1.
 ZWSP="$(printf '\342\200\213')"; NBSP="$(printf '\302\240')"
+u() { printf "$1"; }   # a code point as UTF-8, so the case names stay readable
 for blank in "$ZWSP:a zero-width space" "$NBSP:a non-breaking space" \
-             "<!-- -->:an empty HTML comment" "<!--x-->:an HTML comment with text in it"; do
+             "<!-- -->:an empty HTML comment" "<!--x-->:an HTML comment with text in it" \
+             "$(u '\342\200\216'):U+200E, a left-to-right mark" \
+             "$(u '\342\200\217'):U+200F, a right-to-left mark" \
+             "$(u '\342\200\256'):U+202E, a right-to-left override" \
+             "$(u '\342\201\241'):U+2061, function application" \
+             "$(u '\342\201\242'):U+2062, an invisible times" \
+             "$(u '\342\201\244'):U+2064, an invisible plus" \
+             "$(u '\341\240\216'):U+180E, a Mongolian vowel separator" \
+             "$(u '\357\270\200'):U+FE00, a variation selector" \
+             "$(u '\357\270\217'):U+FE0F, the emoji variation selector" \
+             "$(u '\357\277\271'):U+FFF9, an interlinear annotation anchor" \
+             "$(u '\341\205\237'):U+115F, a Hangul choseong filler" \
+             "$(u '\343\205\244'):U+3164, a Hangul filler" \
+             "$(u '\315\217'):U+034F, a combining grapheme joiner" \
+             "&#8203;:a numeric character reference for one" \
+             "&zwnj;:a NAMED character reference for one" \
+             "[//]: # ():a link reference definition, which draws nothing" \
+             "<div></div>:an empty element" \
+             "---:a thematic break, which is a mark but not a claim"; do
   setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
   add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file "${blank%%:*}")"
-  expect "a body of ${blank#*:} renders nothing, so it is not a claim" 1
+  expect "a body of ${blank#*:} -> not a claim" 1
 done
 # …including one spanning lines, which a line-at-a-time reader would miss.
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
 add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '<!--' 'hidden' '-->')"
 expect "…and an HTML comment spanning three lines is still blank" 1
-# THE CONTROLS, and they are what keep this about RENDERING rather than about characters:
-# the same invisible bytes with one visible word beside them ARE content, and so is a body
-# whose only visible mark is punctuation.
+# THE CONTROLS, and they are what keep this a rule about what is LEFT rather than a longer
+# list of what is taken away: the same invisible bytes with one word beside them ARE a
+# claim, an element with a word IN it is a claim, and a character reference the host draws
+# a LETTER for is a claim.
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
 add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file "<!-- x -->${ZWSP}ok")"
 expect "…while one visible word beside them IS a claim" 0
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
-add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '---')"
-expect "…as is a body whose only mark is a rule the host draws" 0
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '<div>lgtm</div>')"
+expect "…as is an element with a word inside it" 0
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file 'no&#8203;1')"
+expect "…and so is text a zero-width reference is hiding inside" 0
 
 echo
 echo "== a review state must be one the API publishes, case and all =="
@@ -570,32 +608,125 @@ add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CL
 expect "…as does an OPENER carrying an info string, which is legal" 0
 
 echo
+echo "== the CONTAINERS a fence lives in, which the machine did not model =="
+# THE SAME DEFECT A SIXTH TIME, and this is the round it stopped being a list. The fence
+# rules were exact for what they modelled and modelled no CONTAINERS, so a construct that
+# changes what ``` MEANS put the recorded refusal back behind a fence the host does not
+# see. Inside a raw-HTML block the content is HTML: ``` is three backticks a reader can
+# see, and the refusal between them is on the page. `<details>`/`<summary>` is the shape
+# the recorded fixture is itself built from, so this is the vendor's idiom, not a
+# construction. Each case is answered by the SECOND reading of the block structure, and
+# the refusal side takes the union of the two.
+for tag in details pre div table section blockquote-ish-unknown-tag; do
+  setup "$CLEAN_HEAD"
+  add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' \
+    "Reviewed $CLEAN_HEAD." '' "<$tag>" '```' 'rate limited by coderabbit.ai' '```' "</$tag>")"
+  expect "a refusal inside a <$tag> block -> refuse, it is on the page" 1
+done
+says   "  ...and it is the unconditional tier that fired" "DECLINED to review"
+# …and the whole recorded refusal, unaltered, inside the vendor's own <details> idiom.
+setup "$REFUSAL_HEAD"
+{ printf '<!-- walkthrough_start -->\nReviewed %s.\n\n<details>\n<summary>d</summary>\n```\n' \
+    "$REFUSAL_HEAD"; cat "$REFUSAL"; printf '```\n</details>\n'; } > "$TMP/details.md"
+add_comment coderabbitai "$TMP/details.md"
+expect "the RECORDED refusal inside <details> -> refuse" 1
+says   "  ...quoting the reviewer's own words" "Review limit reached"
+# THE CONTROL, and it is the one that keeps this from being "never strip a fence": with no
+# HTML block around it the same three lines ARE a fenced quotation and still clear.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '' '```' 'rate limited by coderabbit.ai' '```')"
+expect "…while the same fence with no HTML block around it is quotation" 0
+# …and a raw-HTML block ends at a blank line, so a fence after one is a fence again.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '' '<div>' 'x' '' '```' 'rate limited by coderabbit.ai' '```')"
+expect "…and a blank line ends the HTML block, so the next fence quotes again" 0
+
+# A LIST ITEM IS A CONTAINER TOO: the fence dies with the item. The host closes the block
+# at the end of the item, so the text after it is a paragraph a human reads; a machine that
+# carries the fence past the item's end pairs it with a LATER marker and swallows that
+# paragraph — and an odd number of markers becomes even, which slips the unbalanced net.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '' '- item' '  ```' '  x' '' 'rate limited by coderabbit.ai' '' '  ```')"
+expect "a fence closed by the END of its list item -> refuse" 1
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '' '- item' '  ```' '  rate limited by coderabbit.ai' '  ```')"
+expect "…while a fence that opens and closes INSIDE the item is quotation" 0
+# The opener may be behind the marker itself, which used to be no fence at all — so a
+# review marker inside a block the host renders as CODE was read as the vendor's claim.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '- ```' '  <!-- walkthrough_start -->' \
+  "  Reviewed $CLEAN_HEAD." '  ```')"
+expect "a marker inside a fence opened BEHIND a list marker -> not evidence" 4
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '1. ```' '   <!-- walkthrough_start -->' \
+  "   Reviewed $CLEAN_HEAD." '   ```')"
+expect "…and behind an ORDERED list marker too" 4
+
+echo
+echo "== an inline code SPAN is text a human reads, so it is not evidence =="
+# THIS ROUND'S REVIEW DEMONSTRATED IT ON ITS OWN DRAFT: spelling the vendor's marker
+# between backticks to describe it cleared route C, and the verdict had to be mangled
+# before it could be posted. Two things stop it, because one construct is invisible to
+# each: the table rows are anchored to a WHOLE line, which a span inside a line breaks;
+# and the strict rendering drops lines inside a span that opened on an earlier line, which
+# an anchor cannot see.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file 'The marker `<!-- walkthrough_start -->` is emitted' \
+  "by the vendor. Reviewed $CLEAN_HEAD.")"
+expect "the marker inside a span, in a sentence -> not evidence" 4
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '`<!-- walkthrough_start -->`' "Reviewed $CLEAN_HEAD.")"
+expect "…nor a span holding nothing else, alone on its line" 4
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file 'the marker is `' '<!-- walkthrough_start -->' \
+  '` as emitted' "Reviewed $CLEAN_HEAD.")"
+expect "…nor a marker on its own line inside a MULTI-LINE span" 4
+# THE CONTROLS: the marker as the vendor actually emits it, alone on its line, still
+# clears — including inside the blockquote its notices arrive in.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD.")"
+expect "…while the marker alone on its line IS the vendor's claim" 0
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '> <!-- walkthrough_start -->' "> Reviewed $CLEAN_HEAD.")"
+expect "…and so is one inside the blockquote its notices arrive in" 0
+
+echo
 echo "== the containment itself, not only the cases that broke it =="
 # THE FILE STATES A SAFETY PROPERTY — every line the STRICT rendering keeps is a line the
-# STRIPPED one kept (strict ⊆ stripped) — and until now the tests only varied the INDENT
-# axis of the cases that had broken it, never the closing marker, the run length or the
-# quote boundary, and never asserted the property itself. Both renderings are sliced out of
-# the shipped script so this tests the real definitions rather than a copy of them.
+# STRIPPED one kept (strict ⊆ stripped) — and it is now STRUCTURAL rather than hoped for:
+# stripped is the UNION of two readings of the block structure and strict is their
+# INTERSECTION, and an intersection is a subset of a union whatever either reading gets
+# wrong. This sweep is what proves the shipped code really is that shape, so it slices the
+# real definitions out of the script rather than testing a copy of them.
 RENDER="$TMP/render.sh"
 { printf '#!/usr/bin/env bash\nset -u\n'
   sed -n "/^FENCE_AWK='/,/^'\$/p" "$SCRIPT"
-  sed -n '/^strip_fences() {/,/^}$/p' "$SCRIPT"
-  sed -n '/^strict_body() {/,/^}$/p'  "$SCRIPT"
-  printf 'case "$1" in stripped) strip_fences "$2";; strict) strict_body "$2";; esac\n'
+  sed -n '/^render_body() {/,/^}$/p' "$SCRIPT"
+  printf 'render_body "$1" "$2" "$3"\n'
 } > "$RENDER"
 chmod +x "$RENDER"
 assert "both renderings could be sliced out of the script" \
-  "$(yes_if bash -c 'grep -q "fence_state" "$1" && grep -q "strict_body" "$1"' _ "$RENDER")"
+  "$(yes_if bash -c 'grep -q "function step(" "$1" && grep -q "render_body() {" "$1"' _ "$RENDER")"
 
-# A body from the alphabet the two renderings disagree over: fences of three sizes, an info
-# string, a tilde fence, blockquote prefixes at two depths, and indents made of spaces, of
-# tabs, and of both.
+# A body from the alphabet the two renderings disagree over — and the alphabet is the test.
+# The previous one held fences of three sizes, an info string, a tilde fence, blockquote
+# prefixes and indents of spaces and tabs, which meant the sweep structurally COULD NOT
+# reach the containers the machine did not model: a raw-HTML block and a list item were not
+# in it, so the property it proved held by construction. Both are in it now, with an inline
+# code span and a fence opener behind a list marker.
 gen_body() { # <seed>
   awk -v seed="$1" 'BEGIN {
     srand(seed)
-    nt = split("```@~~~@````@```js@```a`b@``@text@rate limited by coderabbit.ai@<!-- walkthrough_start -->", t, "@")
-    np = split("@ @   @    @\t@   \t@> @> > @  > @>\t ", p, "@")
-    for (i = 0; i < 3 + int(rand() * 8); i++)
+    nt = split("```@~~~@````@```js@```a`b@``@text@rate limited by coderabbit.ai@" \
+               "<!-- walkthrough_start -->@<details>@<summary>s</summary>@</details>@" \
+               "<pre>@</pre>@<div>@`text@a `b` c@- ```@1. ```@- item@" \
+               "@x", t, "@")
+    np = split("@ @   @    @\t@   \t@> @> > @  > @>\t @- @  @1. ", p, "@")
+    for (i = 0; i < 3 + int(rand() * 10); i++)
       printf "%s%s\n", p[1 + int(rand() * np)], t[1 + int(rand() * nt)]
   }'
 }
@@ -607,10 +738,9 @@ contains() {
          j++ }' "$1" "$2"
 }
 viol=0; bodies=0; differed=0
-for seed in $(seq 1 200); do
+for seed in $(seq 1 400); do
   gen_body "$seed" > "$TMP/gen.md"
-  "$RENDER" stripped "$TMP/gen.md" > "$TMP/gen.stripped"
-  "$RENDER" strict   "$TMP/gen.md" > "$TMP/gen.strict"
+  "$RENDER" "$TMP/gen.md" "$TMP/gen.stripped" "$TMP/gen.strict"
   bodies=$((bodies + 1))
   cmp -s "$TMP/gen.stripped" "$TMP/gen.strict" || differed=$((differed + 1))
   contains "$TMP/gen.stripped" "$TMP/gen.strict" || {
@@ -1059,7 +1189,7 @@ break_row() { # <name> <sed expression that corrupts a row> [args to the script.
 break_row "a broken REFUSALS row -> refuse, never read it as a review" \
   's/^review limit reached$/review limit reache[d/'
 break_row "a broken sentinel row -> refuse"        's/^rate\.limited by .*$/rate.limited by [a-z/'
-break_row "a broken REVIEW_SENTINEL row -> refuse" 's/walkthrough_start\[\[:space:\]\]\*-->/walkthrough_start[/'
+break_row "a broken REVIEW_SENTINEL row -> refuse" 's/walkthrough_start/walkthrough_start(/'
 break_row "a broken NOT_YET row -> refuse"         's/^queued for review$/queued for review[/'
 break_row "a broken REVIEWERS login -> refuse"     's/^coderabbitai  /coderabbitai[   /'
 break_row "a broken REVIEWERS check column -> refuse" \

@@ -39,9 +39,11 @@ case "${1:-}" in
     case "${2:-}" in
       view)
         # Two different `pr view` calls now reach this stub: required-checks.sh asks for
-        # a TSV of PR facts, review-clearance.sh asks for the artifacts as JSON. Branch
-        # on the field list, not on argument position.
-        if printf '%s\n' "$@" | grep -q comments; then
+        # a TSV of PR facts, review-clearance.sh asks for the PR's own facts as JSON.
+        # Branch on the field list, not on argument position — and not on `comments`,
+        # which review-clearance.sh no longer asks `pr view` for at all. `author` is the
+        # field only it wants; both ask for headRefOid.
+        if printf '%s\n' "$@" | grep -q author; then
           [ -f "$FIX/pr_json" ] || { echo "no PR" >&2; exit 1; }
           cat "$FIX/pr_json"
         else
@@ -82,19 +84,23 @@ case "${1:-}" in
       *) echo "stub: unhandled pr $2" >&2; exit 99 ;;
     esac ;;
   api)
-    # Two endpoints reach this stub. review-clearance.sh reads the REVIEW OBJECTS, which
-    # is the only place a review's state and commit_id exist; required-checks.sh reads
-    # the declared list out of the repo's contents.
+    # Three endpoints reach this stub. review-clearance.sh reads the REVIEW OBJECTS
+    # (the only place a review's state and commit_id exist) and the ISSUE COMMENTS —
+    # separately and paginated, because `gh pr view --json comments` answers one page and
+    # the artifact that must never be lost is a refusal, which is a comment.
+    # required-checks.sh reads the declared list out of the repo's contents.
     case "$*" in
-      */pulls/*/reviews*)
-        [ -f "$FIX/reviews_json" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+      */pulls/*/reviews*|*/issues/*/comments*)
+        src="$FIX/reviews_json"
+        case "$*" in */issues/*/comments*) src="$FIX/comments_json" ;; esac
+        [ -f "$src" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
         filter=""; prev=""
         for a in "$@"; do
           [ "$prev" = "--jq" ] && { filter="$a"; break; }
           prev="$a"
         done
-        if [ -n "$filter" ]; then jq -r "$filter" "$FIX/reviews_json"
-        else cat "$FIX/reviews_json"; fi
+        if [ -n "$filter" ]; then jq -r "$filter" "$src"
+        else cat "$src"; fi
         exit 0 ;;
     esac
     # Real gh prints the error BODY to stdout on a 404 and only the summary to
@@ -127,7 +133,8 @@ reviewed_pr() {
   [ "$HAVE_JQ" = 1 ] || return 0
   jq -n --arg h "$HEAD_SHA" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-      author:{login:"dev"}, comments:[]}' > "$FIX/pr_json"
+      author:{login:"dev"}}' > "$FIX/pr_json"
+  printf '[]\n' > "$FIX/comments_json"
   jq -n --arg h "$HEAD_SHA" \
     '[{user:{login:"coderabbitai"}, state:"APPROVED", commit_id:$h,
        body:"**Actionable comments posted: 0**"}]' \
@@ -287,15 +294,13 @@ CR_HEAD="8f40f2ed565a31e141f5ae54a6935ad0810314c4"   # the head #29 was reviewed
 reviewer_pr() { # <body-file>|"" — the artifacts review-clearance.sh will read
   printf 'https://github.com/acme/widgets/pull/42\tmain\t%s\n' "$CR_HEAD" > "$FIX/pr_meta"
   printf '[]\n' > "$FIX/reviews_json"
+  jq -n --arg h "$CR_HEAD" \
+    '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
+      author:{login:"dev"}}' > "$FIX/pr_json"
   if [ -n "${1:-}" ]; then
-    jq -n --arg h "$CR_HEAD" --rawfile b "$1" \
-      '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-        author:{login:"dev"},
-        comments:[{author:{login:"coderabbitai"}, body:$b}]}' > "$FIX/pr_json"
+    jq -n --rawfile b "$1" '[{user:{login:"coderabbitai"}, body:$b}]' > "$FIX/comments_json"
   else
-    jq -n --arg h "$CR_HEAD" \
-      '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-        author:{login:"dev"}, comments:[]}' > "$FIX/pr_json"
+    printf '[]\n' > "$FIX/comments_json"
   fi
 }
 
@@ -404,12 +409,65 @@ jq -n --arg c "$CR_HEAD" --arg b "$(printf '\342\200\213')" \
 expect "a review object holding one zero-width space -> refuse" 1
 says   "  ...still quoting the refusal" "Review limit reached"
 
+# --- the seventh round's routes, driven to the same sentence ------------------
+# 7. A RAW-HTML BLOCK CHANGES WHAT ``` MEANS, and the machine modelled no containers. The
+#    RECORDED refusal inside the vendor's own `<details>` idiom: the host renders its
+#    content as HTML, so the backticks are three characters on the page and the refusal
+#    with them, while a fence machine that has never heard of an HTML block strips it.
+html_block="$TMP/refusal-inside-an-html-block.md"
+{ printf '<!-- walkthrough_start -->\n'
+  printf 'Reviewed %s.\n\n' "$CR_HEAD"
+  printf '<details>\n<summary>d</summary>\n```\n'; cat "$CR_REFUSAL"
+  printf '```\n</details>\n'; } > "$html_block"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$html_block"
+expect "a refusal inside a <details> block -> refuse, never 'ok'" 1
+says   "  ...quoting the reviewer's own words" "Review limit reached"
+# The control: the same fence with no HTML block around it is a quotation and clears, so
+# the case above is about the container and not about fences having stopped working.
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$same_depth"
+expect "…while the same fence outside one is still a quotation" 0
+
+# 8. A FENCE DIES WITH THE LIST ITEM THAT HOLDS IT, so the paragraph after the item is on
+#    the page — and carrying the fence past it also turned an odd marker count even.
+list_fence="$TMP/refusal-after-a-list-item-ends.md"
+{ printf '<!-- walkthrough_start -->\n'
+  printf 'Reviewed %s.\n\n' "$CR_HEAD"
+  printf -- '- item\n  ```\n  x\n\nrate limited by coderabbit.ai\n\n  ```\n'; } > "$list_fence"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$list_fence"
+expect "a refusal after a list item ENDS the fence -> refuse, never 'ok'" 1
+says   "  ...quoting the sentinel a human can plainly read" "rate limited by coderabbit.ai"
+
+# 9. THE EVIDENCE HALF WAS REACHABLE FROM PROSE. Spelled inside an inline code span the
+#    vendor's marker renders as visible characters, so a comment merely DESCRIBING it
+#    cleared the pull request — which is what this round's own review ran into.
+span_marker="$TMP/prose-quoting-the-marker.md"
+{ printf 'The vendor emits `<!-- walkthrough_start -->` around its walkthrough.\n'
+  printf 'Reviewed %s.\n' "$CR_HEAD"; } > "$span_marker"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$span_marker"
+expect "prose quoting the marker in a code span -> refuse, never 'ok'" 1
+
+# 10. "CONTENT" WAS A LIST OF INVISIBLE CHARACTERS, and three constructs no character list
+#     reaches went through it. Each is a review object at the head over the recorded
+#     refusal at that head, and each must lose to it.
+for blank in '&#8203;' '[//]: # ()' '<div></div>'; do
+  setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+  reviewer_pr "$CR_REFUSAL"
+  jq -n --arg c "$CR_HEAD" --arg b "$blank" \
+    '[{user:{login:"coderabbitai"}, state:"COMMENTED", commit_id:$c, body:$b}]' \
+    > "$FIX/reviews_json"
+  expect "a review object whose body is '$blank' -> refuse" 1
+done
+
 # 6. AN ARTIFACT NOBODY CAN ATTRIBUTE was skipped before the refusal tables read it, so a
 #    refusal published by one was never weighed.
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_CLEAN"
-jq '.comments += [{author:null, body:"anything"}]' "$FIX/pr_json" > "$FIX/pr_json.n" \
-  && mv "$FIX/pr_json.n" "$FIX/pr_json"
+jq '. + [{user:null, body:"anything"}]' "$FIX/comments_json" > "$FIX/comments_json.n" \
+  && mv "$FIX/comments_json.n" "$FIX/comments_json"
 expect "an artifact with no author login -> refuse as unknown state" 2
 
 # The default fixture above now clears through route A WITH a body, so the held route — an
@@ -465,11 +523,12 @@ echo "== one vendor's review may not clear another vendor's check =="
 two_vendors() { # <coderabbit-body> <sourcery-body>
   printf 'https://github.com/acme/widgets/pull/42\tmain\t%s\n' "$CR_HEAD" > "$FIX/pr_meta"
   printf '[]\n' > "$FIX/reviews_json"
-  jq -n --arg h "$CR_HEAD" --rawfile a "$1" --rawfile b "$2" \
+  jq -n --arg h "$CR_HEAD" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-      author:{login:"dev"},
-      comments:[{author:{login:"coderabbitai"}, body:$a},
-                {author:{login:"sourcery-ai"},  body:$b}]}' > "$FIX/pr_json"
+      author:{login:"dev"}}' > "$FIX/pr_json"
+  jq -n --rawfile a "$1" --rawfile b "$2" \
+    '[{user:{login:"coderabbitai"}, body:$a},
+      {user:{login:"sourcery-ai"},  body:$b}]' > "$FIX/comments_json"
 }
 
 setup; checks "pass	Build" "pass	CodeRabbit" "pass	Sourcery review"

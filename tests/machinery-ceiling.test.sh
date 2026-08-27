@@ -446,13 +446,47 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # three ways while reading as settled. Each disagreement is now named, in the file, next to
 # the branch that fixes it, because that claim is what stopped the next reader looking.
 #
-# STILL OWED, and this is now the SIXTH consecutive raise from this one pull request: the
-# objective's second criterion asks a project to LOWER one of these constants. It has not
-# happened here either. The reduction candidates named further up (print-board.sh,
-# watch-board.sh, write-snapshot.sh) are untouched, and the debt is larger than when this PR
-# opened — a fact that belongs in the PR body every round, not only here.
-CEILING_TOTAL=8078
-CEILING_CODE=4238
+# STILL OWED, and this is the SIXTH consecutive raise from this one pull request: the
+# objective's second criterion asks a project to LOWER one of these constants. It had not
+# happened by this line. The entry below is where it does.
+
+# LOWERED 2026-08-27, same PR, after a SIXTH independent review — the first reduction on
+# this objective, and it is a reduction because the seventh round's fix was to stop
+# ENUMERATING:
+#
+#   8,078 / 4,238   21 files   what the sixth round pinned
+#   8,065 / 4,233   21 files   -13 total, -5 code — this round
+#
+# All of it in review-clearance.sh (1,293 -> 1,280; code 589 -> 584). required-checks.sh is
+# untouched at 349, for the fourth round running.
+#
+# HOW A ROUND THAT CLOSED THREE MORE ROUTES CAME OUT SMALLER, which is the only interesting
+# thing about these two numbers:
+#   1. THE CONTENT TEST WAS INVERTED. It had been a list of invisible characters to
+#      subtract; thirteen more code points, plus `&#8203;`, `[//]: # ()` and `<div></div>`,
+#      walked through it. Nothing is subtracted for being known-bad now: markup is removed
+#      because it is markup, and what must be LEFT is an ASCII letter or digit. One rule,
+#      fewer lines, and it covers the characters nobody has found yet.
+#   2. THE BLOCK MACHINE MODELS CONTAINERS BY BEING READ TWICE rather than by growing a
+#      case per construct. Reading A is fences and blockquotes; reading B adds raw-HTML
+#      blocks and list items; the refusal side takes the UNION and the clearing side the
+#      INTERSECTION. That closed the `<details>`/`<pre>`/`<div>`/`<table>` routes and the
+#      list-item route at once, made `strict ⊆ stripped` structural rather than tested, and
+#      made a THIRD reading the way to cover the next construct — so the next one need not
+#      grow this file either.
+#   3. TWO SECOND COPIES WENT: `hits()` re-derived which table row would not compile, which
+#      `validate_tables` had already done before any artifact was read, and `owners_of_check`
+#      shelled out to awk twice per row for what `read` splits for free.
+#   4. AND ~45 LINES OF ARCHAEOLOGY. Six rounds of "the previous cut was wrong three ways"
+#      had accumulated in the header. Every RULE and its reason is still there; which round
+#      found it is not, because that belongs in the task document and the KB finding.
+#
+# STILL OWED, in the honest accounting: 13 lines against a file that has grown by 1,280 in
+# this PR is a rounding error, and the reduction candidates named further up (print-board.sh,
+# watch-board.sh, write-snapshot.sh) are still untouched. What changed is the direction, and
+# that the smaller file was also the closed one.
+CEILING_TOTAL=8065
+CEILING_CODE=4233
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is
