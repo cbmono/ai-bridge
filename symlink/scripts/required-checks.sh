@@ -15,12 +15,12 @@
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:
 #
-#   0  a non-empty required set resolved and every member passed
-#   1  a required check is not green — failing, pending, or never reported; or a
-#      required check belongs to a REVIEWER that declined to review (see below)
+#   0  a non-empty required set resolved, every member passed, AND an independent
+#      review artifact clears the current head
+#   1  a required check is not green — failing, pending, or never reported; or no
+#      review cleared this head (see below)
 #   2  usage error, or the environment can't answer (no `gh`, unreadable PR, or
-#      `review-clearance.sh` missing/unrunnable, or a required check that looks like
-#      a reviewer's with no reviewer owning it — the reviewer state cannot be read)
+#      `review-clearance.sh` missing/unrunnable, or an unreadable reviewer state)
 #   3  no required set could be resolved — the merge authority is NOT exercisable
 #      here (this is the signal AUTONOMY.md's preflight surfaces to the human)
 #   4  this PR edits the declared list itself — changing the gate is a human call
@@ -43,17 +43,30 @@
 # GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
 # instance. It takes no org, repo, or check names: those live in the target repo.
 #
-# A REVIEWER'S CHECK IS NOT A REVIEW. `pass` settles a CI job, because a CI job that ran
-# and succeeded is the whole of what it claims. It does not settle a hosted REVIEWER's
-# check: a reviewer that declines to review (rate-limited, out of quota) exits
-# successfully and publishes exactly the same green. So any required name that belongs to
-# a reviewer is handed to `review-clearance.sh`, which reads the reviewer's artifacts
-# instead of its check, and only a clean answer there clears it.
+# A REVIEWER'S CHECK IS NOT A REVIEW, AND A CHECK'S NAME NEVER SETTLES THAT. `pass`
+# settles a CI job, because a CI job that ran and succeeded is the whole of what it
+# claims. It does not settle a hosted REVIEWER's check: a reviewer that declines to review
+# (rate-limited, out of quota) exits successfully and publishes exactly the same green.
+#
+# THIS USED TO BE DECIDED BY THE CHECK'S NAME, and that was the original incident with a
+# newer vendor's name on it. `review-clearance.sh` carried a table of vendor names and
+# review phrasings; a required check called `Codex Review`, or bare `Cursor`, `Copilot`,
+# `Devin` or `PR Agent`, matched no row, was read as plain CI and settled on its green
+# bucket with zero artifacts read. A name table has to enumerate every vendor and every
+# phrasing that will ever exist, so it is never finished.
+#
+# SO THE NAME IS NO LONGER ASKED. This script requires a review artifact on EVERY pull
+# request it is about to clear, whatever its checks are called: `review-clearance.sh`
+# reads the reviewer's artifacts from the API and only a clean answer there clears. The
+# check-name table survives for one narrower job — resolving WHICH vendor owns a required
+# check, so that vendor's own artifacts (and not another's) answer for it. A vendor the
+# table does not know now costs nothing, because the unscoped call still has to clear.
 #
 # FAILS CLOSED. An empty set, an unparseable answer, a declared name that no check
-# reports (a rename), a skipped check, a pending check, a reviewer state that cannot be
-# read — all refuse. A required check the loop cannot see green is a required check that
-# did not pass, and a review the loop cannot see is a review that did not happen.
+# reports (a rename), a skipped check, a pending check, an absent review, a reviewer state
+# that cannot be read — all refuse. A required check the loop cannot see green is a
+# required check that did not pass, and a review the loop cannot see is a review that did
+# not happen.
 set -euo pipefail
 
 DECLARED_PATH=".github/required-checks.txt"
@@ -219,16 +232,16 @@ if [ -n "$problems" ]; then
   exit 1
 fi
 
-# --- a REVIEWER's own check is green whether or not it reviewed --------------
+# --- a green check is never a review -----------------------------------------
 # The one green check that means nothing. A hosted reviewer that declines to review —
 # rate-limited, out of quota — still exits successfully, so its status check reports
 # success and lands in the loop above as `pass`. Three PRs in one tick proved it: all
 # three green, one reviewed, two carrying "Review limit reached" and merged unlooked-at.
 #
-# So a required check that IS a reviewer's is not settled by its bucket. Hand it to
-# review-clearance.sh, which reads the reviewer's ARTIFACTS instead of its check, and
-# treat anything but a clean answer as not-green. The reviewer-name table lives there,
-# not here — one place per vendor fact, so changing reviewers is one file.
+# So no bucket settles it, for any check. review-clearance.sh reads the reviewer's
+# ARTIFACTS — review objects from the API, with their state and their commit_id — and
+# anything but a clean answer is not-green. The reviewer facts live there, not here: one
+# place per vendor, so changing reviewers is one file.
 #
 # MISSING SIBLING ⇒ EXIT 2, not a pass. Without it this script cannot tell a reviewer's
 # check from a CI job, so it cannot know whether the set it just cleared contained one.
@@ -263,75 +276,72 @@ if [ "$selftest" != "$CLEARANCE_SELFTEST_OK" ]; then
   exit 2
 fi
 
-# Which required names are a reviewer's own. `--match-check` answers in three codes and
-# ONLY three; anything else is a sibling behaving unexpectedly, which is unknown state.
-reviewer_checks=""; unknown_checks=""
+# Which required names a reviewer in the sibling's table OWNS. `--match-check` answers in
+# two codes and ONLY two; anything else is a sibling behaving unexpectedly, which is
+# unknown state. This no longer decides WHETHER clearance is asked for — it is always
+# asked for — only WHOSE artifacts answer for a given required check.
+reviewer_checks=""
 while IFS= read -r name; do
   [ -n "$name" ] || continue
   if "$CLEARANCE" --match-check "$name" >/dev/null 2>&1; then mrc=0; else mrc=$?; fi
   case "$mrc" in
     0) reviewer_checks="${reviewer_checks}${name}
 " ;;
-    1) : ;;  # a plain CI job — its bucket is the whole of what it claims
-    3) unknown_checks="${unknown_checks}${name}
-" ;;
+    1) : ;;  # no reviewer in the table owns this name
     *) echo "error: '$CLEARANCE --match-check $name' exited $mrc, which is not one of" >&2
-       echo "       its three answers (0 reviewer, 1 CI, 3 unknown). Whether this" >&2
-       echo "       required check is a reviewer's is unreadable — refusing." >&2
+       echo "       its two answers (0 a reviewer's, 1 not). Whose artifacts answer for" >&2
+       echo "       this required check is unreadable — refusing." >&2
        exit 2 ;;
   esac
 done <<EOF
 $required
 EOF
 
-# A required check that LOOKS like a reviewer's while no reviewer row owns it is the
-# original incident with a different vendor's name on it — `Cursor Bugbot`, `Copilot code
-# review`, `Devin Review`. Settling it on its green bucket is exactly the mistake this
-# script exists to stop, and there is nothing to defer to, because whose artifacts to
-# read is the unknown. So it refuses as unreadable state rather than passing.
-if [ -n "$unknown_checks" ]; then
-  echo "error: a required check looks like a code reviewer's, and no reviewer known to" >&2
-  echo "       review-clearance.sh owns it — so whether PR $pr was reviewed cannot be" >&2
-  echo "       read at all. Its green bucket says the integration ran, never that a" >&2
-  echo "       review happened, so this refuses (fail closed):" >&2
-  printf '%s' "$unknown_checks" | sed 's/^/          unrecognised reviewer check: /' >&2
-  echo "       Add a row to REVIEWERS in review-clearance.sh if it is a reviewer; if it" >&2
-  echo "       is CI, its name has to stop reading as a code review." >&2
-  exit 2
-fi
+# CLEARED PER CHECK WHERE A VENDOR OWNS ONE, AND ALWAYS AT LEAST ONCE. Two reviewers on
+# one repo, one of them rate-limited, and a single unscoped call lets the other one's
+# review clear the refusing one's required check — the same "a green thing stood in for
+# the reviewer" substitution one level up. `--for-check` resolves the name to the reviewer
+# that owns it and considers only that account's artifacts. Where NO required check is a
+# known vendor's — which is every repo whose reviewer the table has never heard of, and
+# the whole of route 1 above — one unscoped call still has to clear, so a green check
+# called anything at all can never be the last word.
+clearance_err="$(mktemp)"
+trap 'rm -f "$probe_err" "$clearance_err"' EXIT
 
-# CLEARED PER CHECK, NOT ONCE FOR THE PR. Two reviewers on one repo, one of them
-# rate-limited, and a single unscoped call lets the other one's review clear the refusing
-# one's required check — the same "a green thing stood in for the reviewer" substitution
-# one level up. `--for-check` resolves the name to the reviewer that owns it and considers
-# only that account's artifacts.
+clearance_for() { # [--for-check <name>] — 0, or the sibling's refusal code
+  # `set -e` is on: capture the exit code through an `if`, never off a bare `$?`, or a
+  # refusing sibling would kill this script before it could report why.
+  if "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --head "$head_sha" "$@" \
+     >/dev/null 2>"$clearance_err"
+  then return 0; else return $?; fi
+}
+
+refuse_clearance() { # <what> <exit code of the sibling>
+  echo "refuse: $1 did not clear PR $pr (review-clearance.sh exit $2). A green check" >&2
+  echo "        means the integration ran, never that a review happened:" >&2
+  sed 's/^/        /' "$clearance_err" >&2
+  [ -n "$reviewer_checks" ] && \
+    printf '%s' "$reviewer_checks" | sed 's/^/          required, and reviewer-owned: /' >&2
+  # An unreadable reviewer state (exit 2) is a different refusal from a reviewer that
+  # answered and declined — keep the caller's two codes distinguishable. Spelled as an
+  # `if` rather than `[ … ] && exit 2`, whose fall-through under `set -e` is a subtlety
+  # nobody should have to re-derive while reading a merge gate.
+  if [ "$2" -eq 2 ]; then exit 2; fi
+  exit 1
+}
+
 if [ -n "$reviewer_checks" ]; then
-  clearance_err="$(mktemp)"
-  trap 'rm -f "$probe_err" "$clearance_err"' EXIT
   while IFS= read -r name; do
     [ -n "$name" ] || continue
-    # `set -e` is on: capture the exit code through an `if`, never off a bare `$?`, or a
-    # refusing sibling would kill this script before it could report why.
-    if "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --head "$head_sha" --for-check "$name" \
-       >/dev/null 2>"$clearance_err"
-    then crc=0; else crc=$?; fi
-    if [ "$crc" -ne 0 ]; then
-      echo "refuse: required check '$name' is a reviewer's own, and that reviewer did not" >&2
-      echo "        clear PR $pr (review-clearance.sh exit $crc). Green means the" >&2
-      echo "        integration ran, never that a review happened:" >&2
-      sed 's/^/        /' "$clearance_err" >&2
-      printf '%s' "$reviewer_checks" | sed 's/^/          required, and reviewer-owned: /' >&2
-      # An unreadable reviewer state (exit 2) is a different refusal from a reviewer that
-      # answered and declined — keep the caller's two codes distinguishable. Spelled as an
-      # `if` rather than `[ … ] && exit 2`, whose fall-through under `set -e` is a subtlety
-      # nobody should have to re-derive while reading a merge gate.
-      if [ "$crc" -eq 2 ]; then exit 2; fi
-      exit 1
-    fi
+    if clearance_for --for-check "$name"; then crc=0; else crc=$?; fi
+    [ "$crc" -eq 0 ] || refuse_clearance "required check '$name' is a reviewer's own, and that reviewer" "$crc"
   done <<EOF
 $reviewer_checks
 EOF
+else
+  if clearance_for; then crc=0; else crc=$?; fi
+  [ "$crc" -eq 0 ] || refuse_clearance "no independent reviewer" "$crc"
 fi
 
 count="$(printf '%s\n' "$required" | grep -c '^' || true)"
-echo "ok: $count required check(s) pass on PR $pr (source: $source, head $head_sha)"
+echo "ok: $count required check(s) pass and a review clears PR $pr (source: $source, head $head_sha)"

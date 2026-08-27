@@ -7,13 +7,17 @@
 # thing standing between an autonomous loop and a merge, so the tests that matter most
 # are the ones proving it fails closed.
 #
-# The last section covers the one green check that means nothing: a REQUIRED check that
-# belongs to a hosted reviewer. A reviewer that declines to review still exits
-# successfully, so its check reports `pass` exactly as a reviewed PR's does — which is
-# how two PRs merged unreviewed. That name is handed to review-clearance.sh instead of
-# being settled by its bucket, and the cases here pin both directions: a real recorded
-# review clears, the recorded refusal does not, and an unreadable reviewer state refuses
-# rather than falling through.
+# THE LAST SECTIONS COVER THE ONE GREEN CHECK THAT MEANS NOTHING. A reviewer that declines
+# to review still exits successfully, so its check reports `pass` exactly as a reviewed
+# PR's does — which is how two PRs merged unreviewed.
+#
+# AND A CHECK'S NAME NO LONGER DECIDES WHETHER ANYONE LOOKED. That used to be a table of
+# vendor names inside review-clearance.sh, and a required check called `Codex Review`, or
+# bare `Cursor` / `Copilot` / `Devin` / `PR Agent`, matched no row, was read as plain CI
+# and settled on its green bucket with zero artifacts read. This script now asks for
+# clearance on EVERY pull request it is about to clear, so `setup()` below ships a review
+# that clears by default and the cases that must refuse take it away. `the name never
+# settles it` drives exactly that.
 set -uo pipefail
 
 SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/required-checks.sh"
@@ -78,6 +82,21 @@ case "${1:-}" in
       *) echo "stub: unhandled pr $2" >&2; exit 99 ;;
     esac ;;
   api)
+    # Two endpoints reach this stub. review-clearance.sh reads the REVIEW OBJECTS, which
+    # is the only place a review's state and commit_id exist; required-checks.sh reads
+    # the declared list out of the repo's contents.
+    case "$*" in
+      */pulls/*/reviews*)
+        [ -f "$FIX/reviews_json" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+        filter=""; prev=""
+        for a in "$@"; do
+          [ "$prev" = "--jq" ] && { filter="$a"; break; }
+          prev="$a"
+        done
+        if [ -n "$filter" ]; then jq -r "$filter" "$FIX/reviews_json"
+        else cat "$FIX/reviews_json"; fi
+        exit 0 ;;
+    esac
     # Real gh prints the error BODY to stdout on a 404 and only the summary to
     # stderr — reproduce that, or the script's "did the fetch work" logic is untested.
     [ -f "$FIX/declared" ] || {
@@ -93,11 +112,27 @@ chmod +x "$TMP/bin/gh"
 export PATH="$TMP/bin:$PATH"
 
 HEAD_SHA="0c2592f7bb98d3de9a7a181d1762dfcaf80785d9"
+HAVE_JQ=0; command -v jq >/dev/null 2>&1 && HAVE_JQ=1
 
-setup() { # start from: a readable PR, no protection, no declared list, no diff
+# A cleared PR by default. Clearance is now asked for on EVERY pull request, so a fixture
+# with no reviewer artifact would make every "-> clear" case below refuse for a reason
+# none of them is about. `no_review` and `reviewer_pr` take it away where that is the
+# point being tested.
+reviewed_pr() {
+  [ "$HAVE_JQ" = 1 ] || return 0
+  jq -n --arg h "$HEAD_SHA" \
+    '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
+      author:{login:"dev"}, comments:[]}' > "$FIX/pr_json"
+  jq -n --arg h "$HEAD_SHA" \
+    '[{user:{login:"coderabbitai"}, state:"APPROVED", commit_id:$h, body:""}]' \
+    > "$FIX/reviews_json"
+}
+
+setup() { # start from: a readable, REVIEWED PR, no protection, no declared list, no diff
   rm -rf "$FIX"; mkdir -p "$FIX"
   printf 'https://github.com/acme/widgets/pull/42\tmain\t%s\n' "$HEAD_SHA" > "$FIX/pr_meta"
   : > "$FIX/checks"
+  reviewed_pr
 }
 
 checks() { printf '%s\n' "$@" > "$FIX/checks"; }        # each arg: "bucket<TAB>name"
@@ -128,6 +163,10 @@ says() { # <name> <substring> — assert against the previous expect()'s output
   fi
 }
 
+if [ "$HAVE_JQ" != 1 ]; then
+  echo "jq is required to run this test (the script's sibling needs it too)"; exit 2
+fi
+
 echo "== required-checks gate =="
 
 # --- nothing to enforce: the authority is not exercisable --------------------
@@ -144,6 +183,7 @@ checks "pass	Build, Lint & Format" "pass	Unit Tests (vitest)" "pass	CodeRabbit"
 declared "# what must be green before an autonomous merge" "Build, Lint & Format" "" "Unit Tests (vitest)"
 expect "declared list, all green -> clear" 0
 says   "  ...and reports the declared source" "source: declared"
+says   "  ...and says a review cleared it too" "a review clears"
 
 # --- declared fallback: every way it must refuse -----------------------------
 setup
@@ -230,7 +270,7 @@ expect "PR unreadable -> error, never a clearance" 2
 setup; checks "pass	Build"; declared "Build"
 expect "unknown option -> usage error" 2 --nope
 
-# --- a required check that belongs to a REVIEWER is not settled by its bucket -
+# --- a green required set is never enough on its own --------------------------
 # The failure this whole section exists for: three PRs in one tick, all three with a
 # green reviewer check, one reviewed and two refused — and the two refusals merged.
 FIXTURES="$(cd "$(dirname "$0")" && pwd)/fixtures/reviewer"
@@ -238,92 +278,113 @@ CR_CLEAN="$FIXTURES/clean-review.pr29.md"      # a real review, recorded verbati
 CR_REFUSAL="$FIXTURES/rate-limit-refusal.pr30.md"  # "Review limit reached", ditto
 CR_HEAD="8f40f2ed565a31e141f5ae54a6935ad0810314c4"   # the head #29 was reviewed at
 
-if ! command -v jq >/dev/null 2>&1; then
-  echo "  ..... reviewer-deferral cases skipped (jq absent; the script needs it too)"
-else
-  reviewer_pr() { # <body-file>|"" — the artifacts review-clearance.sh will read
-    printf 'https://github.com/acme/widgets/pull/42\tmain\t%s\n' "$CR_HEAD" > "$FIX/pr_meta"
-    if [ -n "${1:-}" ]; then
-      jq -n --arg h "$CR_HEAD" --rawfile b "$1" \
-        '{url:"https://github.com/acme/widgets/pull/42", headRefOid:$h,
-          author:{login:"dev"}, reviews:[],
-          comments:[{author:{login:"coderabbitai"}, body:$b}]}' > "$FIX/pr_json"
-    else
-      jq -n --arg h "$CR_HEAD" \
-        '{url:"https://github.com/acme/widgets/pull/42", headRefOid:$h,
-          author:{login:"dev"}, reviews:[], comments:[]}' > "$FIX/pr_json"
-    fi
-  }
+reviewer_pr() { # <body-file>|"" — the artifacts review-clearance.sh will read
+  printf 'https://github.com/acme/widgets/pull/42\tmain\t%s\n' "$CR_HEAD" > "$FIX/pr_meta"
+  printf '[]\n' > "$FIX/reviews_json"
+  if [ -n "${1:-}" ]; then
+    jq -n --arg h "$CR_HEAD" --rawfile b "$1" \
+      '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
+        author:{login:"dev"},
+        comments:[{author:{login:"coderabbitai"}, body:$b}]}' > "$FIX/pr_json"
+  else
+    jq -n --arg h "$CR_HEAD" \
+      '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
+        author:{login:"dev"}, comments:[]}' > "$FIX/pr_json"
+  fi
+}
 
-  setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
-  reviewer_pr "$CR_CLEAN"
-  expect "required reviewer check + a real review -> clear" 0
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_CLEAN"
+expect "required reviewer check + a real review -> clear" 0
 
-  setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
-  reviewer_pr "$CR_REFUSAL"
-  expect "required reviewer check GREEN but the reviewer refused -> refuse" 1
-  says   "  ...and says a green check is not a review" "never that a review happened"
-  says   "  ...and quotes the refusal" "Review limit reached"
-  says   "  ...and names the reviewer-owned required check" "required, and reviewer-owned: CodeRabbit"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_REFUSAL"
+expect "required reviewer check GREEN but the reviewer refused -> refuse" 1
+says   "  ...and says a green check is not a review" "never that a review happened"
+says   "  ...and quotes the refusal" "Review limit reached"
+says   "  ...and names the reviewer-owned required check" "required, and reviewer-owned: CodeRabbit"
 
-  setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr ""
+expect "required reviewer check green but nothing reviewed -> refuse" 1
+
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_CLEAN"; rm -f "$FIX/pr_json"
+expect "reviewer state unreadable -> refuse as unknown, not as clear" 2
+
+echo
+echo "== the name never settles it =="
+# ROUTE 1 OF THE FOURTH REVIEW ROUND, and it is the original incident with a 2026 vendor's
+# name on it. `Cursor Bugbot`, `Codex Review` and bare `Cursor` / `Copilot` / `Devin` /
+# `PR Agent` are shipping code reviewers whose checks are green whether or not they
+# reviewed. A table of names classified them as plain CI and settled them on that bucket
+# with zero artifacts read; a table of names cannot be finished, so the name is not asked.
+for reviewerish in "Cursor Bugbot" "Codex Review" "Cursor" "Copilot" "Devin" "PR Agent" \
+                   "Korbit AI" "CodeAnt AI"; do
+  setup; checks "pass	Build" "pass	$reviewerish"; declared "Build" "$reviewerish"
   reviewer_pr ""
-  expect "required reviewer check green but nothing reviewed -> refuse" 1
-
-  setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
-  reviewer_pr "$CR_CLEAN"; rm -f "$FIX/pr_json"
-  expect "reviewer state unreadable -> refuse as unknown, not as clear" 2
-
-  # Scope: a required set with no reviewer in it never consults the reviewer at all —
-  # proven by leaving the reviewer state unreadable and still clearing.
-  setup; checks "pass	Build"; declared "Build"; rm -f "$FIX/pr_json"
-  expect "no reviewer among the required names -> unaffected" 0
-
-  # --- one vendor's review may not clear another vendor's check ---------------
-  # Two reviewers required, one rate-limited. A single unscoped clearance call answers
-  # "is there a review on this PR" and the vendor that DID review clears the vendor that
-  # refused — the same substitution as the green check, one level in. Each reviewer-owned
-  # name is now cleared against the reviewer that owns it.
-  two_vendors() { # <coderabbit-body> <sourcery-body>
-    printf 'https://github.com/acme/widgets/pull/42\tmain\t%s\n' "$CR_HEAD" > "$FIX/pr_meta"
-    jq -n --arg h "$CR_HEAD" --rawfile a "$1" --rawfile b "$2" \
-      '{url:"https://github.com/acme/widgets/pull/42", headRefOid:$h,
-        author:{login:"dev"}, reviews:[],
-        comments:[{author:{login:"coderabbitai"}, body:$a},
-                  {author:{login:"sourcery-ai"},  body:$b}]}' > "$FIX/pr_json"
-  }
-
-  setup; checks "pass	Build" "pass	CodeRabbit" "pass	Sourcery review"
-  declared "Build" "CodeRabbit" "Sourcery review"
-  two_vendors "$CR_REFUSAL" "$CR_CLEAN"
-  expect "one vendor reviewed, the other refused -> refuse" 1
-  says   "  ...naming the check whose reviewer refused" "required check 'CodeRabbit'"
-
-  setup; checks "pass	Build" "pass	CodeRabbit" "pass	Sourcery review"
-  declared "Build" "CodeRabbit" "Sourcery review"
-  two_vendors "$CR_CLEAN" "$CR_CLEAN"
-  expect "both vendors reviewed this head -> clear" 0
-
-  # --- a required check named for a reviewer nobody knows ---------------------
-  # The original incident with a different vendor on it: `Cursor Bugbot` is green, no
-  # reviewer row owns it, and it used to be settled on that bucket as if it were CI.
-  setup; checks "pass	Build" "pass	Cursor Bugbot"; declared "Build" "Cursor Bugbot"
+  expect "'$reviewerish' green, nothing reviewed -> refuse" 1
+done
+# ...and the identical set with a real review clears, so the refusals above are the absent
+# review and not the check's name having become a refusal of its own.
+for reviewerish in "Cursor Bugbot" "Codex Review" "PR Agent"; do
+  setup; checks "pass	Build" "pass	$reviewerish"; declared "Build" "$reviewerish"
   reviewer_pr "$CR_CLEAN"
-  expect "an unrecognised reviewer's check -> refuse as unknown" 2
-  says   "  ...naming the check it cannot classify" "unrecognised reviewer check: Cursor Bugbot"
-fi
+  expect "…while '$reviewerish' with a real review clears" 0
+done
+
+# The same rule where no required name reads like a reviewer at all. A repo whose reviewer
+# posts no check — or posts one called `Build` — is exactly where "which required check is
+# a reviewer's" had no answer to give.
+setup; checks "pass	Build"; declared "Build"; reviewer_pr ""
+expect "plain CI names only, and nothing reviewed -> refuse" 1
+says   "  ...saying no independent reviewer cleared it" "no independent reviewer"
+setup; checks "pass	Build"; declared "Build"; reviewer_pr "$CR_CLEAN"
+expect "…and the same set with a real review clears" 0
+
+# Unknown reviewer state, with no reviewer-named check anywhere in the required set. This
+# used to be exit 0 — the required names were all "CI", so nothing consulted the reviewer.
+setup; checks "pass	Build"; declared "Build"; rm -f "$FIX/pr_json"
+expect "reviewer state unreadable, no reviewer-named check -> refuse" 2
+
+echo
+echo "== one vendor's review may not clear another vendor's check =="
+# Two reviewers required, one rate-limited. A single unscoped clearance call answers
+# "is there a review on this PR" and the vendor that DID review clears the vendor that
+# refused — the same substitution as the green check, one level in. Each reviewer-owned
+# name is cleared against the reviewer that owns it.
+two_vendors() { # <coderabbit-body> <sourcery-body>
+  printf 'https://github.com/acme/widgets/pull/42\tmain\t%s\n' "$CR_HEAD" > "$FIX/pr_meta"
+  printf '[]\n' > "$FIX/reviews_json"
+  jq -n --arg h "$CR_HEAD" --rawfile a "$1" --rawfile b "$2" \
+    '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
+      author:{login:"dev"},
+      comments:[{author:{login:"coderabbitai"}, body:$a},
+                {author:{login:"sourcery-ai"},  body:$b}]}' > "$FIX/pr_json"
+}
+
+setup; checks "pass	Build" "pass	CodeRabbit" "pass	Sourcery review"
+declared "Build" "CodeRabbit" "Sourcery review"
+two_vendors "$CR_REFUSAL" "$CR_CLEAN"
+expect "one vendor reviewed, the other refused -> refuse" 1
+says   "  ...naming the check whose reviewer refused" "required check 'CodeRabbit'"
+
+setup; checks "pass	Build" "pass	CodeRabbit" "pass	Sourcery review"
+declared "Build" "CodeRabbit" "Sourcery review"
+two_vendors "$CR_CLEAN" "$CR_CLEAN"
+expect "both vendors reviewed this head -> clear" 0
 
 # --- the sibling has to be there AND have to run -----------------------------
-# The two scripts ship as one unit. Without the sibling, this one cannot tell a
-# reviewer's check from a CI job — an unknown reviewer state, which must refuse.
+# The two scripts ship as one unit. Without the sibling, this one cannot ask whether a
+# review happened at all — an unknown reviewer state, which must refuse.
 #
 # AND A PRESENT-BUT-BROKEN SIBLING IS THE WORSE CASE, which is what the rest of this
 # section is. `[ -x ]` tests a mode bit: every variant below carries it and none of them
-# runs, so every `--match-check` call fails, every required name looks like plain CI, no
-# clearance is ever consulted, and the gate reports `ok: N required check(s) pass` on an
-# unreviewed PR. The gate does not fail — it silently is not there. Each case therefore
-# asserts BOTH the exit code and that the output is the sibling complaint, so a pass here
-# cannot come from some unrelated refusal.
+# runs, so every call fails, and a caller that read those failures as "then no reviewer is
+# involved" would report `ok` on an unreviewed PR. The gate does not fail — it silently is
+# not there. Each case therefore asserts BOTH the exit code and that the output is the
+# sibling complaint, so a pass here cannot come from some unrelated refusal.
+echo
 sibling_case() { # <name> <what to write into review-clearance.sh> <expected message>
   local name="$1" writer="$2" want="$3"
   local dir="$TMP/sib.$((sib_n = ${sib_n:-0} + 1))"; mkdir -p "$dir"
@@ -367,8 +428,8 @@ sibling_case "truncated in its header comment -> refuse, never clear" \
 # 400 bytes lands inside the sibling's header comment, so the file has no --self-test at
 # all and fails for that. The dangerous cut is BELOW the self-test block — the file still
 # parses, still answers the self-test, and has lost the tables and the classifier the
-# answer was vouching for. Swept over the previous version, 109 such cuts went on to clear
-# an unreviewed PR through this script. These four walk that range end to end.
+# answer was vouching for. Swept over the version before the sentinel, 109 such cuts went
+# on to clear an unreviewed PR through this script. These four walk that range end to end.
 SIB_SRC="$(dirname "$SCRIPT")/review-clearance.sh"
 SIB_SELFTEST="$(grep -n -- '--self-test" \]; then' "$SIB_SRC" | head -1 | cut -d: -f1)"
 SIB_LINES="$(wc -l < "$SIB_SRC" | tr -d ' ')"
@@ -398,10 +459,13 @@ sibling_case "a sibling too old to self-test -> refuse until relinked" \
 # answers whatever it likes is not a failure mode this gate can detect — it is the gate,
 # and anyone who can rewrite it can rewrite this file beside it. The self-test's job is
 # the accidental break (truncation, syntax error, skew), which is the one that happens.
-# Any answer outside {0,1,3} means the sibling is doing something this script has no
-# reading for. Unknown, so refuse — rather than treating "not 0" as "not a reviewer".
+# Any answer outside {0,1} means the sibling is doing something this script has no reading
+# for. Unknown, so refuse — rather than treating "not 0" as "no reviewer owns it".
 sibling_case "--match-check answers an unknown code -> refuse" \
   'printf "#!/usr/bin/env bash\n[ \"\$1\" = --self-test ] && { echo \"review-clearance: self-test ok\"; exit 0; }\n[ \"\$1\" = --match-check ] && exit 7\nexit 0\n"' \
+  "which is not one of"
+sibling_case "…including the deleted third answer -> refuse" \
+  'printf "#!/usr/bin/env bash\n[ \"\$1\" = --self-test ] && { echo \"review-clearance: self-test ok\"; exit 0; }\n[ \"\$1\" = --match-check ] && exit 3\nexit 0\n"' \
   "which is not one of"
 
 # The passing control for the whole section: the REAL sibling, same fixture, clears. So
