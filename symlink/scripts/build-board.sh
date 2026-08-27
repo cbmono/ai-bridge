@@ -808,7 +808,7 @@ TABLE_SCRIPT = r"""<script>
 #     /projects/p/deliverables/deck.md:/Users/victim/.ssh/id_rsa
 #
 # renders whole into a `data-copy`, labelled `id_rsa`. Appending `:` to the exclusions
-# would be the sixth round of the same move. Stated positively there is nothing to
+# would be one more round of the same move. Stated positively there is nothing to
 # enumerate: `/`, every kind of whitespace, `#`, `:`, `@`, `\`, ZWSP, BOM, U+2028 and the
 # bidi overrides are all simply not in the set, and the next separator nobody has thought
 # of is not in it either.

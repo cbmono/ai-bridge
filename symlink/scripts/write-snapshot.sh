@@ -341,11 +341,11 @@ depends_ids() { # <frontmatter>
 #     `,`), so an apostrophe inside a plain path is not a quote. BOTH of YAML's escapes
 #     are needed to find where a scalar ENDS, and there is exactly one per quote style:
 #     `\"` does not close a double-quoted scalar, and `''` does not close a single-quoted
-#     one — it IS an apostrophe. Handling only the first is what makes
-#     `[ '…/o''brien[draft].md #2', …/clean.md ]` cut INSIDE one atom, fabricating
-#     `…/o''brien[draft].md` and deleting the clean sibling YAML really does return.
-#     A block entry line has no terminator to wait for: its siblings
-#     are on other lines, so the first unquoted whitespace-`#` on it is a comment.
+#     one — it IS an apostrophe. Handle only the first and
+#     `[ '…/o''brien[draft].md #2', …/clean.md ]` is cut INSIDE one atom: it fabricates
+#     `…/o''brien[draft].md`, and it deletes `…/clean.md`, which is an entry YAML really
+#     does return. A block entry line has no terminator to wait for: its siblings are on
+#     other lines, so the first unquoted whitespace-`#` on it is a comment.
 # Anything the cut declines to remove stays exactly as written, and the render-time
 # shape check drops whichever fragments the comma-split makes of it — a visible drop,
 # never a fabricated path.
