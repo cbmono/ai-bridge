@@ -764,15 +764,19 @@ function ws_scan(line, i, col,   c, n) {
 # blockquotes it sits inside), L_INDENT (the columns of indentation inside the innermost
 # one) and L_REST (what follows). A > four columns past its container is literal text
 # rather than a quote marker, which is why the two are measured in one pass.
-function scan_line(line,   i, col, base) {
+function scan_line(line,   i, col, base, adv) {
   i = 1; col = 0; base = 0; L_DEPTH = 0
   while (1) {
     ws_scan(line, i, col)
     if (W_COL - base > 3 || substr(line, W_I, 1) != ">") break
     L_DEPTH++; i = W_I + 1; col = W_COL + 1
-    if (substr(line, i, 1) == " ") { i++; col++ }
-    else if (substr(line, i, 1) == "\t") { col += 4 - (col % 4); i++ }
     base = col
+    # The one space after the marker belongs to the marker. A TAB there is expanded and
+    # ONE COLUMN of it is consumed, so what is left of it still counts as indentation.
+    if (substr(line, i, 1) == " ") { i++; col++; base = col }
+    else if (substr(line, i, 1) == "\t") {
+      adv = 4 - (col % 4); col += adv; i++; base = col - adv + 1
+    }
   }
   ws_scan(line, i, col)
   L_INDENT = W_COL - base; L_REST = substr(line, W_I)

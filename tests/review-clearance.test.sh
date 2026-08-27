@@ -107,6 +107,12 @@ add_comment() { # <login> <body-file>
               '. + [{author:{login:$l}, body:$b}]' <<<"$COMMENTS")"
 }
 
+# The host reports no author at all for an artifact from a deleted account, and `gh` passes
+# that through as `null`. It is not a login the script can compare against anything.
+add_null_comment() { # <body-file>
+  COMMENTS="$("$REAL_JQ" --rawfile b "$1" '. + [{author:null, body:$b}]' <<<"$COMMENTS")"
+}
+
 # A review object as the REST API publishes one: a state, a commit_id and a body. The
 # first two are what clears it now; the body is read only for a refusal.
 add_review() { # <login> <state> <commit_id> <body-file>
@@ -259,6 +265,34 @@ add_review coderabbitai COMMENTED "$CLEAN_HEAD" "$(body_file '```' 'Reviewed.')"
 expect "…nor one whose content is behind an unbalanced fence" 4
 
 echo
+echo "== …and 'says nothing' means the PAGE is blank, not that the bytes are =="
+# THE NARROWEST WAY BACK IN, and it restored the behaviour above exactly. "Content" was any
+# non-whitespace byte, so a body of one ZERO-WIDTH SPACE — or of one empty HTML COMMENT,
+# which is the very shape every machine marker in this file takes — was a claim, and an
+# empty review object cleared over the recorded refusal at that head again. Each case below
+# is that refusal, verbatim, with a review object whose body renders to a blank page.
+ZWSP="$(printf '\342\200\213')"; NBSP="$(printf '\302\240')"
+for blank in "$ZWSP:a zero-width space" "$NBSP:a non-breaking space" \
+             "<!-- -->:an empty HTML comment" "<!--x-->:an HTML comment with text in it"; do
+  setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+  add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file "${blank%%:*}")"
+  expect "a body of ${blank#*:} renders nothing, so it is not a claim" 1
+done
+# …including one spanning lines, which a line-at-a-time reader would miss.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '<!--' 'hidden' '-->')"
+expect "…and an HTML comment spanning three lines is still blank" 1
+# THE CONTROLS, and they are what keep this about RENDERING rather than about characters:
+# the same invisible bytes with one visible word beside them ARE content, and so is a body
+# whose only visible mark is punctuation.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file "<!-- x -->${ZWSP}ok")"
+expect "…while one visible word beside them IS a claim" 0
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file '---')"
+expect "…as is a body whose only mark is a rule the host draws" 0
+
+echo
 echo "== a review state must be one the API publishes, case and all =="
 # PENDING was never submitted and DISMISSED has been withdrawn; neither is evidence that
 # anybody looked. They were skipped by a case-SENSITIVE shell `case`, so any other casing
@@ -409,6 +443,153 @@ setup "$CLEAN_HEAD"; add_comment coderabbitai "$(hidden_sentinel '   ')"
 expect "a THREE-space fence is a real fence, so its content is quotation" 0
 setup "$CLEAN_HEAD"; add_comment coderabbitai "$(hidden_sentinel '  > ')"
 expect "…as is a fence inside a blockquote indented at most three" 0
+
+echo
+echo "== …and agreeing with each other is not agreeing with the HOST =="
+# THE ROUND AFTER THE ONE ABOVE. The two renderings were made to agree, and the rule they
+# agreed on still was not the host's, three ways — each of which strips text a human can
+# read, and each of which therefore fails OPEN. Every case here was rc=0 before.
+TAB="$(printf '\t')"
+
+# 1. BLOCKQUOTE CONTAINMENT. A fence opens inside the blockquote it is written in, and the
+# host closes it where that quote ends: an opener at depth 1 is not paired with a closer at
+# depth 0. This is the reviewer's NATIVE IDIOM rather than a construction — its notices
+# arrive inside a `> [!WARNING]` blockquote — so the payload is the RECORDED refusal,
+# unaltered, and the only edit is the wrapper.
+quoted_fence_refusal="$TMP/refusal-quote-opened-fence.md"
+{ printf '<!-- walkthrough_start -->\nReviewed %s.\n> ```\n' "$REFUSAL_HEAD"
+  cat "$REFUSAL"; printf '```\n'; } > "$quoted_fence_refusal"
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$quoted_fence_refusal"
+expect "a fence OPENED inside a blockquote does not close outside it" 1
+says   "  ...quoting the reviewer's own words" "Review limit reached"
+# THE CONTROL: the identical body with both markers at the same depth is a real fence, so
+# its content is quotation and the marker outside it clears — the boundary above, again.
+same_depth_fence="$TMP/refusal-depth0-fence.md"
+{ printf '<!-- walkthrough_start -->\nReviewed %s.\n```\n' "$REFUSAL_HEAD"
+  cat "$REFUSAL"; printf '```\n'; } > "$same_depth_fence"
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$same_depth_fence"
+expect "…while both markers at the same depth ARE a pair, so that clears" 0
+# The other half of the same rule, and the half the case above cannot see: the block ENDS
+# where the quote ends, so what follows is ordinary text rather than swallowed. Without
+# that, this body has an unclosed fence and evidences nothing (rc=4).
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '> ```' '> make test' \
+  '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD.")"
+expect "…and the quote ending ENDS the block, rather than swallowing the rest" 0
+
+# 2. TABS ARE COLUMNS. The host expands a tab to the next four-column stop, so 1-3 spaces
+# then a tab is indented code. This one reaches ROUTE B, which outranks every refusal
+# tier: a comment that merely QUOTES the trailer format validated as a real verdict.
+quoted_trailer() { # <indent> — the verdict trailer, indented by it
+  body_file 'Quoting the format for the docs:' \
+    "$1"'<!-- okf-verdict v1' "$1"'verdict: pass' "$1"'reviewer: qa' \
+    "$1""head_sha: $CLEAN_HEAD" "$1"'-->'
+}
+setup "$CLEAN_HEAD"; add_comment some-new-reviewer "$(quoted_trailer "   $TAB")"
+expect "3 spaces + a TAB is column 4, so a quoted trailer stays quoted" 4 \
+  --reviewer some-new-reviewer
+setup "$CLEAN_HEAD"; add_comment some-new-reviewer "$(quoted_trailer '    ')"
+expect "…the four-space control, which was already literal" 4 --reviewer some-new-reviewer
+# THE CONTROL that keeps this about INDENTATION: unindented, the same block validates.
+setup "$CLEAN_HEAD"; add_comment some-new-reviewer "$(quoted_trailer '')"
+expect "…while the same trailer unindented is a real verdict" 0 --reviewer some-new-reviewer
+# And the tab that the blockquote marker eats: one column of it belongs to the marker, so
+# `>` TAB SPACE is three columns of indentation (a fence) and `>` TAB SPACE SPACE is four
+# (literal text, and the sentinel in it must be read).
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  ">$TAB "'```' ">$TAB "'rate limited by coderabbit.ai' ">$TAB "'```')"
+expect "a blockquote marker eats ONE column of the tab after it" 0
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  ">$TAB  "'```' ">$TAB  "'rate limited by coderabbit.ai' ">$TAB  "'```')"
+expect "…so one more space is column 4, and the sentinel is literal text" 1
+
+# 3. THE CLOSING MARKER IS NOT JUST A MARKER. A closer may be no shorter than its opener
+# and may carry no info string; reading either as a close also turns an odd number of
+# markers into an even one, which is how it slipped past the unbalanced-fence net too.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '````' 'rate limited by coderabbit.ai' '```')"
+expect "a four-backtick fence is not closed by three" 1
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '```' 'rate limited by coderabbit.ai' '```js')"
+expect "…nor by a closing fence carrying an info string" 1
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '```a`b' 'rate limited by coderabbit.ai' '```')"
+expect "…and a backtick opener whose info string holds a backtick opens nothing" 1
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '``' 'rate limited by coderabbit.ai' '``')"
+expect "…and two backticks are not a fence at all" 1
+# THE CONTROLS, so none of the four passes on a script that stopped pairing fences: a
+# longer closer, and an opener that legitimately carries an info string, both still pair.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '````' 'rate limited by coderabbit.ai' '`````')"
+expect "…while a LONGER closer does close it, so that stays quotation" 0
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '```js' 'rate limited by coderabbit.ai' '```')"
+expect "…as does an OPENER carrying an info string, which is legal" 0
+
+echo
+echo "== the containment itself, not only the cases that broke it =="
+# THE FILE STATES A SAFETY PROPERTY — every line the STRICT rendering keeps is a line the
+# STRIPPED one kept (strict ⊆ stripped) — and until now the tests only varied the INDENT
+# axis of the cases that had broken it, never the closing marker, the run length or the
+# quote boundary, and never asserted the property itself. Both renderings are sliced out of
+# the shipped script so this tests the real definitions rather than a copy of them.
+RENDER="$TMP/render.sh"
+{ printf '#!/usr/bin/env bash\nset -u\n'
+  sed -n "/^FENCE_AWK='/,/^'\$/p" "$SCRIPT"
+  sed -n '/^strip_fences() {/,/^}$/p' "$SCRIPT"
+  sed -n '/^strict_body() {/,/^}$/p'  "$SCRIPT"
+  printf 'case "$1" in stripped) strip_fences "$2";; strict) strict_body "$2";; esac\n'
+} > "$RENDER"
+chmod +x "$RENDER"
+assert "both renderings could be sliced out of the script" \
+  "$(yes_if bash -c 'grep -q "fence_state" "$1" && grep -q "strict_body" "$1"' _ "$RENDER")"
+
+# A body from the alphabet the two renderings disagree over: fences of three sizes, an info
+# string, a tilde fence, blockquote prefixes at two depths, and indents made of spaces, of
+# tabs, and of both.
+gen_body() { # <seed>
+  awk -v seed="$1" 'BEGIN {
+    srand(seed)
+    nt = split("```@~~~@````@```js@```a`b@``@text@rate limited by coderabbit.ai@<!-- walkthrough_start -->", t, "@")
+    np = split("@ @   @    @\t@   \t@> @> > @  > @>\t ", p, "@")
+    for (i = 0; i < 3 + int(rand() * 8); i++)
+      printf "%s%s\n", p[1 + int(rand() * np)], t[1 + int(rand() * nt)]
+  }'
+}
+# contains <stripped> <strict> — is every line of <strict> a line of <stripped>, in order?
+contains() {
+  awk 'NR == FNR { a[++m] = $0; next }
+       { while (j < m && a[j + 1] != $0) j++
+         if (j >= m) exit 1
+         j++ }' "$1" "$2"
+}
+viol=0; bodies=0; differed=0
+for seed in $(seq 1 200); do
+  gen_body "$seed" > "$TMP/gen.md"
+  "$RENDER" stripped "$TMP/gen.md" > "$TMP/gen.stripped"
+  "$RENDER" strict   "$TMP/gen.md" > "$TMP/gen.strict"
+  bodies=$((bodies + 1))
+  cmp -s "$TMP/gen.stripped" "$TMP/gen.strict" || differed=$((differed + 1))
+  contains "$TMP/gen.stripped" "$TMP/gen.strict" || {
+    viol=$((viol + 1)); [ "$viol" -le 2 ] && { echo "        containment violated by:"; \
+      sed 's/^/          | /' "$TMP/gen.md"; }
+  }
+done
+assert "strict is a SUBSET of stripped over $bodies generated bodies ($viol violations)" \
+  "$([ "$viol" -eq 0 ] && echo 0 || echo 1)"
+# …over bodies the two renderings really do answer differently on, or the sweep above is a
+# sweep over bodies neither of them touches and proves nothing.
+assert "…and the two renderings differed on $differed of them" \
+  "$([ "$differed" -gt 0 ] && echo 0 || echo 1)"
 
 echo
 echo "== prose no longer clears anything =="
@@ -626,6 +807,85 @@ add_review coderabbitai APPROVED "$CLEAN_HEAD" "$EMPTY_BODY"
 expect "…and a later review OBJECT outranks it too" 0
 # The boundary of that rule is the section on empty review objects above: a refusal naming
 # THIS head is not an old refusal, and nothing contentless outranks it.
+
+echo
+echo "== a refusal must be WEIGHED, not dropped before anything reads it =="
+# THE RANKING IS ONLY AS GOOD AS THE SET OF REFUSALS THAT REACH IT. Three ways a refusal
+# never reached it, each ending in the same rc=0 over a contentless approval at the head.
+#
+# 1. THE REFUSAL THAT NAMES NO COMMIT. Deciding "does this refusal concern the head" by
+# whether it NAMES the head reads a refusal that pins to nothing as a refusal of some other
+# commit. The reviewer's own placeholder is exactly that: it says it is still working and,
+# in its shortest form, names nothing at all.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file 'Currently processing new changes in this PR.')"
+add_review coderabbitai APPROVED "$CLEAN_HEAD" "$EMPTY_BODY"
+expect "a placeholder naming no commit is not an OLD refusal" 1
+says   "  ...and it is the not-yet tier that fired" "NOT FINISHED"
+# THE CONTROL, and it is the recovery property this whole ordering exists for: a refusal
+# that names a DIFFERENT commit still loses to the empty approval at this head.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai APPROVED "$CLEAN_HEAD" "$EMPTY_BODY"
+expect "…while a refusal naming ANOTHER commit still loses to it" 0
+
+# 2. THE REFUSAL PUBLISHED IN A STATE THAT CANNOT CLEAR. The submitted-state filter ran
+# BEFORE the refusal tables, so a refusal filed as a `DISMISSED` or `PENDING` review object
+# was discarded unread. A state that cannot CLEAR is not a state that cannot REFUSE.
+for st in DISMISSED PENDING pending; do
+  setup "$REFUSAL_HEAD"; add_review coderabbitai "$st" "$REFUSAL_HEAD" "$REFUSAL"
+  add_review coderabbitai APPROVED "$REFUSAL_HEAD" "$EMPTY_BODY"
+  expect "a refusal filed as a '$st' review object is still a refusal" 1
+done
+# THE CONTROL: the same non-submitted state carrying a REAL review body still evidences
+# nothing, which is the rule that section pins — it must not have become a clearing state.
+setup "$CLEAN_HEAD"; add_review coderabbitai DISMISSED "$CLEAN_HEAD" "$CLEAN"
+expect "…while a DISMISSED review object still clears nothing" 3
+
+# 3. THE ARTIFACT NOBODY CAN ATTRIBUTE. An artifact whose author the API reported as `null`
+# was skipped before TEST 1, so a refusal posted by one was never weighed — and "skip it"
+# is also the wrong answer for the question the login decides, which is both whether it
+# counts AND whether clause 8 excludes it. Unreadable state, not irrelevant state.
+setup "$CLEAN_HEAD"; add_null_comment "$REFUSAL"
+add_review coderabbitai APPROVED "$CLEAN_HEAD" "$EMPTY_BODY"
+expect "an artifact with no author login is unreadable state" 2
+says   "  ...saying what could not be answered about it" "no author login"
+# THE CONTROL: the identical body from a named account that is NOT the reviewer is merely
+# ignored, so this is about the missing field and not about the body.
+setup "$CLEAN_HEAD"; add_comment teammate "$REFUSAL"
+add_review coderabbitai APPROVED "$CLEAN_HEAD" "$EMPTY_BODY"
+expect "…while the same body from a named stranger is just ignored" 0
+
+echo
+echo "== nothing clears until every artifact has been read =="
+# WHY THERE IS NO `exit 0` IN THE CLASSIFIER LOOP. Ranking inside it ranked by the order
+# the host streamed the artifacts in — review objects, then comments — so the file's claim
+# that a refusal is weighed before a clearance held only for the shapes that were read last.
+# Both orders of the same two artifacts must give the same answer.
+setup "$REFUSAL_HEAD"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$REFUSAL"
+add_review coderabbitai APPROVED  "$REFUSAL_HEAD" "$EMPTY_BODY"
+expect "refusal first, then the empty approval -> refuse" 1
+setup "$REFUSAL_HEAD"
+add_review coderabbitai APPROVED  "$REFUSAL_HEAD" "$EMPTY_BODY"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$REFUSAL"
+expect "…and the same two in the other order -> the same answer" 1
+# The sharper form of the same property: a clearance streamed BEFORE something this script
+# cannot read used to exit 0 without ever reaching it.
+setup "$CLEAN_HEAD"
+add_review coderabbitai COMMENTED "$CLEAN_HEAD" "$CLEAN"
+add_null_comment "$(body_file 'anything at all')"
+expect "a clearance does not pre-empt an artifact that cannot be read" 2
+
+# THE RESIDUAL, ASSERTED RATHER THAN LEFT TO BE FOUND AGAIN. A refusal at this head LOSES
+# to an artifact carrying evidence at this head — deliberately, because the reviewer is
+# rate-limited and then reviews the same commit, and telling that apart from "posted a
+# reply with words in it" would mean reading the reviewer's PROSE, which is the primitive
+# this file exists to stop using. The operator is told on stderr rather than left to guess.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file \
+  '**Actionable comments posted: 1**' 'One nit in the parser.')"
+expect "a contentful review at the head outranks a refusal at that head" 0
+says   "  ...and says so, rather than clearing silently" "also refused this head"
 
 echo
 echo "== --reviewer names a reviewer the table does not know =="

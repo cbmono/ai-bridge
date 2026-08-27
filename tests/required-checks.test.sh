@@ -365,6 +365,47 @@ reviewer_pr "$CR_CLEAN"
 jq '.author = null' "$FIX/pr_json" > "$FIX/pr_json.n" && mv "$FIX/pr_json.n" "$FIX/pr_json"
 expect "a PR with no author login -> refuse as unknown state" 2
 
+# --- the sixth round's routes, driven to the same sentence --------------------
+# 4. THE FENCE RULE DID NOT MATCH THE HOST. A fence opened inside a blockquote was closed
+#    by a line outside it, and that is the reviewer's own idiom rather than a construction:
+#    its notices arrive inside a `> [!WARNING]` blockquote. The RECORDED refusal, unaltered,
+#    inside such a pair.
+quoted_fence="$TMP/refusal-behind-a-quote-opened-fence.md"
+{ printf '<!-- walkthrough_start -->\n'
+  printf 'Reviewed %s.\n' "$CR_HEAD"
+  printf '> ```\n'; cat "$CR_REFUSAL"; printf '```\n'; } > "$quoted_fence"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$quoted_fence"
+expect "a refusal behind a QUOTE-OPENED fence -> refuse, never 'ok'" 1
+says   "  ...quoting the reviewer's own words" "Review limit reached"
+# The control: both markers at one depth are a real fence, so that body is a review
+# QUOTING a refusal and clears — the case above is the containment, not the fence.
+same_depth="$TMP/review-quoting-a-refusal.md"
+{ printf '<!-- walkthrough_start -->\n'
+  printf 'Reviewed %s.\n' "$CR_HEAD"
+  printf '```\n'; cat "$CR_REFUSAL"; printf '```\n'; } > "$same_depth"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$same_depth"
+expect "…while both markers at one depth ARE a pair, so that clears" 0
+
+# 5. A REVIEW OBJECT WHOSE BODY RENDERS NOTHING counted as a claim, because "content" was
+#    any non-whitespace byte: one zero-width space restored route 2 above exactly.
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_REFUSAL"
+jq -n --arg c "$CR_HEAD" --arg b "$(printf '\342\200\213')" \
+  '[{user:{login:"coderabbitai"}, state:"COMMENTED", commit_id:$c, body:$b}]' \
+  > "$FIX/reviews_json"
+expect "a review object holding one zero-width space -> refuse" 1
+says   "  ...still quoting the refusal" "Review limit reached"
+
+# 6. AN ARTIFACT NOBODY CAN ATTRIBUTE was skipped before the refusal tables read it, so a
+#    refusal published by one was never weighed.
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_CLEAN"
+jq '.comments += [{author:null, body:"anything"}]' "$FIX/pr_json" > "$FIX/pr_json.n" \
+  && mv "$FIX/pr_json.n" "$FIX/pr_json"
+expect "an artifact with no author login -> refuse as unknown state" 2
+
 echo
 echo "== the name never settles it =="
 # ROUTE 1 OF THE FOURTH REVIEW ROUND, and it is the original incident with a 2026 vendor's
