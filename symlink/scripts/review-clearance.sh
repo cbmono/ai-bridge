@@ -152,6 +152,11 @@ set -uo pipefail
 # vendor owns a required check so that vendor's own artifacts answer for it. It never
 # decides whether a review is needed — `required-checks.sh` asks on every PR.
 #
+# ONLY `coderabbitai` IS MEASURED HERE. The other five are each vendor's best-known bot
+# login, taken from its documentation rather than from an artifact this script has seen —
+# and a login spelled wrongly costs exit 3, so the risk of getting one wrong is a human
+# glance. Confirm one against a real PR before relying on it, or name it with `--reviewer`.
+#
 # `--reviewer <login>` bypasses this table entirely, which is how a reviewer with no row
 # yet — or the `qa-reviewer` fallback, posting under a human account — is named.
 REVIEWERS='

@@ -19,8 +19,9 @@
 #      review artifact clears the current head
 #   1  a required check is not green — failing, pending, or never reported; or no
 #      review cleared this head (see below)
-#   2  usage error, or the environment can't answer (no `gh`, unreadable PR, or
-#      `review-clearance.sh` missing/unrunnable, or an unreadable reviewer state)
+#   2  usage error, or the environment can't answer (no `gh` or `jq` — the sibling
+#      needs both — an unreadable PR, `review-clearance.sh` missing/unrunnable, or an
+#      unreadable reviewer state)
 #   3  no required set could be resolved — the merge authority is NOT exercisable
 #      here (this is the signal AUTONOMY.md's preflight surfaces to the human)
 #   4  this PR edits the declared list itself — changing the gate is a human call

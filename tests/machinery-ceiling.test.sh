@@ -329,14 +329,14 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # the same base:
 #
 #   7,674 / 4,094   21 files   what the second cut of this change pinned
-#   7,741 / 4,127   21 files   +67 total, +33 code — the redirect
+#   7,747 / 4,127   21 files   +73 total, +33 code — the redirect
 #
 # Per file, so the raise can be checked rather than believed:
 #
-#   review-clearance.sh       901 ->  957    +56 total, +37 code
-#   required-checks.sh        337 ->  348    +11 total,  -4 code
+#   review-clearance.sh       901 ->  962    +61 total, +37 code
+#   required-checks.sh        337 ->  349    +12 total,  -4 code
 #
-# AND +67 IS THE NET OF A REAL DELETION. Gone: the `SUSPECT_CHECKS` table and
+# AND +73 IS THE NET OF A REAL DELETION. Gone: the `SUSPECT_CHECKS` table and
 # `suspect_check()` (a list of vendor names and review phrasings, ~45 lines), the third
 # `--match-check` answer that existed only to serve it, the whole `unknown_checks` block
 # in required-checks.sh, and the nine PROSE rows of the review-evidence table with their
@@ -363,7 +363,7 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # constants. This raise does not, though it is the first round of this PR that deletes
 # more machinery than it adds in one file. The reduction candidates named further up
 # (print-board.sh, watch-board.sh, write-snapshot.sh) are untouched.
-CEILING_TOTAL=7741
+CEILING_TOTAL=7747
 CEILING_CODE=4127
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
