@@ -64,10 +64,23 @@ case "${1:-}" in
           elif [ -f "$FIX/platform_empty" ]; then
             if has --jq "$@"; then :; else echo '[]'; fi
           elif [ -f "$FIX/platform_names" ]; then
+            # `platform_names` holds a REAL JSON array (built by jq in `platform()` below),
+            # not pre-flattened text — the classify call (no --jq) cats it verbatim, and the
+            # enumerate call (--jq '.[].name') is piped through a REAL jq, exactly as real
+            # `gh --jq` would flatten it. A stub that instead special-cased its own
+            # hardcoded name/output here would exercise the script's two-call shape without
+            # ever running the jq flattening those two gh calls actually depend on.
             if has --jq "$@"; then
               [ -f "$FIX/platform_enum_broken" ] && { echo "boom" >&2; exit 1; }
+              filter=""; prev=""
+              for a in "$@"; do
+                [ "$prev" = "--jq" ] && { filter="$a"; break; }
+                prev="$a"
+              done
+              jq -r "$filter" "$FIX/platform_names"
+            else
               cat "$FIX/platform_names"
-            else echo '[{"name":"stub","bucket":"pass"}]'; fi
+            fi
           else
             # Real gh: this goes to STDERR and exits 1 (verified against a live repo
             # with no protection). The script must not confuse it with a failing
@@ -151,7 +164,7 @@ setup() { # start from: a readable, REVIEWED PR, no protection, no declared list
 
 checks() { printf '%s\n' "$@" > "$FIX/checks"; }        # each arg: "bucket<TAB>name"
 declared() { printf '%s\n' "$@" > "$FIX/declared"; }
-platform() { printf '%s\n' "$@" > "$FIX/platform_names"; }
+platform() { jq -n --args '[$ARGS.positional[] | {name: ., bucket: "pass"}]' -- "$@" > "$FIX/platform_names"; }
 diff_files() { printf '%s\n' "$@" > "$FIX/diff"; }
 
 expect() { # <name> <expected-rc> [extra args to the script...]
