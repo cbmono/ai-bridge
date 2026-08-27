@@ -363,8 +363,51 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 # constants. This raise does not, though it is the first round of this PR that deletes
 # more machinery than it adds in one file. The reduction candidates named further up
 # (print-board.sh, watch-board.sh, write-snapshot.sh) are untouched.
-CEILING_TOTAL=7747
-CEILING_CODE=4127
+
+# RAISED AGAIN 2026-08-27, same PR, after a FOURTH independent review. Three routes, and
+# two of them are what the redirect itself cost — worth saying plainly, because the round
+# that fixes an approach is the round most likely to be described as free:
+#
+#   7,747 / 4,127   21 files   what the redirect pinned
+#   7,883 / 4,170   21 files   +136 total, +43 code — the three fixes
+#
+# All +136 land in review-clearance.sh (962 -> 1,098; code 478 -> 521). required-checks.sh
+# is untouched at 349.
+#
+# WHAT THE 43 CODE LINES BUY, each one a route to clearing an UNREVIEWED pull request:
+#   1. THE TWO BODY RENDERINGS DISAGREED ABOUT WHAT A FENCE IS. The refusal side stripped
+#      leading whitespace before testing for one; the clearing side treated a >=4-space or
+#      tab line as an indented code block and therefore not a fence. So an INDENTED fence
+#      hid the unconditional rate-limit sentinel from the refusal tables while the review
+#      marker outside it cleared — and the containment this file's own comments claim
+#      (strict is a SUBSET of stripped) ran backwards. One `fence_of()` now answers for
+#      both, and it answers as the HOST renders: <=3 spaces is a fence, four or a tab is
+#      literal text. That REPLACES two hand-rolled prefix tests rather than adding a third.
+#   2. A REVIEW OBJECT THAT SAYS NOTHING IS NOT EVIDENCE ON ITS OWN, and this one is the
+#      redirect's own bill. The old body-SHA pin was wrong for every reason above, but an
+#      empty body cannot name a head, so it refused an empty review object as a side effect
+#      of being wrong. With `commit_id` as the pin, an empty-bodied COMMENTED object at the
+#      head cleared OVER the reviewer's verbatim recorded refusal at that same head.
+#      `COMMENTED` is not a claim (the host mints one for any inline comment or thread
+#      reply); an empty APPROVED is, but it is now decided after every artifact has been
+#      read, so a refusal naming THIS head wins while an older one at another commit does
+#      not — a PR skipped once still has to be able to recover.
+#   3. AN ABSENT PR-AUTHOR LOGIN silently switched SCHEMA.md clause 8 off: both author
+#      comparisons then tested against "", which no login equals, so the reviewer account
+#      could clear a pull request it had authored itself.
+#
+# AND WHAT THE COMMENT LINES BUY, since 93 of the 136 are not code by this file's measure
+# (66 whole-line comments, the rest blanks): two of the three are
+# places where a PREVIOUS round's reasoning in this same file was wrong — the stated
+# asymmetry between the two renderings, and "evidence and pinning are both structural" —
+# so the correction sits where the next reader will hit it rather than in a merged PR body.
+#
+# STILL OWED, and this is the fifth consecutive raise from this one pull request: the
+# objective's second criterion asks a project to LOWER one of these constants. It has not
+# happened here. The reduction candidates named further up (print-board.sh, watch-board.sh,
+# write-snapshot.sh) are untouched, and the debt is larger than when this PR opened.
+CEILING_TOTAL=7883
+CEILING_CODE=4170
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

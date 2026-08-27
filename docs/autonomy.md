@@ -130,7 +130,7 @@ someone has to ask for a first review, which is not the discouraged "re-review o
 addressed findings", because no review ever happened.
 
 **Expect exit 4 to be the common answer, and read it as what it is.** Scored across all
-35 pull requests on this repository: 17 carry a CodeRabbit review object and exactly
+35 pull requests on this repository: 18 carry a CodeRabbit review object and exactly
 **one** of them was made at that PR's final head. The reviewer reads the first push, the
 agent then pushes fixes, and `.coderabbit.yaml` here sets `auto_incremental_review:
 false` on purpose (the "one review per PR" cost rule), so nothing re-reads them. Those
