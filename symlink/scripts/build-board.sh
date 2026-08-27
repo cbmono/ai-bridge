@@ -145,7 +145,7 @@
 # writer, plus this renderer's data-governance boundary), tests/artifact-board.test.sh
 # (this renderer's markup and hardening), tests/per-owner-board.test.sh (the two-section
 # split and its HEAD keying), tests/board-renderers.test.sh (print-board and watch-board)
-# and tests/machinery-ceiling.test.sh (this file's size).
+# (this file's size).
 set -euo pipefail
 
 OUT="board.html"

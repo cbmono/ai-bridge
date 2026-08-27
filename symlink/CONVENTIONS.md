@@ -102,6 +102,28 @@ in `cbmono/ai-bridge` enforces this.
   **Corollary — grade against the criteria, not against your own taste.** If you believe
   the criteria themselves are wrong, say so *once*, in the verdict, as a note to the
   human. Do not express it by withholding a pass.
+- **Don't grow the harness without a reason — and past ~150 lines, ask.** This machinery
+  is a means, not the product. Before you open a PR, measure what you added to it:
+
+  ```sh
+  git diff --numstat origin/main -- 'symlink/**/*.sh' | awk '{a+=$1} END{print a+0}'
+  ```
+
+  Under ~150 added lines, carry on. **At or above it, put a `## Harness growth` section in
+  the PR body** naming the figure, what the lines buy, and what you considered instead —
+  then let the owner decide. It is not a block; it is a question the owner answers, and
+  raising it is never a failure.
+
+  For scale: ordinary fixes here add 30-55 lines; the two largest features added 360 and
+  363. The whole harness is ~8,500 lines, so 150 is roughly a 2% jump in one PR.
+
+  **Why a number in a rule rather than a test.** This used to be `machinery-ceiling.test.sh`
+  — 944 lines pinning two integers that every PR touching `symlink/` had to re-measure. The
+  measurement was free; the *coupling* was not. It put a placeholder on `main` and turned it
+  red (#31, needing #32 purely to undo), it was the single conflict `git merge-tree` found
+  across ten PR pairs (#34 x #35), and it forced rebases on PRs that had nothing to do with
+  each other. A threshold you check against **your own diff** cannot collide with anyone
+  else's, which is the whole point.
 - **Kill everything you started before you report.** Any dev server, watcher, file-watch
   probe or other background process you launch must be **stopped before you report back**,
   and your report must say that you stopped it. Measured 2026-08-27: two `pnpm dev`
