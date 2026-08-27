@@ -227,7 +227,7 @@ assert "a trailing remainder after a newline is dropped" \
 # `/projects/../deliverables/<file>` rendered as this project's own deliverable — the
 # guard compared the value against a prefix the value itself had chosen.
 assert "a hostile slug cannot render a path out of the bundle" \
-  "$(fhasnt 'id_rsa' "$DOUT")"
+  "$(fhasnt 'data-copy="/projects/../' "$DOUT")"
 assert "…and that project gets no deliverables panel at all" "$(yes_if python3 -c "
 import sys
 t = open('$DOUT').read()
