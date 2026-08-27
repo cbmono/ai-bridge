@@ -338,8 +338,13 @@ depends_ids() { # <frontmatter>
 #     entry, `…/a`, and everything from ` #1.md` on is comment — the reason this is not
 #     a "lost sibling" but the parser's own reading, and `…/b.md` must NOT render.
 #     A quote only opens a scalar where a scalar may START (line start, or after `[` or
-#     `,`), so an apostrophe inside a plain path is not a quote; `\"` does not close a
-#     double-quoted one. A block entry line has no terminator to wait for: its siblings
+#     `,`), so an apostrophe inside a plain path is not a quote. BOTH of YAML's escapes
+#     are needed to find where a scalar ENDS, and there is exactly one per quote style:
+#     `\"` does not close a double-quoted scalar, and `''` does not close a single-quoted
+#     one — it IS an apostrophe. Handling only the first is what makes
+#     `[ '…/o''brien[draft].md #2', …/clean.md ]` cut INSIDE one atom, fabricating
+#     `…/o''brien[draft].md` and deleting the clean sibling YAML really does return.
+#     A block entry line has no terminator to wait for: its siblings
 #     are on other lines, so the first unquoted whitespace-`#` on it is a comment.
 # Anything the cut declines to remove stays exactly as written, and the render-time
 # shape check drops whichever fragments the comma-split makes of it — a visible drop,
@@ -350,19 +355,28 @@ deliverable_path_entries() { # <frontmatter>
     # terminator, OPEN = the line ended inside a quoted scalar; 0 = absent. CCOL
     # returns early, so TCOL is set only by a `]` that precedes the comment — which
     # is the whole condition the inline form needs. `noq` ignores quoting entirely.
+    # Testing ONE CHARACTER with a regex is a locale trap, and it cost the whole key:
+    # this awk is byte-oriented, so substr() returns one BYTE of a multi-byte character
+    # and `~ /[[:space:]]/` on that byte aborts the program with "towc: multibyte
+    # conversion failure" — so a legitimately stamped `Übersicht.md` did not merely fail
+    # to render, it took every sibling deliverable with it. index() compares bytes and
+    # cannot fail. YAML separation space is space and tab; the line breaks are in the set
+    # only because a CRLF file leaves a `\r` on the line.
+    function ws(x) { return index(" \t\r\n", x) > 0 }
     function scan(s, noq,   i, c, q, fresh, n) {
       CCOL = 0; TCOL = 0; OPEN = 0; q = ""; fresh = 1; n = length(s)
       for (i = 1; i <= n; i++) {
         c = substr(s, i, 1)
         if (q != "") {
           if (q == "\"" && c == "\\") i++
+          else if (c == q && q == "'\''" && substr(s, i + 1, 1) == "'\''") i++
           else if (c == q) q = ""
           continue
         }
         if (!noq && fresh && (c == "\"" || c == "'\''")) { q = c; fresh = 0; continue }
-        if (c == "#" && i > 1 && substr(s, i - 1, 1) ~ /[[:space:]]/) { CCOL = i; return }
+        if (c == "#" && i > 1 && ws(substr(s, i - 1, 1))) { CCOL = i; return }
         if (c == "]" && TCOL == 0) TCOL = i
-        fresh = (c ~ /[[:space:]]/ || c == "," || c == "[")
+        fresh = (ws(c) || c == "," || c == "[")
       }
       OPEN = (q != "")
     }
