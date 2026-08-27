@@ -840,8 +840,21 @@ gt()     { [[ "$1" -gt "$2" ]] && echo 0 || echo 1; }
 #
 # THE DEBT IS STILL THE DEBT, and rebasing does not pay it: write-snapshot.sh, one of the
 # three named reduction candidates, grew again on `main` while this branch was in review.
-CEILING_TOTAL=8497
-CEILING_CODE=4344
+#
+# RAISED 2026-08-27, +55 total / +30 code, all in write-snapshot.sh (645 -> 700 lines),
+# fixing two pre-existing defects a trailing YAML comment triggers: `acceptance_criteria:
+# []  # comment` used to read as filled and report `awaiting: "approve"` on a draft with
+# no real criteria, and `depends_on: [ … ]  # comment` used to lose the real dependency
+# edge and fabricate a bogus one out of the comment's own text. list_region() stays
+# comment-agnostic on purpose (see its own header) — the fix is two small, SCOPED helpers
+# (`strip_trailing_comment()`, `acceptance_criteria_filled()`) used only by the two
+# callers that needed comment-safety, not a change to the shared parsing five other keys
+# still rely on being comment-blind. Debt owed, not paid: write-snapshot.sh grows again.
+#
+#   8,497 / 4,344   21 files   what task-007 pinned above
+#   8,552 / 4,374   21 files   +55 total / +30 code — write-snapshot.sh, task-019
+CEILING_TOTAL=8552
+CEILING_CODE=4374
 
 # Both expressions, in one place, applied to a root — so the self-test below measures a
 # growing fixture with the SAME code that measures the repo. A gate whose failure path is

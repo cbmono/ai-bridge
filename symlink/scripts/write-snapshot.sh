@@ -220,6 +220,52 @@ list_filled() { # <frontmatter> <key>
   [[ -n "$r" ]]
 }
 
+# A genuine trailing YAML comment, removed line by line: a `#` preceded by
+# whitespace and outside a quoted scalar starts one, and everything from there to
+# end of line goes. NOT folded into list_region()/yaml_list_entries() above —
+# those stay DELIBERATELY comment-agnostic for the five free-text keys they serve
+# (see list_region's header: a blanket strip there has twice eaten a real entry).
+# This exists for the two callers below that need comment-safety without touching
+# that shared contract: acceptance_criteria_filled() and depends_ids(). Same
+# quote-tracking as deliverable_path_entries()'s own scoped strip, minus its extra
+# bracket-position gate — a deliverable_paths-specific heuristic neither caller here
+# needs, since both only ever see a single flow list or one block entry per line.
+strip_trailing_comment() { # <text, one or more lines>
+  awk '
+    function ws(x) { return index(" \t\r\n", x) > 0 }
+    {
+      q = ""; fresh = 1; cut = 0; n = length($0)
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1)
+        if (q != "") {
+          if (q == "\"" && c == "\\") { i++; continue }
+          if (c == q) {
+            if (q == "'\''" && substr($0, i + 1, 1) == "'\''") { i++; continue }
+            q = ""
+          }
+          continue
+        }
+        if (fresh && (c == "\"" || c == "'\''")) { q = c; fresh = 0; continue }
+        if (c == "#" && i > 1 && ws(substr($0, i - 1, 1))) { cut = i; break }
+        fresh = (ws(c) || c == "," || c == "[" || c == "-")
+      }
+      print (cut > 0 ? substr($0, 1, cut - 1) : $0)
+    }
+  ' <<<"$1"
+}
+
+# Comment-safe counterpart to list_filled(), for acceptance_criteria ONLY: this
+# boolean drives the `approve` verb in the awaiting switch below, which is exactly
+# the field AWAITING.md is built from. `acceptance_criteria: []  # still drafting`
+# used to strip to a non-empty `#stilldrafting…` and read as filled — a draft with
+# NO real criteria reported as needing a human to approve it.
+acceptance_criteria_filled() { # <frontmatter>
+  local r
+  r="$(strip_trailing_comment "$(list_region "$1" acceptance_criteria)")"
+  r="$(printf '%s' "$r" | tr -d '[:space:]' | tr -d '[]')"
+  [[ -n "$r" ]]
+}
+
 # How many open questions. SCHEMA.md requires every entry to be numbered (Q1, Q2, …),
 # so counting the numbered entries is exact for a conforming document and needs no
 # comma-inside-quotes parsing. An unnumbered but non-empty list counts as 1 — the
@@ -294,9 +340,18 @@ yaml_list_entries() { # <frontmatter> <key>
 # which the snapshot already carries. It is not free prose, not identity, and not a
 # path outside the bundle — the four things the allowlist actually names. A reader
 # adding a field here should be able to say which of those four it is; this is none.
+#
+# COMMENT-STRIPPED before the split, unlike yaml_list_entries()'s other three
+# callers: `depends_on: [ /projects/p/tasks/task-006.md ]  # blocked by
+# /Users/…/notes[1].md` used to lose the real edge AND fabricate a bogus one —
+# `notes[1]`, a fragment of a local filesystem path off the comment — because the
+# unstripped comma-split saw the comment text as part of the (only) entry. A
+# structural reference losing its edge is exactly the failure `depends_on`'s own
+# allowlist entry above says this field must not have.
 depends_ids() { # <frontmatter>
   # Entries arrive already trimmed and unquoted, so basename-then-suffix is safe.
-  yaml_list_entries "$1" depends_on | sed -e 's#^.*/##' -e 's#\.md$##' | grep -v '^$' || true
+  list_entries_from_region "$(strip_trailing_comment "$(list_region "$1" depends_on)")" \
+    | sed -e 's#^.*/##' -e 's#\.md$##' | grep -v '^$' || true
 }
 
 # The bundle-relative deliverable paths a done project's closeout stamped into
@@ -587,7 +642,7 @@ EOF
     case "$t_status" in
       draft)
         if [[ "$oq" != 0 ]]; then awaiting="answer"
-        elif list_filled "$tfm" acceptance_criteria; then awaiting="approve"; fi ;;
+        elif acceptance_criteria_filled "$tfm"; then awaiting="approve"; fi ;;
       in-review) [[ -n "$prs_json" ]] && awaiting="merge" ;;
       blocked)   awaiting="unblock" ;;
     esac
