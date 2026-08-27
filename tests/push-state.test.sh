@@ -40,7 +40,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 HOOK="$HERE/../symlink/.claude/hooks/push-state.sh"
 [ -f "$HOOK" ] || { echo "push-state.test: hook not found at $HOOK" >&2; exit 2; }
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/push-state-fixture.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/push-state-fixture.XXXXXX")" || {
+  echo "push-state.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 # chmod back up first: the unreadable-document fixture would otherwise defeat rm.
 trap 'chmod -R u+rwX "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
 

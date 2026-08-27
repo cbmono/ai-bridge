@@ -41,7 +41,8 @@ set -uo pipefail
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
 GEN="$TPL/symlink/scripts/build-board.sh"
 WRITER="$TPL/symlink/scripts/write-snapshot.sh"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/perowner.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/perowner.XXXXXX")" || {
+  echo "per-owner-board.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));

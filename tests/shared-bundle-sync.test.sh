@@ -32,7 +32,8 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TICK="$REPO/symlink/.claude/agents/project-manager.md"
 LAUNCHER="$REPO/symlink/.claude/commands/pm-loop.md"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/sync.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/sync.XXXXXX")" || {
+  echo "shared-bundle-sync.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 ok() { # <name> <actual> <expected>

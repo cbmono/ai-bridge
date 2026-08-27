@@ -28,7 +28,8 @@ HOOK="$HERE/../symlink/.claude/hooks/show-board-link.sh"
 SETTINGS="$HERE/../symlink/.claude/settings.json"
 [ -f "$HOOK" ] || { echo "show-board-link.test: hook not found at $HOOK" >&2; exit 2; }
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/show-board-link.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/show-board-link.XXXXXX")" || {
+  echo "show-board-link.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 
 pass=0; fail=0

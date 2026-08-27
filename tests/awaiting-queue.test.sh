@@ -10,7 +10,8 @@
 set -uo pipefail
 
 HOOK="$(cd "$(dirname "$0")/.." && pwd)/symlink/.claude/hooks/show-awaiting.sh"
-TMP="$(mktemp -d)"
+TMP="$(mktemp -d)" || {
+  echo "awaiting-queue.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 

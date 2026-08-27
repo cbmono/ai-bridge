@@ -107,7 +107,9 @@ before() { # <file> <needle-first> <needle-second>
   [ "$x" -gt 0 ] && [ "$y" -gt 0 ] && [ "$x" -lt "$y" ]
 }
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/reviewroute.XXXXXX")"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/reviewroute.XXXXXX")" || {
+  echo "review-route.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
+trap 'rm -rf "$TMP"' EXIT
 
 ok "qa-reviewer.md exists" "$(yn test -f "$QA")" yes
 

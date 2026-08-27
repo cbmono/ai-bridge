@@ -53,7 +53,8 @@ assert '$roleTiers names plan-architect and apex' \
   "$(jq -e '.["$roleTiers"] // "" | test("plan-architect") and test("apex")' "$SEED_CFG" >/dev/null && echo 0 || echo 1)"
 
 echo "== validate-bundle.sh confirms the shipped config VALID, asymmetry and all =="
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/roles-roletiers-asymmetry.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/roles-roletiers-asymmetry.XXXXXX")" || {
+  echo "roles-roletiers-asymmetry.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/objectives" "$TMP/projects/live/tasks"
 cp "$SEED_CFG" "$TMP/instance.config.json"

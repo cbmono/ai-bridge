@@ -11,7 +11,8 @@ set -uo pipefail
 
 SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/link-repos.sh"
 BRIDGE_INSTALL="$(cd "$(dirname "$0")/.." && pwd)/install.sh"
-TMP="$(mktemp -d)"
+TMP="$(mktemp -d)" || {
+  echo "link-repos.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 

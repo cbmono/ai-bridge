@@ -17,7 +17,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 VALIDATOR="$HERE/../symlink/scripts/validate-bundle.sh"
 [[ -f "$VALIDATOR" ]] || { echo "validate-bundle.test: validator not found at $VALIDATOR" >&2; exit 2; }
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/validate-bundle-fixture.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/validate-bundle-fixture.XXXXXX")" || {
+  echo "validate-bundle.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 B="$TMP/bundle"
 mkdir -p "$B"/{objectives,knowledge/findings}
