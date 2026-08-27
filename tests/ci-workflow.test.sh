@@ -87,6 +87,16 @@ echo "== it actually invokes the FULL suite — no partial, hardcoded file list 
 assert "the run step invokes the literal glob tests/*.test.sh" \
   "$(grep -qF 'tests/*.test.sh' <<<"$WF_TEXT" && echo 0 || echo 1)"
 
+echo "== ai-bridge-v4/task-022: the host-rendering oracle's --check runs automatically =="
+# Before this task it could only be run by hand, which meant it would not be run. Pinned
+# on the literal invocation, same idiom as the tests/*.test.sh glob above, and on it being
+# NON-blocking — a required check must not fail on a renderer wording change this repo
+# does not control (docs/conventions.md, "the host wins and it is recorded").
+assert "a step invokes tests/fixtures/reviewer/record-host-rendering.sh --check" \
+  "$(grep -qF 'tests/fixtures/reviewer/record-host-rendering.sh --check' <<<"$WF_TEXT" && echo 0 || echo 1)"
+assert "…and that step is continue-on-error, so host drift never fails the required check" \
+  "$(grep -B8 -F 'record-host-rendering.sh --check' <<<"$WF_TEXT" | grep -qF 'continue-on-error: true' && echo 0 || echo 1)"
+
 echo "== the runner distrusts a harness's exit code on its own =="
 # Pins that the double-check this task exists to add — reported fail count, not just
 # $? — is actually present, not merely described in a comment. See
