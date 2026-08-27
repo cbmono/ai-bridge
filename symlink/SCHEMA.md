@@ -554,6 +554,24 @@ means the tracked file answers exactly as it always did.**
 | `people` | **no** — a shared directory of who is who | no lookup; the `authorEmail` chain answers |
 | everything else | no — shared facts (`org`, `models`, `roleTiers`, `maxAgentsInFlight`, `maxPrLoc`, `defaultRepo`, `externalReviewer`, `codegraphSkip`, …) | as documented per key |
 
+### `maxAgentsInFlight` bounds an instance, not a machine — a known hole
+
+The seeded default is **4**, and that number is measured, not chosen: on 2026-08-27, nine
+concurrent agents drove an 11-core Mac to **load average 36.5**, three times
+oversubscribed, and a typecheck took 20-30x its idle time. The mechanism is that `vitest`
+forks a worker **per core**, so three agents running unit tests is ~33 processes on 11
+cores however the suites are arranged.
+
+**But the cap is per instance and the CPU is per machine.** Three instances on one laptop,
+each honouring a cap of 4, can still put **12 agents on 11 cores** and reproduce that
+incident exactly. Nothing here prevents it.
+
+This is an **accepted trade, not an oversight**: a machine-scoped cap needs a lock outside
+any single bundle, and the owner chose the simpler per-instance number. It is written down
+so the next person meeting load average 36 finds a known limitation rather than a mystery.
+If you run several instances on one machine, divide the machine's budget between them by
+hand.
+
 The rule behind the split: **the tracked file holds facts both clones share; the local
 file holds facts about this machine and this human.** A key that must be *the same* on
 both clones to be correct — `defaultOwner`, `people` — is never overridable, because an

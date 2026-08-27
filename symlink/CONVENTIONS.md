@@ -102,6 +102,14 @@ in `cbmono/ai-bridge` enforces this.
   **Corollary — grade against the criteria, not against your own taste.** If you believe
   the criteria themselves are wrong, say so *once*, in the verdict, as a note to the
   human. Do not express it by withholding a pass.
+- **Kill everything you started before you report.** Any dev server, watcher, file-watch
+  probe or other background process you launch must be **stopped before you report back**,
+  and your report must say that you stopped it. Measured 2026-08-27: two `pnpm dev`
+  servers were found still running after **2 days 16 hours** and **2 days 13 hours**, from
+  worktrees whose tasks had merged long before. Nobody noticed until a machine was hot.
+  `scripts/prune-worktrees.sh` reports worktrees that still have a live process attached —
+  a scan catches what discipline misses — but it only ever reports, so the teardown is
+  yours.
 - **Wide work: fan out only if you actually can — most of you can't.** For genuinely wide,
   *independent* work a parallel fan-out beats grinding serially (find the real edges → fan
   out → verify → synthesize), but check your `tools:` list before you plan around one.

@@ -12,7 +12,7 @@
     "example-user-008": "example-user-008@example.com"
   },
   "defaultRepo": null,
-  "maxAgentsInFlight": 10,
+  "maxAgentsInFlight": 4,
   "maxPrLoc": 2000,
   "codegraphSkip": "",
   "externalReviewer": null,
