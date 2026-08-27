@@ -195,12 +195,14 @@ ask() { # <family> <body-file> — the host's verdict for one case, or empty on 
   # sees it, and on every single call — not just checked in aggregate at the end — because
   # a subset of calls failing this way is the dangerous case: it would silently record a
   # refusal or marker case as the SAFE verdict instead of erroring, which is exactly the
-  # direction nothing else in this script would notice. `raw` merges stdout and stderr so
-  # gh's own error text is captured for the diagnostic, never fed to `classify`.
+  # direction nothing else in this script would notice. stdout and stderr are kept
+  # SEPARATE, on purpose: a gh warning on stderr (a version nag, a deprecation notice)
+  # must never get spliced into the HTML `classify` reads, which merging the two streams
+  # on a SUCCESSFUL call would risk.
   local raw rc
-  raw="$(gh api -X POST /markdown --input "$TMPD/req.json" 2>&1)"; rc=$?
+  raw="$(gh api -X POST /markdown --input "$TMPD/req.json" 2>"$TMPD/ask.err")"; rc=$?
   if [ "$rc" -ne 0 ]; then
-    echo "ask: gh api /markdown failed for $1 (exit $rc): ${raw:-<no output>}" >&2
+    echo "ask: gh api /markdown failed for $1 (exit $rc): $(cat "$TMPD/ask.err" 2>/dev/null)" >&2
     return 1
   fi
   if [ -z "$raw" ]; then
