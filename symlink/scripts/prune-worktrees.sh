@@ -42,6 +42,22 @@
 # project-manager agent's "Reclaim the worktree"). The mtime veto catches the
 # dispatch you forgot about; your in-flight count is what you actually rely on.
 #
+# THE LIVE-PROCESS SCAN IS A SEPARATE, LOUDER SIGNAL FROM THE MTIME GUARD ABOVE.
+# `recently_active` answers "has anything in this worktree been WRITTEN to
+# recently" — a process can run for days without writing a single file (a `pnpm
+# dev` server just serves), and does exactly that in the incident this exists
+# for: two dev servers ran 2d16h and 2d13h out of worktrees whose tasks had
+# already merged, invisible to the mtime check because nothing in the tree had
+# changed since the last write. So every worktree is additionally checked for a
+# live process whose cwd or command line sits inside it (`live_processes_in`,
+# below `HAVE_GH`), and reported as its own `LIVE PROCESS` line — independent of
+# and in addition to whatever the worktree classifies as, specifically so that a
+# REMOVABLE verdict (PR merged, tree clean) does not bury the one thing that
+# makes removing it unsafe right now. It never kills; see `CONVENTIONS.md`,
+# "Kill everything you started before you report" — the teardown stays the
+# caller's job, this only makes the miss visible. macOS only; see the comment
+# at `HAVE_LSOF` for what is and is not verified elsewhere.
+#
 # WHY A DETACHED HEAD IS NEVER AUTO-REMOVED  ← read this before widening the script
 # This header used to claim removal "can never lose committed work" because "the
 # branch ref and every committed object survive". That is true only for a worktree
@@ -232,6 +248,87 @@ is_scan_root() {
 
 HAVE_GH=0; command -v gh >/dev/null 2>&1 && HAVE_GH=1
 
+# LIVE PROCESS SCAN. Report-only, like everything else here: it never kills, it
+# prints PID + command so a human decides — matching `report_removable` below,
+# which prints a command rather than running one. This is the detector for the
+# failure `CONVENTIONS.md`'s teardown rule already names: two `pnpm dev` servers
+# ran 2d16h and 2d13h out of worktrees whose tasks had long since merged, and a
+# worktree can be REMOVABLE (PR merged, tree clean) while a server is still
+# bound to a port inside it — that combination is reported LOUDLY, as its own
+# line, never folded into the REMOVABLE/RECLAIMABLE verdict.
+#
+# MACOS ONLY, STATED RATHER THAN ASSUMED. Both signals below are shelled out to
+# platform tools whose behaviour is NOT verified elsewhere:
+#   · `lsof -a -d cwd -n -P -Fpcn` — `-d cwd` restricts the listing to each
+#     process's current-working-directory file descriptor (one line per live
+#     process, not one per open file); `-F pcn` requests the PID, command and
+#     name fields in `-F` machine-readable form, `p`/`c`/`n` prefixing each
+#     value. `-n -P` skip hostname and port lookups, irrelevant here, kept only
+#     because they make lsof answer without ever blocking on DNS. This is a
+#     macOS/BSD lsof invocation (verified on lsof 4.91 / macOS 26.5); GNU/Linux
+#     lsof supports `-d cwd` too but this is not verified there, and is not
+#     claimed to be.
+#   · `ps -axo pid=,command=` — BSD `ps` (macOS's). `-axo` (no leading `-`
+#     needed on BSD ps; used here for readability) selects every process,
+#     including ones without a controlling terminal, formatted as bare PID then
+#     the full command line. A Linux (procps) `ps` accepts this same syntax in
+#     practice, but that is not what this repo is measured against — macOS is
+#     (see CONVENTIONS.md, "macOS is the platform this repo is measured on").
+#
+# BOTH SIGNALS, because either alone misses a real case: a wrapper script can
+# name the worktree path on its command line while its actual cwd is the repo
+# root (a `cd "$wt" && pnpm dev` written as one lsof-invisible-cwd command is
+# rare but not impossible for anything invoked via `sh -c`), and conversely a
+# long-running server can hold `$wt` as its cwd with a command line that names
+# nothing but the binary (`node`, with no path in argv). Each is deduped by
+# PID against the other, so a process matching both signals is reported once.
+#
+# CACHED ONCE, not re-run per worktree: this script may classify many
+# worktrees across several repos in one run, and a whole-system `lsof`/`ps`
+# sweep is the most expensive thing here — repeating it per worktree would
+# make the scan's cost scale with worktree count for no reason, since both
+# tools already enumerate every process in one pass.
+HAVE_LSOF=0; command -v lsof >/dev/null 2>&1 && HAVE_LSOF=1
+LSOF_CWD=""
+[[ $HAVE_LSOF -eq 1 ]] && LSOF_CWD="$(lsof -a -d cwd -n -P -Fpcn 2>/dev/null)"
+PS_ALL="$(ps -axo pid=,command= 2>/dev/null)" || PS_ALL=""
+[[ $HAVE_LSOF -eq 1 ]] || echo "prune-worktrees: lsof not found — live-process scan uses command-line matching only (no cwd check)." >&2
+
+# PID<TAB>COMMAND lines for every live process whose cwd or command line is
+# inside <worktree-path>. Never reports this script's own PID.
+live_processes_in() { # <worktree-path>
+  local wt=$1 pid cmd dir seen=$'\n' line
+  if [[ -n "$LSOF_CWD" ]]; then
+    pid=""; cmd=""
+    while IFS= read -r line; do
+      case "$line" in
+        p*) pid=${line#p} ;;
+        c*) cmd=${line#c} ;;
+        n*)
+          dir=${line#n}
+          case "$dir" in
+            "$wt"|"$wt"/*)
+              [[ "$pid" != "$$" ]] || continue
+              case "$seen" in *$'\n'"$pid"$'\n'*) ;;
+                *) seen+="$pid"$'\n'; printf '%s\t%s\n' "$pid" "$cmd" ;;
+              esac ;;
+          esac ;;
+      esac
+    done <<< "$LSOF_CWD"
+  fi
+  if [[ -n "$PS_ALL" ]]; then
+    while IFS= read -r pid cmd; do
+      [[ -n "$pid" && "$pid" != "$$" ]] || continue
+      case "$cmd" in
+        *"$wt"*)
+          case "$seen" in *$'\n'"$pid"$'\n'*) ;;
+            *) seen+="$pid"$'\n'; printf '%s\t%s\n' "$pid" "$cmd" ;;
+          esac ;;
+      esac
+    done <<< "$PS_ALL"
+  fi
+}
+
 # Resolve a repo's default branch offline: prefer recorded origin/HEAD, else the
 # first common name that exists as a remote-tracking ref.
 default_branch() {
@@ -392,8 +489,29 @@ on_some_ref() {
 }
 
 removed=0; reclaimable=0; kept=0; stale=0
+live_worktrees=0
 CMDS=""
 SEEN_WT=$'\n'
+
+# Print one LIVE PROCESS line per matching PID, ahead of (and independent of)
+# whatever this worktree classifies as. Its own line, its own prefix — the
+# classification below can still print REMOVABLE right after it, which is
+# exactly the loud "task merged, server still running" combination this exists
+# to catch, not a note folded into that line.
+report_live_processes() { # <worktree-path> <label>
+  local wt=$1 label=$2 line any=0
+  while IFS=$'\t' read -r pid cmd; do
+    [[ -n "$pid" ]] || continue
+    printf 'LIVE PROCESS      %s  [%s]  pid=%s  cmd=%s\n' "$wt" "$label" "$pid" "$cmd"
+    any=1
+  done <<< "$(live_processes_in "$wt")"
+  # `|| true`: under `set -e`, a bare `[[ cond ]] && stmt` exits the whole
+  # script the moment `cond` is false — the well-known errexit trap where the
+  # `&&` list's status is the LEFT side's when it short-circuits, and nothing
+  # here is testing it in an if/while. Every process-free worktree hits exactly
+  # this line, so without `|| true` the scan would abort on the first one.
+  [[ $any -eq 1 ]] && live_worktrees=$((live_worktrees+1)) || true
+}
 
 # Decide and act on one worktree. Reads the porcelain record vars set by the loop
 # below (wt/head/ref/detached/locked/prunable) plus repo/def.
@@ -410,6 +528,9 @@ classify() {
     printf 'STALE             %s  [%s]  (directory gone — worktree prune clears it)\n' "$wt" "$label"
     stale=$((stale+1)); return 0
   fi
+
+  report_live_processes "$wt" "$label"
+
   if [[ $locked -eq 1 ]]; then keep locked "$label"; return 0; fi
 
   local tree; tree=$(tree_state "$wt")
@@ -550,8 +671,13 @@ done
 
 echo "---"
 [[ $HAVE_GH -eq 1 ]] || echo "(gh not found — used git-only merge detection; squash-merged branches may be kept)"
-printf 'prune-worktrees: %d removable, %d reclaimable, %d kept, %d stale, %d unregistered. (report-only — nothing was changed)\n' \
-  "$removed" "$reclaimable" "$kept" "$stale" "$unregistered"
+printf 'prune-worktrees: %d removable, %d reclaimable, %d kept, %d stale, %d unregistered, %d with a live process attached. (report-only — nothing was changed)\n' \
+  "$removed" "$reclaimable" "$kept" "$stale" "$unregistered" "$live_worktrees"
+if [[ $live_worktrees -gt 0 ]]; then
+  echo "(a live process is running out of $live_worktrees of the worktrees above, LIVE PROCESS lines —"
+  echo " including any that classified REMOVABLE or RECLAIMABLE. This script never kills anything;"
+  echo " look at each one and stop it yourself before removing the worktree.)"
+fi
 if [[ $reclaimable -gt 0 ]]; then
   echo "(reclaimable = finished, but a detached HEAD's commits are on no branch ref, so"
   echo " removing it deletes their only reachability. Check each one before you do.)"
