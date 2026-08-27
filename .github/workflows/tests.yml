@@ -19,7 +19,17 @@ jobs:
     # .github/required-checks.txt and by scripts/required-checks.sh. Renaming this job
     # is a merge-gate change: update the declared name in the same commit.
     name: harness suite
-    runs-on: ubuntu-latest
+    # macos-latest, not ubuntu-latest: this suite has never had CI, and a first real
+    # run on Linux turned up FOUR harnesses (deliverable-paths-vs-yaml, migrate-bundle,
+    # push-state, reclaim-worktree) failing for reasons that look environment-specific
+    # (GNU vs BSD tool behaviour, a different YAML oracle, PATH/root-permission
+    # differences) rather than defects — on top of the one known, already-fixed-in-#41
+    # failure. This repo's own tests are heavily macOS-authored (BSD stat, macOS
+    # mktemp/symlink quirks, decomposed-filename handling are all named explicitly in
+    # tests/*.test.sh), so macOS is the platform its baseline was actually measured on.
+    # Investigating and fixing each Linux-specific gap is real work belonging to its
+    # own task, not silently absorbed into "wire up CI" — see the PR body.
+    runs-on: macos-latest
     # One harness alone measures ~7 minutes and the full suite several more on top of
     # that; this is a generous ceiling, not the measured number (see the PR body for
     # the measured wall-clock).
@@ -85,18 +95,31 @@ jobs:
               exit 2
             fi
 
-            # Exit codes are not trusted on their own: a harness can print
-            # "pass=N fail=0" and exit 0 while it has just destroyed its checkout, or
-            # print nothing parseable at all. Both are treated as failures here.
+            # Exit codes are not trusted on their own: a harness can print a clean
+            # tally and exit 0 while it has just destroyed its checkout, or print
+            # nothing parseable at all. Both are treated as failures here. Two
+            # conventions are in use across tests/*.test.sh (tests/.claude/rules/
+            # tests.md names both: "pass=/fail=" or "N passed, N failed") — both are
+            # tried, in order, and only their absence counts as "no summary".
             summary="$(printf '%s\n' "$out" | grep -oE 'pass=[0-9]+ fail=[0-9]+' | tail -n1 || true)"
+            style=dense
             if [ -z "$summary" ]; then
-              echo "::error::$f exited $rc but printed no 'pass=N fail=N' summary — the exit code alone is never trusted here"
+              summary="$(printf '%s\n' "$out" | grep -oE '[0-9]+ passed, [0-9]+ failed' | tail -n1 || true)"
+              style=prose
+            fi
+            if [ -z "$summary" ]; then
+              echo "::error::$f exited $rc but printed no recognised pass/fail summary — the exit code alone is never trusted here"
               bad+=("$f (no summary, exit $rc)")
               continue
             fi
 
-            f_pass="$(printf '%s' "$summary" | sed -E 's/pass=([0-9]+).*/\1/')"
-            f_fail="$(printf '%s' "$summary" | sed -E 's/.*fail=([0-9]+)/\1/')"
+            if [ "$style" = dense ]; then
+              f_pass="$(printf '%s' "$summary" | sed -E 's/pass=([0-9]+).*/\1/')"
+              f_fail="$(printf '%s' "$summary" | sed -E 's/.*fail=([0-9]+)/\1/')"
+            else
+              f_pass="$(printf '%s' "$summary" | sed -E 's/^([0-9]+) passed.*/\1/')"
+              f_fail="$(printf '%s' "$summary" | sed -E 's/.*, ([0-9]+) failed$/\1/')"
+            fi
             total_pass=$((total_pass + f_pass))
             total_fail=$((total_fail + f_fail))
 
