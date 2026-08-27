@@ -174,6 +174,11 @@ no PII/secrets. The role-specific procedure is below.
    head is required; it is not the "don't re-review to confirm a fix" cost rule, which is
    about paying an external reviewer twice for the *same* diff.
 
+   **That requirement is bounded by the two-round cap — `CONVENTIONS.md`, "TWO ROUNDS,
+   THEN THE HUMAN DECIDES", is canonical for the rule and its escalation.** Applied here:
+   re-verification is *required* up to the cap and *forbidden* past it, so your second
+   verdict on a PR is your last. Stop and let the human decide.
+
    **Emit all three mandatory lenses** — `correctness`, `security`, `repro`. A lens you
    didn't run is `skipped(<why>)`, never omitted: an absent lens would otherwise pass
    vacuously.

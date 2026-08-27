@@ -81,6 +81,27 @@ in `cbmono/ai-bridge` enforces this.
   *substantial rewrite* that invalidates the original review. Repos should pin this with
   `.coderabbit.yaml` (`auto_incremental_review: false`, `chat.auto_reply: false`) so it
   holds by default rather than by everyone's discipline.
+- **TWO ROUNDS, THEN THE HUMAN DECIDES. This is a hard cap.**
+  A reviewer's job is to evaluate the diff **against the task's `acceptance_criteria`**.
+  It is *not* to re-litigate those criteria, argue the design, or look for a reason the
+  change should not land. Grade the work against the bar it was given.
+  - **Round 1** — the reviewer reports findings. The implementer fixes them and replies
+    once, saying what changed or why it disagrees.
+  - **Round 2** — the reviewer checks *only the things it raised in round 1*. New
+    findings outside that set are **recorded, not blocking**.
+  - **There is no round 3.** Anything still unresolved after round 2 **stops and goes to
+    the human**, with both positions stated in one short block: what the reviewer wants,
+    what the implementer says, and what the criterion actually asks for. The human
+    decides; the agents do not converge on it.
+  **Why this is a hard number and not a guideline.** ai-bridge#34 ran **eight rounds**,
+  and rounds 3-8 produced adversary-shaped findings against a change that already met its
+  criteria — the reviewer kept finding new ground to contest because nothing told it to
+  stop. That single PR, and others like it, consumed roughly **70% of a Max account's
+  weekly budget**. An unresolved disagreement costs the human one decision; an unbounded
+  review costs a week.
+  **Corollary — grade against the criteria, not against your own taste.** If you believe
+  the criteria themselves are wrong, say so *once*, in the verdict, as a note to the
+  human. Do not express it by withholding a pass.
 - **Wide work: fan out only if you actually can — most of you can't.** For genuinely wide,
   *independent* work a parallel fan-out beats grinding serially (find the real edges → fan
   out → verify → synthesize), but check your `tools:` list before you plan around one.
