@@ -49,6 +49,12 @@
 #      `COMMENTED` — compared case-sensitively against the API's own spellings, because
 #      `pending`/`dismissed` in another casing used to slip past a case-sensitive skip
 #      list — and whose `commit_id` equals the head. Evidence and pin both structural.
+#      WITH ONE CORRECTION THE PIN ITSELF FORCED: a review object that says NOTHING is not
+#      evidence on its own. `COMMENTED` is not a claim (the host mints one for any inline
+#      comment or thread reply), so an empty one evidences nothing at all; an empty
+#      `APPROVED`/`CHANGES_REQUESTED` is a claim, but neither may outrank a refusal
+#      published at the same head. The old body-SHA pin refused those cases as a side
+#      effect of being wrong; see the note at TEST 2.
 #   B. a validated `okf-verdict` trailer whose `head_sha` equals the head, from an account
 #      named with `--reviewer` that is NOT a vendor in REVIEWERS (see the tier-4 note).
 #   C. a COMMENT carrying the reviewer's own MACHINE-EMITTED review marker
@@ -58,7 +64,13 @@
 #      35 pull requests here are that shape, so dropping the route would not make the gate
 #      stricter, it would make it structurally unable to say yes to a clean review. It is
 #      the weakest and the narrowest: an HTML comment the vendor's own renderer emits, in
-#      a body whose fenced AND indented code blocks are gone. Prose cannot reach it.
+#      a body whose fenced AND indented code blocks are gone. Prose cannot reach the
+#      EVIDENCE half. ITS PIN IS THE RESIDUAL, AND IT IS STATED RATHER THAN GLOSSED: the
+#      head named as a bare token in that body is the only pin an issue comment has —
+#      there is no `commit_id` on a comment anywhere in the API — so route C alone still
+#      rests on what a body happens to mention, which is the property THE TRAP below gives
+#      the refusal too. What makes it survivable is that the pin cannot act alone: the
+#      refusal tiers run first, and the machine marker must be there as well.
 #
 # THE TABLES CAN NO LONGER CAUSE A CLEARANCE. Every vendor string lives in REVIEWERS
 # (whose artifacts count, and what its check is called), REFUSALS_SENTINEL / NOT_YET /
@@ -248,18 +260,30 @@ unable to (complete|perform|run) (the |this )?review
 # prose quota refusal carrying one such phrase outranked the refusal tier. Prose is gone.
 # What is left is the same CLASS of signal as REFUSALS_SENTINEL — a machine-readable claim
 # by the reviewer, invisible in the rendered page, matched as a whole `<!-- ... -->`
-# construct — ranked against it rather than against prose. That also fixes the asymmetry
-# the prose rows created: a vendor with no sentinel row of its own can no longer have its
-# quota refusal rescued by a phrase in its own body.
+# construct — ranked against it rather than against prose.
+#
+# WHAT THAT DID AND DID NOT MAKE SYMMETRIC, corrected from an earlier claim that all six
+# vendors now get the same answer. What IS the same for all six: no vendor's prose clears
+# anything, and refusal prose is only ever rescued by a MARKER. What is NOT: every row
+# below is one vendor's spelling, and this table is not scoped to the vendor that posted
+# the body — so the other five have no marker of their own to be rescued by (their real
+# reviews reach exit 0 through a review object instead), while a body from any of them that
+# QUOTES a row below is rescued by a marker its author does not emit. The unconditional
+# tier above is the half that is genuinely vendor-neutral, through its second row.
 #
 # A MISSING ROW COSTS A REFUSAL: a vendor whose marker is not here files review objects or
 # lands on exit 4, and `--reviewer` names it explicitly. A row that is too loose costs a
-# CLEARANCE, so nothing belongs here that a placeholder or a banner could carry.
+# CLEARANCE, so nothing belongs here that a placeholder or a banner could carry — which is
+# why `review_stack_entry_start` was REMOVED rather than kept for symmetry with the other
+# three. It wraps a "Review Change Stack" image and a `utm_campaign` link: a promotional
+# banner the vendor emits around a review rather than evidence that one happened, and
+# exactly what the sentence before this one excludes. Measured over all 35 pull requests
+# here, removing it changes 0 outcomes; the fixture that carries it carries three real
+# markers as well.
 REVIEW_SENTINEL='
 <!--[[:space:]]*walkthrough_start[[:space:]]*-->
 <!--[[:space:]]*recent_review_start[[:space:]]*-->
 <!--[[:space:]]*final_review_risk_start[[:space:]]*-->
-<!--[[:space:]]*review_stack_entry_start[[:space:]]*-->
 '
 
 # --- tier 4: an artifact that declares itself a review, structurally ----------
@@ -578,6 +602,20 @@ nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.
   exit 2
 }
 
+# AND THE AUTHOR LOGIN IS PART OF THAT GUARD, because a field that is missing here does
+# not fail — it silently switches off a rule. SCHEMA.md clause 8 (an author is never its
+# own independent reviewer) is enforced below by comparing logins against `$pr_author`, so
+# an absent or empty one turns both comparisons into a test against the empty string,
+# which nothing equals: the reviewer account then clears its own pull request, and the two
+# `continue`s that exist to stop it never fire. Every PR has an author, so no author means
+# the read did not answer — unknown state, and unknown fails closed.
+[ -n "$pr_author" ] || {
+  echo "error: PR $pr reports no author login, so the rule that an author is not its own" >&2
+  echo "       independent reviewer (SCHEMA.md, clause 8) cannot be applied — and a rule" >&2
+  echo "       that cannot be applied is not a rule that passes. Refusing (fail closed)." >&2
+  exit 2
+}
+
 # A review list this script cannot read is an unknown reviewer state, not an empty one:
 # reading it as "no reviews" would turn a transient 5xx into "nothing reviewed this",
 # which is a refusal today but would be a clearance the moment anything downstream
@@ -647,12 +685,56 @@ awk -v s="$SEP" -v dir="$TMPD" '
   f { print >> f }
 ' "$TMPD/stream"
 
+# --- what a FENCE is: ONE rule, shared by both renderings below ---------------
+#
+# THE TWO RENDERINGS HAVE TO AGREE ABOUT THIS, AND THEY DID NOT. `strip_fences` stripped
+# any leading whitespace before testing for a fence, while `strict_body` treated a line
+# indented four spaces (or a tab) as an INDENTED CODE BLOCK and therefore not a fence. So
+# an indented ``` opened a fence on the REFUSAL side and opened nothing on the CLEARING
+# side: the unconditional refusal sentinel sitting between two such markers vanished from
+# the text the refusal tables read, while a review marker outside them survived on the side
+# that clears. A verbatim recorded refusal cleared at exit 0 — a fourth door into the same
+# bypass, and the INVERSE of the asymmetry this file states about itself below, since the
+# strict rendering was keeping lines the stripped one had already removed.
+#
+# THE RULE FOLLOWS THE HOST'S RENDERING, because both renderings are guesses about what a
+# human sees. A fence may be indented at most three spaces and may sit inside blockquote
+# markers (each itself indented at most three); four spaces or one tab makes the line
+# LITERAL TEXT, and the host then renders ``` as three backticks rather than opening a
+# block. Which way each mistake fails is the whole point: text the host renders as TEXT
+# must reach the refusal tables, and calling that a fence hides a refusal a human can
+# plainly read. Text the host renders as CODE is a quotation, and a quoted refusal has
+# always been read here as a discussion of one rather than as one (the fenced-refusal case
+# in the tests) — that part is deliberate, tested, and unchanged.
+FENCE_AWK='
+function bq_peel(s) {                 # strip blockquote markers, each <=3 spaces indented
+  while (match(s, /^ ? ? ?>[ ]?/)) s = substr(s, RLENGTH + 1)
+  return s
+}
+function indented_of(line,   s) {     # 1 when the host renders this line as literal code
+  s = bq_peel(line)
+  if (s ~ /^\t/) return 1
+  # Leading spaces measured rather than matched with an interval expression: `{0,3}` is
+  # not portable across every awk this template may run under.
+  match(s, /^ */)
+  return (RLENGTH >= 4) ? 1 : 0
+}
+function fence_of(line,   s, n) {     # the fence marker this line opens or closes, or ""
+  if (indented_of(line)) return ""
+  s = bq_peel(line)
+  match(s, /^ */); n = RLENGTH
+  s = substr(s, n + 1)
+  if (substr(s, 1, 3) == "```") return "```"
+  if (substr(s, 1, 3) == "~~~") return "~~~"
+  return ""
+}
+'
+
 # --- two renderings of one body, and the asymmetry is deliberate --------------
 #
-# strip_fences() removes FENCED code blocks and is what the REFUSAL tables read. Leading
-# blockquote markers are stripped when testing for the fence, because reviewers wrap their
-# notices in `>` quoting, and the opening marker's TYPE is carried so ``` inside a ~~~
-# block is content rather than a close.
+# strip_fences() removes FENCED code blocks and is what the REFUSAL tables read. The
+# opening marker's TYPE is carried, so ``` inside a ~~~ block is content rather than a
+# close.
 #
 # UNBALANCED FENCES HAND BACK THE RAW BODY. A toggle with no END check is a one-character
 # bypass: a single prepended ``` inverts it, every later line reads as "inside a fence",
@@ -660,12 +742,9 @@ awk -v s="$SEP" -v dir="$TMPD" '
 # body cannot be read as fenced markdown", and refusal language then counts wherever it
 # sits — a human glance at worst, never a merge.
 strip_fences() {
-  awk '
+  awk "$FENCE_AWK"'
     { raw[NR] = $0
-      probe = $0; sub(/^[[:space:]]*((> ?)+)?[[:space:]]*/, "", probe)
-      if (probe ~ /^```/)      marker = "```"
-      else if (probe ~ /^~~~/) marker = "~~~"
-      else                     marker = ""
+      marker = fence_of($0)
       if (marker != "" && (open == "" || open == marker)) {
         open = (open == "" ? marker : "")
         next
@@ -680,33 +759,27 @@ strip_fences() {
 }
 
 # strict_body() is what the CLEARING side reads — the review marker, the verdict trailer
-# and the head token. It removes fenced blocks AND four-space/tab INDENTED code blocks,
-# and prints NOTHING when the fences do not balance.
+# and the head token. It removes the same fenced blocks strip_fences removes, then
+# INDENTED code blocks as well, and prints NOTHING when the fences do not balance.
 #
-# The asymmetry is the safety property. Strip too much on the refusal side and a refusal
-# disappears (fail open), so that side strips the minimum; strip too little on the
-# clearing side and text GitHub renders as literal code is read as markup (fail open), so
-# this side strips the maximum.
+# THE ASYMMETRY IS THE SAFETY PROPERTY, AND IT IS A CONTAINMENT: every line the strict
+# rendering keeps is a line the stripped rendering kept too (strict is a SUBSET of
+# stripped), never the other way round. Strip too much on the refusal side and a refusal
+# disappears (fail open), so that side strips the minimum; strip too little on the clearing
+# side and text the host renders as literal code is read as markup (fail open), so this
+# side strips the maximum. That containment holds only while the two agree on what a fence
+# is, which is why fence_of() above is ONE function rather than two spellings of an idea:
+# it used to run backwards on an indented fence, and a refusal cleared through the gap.
 strict_body() {
-  awk '
-    { line = $0
-      probe = line; sub(/^((> ?)+)/, "", probe)
-      # Leading whitespace, measured rather than matched with an interval expression:
-      # `{0,3}` is not portable across every awk this template may run under.
-      indented = (probe ~ /^\t/)
-      match(probe, /^ */); nsp = RLENGTH
-      if (nsp >= 4) indented = 1
-      rest = substr(probe, nsp + 1)
-      fence = ""
-      if (!indented && (substr(rest, 1, 3) == "```" || substr(rest, 1, 3) == "~~~"))
-        fence = substr(rest, 1, 3)
+  awk "$FENCE_AWK"'
+    { fence = fence_of($0)
       if (fence != "" && (open == "" || open == fence)) {
         open = (open == "" ? fence : "")
         next
       }
       if (open != "") next
-      if (indented) next               # an indented code block renders as literal text
-      keep[++k] = line
+      if (indented_of($0)) next        # an indented code block renders as literal text
+      keep[++k] = $0
     }
     END {
       if (open != "") exit 0            # unbalanced: an unreadable body clears nothing
@@ -796,6 +869,7 @@ reopen_line() { # <stripped-body-file> — when the reviewer published a reopen 
 
 n=0; considered=0; refusal_body=""; refusal_from=""; refusal_kind=""
 stale_from=""; stale_at=""; unproven_from=""
+refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
 while IFS=$'\t' read -r kind login state commit; do
   n=$((n + 1))
   body="$TMPD/body.$n"
@@ -852,15 +926,21 @@ while IFS=$'\t' read -r kind login state commit; do
   fi
   fatal_grep
   if [ -n "$refusal" ]; then
+    # Does this refusal concern THE HEAD BEING CLEARED? Body text, deliberately, and only
+    # in the CLOSING direction: a false positive here costs a human a glance at a PR that
+    # was in fact reviewed, never a merge. It reads the wider (stripped) rendering for the
+    # same reason. Nothing clears on this answer — it is consulted below only to stop a
+    # CONTENTLESS review object from outranking a refusal published at the same commit.
+    names_head "$TMPD/stripped" && refusal_at_head=yes
     [ -n "$refusal_body" ] || { refusal_body="$TMPD/refusal"; refusal_from="$login"
                                 refusal_kind="$kind_of_refusal"
                                 cp "$TMPD/stripped" "$TMPD/refusal"; }
     continue
   fi
 
-  # TEST 2 — is this a review OF THIS COMMIT? The three routes of the header, and the
-  # evidence and the pin travel together in each of them; neither is ever supplied by
-  # prose.
+  # TEST 2 — is this a review OF THIS COMMIT? The three routes of the header. Evidence and
+  # pin travel together in each of them, and in A and B neither half is prose; route C's
+  # pin is the one place a body-mentioned SHA still decides anything (see its note below).
   #
   #   B. the validated trailer, pinned by its own head_sha field
   #   A. a submitted review object, pinned by the API's commit_id
@@ -872,8 +952,32 @@ while IFS=$'\t' read -r kind login state commit; do
   fi
   if [ "$kind" = "review" ]; then
     if [ -n "$commit" ] && [ "$commit" = "$head_sha" ]; then
-      echo "ok: a submitted review ($state) from $login was made at head $head_sha on PR $pr"
-      exit 0
+      # A REVIEW OBJECT AT THE HEAD WITH NOTHING IN IT IS NOT AUTOMATICALLY A REVIEW, and
+      # this is what moving the pin to `commit_id` gave away. The old body-SHA pin was
+      # wrong for every reason the header lists, but in this ONE respect it failed closed:
+      # an empty body cannot name a head, so an empty review object could not clear. Once
+      # `state` + `commit_id` became the pin, an empty-bodied COMMENTED object at the head
+      # cleared OVER the reviewer's own verbatim rate-limit refusal at that same head.
+      #
+      # `COMMENTED` is not a claim. The host mints one for any inline comment and any
+      # thread reply — twelve empty-bodied COMMENTED objects already sit in this
+      # repository's own corpus — so for that state the claim, if there is one, is in the
+      # body. `APPROVED` and `CHANGES_REQUESTED` ARE claims whatever the body says: the
+      # state IS the verdict, and an approval with no words is still an approval. Neither
+      # kind, though, may outrank a refusal published at this same head, so a contentless
+      # one is HELD and decided after every artifact has been read (see below) rather than
+      # exiting here. A PR must still be able to recover from having been refused once,
+      # which is why the refusal has to name this head to win rather than merely exist.
+      if grep -q '[^[:space:]]' "$TMPD/strict" 2>/dev/null; then
+        echo "ok: a submitted review ($state) from $login was made at head $head_sha on PR $pr"
+        exit 0
+      fi
+      if [ "$state" = "COMMENTED" ]; then
+        [ -n "$empty_from" ] || { empty_from="$login"; empty_state="$state"; }
+        continue
+      fi
+      [ -n "$held_from" ] || { held_from="$login"; held_state="$state"; }
+      continue
     fi
     # A review object that is not at this head is stale in the API's own terms — no text
     # is consulted, and no body-mentioned SHA can rescue it.
@@ -893,6 +997,19 @@ while IFS=$'\t' read -r kind login state commit; do
   fatal_grep
   [ -n "$unproven_from" ] || unproven_from="$login ($kind)"
 done < "$TMPD/index"
+
+# --- the one clearance that could not be decided inside the loop --------------
+#
+# A CONTENTLESS `APPROVED` / `CHANGES_REQUESTED` OBJECT AT THE HEAD. The state is the
+# verdict, so it clears — but only now, with every artifact read, and only if none of them
+# refused THIS head. Deciding it inside the loop is what the defect was: review objects are
+# streamed before comments, so an empty object short-circuited past a refusal that had not
+# been looked at yet. An earlier refusal at some OTHER commit still loses to it, because a
+# PR that was skipped once has to be able to recover.
+if [ -n "$held_from" ] && [ -z "$refusal_at_head" ]; then
+  echo "ok: a submitted review ($held_state) from $held_from was made at head $head_sha on PR $pr"
+  exit 0
+fi
 
 # --- nothing cleared: say precisely which shape this PR is -------------------
 #
@@ -919,7 +1036,26 @@ if [ -n "$refusal_body" ]; then
   fi
   echo "        A skipped PR is NOT re-reviewed automatically: nothing re-runs until a" >&2
   echo "        new commit lands or someone asks for a first review." >&2
+  # Say so when a contentless review object sat at this same head, or the operator reads
+  # "nobody reviewed it" while looking at a review object in the browser.
+  contentless="${held_from:-$empty_from}"; contentless_state="${held_state:-$empty_state}"
+  [ -n "$contentless" ] && {
+    echo "        (A $contentless_state review object from $contentless sits at this same head" >&2
+    echo "        with an EMPTY body. An empty review object does not outrank a refusal" >&2
+    echo "        published at that commit — see the note at TEST 2.)" >&2
+  }
   exit 1
+fi
+
+# A review object at the head that says nothing. Its own shape rather than "no evidence",
+# because the operator can see it in the browser and needs to be told why it did not count.
+if [ -n "$empty_from" ]; then
+  echo "refuse: the review object on PR $pr from $empty_from is at head $head_sha but its" >&2
+  echo "        body is EMPTY, and an empty $empty_state review is not a claim that anybody" >&2
+  echo "        read anything: the host mints one for any inline comment or thread reply, so" >&2
+  echo "        the claim, where there is one, is the body. Ask for a review at this head," >&2
+  echo "        or look." >&2
+  exit 4
 fi
 
 if [ -n "$stale_from" ]; then

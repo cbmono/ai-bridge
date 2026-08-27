@@ -312,6 +312,59 @@ setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_CLEAN"; rm -f "$FIX/pr_json"
 expect "reviewer state unreadable -> refuse as unknown, not as clear" 2
 
+# --- the fifth round's three routes, driven to the sentence that authorises ---
+# Each of these ended at `ok: N required check(s) pass` — the line a merge is taken from —
+# while the reviewer's own refusal sat on the pull request, or while nobody was named as
+# its author. They are driven from HERE, and not only against the clearance script, because
+# this is the only place the outcome of getting it wrong is a merge.
+#
+# 1. AN INDENTED FENCE HID THE UNCONDITIONAL SENTINEL. The refusal side called an indented
+#    ``` a fence and the clearing side did not, so a sentinel between two of them was
+#    stripped out of the text the refusal tables read, while the review marker outside them
+#    survived on the side that clears.
+hidden_refusal="$TMP/refusal-behind-an-indented-fence.md"
+{ printf '<!-- walkthrough_start -->\n'
+  printf 'Reviewed %s.\n' "$CR_HEAD"
+  printf '    ```\n    rate limited by coderabbit.ai\n    ```\n'; } > "$hidden_refusal"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$hidden_refusal"
+expect "a refusal behind an INDENTED fence -> refuse, never 'ok'" 1
+says   "  ...quoting the sentinel a human can plainly read" "rate limited by coderabbit.ai"
+# The control: the same indented block with no refusal in it still clears, so the case above
+# fails for the refusal and not because indented text stopped being read at all.
+harmless_block="$TMP/review-with-an-indented-block.md"
+{ printf '<!-- walkthrough_start -->\n'
+  printf 'Reviewed %s.\n' "$CR_HEAD"
+  printf '    ```\n    make test\n    ```\n'; } > "$harmless_block"
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$harmless_block"
+expect "…while the same block with no refusal in it clears" 0
+
+# 2. AN EMPTY REVIEW OBJECT AT THE HEAD outranked the recorded refusal at that same head.
+#    Review objects are streamed before comments, so it exited 0 before the refusal was
+#    read at all.
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_REFUSAL"
+jq -n --arg c "$CR_HEAD" \
+  '[{user:{login:"coderabbitai"}, state:"COMMENTED", commit_id:$c, body:""}]' \
+  > "$FIX/reviews_json"
+expect "an EMPTY review object at the head -> refuse, never 'ok'" 1
+says   "  ...still quoting the refusal" "Review limit reached"
+# The control: the same object at the same head WITH a body is a review, and clears.
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_REFUSAL"
+jq -n --arg c "$CR_HEAD" \
+  '[{user:{login:"coderabbitai"}, state:"COMMENTED", commit_id:$c,
+     body:"**Actionable comments posted: 1**"}]' > "$FIX/reviews_json"
+expect "…while the same object carrying a body clears" 0
+
+# 3. A MISSING AUTHOR LOGIN switched SCHEMA.md clause 8 off, so the reviewer account could
+#    clear a pull request it had authored itself.
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_CLEAN"
+jq '.author = null' "$FIX/pr_json" > "$FIX/pr_json.n" && mv "$FIX/pr_json.n" "$FIX/pr_json"
+expect "a PR with no author login -> refuse as unknown state" 2
+
 echo
 echo "== the name never settles it =="
 # ROUTE 1 OF THE FOURTH REVIEW ROUND, and it is the original incident with a 2026 vendor's

@@ -202,6 +202,63 @@ expect "the recorded refusal AS a review object at the head -> refuse" 1
 says   "  ...quoting the reviewer's own words" "Review limit reached"
 
 echo
+echo "== a review object that says NOTHING is not a review =="
+# WHAT MOVING THE PIN TO commit_id GAVE AWAY, and the reason a corpus rescore could not
+# see it. The old body-SHA pin was wrong for every reason the script's header gives, but in
+# ONE respect it failed closed: an empty body cannot name a head, so an empty review object
+# could not clear. With `state` + `commit_id` as the pin, an EMPTY-BODIED `COMMENTED`
+# object at the head cleared OVER the reviewer's own verbatim recorded refusal at that same
+# head — and review objects are streamed before comments, so it exited 0 before the refusal
+# was ever read. No PR in the 35-PR corpus carries both shapes, so the paired rescore
+# proves nothing here: this case is CONSTRUCTED, which is the only way to see it.
+#
+# `COMMENTED` is not a claim. The host mints one for any inline comment and any thread
+# reply — twelve empty-bodied ones already exist in this repository's corpus — so for that
+# state the claim, if there is one, is the body.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$EMPTY_BODY"
+expect "an EMPTY COMMENTED object at the head loses to a refusal at that head" 1
+says   "  ...quoting the refusal rather than the empty object" "Review limit reached"
+says   "  ...and saying the empty object did not outrank it" "does not outrank"
+
+# THE CONTROL, and it is what keeps the rule about CONTENT rather than about review
+# objects: the identical object at the identical head, WITH a body, still clears past the
+# same refusal. This is #15's shape, the one PR in the corpus that clears through route A.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai COMMENTED "$REFUSAL_HEAD" "$(body_file \
+  '**Actionable comments posted: 1**' 'One nit in the parser.')"
+expect "…while the same object WITH a body clears past that refusal" 0
+
+# An APPROVED/CHANGES_REQUESTED state IS a claim whatever the body says — but not one that
+# outranks a refusal at the same commit either.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai APPROVED "$REFUSAL_HEAD" "$EMPTY_BODY"
+expect "an EMPTY APPROVED at the head loses to a refusal at that head too" 1
+
+# THE PROPERTY THIS MUST NOT BREAK, and the reason the refusal has to NAME the head rather
+# than merely exist: a PR that was skipped once has to be able to recover. The recorded
+# refusal names #30's head, so against a different head it is an OLD refusal — and the
+# empty approval at THIS head wins, exactly as it did before this change.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_review coderabbitai APPROVED "$CLEAN_HEAD" "$EMPTY_BODY"
+expect "…while an OLD refusal at another commit still loses to it" 0
+assert "…because the recorded refusal names #30's head, not this one" \
+  "$(yes_if bash -c 'grep -Fq "$2" "$1" && ! grep -Fq "$3" "$1"' _ "$REFUSAL" "$REFUSAL_HEAD" "$CLEAN_HEAD")"
+
+# And with no refusal anywhere, an empty COMMENTED object is still not evidence — it is
+# not ranked below a refusal, it evidences nothing at all.
+setup "$CLEAN_HEAD"; add_review coderabbitai COMMENTED "$CLEAN_HEAD" "$EMPTY_BODY"
+expect "an EMPTY COMMENTED object on its own evidences nothing" 4
+says   "  ...saying why an empty COMMENTED is not a claim" "inline comment or thread reply"
+# ...where a body of nothing but whitespace is a body of nothing.
+setup "$CLEAN_HEAD"; add_review coderabbitai COMMENTED "$CLEAN_HEAD" "$(body_file '   ' '' '  ')"
+expect "…and neither does one holding only whitespace" 4
+# ...nor one whose only content is unreadable: an unbalanced fence renders to nothing.
+setup "$CLEAN_HEAD"
+add_review coderabbitai COMMENTED "$CLEAN_HEAD" "$(body_file '```' 'Reviewed.')"
+expect "…nor one whose content is behind an unbalanced fence" 4
+
+echo
 echo "== a review state must be one the API publishes, case and all =="
 # PENDING was never submitted and DISMISSED has been withdrawn; neither is evidence that
 # anybody looked. They were skipped by a case-SENSITIVE shell `case`, so any other casing
@@ -305,6 +362,55 @@ add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CL
 expect "…and with the marker BEFORE the stray fence, still nothing" 4
 
 echo
+echo "== the two renderings must agree on what a FENCE is =="
+# A FOURTH DOOR INTO THE SAME BYPASS, and this one needed no unbalanced anything.
+# `strip_fences` (the refusal side) stripped any leading whitespace before testing for a
+# fence; `strict_body` (the clearing side) treated a line indented four spaces or a tab as
+# an INDENTED CODE BLOCK and therefore not a fence. So an INDENTED ``` opened a fence on
+# one side and nothing on the other: the unconditional rate-limit sentinel between two such
+# markers disappeared from the text the refusal tables read, while the review marker outside
+# them survived on the side that clears — and the file's own stated asymmetry (strict is a
+# SUBSET of stripped) ran backwards.
+#
+# The host renders `    ``` ` as three literal backticks, not as a fence, so a human reading
+# these bodies SEES the refusal. Each case below hides the sentinel from the refusal tables
+# in exactly that way and leaves a review marker in the clear; each was rc=0 before.
+marker_and_head=( '<!-- walkthrough_start -->' )
+hidden_sentinel() { # <indent-prefix> — the sentinel wrapped in a fence indented by it
+  local p="$1"
+  body_file "${marker_and_head[@]}" "Reviewed $CLEAN_HEAD." \
+    "$p"'```' "$p"'rate limited by coderabbit.ai' "$p"'```'
+}
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$(hidden_sentinel '    ')"
+expect "a FOUR-SPACE indented fence cannot hide the sentinel" 1
+says   "  ...and it is the unconditional tier that fired" "DECLINED to review"
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$(hidden_sentinel "$(printf '\t')")"
+expect "…nor a TAB-indented one" 1
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$(hidden_sentinel '>     ')"
+expect "…nor a BLOCKQUOTED one indented inside the quote" 1
+# The NOT_YET tier is unconditional for the same reason and was reachable the same way.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '    ```' '    Currently processing new changes in this PR.' '    ```')"
+expect "…and an indented fence cannot hide the placeholder either" 1
+
+# THE CONTROL, and it is what stops the four above from passing on a script that simply
+# stopped stripping fences: the same indentation, with NO refusal in it, still clears.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD." \
+  '    ```' '    make test' '    ```')"
+expect "…while the same indented block with no refusal in it still clears" 0
+
+# THE BOUNDARY, asserted rather than left to be rediscovered as a bug. Up to THREE spaces
+# is a real fence to the host, and a fenced refusal has always been read here as a
+# DISCUSSION of one (the fenced-refusal case above) — so these two stay rc=0 by design,
+# and they are the reason the fix is "agree with the renderer", not "never strip".
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$(hidden_sentinel '   ')"
+expect "a THREE-space fence is a real fence, so its content is quotation" 0
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$(hidden_sentinel '  > ')"
+expect "…as is a fence inside a blockquote indented at most three" 0
+
+echo
 echo "== prose no longer clears anything =="
 # ROUTE 3 OF THE FOURTH REVIEW ROUND. The evidence table used to hold PROSE, matched as an
 # unanchored substring: `i (have )?reviewed`, `(lgtm|looks good to me)`,
@@ -336,12 +442,29 @@ expect "…while the reviewer's own machine marker clears" 0
 
 # Every row of the marker table, one at a time. Three of the nine prose rows it replaced
 # were ever exercised, which is how the negated sentences above went unnoticed.
-for marker in walkthrough_start recent_review_start final_review_risk_start \
-              review_stack_entry_start; do
+for marker in walkthrough_start recent_review_start final_review_risk_start; do
   setup "$CLEAN_HEAD"
   add_comment coderabbitai "$(body_file "<!-- $marker -->" "between 6fca618a and $CLEAN_HEAD")"
   expect "the '$marker' marker is a review" 0
 done
+
+# THE FOURTH ROW IS GONE, AND THIS IS WHAT KEEPS IT GONE. `review_stack_entry_start` wraps
+# a "Review Change Stack" image and a utm_campaign link — a PROMOTIONAL BANNER the vendor
+# emits around a review rather than evidence that one happened, which is precisely what
+# this table's own admission rule excludes ("nothing that a placeholder or a banner could
+# carry"). Measured over all 35 PRs here, removing the row changed 0 outcomes.
+assert "the banner marker really is in the recorded clean review" \
+  "$(yes_if grep -Fq '<!-- review_stack_entry_start -->' "$CLEAN")"
+assert "…and what it wraps really is a promotion, not a review section" \
+  "$(yes_if bash -c 'grep -A3 -F "<!-- review_stack_entry_start -->" "$1" | grep -q "utm_campaign"' _ "$CLEAN")"
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$(body_file '<!-- review_stack_entry_start -->' \
+  "between 6fca618a and $CLEAN_HEAD")"
+expect "the vendor's BANNER marker alone is not a review" 4
+# ...and the control, which is why deleting the row cost nothing: the recorded review that
+# carries that banner carries three real markers as well, and still clears.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+expect "…while the recorded review carrying it still clears on the others" 0
 # ...and a marker the vendor does not emit is not one, so the table is not a catch-all.
 setup "$CLEAN_HEAD"
 add_comment coderabbitai "$(body_file '<!-- walkthrough_end -->' "at $CLEAN_HEAD")"
@@ -427,6 +550,27 @@ expect "…nor by approving its own PR through the API" 3
 setup "$CLEAN_HEAD"; add_comment dev "$CLEAN"
 expect "the implementing author's own artifact -> not independent" 3
 
+# AND A MISSING AUTHOR LOGIN MUST NOT SILENTLY SWITCH THAT RULE OFF. The meta guard
+# required url / head_sha / pr_number and not the author, so an absent or empty login left
+# both author comparisons testing against "" — which no login equals, so the two `continue`s
+# that enforce SCHEMA.md clause 8 never fired and the reviewer cleared its own PR. A PR
+# always has an author; not being told who it is is unknown state, not a green light.
+setup "$CLEAN_HEAD"; AUTHOR=""; add_comment coderabbitai "$CLEAN"
+expect "an EMPTY author login -> refuse, never clearance" 2
+says   "  ...naming the rule it cannot apply" "SCHEMA.md, clause 8"
+setup "$CLEAN_HEAD"; AUTHOR=""; add_review coderabbitai APPROVED "$CLEAN_HEAD" "$EMPTY_BODY"
+expect "…and the same through the API route" 2
+# The author field absent altogether (a deleted account), not merely empty.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; write_pr
+"$REAL_JQ" '.author = null' "$FIX/pr_json" > "$FIX/pr_json.n" && mv "$FIX/pr_json.n" "$FIX/pr_json"
+LAST_OUT="$("$SCRIPT" 42 2>&1)"; rc=$?
+assert "a null author object -> refuse, never clearance" \
+  "$([ "$rc" -eq 2 ] && echo 0 || echo 1)"
+# THE CONTROL: the identical fixture with an author who is not the reviewer clears, so the
+# three above fail for the missing login and not because the fixture stopped working.
+setup "$CLEAN_HEAD"; AUTHOR="dev"; add_comment coderabbitai "$CLEAN"
+expect "…while the same PR with a real author clears" 0
+
 echo
 echo "== the REVIEWERS login column, which had no assertions at all =="
 # Column 1 used to hold `greptile.*` and `(qodo|codium).*` — matched whole-string, but
@@ -480,6 +624,8 @@ expect "refusal then review -> clear" 0
 setup "$CLEAN_HEAD"; add_comment coderabbitai "$REFUSAL"
 add_review coderabbitai APPROVED "$CLEAN_HEAD" "$EMPTY_BODY"
 expect "…and a later review OBJECT outranks it too" 0
+# The boundary of that rule is the section on empty review objects above: a refusal naming
+# THIS head is not an old refusal, and nothing contentless outranks it.
 
 echo
 echo "== --reviewer names a reviewer the table does not know =="
@@ -693,11 +839,16 @@ setup "$CLEAN_HEAD"
 add_comment coderabbitai "$(body_file "${skip_notice[@]:0:4}" "at $CLEAN_HEAD")"
 expect "…the same notice with no review marker -> still a refusal" 1
 
-# THE ASYMMETRY THIS FIXES. The tie-breaker used to be PROSE, and only CodeRabbit had a
-# row in the unconditional sentinel tier — so for the other vendors a quota refusal
-# carrying any approving-sounding phrase cleared. With prose gone, the tier a refusal
-# loses to is the vendor's own machine marker, which a refusal does not carry. Every
-# vendor in the table now gets the same answer.
+# THE ASYMMETRY THIS FIXES, AND THE ONE IT DOES NOT — corrected from an earlier claim in
+# this file that "every vendor now gets the same answer", which is half true. The
+# tie-breaker used to be PROSE, so for a vendor with no row in the unconditional sentinel
+# tier a quota refusal carrying any approving-sounding phrase cleared. With prose gone,
+# what rescues a refusal is a MACHINE MARKER — and that much IS the same for all six, as
+# the six cases below assert. What is NOT the same: every row of the marker table is one
+# vendor's spelling and the table is not scoped to the account that posted the body. The
+# other five have no marker of their own to be rescued by (their real reviews clear through
+# a review object instead), and a body from any of them that QUOTES a row is rescued by a
+# marker its author does not emit. Both halves are asserted below the loop.
 for vendor in coderabbitai sourcery-ai greptile-apps qodo-merge-pro \
               codiumai-pr-agent-pro ellipsis-dev; do
   setup "$CLEAN_HEAD"
@@ -708,11 +859,27 @@ for vendor in coderabbitai sourcery-ai greptile-apps qodo-merge-pro \
   expect "a prose quota refusal from '$vendor' -> refuse" 1
 done
 
+# The half that IS vendor-neutral: the unconditional tier's second row is the generic HTML
+# rate-limit marker, so a vendor with no named row of its own still refuses unconditionally
+# — even beside a review marker, which is what "unconditional" means.
+setup "$CLEAN_HEAD"
+add_comment sourcery-ai "$(body_file '<!-- sourcery: rate-limited -->' \
+  '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD.")"
+expect "another vendor's own HTML rate-limit marker refuses unconditionally" 1
+# The half that is NOT, stated as a test so it cannot quietly become untrue: the marker
+# table holds ONE vendor's spellings and is not scoped to the poster, so quoting a row
+# rescues a prose refusal from any account. Scoping the table per vendor is the fix if this
+# ever matters; it is recorded here rather than claimed away.
+setup "$CLEAN_HEAD"
+add_comment sourcery-ai "$(body_file 'Monthly review limit reached for this repository.' \
+  '<!-- walkthrough_start -->' "Reviewed $CLEAN_HEAD.")"
+expect "…but another vendor's PROSE refusal is rescued by a marker it never emits" 0
+
 # The hole this narrowing must not open, asserted on the evidence rather than trusted:
 # the recorded refusal quotes the PR head, so if a review marker could outrank the machine
 # sentinel, #30 would clear. It carries none, and the sentinel outranks anyway.
 assert "the recorded refusal carries NO review marker" \
-  "$(yes_if bash -c '! grep -Eq "walkthrough_start|recent_review_start|final_review_risk_start|review_stack_entry_start" "$1"' _ "$REFUSAL")"
+  "$(yes_if bash -c '! grep -Eq "walkthrough_start|recent_review_start|final_review_risk_start" "$1"' _ "$REFUSAL")"
 assert "…and does carry the machine-readable rate-limit sentinel" \
   "$(yes_if grep -Fq "rate limited by coderabbit.ai" "$REFUSAL")"
 setup "$REFUSAL_HEAD"
