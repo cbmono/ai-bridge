@@ -72,8 +72,12 @@
 #     where it is — the sibling parses the block from a STRICT rendering with fenced and
 #     indented blocks removed, which is what stops a quoted trailer counting.
 #
-# A human's comment, and a human's own review, are NOT rounds and are not counted. The cap
-# bounds what the loop DISPATCHES; a colleague reading the PR costs the budget nothing.
+# An ordinary human comment is not a round and is not counted: the cap bounds what the loop
+# DISPATCHES, and a colleague reading the PR costs that budget nothing. The honest edge is
+# that a human who QUOTES an `okf-verdict` block passes the pre-filter, and a contentful
+# review object from that account at a candidate commit then counts. That is an over-count
+# by one, it takes a human deliberately pasting the marker, and it errs toward asking the
+# human — which is where the cap sends everything anyway.
 #
 # CLAUSE 8 IS MASKED FOR THE FALLBACK RUNS, DELIBERATELY, AND ONLY FOR THOSE. SCHEMA.md
 # clause 8 — an author is never its own independent reviewer — makes `review-clearance.sh`
@@ -85,6 +89,11 @@
 # login no account can hold, for the `--reviewer` runs only. The vendor run keeps clause 8
 # untouched.
 #
+# THE MASK'S BLAST RADIUS IS ONE CASE, not "clause 8 is off". A `--reviewer` run already
+# considers only artifacts from that one login, so the author-exclusion it disables can
+# only ever have applied when the named account IS the author. Every other run is
+# unaffected by construction, not by care.
+#
 #   THIS SCRIPT CLEARS NOTHING AND MUST NEVER BE READ AS CLEARANCE. Exit 0 here means "the
 #   cap has room", never "this PR was reviewed". The merge gate is `required-checks.sh` +
 #   `review-clearance.sh`, unchanged and unaffected by anything in this file.
@@ -93,8 +102,9 @@
 # `CONVENTIONS.md` calls it "a hard cap", and a `--cap` flag is how a hard cap becomes a
 # default. Two.
 #
-# BROKEN OR ABSENT FAILS CLOSED BY CONSTRUCTION. Every caller wiring below is
-# `scripts/review-rounds.sh <pr> || <refuse>`, so a missing file (exit 127), an unreadable
+# BROKEN OR ABSENT FAILS CLOSED BY CONSTRUCTION. Both callers (`project-manager.md`'s
+# verification step and `qa-reviewer.md` mode B) are told to refuse on ANY non-zero exit,
+# never on exit 1 alone, so a missing file (exit 127), an unreadable
 # PR, an unauthenticated `gh` or a sibling that does not run all reach the dispatcher as
 # "do not dispatch". The expensive direction is a third round nobody stopped; the cheap one
 # is a human being asked.
@@ -344,7 +354,16 @@ while IFS= read -r sha; do
       rc=$?
       case "$rc" in
         0) counted=yes; break ;;
-        1|2|3|4) ;;
+        1|3|4) ;;
+        # Fatal here for the same reason it is fatal above, and spelled out because the
+        # temptation is to shrug it off as "that one account just did not answer": exit 2
+        # is UNREADABLE reviewer state, and unreadable is indistinguishable from empty to
+        # everything downstream. Swallowing it counts zero rounds for that account, and
+        # zero rounds reads as "dispatch another one".
+        *) echo "error: review-clearance.sh exited $rc for PR $pr at $sha as '$login'," >&2
+           echo "       so whether that account verified this commit is unreadable, and" >&2
+           echo "       the number of rounds is therefore unknown. Refusing (fail closed)." >&2
+           exit 2 ;;
       esac
     done < "$TMPD/verdict-logins"
   fi

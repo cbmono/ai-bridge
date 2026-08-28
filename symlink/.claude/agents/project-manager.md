@@ -340,6 +340,21 @@ state, and act only on deltas.
    actually at `in-review` are eligible: an `in-progress` one still has a live agent
    that may advance the head, and a worktree that is clean with nothing unpushed is
    the implementer's *claim* to be finished, not its report.
+   - **Count the rounds BEFORE you dispatch a verifier — `scripts/review-rounds.sh <pr>
+     --repo <org>/<repo>`.** It prints how many verification rounds the PR has already
+     had and exits non-zero at or past **two**, the hard cap in `CONVENTIONS.md` →
+     "TWO ROUNDS, THEN THE HUMAN DECIDES". Non-zero means **do not dispatch a third
+     verifier and do not wait on another external review**: stop, and surface the PR as
+     a 🔴 item with **both positions in one short block** — what the reviewer wants,
+     what the implementer says, and what the acceptance criterion actually asks for. The
+     human decides; the agents do not converge on it. Exit 2 is *unknown*, which is not
+     permission — treat it the same way and say what could not be read. Run it on every
+     tick you would otherwise dispatch a verifier, including the external-reviewer path
+     below: a round is a round whoever spent it. This is the rule in this file with a
+     price tag on it — the pull request it comes from ran **eight** rounds, was closed
+     unmerged, and with its siblings cost roughly **70% of a week's account budget**. An
+     unresolved disagreement costs the human one decision; an unbounded review costs a
+     week, and a cap that is only remembered is the state that produced the eight.
    - **Check the acceptance_criteria travelled with the PR — and that they're ticked.**
      Role agents embed the task's `acceptance_criteria` (a checklist) in the PR body so
      the reviewer evaluates against them (see the role-agent conventions). If a PR is
