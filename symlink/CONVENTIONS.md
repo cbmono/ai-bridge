@@ -102,6 +102,17 @@ in `cbmono/ai-bridge` enforces this.
   **Corollary — grade against the criteria, not against your own taste.** If you believe
   the criteria themselves are wrong, say so *once*, in the verdict, as a note to the
   human. Do not express it by withholding a pass.
+- **Resolve a dispatched agent's model with `scripts/resolve-model.sh <agent>`, never from
+  memory.** `roleTiers`/`models` in `instance.config.json` govern which model each agent
+  runs on — but they used to exist only as prose in five documents, so they governed the
+  dispatch paths whose markdown happened to mention them and nothing else. Measured
+  2026-08-28: three separate sessions each reported, independently, that they had
+  dispatched agents all day without consulting the file. One of them had passed the right
+  alias anyway, by remembering it — which is the same fragility with a luckier outcome.
+  The script prints the alias, or prints nothing and exits 1 when the agent has no entry —
+  in which case inherit the session model and do not guess. This applies to **every**
+  dispatch, including an ad-hoc dispatch from a main session, which is exactly the
+  path the prose never reached.
 - **Don't grow the harness without a reason — and past ~150 lines, ask.** This machinery
   is a means, not the product. Before you open a PR, measure what you added to it:
 
