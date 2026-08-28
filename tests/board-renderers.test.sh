@@ -96,6 +96,16 @@ if command -v git >/dev/null 2>&1; then
   _tpl_gc="$(git -C "$TPL" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
   if [ -n "$_tpl_gd" ] && [ -n "$_tpl_gc" ] && [ "$_tpl_gd" != "$_tpl_gc" ]; then
     INSTALL_SRC="$TMP/install-src"
+    # The copy below reads all of $TPL, so the destination must not live INSIDE $TPL --
+    # $TMP comes from $TMPDIR, which a caller can point anywhere, including into the
+    # checkout. `cp -R "$TPL"/. "$TPL/…"` copies a tree into itself. Compare resolved
+    # paths and refuse rather than recurse; same abort-loudly shape as the mktemp guard
+    # above (task-017), because a wrong answer here is silent and expensive.
+    _tpl_res="$(cd -- "$TPL" && pwd -P)"
+    _src_res="$(cd -- "$TMP" && pwd -P)"
+    case "$_src_res/" in
+      "$_tpl_res"/*) echo "board-renderers.test: TMPDIR ($_src_res) is inside the template tree ($_tpl_res); the install-source copy would recurse. Point TMPDIR outside the checkout." >&2; exit 2 ;;
+    esac
     mkdir -p "$INSTALL_SRC"
     cp -R "$TPL"/. "$INSTALL_SRC"/
     rm -rf "$INSTALL_SRC/.git"
