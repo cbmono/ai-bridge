@@ -78,6 +78,39 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/snapshot-fixture.XXXXXX")" || {
 TMP="$(cd "$TMP" && pwd)"
 trap 'rm -rf "$TMP"' EXIT
 
+# install.sh REFUSES to run from a linked git worktree — deliberately, see its own
+# header — and every role agent works in one (CONVENTIONS.md), so $TPL routinely IS one.
+# This file runs under `set -e`, so letting that guard's exit 2 reach unhandled would
+# kill the WHOLE script mid-run with no summary line at all — worse than the 26 failures
+# #48/#50 fixed elsewhere, because there is nothing here for the CI runner to key on
+# (ai-bridge-v4/task-031). Same fix as tests/board-renderers.test.sh and
+# tests/derived-indexes.test.sh, verbatim: a one-time, filesystem-level copy of THIS
+# checkout into a directory outside any git repository at all, where the guard's own
+# test (`--git-dir` vs `--git-common-dir`) cannot fire for lack of a repository to ask
+# about. Skipped entirely — $BRIDGE_INSTALL stays $TPL/install.sh — when $TPL is already
+# a main tree or no git repo at all, so a plain clone pays nothing extra here.
+if command -v git >/dev/null 2>&1; then
+  _tpl_gd="$(git -C "$TPL" rev-parse --absolute-git-dir 2>/dev/null || true)"
+  _tpl_gc="$(git -C "$TPL" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  if [ -n "$_tpl_gd" ] && [ -n "$_tpl_gc" ] && [ "$_tpl_gd" != "$_tpl_gc" ]; then
+    INSTALL_SRC="$TMP/install-src"
+    # The copy below reads all of $TPL, so the destination must not live INSIDE $TPL --
+    # $TMP comes from $TMPDIR, which a caller can point anywhere, including into the
+    # checkout. `cp -R "$TPL"/. "$TPL/…"` copies a tree into itself. Compare resolved
+    # paths and refuse rather than recurse; same abort-loudly shape as the mktemp guard
+    # above (task-017), because a wrong answer here is silent and expensive.
+    _tpl_res="$(cd -- "$TPL" && pwd -P)"
+    _src_res="$(cd -- "$TMP" && pwd -P)"
+    case "$_src_res/" in
+      "$_tpl_res"/*) echo "snapshot.test: TMPDIR ($_src_res) is inside the template tree ($_tpl_res); the install-source copy would recurse. Point TMPDIR outside the checkout." >&2; exit 2 ;;
+    esac
+    mkdir -p "$INSTALL_SRC"
+    cp -R "$TPL"/. "$INSTALL_SRC"/
+    rm -rf "$INSTALL_SRC/.git"
+    BRIDGE_INSTALL="$INSTALL_SRC/install.sh"
+  fi
+fi
+
 pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
