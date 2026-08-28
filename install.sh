@@ -1230,14 +1230,27 @@ if ! grep -qxF 'instance.config.local.json' "$gi"; then
 instance.config.local.json
 GI
 fi
-# Each line is guarded SEPARATELY. A single guard on the root line would silently
-# skip the per-project one whenever only the root line was already present, and the
-# two are not interchangeable. The match is EXACT (`-qxF`), not `^/?index\.md$` like
-# /repos/ above: a bare `index.md` line is a different pattern that also swallows
-# `knowledge/index.md`, so it must not be read as "already handled".
-if ! grep -qxF '/index.md' "$gi" || ! grep -qxF '/projects/*/index.md' "$gi"; then
-  cat >> "$gi" <<'GI'
-
+# The derived-index ignore block, behind its own marker pair — the same mechanism the
+# machinery block above uses (BEGIN_MARK/END_MARK), and for the same reason. This used
+# to be guarded by "append only if the two literal rule lines are missing"
+# (`grep -qxF '/index.md' ... || ! grep -qxF '/projects/*/index.md' ...`), which is a
+# short-circuit, not a safeguard: once an instance is stamped once, both rule lines exist
+# forever, so the whole block is skipped on every later run — a corrected comment, or a
+# new rule line added here in the future, would reach only fresh installs. Measured
+# twice in one hour against real instances: ai-bridge-v4/task-009.
+#
+# The fix mirrors the machinery block: fully rewrite the region between two markers on
+# every run, and touch nothing outside them. That is also what keeps a RETAINED
+# project's escape hatch safe. A negation line (`!projects/<slug>/index.md`, task-008 /
+# #29) must be added by hand AFTER the two blanket lines this block emits — i.e. after
+# its END marker, never inside the block, since everything between the markers is
+# unconditionally replaced on every stamp. Git applies .gitignore patterns in file
+# order, so a line after the END marker is a line after the two blanket rules, which is
+# the only thing that makes the negation win.
+IDX_BEGIN_MARK="# >>> ai-bridge index ignore >>>"
+IDX_END_MARK="# <<< ai-bridge index ignore <<<"
+idxbody="$(mktemp)"
+cat > "$idxbody" <<'GI'
 # Derived navigation indexes — the root one and each project's, rewritten by every
 # /pm-loop tick from the documents they summarise. A view, not source: on a bundle
 # shared by more than one human it would otherwise conflict on every push.
@@ -1247,17 +1260,73 @@ if ! grep -qxF '/index.md' "$gi" || ! grep -qxF '/projects/*/index.md' "$gi"; th
 # The one exception is a RETAINED project (`status: done`, kept instead of closed):
 # the tick stops touching a retained project at all, so its index.md becomes a
 # permanent, hand-committed front door instead of a rewritten view. To retain one,
-# add a negation line AFTER the two blanket lines that follow this comment, then
-# `git add -f` the file once — e.g. `!projects/<slug>/index.md`. Git applies
-# .gitignore patterns in file order, so a LATER negation overrides an earlier blanket
-# pattern; putting the override BEFORE the two blanket lines instead, or deleting
-# the two lines and asserting "we track these" only in a comment, does not survive
-# the next `install.sh` run — it re-adds whichever of the two lines it finds
-# missing, and it neither looks for nor honours a comment-only override.
+# add a negation line AFTER the two blanket lines below (i.e. after this block's END
+# marker, never inside it — install.sh rewrites everything between the markers on
+# every run), then `git add -f` the file once — e.g. `!projects/<slug>/index.md`.
+# Git applies .gitignore patterns in file order, so a LATER negation overrides an
+# earlier blanket pattern; putting the override before the two blanket lines below,
+# or inside this block, does not survive the next `install.sh` run.
+/index.md
+/projects/*/index.md
 GI
-  grep -qxF '/index.md' "$gi"             || echo '/index.md' >> "$gi"
-  grep -qxF '/projects/*/index.md' "$gi"  || echo '/projects/*/index.md' >> "$gi"
+
+if grep -qxF "$IDX_BEGIN_MARK" "$gi"; then
+  # Already migrated to the marker pair by an earlier run of this (fixed) install.sh —
+  # EXACT line match (`-qxF`), not a substring one: a comment that merely mentions or
+  # resembles this marker text (e.g. quoting it while explaining the mechanism) must
+  # not be mistaken for the real marker line, matching the exact-match awk below.
+  # rewrite in place, exactly like the machinery block above.
+  tmp="$gi.tmp.$$"
+  awk -v b="$IDX_BEGIN_MARK" -v e="$IDX_END_MARK" -v body="$idxbody" '
+    $0==b { print; while ((getline line < body) > 0) print line; close(body); inblock=1; next }
+    $0==e { print; inblock=0; next }
+    !inblock { print }
+  ' "$gi" > "$tmp" && mv "$tmp" "$gi"
+else
+  # No marker pair yet. An instance stamped by the OLD guard-based install.sh carries
+  # the two literal rule lines, adjacent, with no markers — every version of that guard
+  # ever emitted them in exactly that shape. Find them and splice the marker pair in
+  # where the old comment + two rule lines were, so a negation a human already added
+  # right after the old two rule lines ends up right after the new END marker — still
+  # after the two blanket rules, which is the only ordering that matters.
+  #
+  # The old comment is walked off by scanning upward from `/index.md` while lines are
+  # comments (`^#`), never by matching its exact text — the whole point of this fix is
+  # that the comment has drifted across template versions and instances, so there is no
+  # one string to match.
+  # `|| true`: under `set -o pipefail`, a `grep` that matches nothing makes the whole
+  # pipeline (and this assignment) exit non-zero even though `head`/`cut` succeed, and
+  # a bare non-zero assignment — unlike one used as an `if`/`elif` condition — is NOT
+  # exempt from `set -e`, so without this the "genuinely fresh instance" case (no
+  # `/index.md` line to find) would abort the whole install.sh run right here.
+  idxline="$(grep -nxF '/index.md' "$gi" | head -1 | cut -d: -f1)" || true
+  if [ -n "$idxline" ] && [ "$(sed -n "$((idxline+1))p" "$gi")" = "/projects/*/index.md" ]; then
+    start="$idxline"
+    while [ "$start" -gt 1 ] && sed -n "$((start-1))p" "$gi" | grep -q '^#'; do
+      start=$((start-1))
+    done
+    tmp="$gi.tmp.$$"
+    : > "$tmp"
+    if [ "$start" -gt 1 ]; then
+      sed -n "1,$((start-1))p" "$gi" >> "$tmp"
+    fi
+    printf '%s\n' "$IDX_BEGIN_MARK" >> "$tmp"
+    cat "$idxbody" >> "$tmp"
+    printf '%s\n' "$IDX_END_MARK" >> "$tmp"
+    sed -n "$((idxline+2)),\$p" "$gi" >> "$tmp"
+    mv "$tmp" "$gi"
+  else
+    # Genuinely fresh: no marker pair, and no legacy two-line block in the expected,
+    # adjacent shape (or one reordered enough that guessing at it risks a bad splice —
+    # left alone rather than guessed at). Append a new marker-wrapped block.
+    {
+      printf '\n%s\n' "$IDX_BEGIN_MARK"
+      cat "$idxbody"
+      printf '%s\n' "$IDX_END_MARK"
+    } >> "$gi"
+  fi
 fi
+rm -f "$idxbody"
 
 # A .gitignore line is INERT for a file git already tracks, so on an instance whose
 # index.md files are committed this change would silently do nothing. Report the exact
