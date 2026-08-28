@@ -166,5 +166,30 @@ assert "…root index.md is ignored after migrating past the decoy" \
 assert "…the decoy line itself survives untouched"  \
   "$(yes_if grep -qF 'a note that mentions' "$INST3/.gitignore")"
 
+# ---------------------------------------------------------------------------------
+# 5. NON-GREEDY pairing: a stray, exact copy of the END marker text sitting further
+#    down the file (e.g. quoted in an unrelated comment) must close the block at the
+#    FIRST end marker, not swallow everything up to whichever one comes last.
+# ---------------------------------------------------------------------------------
+INST4="$TMP/inst4"; mkdir -p "$INST4"
+bash "$TPL/install.sh" "$INST4" >"$TMP/out4a" 2>&1
+{
+  printf '\n# a later, unrelated section quoting the same text a second time:\n'
+  printf '# <<< ai-bridge index ignore <<<\n'
+  printf '# — should stay right here, untouched, and not re-open or re-close anything.\n'
+} >> "$INST4/.gitignore"
+cp "$INST4/.gitignore" "$TMP/inst4.before"
+
+bash "$TPL/install.sh" "$INST4" >"$TMP/out4b" 2>&1
+between_markers="$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST4/.gitignore" | head -1)"
+assert "the block still closes at its OWN (first) END marker" \
+  "$([[ -n "$between_markers" ]] && echo 0 || echo 1)"
+assert "…exactly ONE real block, not content swallowed to the stray END" \
+  "$([[ "$(grep -cxF '# >>> ai-bridge index ignore >>>' "$INST4/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"
+assert "…the stray END further down the file survives untouched" \
+  "$(yes_if grep -qxF '# — should stay right here, untouched, and not re-open or re-close anything.' "$INST4/.gitignore")"
+assert "…and the unrelated comment line above it survives untouched" \
+  "$(yes_if grep -qxF '# a later, unrelated section quoting the same text a second time:' "$INST4/.gitignore")"
+
 echo "index-ignore-restamp.test.sh: pass=$pass fail=$fail"
 [[ $fail -eq 0 ]]
