@@ -131,7 +131,8 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    standing guardrails below. **Brief it with the gap and the guardrails, not with
    state** — it reads the bundle, `git` and `gh` itself, so there is nothing for you
    to look up first. **Run the tick on the orchestrator's configured model:**
-   resolve `project-manager` in `roleTiers` (default `deep`) → an alias via `models`
+   resolve it with `scripts/resolve-model.sh project-manager`, which applies
+   `roleTiers` (default `deep`) → an alias via `models`
    (default `deep` → `opus`), and pass that as the tick's model. If `models`/`roleTiers`
    are absent, inherit the session model. (The top `apex`/`fable` tier is reserved for
    the rarest, deepest reasoning — the `plan-architect` critique — not the routine tick.) A LIVE tick refines drafts, dispatches `ready` tasks,
@@ -172,7 +173,7 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    - `.claude/agents/advisor.md` must exist. Deleted ⇒ same answer, and the file is
      the off switch that works even on an instance whose config you cannot edit.
 
-   Its model comes from `roleTiers.advisor` resolved through `models`, exactly like
+   Its model comes from `scripts/resolve-model.sh advisor` (`roleTiers.advisor` through `models`), exactly like
    every other role. **Absent ⇒ `light`**, the cheapest tier — an observer that costs
    as much as the work it observes is not worth running.
 

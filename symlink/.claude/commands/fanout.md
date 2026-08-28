@@ -48,3 +48,13 @@ of independent asks the user has already given in this turn.
   merge. Those gates exist only for tracked `projects/` work.
 - Cap concurrency to a sensible handful; if there are many units, batch them.
 - No customer PII in any agent prompt.
+
+## Model for each dispatched agent
+
+Resolve it with `scripts/resolve-model.sh <agent>` before spawning, never from memory.
+Most fan-outs use `general-purpose`, which has no `roleTiers` entry — the script then
+prints nothing and exits 1, and inheriting the session model is the correct answer. But
+when you fan out a **named role agent**, that agent has a tier, and reading it from the
+config is the difference between the instance's setting governing the dispatch and it
+not. See `CONVENTIONS.md`, "Resolve a dispatched agent's model with
+`scripts/resolve-model.sh`".

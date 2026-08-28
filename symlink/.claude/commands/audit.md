@@ -14,7 +14,7 @@ and stop.
 
 ## Steps
 1. Read `instance.config.json`. **Resolve the auditor's model** the same way the PM
-   routes dispatches: look up `auditor` in `roleTiers` (default `deep`), map it to an
+   routes dispatches: run `scripts/resolve-model.sh auditor` — it looks `auditor` up in `roleTiers` (default `deep`) and maps it to an
    alias via `models`; if those maps are absent, inherit the session model.
 2. Dispatch the **`auditor`** agent (`subagent_type: auditor`) for one pass, passing the
    resolved model. It's read-only — it grounds each objective's `success_criteria`
