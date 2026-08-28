@@ -1306,14 +1306,15 @@ else
       start=$((start-1))
     done
     tmp="$gi.tmp.$$"
-    : > "$tmp"
-    if [ "$start" -gt 1 ]; then
-      sed -n "1,$((start-1))p" "$gi" >> "$tmp"
-    fi
-    printf '%s\n' "$IDX_BEGIN_MARK" >> "$tmp"
-    cat "$idxbody" >> "$tmp"
-    printf '%s\n' "$IDX_END_MARK" >> "$tmp"
-    sed -n "$((idxline+2)),\$p" "$gi" >> "$tmp"
+    {
+      if [ "$start" -gt 1 ]; then
+        sed -n "1,$((start-1))p" "$gi"
+      fi
+      printf '%s\n' "$IDX_BEGIN_MARK"
+      cat "$idxbody"
+      printf '%s\n' "$IDX_END_MARK"
+      sed -n "$((idxline+2)),\$p" "$gi"
+    } > "$tmp"
     mv "$tmp" "$gi"
   else
     # Genuinely fresh: no marker pair, and no legacy two-line block in the expected,
