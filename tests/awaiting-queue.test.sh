@@ -9,7 +9,8 @@
 # empty the nudge instead of failing loudly).
 set -uo pipefail
 
-HOOK="$(cd "$(dirname "$0")/.." && pwd)/symlink/.claude/hooks/show-awaiting.sh"
+TPL="$(cd "$(dirname "$0")/.." && pwd)"
+HOOK="$TPL/symlink/.claude/hooks/show-awaiting.sh"
 TMP="$(mktemp -d)" || {
   echo "awaiting-queue.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -145,7 +146,31 @@ fi
 # The queue is created once so a new instance has a working nudge, but a
 # deliberate `rm` must survive every later refresh. Get this wrong and the off
 # switch quietly stops being one.
-BRIDGE_INSTALL="$(cd "$(dirname "$0")/.." && pwd)/install.sh"
+#
+# install.sh refuses to run from a linked git worktree (deliberately — see its own
+# header), and every role agent's checkout of this template is one (CONVENTIONS.md).
+# Re-point $BRIDGE_INSTALL at a filesystem-level copy of $TPL outside any git
+# repository, exactly as tests/board-renderers.test.sh does — see there for the full
+# rationale and the TMPDIR-recursion guard this carries along with it. Skipped when
+# $TPL is already a main tree or no repo at all, so a plain clone pays nothing extra.
+# ai-bridge-v4/task-030.
+BRIDGE_INSTALL="$TPL/install.sh"
+if command -v git >/dev/null 2>&1; then
+  _tpl_gd="$(git -C "$TPL" rev-parse --absolute-git-dir 2>/dev/null || true)"
+  _tpl_gc="$(git -C "$TPL" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  if [ -n "$_tpl_gd" ] && [ -n "$_tpl_gc" ] && [ "$_tpl_gd" != "$_tpl_gc" ]; then
+    INSTALL_SRC="$TMP/install-src"
+    _tpl_res="$(cd -- "$TPL" && pwd -P)"
+    _src_res="$(cd -- "$TMP" && pwd -P)"
+    case "$_src_res/" in
+      "$_tpl_res"/*) echo "awaiting-queue.test: TMPDIR ($_src_res) is inside the template tree ($_tpl_res); the install-source copy would recurse. Point TMPDIR outside the checkout." >&2; exit 2 ;;
+    esac
+    mkdir -p "$INSTALL_SRC"
+    cp -R "$TPL"/. "$INSTALL_SRC"/
+    rm -rf "$INSTALL_SRC/.git"
+    BRIDGE_INSTALL="$INSTALL_SRC/install.sh"
+  fi
+fi
 inst="$TMP/instance"
 rm -rf "$inst"; mkdir -p "$inst"
 ( cd "$inst" && git init -q . ) 2>/dev/null

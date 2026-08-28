@@ -29,6 +29,32 @@ TPL="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/derived-indexes.XXXXXX")" || {
   echo "derived-indexes.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+
+# install.sh refuses to run from a linked git worktree (deliberately — see its own
+# header), and every role agent's checkout of this template is one (CONVENTIONS.md).
+# Re-point $BRIDGE_INSTALL at a filesystem-level copy of $TPL outside any git
+# repository, exactly as tests/board-renderers.test.sh does — see there for the full
+# rationale and the TMPDIR-recursion guard this carries along with it. Skipped when
+# $TPL is already a main tree or no repo at all, so a plain clone pays nothing extra.
+# ai-bridge-v4/task-030.
+BRIDGE_INSTALL="$TPL/install.sh"
+if command -v git >/dev/null 2>&1; then
+  _tpl_gd="$(git -C "$TPL" rev-parse --absolute-git-dir 2>/dev/null || true)"
+  _tpl_gc="$(git -C "$TPL" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  if [ -n "$_tpl_gd" ] && [ -n "$_tpl_gc" ] && [ "$_tpl_gd" != "$_tpl_gc" ]; then
+    INSTALL_SRC="$TMP/install-src"
+    _tpl_res="$(cd -- "$TPL" && pwd -P)"
+    _src_res="$(cd -- "$TMP" && pwd -P)"
+    case "$_src_res/" in
+      "$_tpl_res"/*) echo "derived-indexes.test: TMPDIR ($_src_res) is inside the template tree ($_tpl_res); the install-source copy would recurse. Point TMPDIR outside the checkout." >&2; exit 2 ;;
+    esac
+    mkdir -p "$INSTALL_SRC"
+    cp -R "$TPL"/. "$INSTALL_SRC"/
+    rm -rf "$INSTALL_SRC/.git"
+    BRIDGE_INSTALL="$INSTALL_SRC/install.sh"
+  fi
+fi
+
 pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
@@ -56,7 +82,7 @@ assert "no bare 'index.md' pattern in the seed" \
 echo
 echo "== a live instance: git's own answer, not the pattern text =="
 INST="$TMP/g/_ai-bridge-g"; mkdir -p "$INST"
-bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 assert "a FRESH stamp gets the root line"   "$(yes_if grep -qxF '/index.md' "$INST/.gitignore")"
 assert "…and the per-project line"          "$(yes_if grep -qxF '/projects/*/index.md' "$INST/.gitignore")"
 ( cd "$INST" && git init -q . && git config user.email t@e.st && git config user.name t )
@@ -80,13 +106,13 @@ assert "…but stages the KB index"           "$(has 'knowledge/index\.md' "$STA
 echo
 echo "== an instance whose .gitignore predates the lines =="
 OLD="$TMP/g/_ai-bridge-old"; mkdir -p "$OLD"
-bash "$TPL/install.sh" "$OLD" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$OLD" >/dev/null 2>&1
 grep -vE '^/(index\.md|projects/\*/index\.md)$' "$OLD/.gitignore" > "$OLD/.gi" && mv "$OLD/.gi" "$OLD/.gitignore"
 assert "the lines really were removed"      "$(no_if grep -qxF '/index.md' "$OLD/.gitignore")"
-bash "$TPL/install.sh" "$OLD" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$OLD" >/dev/null 2>&1
 assert "install.sh re-adds the root line"   "$(yes_if grep -qxF '/index.md' "$OLD/.gitignore")"
 assert "…and the per-project line"          "$(yes_if grep -qxF '/projects/*/index.md' "$OLD/.gitignore")"
-bash "$TPL/install.sh" "$OLD" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$OLD" >/dev/null 2>&1
 COUNT="$(grep -cxF '/index.md' "$OLD/.gitignore")"
 assert "a re-run does not duplicate them"   "$([[ "$COUNT" == 1 ]] && echo 0 || echo 1)"
 
@@ -95,11 +121,11 @@ echo "== an already-TRACKED index.md: reported, never touched =="
 # A .gitignore line does nothing to a file git already tracks. Silence here would be
 # the whole change quietly not happening, so the installer prints the exact command.
 TRK="$TMP/g/_ai-bridge-tracked"; mkdir -p "$TRK/projects/p1"
-bash "$TPL/install.sh" "$TRK" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$TRK" >/dev/null 2>&1
 printf 'root\n' > "$TRK/index.md"; printf 'proj\n' > "$TRK/projects/p1/index.md"
 ( cd "$TRK" && git init -q . && git config user.email t@e.st && git config user.name t \
   && git add -f index.md projects/p1/index.md >/dev/null && git commit -qm seed )
-OUT="$(bash "$TPL/install.sh" "$TRK" 2>&1)"
+OUT="$(bash "$BRIDGE_INSTALL" "$TRK" 2>&1)"
 assert "the tracked root index is reported"  "$(has 'tracked index.md' "$OUT")"
 assert "…and the tracked project index"      "$(has 'tracked projects/p1/index.md' "$OUT")"
 assert "…with the exact rm --cached command" "$(has 'git rm --cached' "$OUT")"
@@ -107,12 +133,12 @@ assert "…and the file is NOT removed"        "$(yes_if grep -q 'root' "$TRK/in
 assert "…and it is still tracked afterwards" "$(yes_if bash -c "cd '$TRK' && git ls-files --error-unmatch index.md")"
 # Once untracked, the report must go quiet — it is a to-do, not a permanent banner.
 ( cd "$TRK" && git rm --cached -q -- index.md 'projects/*/index.md' && git commit -qm untrack )
-OUT2="$(bash "$TPL/install.sh" "$TRK" 2>&1)"
+OUT2="$(bash "$BRIDGE_INSTALL" "$TRK" 2>&1)"
 assert "after untracking, nothing is reported" "$(hasnt 'tracked index.md' "$OUT2")"
 assert "…and the files survive on disk"        "$(yes_if grep -q 'root' "$TRK/index.md")"
 # An instance that is not a git repo at all must not error or report.
 NOGIT="$TMP/g/_ai-bridge-nogit"; mkdir -p "$NOGIT"
-RC=0; OUT3="$(bash "$TPL/install.sh" "$NOGIT" 2>&1)" || RC=$?
+RC=0; OUT3="$(bash "$BRIDGE_INSTALL" "$NOGIT" 2>&1)" || RC=$?
 assert "a non-repo instance exits 0"           "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "…and reports no tracked indexes"       "$(hasnt 'tracked index.md' "$OUT3")"
 
@@ -125,7 +151,7 @@ echo "== a RETAINED project's index.md: committed, and NOT hidden by check-ignor
 # view — it must NOT read as ignored even though the blanket per-project pattern
 # still applies to every OTHER (non-retained) project.
 RET="$TMP/g/_ai-bridge-retain"; mkdir -p "$RET/projects/p1" "$RET/projects/p2"
-bash "$TPL/install.sh" "$RET" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$RET" >/dev/null 2>&1
 ( cd "$RET" && git init -q . && git config user.email t@e.st && git config user.name t )
 printf 'active\n'   > "$RET/projects/p1/index.md"
 printf 'retained\n' > "$RET/projects/p2/index.md"
@@ -149,7 +175,7 @@ echo
 echo "== …and that survives an install.sh RE-STAMP, not just the post-edit state =="
 # This rule has been reversed by a re-stamp at least twice on real instances — assert
 # the state AFTER re-running install.sh, not just right after the edit.
-bash "$TPL/install.sh" "$RET" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$RET" >/dev/null 2>&1
 assert "the negation line is still present"    \
   "$(yes_if grep -qxF '!projects/p2/index.md' "$RET/.gitignore")"
 assert "the blanket line is not duplicated"    \
@@ -165,7 +191,7 @@ echo "== …while a comment-only override (no negation) does NOT survive a re-st
 # asserting "we track these" only in prose does not survive, because install.sh
 # re-adds whichever of the two lines it finds missing and never reads the comment.
 BAD="$TMP/g/_ai-bridge-bad-override"; mkdir -p "$BAD/projects/p1"
-bash "$TPL/install.sh" "$BAD" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$BAD" >/dev/null 2>&1
 grep -vE '^/(index\.md|projects/\*/index\.md)$' "$BAD/.gitignore" > "$BAD/.gi"
 printf '\n# NOT ignoring the navigation indexes, deliberately — this instance tracks them.\n' >> "$BAD/.gi"
 mv "$BAD/.gi" "$BAD/.gitignore"
@@ -173,7 +199,7 @@ assert "the comment-only override really is in place" \
   "$(yes_if grep -q 'NOT ignoring the navigation indexes' "$BAD/.gitignore")"
 assert "…and the blanket line really is gone"          \
   "$(no_if grep -qxF '/projects/*/index.md' "$BAD/.gitignore")"
-bash "$TPL/install.sh" "$BAD" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$BAD" >/dev/null 2>&1
 assert "a re-stamp silently reverses a comment-only override" \
   "$(yes_if grep -qxF '/projects/*/index.md' "$BAD/.gitignore")"
 
