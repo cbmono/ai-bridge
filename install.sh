@@ -1272,10 +1272,10 @@ GI
 
 if grep -qxF "$IDX_BEGIN_MARK" "$gi"; then
   # Already migrated to the marker pair by an earlier run of this (fixed) install.sh —
-  # EXACT line match (`-qxF`), not a substring one: a comment that merely mentions or
-  # resembles this marker text (e.g. quoting it while explaining the mechanism) must
-  # not be mistaken for the real marker line, matching the exact-match awk below.
-  # rewrite in place, exactly like the machinery block above.
+  # rewrite in place, exactly like the machinery block above. EXACT line match
+  # (`-qxF`), not a substring one: a comment that merely mentions or resembles this
+  # marker text (e.g. quoting it while explaining the mechanism) must not be mistaken
+  # for the real marker line, matching the exact-match awk below.
   tmp="$gi.tmp.$$"
   awk -v b="$IDX_BEGIN_MARK" -v e="$IDX_END_MARK" -v body="$idxbody" '
     $0==b { print; while ((getline line < body) > 0) print line; close(body); inblock=1; next }
