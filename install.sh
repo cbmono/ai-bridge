@@ -1270,18 +1270,42 @@ cat > "$idxbody" <<'GI'
 /projects/*/index.md
 GI
 
-if grep -qxF "$IDX_BEGIN_MARK" "$gi"; then
+# `|| true` throughout this section: under `set -o pipefail`, a `grep` that matches
+# nothing makes the whole pipeline (and a bare assignment built from it) exit non-zero
+# even though `head`/`cut` succeed, and a bare non-zero assignment — unlike one used
+# directly as an `if`/`elif` condition — is NOT exempt from `set -e`. Without it, the
+# ordinary "no such line" case aborts the whole install.sh run right here instead of
+# falling through to the next branch. See knowledge/findings/a-bare-pipeline-assignment-
+# aborts-under-set-e-even-when-a-sibling-guard-is-fine.md in the control-panel bundle.
+idx_begin_line="$(grep -nxF "$IDX_BEGIN_MARK" "$gi" | head -1 | cut -d: -f1)" || true
+if [ -n "$idx_begin_line" ]; then
   # Already migrated to the marker pair by an earlier run of this (fixed) install.sh —
   # rewrite in place, exactly like the machinery block above. EXACT line match
   # (`-qxF`), not a substring one: a comment that merely mentions or resembles this
   # marker text (e.g. quoting it while explaining the mechanism) must not be mistaken
   # for the real marker line, matching the exact-match awk below.
-  tmp="$gi.tmp.$$"
-  awk -v b="$IDX_BEGIN_MARK" -v e="$IDX_END_MARK" -v body="$idxbody" '
-    $0==b { print; while ((getline line < body) > 0) print line; close(body); inblock=1; next }
-    $0==e { print; inblock=0; next }
-    !inblock { print }
-  ' "$gi" > "$tmp" && mv "$tmp" "$gi"
+  #
+  # BEGIN alone is not enough to rewrite: this awk's `!inblock { print }` only resumes
+  # printing once it sees an EXACT END line, so a file with BEGIN and no (or a
+  # preceding) END would have every line from BEGIN to EOF silently dropped by the
+  # rewrite below — an interrupted stamp or a hand-edit that removed the END line reaches
+  # exactly this state. Verify END exists AFTER BEGIN before touching the file at all;
+  # if it does not, leave the file untouched and report the problem instead of writing.
+  idx_end_line="$(grep -nxF "$IDX_END_MARK" "$gi" | head -1 | cut -d: -f1)" || true
+  if [ -z "$idx_end_line" ] || [ "$idx_end_line" -lt "$idx_begin_line" ]; then
+    echo "warn  $gi carries an index-ignore BEGIN marker ('$IDX_BEGIN_MARK') with no" >&2
+    echo "      matching END marker after it. Left UNCHANGED rather than risk dropping" >&2
+    echo "      everything after the BEGIN line. Fix by hand: add '$IDX_END_MARK' right" >&2
+    echo "      after the two blanket rule lines (/index.md, /projects/*/index.md), or" >&2
+    echo "      remove the stray BEGIN line — then re-run." >&2
+  else
+    tmp="$gi.tmp.$$"
+    awk -v b="$IDX_BEGIN_MARK" -v e="$IDX_END_MARK" -v body="$idxbody" '
+      $0==b { print; while ((getline line < body) > 0) print line; close(body); inblock=1; next }
+      $0==e { print; inblock=0; next }
+      !inblock { print }
+    ' "$gi" > "$tmp" && mv "$tmp" "$gi"
+  fi
 else
   # No marker pair yet. An instance stamped by the OLD guard-based install.sh carries
   # the two literal rule lines, adjacent, with no markers — every version of that guard
@@ -1294,13 +1318,25 @@ else
   # comments (`^#`), never by matching its exact text — the whole point of this fix is
   # that the comment has drifted across template versions and instances, so there is no
   # one string to match.
-  # `|| true`: under `set -o pipefail`, a `grep` that matches nothing makes the whole
-  # pipeline (and this assignment) exit non-zero even though `head`/`cut` succeed, and
-  # a bare non-zero assignment — unlike one used as an `if`/`elif` condition — is NOT
-  # exempt from `set -e`, so without this the "genuinely fresh instance" case (no
-  # `/index.md` line to find) would abort the whole install.sh run right here.
-  idxline="$(grep -nxF '/index.md' "$gi" | head -1 | cut -d: -f1)" || true
-  if [ -n "$idxline" ] && [ "$(sed -n "$((idxline+1))p" "$gi")" = "/projects/*/index.md" ]; then
+  #
+  # Scan EVERY standalone `/index.md` line, not just the first: an earlier, unrelated
+  # `/index.md` line (rare, but not impossible — nothing stops a human from ignoring
+  # some other file with that exact name) must not steal the adjacency match away from
+  # the real index-ignore pair sitting later in the file. Stopping at the first
+  # candidate that ISN'T followed by `/projects/*/index.md` would fall through to the
+  # fresh-instance append path below and append the blanket block at EOF — after an
+  # existing retained-project negation, silently reversing it (criterion 4).
+  idxline=""
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] || continue
+    if [ "$(sed -n "$((candidate+1))p" "$gi")" = "/projects/*/index.md" ]; then
+      idxline="$candidate"
+      break
+    fi
+  done <<EOF
+$(grep -nxF '/index.md' "$gi" | cut -d: -f1)
+EOF
+  if [ -n "$idxline" ]; then
     start="$idxline"
     while [ "$start" -gt 1 ] && sed -n "$((start-1))p" "$gi" | grep -q '^#'; do
       start=$((start-1))

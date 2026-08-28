@@ -191,5 +191,97 @@ assert "…the stray END further down the file survives untouched" \
 assert "…and the unrelated comment line above it survives untouched" \
   "$(yes_if grep -qxF '# a later, unrelated section quoting the same text a second time:' "$INST4/.gitignore")"
 
+# ---------------------------------------------------------------------------------
+# 6. BEGIN without a matching END must NOT be rewritten — CodeRabbit round 1 on #51.
+#    The old code gated the "already migrated" branch on BEGIN's presence alone; the
+#    awk's `!inblock { print }` only resumes once it sees an EXACT END line, so a file
+#    with BEGIN and no END (an interrupted stamp, or a hand-edit that dropped the END
+#    line) had every line after BEGIN silently dropped by the rewrite, and `mv` wrote
+#    that truncated file back over the real one. Assert byte-for-byte NO CHANGE and
+#    that the run reports the problem.
+# ---------------------------------------------------------------------------------
+INST5="$TMP/inst5"; mkdir -p "$INST5"
+bash "$TPL/install.sh" "$INST5" >"$TMP/out5a" 2>&1
+# Append a distinctive trailer AFTER the natural stamp — deliberately, so there is real
+# content sitting after the block regardless of where a fresh stamp happens to place it
+# (a bare "the block was already the last thing in the file" fixture would let a
+# truncating implementation pass this test vacuously, the same trap `.claude/rules/
+# tests.md` warns about).
+printf '\n# TRAILER: unrelated content that must survive a re-stamp untouched.\n/some/trailer/rule\n' >> "$INST5/.gitignore"
+# Drop the END marker line, leaving BEGIN, the trailer, and everything else intact but
+# unclosed.
+awk '$0 == "# <<< ai-bridge index ignore <<<" { next } { print }' "$INST5/.gitignore" \
+  > "$INST5/.gitignore.tmp" && mv "$INST5/.gitignore.tmp" "$INST5/.gitignore"
+cp "$INST5/.gitignore" "$TMP/inst5.before"
+assert "the fixture really has BEGIN with no END (sanity check on the fixture itself)" \
+  "$([[ "$(grep -cxF '# >>> ai-bridge index ignore >>>' "$INST5/.gitignore")" -eq 1 \
+     && "$(grep -cxF '# <<< ai-bridge index ignore <<<' "$INST5/.gitignore")" -eq 0 ]] && echo 0 || echo 1)"
+assert "…and the trailer really does sit AFTER the dangling BEGIN (sanity check)" \
+  "$([[ "$(grep -nxF '# >>> ai-bridge index ignore >>>' "$INST5/.gitignore" | cut -d: -f1)" \
+        -lt "$(grep -nxF '/some/trailer/rule' "$INST5/.gitignore" | cut -d: -f1)" ]] && echo 0 || echo 1)"
+
+err5="$(bash "$TPL/install.sh" "$INST5" 2>&1 1>/dev/null)"
+rc5=$?
+assert "install.sh still exits 0 on a BEGIN-without-END .gitignore" \
+  "$([[ $rc5 -eq 0 ]] && echo 0 || echo 1)"
+assert "the malformed file is left BYTE-FOR-BYTE unchanged, not truncated" \
+  "$(cmp -s "$TMP/inst5.before" "$INST5/.gitignore" && echo 0 || echo 1)"
+assert "…the trailer AFTER the dangling BEGIN specifically survives" \
+  "$(yes_if grep -qxF '/some/trailer/rule' "$INST5/.gitignore")"
+assert "…and the run reports the malformed marker pair" \
+  "$(printf '%s\n' "$err5" | grep -qi 'no.*matching END marker\|END marker' && echo 0 || echo 1)"
+
+# ---------------------------------------------------------------------------------
+# 7. An EARLIER, unrelated standalone `/index.md` line must not steal the adjacency
+#    match — CodeRabbit round 1 on #51. The old code used only the FIRST exact `/index.md`
+#    line in the file (`grep -nxF` + `head -1`); if THAT one wasn't followed by
+#    `/projects/*/index.md`, it fell through to the fresh-instance append path and
+#    appended the blanket block at EOF — AFTER an existing retained-project negation,
+#    silently reversing task-008's criterion 4. Note the decoy must be an EXACT,
+#    standalone `/index.md` line (not merely a path ending in `index.md`, which `-x`
+#    would never match in the first place) to actually exercise this — confirmed by
+#    replaying this exact fixture against the pre-fix install.sh, where it reproduces
+#    the bug. Assert with `git check-ignore`, not by grepping for the pattern.
+# ---------------------------------------------------------------------------------
+INST6="$TMP/inst6"; mkdir -p "$INST6/projects/retained-example" "$INST6/projects/other-project"
+bash "$TPL/install.sh" "$INST6" >"$TMP/out6a" 2>&1
+cat > "$INST6/.gitignore" <<'GI'
+.DS_Store
+
+# A hand-written, unrelated /index.md rule some human added earlier in the file for
+# their own reasons — an EXACT duplicate of the real rule's text, but not adjacent to
+# /projects/*/index.md, so it must not be the one the adjacency scan latches onto.
+/index.md
+
+# Derived navigation indexes — the root one and each project's, rewritten by every
+# /pm-loop tick from the documents they summarise. A view, not source.
+/index.md
+/projects/*/index.md
+!projects/retained-example/index.md
+
+# The local live board page (scripts/watch-board.sh). Derived output.
+/.board-live/
+GI
+
+bash "$TPL/install.sh" "$INST6" >"$TMP/out6b" 2>&1
+assert "install.sh exits 0 with an earlier unrelated /index.md line present" \
+  "$([[ $? -eq 0 ]] && echo 0 || echo 1)"
+assert "the REAL index-ignore pair is migrated to the marker pair (not the decoy)" \
+  "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$INST6/.gitignore")"
+assert "the earlier unrelated /index.md rule is untouched" \
+  "$([[ "$(grep -cxF '/index.md' "$INST6/.gitignore")" -eq 2 ]] && echo 0 || echo 1)"
+assert "…exactly ONE index-ignore block was created, not a duplicate at EOF" \
+  "$([[ "$(grep -cxF '# >>> ai-bridge index ignore >>>' "$INST6/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"
+assert "a retained project's negation still wins (check-ignore) despite the decoy" \
+  "$(no_if git_check_ignore "$INST6" projects/retained-example/index.md)"
+assert "…an ordinary project is still ignored" \
+  "$(yes_if git_check_ignore "$INST6" projects/other-project/index.md)"
+assert "…root index.md is still ignored" \
+  "$(yes_if git_check_ignore "$INST6" index.md)"
+neg_line6="$(grep -nxF '!projects/retained-example/index.md' "$INST6/.gitignore" | head -1 | cut -d: -f1)"
+end_line6="$(grep -nxF '# <<< ai-bridge index ignore <<<' "$INST6/.gitignore" | head -1 | cut -d: -f1)"
+assert "…and the negation still sits after the block's END marker" \
+  "$([[ -n "$neg_line6" && -n "$end_line6" && "$neg_line6" -gt "$end_line6" ]] && echo 0 || echo 1)"
+
 echo "index-ignore-restamp.test.sh: pass=$pass fail=$fail"
 [[ $fail -eq 0 ]]
