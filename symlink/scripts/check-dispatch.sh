@@ -45,6 +45,11 @@
 #   4  the record contradicts itself: `in-review`/`done` with an empty `pr:`, or a PR that
 #      resolves while `status:` never moved. Usually one edit away from correct.
 #
+# WHAT IT IS ASKED ABOUT MATTERS: run it on a task you DISPATCHED, when its agent reports.
+# A task nobody has dispatched yet reads as exit 1 too — correctly, in the sense that no PR
+# exists, and uselessly, in the sense that none was due. The verdict is about a dispatch,
+# not about a document sitting in the queue.
+#
 # THE PARKED CATCH NEEDS NO NETWORK, on purpose: an unmoved status with an empty `pr:` is
 # decided from the document alone, before the host is consulted at all, so an offline
 # machine, a missing CLI or a rate limit cannot silence the one verdict this exists for.
@@ -165,11 +170,14 @@ if [ -n "$urls" ]; then
     echo "               cannot be resolved. Unknown is not a pass — refusing." >&2
     exit 2
   }
+  # Both host calls read from /dev/null: this loop's stdin IS the URL list, and a child
+  # that consumed any of it would silently drop the PRs after the first — a task may fan
+  # out to several (SCHEMA.md), and a swallowed one is a PR nobody checked.
   while IFS= read -r u; do
     [ -n "$u" ] || continue
-    if gh pr view "$u" --json url >/dev/null 2>&1; then
+    if gh pr view "$u" --json url >/dev/null 2>&1 </dev/null; then
       echo "ok: $u exists"
-    elif ! gh auth status >/dev/null 2>&1; then
+    elif ! gh auth status >/dev/null 2>&1 </dev/null; then
       echo "cannot answer: gh cannot reach the host (not logged in), so whether" >&2
       echo "               $u exists is unknown. Refusing rather than reporting a" >&2
       echo "               missing PR that may be perfectly fine." >&2
@@ -184,6 +192,9 @@ fi
 
 if [ -n "$missing" ]; then
   echo "NOT THERE: $TASK claims a pull request the host does not resolve:" >&2
+  # Unquoted on purpose: $missing is a space-joined list of URLs, and a URL contains no
+  # space — word splitting is the iteration here.
+  # shellcheck disable=SC2086
   for u in $missing; do echo "           $u" >&2; done
   echo "           A deleted branch, a URL written from memory, or a PR opened" >&2
   echo "           against the wrong repository all land here." >&2
