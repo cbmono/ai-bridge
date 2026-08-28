@@ -257,6 +257,12 @@ state, and act only on deltas.
    flight at once; leave the rest `ready` for the next tick. Send independent dispatches in one
    message so they run concurrently.
 
+   **A dispatch you send is not finished when the agent says so.** Whatever you dispatch
+   here, you check when it reports — `scripts/check-dispatch.sh <task-path>`, per step 4.
+   Note it now, at the point of dispatch, because the completion notice is exactly what
+   cannot be trusted: on 2026-08-28 two agents reported complete with their work committed
+   (one pushed) and no PR open.
+
    **Isolation (required for parallel safety).** If the product repos are a *single
    shared clone over one package store*, concurrent agents otherwise corrupt each
    other's worktrees (source + `.git` link wiped mid-run). In every dispatch,
@@ -299,6 +305,26 @@ state, and act only on deltas.
    reported a blocker or died, set `status: blocked` with a `# Notes` reason.
    **Research tasks have no PRs and no agent** — leave their human-set status alone
    (just keep the docs/index consistent); don't mark them `blocked` for lacking a PR.
+
+   **Check the artifact, don't believe the report.** For every task a dispatched agent
+   has reported on, run `scripts/check-dispatch.sh <task-path>` and act on its exit code,
+   not on the agent's summary. **0** — it produced what it promised, **or** stopped honestly at
+   `blocked`/`cancelled`, which clears because no artifact was due: read the stated reason,
+   don't read a stopped task as a verified artifact. **1** — PARKED: the task still reads
+   `ready`/`in-progress` and names no PR, which is what an agent that ended its turn
+   waiting on a background job looks like. **3** — its `pr:` names a pull request the host
+   does not resolve. **4** — status and `pr:` contradict each other, usually one document
+   edit away from correct. **2** — it could not answer (research task, unreadable
+   frontmatter, no `gh`); treat that as unknown, not as fine.
+   **A non-zero verdict is never a re-dispatch** — step 2 of this file says re-running a
+   task sequence that already finished is the most expensive failure this loop has, and
+   this check exists precisely so that failure is not automated. On exit 1, read the
+   agent's final message and its worktree first: the work is usually already committed,
+   sometimes already pushed, and one message asking it to open the PR on what it has
+   recovers it. Anything beyond that is the human's call — surface it in `AWAITING.md`.
+   Measured 2026-08-28: two agents parked this way and both reported as `completed`; the
+   wall-clock rule missed it (one parked at 16 minutes), the two-round review cap missed it
+   (neither reached review), and the completion notification *was* the failure.
 
    **Independent verification (the verifier edge).** A PR must be checked by an
    **independent** reviewer — fresh context, judged on real signals — before it is

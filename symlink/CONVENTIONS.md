@@ -143,6 +143,26 @@ in `cbmono/ai-bridge` enforces this.
   `scripts/prune-worktrees.sh` reports worktrees that still have a live process attached —
   a scan catches what discipline misses — but it only ever reports, so the teardown is
   yours.
+- **A dispatch is not finished until its artifact exists — check, don't believe the
+  report.** When an agent you dispatched reports back, run `scripts/check-dispatch.sh
+  <task-doc>` before you act on what it said. It reads three things and judges nothing
+  else: did `status:` advance, does `pr:` name a URL, and does that pull request exist.
+  Exit 0 is the only clearance — exit 1 is the parked signature (still `ready`/`in-progress`
+  with no PR), 3 a `pr:` the host does not resolve, 4 a record contradicting itself, 2 a
+  question it cannot answer. **Exit 0 does not mean "there is a PR":** a task the agent left
+  `blocked` or `cancelled` with no PR also clears, because no artifact was due — read the
+  stated reason rather than reading a stopped task as a verified artifact. Measured 2026-08-28: two agents finished their work, committed
+  it — one had already pushed — then ended their turns waiting on a background job that
+  nothing was left running to notify, and **reported as completed** with no PR open. The
+  wall-clock rule missed it (one parked at **16 minutes**), the two-round cap missed it
+  (neither reached review), and the completion notification *was* the failure. Asking
+  whether the PR exists takes two seconds and nothing was doing it. This applies to
+  **every** dispatch, including an **ad-hoc** dispatch from a main session — the path with
+  no coverage at all today, because no tick ever reads it.
+  **It is report-only, and that is the point: a non-zero verdict is never a licence to
+  re-dispatch.** Re-running a task sequence that already finished is the most expensive
+  failure this loop has (`/pm-loop` step 2), and the usual recovery is one message to the
+  parked agent telling it to open the PR on what it already has.
 - **Wide work: fan out only if you actually can — most of you can't.** For genuinely wide,
   *independent* work a parallel fan-out beats grinding serially (find the real edges → fan
   out → verify → synthesize), but check your `tools:` list before you plan around one.
