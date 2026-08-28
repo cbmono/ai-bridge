@@ -18,8 +18,13 @@
 # same shape as the vacuous self-skipping assertion tests/board-renderers.test.sh carried
 # until task-024, and the rate-limited-review-behind-a-green-check defect from task-010.
 #
+# task-031 added a sixth: snapshot.test.sh carried the same dependency but under its own
+# `set -e`, so the guard's exit 2 killed the whole script mid-run and it printed no
+# summary line at all — worse than the other five, which at least printed fail=N. Same
+# fix, same loop; see its own comment there for why $TPL routinely IS a worktree.
+#
 # WHAT THIS PINS, TOGETHER, SO NO PART OF THE FIX CAN REGRESS ALONE:
-#   1. Each of the five harnesses below reports fail=0 when run from a FRESH LINKED
+#   1. Each of the six harnesses below reports fail=0 when run from a FRESH LINKED
 #      WORKTREE of this very checkout — not by reasoning about why it should, by
 #      actually running it there and reading its own summary line.
 #   2. install.sh ITSELF still refuses to run from that same worktree — the guard this
@@ -62,7 +67,7 @@ ok "install.sh still refuses to run from this worktree" "$guard_rc" 2
 ok "…still says why"                                     "$(printf '%s' "$guard_out" | grep -qi 'refusing to install from a git worktree' && echo yes || echo no)" yes
 ok "…still stamped nothing"                              "$(find "$TMP/never-stamped" -mindepth 1 2>/dev/null | wc -l | tr -d ' ')" 0
 
-# --- half 2: none of the five below still depends on install.sh having run from a
+# --- half 2: none of the six below still depends on install.sh having run from a
 # location the guard above would refuse ---------------------------------------
 # One function, run over every harness known to carry the $TPL/install.sh dependency,
 # so a sixth one found later is a one-line addition here rather than a sixth copy of
@@ -89,7 +94,7 @@ check_harness_parity() { # <test-file-basename, without .test.sh>
   ok "…having actually run some assertions, not zero" "$([ "$p" -gt 0 ] && echo yes || echo no)" yes
 }
 
-for h in board-renderers awaiting-queue commit-as-identity link-repos derived-indexes; do
+for h in board-renderers awaiting-queue commit-as-identity link-repos derived-indexes snapshot; do
   check_harness_parity "$h"
 done
 
