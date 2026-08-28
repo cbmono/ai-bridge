@@ -308,8 +308,9 @@ state, and act only on deltas.
 
    **Check the artifact, don't believe the report.** For every task a dispatched agent
    has reported on, run `scripts/check-dispatch.sh <task-path>` and act on its exit code,
-   not on the agent's summary. **0** — it produced what it promised (or stopped honestly at
-   `blocked`/`cancelled`); carry on. **1** — PARKED: the task still reads
+   not on the agent's summary. **0** — it produced what it promised, **or** stopped honestly at
+   `blocked`/`cancelled`, which clears because no artifact was due: read the stated reason,
+   don't read a stopped task as a verified artifact. **1** — PARKED: the task still reads
    `ready`/`in-progress` and names no PR, which is what an agent that ended its turn
    waiting on a background job looks like. **3** — its `pr:` names a pull request the host
    does not resolve. **4** — status and `pr:` contradict each other, usually one document

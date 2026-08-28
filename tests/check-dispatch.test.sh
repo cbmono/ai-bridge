@@ -55,6 +55,7 @@ FIXDIR="$HERE/fixtures/dispatch"
 SUCCESS="$FIXDIR/success.task.md"
 PARKED="$FIXDIR/parked.task.md"
 GHOST="$FIXDIR/ghost-pr.task.md"
+COMMENTED="$FIXDIR/commented-pr.task.md"
 
 SUCCESS_PR="https://github.com/acme/widgets/pull/42"
 
@@ -107,6 +108,27 @@ out_of() { # <task-doc> -> stdout+stderr, for the one place the wording is the p
   bash "$SCRIPT" "$@" 2>&1
 }
 
+# mk_task(): a synthetic task document in TMP, for the shapes that are one field away
+# from a tracked fixture — consistency defects in the RECORD rather than the three shapes
+# the fixtures pin. Defined up here because several sections below build one.
+mk_task() { # <file> <status> <pr-value> [kind]
+  local f="$1" st="$2" pr="$3" kind="${4:-build}"
+  cat > "$f" <<EOF
+---
+type: Task
+title: synthetic
+kind: $kind
+status: $st
+target_repo: acme/widgets
+open_questions: []
+pr: $pr
+timestamp: 2026-08-28T00:00:00Z
+---
+
+# Context
+EOF
+}
+
 # fingerprint(): contents AND mode of every tracked fixture, so a script that rewrote a
 # task document — the re-dispatch's quieter cousin — cannot pass this file.
 fingerprint() {
@@ -122,6 +144,7 @@ ok "the script under test exists"      "$([ -f "$SCRIPT" ] && echo yes || echo n
 ok "success fixture exists"            "$([ -f "$SUCCESS" ] && echo yes || echo no)" yes
 ok "parked fixture exists"             "$([ -f "$PARKED" ] && echo yes || echo no)" yes
 ok "ghost-PR fixture exists"           "$([ -f "$GHOST" ] && echo yes || echo no)" yes
+ok "commented-PR fixture exists"       "$([ -f "$COMMENTED" ] && echo yes || echo no)" yes
 ok "the stub resolves the success PR"  "$(gh pr view "$SUCCESS_PR" --json url >/dev/null 2>&1 && echo yes || echo no)" yes
 ok "…and does not resolve the ghost"   "$(gh pr view "https://github.com/acme/widgets/pull/9999" --json url >/dev/null 2>&1 && echo yes || echo no)" no
 
@@ -148,6 +171,50 @@ ok "PARKED: status unmoved + no PR             -> exit 1" "$(rc_of "$PARKED")"  
 ok "ghost:  pr: names a PR that is not there   -> exit 3" "$(rc_of "$GHOST")"   3
 
 echo
+echo "== a URL in a YAML comment is not a recorded artifact (ai-bridge#54, round 1) =="
+# The false clearance inside the false-clearance checker: `pr: [] # https://…/pull/42`
+# records NOTHING, but a reader that greps the raw line finds a URL, resolves it, and
+# returns exit 0 on a dispatch that produced no PR. The fixture's commented URL is the one
+# the stub DOES resolve, so this can only pass because the comment was stripped — not
+# because the URL happened to 404.
+ok "the fixture's commented-out URL really does resolve at the host (or this proves nothing)" \
+   "$(gh pr view "$SUCCESS_PR" --json url >/dev/null 2>&1 && echo yes || echo no)" yes
+ok "an empty pr: with a URL in a trailing comment is still PARKED -> exit 1" \
+   "$(rc_of "$COMMENTED")" 1
+# The same document one field on: `in-review` must read as a contradiction (4), never as a
+# resolved PR (0) — the comment is invisible to both halves of the check, not just one.
+sed 's/^status: in-progress$/status: in-review/' "$COMMENTED" > "$TMP/commented-in-review.md"
+ok "…and at status: in-review it is a MISMATCH, never a clearance -> exit 4" \
+   "$(rc_of "$TMP/commented-in-review.md")" 4
+ok "the mutation above actually landed (or the assertion tested the same file twice)" \
+   "$(grep -qF 'status: in-review' "$TMP/commented-in-review.md" && echo yes || echo no)" yes
+# A bare key with only a comment after it: the `#` lands at column 1 unless pr_region()
+# keeps the whitespace after the colon, and the strip's "preceded by whitespace" rule
+# cannot see it there. This is the variant that survived the first cut of the fix.
+mk_task "$TMP/pr-key-comment.md" in-progress "# $SUCCESS_PR"
+ok "pr: with nothing but a comment after it -> exit 1" "$(rc_of "$TMP/pr-key-comment.md")" 1
+
+echo
+echo "== …and the strip must not eat a real URL, which is how the last two fixes went wrong =="
+# ai-bridge#44's header records that a blanket strip twice ate real `open_questions`
+# entries. The two shapes that would break here: a `#` INSIDE the URL (a fragment, not
+# preceded by whitespace) and a real entry followed by a genuine comment.
+mk_task "$TMP/pr-fragment.md" in-review "[ ${SUCCESS_PR}#issuecomment-99 ]"
+mk_task "$TMP/pr-real-plus-comment.md" in-review "[ \"$SUCCESS_PR\" ]  # merged 2026-08-28"
+ok "a URL fragment (#issuecomment-99) is not a comment      -> exit 0" \
+   "$(rc_of "$TMP/pr-fragment.md")" 0
+ok "a real entry with a genuine trailing comment still clears -> exit 0" \
+   "$(rc_of "$TMP/pr-real-plus-comment.md")" 0
+# A quoted scalar containing " #" is not a comment either — the quote tracking carried
+# over from #44 is what makes that true, and nothing else here would notice if it went.
+# The ghost URL sits AFTER the quoted hash on purpose: a strip that wrongly cut at " #"
+# would drop it, every remaining URL would resolve, and the check would clear. Only correct
+# quote tracking reaches the ghost and reports it.
+mk_task "$TMP/pr-quoted-hash.md" in-review "[ \"not #a comment\", https://github.com/acme/widgets/pull/9999 ]"
+ok "a ' #' inside quotes does not truncate the list         -> exit 3" \
+   "$(rc_of "$TMP/pr-quoted-hash.md")" 3
+
+echo
 echo "== the parked verdict has to be readable, or the human ignores it =="
 PARKED_OUT="$(out_of "$PARKED")"
 ok "the parked verdict names the document"   "$(grep -qF "parked.task.md" <<<"$PARKED_OUT" && echo yes || echo no)" yes
@@ -156,25 +223,6 @@ ok "…and quotes the status it is still at"   "$(grep -qF "in-progress" <<<"$PA
 
 echo
 echo "== the two halves disagreeing is its own answer (exit 4), not a pass and not the parked shape =="
-# Built in TMP rather than tracked: these are consistency defects in the RECORD, a
-# different class from the three shapes above, and each is one field away from a fixture.
-mk_task() { # <file> <status> <pr-value> [kind]
-  local f="$1" st="$2" pr="$3" kind="${4:-build}"
-  cat > "$f" <<EOF
----
-type: Task
-title: synthetic
-kind: $kind
-status: $st
-target_repo: acme/widgets
-open_questions: []
-pr: $pr
-timestamp: 2026-08-28T00:00:00Z
----
-
-# Context
-EOF
-}
 mk_task "$TMP/claims-review.md" in-review "[ ]"
 mk_task "$TMP/pr-but-unmoved.md" in-progress "[\"$SUCCESS_PR\"]"
 mk_task "$TMP/done-no-pr.md" done "[ ]"
@@ -311,6 +359,10 @@ ok "…covering the ad-hoc dispatch path explicitly" \
    "$(grep -qF 'ad-hoc' <<<"$CONV_BULLET" && echo yes || echo no)" yes
 ok "…and saying the check never re-dispatches" \
    "$(grep -qiE 'report-only|never (re-)?dispatch' <<<"$CONV_BULLET" && echo yes || echo no)" yes
+# Exit 0 covers an honest stop as well as a resolved PR, and the prose has to say so — a
+# reader who takes 0 as "there is a PR" would read a `blocked` task as a verified artifact.
+ok "…and stating that exit 0 also covers a blocked/cancelled stop" \
+   "$(grep -qE 'blocked' <<<"$CONV_BULLET" && echo yes || echo no)" yes
 
 # Literal prefixes, matched with index() rather than a regex: `-v` strings are escape-
 # processed before awk ever sees them, so a pattern like '^4\. \*\*' arrives as `^4. **`
@@ -338,7 +390,7 @@ ok "…and step 4 says a non-zero verdict is not a re-dispatch" \
 # --- the assertion total ---------------------------------------------------------------
 # A block that is skipped rather than failed still turns this file red. Move this number
 # in the same commit that adds or removes an assertion.
-EXPECTED_ASSERTIONS=64
+EXPECTED_ASSERTIONS=74
 TOTAL=$((pass + fail))
 ok "exactly $EXPECTED_ASSERTIONS assertions ran (a silently skipped block shows up here)" \
    "$TOTAL" "$EXPECTED_ASSERTIONS"

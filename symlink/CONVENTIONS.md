@@ -149,7 +149,9 @@ in `cbmono/ai-bridge` enforces this.
   else: did `status:` advance, does `pr:` name a URL, and does that pull request exist.
   Exit 0 is the only clearance — exit 1 is the parked signature (still `ready`/`in-progress`
   with no PR), 3 a `pr:` the host does not resolve, 4 a record contradicting itself, 2 a
-  question it cannot answer. Measured 2026-08-28: two agents finished their work, committed
+  question it cannot answer. **Exit 0 does not mean "there is a PR":** a task the agent left
+  `blocked` or `cancelled` with no PR also clears, because no artifact was due — read the
+  stated reason rather than reading a stopped task as a verified artifact. Measured 2026-08-28: two agents finished their work, committed
   it — one had already pushed — then ended their turns waiting on a background job that
   nothing was left running to notify, and **reported as completed** with no PR open. The
   wall-clock rule missed it (one parked at **16 minutes**), the two-round cap missed it

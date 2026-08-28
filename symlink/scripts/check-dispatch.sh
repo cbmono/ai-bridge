@@ -109,22 +109,76 @@ field() { # <key>
 # `[ "url" ]`, two entries comma-separated) or a block sequence on the following lines.
 # Everything from the key up to the next column-0 key is the value, per YAML — so this
 # reads all of them without caring which spelling was used.
+#
+# THE WHITESPACE AFTER THE COLON IS KEPT, NOT STRIPPED, and that is load-bearing: the
+# comment strip below only treats a `#` as a comment when whitespace precedes it (so a
+# URL fragment — `…/pull/42#issuecomment-9` — survives). Consuming the separator here
+# would put a `#` at column 1 for `pr: # note`, where that rule cannot see it. Same
+# reason write-snapshot.sh's list_region() removes only up to the colon.
 pr_region() {
   printf '%s\n' "$fm" | awk '
-    !seen && index($0, "pr:") == 1 { seen = 1; blk = 1; v = $0; sub(/^pr:[[:space:]]*/, "", v); print v; next }
+    !seen && index($0, "pr:") == 1 { seen = 1; blk = 1; v = $0; sub(/^pr:/, "", v); print v; next }
     blk && /^[[:space:]]/ { print; next }
     blk { blk = 0 }'
+}
+
+# A genuine trailing YAML comment, removed line by line: a `#` preceded by whitespace and
+# outside a quoted scalar starts one, and everything from there to end of line goes.
+#
+# WHY THIS IS NOT OPTIONAL POLISH. Without it, `pr: [] # https://…/pull/42` — an EMPTY
+# list with a URL in a comment — resolves that URL and clears: exit 0 on a task with no
+# recorded PR at all, which is the exact false clearance this whole script exists to
+# prevent. A commented-out URL is the most natural way for that line to end up written.
+#
+# WHY IT LIVES AT THE CONSUMER AND NOT IN pr_region(). This is the third time this repo
+# has met this defect (ai-bridge#44 fixed it in write-snapshot.sh, where a trailing
+# comment flipped an `awaiting:approve` verb and fabricated a `depends_on` edge), and the
+# lesson recorded there is that a BLANKET strip inside a shared region reader twice ate
+# real `open_questions` entries. `pr:` is a list of URLs, never free text, so the strip is
+# safe HERE and is applied only here. The quote tracking is carried over verbatim from
+# that fix rather than re-derived: a `#` inside a quoted scalar is not a comment, and
+# `pr: [ "…/pull/42" ]  # merged` must lose only the comment.
+#
+# Deliberately duplicated rather than shared: these are two standalone scripts, sourcing
+# one from the other would run it, and write-snapshot.sh already carries two scoped
+# copies of this logic for the same reason.
+strip_trailing_comment() { # <text, one or more lines>
+  awk '
+    function ws(x) { return index(" \t\r\n", x) > 0 }
+    {
+      q = ""; fresh = 1; cut = 0; n = length($0)
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1)
+        if (q != "") {
+          if (q == "\"" && c == "\\") { i++; continue }
+          if (c == q) {
+            if (q == "'"'"'" && substr($0, i + 1, 1) == "'"'"'") { i++; continue }
+            q = ""
+          }
+          continue
+        }
+        if (fresh && (c == "\"" || c == "'"'"'")) { q = c; fresh = 0; continue }
+        if (c == "#" && i > 1 && ws(substr($0, i - 1, 1))) { cut = i; break }
+        fresh = (ws(c) || c == "," || c == "[" || c == "-")
+      }
+      print (cut > 0 ? substr($0, 1, cut - 1) : $0)
+    }
+  ' <<<"$1"
 }
 
 status="$(field status)"
 kind="$(field kind)"
 region="$(pr_region)"
+# Every judgement below is made on the COMMENTED-OUT-FREE value. Nothing a human wrote
+# after a `#` is a recorded artifact, and a URL sitting in a comment is the one input that
+# could make an empty `pr:` clear.
+value="$(strip_trailing_comment "$region")"
 
 # What the field CLAIMS, with the list syntax stripped: empty means the agent recorded no
 # artifact at all, which is a different finding from recording an unusable one.
-claim="$(printf '%s' "$region" | tr -d '[]",'"'" | tr -d '[:space:]')"
+claim="$(printf '%s' "$value" | tr -d '[]",'"'" | tr -d '[:space:]')"
 # ...and the URLs inside it. A pull-request URL is the only thing here that can be resolved.
-urls="$(printf '%s\n' "$region" | grep -oE 'https?://[^]"'"'"' ,]+/pull/[0-9]+')"
+urls="$(printf '%s\n' "$value" | grep -oE 'https?://[^]"'"'"' ,]+/pull/[0-9]+')"
 
 [ -n "$status" ] || {
   echo "error: $TASK records no status:, so whether the dispatch advanced it is" >&2
@@ -205,7 +259,7 @@ fi
 # a claim with nothing resolvable behind it. The report DID say it produced something, so
 # this is the unbacked-claim shape, not the parked one.
 if [ -n "$claim" ] && [ -z "$urls" ]; then
-  echo "NOT A URL: $TASK has pr: $region" >&2
+  echo "NOT A URL: $TASK has pr:$(printf '%s' "$value" | tr '\n' ' ')" >&2
   echo "           which names no pull request URL, so nothing can be resolved." >&2
   exit 3
 fi
