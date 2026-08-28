@@ -347,8 +347,10 @@ state, and act only on deltas.
      verifier and do not wait on another external review**: stop, and surface the PR as
      a 🔴 item with **both positions in one short block** — what the reviewer wants,
      what the implementer says, and what the acceptance criterion actually asks for. The
-     human decides; the agents do not converge on it. Exit 2 is *unknown*, which is not
-     permission — treat it the same way and say what could not be read. Run it on every
+     human decides; the agents do not converge on it. **Report exit 1 and exit 2 as
+     different things**: exit 1 is the cap reached, exit 2 (or a missing script) is a
+     count nobody could read — *unknown*, which is not permission either, but which sends
+     the human to fix a tool rather than to settle a disagreement. Run it on every
      tick you would otherwise dispatch a verifier, including the external-reviewer path
      below: a round is a round whoever spent it. This is the rule in this file with a
      price tag on it — the pull request it comes from ran **eight** rounds, was closed

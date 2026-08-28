@@ -28,11 +28,15 @@ no PII/secrets. The role-specific procedure is below.
 
 ### B. Review an existing PR (no new branch)
 1. **Are you allowed to be here at all? Run `scripts/review-rounds.sh <pr> --repo
-   <org>/<repo>` before you read the diff.** Non-zero means this PR has already had its
-   two verification rounds: post the escalation block from step 6 and stop, without
-   reviewing. A third round costs a full session and, on the pull request this cap comes
-   from, produced findings against a change that already met its criteria. Reading the
-   diff first is how a session gets spent before the rule is consulted.
+   <org>/<repo>` before you read the diff.** **Exit 1** means the cap is reached — this PR
+   has already had its two verification rounds. **Exit 2, a missing script, or any other
+   non-zero** means the count could not be read, which is *unknown*, not the cap and not
+   permission. **Both stop you**: post the escalation block from step 6 and stop without
+   reviewing — but say which of the two it was, because "the cap is reached" and "nothing
+   could count the rounds" send the human to different places. A third round costs a full
+   session and, on the pull request this cap comes from, produced findings against a
+   change that already met its criteria. Reading the diff first is how a session gets
+   spent before the rule is consulted.
    Then read the task and the PR (`gh pr view <n> --json baseRefName,headRefName,url`,
    `gh pr diff <n>`), and check CI (`gh pr checks <n>`).
 2. **E2E first-failure rerun + run comparison** (this is QA's own signal — keep it):

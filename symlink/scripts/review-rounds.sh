@@ -72,6 +72,30 @@
 #     where it is — the sibling parses the block from a STRICT rendering with fenced and
 #     indented blocks removed, which is what stops a quoted trailer counting.
 #
+# THE COUNT IS A FLOOR, AND HERE IS EXACTLY WHERE IT LOSES A ROUND. A round evidenced ONLY
+# by an issue comment (route C) has no host-assigned pin — there is no `commit_id` on a
+# comment anywhere in the API — so it is attributed through the commit its body names, and
+# it is countable only while that commit is still one the host lists. Two things erode
+# that: a force-push can orphan the commit, and the vendor keeps ONE summary comment per
+# PR and EDITS it, so its body names only the latest range it read. The second is the
+# bigger limit and it has nothing to do with force-pushes: at most ONE route-C round is
+# ever visible on a PR, however many happened.
+#
+# NEITHER IS FIXABLE FROM WHAT THE HOST PUBLISHES, and this was measured rather than
+# assumed, on ai-bridge#34 (29 commits, 2 recorded force-pushes): the REST timeline's
+# `head_ref_force_pushed` events carry only the commit AFTER each push — both were still
+# in the commit list — and its `committed` events reproduce the current commit list exactly
+# (29 and 29, zero extra). There is no record of the orphaned commit to recover.
+#
+# AND THE OBVIOUS WORKAROUND IS THE FORGERY THIS FILE EXISTS TO REFUSE. Adding
+# body-mentioned SHAs as candidates would recover the orphan — and would also add the BASE
+# commit, which every one of the vendor's review comments names in its `between <base> and
+# <head>` line. Measured against the recorded corpus, that turns #29 from one round into
+# two: a phantom round on every reviewed PR, from text anyone can write. So the residual
+# stays, stated: the count can be one LOW, which costs one extra dispatch, and it cannot be
+# one HIGH from anything an artifact says. Under-counting is not free — it is simply the
+# only direction available here, and it is the cheaper one.
+#
 # An ordinary human comment is not a round and is not counted: the cap bounds what the loop
 # DISPATCHES, and a colleague reading the PR costs that budget nothing. The honest edge is
 # that a human who QUOTES an `okf-verdict` block passes the pre-filter, and a contentful

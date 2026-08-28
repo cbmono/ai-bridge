@@ -228,6 +228,22 @@ setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"
 comment "coderabbitai[bot]" "$CLEAN_BODY"
 ok "a round at an older commit still counts (the head has moved on)" "$(run)" "0 1"
 
+# THE FLOOR, PINNED IN BOTH DIRECTIONS. A round evidenced only by an issue comment is
+# attributed through the commit its body names, so a force-push that orphans that commit
+# loses it — the count reads one LOW. That is a stated limit, not an oversight: the REST
+# timeline publishes no record of the orphaned commit (measured on ai-bridge#34), and the
+# one workaround available — treating body-mentioned SHAs as candidates — would also admit
+# the BASE commit that every review comment names in its `between <base> and <head>` line.
+# The second case here is the one that makes that concrete: it is the recorded clean
+# review, and if body-mentioned SHAs ever became candidates it would count TWO.
+setup; commit "$REFUSAL_HEAD"   # CLEAN_HEAD force-pushed away; the comment survives
+comment "coderabbitai[bot]" "$CLEAN_BODY"
+ok "a comment-only round at an orphaned commit reads one LOW (stated floor)" "$(run)" "0 0"
+
+setup; commit "$CLEAN_HEAD"
+comment "coderabbitai[bot]" "$CLEAN_BODY"
+ok "…and the base SHA that same body names is never a second round" "$(run)" "0 1"
+
 echo
 echo "== the fallback verifier, and its trailer =="
 
