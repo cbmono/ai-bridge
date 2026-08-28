@@ -96,14 +96,21 @@ if command -v git >/dev/null 2>&1; then
     INSTALL_SRC="$TMP/install-src"
     # The copy below reads all of $TPL, so the destination must not live INSIDE $TPL --
     # $TMP comes from $TMPDIR, which a caller can point anywhere, including into the
-    # checkout. `cp -R "$TPL"/. "$TPL/…"` copies a tree into itself. Compare resolved
-    # paths and refuse rather than recurse; same abort-loudly shape as the mktemp guard
-    # above (task-017), because a wrong answer here is silent and expensive.
-    _tpl_res="$(cd -- "$TPL" && pwd -P)"
-    _src_res="$(cd -- "$TMP" && pwd -P)"
-    case "$_src_res/" in
-      "$_tpl_res"/*) echo "snapshot.test: TMPDIR ($_src_res) is inside the template tree ($_tpl_res); the install-source copy would recurse. Point TMPDIR outside the checkout." >&2; exit 2 ;;
-    esac
+    # checkout, and `cp -R "$TPL"/. "$TPL/…"` copies a tree into itself. A resolved-path
+    # prefix check against $TPL alone is not enough, though: install.sh's guard fires off
+    # $0's own directory, so if $TMP resolves inside SOME OTHER linked worktree instead —
+    # not $TPL, just any of them — the copy still sits inside a linked worktree from
+    # git's point of view and the guard fires again on the copy, achieving nothing. So
+    # this asks the exact question install.sh's own guard asks, of $TMP itself, rather
+    # than comparing path text against one specific worktree; same abort-loudly shape as
+    # the mktemp guard above (task-017), because a wrong answer here is silent and
+    # expensive.
+    _tmp_gd="$(git -C "$TMP" rev-parse --absolute-git-dir 2>/dev/null || true)"
+    _tmp_gc="$(git -C "$TMP" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    if [ -n "$_tmp_gd" ] && [ -n "$_tmp_gc" ] && [ "$_tmp_gd" != "$_tmp_gc" ]; then
+      echo "snapshot.test: TMPDIR ($TMP) resolves inside a linked git worktree (git dir: $_tmp_gd); the install-source copy would still trip install.sh's own worktree guard. Point TMPDIR outside every worktree, not just this template's." >&2
+      exit 2
+    fi
     mkdir -p "$INSTALL_SRC"
     cp -R "$TPL"/. "$INSTALL_SRC"/
     rm -rf "$INSTALL_SRC/.git"

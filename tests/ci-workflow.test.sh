@@ -187,17 +187,60 @@ FIX
   # harness as bad, then confirm THAT version reports a false all-clear on the
   # identical fixture.
   MUTATED="$RUNNER_TMP/runner-mutated.sh"
-  python3 - "$EXTRACTED" "$MUTATED" <<'PY'
+  # Mirrors the extraction branch above: on a Python-less host RUNNER_ORACLE is
+  # "psych", and a bare python3 call here would die under this file's own
+  # `set -uo pipefail` before the assertion below it ever ran — the branch built
+  # specifically for that host would never reach what it exists to prove.
+  #
+  # ANCHORED ON THE UNIQUE ERROR TEXT, not a generic "if -z summary" pattern: the
+  # real script has TWO such blocks (an inner one that only swaps the dense summary
+  # for the prose-style fallback, and this outer one that actually gives up). A
+  # generic pattern matches both, and Python's `subn(..., count=1)` silently caps
+  # the reported match count at 1 regardless of how many exist — hiding exactly the
+  # ambiguity this guard is supposed to catch. Anchoring on the error message text,
+  # unique to the give-up block, then walking outward to its enclosing `if`/`fi` is
+  # unambiguous regardless of how many other "if -z summary" blocks the script has.
+  if [ "$RUNNER_ORACLE" = "pyyaml" ]; then
+    python3 - "$EXTRACTED" "$MUTATED" <<'PY'
 import re, sys
 src = open(sys.argv[1]).read()
-pattern = re.compile(r'(if \[ -z "\$summary" \]; then\n)(.*?)(\n( *)fi\n)', re.S)
-mutated, n = pattern.subn(lambda m: m.group(1) + "      continue\n" + m.group(3), src, count=1)
-if n != 1:
-    sys.exit("expected exactly one missing-summary guard, found %d" % n)
+anchor = "printed no recognised pass/fail summary"
+idx = src.index(anchor)
+if_re = re.compile(r'if \[ -z "\$summary" \]; then\n')
+starts = [m.end() for m in if_re.finditer(src) if m.start() < idx]
+if not starts:
+    sys.exit("could not locate the enclosing missing-summary guard")
+then_end = starts[-1]
+fi_m = re.compile(r'\n( *)fi\n').search(src, idx)
+if not fi_m:
+    sys.exit("could not find the closing fi for the missing-summary guard")
+mutated = src[:then_end] + "      continue\n" + fi_m.group(1) + "fi\n" + src[fi_m.end():]
 open(sys.argv[2], "w").write(mutated)
 PY
+  else
+    ruby - "$EXTRACTED" "$MUTATED" <<'RB'
+src = File.read(ARGV[0])
+anchor = "printed no recognised pass/fail summary"
+idx = src.index(anchor)
+abort("could not locate the missing-summary anchor text") unless idx
+if_re = /if \[ -z "\$summary" \]; then\n/
+if_starts = []
+pos = 0
+while (m = if_re.match(src, pos))
+  if_starts << m.end(0)
+  pos = m.end(0)
+end
+if_starts.select! { |e| e <= idx }
+abort("could not locate the enclosing missing-summary guard") if if_starts.empty?
+then_end = if_starts.last
+fi_match = /\n( *)fi\n/.match(src, idx)
+abort("could not find the closing fi for the missing-summary guard") unless fi_match
+mutated = src[0...then_end] + "      continue\n" + fi_match[1] + "fi\n" + src[fi_match.end(0)..-1]
+File.write(ARGV[1], mutated)
+RB
+  fi
   MUT_STATUS=$?
-  assert "the missing-summary guard was found once and mutated" "$([ "$MUT_STATUS" -eq 0 ] && echo 0 || echo 1)"
+  assert "the give-up missing-summary guard was located and mutated" "$([ "$MUT_STATUS" -eq 0 ] && echo 0 || echo 1)"
   if [ "$MUT_STATUS" -eq 0 ]; then
     MUT_OUT="$( cd "$WS" && GITHUB_WORKSPACE="$WS" RUNNER_TEMP="$RUNNER_TMP/runner-tmp2" bash "$MUTATED" 2>&1 )"; MUT_RC=$?
     assert "…and on the SAME fixture, a mutated runner that drops the guard falsely passes (proves the pin bites)" \
