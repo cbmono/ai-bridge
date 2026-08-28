@@ -41,6 +41,32 @@ SCRIPT="$TPL/symlink/scripts/commit-as.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/commit-as-identity.XXXXXX")" || {
   echo "commit-as-identity.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+
+# install.sh refuses to run from a linked git worktree (deliberately — see its own
+# header), and every role agent's checkout of this template is one (CONVENTIONS.md).
+# Re-point $BRIDGE_INSTALL at a filesystem-level copy of $TPL outside any git
+# repository, exactly as tests/board-renderers.test.sh does — see there for the full
+# rationale and the TMPDIR-recursion guard this carries along with it. Skipped when
+# $TPL is already a main tree or no repo at all, so a plain clone pays nothing extra.
+# ai-bridge-v4/task-030.
+BRIDGE_INSTALL="$TPL/install.sh"
+if command -v git >/dev/null 2>&1; then
+  _tpl_gd="$(git -C "$TPL" rev-parse --absolute-git-dir 2>/dev/null || true)"
+  _tpl_gc="$(git -C "$TPL" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  if [ -n "$_tpl_gd" ] && [ -n "$_tpl_gc" ] && [ "$_tpl_gd" != "$_tpl_gc" ]; then
+    INSTALL_SRC="$TMP/install-src"
+    _tpl_res="$(cd -- "$TPL" && pwd -P)"
+    _src_res="$(cd -- "$TMP" && pwd -P)"
+    case "$_src_res/" in
+      "$_tpl_res"/*) echo "commit-as-identity.test: TMPDIR ($_src_res) is inside the template tree ($_tpl_res); the install-source copy would recurse. Point TMPDIR outside the checkout." >&2; exit 2 ;;
+    esac
+    mkdir -p "$INSTALL_SRC"
+    cp -R "$TPL"/. "$INSTALL_SRC"/
+    rm -rf "$INSTALL_SRC/.git"
+    BRIDGE_INSTALL="$INSTALL_SRC/install.sh"
+  fi
+fi
+
 pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
@@ -301,13 +327,13 @@ assert "seed/.gitignore ignores it" \
 # install.sh must also add it to an instance whose .gitignore predates the line —
 # the seed is copied only when absent, so an older instance would never get it.
 INST="$TMP/g/_ai-bridge-g"; mkdir -p "$INST"
-bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 grep -v 'instance.config.local.json' "$INST/.gitignore" > "$INST/.gi" && mv "$INST/.gi" "$INST/.gitignore"
-bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
+bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 assert "install.sh re-adds it to an older instance" \
   "$(grep -qxF 'instance.config.local.json' "$INST/.gitignore" && echo 0 || echo 1)"
 assert "…and does not duplicate it on a re-run" \
-  "$( [ "$( { bash "$TPL/install.sh" "$INST" >/dev/null 2>&1; grep -cxF 'instance.config.local.json' "$INST/.gitignore"; } )" = 1 ] && echo 0 || echo 1 )"
+  "$( [ "$( { bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1; grep -cxF 'instance.config.local.json' "$INST/.gitignore"; } )" = 1 ] && echo 0 || echo 1 )"
 # It really is ignored in a live instance, not just listed.
 ( cd "$INST" && git init -q . && printf '{ "authorEmail": "x@y.z" }\n' > instance.config.local.json )
 assert "git ignores the override in an instance" \

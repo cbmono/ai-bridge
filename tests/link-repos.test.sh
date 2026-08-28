@@ -9,11 +9,36 @@
 # and the unconfigured-reposRoot path the installer depends on.
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/link-repos.sh"
-BRIDGE_INSTALL="$(cd "$(dirname "$0")/.." && pwd)/install.sh"
+TPL="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT="$TPL/symlink/scripts/link-repos.sh"
 TMP="$(mktemp -d)" || {
   echo "link-repos.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+
+# install.sh refuses to run from a linked git worktree (deliberately — see its own
+# header), and every role agent's checkout of this template is one (CONVENTIONS.md).
+# Re-point $BRIDGE_INSTALL at a filesystem-level copy of $TPL outside any git
+# repository, exactly as tests/board-renderers.test.sh does — see there for the full
+# rationale and the TMPDIR-recursion guard this carries along with it. Skipped when
+# $TPL is already a main tree or no repo at all, so a plain clone pays nothing extra.
+# ai-bridge-v4/task-030.
+BRIDGE_INSTALL="$TPL/install.sh"
+if command -v git >/dev/null 2>&1; then
+  _tpl_gd="$(git -C "$TPL" rev-parse --absolute-git-dir 2>/dev/null || true)"
+  _tpl_gc="$(git -C "$TPL" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  if [ -n "$_tpl_gd" ] && [ -n "$_tpl_gc" ] && [ "$_tpl_gd" != "$_tpl_gc" ]; then
+    INSTALL_SRC="$TMP/install-src"
+    _tpl_res="$(cd -- "$TPL" && pwd -P)"
+    _src_res="$(cd -- "$TMP" && pwd -P)"
+    case "$_src_res/" in
+      "$_tpl_res"/*) echo "link-repos.test: TMPDIR ($_src_res) is inside the template tree ($_tpl_res); the install-source copy would recurse. Point TMPDIR outside the checkout." >&2; exit 2 ;;
+    esac
+    mkdir -p "$INSTALL_SRC"
+    cp -R "$TPL"/. "$INSTALL_SRC"/
+    rm -rf "$INSTALL_SRC/.git"
+    BRIDGE_INSTALL="$INSTALL_SRC/install.sh"
+  fi
+fi
 pass=0; fail=0
 
 ok() { # <name> <actual> <expected>
