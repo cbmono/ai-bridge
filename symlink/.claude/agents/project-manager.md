@@ -287,7 +287,7 @@ state, and act only on deltas.
    heavily inferred (the same signal that triggers the optional `plan-architect`
    critique); **drop toward `light`** for a trivial one (docs-only, one-line fix). A
    task may set a `model:` field (a `light|standard|deep` tier, or a raw alias) —
-   honor it verbatim, no heuristic. Resolve the chosen tier to an alias via `models`
+   honor it verbatim, no heuristic. Resolve the chosen tier to an alias with `scripts/resolve-model.sh <agent>` (or via `models`
    and pass it as the model when you spawn the agent — the same for **every**
    dispatch, including the `cataloguer` and an optional `plan-architect` critique:
    look their tiers up in `roleTiers` too, never a hard-coded default. If

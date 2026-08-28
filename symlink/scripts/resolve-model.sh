@@ -30,7 +30,12 @@ set -uo pipefail
 agent=""; inst="."
 while [ $# -gt 0 ]; do
   case "$1" in
-    --instance) inst="${2:-}"; shift 2 ;;
+    # `[ $# -ge 2 ]` first: a bare trailing `--instance` leaves one argument, and
+    # `shift 2` then FAILS WITHOUT SHIFTING. With no `set -e` that returns to the top
+    # of the loop with the same argv and spins forever — verified by running it.
+    --instance)
+      [ $# -ge 2 ] || { echo "resolve-model: --instance needs a directory" >&2; exit 2; }
+      inst="$2"; shift 2 ;;
     -h|--help) sed -n '3,5p' "$0"; exit 0 ;;
     -*) echo "resolve-model: unknown flag $1" >&2; exit 2 ;;
     *) agent="$1"; shift ;;
