@@ -1304,6 +1304,12 @@ if STANDALONE:
            + head_html + "\n</head>\n<body>\n" + body_html + "\n</body>\n</html>\n")
 else:
     doc = head_html + "\n" + body_html + "\n"
+# The output DIRECTORY is created, and only here — after the "nothing to write" exit
+# above, so an instance that is off the board still leaves no trace. The /pm-loop tick
+# renders to `.board-live/board.html`, which exists on a machine that has run
+# watch-board.sh and on no other, and a renderer that fails with a FileNotFoundError the
+# first time each tick calls it would be a board nobody ever sees.
+OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_text(doc, encoding="utf-8")
 print(f"build-board: wrote {OUT} — {len(instances)} instance(s), "
       f"{n_awaiting} awaiting, {len(broken)} unreadable snapshot(s).")

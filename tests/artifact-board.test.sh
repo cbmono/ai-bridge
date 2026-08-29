@@ -289,6 +289,21 @@ rc2=0; bash "$GEN" --out "$TMP/none.html" "$TMP/nosnap" >/dev/null 2>&1 || rc2=$
 assert "an instance with no snapshot exits 0"        "$(eq "$rc2" 0)"
 assert "…and writes nothing"                         "$(fhasnt x "$TMP/none.html" 2>/dev/null || echo 0)"
 
+echo "== --out creates its directory, but only when there is something to write =="
+# THE TICK RENDERS TO `.board-live/board.html`, a directory that exists on a machine
+# which has run watch-board.sh and on no other. A renderer that raised FileNotFoundError
+# the first time each tick called it would be a board nobody ever sees — so the parent is
+# created here rather than in every caller.
+rcd=0; bash "$GEN" --standalone --out "$TMP/fresh/deeper/board.html" "$TMP/alpha" >/dev/null 2>&1 || rcd=$?
+assert "a missing --out directory is created"        "$(eq "$rcd" 0)"
+assert "…and the page is written into it"            "$(yes_if test -s "$TMP/fresh/deeper/board.html")"
+# The other half, and the one that keeps "absence is safe" above true: an instance that
+# is off the board must leave no trace at all, so the mkdir sits AFTER the nothing-to-write
+# exit rather than beside the argument parsing.
+rcd2=0; bash "$GEN" --out "$TMP/untouched/board.html" "$TMP/nosnap" >/dev/null 2>&1 || rcd2=$?
+assert "…while a board with no snapshot exits 0"     "$(eq "$rcd2" 0)"
+assert "…and creates no directory at all"            "$(yes_if test ! -e "$TMP/untouched")"
+
 echo "== one drifted instance must not blank the board =="
 mkdir -p "$TMP/bad"; printf 'not json at all\n' > "$TMP/bad/SNAPSHOT.json"
 rc3=0; bash "$GEN" --out "$TMP/mixed.html" "$TMP/bad" "$TMP/alpha" >/dev/null 2>&1 || rc3=$?
