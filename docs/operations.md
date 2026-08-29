@@ -282,7 +282,7 @@ the same position as one that deleted the file — opt in with `touch SNAPSHOT.j
 "boardInstances": [".", "~/workspace/other-group/_ai-bridge-other-group"]
 ```
 
-### Before you publish it, know what it carries
+### Before it leaves the machine, know what it carries
 
 Nothing publishes the board any more — the tick renders a local file — but a file is
 copyable, and the board's HTML can therefore still leave the machine if you carry it

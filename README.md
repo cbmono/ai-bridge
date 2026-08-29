@@ -280,7 +280,7 @@ Derived and gitignored; never hand-edit it. Reasoning:
 
 A cross-instance board is available too, on the same off-by-deletion rule
 ([docs/operations.md § the board](docs/operations.md#5-the-cross-instance-board-optional)).
-**Read the field list before you publish one** — the page can leave the machine.
+**Read the field list before you carry one off the machine** — nothing publishes it, but a rendered file is still a file.
 
 ## Three ways to see the board
 
@@ -358,7 +358,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Worktrees** | `prune-worktrees.sh` **reports, never deletes.** Do not add a delete, not even behind a flag — it destroyed three running agents' worktrees once. [→](docs/conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing) |
 | **Bundle repair** | `migrate-bundle.sh` is report-only by default and fixes only what has one right answer. **A false success is worse than the error it claims to fix.** [→](docs/conventions.md#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) |
 | **Retiring content** | machinery symlinks are swept; **seed content is only ever reported**, never deleted. [→](docs/operations.md#2-retiring-content-swept-vs-reported) |
-| **Published data** | the board's field list is a data-governance boundary — no question text, no document bodies, no author identity, no out-of-bundle paths. [→](docs/operations.md#before-you-publish-it-know-what-it-carries) |
+| **Board data** | the board's field list is a data-governance boundary — no question text, no document bodies, no author identity, no out-of-bundle paths. Nothing publishes it now, and a rendered file is still copyable. [→](docs/operations.md#before-it-leaves-the-machine-know-what-it-carries) |
 | **Untrusted text** | `AWAITING.md` items and the per-turn state injection are fenced as data before they enter session context. Keep the boundary. [→](docs/conventions.md#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) |
 | **No customer PII** | not in a task title, not in an answer, not in a `Finding`. Titles reach the board; answers persist for the life of the repo. |
 | **Drift check** | `/audit` is read-only and advisory. It catches an autonomous loop gaming itself; it is not a merge-blocking guarantee. [→](docs/autonomy.md#the-audit-counter-metric) |
