@@ -44,6 +44,28 @@ Pair it with `/audit`, the slow counter-metric that watches an autonomous loop f
 status checks, the merge authority cannot be exercised at all. The loop says so once and
 keeps surfacing PRs for you.
 
+## Did the dispatch produce its PR?
+
+Everything below is about a pull request. This is the check that one exists.
+`scripts/check-dispatch.sh <task-doc>`, run whenever a dispatched agent reports — from a
+tick or from an ad-hoc dispatch — reads three things and judges nothing else: did
+`status:` move off `ready`/`in-progress`, does `pr:` name a URL, does the host resolve
+that PR. It is **report-only** — it never re-dispatches, never edits the task, and asks
+the host only to read.
+
+| Exit | Means |
+|---|---|
+| 0 | the dispatch produced what it promised — **or stopped honestly** (`blocked`/`cancelled`, so nothing was due). Read the stated reason; exit 0 does not mean "there is a PR" |
+| 1 | **parked** — still `draft`/`ready`/`in-progress` with no PR. The signature it exists for, decided from the document alone with no network |
+| 2 | cannot answer — usage, unreadable frontmatter, a research task (no PR by design; read its `artifacts:`), `gh` missing. Unknown is never reported as fine |
+| 3 | `pr:` names a pull request the host does not resolve, or is not a URL at all |
+| 4 | the record contradicts itself — `in-review`/`done` with an empty `pr:`, or a PR that resolves while `status:` never moved |
+
+Ask it about a task you **dispatched**: one nobody has dispatched reads as exit 1 too,
+correctly and uselessly. The measurement behind it is in
+[`symlink/CONVENTIONS.md`](../symlink/CONVENTIONS.md) → "A dispatch is not finished until
+its artifact exists".
+
 ## Required checks — exit 0 is the only clearance
 
 The merge gate's first precondition is `scripts/required-checks.sh <pr>`.
@@ -186,6 +208,35 @@ clean. Three rules keep it to one.
    which makes any prior verdict stale (predicate clause 3), so the *new* commit still has
    to be verified before it can merge — that's re-verification of different code, not
    re-review of the same code, and the loop does it automatically.
+
+## Two rounds, then the human decides
+
+A **hard cap** on how many verification rounds one PR gets, so an unresolved disagreement
+costs the human one decision rather than an unbounded review.
+[`symlink/CONVENTIONS.md`](../symlink/CONVENTIONS.md) → "TWO ROUNDS, THEN THE HUMAN
+DECIDES" is normative and carries the measurement behind the number.
+
+| Round | What happens |
+|---|---|
+| 1 | the reviewer reports findings; the implementer fixes them and replies **once** |
+| 2 | the reviewer checks **only** what it raised in round 1 — new findings outside that set are recorded, not blocking |
+| 3 | **there is none.** Whatever is unresolved goes to the human in one short block: what the reviewer wants, what the implementer says, what the criterion actually asks |
+
+`scripts/review-rounds.sh <pr> [--repo <owner>/<name>]` makes the cap a number a
+dispatcher **reads** rather than a rule it has to remember. Run it before dispatching a
+verifier, and before verifying as one.
+
+| Exit | Means |
+|---|---|
+| 0 | under the cap |
+| 1 | at or past two rounds — stop, and put both positions in front of the human |
+| 2 | cannot answer. **Unknown is not permission**, and a missing or broken script lands here too, so the failure direction is "ask the human" |
+
+A round is one **completed verification of a distinct commit**, and whether a candidate
+counts is decided by `review-clearance.sh` unmodified — so a rate-limited reviewer's
+refusal is not a round, and an absent reviewer adds none. The count is a **floor**: it can
+be one low (which costs one extra dispatch) and it cannot be one high from anything an
+artifact's text says.
 
 ## Browser writes
 

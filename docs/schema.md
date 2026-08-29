@@ -22,7 +22,7 @@ task/project/objective/agent constructs — those are producer-defined extension
 | `type` | Lives at | What it is |
 |---|---|---|
 | `Objective` | `objectives/<slug>.md` | a goal, with `success_criteria` that `/audit` grounds progress against |
-| `Project` | `projects/<slug>/project.md` | a `build` or `research` effort; carries `autonomy`, `owner`, `target_repo`, `clis`, `browser` |
+| `Project` | `projects/<slug>/project.md` | a `build` or `research` effort; carries `autonomy`, `owner`, `target_repo`, `clis`, `browser`, `retain` |
 | `Phase` | `projects/<slug>/phases/<n>-<slug>.md` | an ordered stage of a project |
 | `Task` | `projects/<slug>/tasks/<id>.md` | the unit a role agent is dispatched on |
 | `Agent` | `agents/index.md` | the role roster |
@@ -55,6 +55,21 @@ draft ──│ HUMAN promotes │──► ready ──► in-progress ⇄ in-r
 
 A task may fan out to several PRs (`pr:` is a list) and stays `in-review` until **all** of
 them merge.
+
+## Closing a project
+
+`/close-project <slug>` runs once every task is terminal. Its folder step is one tested
+command — `scripts/close-project-folder.sh <slug>` reports, `--apply` writes — and what it
+does is decided by one optional field, `retain:` (absent = false).
+
+| `project.md` | The folder at closeout |
+|---|---|
+| **no `retain:`** (default) | `git rm -r projects/<slug>/`. Git history + `knowledge/` are the record — there is **no `archive/`**. Right for `build`, whose real output is merged PRs living in the product repo |
+| **`retain: true`** | kept, and *frozen* first: `deliverable_paths:` stamped into `project.md`, working files pruned and reported, `index.md` refreshed and **committed** as the front door. Right for `research`, whose output **is** the folder |
+
+`retain:` governs the **folder only** — a retained project still ends `status: done` with
+every task terminal, and is not reopenable. Full rules, including exactly which working
+files are pruned: [`SCHEMA.md`](../symlink/SCHEMA.md) → "Project & objective completion".
 
 ## What validation checks — and what it deliberately does not
 
