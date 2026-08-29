@@ -69,7 +69,20 @@ cfg="$root/instance.config.json"
 # grep rather than a jq dependency, matching show-awaiting.sh and push-state.sh (bash +
 # sed/awk only) rather than agent-control.sh's jq-hard-requirement, which pays for a real
 # parser because it is a security control.
-if grep -q '"board"[[:space:]]*:[[:space:]]*false' "$cfg" 2>/dev/null; then exit 0; fi
+#
+# NEWLINES ARE FLATTENED FIRST, because `grep` reads one line at a time and JSON does not
+# have to put a key and its value on one. `{"board":\n  false}` is valid, and a line-wise
+# reader answers "on" for it — failing OPEN again, by a second route. Flattening cannot
+# widen the match across members: the pattern requires `false` immediately after the
+# colon, so `"board": true, "x": false` still reads as true.
+#
+# THIS IS ONE STEP AHEAD OF `install.sh`'s `cfg_bool()`, WHICH IS DELIBERATE. That reader
+# is line-wise and stays that way — it is pinned by tests/snapshot.test.sh and is not this
+# change's to move. On the split-line config the two disagree in the SAFE direction: the
+# installer seeds a snapshot, and this hook still honours the `false` and stays quiet.
+if tr '\n' ' ' < "$cfg" 2>/dev/null | grep -q '"board"[[:space:]]*:[[:space:]]*false'; then
+  exit 0
+fi
 
 page="$root/.board-live/board.html"
 [ -f "$page" ] || exit 0

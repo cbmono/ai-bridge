@@ -188,6 +188,17 @@ assert "one-line board:false is still OFF"      "$([ -z "$OUT" ] && echo 0 || ec
 printf '{ "org": "x", "board": true, "maxPrLoc": 2000 }\n' > "$INST/instance.config.json"
 run
 assert "…and one-line board:true still prints"  "$(has "$PAGE" "$OUT")"
+# The other half of the same failure, from CodeRabbit on ai-bridge#60: JSON does not have
+# to put a key and its value on ONE line, and a line-wise reader answers "on" for a config
+# that says `false` — the identical fail-open, reached by a second route.
+printf '{\n  "board":\n    false\n}\n' > "$INST/instance.config.json"
+run
+assert "a split-line board:false is still OFF"  "$([ -z "$OUT" ] && echo 0 || echo 1)"
+# …and flattening must not let the match wander across members: `false` has to be THIS
+# key's value, not the next one's.
+printf '{\n  "board": true,\n  "somethingElse": false\n}\n' > "$INST/instance.config.json"
+run
+assert "…while a later false value does not switch it off" "$(has "$PAGE" "$OUT")"
 
 echo "== nothing task-derived ever reaches stdout =="
 # The data-governance line: this hook must print the path and NOTHING else, even when a

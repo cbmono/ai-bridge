@@ -262,12 +262,14 @@ Details worth knowing before you pick one:
 
 **On by default, off by `board: false`.** (Changed 2026-08-23: it used to be opt-in by presence, with `rm` permanent. That inverted the common case — every instance stamped before the board existed silently stayed off it, and three of three real instances were in that state. The decision now lives in `board` in `instance.config.json`, where it is visible and survives a re-stamp. A `rm` still drops an instance off immediately, but the next stamp restores it unless config says otherwise. A snapshot is a LOCAL gitignored file — having one does not publish anything.)
 
-**Historic note.** `install.sh` creates `SNAPSHOT.json` on the **first
-stamp only**; the writer rewrites it just when it already exists and never creates it;
-`build-board.sh` leaves a snapshot-less instance off the page entirely, with no
-placeholder. So `rm SNAPSHOT.json` takes that instance off the board for good, and
-`touch SNAPSHOT.json` puts it back. An instance stamped **before** the board existed is in
-the same position as one that deleted the file — opt in with `touch SNAPSHOT.json`.
+**Who creates the file, and who does not.** `install.sh` creates `SNAPSHOT.json` on
+**any** stamp where it is missing and `board` is not `false` — not the first stamp only,
+which is how `AWAITING.md` works and is the thing this paragraph used to say. The writer
+rewrites it just when it already exists and never creates it; `build-board.sh` leaves a
+snapshot-less instance off the page entirely, with no placeholder. So `rm SNAPSHOT.json`
+takes that instance off the board **until the next stamp**, and `board: false` is what
+keeps it off across stamps. An instance stamped **before** the board existed comes back on
+at its next stamp, with no `touch` needed.
 
 **Which instances appear is explicit, never a glob.**
 

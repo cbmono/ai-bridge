@@ -41,7 +41,7 @@ gitignored file on their machine.
 | 4 | Name who owns unowned work — **tracked** | either clone | `defaultOwner` in `instance.config.json` |
 | 5 | Say which login this clone is | **each** clone | `{ "ownerGithubUser": "<login>" }` in `instance.config.local.json` |
 | 6 | Put this machine's paths in the local file | **each** clone | `reposRoot`, `worktreeRoot`, `boardInstances` |
-| 7 | Turn the nudges on (a clone is not a first stamp) | second clone | `touch AWAITING.md SNAPSHOT.json` |
+| 7 | Turn the nudges on (a clone is not a first stamp) | second clone | `touch AWAITING.md` — `SNAPSHOT.json` is seeded by the stamp itself |
 | 8 | Untrack the derived indexes if already committed | either clone | run the `git rm --cached` that `install.sh` prints |
 | 9 | Assign work | either clone | `owner: <github-login>` on a `project.md` or one `tasks/<id>.md` |
 
@@ -109,9 +109,13 @@ Covered by `tests/task-owner.test.sh` (74 assertions, mostly refusals), `commit-
 ## One thing a second clone does not get automatically
 
 The second clone is **not a first stamp** (`instance.config.json` arrives tracked), so
-`install.sh` there will **not** create `AWAITING.md` or `SNAPSHOT.json`. It says so, with
-the `touch` to turn each on. See [conventions.md invariant 3](conventions.md#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence)
-for why creation is gated on the first stamp.
+`install.sh` there will **not** create `AWAITING.md`. It says so, with the `touch` to turn
+it on. See [conventions.md invariant 3](conventions.md#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence)
+for why that creation is gated on the first stamp.
+
+`SNAPSHOT.json` is **not** gated that way and needs no `touch`: the installer seeds it on
+any stamp where it is missing, unless `board` is `false`. The board's off switch is that
+key, not the file's absence.
 
 Two rules survive the per-machine override and are checked against the *effective*
 values: `worktreeRoot` must never sit inside the synced `reposRoot`, and `reposRoot` must
