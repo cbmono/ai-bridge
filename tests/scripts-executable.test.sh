@@ -11,7 +11,7 @@
 # what made the original defect invisible — not because they are the "only" such files.)
 #
 # WHY THE INDEX, NOT THE WORKING TREE. `close-project-folder.sh` shipped in ai-bridge#30
-# at mode 100644 — the only 644 among what are now 15 scripts here — and the defect was
+# at mode 100644 — the only 644 among what are now 16 scripts here — and the defect was
 # invisible on every developer machine because `install.sh` runs `chmod +x` on every
 # script it stamps. After that stamp, `test -x` on the working-tree copy is TRUE and
 # `git status` shows the file as locally modified (a mode change), while `origin/main`
@@ -247,7 +247,7 @@ echo "== symlink/scripts — install.sh chmods these on stamp, but the repo itse
 # drop out of the check. Quoting routes the pattern through git's own index-backed glob
 # matching instead — the one source this test's header already says to trust. See the
 # "guard D" reproduction below, and the anchored call-site pin that keeps it quoted.
-check_group "$TPL" "symlink/scripts/*.sh" 15 'symlink/scripts/*.sh'
+check_group "$TPL" "symlink/scripts/*.sh" 16 'symlink/scripts/*.sh'
 
 echo "== symlink/.claude/hooks — bare paths off settings.json, NO installer chmod at all =="
 check_group "$TPL" "symlink/.claude/hooks/*.sh" 5 'symlink/.claude/hooks/*.sh'
@@ -459,7 +459,7 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # A skipped block is now as red as a failed one. The pin counts every assertion BEFORE
 # itself; add or remove an assertion and this number moves with it, deliberately, in the
 # same commit.
-EXPECTED_ASSERTIONS=53
+EXPECTED_ASSERTIONS=54
 TOTAL=$((pass + fail))
 assert "exactly $EXPECTED_ASSERTIONS assertions ran — a silently skipped block shows up here (got $TOTAL)" \
   "$([ "$TOTAL" -eq "$EXPECTED_ASSERTIONS" ] && echo 0 || echo 1)"

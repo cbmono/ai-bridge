@@ -6,7 +6,21 @@
 # WHY. `instance.config.json` is tracked, so every value in it is a statement both
 # clones of a shared bundle read. `reposRoot`, `worktreeRoot` and `boardInstances` are
 # absolute paths on ONE machine, so a tracked value cannot be right for both. The
-# override exists for exactly those, plus the two identity keys.
+# override exists for exactly those, plus the two identity keys — and, since 2026-08-29,
+# for the three SPEND AND CAPACITY keys: `models`, `roleTiers` and `maxAgentsInFlight`.
+# Those are not paths, so they need their own argument: two clones disagreeing about them
+# breaks nothing (each dispatch runs on its own machine), while a TRACKED value forces one
+# number on every clone — measured 2026-08-29, `maxAgentsInFlight` read 4 / 6 / 10 across
+# three instances on one 11-core machine, up to 20 concurrent agents against a ceiling
+# near 4.
+#
+# They also carry a failure mode the paths do not, which is why they are exercised entry
+# by entry below rather than as "the override won". `roleTiers` is a MAP, and the override
+# anyone actually writes is a PARTIAL one — a single agent moved to a cheaper tier. A
+# layering that merges with `dict.update()` replaces the whole map with that one entry, so
+# every OTHER agent silently loses its tier and inherits the session model: a one-line
+# local file changes seven agents' models, six of them by accident, and nothing looks
+# broken.
 #
 # The failure this file is built to catch is a HALF-HONOURED override: one reader picks
 # it up and another does not, so the loop dispatches against one reposRoot while
@@ -16,9 +30,12 @@
 # on someone's machine.
 #
 # The keys that are NOT overridable are asserted too, and they are the sharper half:
-# `defaultOwner` and `people` are only correct while both clones agree, so an override
-# is precisely the disagreement that breaks them (`defaultOwner`'s own case lives in
-# task-owner.test.sh, where the two-clone fixture is).
+# `defaultOwner`, `people` and `externalReviewer` are only correct while both clones
+# agree, so an override is precisely the disagreement that breaks them (`defaultOwner`'s
+# own case lives in task-owner.test.sh, where the two-clone fixture is). `externalReviewer`
+# is the one to hold the line on: it names WHERE THIS CODE MAY BE SENT, which is policy
+# rather than preference, and a clone quietly routing diffs to another reviewer breaks in
+# the direction nobody notices.
 #
 # assert(): 0 is a PASS, matching the other harnesses here.
 set -uo pipefail
@@ -129,13 +146,92 @@ else
 fi
 
 echo
+echo "== resolve-model.sh / resolve-max-agents.sh: spend and capacity read local-first =="
+if command -v python3 >/dev/null 2>&1; then
+  spend_cfg() { printf '%s\n' '{
+  "org": "o",
+  "maxAgentsInFlight": 9,
+  "models":    { "light": "haiku", "standard": "sonnet", "deep": "opus" },
+  "roleTiers": { "software-engineer": "deep", "cataloguer": "standard" }
+}' > "$INST/instance.config.json"; }
+  MODEL() { ( cd "$INST" && bash "$SCRIPTS/resolve-model.sh" "$1" 2>/dev/null ); }
+  CAP()   { ( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null ); }
+  spend_cfg
+  no_local
+  assert "no local file -> the tracked tier answers (deep -> opus)" \
+    "$([ "$(MODEL software-engineer)" == opus ] && echo 0 || echo 1)"
+  assert "no local file -> the tracked cap answers (9)" \
+    "$([ "$(CAP)" == 9 ] && echo 0 || echo 1)"
+
+  # THE PARTIAL OVERRIDE. One roleTiers entry named; every other entry must survive.
+  local_cfg '{ "roleTiers": { "cataloguer": "light" }, "maxAgentsInFlight": 2 }'
+  assert "a partial roleTiers override moves the entry it names (light -> haiku)" \
+    "$([ "$(MODEL cataloguer)" == haiku ] && echo 0 || echo 1)"
+  assert "…and the entries it does NOT name keep their tracked tier" \
+    "$([ "$(MODEL software-engineer)" == opus ] && echo 0 || echo 1)"
+  assert "…and the cap comes from the local file (2, not the tracked 9)" \
+    "$([ "$(CAP)" == 2 ] && echo 0 || echo 1)"
+
+  # Same shape for `models`: retier ONE alias, leave the rest of the map standing. The
+  # two agents resolve to different aliases here on purpose — an override making both
+  # equal would pass whichever map won.
+  local_cfg '{ "models": { "deep": "haiku" } }'
+  assert "a partial models override retiers the tier it names (deep -> haiku)" \
+    "$([ "$(MODEL software-engineer)" == haiku ] && echo 0 || echo 1)"
+  assert "…and the tiers it does not name are untouched (standard -> sonnet)" \
+    "$([ "$(MODEL cataloguer)" == sonnet ] && echo 0 || echo 1)"
+
+  # A local file naming neither key is not an override of either — absence behaves as
+  # it always did, which is what a single-human instance sees.
+  local_cfg '{ "ownerGithubUser": "example-user-007" }'
+  assert "a local file without the keys defers to the tracked tier" \
+    "$([ "$(MODEL software-engineer)" == opus ] && echo 0 || echo 1)"
+  assert "…and to the tracked cap" \
+    "$([ "$(CAP)" == 9 ] && echo 0 || echo 1)"
+
+  # An unreadable local file must not blank the tracked answer, for the same reason
+  # build-board.sh must not blank the board.
+  local_cfg '{ not json at all'
+  assert "an unreadable local file falls back to the tracked tier" \
+    "$([ "$(MODEL software-engineer)" == opus ] && echo 0 || echo 1)"
+  assert "…and to the tracked cap" \
+    "$([ "$(CAP)" == 9 ] && echo 0 || echo 1)"
+
+  # Absent from BOTH files, neither resolver invents a value: it prints nothing and
+  # exits 1, and the CALLER applies the fallback its own document states.
+  printf '{\n  "org": "o"\n}\n' > "$INST/instance.config.json"
+  no_local
+  OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null )"; RC=$?
+  assert "no cap in either file -> prints nothing"  "$([ -z "$OUT" ] && echo 0 || echo 1)"
+  assert "…and exits 1 rather than inventing a number" "$([ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-model.sh" software-engineer 2>/dev/null )"; RC=$?
+  assert "no roleTiers in either file -> prints nothing" "$([ -z "$OUT" ] && echo 0 || echo 1)"
+  assert "…and exits 1, so the agent inherits the session model" "$([ "$RC" -eq 1 ] && echo 0 || echo 1)"
+
+  # A cap that is not a positive integer is refused, not rounded. `isinstance(True, int)`
+  # is True in Python, so `true` would otherwise resolve to a cap of 1 and look chosen.
+  printf '{\n  "maxAgentsInFlight": true\n}\n' > "$INST/instance.config.json"
+  OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null )"; RC=$?
+  assert "a boolean cap is refused, not read as 1" \
+    "$([ -z "$OUT" ] && [ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  printf '{\n  "maxAgentsInFlight": 0\n}\n' > "$INST/instance.config.json"
+  OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null )"; RC=$?
+  assert "a cap of 0 is refused rather than dispatching nothing forever" \
+    "$([ -z "$OUT" ] && [ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  tracked
+else
+  echo "  (python3 absent — resolver cases skipped)"
+fi
+
+echo
 echo "== static: every reader of an overridable key does the two-file lookup =="
 # The drift guard. A reader added later that parses only instance.config.json makes the
 # override a half-truth, which is the failure mode this file exists for.
 for pair in "link-repos.sh:reposRoot" "index-kb.sh:reposRoot" \
             "prune-worktrees.sh:reposRoot" "prune-worktrees.sh:worktreeRoot" \
             "build-board.sh:boardInstances" "commit-as.sh:authorEmail" \
-            "task-owner.sh:ownerGithubUser"; do
+            "task-owner.sh:ownerGithubUser" "resolve-model.sh:roleTiers" \
+            "resolve-model.sh:models" "resolve-max-agents.sh:maxAgentsInFlight"; do
   f="${pair%%:*}"; k="${pair##*:}"
   assert "$f reads $k, and knows the local file" \
     "$( grep -q "$k" "$SCRIPTS/$f" && grep -q 'instance.config.local.json' "$SCRIPTS/$f" && echo 0 || echo 1 )"
@@ -156,15 +252,45 @@ assert "commit-as.sh reads people from the tracked config" \
   "$(grep -q 'TRACKED_CONFIG' "$SCRIPTS/commit-as.sh" && echo 0 || echo 1)"
 assert "…and never people from the local one" \
   "$(grep -q 'LOCAL_CONFIG.*people\|people.*LOCAL_CONFIG' "$SCRIPTS/commit-as.sh" && echo 1 || echo 0)"
+# `externalReviewer` has only PROSE readers today (new-project.md's review route). Same
+# rule, other path — and the sharpest of the three, because it decides where a diff is
+# sent, so a local override is a policy change nobody reviews.
+NEWPROJ="$TPL/symlink/.claude/commands/new-project.md"
+assert "new-project.md reads externalReviewer from the tracked config" \
+  "$(grep -q 'externalReviewer.*instance\.config\.json' "$NEWPROJ" && echo 0 || echo 1)"
+assert "…and never from the local one" \
+  "$(grep -q 'externalReviewer.*instance\.config\.local\.json' "$NEWPROJ" && echo 1 || echo 0)"
+# A resolver nothing calls does not make an override real: the cap's only consumers are
+# the PM's prose, so they must name the script rather than the tracked file alone.
+for f in "$TPL/symlink/.claude/commands/pm-loop.md" "$TPL/symlink/.claude/agents/project-manager.md"; do
+  assert "$(basename "$f") resolves the cap with resolve-max-agents.sh" \
+    "$(grep -q 'resolve-max-agents\.sh' "$f" && echo 0 || echo 1)"
+done
 
 echo
 echo "== the overridable set is documented in ONE place =="
 SCHEMA="$TPL/symlink/SCHEMA.md"
 assert "SCHEMA.md has the override section" \
   "$(grep -q '^## Per-machine config overrides' "$SCHEMA" && echo 0 || echo 1)"
-for k in ownerGithubUser authorEmail reposRoot worktreeRoot boardInstances boardArtifactUrl defaultOwner people; do
+for k in ownerGithubUser authorEmail reposRoot worktreeRoot boardInstances boardArtifactUrl \
+         models roleTiers maxAgentsInFlight defaultOwner people externalReviewer; do
   assert "…and names $k"  "$(grep -q "\`$k\`" "$SCHEMA" && echo 0 || echo 1)"
 done
+# The three keys that moved on 2026-08-29 must be listed as overridable IN THE TABLE, not
+# merely mentioned somewhere in the section — `maxAgentsInFlight` has a whole subsection
+# of its own, so "is named" would pass with the row absent.
+for k in models roleTiers maxAgentsInFlight; do
+  assert "…and its table row marks $k overridable" \
+    "$(grep -q "^| \`$k\` | \*\*yes\*\*" "$SCHEMA" && echo 0 || echo 1)"
+done
+assert "…and no longer files them under 'everything else'" \
+  "$(grep '^| everything else' "$SCHEMA" | grep -qE 'models|roleTiers|maxAgentsInFlight' && echo 1 || echo 0)"
+# And the one that deliberately did NOT move, with the reason stated — an override there
+# is a change to where code may be sent, which is the disagreement that breaks it.
+assert "…and its table row marks externalReviewer NOT overridable, by design" \
+  "$(grep -q '^| \`externalReviewer\` | \*\*no, by design\*\*' "$SCHEMA" && echo 0 || echo 1)"
+assert "…and says why: it names where this code may be sent" \
+  "$(grep -q 'where this code may be sent' "$SCHEMA" && echo 0 || echo 1)"
 assert "…and states the worktreeRoot fallback" \
   "$(grep -q '<reposRoot>/_wt' "$SCHEMA" && echo 0 || echo 1)"
 assert "…and that worktreeRoot must not sit inside reposRoot" \

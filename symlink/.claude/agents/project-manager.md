@@ -252,8 +252,13 @@ state, and act only on deltas.
    all `done`, that clears the ownership check, and that is not already in-progress: set `assignee` +
    `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the task — both, or neither**, because `reclaim-worktree.sh` refuses a path with no branch to verify it against. Write them BEFORE spawning, so a tick that dies mid-dispatch still leaves the record the reclaim depends on. Then spawn the role with the Agent tool
    (`subagent_type: <assignee>`), passing the absolute task path and its
-   `target_repo`. Respect the concurrency cap **`maxAgentsInFlight`** from
-   `instance.config.json` (fall back to 5 if the key is absent) — that many agents in
+   `target_repo`. Respect the concurrency cap **`maxAgentsInFlight`**, resolved with
+   `scripts/resolve-max-agents.sh` rather than read from memory: it takes
+   `instance.config.local.json` first and the tracked `instance.config.json` second,
+   because the cap is **this machine's** capacity — three instances on one laptop each
+   honouring a tracked number is how 20 agents land on 11 cores (`SCHEMA.md`,
+   "Per-machine config overrides"). It prints nothing and exits 1 when neither file sets
+   the key; fall back to 5 then. That many agents in
    flight at once; leave the rest `ready` for the next tick. Send independent dispatches in one
    message so they run concurrently.
 
