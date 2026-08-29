@@ -318,8 +318,11 @@ ticks, regardless of how long a tick runs.
   **empty**, because that is the signal promotion keys on; an entry left in both lists
   blocks the draft forever. `answered_questions` is a human audit record — nothing reads
   it — and it carries **no customer PII**, since it persists for the life of the repo.
-- Concurrency cap: **at most `maxAgentsInFlight` role agents in flight** (from
-  `instance.config.json`; fall back to 5 if the key is absent), and each must use its own
+- Concurrency cap: **at most `maxAgentsInFlight` role agents in flight** — resolve it with
+  `scripts/resolve-max-agents.sh`, which reads `instance.config.local.json` first and the
+  tracked `instance.config.json` second because the cap is **this machine's** capacity
+  (`SCHEMA.md`, "Per-machine config overrides"); it prints nothing and exits 1 when
+  neither file sets the key, and you fall back to 5 then. Each agent must use its own
   worktree under the instance's `worktreeRoot` (from `instance.config.json`, never
   inside the synced `reposRoot`; if the key is absent, `<reposRoot>/_wt`)
   + a **private package store** (e.g.

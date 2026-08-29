@@ -551,9 +551,27 @@ means the tracked file answers exactly as it always did.**
 | `worktreeRoot` | **yes** — an absolute path on this machine | `<reposRoot>/_wt`, which is also still swept as the legacy root |
 | `boardInstances` | **yes** — a list of paths to sibling instances | just this instance |
 | `boardArtifactUrl` | **yes** — the artifact **this human** owns and publishes to | a tick never publishes: no render, no publish, no mention |
+| `models` | **yes** — which model each tier costs **this human** | the tracked map; absent from both, `resolve-model.sh` prints nothing and the agent inherits the session model |
+| `roleTiers` | **yes** — the same bill, per agent. **A partial override replaces only the entries it names**, so moving one agent to a cheaper tier leaves every other agent's tier standing | as `models` above |
+| `maxAgentsInFlight` | **yes** — how many agents **this machine** can carry (below) | the tracked value; absent from both, `resolve-max-agents.sh` prints nothing and exits 1, and the caller applies the fallback its own document states |
 | `defaultOwner` | **no, by design** | step 4 above: unowned, so every clone treats it as its own |
 | `people` | **no** — a shared directory of who is who | no lookup; the `authorEmail` chain answers |
-| everything else | no — shared facts (`org`, `models`, `roleTiers`, `maxAgentsInFlight`, `maxPrLoc`, `defaultRepo`, `externalReviewer`, `codegraphSkip`, …) | as documented per key |
+| `externalReviewer` | **no, by design** — it names **where this code may be sent**. That is policy, not preference: one clone silently routing diffs to a different reviewer is precisely the disagreement that breaks it, and it breaks in the direction nobody notices | the CodeRabbit CLI |
+| everything else | no — shared facts (`org`, `maxPrLoc`, `defaultRepo`, `codegraphSkip`, …) | as documented per key |
+
+**`models`, `roleTiers` and `maxAgentsInFlight` moved into this table on 2026-08-29.** They
+are **spend and capacity**, not shared facts: which model a human pays for, and how many
+agents one machine can carry. Two clones disagreeing about either breaks nothing, because
+each dispatch runs on its own machine against its own worktree — which is this section's
+own test for what belongs in the local file. Tracked, they were worse than merely
+imprecise: one number was forced on every clone. Measured 2026-08-29, `maxAgentsInFlight`
+read **4 / 6 / 10 across three instances on one 11-core machine** — up to 20 concurrent
+agents against a measured ceiling near 4.
+
+All three are read by a script rather than by whoever remembered to look:
+`scripts/resolve-model.sh <agent>` for the first two, `scripts/resolve-max-agents.sh` for
+the cap. Neither script invents a value it cannot find; both print nothing and exit 1
+instead, and the caller applies its own documented fallback.
 
 ### `maxAgentsInFlight` bounds an instance, not a machine — a known hole
 
@@ -571,12 +589,15 @@ This is an **accepted trade, not an oversight**: a machine-scoped cap needs a lo
 any single bundle, and the owner chose the simpler per-instance number. It is written down
 so the next person meeting load average 36 finds a known limitation rather than a mystery.
 If you run several instances on one machine, divide the machine's budget between them by
-hand.
+hand — **in each instance's `instance.config.local.json`**, which is what makes that
+division per-machine and stops it being pushed to everyone else's clone.
 
 The rule behind the split: **the tracked file holds facts both clones share; the local
 file holds facts about this machine and this human.** A key that must be *the same* on
-both clones to be correct — `defaultOwner`, `people` — is never overridable, because an
-override is exactly the disagreement that breaks it.
+both clones to be correct — `defaultOwner`, `people`, `externalReviewer` — is never
+overridable, because an override is exactly the disagreement that breaks it. Spend and
+capacity fail that test in the other direction: `models`, `roleTiers` and
+`maxAgentsInFlight` are correct *while the clones differ*, so they are overridable.
 
 **`boardArtifactUrl` moved into this table on 2026-08-26, and the reason is worth
 keeping.** It was *deliberately* not overridable: one URL means one shared page, and two
