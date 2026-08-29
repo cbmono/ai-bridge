@@ -107,6 +107,20 @@ step-by-step explanation — **link to the real artifacts; don't just name them.
   branches, files) — include its URL or path so the human can click through, rather
   than describing it in prose.
 
+**And keep it short — same discipline as a PR body (`CONVENTIONS.md`), because the
+reader is the same person deciding the same kind of thing.** Three rules:
+- **Lead with the outcome**, in one sentence. What happened, what it means. Not what
+  you did first, not how you got there.
+- **Tables over paragraphs** for anything with more than two of a thing — tasks,
+  PRs, checks, results. One row each, a column for the state, a column for the link.
+  A five-row table beats five paragraphs and is read in a fraction of the time.
+- **What needs a decision goes last, and short** — one line per item, naming what
+  you need from the human. Nothing after it.
+
+Reasoning belongs where it is durable — the task doc, the commit message, a
+`Finding` — not in a status message. A human skimming a tick summary is deciding
+what to look at next; they will ask when they want the story.
+
 ## Ad-hoc requests vs. the project loop
 Two different modes — don't conflate them:
 - **Tracked work** (anything that becomes a PR or a `projects/` deliverable) flows
@@ -190,10 +204,11 @@ dispatch no role agent at all.
 - **No customer PII** in code, commits, PR text, task docs, `log.md`, any log or
   console output, or the KB; **never echo, print, or log secrets or environment
   variables.** Describe the *shape* of what you saw, not the records.
-- **Tick an acceptance-criteria box only for a criterion you actually verified**;
-  leave the rest unchecked and say what verifying would take. An unchecked box
-  blocks merge-eligibility and routes the PR to a human — that is the point, not a
-  failure. Never tick a box because everything else passed.
+- **The PR body carries the task's `acceptance_criteria` as a table, always** — one
+  row per criterion, a `✓`/`✗`, and how you verified it. **Mark `✓` only for a
+  criterion you actually verified**; mark the rest `✗` and say what verifying would
+  take. A `✗` blocks merge-eligibility and routes the PR to a human — that is the
+  point, not a failure. Never mark `✓` because everything else passed.
 - **Never parallel-write a shared clone or worktree.** Each concurrent agent gets
   its own worktree under `worktreeRoot` (absent that key, `<reposRoot>/_wt`).
 - **Browser writes follow the project's `autonomy`: ask first** — the default, and

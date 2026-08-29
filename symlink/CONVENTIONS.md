@@ -34,24 +34,61 @@ in `cbmono/ai-bridge` enforces this.
   `origin` early (don't wait until the end) so an interrupted worktree loses nothing.
 - PR title format: `<type>: <subject> [<task-id>]` (OKF task id, e.g.
   `[ci-hardening/task-001]`). Target the default branch. **Never merge.**
-- **Embed the task's `acceptance_criteria` in the PR body** as a checklist (plus any
-  hints a reviewer needs), and note how you verified each. This is what the
-  independent reviewer — an external one (e.g. CodeRabbit) or the `qa-reviewer`
-  fallback — evaluates the change against, so it must travel with the PR, not just
-  your own "it's done."
-  **Tick a box only for a criterion you actually verified; leave the rest unchecked** and
-  say what verifying it would take. An unchecked box **blocks the PR from being
+- **The PR body has a required shape, and it is short.** Its reader is a **human deciding
+  whether to merge** — not an agent reconstructing how you worked. Three required parts, in
+  this order, plus an optional `## Notes` section (below) and nothing else:
+
+  ```md
+  **TL;DR** — one sentence: what changes, and why it is safe to merge.
+
+  | Criterion | ✓ | Verified by |
+  |---|---|---|
+  | the retry backs off on 429     | ✓ | `foo.test.sh` 40/0 |
+  | works with two host accounts   | ✗ | needs two accounts — see task doc |
+
+  ⚠️ Needs your call: harness growth 414 lines.
+  ```
+
+  1. **A one-sentence TL;DR**, first.
+  2. **The task's `acceptance_criteria` as a table** — one row per criterion, its text
+     verbatim, a `✓`/`✗`, and the evidence. **Required, always** (next bullet).
+  3. **A short flagged line per threshold question** the owner must answer — harness
+     growth, PR size, a wide change you could not split. One line each, `⚠️`-prefixed,
+     last. Not a section, not an essay.
+
+  **Reasoning goes in the commit message and the task doc.** Why you chose this design,
+  what you rejected, the incident that motivated it, what you tried first — all of it is
+  already carried by those two, both travel with the change, and **none of it is needed to
+  decide a merge.** A reader who wants the story has `git log` and the task document; a
+  reader deciding a merge has thirty seconds. Add a `## Notes` section only for something a
+  *reviewer* cannot see from the diff (a hint about where to look, a deliberate omission).
+- **The criteria table is the merge gate — so it is required, and terseness never costs
+  evidence.** It is what the independent reviewer — an external one (e.g. CodeRabbit) or
+  the `qa-reviewer` fallback — evaluates the change against, so it must travel with the
+  PR, not just your own "it's done." The `✓`/`✗` column **is** the checkbox state
+  `SCHEMA.md` reads (→ "Two structured inputs; prose is never one"): one mark per
+  criterion, machine-checkable, and the only place criteria coverage is read from.
+  **Mark `✓` only for a criterion you actually verified; mark the rest `✗`** and say in
+  the same row what verifying it would take. A `✗` **blocks the PR from being
   merge-eligible** (`SCHEMA.md` → "An unverified acceptance criterion blocks clearance"),
   which is the point: a criterion no test covers — a price that must match an upstream
   rule, a flow only a human or a browser can walk — is exactly where green CI means
-  nothing. Leaving it honestly unchecked routes the PR to a human instead of letting it
-  ride the deterministic checks. Never tick a box because everything else passed.
+  nothing. Leaving it honestly unmarked routes the PR to a human instead of letting it
+  ride the deterministic checks. Never mark `✓` because everything else passed.
+  **Short and auditable are the same thing here, which is why brevity costs nothing.**
+  `` `foo.test.sh` 40/0 `` is *shorter* than a paragraph and *more* checkable than one: it
+  names an artifact the reader can re-run, and a claim a reader can re-run is the only
+  kind that counts. So the short form is licence to drop the narration, **never** licence
+  to assert without evidence — "verified, works as expected" is a long way of saying
+  nothing. Name the command, the test file and its tally, the CI run, or the URL you
+  loaded.
 - Run the repo's build, lint, and tests green before opening a PR. If you can't
   get them green, report rather than open the PR.
 - **PR size is a heuristic that suggests a split, never a gate.** Before opening, check
   the diff against **`maxPrLoc`** in `instance.config.json` (**absent that key, 500**);
-  past it, say so in the PR body and propose the split you would make — by phase, by
-  layer, or as a stack — and note the parts you would extract. Then **open the PR
+  past it, say so in the PR body as one `⚠️` line — the figure and the split you would make
+  (by phase, by layer, or as a stack) — and put the detail in the commit message and the
+  task doc, per the PR-body shape above. Then **open the PR
   anyway**: generated boilerplate, codemods, lockfiles and dense logic all move the real
   number, so a line count cannot decide reviewability on its own, and a task that
   legitimately needs one large change must not be blocked by arithmetic. It is **not** a
@@ -81,6 +118,22 @@ in `cbmono/ai-bridge` enforces this.
   *substantial rewrite* that invalidates the original review. Repos should pin this with
   `.coderabbit.yaml` (`auto_incremental_review: false`, `chat.auto_reply: false`) so it
   holds by default rather than by everyone's discipline.
+  **The reply is a list, not a letter** — same discipline as the PR body, same reason:
+
+  ```md
+  - Finding 1 — fixed: `foo.sh` now quotes `$dir` (a1b2c3d).
+  - Finding 2 — not taking: the path is `mktemp -d`-owned, never user input.
+  - Finding 3 — fixed: added the null case, `foo.test.sh` 41/0.
+
+  Evidence: `foo.test.sh` 41/0 · CI run 1234 green · `shellcheck` clean.
+  ```
+
+  One line per finding **fixed** (what changed, and where), one line per finding **not
+  taken** (with the reason), and the evidence as a short list at the end. **Never restate
+  the finding back at the reviewer** — it wrote the finding, it still has it, and quoting
+  it back is the single biggest source of reply length. The reviewer is deciding whether
+  each finding is closed, not re-reading its own review. If you disagree, say so once with
+  the evidence and move on (the two-round cap below is what ends it, not persistence).
 - **TWO ROUNDS, THEN THE HUMAN DECIDES. This is a hard cap.**
   A reviewer's job is to evaluate the diff **against the task's `acceptance_criteria`**.
   It is *not* to re-litigate those criteria, argue the design, or look for a reason the
@@ -131,10 +184,11 @@ in `cbmono/ai-bridge` enforces this.
   git diff --numstat origin/main -- 'symlink/**/*.sh' | awk '{a+=$1} END{print a+0}'
   ```
 
-  Under ~150 added lines, carry on. **At or above it, put a `## Harness growth` section in
-  the PR body** naming the figure, what the lines buy, and what you considered instead —
-  then let the owner decide. It is not a block; it is a question the owner answers, and
-  raising it is never a failure.
+  Under ~150 added lines, carry on. **At or above it, flag it in the PR body as one
+  `⚠️` line naming the figure** — `⚠️ Needs your call: harness growth 414 lines.` — and put
+  what the lines buy and what you considered instead in the **commit message and the task
+  doc**, per the PR-body shape above. Then let the owner decide. It is not a block; it is a
+  question the owner answers, and raising it is never a failure.
 
   For scale: ordinary fixes here add 30-55 lines; the two largest features added 360 and
   363. The whole harness is ~8,500 lines, so 150 is roughly a 2% jump in one PR.

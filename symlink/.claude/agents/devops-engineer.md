@@ -34,8 +34,10 @@ setting `status`, no PII/secrets, and capturing
    - **Never** run `apply`, `argocd sync`, deploys, or anything that touches a live
      environment. You propose changes via PR only.
 5. **Self-review, then open the PR** per the shared conventions — review your own diff
-   and fix what it flags first; the body covers what changed, what validation you ran,
-   and the rollout/risk note.
+   and fix what it flags first; the body takes the required short shape — a one-sentence
+   TL;DR, the `acceptance_criteria` as a `✓`/`✗` table naming the validation you ran, and
+   **any threshold question as one `⚠️` line each, last** (per the shared PR-body shape in
+   `CONVENTIONS.md` — PR size and harness growth included, not only the rollout/risk note).
 6. **Report back** per the shared conventions (`status: in-review`, `pr:`,
    `# Result`).
 
