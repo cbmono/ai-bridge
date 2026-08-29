@@ -601,9 +601,9 @@ state, and act only on deltas.
    disappeared from under its own owner at the next login and no share level ever let a
    second human update it. So, immediately after the writer:
 
-   1. Read `board` from `instance.config.json`. `false` ⇒ **skip the rest of this step in
-      silence** — no render, no line in your report, and never an error. Absent or `true`
-      ⇒ render; on by default is the seeded value.
+   1. Read `board` from `instance.config.json`. `false` ⇒
+      **skip the rest of this step in silence** — no render, no line in your report, and
+      never an error. Absent or `true` ⇒ render; on by default is the seeded value.
       **This is the same key `install.sh` already reads**, not a second switch: the
       installer reads `cfg_bool board true` at STAMP time to decide whether
       `SNAPSHOT.json` is seeded at all, and this is that key's TICK-time reader. Read it

@@ -236,14 +236,22 @@ for pair in "link-repos.sh:reposRoot" "index-kb.sh:reposRoot" \
   assert "$f reads $k, and knows the local file" \
     "$( grep -q "$k" "$SCRIPTS/$f" && grep -q 'instance.config.local.json' "$SCRIPTS/$f" && echo 0 || echo 1 )"
 done
-# The board URL's reader is a hook, not a script under scripts/ — same rule, other path.
-# It became overridable when artifact publishing turned out to be ACCOUNT-SCOPED: only
-# the account that owns an artifact can update it, so a tracked URL gives a shared bundle
-# one working board and one publish step that fails silently on the other clone.
+# And the keys that must NOT be overridable are read from the tracked file only.
+# `board` is the newest of them, and the sharpest illustration of why the direction
+# matters: it has TWO readers at opposite ends of an instance's life — `install.sh` at
+# stamp time, deciding whether SNAPSHOT.json is seeded, and the SessionStart hook plus the
+# /pm-loop tick afterwards, deciding whether the board is rendered and surfaced. The
+# installer reads the tracked file and nothing else, so a per-machine override would give
+# one key two answers, and the half that disagreed would be the silent one.
 HOOK="$TPL/symlink/.claude/hooks/show-board-link.sh"
-assert "show-board-link.sh reads boardArtifactUrl, and knows the local file" \
-  "$( grep -q 'boardArtifactUrl' "$HOOK" && grep -q 'instance.config.local.json' "$HOOK" && echo 0 || echo 1 )"
-# And the two keys that must NOT be overridable are read from the tracked file only.
+assert "show-board-link.sh reads board from the tracked config" \
+  "$( grep -q '\"board\"' "$HOOK" && echo 0 || echo 1 )"
+assert "…and never from the local one" \
+  "$( grep -q 'instance.config.local.json' "$HOOK" && echo 1 || echo 0 )"
+assert "install.sh still reads the same key, at stamp time" \
+  "$( grep -q 'cfg_bool board true' "$TPL/install.sh" && echo 0 || echo 1 )"
+assert "…from the tracked instance.config.json" \
+  "$( grep -q 'cfg_bool board true "$TARGET/instance.config.json"' "$TPL/install.sh" && echo 0 || echo 1 )"
 assert "task-owner.sh reads defaultOwner from the tracked config" \
   "$(grep -q 'json_string "\$CONFIG" defaultOwner' "$SCRIPTS/task-owner.sh" && echo 0 || echo 1)"
 assert "…and never from the local one" \
@@ -272,7 +280,7 @@ echo "== the overridable set is documented in ONE place =="
 SCHEMA="$TPL/symlink/SCHEMA.md"
 assert "SCHEMA.md has the override section" \
   "$(grep -q '^## Per-machine config overrides' "$SCHEMA" && echo 0 || echo 1)"
-for k in ownerGithubUser authorEmail reposRoot worktreeRoot boardInstances boardArtifactUrl \
+for k in ownerGithubUser authorEmail reposRoot worktreeRoot boardInstances board \
          models roleTiers maxAgentsInFlight defaultOwner people externalReviewer; do
   assert "…and names $k"  "$(grep -q "\`$k\`" "$SCHEMA" && echo 0 || echo 1)"
 done
@@ -289,6 +297,10 @@ assert "…and no longer files them under 'everything else'" \
 # is a change to where code may be sent, which is the disagreement that breaks it.
 assert "…and its table row marks externalReviewer NOT overridable, by design" \
   "$(grep -q '^| \`externalReviewer\` | \*\*no, by design\*\*' "$SCHEMA" && echo 0 || echo 1)"
+assert "…and its table row marks board NOT overridable" \
+  "$(grep -q '^| \`board\` | \*\*no\*\*' "$SCHEMA" && echo 0 || echo 1)"
+assert "…and says the installer reads it from the tracked file at stamp time" \
+  "$(grep -q '^| \`board\` | .*tracked file at stamp time' "$SCHEMA" && echo 0 || echo 1)"
 assert "…and says why: it names where this code may be sent" \
   "$(grep -q 'where this code may be sent' "$SCHEMA" && echo 0 || echo 1)"
 assert "…and states the worktreeRoot fallback" \

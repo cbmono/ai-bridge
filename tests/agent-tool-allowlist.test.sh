@@ -168,10 +168,13 @@ ok() { # <name> <actual> <expected>
 # Including it would flag the bundle's core vocabulary as a tool reference. It is now kept
 # quiet by rule 2 rather than by a comment, which is stronger: the schema is what says it is
 # a document type. `Agent` is the name that decides dispatch here and it is BOTH an OKF type
-# and a tool — rule 1 wins, so it stays checked as a tool. `Artifact` is on the list because
-# a PM tick publishes the board with it; the collision it has to survive is OKF's
-# `artifacts:` field, and it does — that is lowercase and plural, and a mention only counts
-# inside backticks as this exact identifier.
+# and a tool — rule 1 wins, so it stays checked as a tool. `Artifact` is on the list even though
+# NOTHING GRANTS IT ANY MORE — the PM tick that published the board was deleted, and a
+# name dropped from `VOCAB` stops being checked as a tool and starts being reported as an
+# unclassified identifier, which is the silence this whole guard exists to end. A real
+# harness tool belongs here whether or not this bundle currently uses it. The collision it
+# has to survive is OKF's `artifacts:` field, and it does — that is lowercase and plural,
+# and a mention only counts inside backticks as this exact identifier.
 VOCAB='Agent|Artifact|AskUserQuestion|Workflow|Skill|Read|Write|Edit|MultiEdit|NotebookEdit|Glob|Grep|Bash|BashOutput|KillShell|KillBash|WebFetch|WebSearch|TodoWrite|ToolSearch|SlashCommand|ExitPlanMode|EnterWorktree|ExitWorktree|mcp__[A-Za-z0-9_*-]+'
 MENTION_RE="\`($VOCAB)\`"
 
@@ -896,7 +899,7 @@ ok "shared doc green when all readers hold it" "$v" 0
 # which is exactly the shape that cannot tell "nothing to find" from "not looking", so the
 # classifier is exercised directly: a real tool is known, an invented one is not, and the
 # three names this task was dispatched to close are known now.
-ok "lexicon knows a granted tool"            "$(in_vocab Artifact)" yes
+ok "lexicon knows an ungranted harness tool" "$(in_vocab Artifact)" yes
 ok "lexicon knows the MCP wildcard grant"    "$(in_vocab 'mcp__claude-in-chrome__*')" yes
 ok "lexicon rejects an invented tool"        "$(in_vocab SummonDragon)" no
 for t in AskUserQuestion ExitWorktree Artifact; do

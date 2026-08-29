@@ -49,24 +49,27 @@ cfg="$root/instance.config.json"
 # from somewhere the stamp-time reader does not look is how one key becomes two switches.
 # Same default, too: absent means on.
 #
-# A single top-level scalar — grep/sed rather than a jq dependency, matching
-# show-awaiting.sh and push-state.sh (bash + sed/awk only) rather than agent-control.sh's
-# jq-hard-requirement, which pays for a real parser because it is a security control.
+# A FIXED GREP FOR `false`, NEVER A `\(true\|false\)` ALTERNATION. That alternation is a
+# GNU sed extension; BSD sed matches nothing with it and the reader then returns its
+# default forever — which is exactly how `install.sh`'s own `cfg_bool()` came to ignore
+# `board: false` once already (its header records the fix, and this is the same fix). A
+# switch whose reader silently always answers "default" is indistinguishable from the
+# inert key this gate exists to close, so it is worth the repetition.
 #
-# `tr` FIRST, and it is load-bearing rather than tidying: a config written as a one-liner
-# (`{ "board": false }`) puts no member at the start of a line, so a line-anchored pattern
-# would match nothing there and read the switch as absent — failing OPEN, which is
-# precisely the defect this gate exists to close. Breaking every `{` and `,` onto its own
-# line puts each JSON member at a line start whichever way the file is formatted.
+# Only `false` is tested, because the default is on: `true` and absent do the same thing.
+# Testing the opt-OUT rather than the opt-in is also the safer direction — a value this
+# grep cannot make sense of leaves the board switched on, never silently switched off.
 #
-# The value must be a BARE `true`/`false`. That is what keeps the seeded `"$board"` doc
-# string — a quoted prose value that describes the setting — from ever being read AS the
-# setting, and what keeps `"boardInstances"`, a different key that merely starts the same
-# way, out of it.
-board="$(tr '{,' '\n\n' < "$cfg" \
-  | sed -n 's/^[[:space:]]*"board"[[:space:]]*:[[:space:]]*\(true\|false\).*$/\1/p' \
-  | head -n1)"
-if [ "$board" = false ]; then exit 0; fi
+# Not line-anchored, which is what makes a hand-written one-liner (`{ "board": false }` —
+# the shape SCHEMA.md tells a second human to write) read the same as the pretty-printed
+# tracked file. The leading quote in `"board"` is what keeps the seeded `"$board"` doc
+# string, whose prose mentions both `true` and `false`, from ever being read AS the
+# setting, and what keeps `"boardInstances"` out of it.
+#
+# grep rather than a jq dependency, matching show-awaiting.sh and push-state.sh (bash +
+# sed/awk only) rather than agent-control.sh's jq-hard-requirement, which pays for a real
+# parser because it is a security control.
+if grep -q '"board"[[:space:]]*:[[:space:]]*false' "$cfg" 2>/dev/null; then exit 0; fi
 
 page="$root/.board-live/board.html"
 [ -f "$page" ] || exit 0

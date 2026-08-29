@@ -20,9 +20,11 @@
 #     --out FILE        where to write (default: ./board.html — it is the path an
 #                       instance's .gitignore already covers)
 #     --standalone      wrap the output in <!doctype html>/<head> for opening in a
-#                       browser directly. OMIT for publishing (see OUTPUT SHAPE).
-#                       Wrapping, not markup: the same page either way, which is why
-#                       watch-board.sh can pass it and the publish step can not.
+#                       browser directly. PASS IT unless something else supplies that
+#                       wrapper — watch-board.sh and the /pm-loop tick both do, and the
+#                       publish step that could not is deleted. Wrapping, not markup:
+#                       the same page either way, so omitting it leaves a fragment to
+#                       embed, which is all the default is for now.
 #     --list-instances  print the resolved instance directories, one per line, and
 #                       exit without writing anything. This exists so watch-board.sh
 #                       can learn WHICH directories to watch without carrying a third
