@@ -99,6 +99,17 @@ in `cbmono/ai-bridge` enforces this.
   stop. That single PR, and others like it, consumed roughly **70% of a Max account's
   weekly budget**. An unresolved disagreement costs the human one decision; an unbounded
   review costs a week.
+  **And the number is countable — `scripts/review-rounds.sh <pr> --repo <org>/<repo>`.**
+  It prints how many rounds a PR has already had and **exits non-zero at or past two**, so
+  whoever is about to spawn a verifier can be refused instead of trusted to remember. Run
+  it *before* dispatching one (the `project-manager`'s verification step) and *before*
+  verifying one (`qa-reviewer` mode B, first thing); non-zero means stop and write the
+  both-positions block above. It counts **completed verifications of distinct commits**,
+  decided by `review-clearance.sh` — so a rate-limited reviewer's refusal, which publishes
+  a green check and names the head in its own body, is **not** a round, and an absent
+  reviewer adds none. Exit 2 is *unknown*, which is not permission. A missing or broken
+  script exits non-zero too, so the failure direction is "ask the human", never "review
+  again". This rule spent a week of budget while it was prose; it is not prose now.
   **Corollary — grade against the criteria, not against your own taste.** If you believe
   the criteria themselves are wrong, say so *once*, in the verdict, as a note to the
   human. Do not express it by withholding a pass.

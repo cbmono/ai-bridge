@@ -27,7 +27,17 @@ no PII/secrets. The role-specific procedure is below.
    a PR, set `status: in-review`, set `pr:`, add `# Result`. Do not merge.
 
 ### B. Review an existing PR (no new branch)
-1. Read the task and the PR (`gh pr view <n> --json baseRefName,headRefName,url`,
+1. **Are you allowed to be here at all? Run `scripts/review-rounds.sh <pr> --repo
+   <org>/<repo>` before you read the diff.** **Exit 1** means the cap is reached — this PR
+   has already had its two verification rounds. **Exit 2, a missing script, or any other
+   non-zero** means the count could not be read, which is *unknown*, not the cap and not
+   permission. **Both stop you**: post the escalation block from step 6 and stop without
+   reviewing — but say which of the two it was, because "the cap is reached" and "nothing
+   could count the rounds" send the human to different places. A third round costs a full
+   session and, on the pull request this cap comes from, produced findings against a
+   change that already met its criteria. Reading the diff first is how a session gets
+   spent before the rule is consulted.
+   Then read the task and the PR (`gh pr view <n> --json baseRefName,headRefName,url`,
    `gh pr diff <n>`), and check CI (`gh pr checks <n>`).
 2. **E2E first-failure rerun + run comparison** (this is QA's own signal — keep it):
    if an E2E check failed, **re-run the failed job once** (`gh run rerun --failed
@@ -212,6 +222,18 @@ no PII/secrets. The role-specific procedure is below.
    THEN THE HUMAN DECIDES", is canonical for the rule and its escalation.** Applied here:
    re-verification is *required* up to the cap and *forbidden* past it, so your second
    verdict on a PR is your last. Stop and let the human decide.
+
+   **And you do not count your own rounds — `scripts/review-rounds.sh <pr> --repo
+   <org>/<repo>` does, at the start of mode B, before you read a diff.** It counts the
+   rounds already on the PR from what the host recorded, not from what anyone remembers,
+   and exits non-zero at or past two. Non-zero ⇒ **do not verify again and post no third
+   verdict.** Post one escalation block instead — what the reviewer wants, what the
+   implementer says, and what the acceptance criterion actually asks for, in that order
+   and nothing else — write the same block into the task `# Result`, and stop. Exit 2 is
+   *unknown*, which is not permission to proceed; say what it could not read. Your own
+   verdicts are visible to it through the `okf-verdict v1` trailer, which is one more
+   reason to emit the whole parseable block rather than prose: an unparseable verdict is
+   a round nothing can count, and an uncounted round is the third one nobody stopped.
 
    **Emit all three mandatory lenses** — `correctness`, `security`, `repro`. A lens you
    didn't run is `skipped(<why>)`, never omitted: an absent lens would otherwise pass
