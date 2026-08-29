@@ -459,9 +459,9 @@ Everything between `ready` and `done` is the PM's to drive autonomously.
 An instance may be shared by more than one human: each clones the same bundle repo
 and runs their own `/pm-loop`, so both see one set of projects and one knowledge base,
 and can hand a project or a single task to the other. `owner` is what keeps their two
-loops from doing the same work twice — and, since publishing is account-scoped, it is
-also what lets each human's **own** published board separate their projects from the
-other's (see `boardArtifactUrl` under "Per-machine config overrides").
+loops from doing the same work twice — and it is also what lets each clone's **own**
+locally rendered board separate their projects from the other's, since every owner but
+this one is read from the tracked task documents at this clone's git `HEAD`.
 
 **Two operations, not one chain.** Deciding whether a task is *this clone's* means
 first **resolving** who owns it (the four steps below), then **comparing** that owner
@@ -550,7 +550,7 @@ means the tracked file answers exactly as it always did.**
 | `reposRoot` | **yes** — an absolute path on this machine | the readers report it as unset and skip; nothing is guessed |
 | `worktreeRoot` | **yes** — an absolute path on this machine | `<reposRoot>/_wt`, which is also still swept as the legacy root |
 | `boardInstances` | **yes** — a list of paths to sibling instances | just this instance |
-| `boardArtifactUrl` | **yes** — the artifact **this human** owns and publishes to | a tick never publishes: no render, no publish, no mention |
+| `board` | **no** — one instance, one answer, and `install.sh` reads it from the tracked file at stamp time | on: `SNAPSHOT.json` is seeded, and each tick renders `.board-live/board.html` |
 | `models` | **yes** — which model each tier costs **this human** | the tracked map; absent from both, `resolve-model.sh` prints nothing and the agent inherits the session model |
 | `roleTiers` | **yes** — the same bill, per agent. **A partial override replaces only the entries it names**, so moving one agent to a cheaper tier leaves every other agent's tier standing | as `models` above |
 | `maxAgentsInFlight` | **yes** — how many agents **this machine** can carry (below) | the tracked value; absent from both, `resolve-max-agents.sh` prints nothing and exits 1, and the caller applies the fallback its own document states |
@@ -599,20 +599,20 @@ overridable, because an override is exactly the disagreement that breaks it. Spe
 capacity fail that test in the other direction: `models`, `roleTiers` and
 `maxAgentsInFlight` are correct *while the clones differ*, so they are overridable.
 
-**`boardArtifactUrl` moved into this table on 2026-08-26, and the reason is worth
-keeping.** It was *deliberately* not overridable: one URL means one shared page, and two
-clones holding two values would publish two boards that each look like the board. That
-argument assumed two clones can publish to one artifact. **They cannot** — artifact
-publishing is **account-scoped**: the update path requires an artifact the account owns
-and no share level grants it, so exactly one account can ever publish to a given URL.
-Verified live: listing with `scope: all` did not show the other human's board, and
-reading it directly returned *artifact not found — it may have been deleted, or it has
-not been shared with you*. The tracked value therefore did not produce one shared board;
-it produced **one working board and one silently dead publish step** on whichever clone
-did not own the artifact. So each human records **their own** board here, and the
-cross-owner view is not a shared page at all — it is the *other owners* section that
-`scripts/build-board.sh` reads from the tracked task documents at your current git
-`HEAD`, which is the one thing both clones genuinely share.
+**A published-board URL key sat in this table from 2026-08-26 until 2026-08-29, and its
+deletion is the reason `board` is in the row above.** It named the page each human
+published to, and it was moved here once artifact publishing turned out to be
+**account-scoped**: the update path requires an artifact the account owns and no share
+level grants it, so exactly one account could ever publish to a given URL — a tracked
+value produced **one working board and one silently dead publish step** on whichever clone
+did not own the artifact. Then the owning account was switched and the page disappeared
+from under its own owner, which is the failure the key could not survive. Publishing is
+deleted outright: the board is now a local file each tick re-renders, `board` is the
+switch, and it is **not** overridable, because `install.sh` reads that same key from the
+tracked file at stamp time and a per-machine override would give one switch two answers.
+Nothing was lost on a shared bundle — the cross-owner view was never the published page.
+It is the *other owners* section that `scripts/build-board.sh` reads from the tracked task
+documents at your current git `HEAD`, which is the one thing both clones genuinely share.
 
 Two constraints survive the override and must be checked against the *effective*
 values, not the tracked ones:

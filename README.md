@@ -291,27 +291,30 @@ are doing, not by which is newest.
 | You want | Run | Costs |
 |---|---|---|
 | a look right now, in the terminal you are in | `scripts/print-board.sh` | nothing |
-| a page to open locally, or to publish for the team | `scripts/build-board.sh` | a re-run to refresh |
+| a page to open locally — the one each tick renders | `scripts/build-board.sh --standalone` | a re-run, or a looping instance |
 | a page that updates itself as you work | `scripts/watch-board.sh` | **a process you keep running** |
 
 ```bash
 scripts/print-board.sh                      # columns: instance, project, phases, tasks, awaiting
 scripts/build-board.sh --standalone         # ./board.html, openable in a browser
-scripts/build-board.sh                      # the same page as a BODY — for publishing as an Artifact
+scripts/build-board.sh                      # the same page as a BODY — no <html> wrapper, for embedding
 scripts/watch-board.sh                      # ./.board-live/board.html, re-rendered on every change
 ```
 
-**A published page can keep itself current.** Publish the page once,
-record its URL as `boardArtifactUrl` (in `instance.config.local.json` if the bundle has
-more than one human, else the tracked `instance.config.json`), and every `/pm-loop` tick
-re-renders and republishes it *there* — no key, and no tick ever publishes anything
-([docs/operations.md § publishing it from each tick](docs/operations.md#publishing-it-from-each-tick)).
+**The page keeps itself current, locally.** Every `/pm-loop` tick re-renders it to
+`.board-live/board.html` — gitignored, on this machine — and reports the path; a
+`SessionStart` hook prints the same path when a session starts. `board: false` in
+`instance.config.json` turns that off; absent or `true` leaves it on, which is the seeded
+default ([docs/operations.md § rendering it from each
+tick](docs/operations.md#rendering-it-from-each-tick)). Nothing is published anywhere. It
+is only as fresh as the last tick — the page's masthead says when that was, and
+`watch-board.sh` is the view that follows your work in between.
 
-**The board is per owner.** Publishing is account-scoped — only the account that owns an
-artifact can update it — so two humans cannot share one published page, and each records
-their own URL. Your own projects come from your `SNAPSHOT.json`; every other owner's is a
-collapsed, **named** section below them, read from the tracked task documents at your
-current git `HEAD` (the one thing both clones share) and cached against that SHA.
+**The board is per installation, and it still shows everybody.** Your own projects come
+from your `SNAPSHOT.json`; every other owner's is a collapsed, **named** section below
+them, read from the tracked task documents at your current git `HEAD` (the one thing both
+clones share) and cached against that SHA. That is why the local board loses nothing on a
+shared bundle: the cross-owner half never came from a shared page, it came from git.
 
 **The watcher's cost is the real one, so read it before you pick it.** It needs a
 resident process, and ai-bridge deliberately has none — its agents are ephemeral
@@ -380,7 +383,7 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
 | `boardInstances` | the board is just this instance | yes |
-| `boardArtifactUrl` | **no tick ever publishes the board** | **yes** — publishing is account-scoped, so each human owns their own board |
+| `board` | **on** — `SNAPSHOT.json` is seeded, and each tick renders `.board-live/board.html` | **no** — one instance, one answer |
 | `codegraphSkip` | index every product repo | yes |
 
 Environment knobs: `PUSH_STATE_MAX` (default **12**), `PRUNE_ACTIVE_MINUTES`,

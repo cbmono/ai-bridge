@@ -4,13 +4,16 @@ An ai-bridge bundle can be shared by two humans, each with their own clone and t
 own `/pm-loop`. Both see one set of projects and one knowledge base, and either can hand
 a project or a single task across.
 
-**The published board is the one thing that is not shared — and cannot be.** Artifact
-publishing is account-scoped: only the account that owns an artifact may update it, so a
-single `boardArtifactUrl` gives a shared bundle one working board and one publish step
-that fails silently forever. Each human records **their own** URL and publishes **their
-own** page: their projects come from their own snapshot, and every *other* owner's is a
-named, collapsed section read from the tracked task documents at their current git
-`HEAD`. Git is what two clones genuinely share; an artifact is not.
+**The board is not shared either — each clone renders its own, and that costs nothing.**
+There is no published page to share: every `/pm-loop` tick renders `.board-live/board.html`
+on the machine it runs on. Each human's own projects come from their own snapshot, and
+every *other* owner's is a named, collapsed section read from the tracked task documents at
+their current git `HEAD`. **Git is what two clones genuinely share**, which is why this
+half survived deleting the publish path intact: the cross-owner view never came from a
+shared page. (It briefly came from one per human. Publishing was account-scoped — only the
+owning account could ever update a page — so a shared URL gave a bundle one working board
+and one publish step that failed silently forever; then the page vanished from under its
+own owner at the next login, and the whole path was deleted.)
 
 **All of it is a no-op on a single-human instance.** Absence means today's behaviour at
 every step — never an error.
@@ -38,7 +41,6 @@ gitignored file on their machine.
 | 4 | Name who owns unowned work — **tracked** | either clone | `defaultOwner` in `instance.config.json` |
 | 5 | Say which login this clone is | **each** clone | `{ "ownerGithubUser": "<login>" }` in `instance.config.local.json` |
 | 6 | Put this machine's paths in the local file | **each** clone | `reposRoot`, `worktreeRoot`, `boardInstances` |
-| 6b | Publish your **own** board and record its URL | **each** clone | `boardArtifactUrl` in `instance.config.local.json` |
 | 7 | Turn the nudges on (a clone is not a first stamp) | second clone | `touch AWAITING.md SNAPSHOT.json` |
 | 8 | Untrack the derived indexes if already committed | either clone | run the `git rm --cached` that `install.sh` prints |
 | 9 | Assign work | either clone | `owner: <github-login>` on a `project.md` or one `tasks/<id>.md` |
@@ -54,7 +56,7 @@ gitignored file on their machine.
 | `reposRoot` | either | required for dispatch | Yes |
 | `worktreeRoot` | either | `<reposRoot>/_wt` | Yes |
 | `boardInstances` | either | the board is just this instance | Yes |
-| `boardArtifactUrl` | either | no tick ever publishes | Yes — **one artifact per owner**; publishing is account-scoped |
+| `board` | tracked `instance.config.json` | on: the snapshot is seeded and each tick renders the local page | **No** — one instance, one answer |
 
 The **one** place the overridable set is listed — with what each key means when absent —
 is [`SCHEMA.md` → "Per-machine config overrides"](../symlink/SCHEMA.md). Every reader

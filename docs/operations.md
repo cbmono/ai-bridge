@@ -205,24 +205,24 @@ against the old flag fails loudly rather than rendering a different page.
 ```bash
 scripts/write-snapshot.sh                                    # in an instance: refresh its SNAPSHOT.json
 scripts/print-board.sh                                       # the terminal board
-scripts/build-board.sh                                       # an Artifact page BODY, for publishing
+scripts/build-board.sh                                       # the same page as a BODY, no <html> wrapper
 scripts/build-board.sh --standalone --out /tmp/board.html    # ...the same page, to open in a browser
 scripts/watch-board.sh                                       # a local page, re-rendered on every change
 ```
 
 Each `/pm-loop` tick refreshes the snapshot at the end of the tick, so on a looping
-instance you never run the writer by hand — and where `boardArtifactUrl` is set, the same
-tick re-renders and republishes the page ([below](#publishing-it-from-each-tick)).
+instance you never run the writer by hand — and unless `board` is `false`, the same tick
+re-renders the local page and reports its path ([below](#rendering-it-from-each-tick)).
 
 ### Which renderer to reach for
 
 | | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` |
 |---|---|---|---|---|
-| Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, for publishing | the same page, kept fresh |
-| Freshness | the moment you ran it | the moment you ran it | the moment you ran it — or every tick, once published | live, to the second |
-| Shareable | paste the text | you publish it yourself | **yes** — publish it, read it on a phone | no, local only |
-| Costs | nothing | a re-run to refresh | a re-run, or a looping instance | **a resident process** |
-| Reach for it | by default, when you are already in a terminal | you want to look at it locally | someone else needs to see it | while actively working a queue |
+| Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, no `<html>` wrapper | the same page, kept fresh |
+| Freshness | the moment you ran it | the moment you ran it — or **every tick**, on a looping instance | the moment you ran it | live, to the second |
+| Leaves the machine | no | no | only if you carry it somewhere | no |
+| Costs | nothing | a re-run, or a looping instance | a re-run to refresh | **a resident process** |
+| Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue |
 
 **The watcher needs a process you keep alive, and that is a real cost, not a detail.**
 ai-bridge deliberately has no resident process: its agents are ephemeral subagents inside
@@ -284,8 +284,9 @@ the same position as one that deleted the file — opt in with `touch SNAPSHOT.j
 
 ### Before you publish it, know what it carries
 
-The board's HTML can leave the machine, so the snapshot deliberately carries *less* than
-`AWAITING.md` does.
+Nothing publishes the board any more — the tick renders a local file — but a file is
+copyable, and the board's HTML can therefore still leave the machine if you carry it
+somewhere. So the snapshot deliberately carries *less* than `AWAITING.md` does.
 
 | Carried | Never carried |
 |---|---|
@@ -298,14 +299,14 @@ The board's HTML can leave the machine, so the snapshot deliberately carries *le
 | PR links | — |
 
 **One identity field is carried, and it was a decision.** `owner` used to be on the right
-of that table, for the obvious reason: on a shared bundle it names a person, and this page
-gets published. It moved because publishing is **account-scoped** — each human publishes
-their own board — so a board that cannot say whose project is whose cannot separate your
-work from theirs, which is the only thing the second section is for. The concession is
-kept narrow: a GitHub username (public, stable — never an email), copied verbatim from the
-project document, project-level only. **The other owners are named in the published HTML
-whether their section is expanded or collapsed** — the collapse is reading comfort, not
-redaction, and the page's own footer says so.
+of that table, for the obvious reason: on a shared bundle it names a person, and the page
+was published then. It moved because a board that cannot say whose project is whose cannot
+separate your work from theirs, which is the only thing the second section is for — and
+that is still true now the page is local. The concession is kept narrow: a GitHub username
+(public, stable — never an email), copied verbatim from the project document,
+project-level only. **The other owners are named in the rendered HTML whether their
+section is expanded or collapsed** — the collapse is reading comfort, not redaction, and
+the page's own footer says so.
 
 Titles *are* carried, because a board without them is unreadable — which makes the file
 **as sensitive as the task documents it comes from**. That sentence travels inside the
@@ -346,7 +347,7 @@ Full reasoning, including why one drifted instance must not blank the board for 
 | `PRUNE_ACTIVE_MINUTES` | env | the recursive mtime veto in the worktree report |
 | `worktreeRoot` | `instance.config.json` | **`<reposRoot>/_wt`** |
 | `boardInstances` | `instance.config.json` | just this instance |
-| `boardArtifactUrl` | `instance.config.local.json`, else `instance.config.json` | **a tick never publishes** — render and publish by hand, or not at all |
+| `board` | `instance.config.json` (tracked; read by `install.sh` **and** by each tick) | **on** — `SNAPSHOT.json` is seeded, and each tick renders `.board-live/board.html` |
 | `codegraphSkip` | `instance.config.json` | index every product repo |
 
 One hard rule holds regardless of `maxAgentsInFlight`: never two package installs against
@@ -494,89 +495,88 @@ The old `/status` command and `DASHBOARD.md` are gone. In each existing instance
 
 ## Which renderer, and the one question that decides it
 
-**Where may this board go?** That is the whole decision, and it is per instance — not a
-preference.
+**How fresh does it have to be?** That is the whole decision now. It used to be *where
+may this board go* — and that question is **gone**, because nothing publishes any more:
+every renderer below writes to the machine it runs on and stays there.
 
 | | Reach | Process | Use it when |
 |---|---|---|---|
 | `print-board.sh` | this terminal | none | you are already in the terminal. The default. |
-| `build-board.sh --standalone` | a local HTML file | none | you want to open the page yourself |
-| `build-board.sh` | **published, shareable** | none | a teammate needs to see it, or you want it on a phone |
-| `watch-board.sh` | this machine only | **a resident one** | the board **must not leave the machine** |
+| `build-board.sh --standalone` | a local HTML file | none | you want to open the page — and it is what each tick renders |
+| `build-board.sh` | a page **body**, no wrapper | none | you are embedding the markup in something else |
+| `watch-board.sh` | this machine only | **a resident one** | you want the page to follow your work *between* ticks |
 
-The last row is not a fallback, it is the compliant path. Publishing sends every task
-**title** to claude.ai; the snapshot's own `_sensitivity` field says it is "as sensitive
-as the task documents it comes from". For an instance whose `CLAUDE.md` carries no-PII
-rules, `watch-board.sh` is the only renderer that answers "nowhere" — which is why it
-was NOT retired when the publishable page arrived. (The reasoning was recorded as a
-Finding in the private instance that raised it, so it is not linkable from this public
-repo; the short version is the paragraph you just read.)
+**The compliance question answered itself, and that is the point of deleting the publish
+path.** Every task **title** used to be sent to claude.ai by the tick; the snapshot's own
+`_sensitivity` field says it is "as sensitive as the task documents it comes from".
+`watch-board.sh` was kept — rather than retired when the publishable page arrived —
+precisely because it was the only renderer that answered "nowhere", and an instance whose
+`CLAUDE.md` carries no-PII rules had to have one. Now they all answer "nowhere", so
+`watch-board.sh` is the *live* one rather than the *compliant* one, and the rest of that
+reasoning is history rather than a constraint on which renderer you may use. (It was
+recorded as a Finding in the private instance that raised it, so it is not linkable from
+this public repo; the short version is the paragraph you just read.)
 
-`build-board.sh` emits a page **body** — no `<!doctype>`, `<html>`, `<head>` or
-`<body>`, because the publish step wraps the file in exactly those. Opening it directly
-in a browser lands in quirks mode; that is expected, and `build-board.sh --standalone`
-is the one to open locally.
+`build-board.sh` emits a page **body** by default — no `<!doctype>`, `<html>`, `<head>`
+or `<body>`, because a host used to supply exactly those. Nothing supplies them now, so
+opening that output directly lands in quirks mode: `--standalone` is the normal choice,
+and it is the one the tick passes.
 
-### Publishing it from each tick
+### Rendering it from each tick
 
-A published board is a **static page**: three things have to happen for it to move, and
-only two of them are a script. `write-snapshot.sh` refreshes the data,
-`build-board.sh` re-renders the page — and then somebody has to publish
-it, which no script can do, because publishing is a tool the agent holds and not a
-command on the machine. Left there, the page goes stale with only its masthead timestamp
-to admit it.
+The board is a **static file**: it does not move until something re-renders it, and its
+masthead timestamp is the only thing that admits how old it is. So each `/pm-loop` tick
+re-renders it as its last act, right after `write-snapshot.sh` refreshes the data:
 
-So record the page's URL once and each `/pm-loop` tick keeps it current:
-
-```jsonc
-// instance.config.local.json on a bundle two humans share (each records their OWN
-// board); the tracked instance.config.json is fine for a single-human instance.
-"boardArtifactUrl": "https://claude.ai/public/artifacts/<the-id-of-your-board>"
+```sh
+scripts/build-board.sh --standalone --out .board-live/board.html
 ```
 
 Four properties, and the first is the one to remember:
 
-1. **Absent means silence, not an error.** No `boardArtifactUrl` (or `null`) ⇒ the tick
-   renders nothing, publishes nothing and says nothing — the same shape as the optional
-   `advisor`. An instance whose board must not leave the machine must not acquire a
-   broken step by upgrading, and deleting the key turns publishing off again. A key that
-   is *present* but not an `https://` URL is the one case that gets a line: a typo is not
-   a decision, and silence would hide it. (The off switch is a **config key**, not a
-   deletable file under `symlink/` — which is the caveat
+1. **`board` is the switch, and it is the same key the installer reads.** `board: false`
+   in the tracked `instance.config.json` ⇒ the tick renders nothing and says nothing;
+   absent or `true` ⇒ it renders and reports the path. `install.sh` reads that same key at
+   **stamp** time (`cfg_bool board true`) to decide whether `SNAPSHOT.json` is seeded at
+   all, so one key has two readers at the two ends of the lifecycle — deliberately not two
+   keys, and deliberately not the local override file, which the installer does not read.
+   (The off switch is a **config key**, not a deletable file under `symlink/` — which is
+   the caveat
    [conventions.md invariant 4](conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file)
    ends on: machinery is re-linked unconditionally, so a file-shaped switch gets switched
    back on by the next `install.sh`.)
-2. **The URL is read, never invented.** Publishing without it forks a *second* artifact
-   rather than updating the first, so the URL a team bookmarked would freeze while a new
-   page appeared every gap. A tick that publishes to a fresh URL is a bug, not an
-   outcome; if the recorded one stops resolving, the tick says so in one line and
-   recording a replacement stays yours.
-3. **It IS per-machine, and that reverses an earlier rule.** It used to be tracked-only,
-   on the ground that one URL means one page a whole team shares. That assumed two clones
-   could publish to one artifact, and **they cannot**: publishing is **account-scoped** —
-   the update path needs an artifact the account owns, and no share level grants it, so
-   exactly one account can ever update a given URL. Verified live: listing with
-   `scope: all` did not include the other human's board, and reading it directly returned
-   *artifact not found — it may have been deleted, or it has not been shared with you*. A
-   tracked URL therefore never produced one shared board; it produced one working board
-   and one publish step that failed silently on the other clone forever. So
-   `boardArtifactUrl` is in the `instance.config.local.json` override set and **each human
-   publishes their own page** ([SCHEMA.md → Per-machine config
-   overrides](../symlink/SCHEMA.md)).
-4. **A republish is not a change.** The tick still reports `noop: true` when the
-   documents did not move — a board refresh alone must not wake anybody, or an idle loop
-   starts scrolling and gets switched off.
+2. **The path is the one the watcher already uses.** `.board-live/board.html` is
+   `watch-board.sh`'s default output and is gitignored by `install.sh`, so the tick and
+   the watcher keep **one** board rather than two, and there is nothing new to ignore.
+   Never commit it.
+3. **The tick reports the path, not a promise of freshness.** One line —
+   `BOARD: rendered <path>` — and the `SessionStart` hook below prints the same path at
+   the start of every session. Between ticks the page is stale, and the masthead is what
+   says by how much; `watch-board.sh` is the answer if that matters.
+4. **A render is not a change.** The tick still reports `noop: true` when the documents
+   did not move — a board refresh alone must not wake anybody, or an idle loop starts
+   scrolling and gets switched off.
 
-Publishing is still a **decision**, not a default: it sends every task title to
-claude.ai. Read [what the snapshot carries](#before-you-publish-it-know-what-it-carries)
-before you set the key, and note that `board: true` (a local, gitignored snapshot)
-publishes nothing on its own — the two switches are independent.
+**There was a publish path here until 2026-08-29, and deleting it is the headline, not a
+footnote.** A recorded artifact URL made each tick republish the page to claude.ai. It
+could not work: publishing is **account-scoped** — the update path needs an artifact the
+account owns, and no share level grants it, so exactly one account could ever update a
+given URL. Verified live: a `scope: all` listing did not include the other human's board,
+and reading it directly returned *artifact not found — it may have been deleted, or it has
+not been shared with you*. So a shared URL never produced one shared board; it produced one
+working board and one publish step that failed silently on the other clone forever. Then
+the owner switched Claude accounts and the recorded page disappeared from under them,
+which is the failure that ended it. The key, the step, the publish grant and the
+per-machine override row are all gone; the cross-owner section survives untouched, because
+it never came from the published page — `build-board.sh` reads it from the tracked task
+documents at your current git `HEAD`.
 
-**A `SessionStart` hook surfaces the link too.** `.claude/hooks/show-board-link.sh`
-reads this same `boardArtifactUrl` — never a second copy of it — and, if it is set,
-prints it once when a session starts, so the human can open the page instead of
-digging for the URL. Same off switch as everything else here: absent, empty, or `null`
-means exit 0 in silence, and so does a non-bridge project that happens to inherit the
-hook. It reads nothing else — no task document, no `AWAITING.md` — so it is not a
-second, unvalidated copy of `show-awaiting.sh`'s field discipline; it prints the link
-and nothing more.
+**A `SessionStart` hook surfaces the path too.** `.claude/hooks/show-board-link.sh` prints
+the rendered board when a session starts, so the human can open it instead of digging for
+it: a `file://` link **and** the bare path on its own line, because `file://` is a
+hyperlink in some terminals and inert text in others, and the bare line is the one you can
+copy. Same off switch as everything else here — no instance signature, `board: false`, or
+no rendered page yet all mean exit 0 in silence, and so does a non-bridge project that
+happens to inherit the hook. It reads nothing else: no task document, no `AWAITING.md`, so
+it is not a second, unvalidated copy of `show-awaiting.sh`'s field discipline. It prints
+the path and nothing more.
