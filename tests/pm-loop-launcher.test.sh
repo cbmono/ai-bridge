@@ -22,10 +22,15 @@
 # It is deliberately NOT a check that the launcher prints few lines — that is behaviour of
 # a model, not of a file. What is checkable is the instruction it reads, which is this.
 #
-# IT ALSO OWNS THE ONE GRANT THAT IS NOT A PRECONDITION. `Artifact` was added so a tick can
-# republish the board, and a widened tool contract is exactly the thing this file was
-# written to keep honest — so the grant, the step that uses it, and the two rules that keep
-# it harmless (never a new URL, never a `noop: false`) are asserted together at the bottom.
+# IT ALSO OWNS THE GRANT THAT WAS NOT A PRECONDITION — WHICH IS NOW ITS ABSENCE. A publish
+# grant was added once so a tick could republish the board to a hosted page, together with
+# a step 2c that finished the job whenever the tick could not. Both are deleted: publishing
+# was account-scoped, so exactly one account could ever update a page and the recorded
+# board vanished from under its own owner at the next login. The board is a local file now.
+# Narrowing a tool contract is the harder direction to hold — a deleted grant leaves no
+# trace, and nothing but an assertion stops the next "the tick could just publish this" —
+# so the absence of the grant, the absence of the step, and the switch that replaced them
+# are asserted together at the bottom.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
@@ -73,16 +78,17 @@ readers_granted() { # <file> -> count of grants that are NOT on the approved lis
   # the simple allowlist shapes. So: extract every grant, subtract the approved forms,
   # and count what is left.
   #
-  # `Artifact` is approved and is NOT a reader: it publishes a page and cannot open a
-  # task document, the git history or the GitHub API — the class this check exists to
-  # keep out. It is also the only grant here that is not a precondition, so the launcher
-  # states its reason beside the list (asserted further down), which is what keeps the
-  # next addition a line in a diff rather than a habit.
+  # THE APPROVED SET IS NOW EXACTLY THE PRECONDITIONS. `Artifact` used to be on it — a
+  # publish grant, not a reader, and the only entry here that was not a precondition. It
+  # is gone with the publish step, so it is gone from this list too: a closed list that
+  # keeps approving a grant nothing uses is how the next one gets added by analogy. The
+  # consequence is deliberate — re-granting it now fails THIS check, under a name about
+  # readers, and the assertions further down say plainly that the grant itself is out.
   awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
     | tr ',' '\n' \
     | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
     | grep -v '^$' \
-    | grep -v -x -e 'Bash(pwd)' -e 'Bash(ls:\*)' -e 'Agent' -e 'Artifact' \
+    | grep -v -x -e 'Bash(pwd)' -e 'Bash(ls:\*)' -e 'Agent' \
                  -e 'ScheduleWakeup' -e 'CronList' -e 'CronDelete' \
     | wc -l | tr -d ' '
 }
@@ -105,7 +111,7 @@ for probe in 'Bash(curl:*)' 'Bash(python:*)' 'Bash(node:*)' 'Read' 'Bash'; do
 done
 # …while the real launcher's exact grant list still passes, so the allowlist is not
 # simply rejecting everything.
-printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Agent, Artifact, ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
+printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Agent, ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
   > "$TMP/probe.md"
 ok "…and PASSES on the approved set alone" "$(readers_granted "$TMP/probe.md")" 0
 
@@ -140,78 +146,97 @@ ok "step 0: reads gh pr list"          "$(in_step0 'gh pr list')" yes
 ok "step 0: task doc outranks ledger"  "$(in_step0 'the task document wins')" yes
 ok "step 0: names the duplicate-PR failure" "$(in_step0 'duplicate PRs')" yes
 
-# --- the republish: a grant, a step, and the two rules that keep it harmless -------
+# --- the board: no publish grant, no step 2c, and a switch read at TICK time -------
 #
-# WHY THESE ARE ASSERTED HERE. The board is a static page and nothing moved it, so a
-# tick now re-renders and republishes it. Three of that step's properties are the kind
-# that read as satisfied while being wrong, which is this file's whole subject:
+# WHY THESE ARE ASSERTED HERE. The board is where this launcher's tool contract was
+# widened, and it has now been narrowed back — the harder direction to keep, because a
+# deleted grant leaves nothing behind to review. Four properties, each the kind that reads
+# as satisfied while being wrong, which is this file's whole subject:
 #
-#   · THE GRANT AND THE STEP MUST BOTH EXIST. `Artifact` in the launcher's allowed-tools
-#     with no step is a widened contract buying nothing; the step with no grant anywhere
-#     is an instruction that cannot run. The grant that matters is on the TICK, which is
-#     what actually publishes (it holds `Bash`, so it is the only one of the two that can
-#     render), and that is exactly the class agent-tool-allowlist.test.sh was written for:
-#     an instruction naming a tool its agent does not hold reads perfectly and never runs.
-#   · A NEW URL EACH TICK IS THE BUG. Publishing without the recorded URL forks a SECOND
-#     artifact instead of updating the first, so the page a team bookmarked freezes while
-#     a fresh one appears every gap — and nothing about that looks broken from inside the
-#     loop, because a publish did succeed. Hence "read from config, never invented".
-#   · A REPUBLISH IS NOT A CHANGE. Every tick refreshes the board, so counting it as a
-#     change pins `noop` to false forever and retires the streak line that makes an idle
-#     loop quiet. That is the difference between a loop a human leaves running and one
-#     they turn off, so the rule is pinned rather than left to whoever edits step 3.
+#   · THE GRANT AND THE STEP WENT TOGETHER, AND BOTH MUST STAY GONE. Publishing was
+#     account-scoped: one account could ever update a given page, no share level granted a
+#     second human write access, and the recorded board vanished from under its own owner
+#     the moment they switched Claude accounts. So the grant bought a step that could not
+#     work. Its absence is asserted on the launcher AND on the tick, because a grant with
+#     no step is a widened contract buying nothing while a step with no grant is an
+#     instruction that cannot run — the class agent-tool-allowlist.test.sh was written for.
+#   · THE SWITCH IS READ AT TICK TIME, which is the defect this actually closed. `board`
+#     was never unread — `install.sh`'s `cfg_bool board true` has gated SNAPSHOT.json
+#     seeding since #10 — but it was read only at STAMP time, so `board: false` could not
+#     stop a tick rendering once that file existed. The tick's own read is pinned here, as
+#     is the fact that it does not replace the installer's. The behavioural half, on the
+#     hook that actually runs, is in tests/show-board-link.test.sh.
+#   · THE RENDER IS THE ONE `build-board.sh` CALL THAT OPENS IN A BROWSER. `--standalone`
+#     was FORBIDDEN in the publish step (a host supplied the wrapper) and is REQUIRED now
+#     (nothing does), so the flag flipping is not cosmetic and is asserted as such.
+#   · A RENDER IS NOT A CHANGE. Every tick refreshes the board, so counting it as a change
+#     pins `noop` to false forever and retires the streak line that makes an idle loop
+#     quiet. That is the difference between a loop a human leaves running and one they
+#     turn off, so the rule is pinned rather than left to whoever edits step 3.
 #
 # As everywhere in this file: these check the INSTRUCTION, not a model's behaviour.
-ok "launcher grants Artifact"            "$(granted "$LAUNCHER" 'Artifact')" yes
-ok "…with the reason beside the list"    "$(has "$LAUNCHER" 'Why `Artifact` is in `allowed-tools`')" yes
-ok "…naming what no script can do"      "$(has "$LAUNCHER" 'publishing is the one board step no script can do')" yes
-ok "…and that the tick is what publishes" "$(has "$LAUNCHER" '**The publish happens in the TICK, not here**')" yes
+#
+# THE DELETED KEY IS ASSEMBLED AT RUNTIME so this file does not contain the string it
+# asserts nobody contains, and needs no exemption from the repo-wide scan in
+# tests/show-board-link.test.sh. An exemption list is the part that rots.
+DEAD_KEY="board""ArtifactUrl"
+ok "launcher grants no publish tool"     "$(granted "$LAUNCHER" 'Artifact')" no
+ok "…and says so beside the list"        "$(has "$LAUNCHER" 'Why there is no publish grant, and no publish step')" yes
+ok "…naming why it could not work"       "$(has "$LAUNCHER" 'account-scoped')" yes
+ok "…and where the board goes instead"   "$(has "$LAUNCHER" '.board-live/board.html')" yes
+ok "launcher names no deleted config key" "$(has "$LAUNCHER" "$DEAD_KEY")" no
 
-# The step itself, and its absence rule. `2c` matches 2b's shape: one condition, and
-# absence is silence — the same property awaiting-queue/snapshot absence rules carry.
-step2c() { awk '/^2c\. /{p=1; next} p&&/^3\. /{p=0} p' "$LAUNCHER"; }
-S2C="$(step2c)"
-ok "launcher has a step 2c"              "$([ -n "$S2C" ] && echo yes || echo no)" yes
-in_2c() { printf '%s' "$S2C" | grep -qF -- "$1" && echo yes || echo no; }
-ok "2c: absence is silence, not an error" "$(in_2c 'absence means skip in silence')" yes
-ok "2c: it does not read the config here" "$(in_2c '**You do not read the config here.**')" yes
-ok "2c: a fresh URL is a bug"             "$(in_2c 'A new URL each tick is a bug, not an outcome')" yes
-ok "2c: …and says what goes wrong"        "$(in_2c 'forks a *second* artifact')" yes
-ok "2c: the URL is never invented"        "$(in_2c 'never invented')" yes
-ok "2c: it never blocks the loop"         "$(in_2c 'It never blocks')" yes
+# The step is GONE, not emptied: 2c WAS the publish handoff, and the tick renders and
+# reports the path itself, so nothing replaced it.
+step2c() { awk '/^2c\. /{p=1; next} p&&/^3\. /{p=0} p' "$1"; }
+ok "launcher has no step 2c at all"      "$([ -z "$(step2c "$LAUNCHER")" ] && echo yes || echo no)" yes
+# …and the steps that are not about publishing are untouched, so "no 2c" is a deletion
+# rather than a file that stopped parsing.
+ok "…while step 2b is still there"       "$(grep -c '^2b\. ' "$LAUNCHER" | tr -d ' ')" 1
+ok "…and step 3 still follows it"        "$(grep -c '^3\. \*\*On completion' "$LAUNCHER" | tr -d ' ')" 1
 
 # The noop rule lives in step 3, where `noop` is defined — not in a note beside it.
 step3() { awk '/^3\. \*\*On completion/{p=1; next} p&&/^4\. /{p=0} p' "$LAUNCHER"; }
-ok "step 3: a republish is not a change" \
-  "$(step3 | grep -qF 'A board refresh or a republish is not a change' && echo yes || echo no)" yes
+ok "step 3: a render is not a change" \
+  "$(step3 | grep -qF 'A board refresh or a render is not a change' && echo yes || echo no)" yes
 
-# The tick's half: it holds the grant, renders the one board, reads the URL from config,
-# and repeats the noop rule where the work happens.
-ok "tick holds the Artifact tool" \
-  "$(awk '/^---$/{d++; next} d==1 && /^tools:/{print}' "$TICK" | tr ',' '\n' \
-     | sed -e 's/^tools:[[:space:]]*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
-     | grep -qx 'Artifact' && echo yes || echo no)" yes
-ok "tick names the config key"           "$(has "$TICK" 'boardArtifactUrl')" yes
-ok "tick renders the board"              "$(has "$TICK" 'build-board.sh --out')" yes
+# The tick's half: it holds no publish grant, re-checks the switch, renders the one board
+# to the one path, and repeats the noop rule where the work happens.
+tick_tools() {
+  awk '/^---$/{d++; next} d==1 && /^tools:/{print}' "$TICK" | tr ',' '\n' \
+    | sed -e 's/^tools:[[:space:]]*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+ok "tick holds no publish tool"          "$(tick_tools | grep -qx 'Artifact' && echo yes || echo no)" no
+ok "…while still holding Bash to render" "$(tick_tools | grep -qx 'Bash' && echo yes || echo no)" yes
+ok "tick re-reads board at tick time"    "$(has "$TICK" 'Read `board` from `instance.config.json`')" yes
+ok "…false skips in silence"             "$(has "$TICK" 'skip the rest of this step in silence')" yes
+ok "…absent or true renders"             "$(has "$TICK" 'Absent or `true`')" yes
+ok "…and it does NOT replace the stamp-time reader" "$(has "$TICK" 'cfg_bool board true')" yes
+ok "…reading the same tracked file"      "$(has "$TICK" '**tracked**')" yes
+ok "tick renders the board"              "$(has "$TICK" 'build-board.sh --standalone --out')" yes
+ok "…to the path watch-board.sh uses"    "$(has "$TICK" '.board-live/board.html')" yes
 # `--layout` was DELETED, not defaulted away (see build-board.sh's header): a tick that
-# still passed it would exit 2 and publish nothing, so its absence is the assertion.
+# still passed it would exit 2 and render nothing, so its absence is the assertion.
 # tests/artifact-board.test.sh makes the same claim repo-wide; this one keeps it beside
 # the step it is about, where a future edit to the tick would be reviewed.
 ok "…and passes no removed --layout flag" "$(has "$TICK" '--layout')" no
-ok "tick skips in silence when unset"    "$(has "$TICK" 'skip the rest of this step in silence')" yes
-ok "tick: publishing without the URL forks" "$(has "$TICK" 'forks a second artifact')" yes
-ok "tick: a republish is not a change"   "$(has "$TICK" 'A republish is not a state change')" yes
+ok "tick reports the path, once"         "$(has "$TICK" 'BOARD: rendered <path>')" yes
+ok "…and never claims the page is live"  "$(has "$TICK" 'Say the path, never that it is live')" yes
+ok "tick: a render is not a change"      "$(has "$TICK" 'A render is not a state change')" yes
+ok "tick names no deleted config key"    "$(has "$TICK" "$DEAD_KEY")" no
 # The retired renderer must not come back as the thing the tick runs.
 ok "tick names no retired renderer"      "$(has "$TICK" 'build-artifact-board')" no
 ok "launcher names no retired renderer"  "$(has "$LAUNCHER" 'build-artifact-board')" no
 
-# NON-VACUITY for the two greps above: they must fail on a launcher that lost the step.
-printf -- '---\nallowed-tools: Bash(pwd), Agent\n---\n\n2c. no rule here\n\n3. **On completion**, schedule\n' \
-  > "$TMP/nostep.md"
-ok "checker flags a launcher with no grant" "$(granted "$TMP/nostep.md" 'Artifact')" no
-ok "checker flags a 2c with no absence rule" \
-  "$(awk '/^2c\. /{p=1; next} p&&/^3\. /{p=0} p' "$TMP/nostep.md" \
-     | grep -qF 'absence means skip in silence' && echo yes || echo no)" no
+# NON-VACUITY for the two absence checks above: each must FIND what it looks for when it
+# is really there, or "gone" is indistinguishable from "never looked".
+printf -- '---\nallowed-tools: Bash(pwd), Agent, Artifact\n---\n\n2c. **Republish the board.**\n   a body\n\n3. **On completion**, schedule\n' \
+  > "$TMP/withstep.md"
+ok "the grant checker sees a grant that IS there" "$(granted "$TMP/withstep.md" 'Artifact')" yes
+ok "the 2c checker sees a 2c that IS there" \
+  "$([ -n "$(step2c "$TMP/withstep.md")" ] && echo yes || echo no)" yes
+ok "…and the same key grep finds a planted key" \
+  "$(printf 'x %s y\n' "$DEAD_KEY" > "$TMP/withkey.md"; has "$TMP/withkey.md" "$DEAD_KEY")" yes
 
 # --- non-vacuity: the two mechanical checks must reject a bad file ----------------
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")" || {

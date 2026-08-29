@@ -1,7 +1,7 @@
 ---
 description: Start the Project Manager loop as a SERIAL, completion-driven loop (one tick at a time) in this control-panel instance repo
 argument-hint: "[gap]  pause between ticks, default 10m  (e.g. 0m for back-to-back, 30m)"
-allowed-tools: Bash(pwd), Bash(ls:*), Agent, Artifact, ScheduleWakeup, CronList, CronDelete
+allowed-tools: Bash(pwd), Bash(ls:*), Agent, ScheduleWakeup, CronList, CronDelete
 ---
 
 Start the **Project Manager loop** — but as a **SERIAL, completion-driven** loop:
@@ -100,27 +100,28 @@ here buys nothing and is paid for twice.
 **This is not "print less".** Collapsing, quieting or redirecting the output would
 keep every token and lose the trail. The work does not belong here at all.
 
-### Why `Artifact` is in `allowed-tools`
+### Why there is no publish grant, and no publish step
 
-It is the one grant that is not a precondition, so the reason lives beside the list it
-widens. **The rule above is untouched: `Artifact` reads nothing.** It publishes a page —
-it cannot open a task document, the git history or the GitHub API, which is what that
-list is closed against.
+`allowed-tools` above is now nothing but the preconditions, and it used to carry one more
+grant: the publishing tool, added so a tick could push the board to a hosted page, plus a
+**step 2c** that finished the job whenever the tick could not. **The grant and the step
+are both deleted**, and the reason is worth keeping, because it is not "we simplified".
 
-It is here because **publishing is the one board step no script can do.**
-`scripts/write-snapshot.sh` refreshes the data and `scripts/build-board.sh` renders the
-page, but neither can put it where a teammate opens it, so without
-this grant a published board goes stale with only its masthead timestamp to admit it.
+Publishing was **account-scoped**. Exactly one account could ever update a given page, no
+share level granted a second human write access, and the page vanished from under its own
+owner the moment they switched Claude accounts — which is what actually happened. So the
+mechanism could not deliver the one thing it existed for, and a grant that buys a step
+that cannot work is a widened tool contract bought for nothing.
 
-**The publish happens in the TICK, not here** — see `.claude/agents/project-manager.md`
-step 8, which renders and publishes as its last act. Two reasons, the second decisive:
-the tick already holds `Bash`, so it is the only one of the two that can render at all;
-and the page body is tens of kilobytes that would otherwise land in **this** session's
-context, the one thing the section above exists to protect. The grant sits in this list
-anyway because this list is the loop's tool contract — a reader has to be able to see
-that the loop publishes — and because a tick that cannot publish from a subagent says so
-in one line and step 2c finishes the job. **Either way it is one publish per tick, to the
-URL already recorded in config.**
+**The board is now a local file**, rendered by the tick with `scripts/build-board.sh
+--standalone` into the gitignored `.board-live/board.html` — see
+`.claude/agents/project-manager.md` step 8, which renders as its last act and reports the
+path in one `BOARD: rendered <path>` line — surfaced to the human with the rest of the
+tick's report, and printed again at the start of every session by the
+`show-board-link.sh` hook. Rendering needs `Bash`, which the tick already holds and this
+launcher deliberately does not, so there is nothing left for the launcher to do about the
+board at all: no grant, no step, and no page body landing in **this** session's context,
+which is the one thing the section above exists to protect.
 
 ## How the serial loop works
 
@@ -217,47 +218,13 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    any other shape, ignore it and continue — an observer that can stall the loop is
    worse than no observer.
 
-2c. **Republish the board, if this instance publishes one.** Same shape as 2b, and the
-   same rule first: **absence means skip in silence** — no message, no warning, nothing
-   in the tick summary. An instance that does not publish its board must not acquire a
-   broken step.
-
-   **You do not read the config here.** The tick does (`boardArtifactUrl`, from
-   `instance.config.local.json` if it names one, else `instance.config.json` — the board
-   is **per owner**, because publishing is account-scoped and only the account that owns
-   an artifact can update it), and it ends its report with at most one line:
-
-   ```
-   BOARD: published <url>              # done — nothing for you to do
-   BOARD: rendered <path> -> <url>     # it could not publish; you finish it
-   ```
-
-   No `BOARD:` line ⇒ no `boardArtifactUrl`, or nothing to publish ⇒ step over it
-   without a word. On the second form, publish **that file** to **that exact URL** with
-   `Artifact`, updating the artifact that is already there. **Widen nothing to do it**: if
-   publishing needs the page body inline and you hold no reader, that is where this step
-   stops — say so in one line, with the path and the URL, and let the human finish it. A
-   grant added here to work around the closed list above would cost more than a stale
-   board does.
-
-   **A new URL each tick is a bug, not an outcome.** Publishing without the recorded URL
-   forks a *second* artifact instead of updating the first: the board the team
-   bookmarked quietly stops moving while a fresh one appears every gap. So the URL is
-   read from config and **never invented** — not guessed from a previous tick's output,
-   not "recreated" because the old one 404s. A URL that no longer resolves is the human's
-   decision to record a new one in their config, never yours.
-
-   **It never blocks, and it is not a state change.** A failed or refused publish is one
-   line in the tick summary and the loop goes on to step 3, exactly like the advisor —
-   and a tick whose only act was refreshing the board still reports `noop: true` (step 3).
-
 3. **On completion**, schedule the next tick after the gap: call `ScheduleWakeup`
    with `delaySeconds` = the gap, and `prompt` = `/pm-loop <gap>` so this skill
    re-enters and dispatches the next tick. (If gap is `0m`, dispatch the next
    tick immediately instead of scheduling.)
    **Always pass `noop` and `reason`.** `noop: true` when the tick changed nothing
    (no dispatch, no status change, no `AWAITING.md` edit); `noop: false` when it did.
-   **A board refresh or a republish is not a change.** The snapshot and the page are
+   **A board refresh or a render is not a change.** The snapshot and the page are
    derived from documents that did not move, so a tick whose only act was re-rendering
    them is still `noop: true`. Every tick refreshes the board, so counting it would pin
    `noop` to `false` forever, retire the streak line below, and hand the human back the
@@ -380,13 +347,13 @@ ticks, regardless of how long a tick runs.
   `touch SNAPSHOT.json` puts it back. Which instances a board shows comes from
   `boardInstances` in `instance.config.json`; **if that key is absent or empty, the
   board is just this instance.**
-- **A published board is republished by the same tick** — but only where
-  `boardArtifactUrl` is set, in `instance.config.local.json` or the tracked
-  `instance.config.json`. **The board is per owner**: publishing is account-scoped, so
-  each human publishes their own page, and the other owners' projects appear on it as a
-  section read from the tracked task documents at this clone's git `HEAD`.
-  The tick re-renders with
-  `scripts/build-board.sh` and publishes to that recorded URL (step 2c);
-  **no key ⇒ no render, no publish, no mention.** Refreshing the snapshot is local and
-  publishes nothing, so the two switches are independent: an instance can be on the
-  terminal board and never publish a page.
+- **The board page is re-rendered by the same tick, to a local file** —
+  `scripts/build-board.sh --standalone --out .board-live/board.html`, the gitignored path
+  `scripts/watch-board.sh` also writes. It is **per machine, not per account**: nothing is
+  published anywhere, and the other owners' projects appear on it as a section read from
+  the tracked task documents at this clone's git `HEAD`. `board: false` in
+  `instance.config.json` ⇒ **no render and no mention**; absent or `true` ⇒ it renders and
+  the tick reports the path. That is the same key `install.sh` reads at stamp time to
+  decide whether `SNAPSHOT.json` exists at all, read again at tick time — one switch, two
+  readers. The page is only as fresh as the last tick, which its masthead timestamp
+  states; `scripts/watch-board.sh` is the live view.

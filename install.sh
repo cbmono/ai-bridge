@@ -1055,11 +1055,20 @@ fi
 # right way round: a deletion is a moment's decision, a config key is a durable one.
 #
 # WHAT THIS DOES NOT CHANGE, and the distinction matters for a no-PII instance:
-# SNAPSHOT.json is a LOCAL, gitignored file. Having one puts an instance on the
-# TERMINAL board and makes a page renderable — it does not publish anything. Publishing
-# is a separate, deliberate act (rendering the board to HTML, then hosting that page at
-# an Artifact URL), and question TEXT needs SNAPSHOT_QUESTION_TEXT=1 on top of that.
-# On-by-default is therefore safe for an instance that must not publish.
+# SNAPSHOT.json is a LOCAL, gitignored file, and so is the page rendered from it. Having
+# one puts an instance on the TERMINAL board and makes a page renderable — and since the
+# account-scoped publish path was deleted, nothing this repo ships sends any of it
+# anywhere. Question TEXT still needs SNAPSHOT_QUESTION_TEXT=1 on top of that.
+# On-by-default is therefore safe even for an instance whose board must not leave the
+# machine.
+#
+# THIS IS NO LONGER THE ONLY READER OF `board`, AND THAT IS THE POINT. The key is read
+# here at STAMP time, deciding whether the file below is created at all; each /pm-loop
+# tick and the SessionStart board hook read it again at TICK time, deciding whether the
+# page is rendered and surfaced. Until 2026-08-29 nothing re-read it, so `board: false`
+# stopped the seed and stopped nothing afterwards. Every reader takes it from THIS
+# tracked config — never from a per-machine override — so one key cannot become two
+# switches that disagree.
 #
 # NO SCRIPT IS NAMED HERE, ON PURPOSE. This comment used to name the renderer it meant,
 # and when that renderer was folded into another the name went stale — install.sh never

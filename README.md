@@ -280,7 +280,7 @@ Derived and gitignored; never hand-edit it. Reasoning:
 
 A cross-instance board is available too, on the same off-by-deletion rule
 ([docs/operations.md § the board](docs/operations.md#5-the-cross-instance-board-optional)).
-**Read the field list before you publish one** — the page can leave the machine.
+**Read the field list before you carry one off the machine** — nothing publishes it, but a rendered file is still a file.
 
 ## Three ways to see the board
 
@@ -291,27 +291,30 @@ are doing, not by which is newest.
 | You want | Run | Costs |
 |---|---|---|
 | a look right now, in the terminal you are in | `scripts/print-board.sh` | nothing |
-| a page to open locally, or to publish for the team | `scripts/build-board.sh` | a re-run to refresh |
+| a page to open locally — the one each tick renders | `scripts/build-board.sh --standalone` | a re-run, or a looping instance |
 | a page that updates itself as you work | `scripts/watch-board.sh` | **a process you keep running** |
 
 ```bash
 scripts/print-board.sh                      # columns: instance, project, phases, tasks, awaiting
 scripts/build-board.sh --standalone         # ./board.html, openable in a browser
-scripts/build-board.sh                      # the same page as a BODY — for publishing as an Artifact
+scripts/build-board.sh                      # the same page as a BODY — no <html> wrapper, for embedding
 scripts/watch-board.sh                      # ./.board-live/board.html, re-rendered on every change
 ```
 
-**A published page can keep itself current.** Publish the page once,
-record its URL as `boardArtifactUrl` (in `instance.config.local.json` if the bundle has
-more than one human, else the tracked `instance.config.json`), and every `/pm-loop` tick
-re-renders and republishes it *there* — no key, and no tick ever publishes anything
-([docs/operations.md § publishing it from each tick](docs/operations.md#publishing-it-from-each-tick)).
+**The page keeps itself current, locally.** Every `/pm-loop` tick re-renders it to
+`.board-live/board.html` — gitignored, on this machine — and reports the path; a
+`SessionStart` hook prints the same path when a session starts. `board: false` in
+`instance.config.json` turns that off; absent or `true` leaves it on, which is the seeded
+default ([docs/operations.md § rendering it from each
+tick](docs/operations.md#rendering-it-from-each-tick)). Nothing is published anywhere. It
+is only as fresh as the last tick — the page's masthead says when that was, and
+`watch-board.sh` is the view that follows your work in between.
 
-**The board is per owner.** Publishing is account-scoped — only the account that owns an
-artifact can update it — so two humans cannot share one published page, and each records
-their own URL. Your own projects come from your `SNAPSHOT.json`; every other owner's is a
-collapsed, **named** section below them, read from the tracked task documents at your
-current git `HEAD` (the one thing both clones share) and cached against that SHA.
+**The board is per installation, and it still shows everybody.** Your own projects come
+from your `SNAPSHOT.json`; every other owner's is a collapsed, **named** section below
+them, read from the tracked task documents at your current git `HEAD` (the one thing both
+clones share) and cached against that SHA. That is why the local board loses nothing on a
+shared bundle: the cross-owner half never came from a shared page, it came from git.
 
 **The watcher's cost is the real one, so read it before you pick it.** It needs a
 resident process, and ai-bridge deliberately has none — its agents are ephemeral
@@ -355,7 +358,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Worktrees** | `prune-worktrees.sh` **reports, never deletes.** Do not add a delete, not even behind a flag — it destroyed three running agents' worktrees once. [→](docs/conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing) |
 | **Bundle repair** | `migrate-bundle.sh` is report-only by default and fixes only what has one right answer. **A false success is worse than the error it claims to fix.** [→](docs/conventions.md#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) |
 | **Retiring content** | machinery symlinks are swept; **seed content is only ever reported**, never deleted. [→](docs/operations.md#2-retiring-content-swept-vs-reported) |
-| **Published data** | the board's field list is a data-governance boundary — no question text, no document bodies, no author identity, no out-of-bundle paths. [→](docs/operations.md#before-you-publish-it-know-what-it-carries) |
+| **Board data** | the board's field list is a data-governance boundary — no question text, no document bodies, no author identity, no out-of-bundle paths. Nothing publishes it now, and a rendered file is still copyable. [→](docs/operations.md#before-it-leaves-the-machine-know-what-it-carries) |
 | **Untrusted text** | `AWAITING.md` items and the per-turn state injection are fenced as data before they enter session context. Keep the boundary. [→](docs/conventions.md#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) |
 | **No customer PII** | not in a task title, not in an answer, not in a `Finding`. Titles reach the board; answers persist for the life of the repo. |
 | **Drift check** | `/audit` is read-only and advisory. It catches an autonomous loop gaming itself; it is not a merge-blocking guarantee. [→](docs/autonomy.md#the-audit-counter-metric) |
@@ -380,7 +383,7 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
 | `boardInstances` | the board is just this instance | yes |
-| `boardArtifactUrl` | **no tick ever publishes the board** | **yes** — publishing is account-scoped, so each human owns their own board |
+| `board` | **on** — `SNAPSHOT.json` is seeded, and each tick renders `.board-live/board.html` | **no** — one instance, one answer |
 | `codegraphSkip` | index every product repo | yes |
 
 Environment knobs: `PUSH_STATE_MAX` (default **12**), `PRUNE_ACTIVE_MINUTES`,

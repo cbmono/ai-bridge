@@ -4,11 +4,15 @@
 # clone's SNAPSHOT.json, and every other owner's come from the TRACKED task documents at
 # your current git HEAD.
 #
-# WHY THIS EXISTS. Artifact publishing is account-scoped: the update path needs an
-# artifact the account owns, and there is no share level that grants it, so exactly one
-# account can ever publish to a given URL. Two humans sharing a bundle therefore cannot
-# share one published board — each publishes their own. The cross-owner view then has to
-# come from the one thing both clones genuinely share, which is git.
+# WHY THIS EXISTS, AND WHY IT OUTLIVED THE PUBLISH PATH. It was written when each human
+# published their own board: artifact publishing is account-scoped — the update path needs
+# an artifact the account owns and no share level grants it — so two humans sharing a
+# bundle could never share one published page. The cross-owner view therefore had to come
+# from the one thing both clones genuinely share, which is git. Publishing is now deleted
+# and the board is a local file per machine, and NOTHING BELOW CHANGED: sourcing the
+# section from HEAD was never a workaround for the publish path, it was the only design
+# that ever worked, and it is what makes a per-machine board lose nothing on a shared
+# bundle.
 #
 # THE FOUR CLAIMS THIS FILE PINS, and each is a way the section could be quietly wrong:
 #
@@ -28,11 +32,12 @@
 #      cache would pass the first half and fail the second, which is exactly why the
 #      cache is keyed to the SHA and the timer is only the fallback.
 #
-# NAMED, AND COLLAPSED FOR ERGONOMICS ONLY. The other owners are named on a page that
-# gets published. Collapsing their section does not hide that — the names are in the HTML
-# whether the <details> is open or shut — so the assertions below check the NAME is
-# present in the markup and that the block merely starts closed. Nothing here should be
-# read as testing a privacy control, because the collapse is not one.
+# NAMED, AND COLLAPSED FOR ERGONOMICS ONLY. The other owners are named in the rendered
+# HTML. Collapsing their section does not hide that — the names are in the markup whether
+# the <details> is open or shut — so the assertions below check the NAME is present and
+# that the block merely starts closed. Nothing here should be read as testing a privacy
+# control, because the collapse is not one. (It mattered more when the page was published;
+# a local file is still a file, and a file can be copied somewhere.)
 # See /knowledge/findings/board-owner-identity-named-not-redacted.md.
 #
 # assert(): 0 is a PASS, matching the other harnesses here.

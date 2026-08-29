@@ -20,9 +20,11 @@
 #     --out FILE        where to write (default: ./board.html — it is the path an
 #                       instance's .gitignore already covers)
 #     --standalone      wrap the output in <!doctype html>/<head> for opening in a
-#                       browser directly. OMIT for publishing (see OUTPUT SHAPE).
-#                       Wrapping, not markup: the same page either way, which is why
-#                       watch-board.sh can pass it and the publish step can not.
+#                       browser directly. PASS IT unless something else supplies that
+#                       wrapper — watch-board.sh and the /pm-loop tick both do, and the
+#                       publish step that could not is deleted. Wrapping, not markup:
+#                       the same page either way, so omitting it leaves a fragment to
+#                       embed, which is all the default is for now.
 #     --list-instances  print the resolved instance directories, one per line, and
 #                       exit without writing anything. This exists so watch-board.sh
 #                       can learn WHICH directories to watch without carrying a third
@@ -1302,6 +1304,12 @@ if STANDALONE:
            + head_html + "\n</head>\n<body>\n" + body_html + "\n</body>\n</html>\n")
 else:
     doc = head_html + "\n" + body_html + "\n"
+# The output DIRECTORY is created, and only here — after the "nothing to write" exit
+# above, so an instance that is off the board still leaves no trace. The /pm-loop tick
+# renders to `.board-live/board.html`, which exists on a machine that has run
+# watch-board.sh and on no other, and a renderer that fails with a FileNotFoundError the
+# first time each tick calls it would be a board nobody ever sees.
+OUT.parent.mkdir(parents=True, exist_ok=True)
 OUT.write_text(doc, encoding="utf-8")
 print(f"build-board: wrote {OUT} — {len(instances)} instance(s), "
       f"{n_awaiting} awaiting, {len(broken)} unreadable snapshot(s).")
