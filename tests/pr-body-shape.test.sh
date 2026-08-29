@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# pr-body-shape.test.sh — the short form for PR bodies, review replies and progress
-# reports keeps every element that was load-bearing BEFORE it got short.
+# pr-body-shape.test.sh — the short form for PR bodies, review replies, progress reports
+# and GitHub comments keeps every element that was load-bearing BEFORE it got short.
 #
 # WHY THIS EXISTS. `CONVENTIONS.md` never asked for a long PR body: it asked for the
 # task's `acceptance_criteria` with how each was verified, plus a note when a threshold
@@ -25,6 +25,18 @@
 #     consumer is told to read would be a gate nobody applies;
 #   * evidence is named (a command, a test file and its tally, a run, a URL) and brevity
 #     is stated to be licence to drop NARRATION, never licence to assert without evidence.
+#
+# GITHUB COMMENTS ARE PINNED THE SAME WAY, AND FOR THE SAME REASON. The first version of
+# this rule covered PR bodies, review replies and progress reports; inline code comments
+# and PR thread comments were never named, so they kept the old habit — measured at 2,027
+# characters against 120 for the humans on the same pull request. A rule that names its
+# surfaces is the fix, so this file pins that the surfaces stay named: the ~280-character
+# target, the shape (what is wrong, where, what to do), the three things that do not
+# belong (the diff restated, incident history, rejected alternatives), and the answer to
+# the question that motivated the rule — that the verbosity buys the AGENT readers
+# nothing either, since a reviewing agent reads the diff and the criteria table, not our
+# narration. Drop that last clause and the rule loses its justification, which is how a
+# future editor talks themselves back into 2,000-character comments.
 #
 # AND IT PROVES IT CAN FAIL. Every assertion here is re-run against a MUTANT copy of the
 # same document with the bullet it depends on deleted, and must flip to absent. A grep
@@ -145,7 +157,26 @@ ok "never restate the finding back"       "$(saw "$CONV_FLAT" '**Never restate t
 ok "the reply is a list, not a letter"    "$(saw "$CONV_FLAT" '**The reply is a list, not a letter**')" yes
 
 echo
-echo "== 7. progress reports: outcome first, tables, decisions last and short =="
+echo "== 7. GitHub comments: about a tweet, shaped, and no help to an agent either =="
+ok "a comment is about 280 characters"    "$(saw "$CONV_FLAT" '**A GitHub comment is about 280 characters — roughly a tweet.**')" yes
+ok "inline code comments are named"       "$(saw "$CONV_FLAT" 'an **inline code comment**')" yes
+ok "PR thread comments are named"         "$(saw "$CONV_FLAT" 'a **PR thread comment**')" yes
+ok "longer only if the finding needs it"  "$(saw "$CONV_FLAT" 'Longer only when the finding genuinely needs it')" yes
+ok "…and never by default"                "$(saw "$CONV_FLAT" '**never by default**')" yes
+ok "the shape: what/where/what to do"     "$(saw "$CONV_FLAT" '**The shape is: what is wrong, where, and what to do.**')" yes
+ok "the example shows that shape"         "$(saw "$CONV_FLAT" '`run.sh:42` — `$dir` is unquoted')" yes
+ok "never restate the diff back"          "$(saw "$CONV_FLAT" '**Never restate the diff back at the reader**')" yes
+ok "no history, no rejected alternatives" "$(saw "$CONV_FLAT" '**No incident history, no rejected alternatives**')" yes
+ok "evidence as a short list, not prose"  "$(saw "$CONV_FLAT" '**Evidence as a short list, not prose.**')" yes
+ok "agents do NOT need the verbosity"     "$(saw "$CONV_FLAT" '**The verbosity is not needed for the agent readers either**')" yes
+ok "…they read the diff and the table"    "$(saw "$CONV_FLAT" 'reads the **diff** and the **criteria table**, not our narration')" yes
+ok "…so brevity costs nothing either way" "$(saw "$CONV_FLAT" '**brevity costs nothing on either side**')" yes
+ok "the measured average is recorded"     "$(saw "$CONV_FLAT" 'averaged **2,027 characters** across 6 inline comments')" yes
+ok "…against the humans on the same PR"   "$(saw "$CONV_FLAT" 'averaged **120** across 2')" yes
+ok "…and the ratio is stated"             "$(saw "$CONV_FLAT" '**17x the humans**')" yes
+
+echo
+echo "== 8. progress reports: outcome first, tables, decisions last and short =="
 ok "lead with the outcome"                "$(saw "$SEED_FLAT" '**Lead with the outcome**')" yes
 ok "tables over paragraphs"               "$(saw "$SEED_FLAT" '**Tables over paragraphs**')" yes
 ok "decisions last, and short"            "$(saw "$SEED_FLAT" '**What needs a decision goes last, and short**')" yes
@@ -154,7 +185,7 @@ ok "reasoning lives where it is durable"  "$(saw "$SEED_FLAT" 'Reasoning belongs
 ok "the criteria table invariant is here" "$(saw "$SEED_FLAT" "The PR body carries the task's \`acceptance_criteria\` as a table, always")" yes
 
 echo
-echo "== 8. MUTATION: cut the gate bullet out and every gate assertion flips =="
+echo "== 9. MUTATION: cut the gate bullet out and every gate assertion flips =="
 # The edit this file exists to catch: someone "shortens" CONVENTIONS.md by deleting the
 # bullet that carries the gate, leaving the shape bullet (and its TL;DR) intact.
 strip_bullet "$CONV" '**The criteria table is the merge gate' > "$TMP/conv-no-gate.md"
@@ -169,7 +200,7 @@ ok "mutant: short-AND-auditable is gone"  "$(saw "$MUT_FLAT" '**Short and audita
 ok "mutant: the evidence rule is gone"    "$(saw "$MUT_FLAT" 'licence to assert without evidence')" no
 
 echo
-echo "== 9. MUTATION: cut the review bullet, and the reply rules all flip =="
+echo "== 10. MUTATION: cut the review bullet, and the reply rules all flip =="
 strip_bullet "$CONV" '**One review per PR' > "$TMP/conv-no-reply.md"
 REPLY_FLAT="$(flatten "$TMP/conv-no-reply.md")"
 ok "CONTROL: the gate survives this cut"  "$(saw "$REPLY_FLAT" '**Required, always**')" yes
@@ -178,7 +209,7 @@ ok "mutant: per-finding lines are gone"   "$(saw "$REPLY_FLAT" 'One line per fin
 ok "mutant: don't-restate is gone"        "$(saw "$REPLY_FLAT" '**Never restate the finding back at the reviewer**')" no
 
 echo
-echo "== 10. MUTATION: cut the progress-report rules from the seed =="
+echo "== 11. MUTATION: cut the progress-report rules from the seed =="
 # From the short-form paragraph to the end of its section — what "trim this section"
 # would actually delete.
 strip_to_heading "$SEED" '**And keep it short — same discipline as a PR body' > "$TMP/seed-no-report.md"
@@ -188,6 +219,20 @@ ok "CONTROL: the next section survives"   "$(saw "$SEEDMUT_FLAT" '## Ad-hoc requ
 ok "mutant: outcome-first is gone"        "$(saw "$SEEDMUT_FLAT" '**Lead with the outcome**')" no
 ok "mutant: tables-over-prose is gone"    "$(saw "$SEEDMUT_FLAT" '**Tables over paragraphs**')" no
 ok "mutant: decisions-last is gone"       "$(saw "$SEEDMUT_FLAT" '**What needs a decision goes last, and short**')" no
+
+echo
+echo "== 12. MUTATION: cut the comment bullet, and every comment assertion flips =="
+strip_bullet "$CONV" '**A GitHub comment is about 280 characters' > "$TMP/conv-no-comment.md"
+COMMENT_FLAT="$(flatten "$TMP/conv-no-comment.md")"
+ok "CONTROL: the gate survives this cut"  "$(saw "$COMMENT_FLAT" '**Required, always**')" yes
+ok "CONTROL: the reply rules survive it"  "$(saw "$COMMENT_FLAT" 'One line per finding **fixed**')" yes
+ok "mutant: the tweet target is gone"     "$(saw "$COMMENT_FLAT" '**A GitHub comment is about 280 characters — roughly a tweet.**')" no
+ok "mutant: the inline surface is gone"   "$(saw "$COMMENT_FLAT" 'an **inline code comment**')" no
+ok "mutant: the thread surface is gone"   "$(saw "$COMMENT_FLAT" 'a **PR thread comment**')" no
+ok "mutant: the stated shape is gone"     "$(saw "$COMMENT_FLAT" '**The shape is: what is wrong, where, and what to do.**')" no
+ok "mutant: don't-restate-the-diff gone"  "$(saw "$COMMENT_FLAT" '**Never restate the diff back at the reader**')" no
+ok "mutant: the agent-reader answer gone" "$(saw "$COMMENT_FLAT" '**The verbosity is not needed for the agent readers either**')" no
+ok "mutant: the measurement is gone"      "$(saw "$COMMENT_FLAT" 'averaged **2,027 characters** across 6 inline comments')" no
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

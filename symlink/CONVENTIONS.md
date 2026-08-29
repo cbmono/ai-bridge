@@ -134,6 +134,35 @@ in `cbmono/ai-bridge` enforces this.
   it back is the single biggest source of reply length. The reviewer is deciding whether
   each finding is closed, not re-reading its own review. If you disagree, say so once with
   the evidence and move on (the two-round cap below is what ends it, not persistence).
+- **A GitHub comment is about 280 characters — roughly a tweet.** This covers the two
+  surfaces the shapes above never reached: an **inline code comment** and a **PR thread
+  comment**, whoever writes them. Longer only when the finding genuinely needs it — a race
+  whose trigger takes three sentences to state — and **never by default**.
+  **The shape is: what is wrong, where, and what to do.**
+
+  ```md
+  `run.sh:42` — `$dir` is unquoted, so a path with a space splits into two arguments.
+  Quote it: `rm -rf "$dir"`.
+
+  Evidence: `harness-temp-safety.test.sh` 12/1 · `shellcheck` SC2086.
+  ```
+
+  Nothing else. **Never restate the diff back at the reader** — the host prints the lines
+  you are commenting on directly above your comment, so summarising them is pure length.
+  **No incident history, no rejected alternatives**, no essay on why the class of bug
+  matters: that reasoning belongs in the commit message and the task doc, exactly as it
+  does for the PR body. **Evidence as a short list, not prose.**
+  **The verbosity is not needed for the agent readers either** — that was the open
+  question, and the answer is no. A reviewing agent reads the **diff** and the **criteria
+  table**, not our narration, and no clearance predicate in `SCHEMA.md` reads a comment
+  body at all. So **brevity costs nothing on either side**: the human gets a comment they
+  can act on, and the agent gets exactly what it was already reading.
+  **Measured, so the target is grounded rather than a taste.** On `monorepo#3244`, our
+  agents averaged **2,027 characters** across 6 inline comments; the two human reviewers on
+  the same pull request averaged **120** across 2 — **17x the humans**, and 7x a tweet. The
+  short form landed for PR bodies, review replies and progress reports while comments kept
+  the old habit, because nothing named them as a surface. They are named here, and
+  `tests/pr-body-shape.test.sh` keeps them named.
 - **TWO ROUNDS, THEN THE HUMAN DECIDES. This is a hard cap.**
   A reviewer's job is to evaluate the diff **against the task's `acceptance_criteria`**.
   It is *not* to re-litigate those criteria, argue the design, or look for a reason the
