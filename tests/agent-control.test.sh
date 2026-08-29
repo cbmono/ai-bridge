@@ -400,11 +400,15 @@ echo
 echo "--- registration: the hook is wired up and shippable --------------------"
 SETTINGS="$REPO/symlink/.claude/settings.json"
 ok "settings.json is valid JSON"                       "$(jq -e . "$SETTINGS" >/dev/null 2>&1 && echo yes || echo no)" yes
-ok "…registers a PreToolUse hook"                      "$(jq -r '.hooks.PreToolUse | length' "$SETTINGS")" 1
+# SELECTED BY NAME, NOT COUNTED AND NOT BY INDEX. What this asserts is that THIS hook is
+# registered. `PreToolUse | length` said so only for as long as this was the only entry,
+# and broke the moment a second, unrelated PreToolUse hook was added — reporting a failure
+# against the kill switch that had nothing to do with it.
+ok "…registers a PreToolUse hook"                      "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(test("agent-control[.]sh"))] | length' "$SETTINGS")" 1
 # A bare relative hook path resolves against the SESSION CWD, so it exits 127 on
 # every matching tool call in any project that does not itself ship the script.
 ok "…via the \$CLAUDE_PROJECT_DIR idiom, never a bare relative path" \
-   "$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$SETTINGS" | grep -c '^"\$CLAUDE_PROJECT_DIR"/\.claude/hooks/agent-control\.sh$')" 1
+   "$(jq -r '.hooks.PreToolUse[].hooks[].command | select(test("agent-control[.]sh"))' "$SETTINGS" | grep -c '^"\$CLAUDE_PROJECT_DIR"/\.claude/hooks/agent-control\.sh$')" 1
 ok "the hook file the settings name actually exists"   "$([ -f "$HOOK_SRC" ] && echo yes || echo no)" yes
 ok "the operator script is executable-shaped"          "$(head -1 "$CTL_SRC" | grep -c '^#!/usr/bin/env bash$')" 1
 ok "both files pass bash -n"                           "$(bash -n "$HOOK_SRC" && bash -n "$CTL_SRC" && echo yes || echo no)" yes
