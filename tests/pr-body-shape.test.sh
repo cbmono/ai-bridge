@@ -227,7 +227,8 @@ COMMENT_FLAT="$(flatten "$TMP/conv-no-comment.md")"
 ok "CONTROL: the gate survives this cut"  "$(saw "$COMMENT_FLAT" '**Required, always**')" yes
 ok "CONTROL: the reply rules survive it"  "$(saw "$COMMENT_FLAT" 'One line per finding **fixed**')" yes
 ok "mutant: the tweet target is gone"     "$(saw "$COMMENT_FLAT" '**A GitHub comment is about 280 characters — roughly a tweet.**')" no
-ok "mutant: the named surfaces are gone"  "$(saw "$COMMENT_FLAT" 'an **inline code comment**')" no
+ok "mutant: the inline surface is gone"   "$(saw "$COMMENT_FLAT" 'an **inline code comment**')" no
+ok "mutant: the thread surface is gone"   "$(saw "$COMMENT_FLAT" 'a **PR thread comment**')" no
 ok "mutant: the stated shape is gone"     "$(saw "$COMMENT_FLAT" '**The shape is: what is wrong, where, and what to do.**')" no
 ok "mutant: don't-restate-the-diff gone"  "$(saw "$COMMENT_FLAT" '**Never restate the diff back at the reader**')" no
 ok "mutant: the agent-reader answer gone" "$(saw "$COMMENT_FLAT" '**The verbosity is not needed for the agent readers either**')" no
