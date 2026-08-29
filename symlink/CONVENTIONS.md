@@ -35,8 +35,8 @@ in `cbmono/ai-bridge` enforces this.
 - PR title format: `<type>: <subject> [<task-id>]` (OKF task id, e.g.
   `[ci-hardening/task-001]`). Target the default branch. **Never merge.**
 - **The PR body has a required shape, and it is short.** Its reader is a **human deciding
-  whether to merge** — not an agent reconstructing how you worked. Three parts, in this
-  order, and nothing else:
+  whether to merge** — not an agent reconstructing how you worked. Three required parts, in
+  this order, plus an optional `## Notes` section (below) and nothing else:
 
   ```md
   **TL;DR** — one sentence: what changes, and why it is safe to merge.

@@ -36,7 +36,8 @@ setting `status`, no PII/secrets, and capturing
 5. **Self-review, then open the PR** per the shared conventions — review your own diff
    and fix what it flags first; the body takes the required short shape — a one-sentence
    TL;DR, the `acceptance_criteria` as a `✓`/`✗` table naming the validation you ran, and
-   the rollout/risk note as one short flagged line.
+   **any threshold question as one `⚠️` line each, last** (per the shared PR-body shape in
+   `CONVENTIONS.md` — PR size and harness growth included, not only the rollout/risk note).
 6. **Report back** per the shared conventions (`status: in-review`, `pr:`,
    `# Result`).
 
