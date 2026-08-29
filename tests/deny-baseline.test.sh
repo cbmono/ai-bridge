@@ -150,6 +150,10 @@ ok "…a remote DROP DATABASE" \
    "$(verdict "$GITREPO" "mysql -h 10.0.0.5 -e 'DROP DATABASE app'")" "deny:sql_destructive_remote"
 ok "…a connection URI names the host too" \
    "$(verdict "$GITREPO" "psql postgres://app@db.internal:5432/app -c 'drop schema public cascade'")" "deny:sql_destructive_remote"
+ok "…a URI hidden behind --url= is still a URI" \
+   "$(verdict "$GITREPO" "cockroach sql --url=postgres://app@db.internal:26257/app -e 'TRUNCATE events'")" "deny:sql_destructive_remote"
+ok "…and sqlcmd names its server with -S, not -h" \
+   "$(verdict "$GITREPO" "sqlcmd -S sql.example.com -Q 'DROP TABLE users'")" "deny:sql_destructive_remote"
 ok "…PGHOST names it as well" \
    "$(verdict "$GITREPO" "PGHOST=db.example.com psql -c 'TRUNCATE events'")" "deny:sql_destructive_remote"
 # THE HOST THE GUARD CANNOT READ. This is the command a session holding live credentials
@@ -164,6 +168,8 @@ ok "…on 127.0.0.1 too" \
    "$(verdict "$GITREPO" "psql -h 127.0.0.1 -c 'DROP DATABASE testdb'")" "allow"
 ok "…and over the default socket, no host named" \
    "$(verdict "$GITREPO" "psql -d testdb -c 'DROP TABLE fixtures'")" "allow"
+ok "…psql -S is single-line mode, not a server, so a local DROP still runs" \
+   "$(verdict "$GITREPO" "psql -S -d testdb -c 'DROP TABLE fixtures'")" "allow"
 ok "…and a remote SELECT is not destructive" \
    "$(verdict "$GITREPO" "psql -h db.example.com -c 'SELECT count(*) FROM users'")" "allow"
 
@@ -302,6 +308,24 @@ ok "…terraform destroy is also a rule" \
    "$(verdict "$GITREPO" 'terraform destroy')" "deny:terraform_destroy"
 ok "…and so is rm -rf \$HOME" \
    "$(verdict "$GITREPO" "rm -rf $FIXHOME")" "deny:rm_rf_repo_root"
+
+echo "== the rule list itself: a rule cannot be added without being tested"
+# THE LIST IS MEANT TO GROW, so the two ways a growing list rots are pinned here rather
+# than left to whoever adds the next rule. A name in `RULES` with no function is a silent
+# no-op (the dispatch loop's `rule_$name` simply fails); a function missing from `RULES`
+# never runs at all. Both read as "the guard is fine".
+RULE_IDS="$(sed -n 's/^RULES="\(.*\)"$/\1/p' "$HOOK")"
+DEFINED="$(grep -oE '^rule_[a-z0-9_]+\(\)' "$HOOK" | sed 's/^rule_//; s/()$//' | sort | tr '\n' ' ')"
+ok "RULES is readable from the hook"    "$([ -n "$RULE_IDS" ] && echo yes || echo no)" "yes"
+ok "…and matches the functions defined" "$(printf '%s' "$RULE_IDS" | tr ' ' '\n' | sort | tr '\n' ' ')" "$DEFINED"
+# EVERY RULE MUST BE EXERCISED HERE. Without this, a rule added to `RULES` and never tested
+# is exactly the false comfort this baseline exists to avoid — it ships, it is documented,
+# and nobody has ever seen it fire.
+UNTESTED=""
+for rid in $RULE_IDS; do
+  grep -qF "\"deny:$rid\"" "$0" || UNTESTED="${UNTESTED:+$UNTESTED }$rid"
+done
+ok "…and every rule has at least one deny case here" "${UNTESTED:-none}" "none"
 
 echo
 echo "pass=$pass fail=$fail"

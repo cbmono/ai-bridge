@@ -60,7 +60,11 @@
 # ------------------------------------------------------------------------ WHAT IT IS NOT
 # Pattern matching over a command string. It stops the named shapes, not every route to
 # the same outcome: a path built from a variable, SQL read from a file, a wrapper script,
-# a language runtime. It raises the floor. THE REAL BOUNDARY IS CREDENTIALS — an agent
+# a language runtime. Paths and branches are judged against the payload's `cwd`, so a `cd`
+# earlier in the same command — or a `git -C <elsewhere>` — is not followed; the
+# force-push rule still covers the common branch names in that case, and the `rm` rule may
+# read a relative path against the wrong directory. It raises the floor.
+# THE REAL BOUNDARY IS CREDENTIALS — an agent
 # that cannot reach production cannot harm it whatever it decides. This is not a
 # substitute for that audit.
 set -uo pipefail
@@ -235,6 +239,9 @@ default_branch() {
 # is not wanted here — `rm -rf <symlink-to-repo>` is a different command.
 norm_path() { # <path>
   local p="$1" out="" part oldopts
+  # A LITERAL TILDE IS THE INPUT HERE, not something to expand: the agent's command text
+  # contains `~` unexpanded, and this is what resolves it.
+  # shellcheck disable=SC2088  # case PATTERNS, matching a tilde in data — not a path to expand
   case "$p" in
     "~") p="$HOME" ;;
     "~/"*) p="$HOME/${p#\~/}" ;;
@@ -282,6 +289,15 @@ covers() { # <p> <x>
 
 # =============================================================================== RULES ==
 # Print the reason, `return 0` to DENY. See "HOW TO ADD A RULE" at the top.
+#
+# EACH RULE OPENS WITH A ONE-LINE `case` PRE-FILTER, and it must be a SUPERSET of what the
+# rule can possibly match — it is an optimisation, never a condition. This hook runs in
+# front of every Bash call in every session, and the tokenising below costs several
+# subprocesses per stage per rule; without the pre-filter an ordinary `npm ci && npm test`
+# paid ~160 ms for seven rules that could not have fired. With it, a command naming none of
+# the tools falls through in microseconds. Narrowing one of these silently disables part of
+# a rule, so derive it from the rule body, and note that the deny half of that rule's tests
+# is what proves the filter still lets the real shapes through.
 RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration"
 
 # --- terraform_destroy --------------------------------------------------------------- #
@@ -290,6 +306,7 @@ RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destr
 # read-only "what would this remove?" query, which is the thing an agent actually needs —
 # is explicitly allowed, as is every other terraform subcommand including `apply`.
 rule_terraform_destroy() {
+  case "$1" in *destroy*) ;; *) return 1 ;; esac
   local stage c sub
   while IFS= read -r stage; do
     [ -n "$stage" ] || continue
@@ -314,6 +331,7 @@ EOF
 # into a sweep. NARROW ENOUGH TO KEEP: the routine deletes — pod, job, deployment,
 # configmap, secret, ingress, `-f manifest.yaml` — are all still allowed, in any namespace.
 rule_k8s_irreversible_delete() {
+  case "$1" in *delete*) ;; *) return 1 ;; esac
   local stage c sub kind k
   local irreversible="namespace namespaces ns persistentvolume persistentvolumes pv persistentvolumeclaim persistentvolumeclaims pvc customresourcedefinition customresourcedefinitions crd crds node nodes"
   while IFS= read -r stage; do
@@ -349,6 +367,7 @@ EOF
 # "deny unless namespace == dev": namespace naming is per-org, and a deny-unless list
 # would refuse every routine delete in a namespace whose name this file cannot know.
 rule_k8s_production_target() {
+  case "$1" in *delete*|*drain*|*uninstall*) ;; *) return 1 ;; esac
   local stage c sub ns ctx target
   while IFS= read -r stage; do
     [ -n "$stage" ] || continue
@@ -385,6 +404,7 @@ EOF
 # reading the variable to find out is not available here. The reason names the fix
 # (`-h localhost`) for the case where it really was local.
 rule_sql_destructive_remote() {
+  case "$1" in *psql*|*mysql*|*mariadb*|*mongo*|*clickhouse*|*cockroach*|*sqlcmd*) ;; *) return 1 ;; esac
   local stage c verb host w unresolved seen
   while IFS= read -r stage; do
     [ -n "$stage" ] || continue
@@ -411,6 +431,10 @@ EOT
 
     host=""
     while IFS= read -r w; do
+      # `--url=postgres://…` / `--uri=…` / `--dsn=…` carry the same target as a bare URI and
+      # would otherwise slip past the scheme glob below, which is a FALSE NEGATIVE — the one
+      # outcome this baseline must not produce.
+      case "$w" in --*=*://*) w="${w#*=}" ;; esac
       case "$w" in
         postgres://*|postgresql://*|mysql://*|mongodb://*|mongodb+srv://*|clickhouse://*)
           host="${w#*://}"; host="${host##*@}"; host="${host%%/*}"; host="${host%%\?*}"; host="${host%%:*}"
@@ -421,6 +445,10 @@ $(tokens_of "$stage")
 EOT
     [ -n "$host" ] || host="$(flag_value "$stage" -h --host --hostname || true)"
     [ -n "$host" ] || host="$(flag_value "$stage" PGHOST MYSQL_HOST MYSQL_TCP_ADDR || true)"
+    # SCOPED TO sqlcmd ON PURPOSE. `-S` names the server there, but it is `--single-line`
+    # (no argument) to psql and a socket PATH to mysql, so reading it unconditionally would
+    # take psql's next flag for a hostname and refuse a local command.
+    if [ -z "$host" ] && [ "$c" = sqlcmd ]; then host="$(flag_value "$stage" -S --server || true)"; fi
 
     if [ -z "$host" ] && [ "$unresolved" = 0 ]; then
       continue   # no host named and nothing hidden ⇒ local socket ⇒ allowed
@@ -454,6 +482,7 @@ EOF
 # would make this the rule an instance switches the baseline off to escape. `$HOME` and
 # `~` are the two it does resolve.
 rule_rm_rf_repo_root() {
+  case "$1" in *rm*) ;; *) return 1 ;; esac
   local stage c w recursive seen op p root
   while IFS= read -r stage; do
     [ -n "$stage" ] || continue
@@ -514,6 +543,7 @@ EOF
 # rebase and stays allowed, as does every non-force push, including to the default branch
 # (this control panel commits straight to it by design).
 rule_force_push_protected() {
+  case "$1" in *push*) ;; *) return 1 ;; esac
   local stage c w seen sub skipnext force del args remote r d dst p protected oldopts
   while IFS= read -r stage; do
     [ -n "$stage" ] || continue
@@ -600,6 +630,7 @@ EOF
 # are not secrets; a path that is the operand of `-o`/`--output` is a DOWNLOAD, not an
 # upload; and a local target (localhost/127.0.0.1) is not exfiltration.
 rule_secret_exfiltration() {
+  case "$1" in *env*|*id_rsa*|*id_ed25519*|*id_ecdsa*|*id_dsa*|*.pem*|*.p12*|*.pfx*|*npmrc*|*netrc*|*pgpass*|*credentials*|*kubeconfig*|*.ssh*|*service-account*) ;; *) return 1 ;; esac
   local seg w prev sender secret
   while IFS= read -r seg; do
     [ -n "$seg" ] || continue

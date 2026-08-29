@@ -459,7 +459,9 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # A skipped block is now as red as a failed one. The pin counts every assertion BEFORE
 # itself; add or remove an assertion and this number moves with it, deliberately, in the
 # same commit.
-EXPECTED_ASSERTIONS=54
+# 54 -> 55: symlink/.claude/hooks/deny-destructive.sh (ai-bridge-v5/task-006) is one more
+# executable machinery file, so the per-file enumeration runs one more assertion.
+EXPECTED_ASSERTIONS=55
 TOTAL=$((pass + fail))
 assert "exactly $EXPECTED_ASSERTIONS assertions ran — a silently skipped block shows up here (got $TOTAL)" \
   "$([ "$TOTAL" -eq "$EXPECTED_ASSERTIONS" ] && echo 0 || echo 1)"

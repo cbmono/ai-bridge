@@ -41,6 +41,7 @@ move it here intact instead.
 | 16 | [The kill switch is one hook, and it fails open](#16-the-kill-switch-is-one-hook-and-it-fails-open) | `agent-control.sh`, `control.sh` |
 | 17 | [An instruction is executable only if the agent *holds* the tool](#17-an-instruction-addressed-to-an-agent-is-executable-only-if-that-agent-holds-the-tool) | every agent body, `symlink/CONVENTIONS.md`, `seed/CLAUDE.md` |
 | 18 | [The allowlist check is pinned from both sides](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure) | `agent-tool-allowlist.test.sh` |
+| 19 | [The destructive-action baseline is a hook, and it is narrow on purpose](#19-the-destructive-action-baseline-is-a-hook-and-it-is-narrow-on-purpose) | `deny-destructive.sh`, `permissions.deny` |
 
 ---
 
@@ -557,6 +558,75 @@ instance `CLAUDE.md` needs **both** edits, and only the template side is testabl
 declaring no `tools:` key (`config/*/agents/`) inherit everything and are skipped — and
 that skip is asserted, not assumed, so one of them growing a `tools:` key fails here.
 Covered by `tests/agent-tool-allowlist.test.sh` (86 assertions).
+
+
+## 19. The destructive-action baseline is a hook, and it is narrow on purpose
+
+`permissions.deny` was **empty in all three live instances** while one of them ran 13
+projects on `yolo` autonomy holding live production credentials. The gap was never that
+nobody had written the rule down — it was that the rule was written as prose, and prose is
+a request an agent may decline. `symlink/.claude/hooks/deny-destructive.sh` refuses the
+tool call at the `PreToolUse` boundary, before it runs: the same category as branch
+protection, and categorically unlike a `CONVENTIONS.md` line.
+
+**Why a hook and not `permissions.deny` patterns.** A `permissions.deny` entry matches a
+command **prefix**, and every shape worth denying is conditional on something a prefix
+cannot see — `DROP TABLE` against a remote host versus a test container, `kubectl delete
+pod` versus `kubectl delete namespace`, `rm -rf node_modules` versus `rm -rf` at the repo
+root (which depends on the session's cwd), a force-push to a feature branch versus to the
+default branch. Written as prefixes each rule is either **too broad**, and gets switched
+off — the failure mode of every over-strict lint, and a baseline nobody keeps protects
+nothing — or **too narrow**, which is *false comfort*, and false comfort is worse than an
+empty list because the instance now believes it is covered. A hook sees the whole command,
+the cwd and the repo, so a rule can be narrow enough to keep.
+
+**And it is the only form that can be proven.** A prefix pattern's matching is the
+harness's business, so a harness assertion about it would be a re-implementation of the
+matcher passing for its own reasons. The hook is a pure function from a payload to a
+decision, so `tests/deny-baseline.test.sh` feeds it real payloads and reads the verdict.
+`permissions.deny` still carries a short block for the handful of shapes that **are**
+unconditional (`rm -rf /`, `terraform destroy`), and every entry in it is deliberately
+duplicated by a hook rule, so **nothing depends on the layer that cannot be proven**. An
+entry there must be an exact command or a true prefix: `Bash(rm -rf /*)` is a *wildcard*,
+and would refuse every absolute-path delete on the machine.
+
+**Both directions, per rule, always.** A rule is only tested when the harness shows the
+shape it refuses **and** a neighbouring command — same tool, same verb, one condition
+different — that it must still allow. "It denies `kubectl delete namespace`" alone passes
+a hook that denies every `kubectl` call, which is the version that gets deleted. The allow
+half is the load-bearing half: `psql` against a test container, `rm -rf node_modules`,
+`rm -rf "$TMP"`, `terraform plan -destroy`, `git push --force-with-lease` to a feature
+branch are what agents here run every day.
+
+**The escape hatch is the human's own terminal, and it is what keeps the rules narrow.**
+Every refusal is satisfiable by a human running the command outside the harness, so no
+rule ever has to be widened for a legitimate emergency and no instance has a reason to
+disable the baseline. The deny message says so, and tells the agent **not** to re-issue a
+variant that evades the pattern — without that sentence a guard just teaches rewording.
+
+**Fail open on plumbing, never on a match.** No `jq`, an unparseable payload: log to stderr
+and let the call through, for the same reason `agent-control.sh` does ([16](#16-the-kill-switch-is-one-hook-and-it-fails-open)) — a
+guard that blocks all work because its own plumbing broke is a guard that gets removed. A
+rule that *matches* always denies. A refusal is JSON on stdout and the script's only exit
+status is 0.
+
+**Two limits, stated rather than papered over.** (i) This is pattern matching over a
+command string. It stops the named shapes, not every route to the same outcome — a path
+built from a variable, SQL read from a file, a wrapper script, a language runtime. It
+raises the floor; it is not a proof. (ii) **Credentials are the real boundary.** An agent
+that cannot reach production cannot harm it whatever it decides, and that audit is
+separate, stronger, and not replaced by this list.
+
+**It is machinery, so it is not deletable per instance** ([4](#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) is the *opposite* case) — `install.sh`
+re-links it unconditionally. That is the point: a safety floor an instance can `rm` is not
+a floor. The cost is that a **new** file under `symlink/` is *absent* rather than dangling
+in an already-stamped instance, which `check-machinery.sh` deliberately cannot see, so the
+guard only starts enforcing after `install.sh <instance>` runs once. `settings.json`
+registers it behind an `[ -x ]` test so the interval is a quiet no-op rather than a 127 on
+every tool call.
+
+Covered by `tests/deny-baseline.test.sh` (86 assertions), and mutation-checked in both
+directions: neutering one rule fails 7 assertions, making one unconditional fails 6.
 
 ---
 

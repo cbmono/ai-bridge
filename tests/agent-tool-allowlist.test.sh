@@ -192,7 +192,11 @@ MENTION_RE="\`($VOCAB)\`"
 # the same commit that adds the mention it is for. Add a name here ONLY after checking it is
 # not a tool and no other rule can classify it — this list is the residue, and Guard C keeps
 # it honest as the tree changes.
-NOT_A_TOOL='SessionStart|Makefile'
+# `PreToolUse` was added here by ai-bridge-v5/task-006, in the same commit as the root
+# `CLAUDE.md` mention that justifies it (invariant 19, the destructive-action baseline) —
+# which is the only way an entry may be added. It is a Claude Code hook EVENT, not a tool,
+# and no other rule classifies it. Guard C below fails if that mention is ever removed.
+NOT_A_TOOL='SessionStart|PreToolUse|Makefile'
 
 # Rule 2, DERIVED: OKF's document types, from the schema that defines them. `symlink/SCHEMA.md`
 # writes each as a `## type: <Name>` heading, so the registry is machine-readable and a new
@@ -939,7 +943,11 @@ ok "a declared non-tool stays quiet"         "$v" 0
 # `Deploy` above, because it was never disclosed at all. Guard C's removal of the 9
 # un-earned entries is what makes each of these fail here now; before the fix, all four
 # were `86 passed, 0 failed`, reproduced live against ai-bridge#19 at `7a9ecb2`.
-for hallucinated in Notification PreToolUse PreCompact SubagentStop; do
+# `PreToolUse` used to be the fourth name here and has since EARNED its entry (see
+# NOT_A_TOOL above), so it would now classify and could no longer prove anything. It is
+# replaced by `SessionEnd` — still un-earned — rather than dropped, because the strength
+# of this group is the number of distinct shapes it reproduces, not the names it uses.
+for hallucinated in Notification SessionEnd PreCompact SubagentStop; do
   body="Use the \`${hallucinated}\` tool to alert the team."
   fixture "hallucinated_${hallucinated}" 'Read, Grep' "$body"
   read -r v d s r <<<"$(run_fx "hallucinated_${hallucinated}")"
@@ -998,7 +1006,7 @@ ok "a NOT_A_TOOL_TREE entry with a space+glob path is still found" \
 NOT_A_TOOL_TREE=("${SAVED_NOT_A_TOOL_TREE[@]}")
 # The nine names removed from NOT_A_TOOL by this fix are the reproduced proof: each has
 # zero real mentions, which is exactly why they were silent before and unclassified now.
-for unearned in SessionEnd UserPromptSubmit PreToolUse PostToolUse SubagentStart SubagentStop PreCompact InstructionsLoaded Notification; do
+for unearned in SessionEnd UserPromptSubmit PostToolUse SubagentStart SubagentStop PreCompact InstructionsLoaded Notification; do
   ok "removed entry \`$unearned\` had zero real mentions" "$(not_a_tool_uses "$unearned")" 0
 done
 
