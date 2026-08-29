@@ -384,14 +384,23 @@ down**, then resolves the tier via `models` and passes that model on dispatch. A
 force a specific model with a `model:` field (a tier or a raw alias) — the PM honors it
 verbatim. Omit both maps and everything just inherits the session model.
 
+**Resolve it with `scripts/resolve-model.sh <agent>`, never from memory.** It prints the
+one alias for that agent (`roleTiers[<agent>]` → `models[<tier>]`), and for an agent with
+no entry prints nothing and exits 1 — the caller then inherits the session model rather
+than guessing. This applies to **every** dispatch, including an ad-hoc one from a main
+session, which is the path the prose version of this rule never reached.
+
 ### Concurrency
 
 `maxAgentsInFlight` (default **10**) caps how many role agents the PM runs at once. With
 worktree isolation + private package stores the old corruption risk is gone, so this is a
 **throughput/cost throttle**, not a safety lock — tune it to the machine and account:
 raise it on a well-resourced box with mostly-independent tasks, lower it (e.g. 5) on a
-laptop or when role agents lean on `Workflow` fan-outs. A role agent's own `Workflow`
-fan-out is a separate layer, bounded by the Workflow tool's own concurrency.
+laptop. **No role agent's allowlist contains `Workflow`**, and of the role agents only
+`qa-reviewer` holds `Agent` — so the only fan-out that can happen inside a task is
+`qa-reviewer` dispatching several agents in parallel, and this same cap bounds it. Read a
+fan-out instruction against the agent's `tools:` list, never against what is installed:
+[invariant 17](conventions.md#17-an-instruction-addressed-to-an-agent-is-executable-only-if-that-agent-holds-the-tool).
 
 ### PR size
 

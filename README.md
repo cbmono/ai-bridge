@@ -172,7 +172,7 @@ Run these inside an instance.
 | `/pr-review-request <pr>` | ask for an independent review of a PR |
 | `/audit` | the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/fanout <task>` | parallel work across several repos |
-| `/close-project <slug>` | close a project and fold its conclusions into `knowledge/` |
+| `/close-project <slug>` | close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. [→](docs/schema.md#closing-a-project) |
 
 Flags `/new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 `browser=claude-for-chrome`, `/yolo`, `/cli …`, `/claudeforchrome`, `--no-commit`.
@@ -349,7 +349,8 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Independent review** | every PR is cleared by a reviewer with fresh context, never the implementing agent's self-report. [→](docs/autonomy.md#the-verification-gate) |
 | **Merge gate** | `required-checks.sh` — **exit 0 is the only clearance.** Missing, pending, skipped and unreadable all refuse. [→](docs/autonomy.md#required-checks--exit-0-is-the-only-clearance) |
 | **Review gate** | `review-clearance.sh` — a **green check from a reviewer that declined to review is not verification.** It reads the reviewer's artifacts, takes evidence and pinning from the reviews **API** (`state` + `commit_id`), leaves text matching only the job of spotting a refusal, and refuses on unknown state. `required-checks.sh` asks it on **every** PR, so a check's name never settles whether anybody looked. [→](docs/autonomy.md#the-verification-gate) |
-| **Review rounds** | `review-rounds.sh` — **two rounds, then the human decides**, as a number a dispatcher reads. It counts completed verifications of distinct commits (a rate-limited reviewer's refusal is not a round) and **exits non-zero at or past two**, so a third verifier is refused rather than remembered against. [→](symlink/CONVENTIONS.md) |
+| **Review rounds** | `review-rounds.sh` — **two rounds, then the human decides**, as a number a dispatcher reads rather than a rule it must remember. Exits non-zero at or past two, so a third verifier is refused. [→](docs/autonomy.md#two-rounds-then-the-human-decides) |
+| **Dispatch check** | `check-dispatch.sh` — an agent's "done" is not evidence that a PR exists. Did `status:` move, does `pr:` name a URL, does that PR resolve. **Report-only.** [→](docs/autonomy.md#did-the-dispatch-produce-its-pr) |
 | **Delegated autonomy** | one deletable file. `rm symlink/AUTONOMY.md` and every project is `gated`. [→](docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) |
 | **Worktrees** | `prune-worktrees.sh` **reports, never deletes.** Do not add a delete, not even behind a flag — it destroyed three running agents' worktrees once. [→](docs/conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing) |
 | **Bundle repair** | `migrate-bundle.sh` is report-only by default and fixes only what has one right answer. **A false success is worse than the error it claims to fix.** [→](docs/conventions.md#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) |
@@ -400,6 +401,8 @@ Run from an instance root unless noted.
 | `required-checks.sh` | resolves a PR's required checks | no |
 | `review-clearance.sh` | asserts an artifact **evidencing a completed review** exists on a PR (never a green check) | no |
 | `review-rounds.sh` | counts a PR's completed verification **rounds**; exit non-zero at or past **two** | no |
+| `check-dispatch.sh` | `<task-doc>` — did the dispatch actually produce the PR it promised | **never** |
+| `resolve-model.sh` | `<agent>` — prints the model alias it should run on, from `roleTiers`/`models` | no |
 | `task-owner.sh` | resolves and compares a task's owner | no |
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
@@ -430,6 +433,7 @@ Run from an instance root unless noted.
 | `required-checks.sh` exits 1, "no independent review clears" | every required check is green but no review artifact clears the head — the gate no longer decides from a check's *name* whether a reviewer is involved | ask for a review at the current head; if the repo genuinely has no reviewer, that is the thing to fix, not the gate |
 | `required-checks.sh` exits 2, "present but does not run" | the linked sibling is broken, or predates its `--self-test` contract; a mode bit is not proof a file executes | `install.sh <instance>` to relink — a sibling that fails every call looks exactly like "no reviewer is required", so this refuses |
 | `review-rounds.sh` exits 1 | the PR has already had its two verification rounds — this is the cap doing its job, not a fault | stop reviewing: put both positions (reviewer / implementer / what the criterion asks) in front of the human and let them decide |
+| An agent reported "done" but no PR ever appeared | it parked before opening one — `check-dispatch.sh` exit 1, the parked signature | one message to that agent: open the PR on what it already committed. Never re-dispatch the task |
 | `review-clearance.sh` exits 4 on a PR that *was* reviewed | the reviewer read an earlier push and does not re-review (`auto_incremental_review: false`) — the review is **stale**, not absent | ask for a review at the current head; this is the common case here, not a bug |
 | `review-clearance.sh` exits 4, "carries no evidence that a review was COMPLETED" | the only artifact is the reviewer's *"currently processing"* placeholder or similar — it names the head but nothing says anybody read it | wait for the real review, or ask for one; not-a-refusal is not a review, and clearing on it was a live false pass |
 | CodeRabbit: "Unable to determine base branch" | a remote-less instance has no `origin/HEAD` to infer one from | `git config coderabbit.baseBranch <branch>` |
@@ -457,7 +461,8 @@ than shortening it.
 - Machinery goes in `symlink/`. Keep it **generic**: no org, repo, path, team or channel literals — those belong in an instance's `instance.config.json` / `CLAUDE.md`.
 - Starting content goes in `seed/`. Retiring a seed file needs an entry in [`RETIRED`](RETIRED) in the same commit.
 - Tests live in `tests/`, never under `symlink/` — everything there ships into every instance.
-- Run the suite before pushing: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. CI runs the same full suite on every PR and every push to `main` ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)); `harness suite` is a required check declared in [`.github/required-checks.txt`](.github/required-checks.txt).
+- Run the suite before pushing: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. CI runs the same full suite as the required check **`harness suite`**, which `main`'s branch protection requires and is strict about — so be up to date with `main`. [→](docs/conventions.md#repo-conventions-that-are-not-invariants)
+- Adding to the harness itself? Measure what your diff adds under `symlink/**/*.sh`, and at or above ~150 lines ask in the PR body instead of assuming. [→](docs/conventions.md#repo-conventions-that-are-not-invariants)
 - This repo is **public**. Placeholders must be verified unclaimed: `example-user-007` / `example-user-008` and `example.com`.
 
 Agent-facing rules are in [`CLAUDE.md`](CLAUDE.md) and [`.claude/rules/`](.claude/rules).
