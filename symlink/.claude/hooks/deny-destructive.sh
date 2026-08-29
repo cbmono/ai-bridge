@@ -125,11 +125,15 @@ stages() {
   printf '%s' "$s" | tr "$SEP|" '\n\n'
 }
 
-# One token per line, surrounding quotes stripped. Redirections, subshell parens and
-# backticks become separators so `$(cat .env)` yields `.env` as its own token.
+# One token per line, surrounding quotes stripped. Redirections, subshell parens, backticks
+# and PIPES become separators, so `$(cat .env)` yields `.env` as its own token and
+# `cat .env|curl …` — no spaces — does not collapse into the single token `.env|curl`, which
+# matched neither the secret list nor the sender list and let the exfiltration through.
+# `stages()` already splits on `|` before it tokenises, so this only changes what the
+# exfiltration rule sees, which is the one rule that tokenises a whole segment.
 tokens_of() {
   printf '%s' "$1" \
-    | tr '<>()`' '     ' \
+    | tr '<>()`|' '      ' \
     | tr ' \t' '\n\n' \
     | sed -e 's/^["'"'"']*//' -e 's/["'"'"']*$//' \
     | grep -v '^[[:space:]]*$'
@@ -152,17 +156,29 @@ EOF
   return 1
 }
 
-# The first non-flag token after <word>. `kubectl delete` ⇒ the resource kind.
+# Flags whose NEXT token is a value, not a subcommand or an operand. Skipping the flag
+# alone was a silent false negative in both directions: `kubectl -n prod delete pvc x` read
+# `prod` as the subcommand (so no rule fired at all), and `kubectl delete -n infra pvc x`
+# read `infra` as the resource kind (so the irreversible-kind list never matched). Extend
+# this list when you teach a rule a new tool.
+VALUE_FLAGS="-n --namespace --context --kube-context --kubeconfig -f --filename -l --selector --field-selector -o --output --grace-period --timeout --as --cluster --user --server --token --chunk-size -h --host --hostname -p --port -U --username -d --dbname -c --command -e --execute -S --chdir --set --values --repo --version -var -var-file -state -out -target"
+
+# The first non-flag token after <word>, skipping any flag's value. `kubectl delete` ⇒ the
+# resource kind. Comparison is on the BASENAME, so `/usr/local/bin/kubectl` is `kubectl`.
 word_after() { # <stage> <word>
-  local w seen=0
+  local w f seen=0 skipv=0
   while IFS= read -r w; do
     if [ "$seen" = 0 ]; then
-      [ "$w" = "$2" ] && seen=1
+      [ "${w##*/}" = "$2" ] && seen=1
       continue
     fi
+    if [ "$skipv" = 1 ]; then skipv=0; continue; fi
     case "$w" in
-      -*) continue ;;
-      [A-Za-z_]*=*) continue ;;
+      *=*) case "$w" in -*) continue ;; [A-Za-z_]*) continue ;; esac ;;
+    esac
+    case "$w" in
+      -*) for f in $VALUE_FLAGS; do [ "$w" = "$f" ] && { skipv=1; break; }; done
+          continue ;;
       *) printf '%s' "$w"; return 0 ;;
     esac
   done <<EOF
@@ -423,7 +439,9 @@ rule_sql_destructive_remote() {
     # A connection target that is a shell variable cannot be judged.
     unresolved=0; seen=0
     while IFS= read -r w; do
-      if [ "$seen" = 0 ]; then [ "$w" = "$c" ] && seen=1; continue; fi
+      # BASENAME, matching what first_word returned: `/usr/bin/psql` is `psql`, and a
+      # literal comparison here would never find the command word and skip every operand.
+      if [ "$seen" = 0 ]; then [ "${w##*/}" = "$c" ] && seen=1; continue; fi
       case "$w" in *'$'*|*'`'*) unresolved=1; break ;; esac
     done <<EOT
 $(tokens_of "$stage")
@@ -504,7 +522,9 @@ EOT
     root="$(repo_root)"
     seen=0
     while IFS= read -r w; do
-      if [ "$seen" = 0 ]; then [ "$w" = "rm" ] && seen=1; continue; fi
+      # BASENAME: `/bin/rm -rf /` passed first_word and then matched no token here, so
+      # every operand was skipped and the command was allowed.
+      if [ "$seen" = 0 ]; then [ "${w##*/}" = "rm" ] && seen=1; continue; fi
       case "$w" in -*) continue ;; esac
       op="$w"
       case "$op" in *'$'*|*'`'*) continue ;; esac
@@ -553,7 +573,7 @@ rule_force_push_protected() {
     seen=0; sub=""; skipnext=0; force=0; del=0; args=""
     while IFS= read -r w; do
       if [ "$skipnext" = 1 ]; then skipnext=0; continue; fi
-      if [ "$seen" = 0 ]; then [ "$w" = "git" ] && seen=1; continue; fi
+      if [ "$seen" = 0 ]; then [ "${w##*/}" = "git" ] && seen=1; continue; fi
       if [ -z "$sub" ]; then
         case "$w" in
           -C|-c|--git-dir|--work-tree|--namespace|--exec-path) skipnext=1; continue ;;
@@ -651,8 +671,20 @@ EOT
 
     secret=""; prev=""
     while IFS= read -r w; do
-      case "$prev" in -o|--output|-O|--output-dir|--remote-name) prev="$w"; continue ;; esac
+      # A KEY PRESENTED TO AUTHENTICATE IS NOT A KEY BEING SENT. `ssh -i ~/.ssh/id_ed25519
+      # host` and `curl --cert client.pem …` are ordinary authenticated calls, and refusing
+      # them would make this the rule that gets the baseline switched off. The operand of an
+      # identity/certificate flag — and of `-o`, which is a DOWNLOAD — is skipped. A secret
+      # in POSITIONAL position (`scp id_ed25519 host:/tmp/`) is still the payload, and is
+      # still refused.
+      case "$prev" in
+        -o|--output|-O|--output-dir|--remote-name|-i|--identity-file|--cert|-E|--key|--cacert|--capath|--pubkey|--proxy-cert|--proxy-key)
+          prev="$w"; continue ;;
+      esac
       prev="$w"
+      case "$w" in
+        --cert=*|--key=*|--cacert=*|--capath=*|--identity-file=*|--pubkey=*|--proxy-cert=*|--proxy-key=*|--output=*) continue ;;
+      esac
       w="${w#@}"
       case "$w" in
         *.env.example|*.env.sample|*.env.template|*.env.dist|*.env.example*) continue ;;

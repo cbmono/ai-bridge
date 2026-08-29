@@ -625,8 +625,9 @@ guard only starts enforcing after `install.sh <instance>` runs once. `settings.j
 registers it behind an `[ -x ]` test so the interval is a quiet no-op rather than a 127 on
 every tool call.
 
-Covered by `tests/deny-baseline.test.sh` (86 assertions), and mutation-checked in both
-directions: neutering one rule fails 7 assertions, making one unconditional fails 6.
+Covered by `tests/deny-baseline.test.sh` (102 assertions), and mutation-checked in both
+directions: neutering one rule fails 7 assertions, making one unconditional fails 6, and
+adding a rule to `RULES` with no test here fails by name.
 
 ---
 
