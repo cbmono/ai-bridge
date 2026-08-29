@@ -332,8 +332,9 @@ caveats: none | <what the reviewer could not settle>
 ```
 
 **Two structured inputs; prose is never one.** A consumer reads the *verdict* from the
-trailer and nowhere else, and reads *criteria coverage* from the **checkbox state** of the
-`acceptance_criteria` checklist in the PR body. Both are structured signals, and they
+trailer and nowhere else, and reads *criteria coverage* from the **`✓`/`✗` column** of the
+`acceptance_criteria` table in the PR body (`CONVENTIONS.md` → the required PR-body shape;
+a `✗` is an unchecked box and is read exactly as one). Both are structured signals, and they
 answer different questions — did the reviewer pass it, and did anyone verify each
 criterion. **Free prose is never an input**: not the review text around the trailer, not
 the PR description, not a commit message. That is the injection boundary — a PR carries
@@ -356,7 +357,7 @@ predicate is how a bad input gets accepted:
 4. **All three mandatory lenses are present**, each `done` or `skipped(<reason>)`.
 5. **`unverified_criteria: none`.**
 6. **`caveats: none`** — a self-declared caveat is disqualifying, not context.
-7. **Every acceptance-criteria box in the PR body is ticked.**
+7. **Every acceptance-criteria row in the PR body's table is `✓`.** One `✗` refuses.
 8. **`reviewer` is the independent reviewer** — never the implementing agent's own report.
 9. **No reviewer-authored review thread is still unresolved.** A thread the PR
    author/executor resolved itself does not count unless the reviewer re-acknowledged it
@@ -422,9 +423,9 @@ verdict for code that is no longer there.
 **Why this is a contract and not a convention.** "Approve now, finish the analysis later"
 is indistinguishable from a real pass once it is prose: an APPROVE whose own body said two
 fanned-out lenses were still outstanding has cleared a money bug here before. Clause 7
-carries the same weight for a different reason — role agents leave a box **unchecked**
-when they could not actually verify it (the honest state; never tick a box you couldn't
-confirm), because deterministic checks passing is not evidence for a criterion no
+carries the same weight for a different reason — role agents mark a row **`✗`**
+when they could not actually verify it (the honest state; never mark `✓` for something you
+couldn't confirm), because deterministic checks passing is not evidence for a criterion no
 deterministic check covers.
 
 **Two human authorities** keep this semi-autonomous. Both are the human's **by default**,

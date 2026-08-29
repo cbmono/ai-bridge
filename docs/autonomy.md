@@ -91,7 +91,7 @@ not the complete set of requirements.
 | Failure class | What it looks like | Why it is a refusal |
 |---|---|---|
 | **An unfinished verdict** | trailer missing, partial, `inconclusive`, carrying `caveats`, or omitting a mandatory lens | an approval that admits its own analysis is unfinished is not an approval |
-| **An unverified criterion** | any `acceptance_criteria` box left unchecked | green CI is not evidence for a criterion no check covers |
+| **An unverified criterion** | any `acceptance_criteria` row left `✗` in the PR body's table | green CI is not evidence for a criterion no check covers |
 | **A refusal dressed as a pass** | the reviewer declaring it didn't review (rate-limited, quota exhausted, skipped) while a **green check** publishes alongside | the most convincing false pass in the system |
 
 The predicate also requires a current `head_sha`, the right reviewer identity, no

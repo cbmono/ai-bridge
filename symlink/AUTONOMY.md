@@ -120,9 +120,9 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    is a **stale** review, not a refusal: surface it as "reviewed at `<sha>`, head has
    moved", and ask for a review at the current head. Reporting it as "the reviewer
    declined" sends someone looking for a quota that was never exhausted.
-3. **Every acceptance-criteria box in the PR body is ticked.** An unchecked box is a
-   criterion nobody verified (`SCHEMA.md`), and green CI is not evidence for one no check
-   covers. This is the condition that catches the class of bug deterministic checks
+3. **Every acceptance-criteria row in the PR body's table is `✓`.** A `✗` — the unchecked
+   box — is a criterion nobody verified (`SCHEMA.md`), and green CI is not evidence for one
+   no check covers. This is the condition that catches the class of bug deterministic checks
    cannot see.
 4. **The head is still the verified SHA.**
 

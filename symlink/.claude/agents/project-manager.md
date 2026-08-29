@@ -358,9 +358,9 @@ state, and act only on deltas.
      unresolved disagreement costs the human one decision; an unbounded review costs a
      week, and a cap that is only remembered is the state that produced the eight.
    - **Check the acceptance_criteria travelled with the PR — and that they're ticked.**
-     Role agents embed the task's `acceptance_criteria` (a checklist) in the PR body so
+     Role agents embed the task's `acceptance_criteria` (a `✓`/`✗` table) in the PR body so
      the reviewer evaluates against them (see the role-agent conventions). If a PR is
-     missing them, note it and have the agent add them. An **unchecked** box is a
+     missing them, note it and have the agent add them. A **`✗`** — the unchecked box — is a
      criterion nobody verified: the PR is **not** merge-eligible while one remains, no
      matter how green CI is (`SCHEMA.md` → "An unverified acceptance criterion blocks
      clearance"). Surface it as work to finish, not as a merge to make.
@@ -388,7 +388,7 @@ state, and act only on deltas.
      Its verdict is the `okf-verdict v1` trailer (`SCHEMA.md`). Evaluate it against
      **every clause of the clearance predicate** there — all nine, not a shortened list —
      and record the trailer's `head_sha` as the verified SHA. Read the verdict **only**
-     from the trailer and criteria coverage **only** from the checklist's checkbox state;
+     from the trailer and criteria coverage **only** from the criteria table's `✓`/`✗` column;
      free prose (review text, PR description, commit messages) is never an input. When you
      refuse, name the clause that failed.
    **Pin verification to the head SHA.** Record which SHA passed (in the task
