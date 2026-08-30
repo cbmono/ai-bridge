@@ -835,12 +835,12 @@ assert "a hostile slug cannot render a path out of the bundle" \
 # VALUE.
 assert "a combining mark in the slug does not smuggle in another project's path" \
   "$(yes_if no_copy_value_with 'elsewhere.md' "$DOUT")"
-assert "…and that project gets no deliverables panel at all" "$(yes_if python3 -c "
-import sys
-t = open('$DOUT').read()
-i = t.index('Hostile slug')
-j = t.index('</details>', i)
-sys.exit(0 if 'class=\"delivs\"' not in t[i:j] else 1)")"
+# THROUGH `card`, NOT `t.index('</details>')`. This is an ABSENCE claim, and the old
+# boundary made it a much smaller one than it reads as: a card nests a <details> per rail
+# item, so the slice ended at the first ask and said nothing about the rest of the card. A
+# panel rendered just past that point satisfied it.
+assert "…and that project gets no deliverables panel at all" \
+  "$(card "$DOUT" 'Hostile slug' | fhasnt_in 'class="delivs"')"
 # Not a second `Deliverables · 3` grep — that was byte-identical to the assertion above
 # and could not fail independently of it. Counting the BUTTONS is the half the heading
 # cannot certify: heading and list are built from the same filtered sequence, so a
@@ -853,18 +853,99 @@ echo "== absent/empty deliverable_paths renders no panel, and no error =="
 # and then failed would still pass a `test -s` check.
 assert "it still exits 0"                             "$(eq "$rc4" 0)"
 assert "…and produces non-empty output"               "$(yes_if test -s "$DOUT")"
-assert "no deliverables panel for a project with none" "$(yes_if python3 -c "
-import sys
-t = open('$DOUT').read()
-i = t.index('Closed with nothing stamped')
-j = t.index('</details>', i)
-sys.exit(0 if 'class=\"delivs\"' not in t[i:j] else 1)")"
+assert "no deliverables panel for a project with none" \
+  "$(card "$DOUT" 'Closed with nothing stamped' | fhasnt_in 'class="delivs"')"
 echo "== it reuses the ONE existing clipboard helper — no second <script> =="
 # -c counts LINES, not occurrences — a second <script> on the SAME line as the first
 # would still read 1 and pass. -o prints one match per line, so piping to `wc -l` counts
 # occurrences regardless of how many share a line.
 assert "exactly one <script> element on this page too" \
   "$(eq "$(grep -oF '<script' "$DOUT" | wc -l | tr -d ' ')" 1)"
+
+echo "== collapsing is still <details>, and no script drives it =="
+# A SCRIPT-DRIVEN VERSION WAS TRIED AND REJECTED BEFORE, so this is a constraint rather
+# than a preference — and the page carries a <script> for the clipboard, which is exactly
+# what makes "no script drives the collapsing" a thing that can rot quietly. So it is
+# asserted on the script's BODY: the one function on this page must not know that
+# <details> exists.
+board_script() { # <file> -> the body of the single <script> element
+  python3 - "$1" <<'PYS'
+import re, sys
+m = re.search(r"<script>(.*?)</script>", open(sys.argv[1], encoding="utf-8").read(), re.S)
+sys.stdout.write(m.group(1) if m else "")
+PYS
+}
+for f in "$OUT" "$BOUT" "$TM" "$RW" "$DOUT"; do
+  assert "exactly one <script> on $(basename "$f")" \
+    "$(eq "$(grep -oF '<script' "$f" | wc -l | tr -d ' ')" 1)"
+done
+# ASSERTED ON THE CONSTRUCTS, NOT ON THE WORD. The helper's own comments discuss <details>
+# at length — they have to, because the one thing it deliberately does NOT do is cancel the
+# toggle, and that decision belongs where the next editor reads it. So `fhasnt 'details'`
+# would be red on a correct file for the wrong reason. These are the only ways a script can
+# drive a <details>, and not one of them appears in prose.
+for k in ".open=" ".open =" "toggleAttribute" "querySelector('details" "closest('details" "setAttribute('open" "removeAttribute('open"; do
+  assert "the script never does: $k"                 "$(board_script "$RW" | fhasnt_in "$k")"
+done
+# NON-VACUITY, both halves: the extractor really returned the helper (not an empty string
+# that trivially contains none of the above), and the same check FLAGS a planted driver.
+assert "…and that script really is the clipboard helper" "$(board_script "$RW" | fhas_in 'clipboard')"
+assert "…while the same check flags a planted driver" \
+  "$(printf '%s\n' "d.open=true" | fhas_in ".open=")"
+# THE ROWS ARE STILL <details>-COLLAPSED. The markup is the mechanism; if it were gone the
+# assertions above would be true of a page that no longer collapses at all.
+assert "the cards are still <details> elements"      "$(fhas '<details class="proj' "$RW")"
+
+echo "== the ONE clipboard helper is reused, and file:// is not re-derived =="
+# `navigator.clipboard` DOES work over file:// — Chromium treats `file:` as potentially
+# trustworthy — measured during ai-bridge#74 and deliberately not re-measured here. What
+# this pins is that the settled shape is still the shipped one and that nobody added a
+# SECOND helper beside it: one async write, one legacy fallback, on the whole page.
+# THE CALL, not the name — `navigator.clipboard.writeText` appears twice on a correct page,
+# once in the capability GUARD and once in the call it guards, so counting the name counts
+# the guard as a second helper.
+assert "one navigator.clipboard write, not two"      \
+  "$(eq "$(grep -oF 'navigator.clipboard.writeText(' "$RW" | wc -l | tr -d ' ')" 1)"
+assert "…and one legacy fallback behind it"          \
+  "$(eq "$(grep -oF "document.execCommand('copy')" "$RW" | wc -l | tr -d ' ')" 1)"
+# THE NEW CONTROLS USE IT RATHER THAN BRINGING THEIR OWN. Both of this task's new/moved
+# buttons copy through the same [data-copy] convention — a promote control with its own
+# onclick would be the second helper this criterion forbids.
+assert "the promote control copies via [data-copy]"  "$(fhas 'class="promote" data-copy=' "$RW")"
+assert "…and the unnumbered Q handle does too"       "$(fhas 'class="qbtn nonum" data-copy=' "$QN")"
+assert "no inline handler anywhere on the page"      "$(fhasnt 'onclick=' "$RW")"
+
+echo "== no slice in this file cuts a card at the first nested </details> =="
+# THE TRAP THIS GUARDS, recorded in task-015's doc: a card now nests a <details> per rail
+# item, so `t.index('</details>', i)` ends the slice at the FIRST ask. An absence asserted
+# that way reads a few hundred bytes and reports green on a page that is wrong immediately
+# after them. `card()` ends a card where the NEXT card begins instead.
+#
+# A SCAN, not a promise, because the boundary is retyped at every new call site and the
+# failure is invisible in review — the assertion still passes, it just stops meaning what
+# it says.
+# THE NEEDLE IS ASSEMBLED, NOT TYPED, and the planted offender below is built from the same
+# piece. A scanner whose own body — or whose own fixture line — contains the pattern it scans
+# for reports a permanent offender, and a check that is red on a correct file is a check
+# somebody deletes. Splitting the literal keeps both lines from matching.
+CLOSE_TAG="</de""tails>"
+slice_offenders() { # <file> -> offending lines, if any
+  grep -nE "(index|find)\\('$CLOSE_TAG'" "$1" | grep -v '^[0-9]*:[[:space:]]*#' || true
+}
+assert "no </details> slice boundary survives here"  "$(eq "$(slice_offenders "$0")" '')"
+# NON-VACUITY: the same scan must find a planted one, or it is asserting nothing.
+PLANT="$TMP/planted-slice.sh"
+printf '%s\n' "j = t.index('$CLOSE_TAG', i)" > "$PLANT"
+assert "…and the same scan flags a planted one"      \
+  "$([ -n "$(slice_offenders "$PLANT")" ] && echo 0 || echo 1)"
+# AND THE HELPER REALLY SPANS THEM. The scan above says nobody uses the bad boundary; this
+# says the good one reaches past the rail — `$TM`'s first card nests a <details> per ask,
+# and the task TABLE is rendered after the rail closes, so a slice that stopped at the
+# first ask could not contain it.
+assert "a card slice reaches past its nested asks"   \
+  "$(card "$TM" 'Terminal and live' | fhas_in '<table')"
+assert "…and the rail it had to cross really nests one" \
+  "$(rail_of "$TM" 'Terminal and live' | fhas_in '<details')"
 
 echo "== both themes are defined on bare :root =="
 assert "no token defined only in a media/theme block" "$(yes_if python3 -c "
