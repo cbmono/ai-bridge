@@ -14,9 +14,9 @@
 # THE ANTI-LENGTH-GATE CASE IS THE ONE THAT MUST NOT REGRESS, and it is pinned twice on
 # purpose. The obvious implementation of "stop the long PR bodies" is a character limit,
 # and it would be WRONG: a 1,137-line change may honestly need more than a tweet, and
-# `CONVENTIONS.md` already permits "longer when it genuinely needs it". A size gate would
-# refuse exactly the pull requests that most need explaining, and a gate that refuses
-# correct work gets switched off. So:
+# `CONVENTIONS.md` bounds the body's SHAPE and never its size. A size gate would refuse
+# exactly the pull requests that most need explaining, and a gate that refuses correct
+# work gets switched off. So:
 #
 #   * BEHAVIOURALLY — a body of EXACTLY 14,673 characters, the length of the description
 #     that motivated the whole task, clears when it carries both elements. Not "a long
@@ -268,6 +268,14 @@ expect "a table the host would not render -> refuse" 1 42
 
 serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE")"
 expect "a table header with no data row -> refuse" 1 42
+
+# An escaped pipe is CONTENT in GFM, and counting it as a cell boundary would refuse a
+# table the host renders perfectly — a false "structure missing" on a correct PR, which
+# is the failure that gets a gate switched off.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+                   '| Criterion | \| | Verified by |' "$TABLE_RULE" \
+                   '| a cell with a \| in it | ✓ | `foo.test.sh` 40/0 |')"
+expect "a table whose cells escape a pipe -> clear" 0 42
 
 echo
 echo "== every text match fails in the SAFE direction =="

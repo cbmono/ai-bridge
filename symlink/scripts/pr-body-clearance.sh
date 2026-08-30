@@ -228,6 +228,10 @@ table_state() { # <rendered-body>
   awk -v marks="$(rows "$CRITERIA_MARKS" | tr '\n' '\036')" '
     function cellcount(s,   arr, n) {
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+      # An ESCAPED pipe is content, not a cell boundary — that is how GFM says to put a
+      # `|` inside a cell, and counting it as a boundary would inflate the header past
+      # the delimiter row and refuse a table the host renders perfectly.
+      gsub(/\\\|/, "", s)
       sub(/^\|/, "", s); sub(/\|$/, "", s)
       n = split(s, arr, "|")
       return n
