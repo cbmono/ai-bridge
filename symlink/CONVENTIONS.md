@@ -458,10 +458,10 @@ in `cbmono/ai-bridge` enforces this.
   The tick half is CHECKED, and the reader is named so you can go and look: the control
   panel's `scripts/tick-lock.sh` refuses a tick acquire that finds no lock (exit 4) — no
   lock means no launcher, and no launcher means nobody dispatched that tick. Nothing on
-  your path reads that file; only the loop and the tick do. The same-task half is NOT checked and cannot be, because nothing can see
-  the intent behind a message; it is held by whoever dispatches, which is why it is
-  written here and in the dispatchers' own instructions instead of being asserted
-  somewhere no one reads. **Most readers of this file dispatch nothing** (see the
+  your path reads that file; only the loop and the tick do. The same-task half, by
+  contrast, is NOT checked and cannot be, because nothing can see the intent behind a
+  message; it is held by whoever dispatches, which is why it is written here and in the
+  dispatchers' own instructions instead of being asserted somewhere no one reads. **Most readers of this file dispatch nothing** (see the
   wide-work bullet above), so for you it is the rule your dispatcher follows, and it
   cashes out as one thing: a message picking up **your own task's** next round is
   legitimate work; anything else should have been a fresh agent, and saying so is better
