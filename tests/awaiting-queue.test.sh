@@ -42,7 +42,10 @@ setup() {
 setup_plain() { rm -rf "$TMP/inst"; mkdir -p "$TMP/inst"; }
 
 # The layout the project-manager agent is specified to write. Kept verbatim here
-# so a drift in either place fails this test.
+# so a drift in either place fails this test. SIX verbs now: `grant` was added beside
+# `answer` because "install or grant a thing" and "answer a question" are different asks
+# that rendered identically, and its glyph sits AFTER the `* ` marker — which is exactly
+# why the hook's grep survives a new verb and would not survive a new marker.
 write_queue() {
   cat > "$TMP/inst/AWAITING.md" <<'EOF'
 # Awaiting you
@@ -51,9 +54,10 @@ Derived and gitignored — **do not hand-edit**. Rewritten each `/pm-loop` tick
 from `projects/*/tasks/*.md`. Delete this file to turn the queue off for good.
 Last refreshed: 2026-08-11T10:04:00Z.
 
-## 🔴 Awaiting you (5)
+## 🔴 Awaiting you (6)
 * ✅ **approve** — [Harden CI](/projects/ci/tasks/task-001.md) · refined & clean, promote `draft → ready`
 * ❓ **answer** — [Pick a region](/projects/ci/tasks/task-002.md) · Q1: which region?
+* 🧰 **grant** — [Cut the release](/projects/ci/tasks/task-003.md) · install/grant the `gh` CLI — blocks the release step
 * 🔀 **merge** — [Bump deps](/projects/deps/tasks/task-004.md) · [monorepo#2725](https://github.com/acme/monorepo/pull/2725)
 * ⛔ **unblock** — [Rotate token](/projects/deps/tasks/task-005.md) · needs a new npm token
 * 🏁 **close** — [CI hardening](/projects/ci/project.md) · all tasks terminal → `/close-project ci`
@@ -121,7 +125,7 @@ check "stale DASHBOARD.md ignored after rename" 0
 
 # --- the layout contract with the project-manager --------------------------
 setup; write_queue
-check "PM layout -> all five verb items surfaced" 5
+check "PM layout -> all six verb items surfaced" 6
 
 setup; printf '# Awaiting you\n\n## 🔴 Awaiting you (0)\n_None._\n' > "$TMP/inst/AWAITING.md"
 check "empty queue (_None._) -> silent, not a blank nudge" 0
@@ -130,12 +134,12 @@ check "empty queue (_None._) -> silent, not a blank nudge" 0
 # can't inflate the startup nudge.
 setup; write_queue
 printf '\n## Notes\n* not an action item\n' >> "$TMP/inst/AWAITING.md"
-check "trailing section not counted as items" 5
+check "trailing section not counted as items" 6
 
 # Guards the heading contract: reshape it and the nudge empties silently, which
 # is exactly the failure this test exists to catch.
 setup; write_queue
-sed -i.bak 's/^## 🔴 Awaiting you (5)/## Things To Do/' "$TMP/inst/AWAITING.md"
+sed -i.bak 's/^## 🔴 Awaiting you (6)/## Things To Do/' "$TMP/inst/AWAITING.md"
 check "renamed heading -> nudge empties (documents the coupling)" 0
 
 # --- instruction/data boundary -------------------------------------------

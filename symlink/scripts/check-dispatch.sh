@@ -42,8 +42,9 @@
 #      recorded URL still had to be resolved. Unknown is never reported as fine.
 #   3  the claim is not backed: `pr:` names a pull request the host does not resolve, or
 #      names something that is not a URL at all.
-#   4  the record contradicts itself: `in-review`/`done` with an empty `pr:`, or a PR that
-#      resolves while `status:` never moved. Usually one edit away from correct.
+#   4  the record contradicts itself: `in-review`/`done` with an empty `pr:`, a PR that
+#      resolves while `status:` never moved, or a `blocked` reason naming a tool the
+#      assignee's own `tools:` list already grants. Usually one edit away from correct.
 #
 # WHAT IT IS ASKED ABOUT MATTERS: run it on a task you DISPATCHED, when its agent reports.
 # A task nobody has dispatched yet reads as exit 1 too — correctly, in the sense that no PR
@@ -166,6 +167,102 @@ strip_trailing_comment() { # <text, one or more lines>
   ' <<<"$1"
 }
 
+# --- the blocked-vs-own-tools contradiction ------------------------------------------
+# Three primitives and one predicate, kept here with the other readers. Nothing below runs
+# unless `status:` is `blocked`, so an ordinary check pays none of it.
+
+# The bundle root, by walking UP from the task document until a directory carrying the
+# two-part instance signature appears — the same `instance.config.json` + `.claude/agents`
+# pair session-banner.sh and push-state.sh use to decide "is this an instance at all".
+# Deliberately not $CLAUDE_PROJECT_DIR and not a path literal: this script is symlinked
+# into every instance and is run from anywhere, and a task document already knows where it
+# lives. No signature ⇒ no answer, which is how a fixture outside an instance stays quiet.
+bundle_root() { # <task-doc>
+  local d
+  d="$(cd -- "$(dirname -- "$1")" 2>/dev/null && pwd -P)" || return 1
+  while [ -n "$d" ] && [ "$d" != "/" ]; do
+    if [ -d "$d/.claude/agents" ] && [ -f "$d/instance.config.json" ]; then
+      printf '%s\n' "$d"; return 0
+    fi
+    d="$(dirname -- "$d")"
+  done
+  return 1
+}
+
+# The agent's OWN allowlist, one tool per line. Same frontmatter reader as everywhere
+# else; empty output means "no `tools:` key", which is a grant of everything and therefore
+# not a contradiction anyone can read off the file — so the predicate below stays silent.
+granted_tools() { # <agent-file>
+  awk 'NR==1 && $0=="---" {fm=1; next} fm==1 && $0=="---" {exit}
+       fm==1 && /^tools:[[:space:]]*/ { sub(/^tools:[[:space:]]*/, ""); gsub(/,/, "\n"); print }' "$1" \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$'
+}
+
+task_body() { # <task-doc> — everything after the closing frontmatter delimiter
+  awk 'NR==1 && $0=="---" {fm=1; next} fm==1 && $0=="---" {fm=2; next} fm!=1 {print}' "$1"
+}
+
+# A tool name only counts inside BACKTICKS, and only on a line that also says something
+# was LACKING. Both halves are needed and each removes a different false positive: without
+# the backticks, "read the file" and "no bash on the runner" are hits; without the cue, an
+# acceptance criterion that merely names a tool is one. Same reasoning, and the same shape,
+# as tests/agent-tool-allowlist.test.sh — a mention is a backticked identifier, never a word.
+# The curly apostrophe is deliberate and sits beside the straight one: a blocker reason is
+# prose an agent typed, and a smart-quoted "can’t" must not slip past the cue. Same
+# accommodation tests/agent-tool-allowlist.test.sh makes, for the same reason.
+# shellcheck disable=SC1112
+LACK_CUE='(^|[^a-z])([Nn]o|[Nn]ot|[Nn]one|[Nn]ever|[Ww]ithout|[Cc]annot|[Cc]an['"'"'’]t|[Dd]on['"'"'’]t|[Dd]oesn['"'"'’]t|[Ll]ack|[Ll]acks|[Ll]acking|[Mm]issing|[Uu]navailable|[Aa]bsent|[Dd]enied|[Uu]nable|[Nn]eed|[Nn]eeds|[Rr]equire|[Rr]equires|[Bb]locked)([^a-z]|$)'
+
+# Prints one report line per contradicting mention and returns 0 when there is at least
+# one. Returns 1 — silently — for every case it cannot decide.
+blocked_contradiction() { # <task-doc>
+  local root agent afile held t pat line found=1
+  root="$(bundle_root "$1")" || return 1
+  agent="$(field assignee)"
+  [ -n "$agent" ] || return 1
+  # A path literal out of the document, so it is confined to one directory and cannot
+  # escape it: a slash or a `..` in `assignee:` would otherwise read an arbitrary file.
+  case "$agent" in */*|*..*|"") return 1 ;; esac
+  afile="$root/.claude/agents/$agent.md"
+  [ -f "$afile" ] || return 1
+  held="$(granted_tools "$afile")"
+  [ -n "$held" ] || return 1
+
+  while IFS= read -r t; do
+    [ -n "$t" ] || continue
+    # A wildcard grant (`mcp__claude-in-chrome__*`) covers every tool under its prefix, so
+    # naming one of them as missing contradicts the grant just as an exact name does.
+    case "$t" in
+      *\*) pat="\`${t%\*}[A-Za-z0-9_*-]*\`" ;;
+      *)   pat="\`$t\`" ;;
+    esac
+    while IFS= read -r line; do
+      [ -n "$line" ] || continue
+      printf '%s\n' "$line" | grep -qE "$LACK_CUE" || continue
+      if [ "$found" -ne 0 ]; then
+        echo "CONTRADICTION: $1 reports status: blocked for a reason naming a tool that" >&2
+        echo "               $agent's own tools: list already grants:" >&2
+        found=0
+      fi
+      printf '               grants `%s` — "%s"\n' \
+        "$t" "$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | cut -c1-96)" >&2
+    done <<EOF
+$(task_body "$1" | grep -E "$pat" || true)
+EOF
+  done <<EOF
+$held
+EOF
+
+  [ "$found" -eq 0 ] || return 1
+  echo "               A tool you hold is not a blocker. Re-read the allowlist in" >&2
+  echo "               $afile before writing a blocker reason." >&2
+  echo "               If a tool really is absent, CONVENTIONS.md's middle rung applies:" >&2
+  echo "               record the request in open_questions and CARRY ON — blocked is not" >&2
+  echo "               the response to a missing tool." >&2
+  echo "               This is a report, not an instruction. Nothing is re-dispatched." >&2
+  return 0
+}
+
 status="$(field status)"
 kind="$(field kind)"
 region="$(pr_region)"
@@ -279,6 +376,35 @@ if [ "$advanced" = "no" ] && [ -n "$urls" ]; then
 fi
 
 if [ "$advanced" = "stopped" ]; then
+  # --- the one thing a `blocked` reason can say that is checkable --------------------
+  # `blocked` for a reason that NAMES A TOOL THE ASSIGNEE'S OWN `tools:` LIST GRANTS.
+  #
+  # WHY THIS ONE AND NOTHING WIDER. Whether a blocker is real is a judgement, and this
+  # script does not make judgements (see the header). But "I am blocked because I lack
+  # `Bash`" from an agent whose frontmatter grants `Bash` is not a judgement — it is the
+  # record disagreeing with itself, decidable from two files, and it is the COMMON shape:
+  # the default an agent falls into is to report the gap rather than to exhaust what it
+  # holds (`CONVENTIONS.md` → "Exhaust your own tools before you hand work back").
+  #
+  # WHAT IT CANNOT SEE, stated so nobody reads more into a green result: an agent that
+  # silently hands instructions back instead of acting leaves no artifact at all, and a
+  # blocker that is genuine but was never worth blocking on reads exactly like a real one.
+  # This catches the contradiction, not the behaviour.
+  #
+  # AND IT CAN OVER-REPORT, on purpose. The scan is the whole document body, so a `# Context`
+  # sentence naming a held tool next to a negation ("must not use `Bash`") reports too. That
+  # direction is the cheap one — the verdict is report-only and costs a human one read of a
+  # quoted line — where narrowing to a section heading would go silent whenever an agent
+  # wrote its reason somewhere else, and silence is what this whole class of check fails at.
+  #
+  # SILENT WHEN IT CANNOT DECIDE. No `assignee:`, no bundle root, no agent file, no
+  # `tools:` key — every one of those means the question is unanswerable, and an
+  # unanswerable question adds nothing to an honest stop. It falls through to exit 0
+  # rather than inventing a verdict, which is also what keeps this off a task document
+  # checked outside an instance.
+  if [ "$status" = "blocked" ]; then
+    blocked_contradiction "$TASK" && exit 4
+  fi
   echo "ok: $TASK reports status: $status — an honest stop, no PR expected."
   echo "    Read the stated reason; this check has nothing further to say about it."
   exit 0

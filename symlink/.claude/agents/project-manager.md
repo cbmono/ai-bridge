@@ -610,14 +610,27 @@ state, and act only on deltas.
    ## 🔴 Awaiting you (<n>)
    * ✅ **approve** — [<task title>](/projects/<slug>/tasks/<id>.md) · refined & clean, promote `draft → ready`
    * ❓ **answer** — [<task title>](/projects/<slug>/tasks/<id>.md) · Q1: <question>; Q2: <question>
+   * 🧰 **grant** — [<task title>](/projects/<slug>/tasks/<id>.md) · install/grant <tool or access> — <what it unblocks>
    * 🔀 **merge** — [<task title>](/projects/<slug>/tasks/<id>.md) · [<repo>#<n>](<pr-url>)
    * ⛔ **unblock** — [<task title>](/projects/<slug>/tasks/<id>.md) · <blocker reason>
    * 🏁 **close** — [<project title>](/projects/<slug>/project.md) · all tasks terminal → `/close-project <slug>`
    ```
 
+   **`🧰 grant` and `❓ answer` are different asks, and that is why `grant` has a glyph of
+   its own.** An `open_questions` entry that asks for a **tool, an install, a credential or
+   an access grant** — an agent hitting a capability gap, per `CONVENTIONS.md` → "the middle
+   rung NEVER BLOCKS" — renders as `🧰 **grant**`, never as `❓ **answer**`. The two read
+   identically otherwise, so a request to install a CLI looks like a question the human can
+   dispose of by typing a sentence, and it sits in the queue while they wait for a question
+   that was never being asked. The **reply mechanism is the same** — the human still appends
+   ` --- <answer>` to the entry, and the next tick folds it in and re-dispatches with the
+   tool — so the glyph changes what the human is being asked to *do*, not how they answer.
+
    Keep the `## 🔴 Awaiting you` heading and the `*` marker followed by one space exactly as shown —
    `session-banner.sh` greps for them, and reshaping either silently empties the
-   startup nudge. Render `_None._` under the heading when there is nothing, so the
+   startup nudge. **A new verb is free; a new marker is not** — the glyph sits *after* the
+   `* `, so `🧰` costs the banner nothing, and anything that moves the `* ` costs it every
+   item. Render `_None._` under the heading when there is nothing, so the
    shape stays stable. `AWAITING.md` is **derived and gitignored**: rewrite it, but
    **never stage or commit it**.
 
