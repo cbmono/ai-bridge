@@ -114,6 +114,195 @@ assert "…and it sorts AFTER the live one"            "$(yes_if python3 -c "
 import sys; h=open('$OUT').read()
 sys.exit(0 if h.index('Live work') < h.index('Finished work') else 1)")"
 
+# ---------------------------------------------------------------------------
+# THE COLLAPSED VIEW HAS TO ANSWER "WHICH PROJECTS NEED ME?" ON ITS OWN.
+#
+# The pooled queue that used to sit above every project moved INSIDE each project on
+# 2026-08-30. That move is only safe if the summary line carries the weight the pooled
+# list used to carry, and this is the block that says so: sixteen closed rows with the
+# queues hidden inside them and no marking is strictly worse than the clutter it
+# replaced. Three channels are asserted separately, because each covers a reader the
+# others do not — the COUNT (a number, for anyone), the MARKED CARD (a shape, for a
+# reader skimming rather than reading) and the ORDER (colour-free, for a reader who
+# cannot see the chip at all, or a phone showing four rows at a time). A test on only
+# the chip would pass a page whose entire signal is one colour nobody can see.
+#
+# The fixture lists the quiet project FIRST in the snapshot, so the order assertion
+# fails if the sort is dropped rather than passing on the input's own order.
+#
+# ONE BOUNDARY RULE for every "inside this project's card" assertion below, and it is
+# not `t.index('</details>', i)`. A card can now contain NESTED <details> — every rail
+# item is one — so that slice stops at the first ASK rather than at the end of the
+# project, and an assertion cut that way reads a few hundred bytes and reports green on
+# a page that is wrong immediately after them. A card ends where the NEXT card begins.
+card() { # <file> <project title> -> just that project's card, on stdout
+  python3 - "$1" "$2" <<'PYC'
+import sys
+t = open(sys.argv[1], encoding="utf-8").read()
+i = t.index(sys.argv[2])
+j = t.find('<details class="proj', i)
+sys.stdout.write(t[i:] if j < 0 else t[i:j])
+PYC
+}
+fhas_in()   { grep -qF -- "$1" && echo 0 || echo 1; }
+fhasnt_in() { grep -qF -- "$1" && echo 1 || echo 0; }
+before_in() { # <a> <b> — 0 when a appears before b on stdin
+  python3 -c "
+import sys
+t = sys.stdin.read()
+try:
+    sys.exit(0 if t.index(sys.argv[1]) < t.index(sys.argv[2]) else 1)
+except ValueError:
+    sys.exit(1)" "$1" "$2" && echo 0 || echo 1
+}
+mkdir -p "$TMP/board15/projects/quiet" "$TMP/board15/projects/wants-me" \
+         "$TMP/board15/projects/nostamp"
+mk "$TMP/board15" "board15" '[
+ {"slug":"quiet","title":"Nothing waiting","kind":"build","status":"active","autonomy":"gated",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Just working","status":"in-progress",
+            "assignee":"software-engineer","awaiting":"","open_questions":0,
+            "advisor_notes":3,"depends_on":[],"in_flight":true,"prs":[]}]},
+ {"slug":"wants-me","title":"Two decisions","kind":"build","status":"active","autonomy":"gated",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Promote me","status":"draft","assignee":"",
+            "awaiting":"approve","open_questions":0,"advisor_notes":0,"depends_on":[],
+            "in_flight":false,"prs":[]},
+           {"id":"task-002","title":"Merge me","status":"in-review","assignee":"",
+            "awaiting":"merge","open_questions":0,"advisor_notes":0,"depends_on":[],
+            "in_flight":false,"prs":[]}]},
+ {"slug":"nostamp","title":"No timestamp","kind":"build","status":"active","autonomy":"gated",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},"tasks":[]},
+ {"slug":"nofile","title":"No project md","kind":"build","status":"active","autonomy":"gated",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},"tasks":[]},
+ {"slug":"..","title":"Hostile slug here","kind":"build","status":"active","autonomy":"gated",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},"tasks":[]}]'
+printf -- '---\ntype: Project\ntitle: Nothing waiting\nstatus: active\ntimestamp: 2026-03-04T10:11:12Z   # notes at %s\n---\n' \
+  "/Users/attacker/board15-secret.md" > "$TMP/board15/projects/quiet/project.md"
+printf -- '---\ntype: Project\ntitle: Two decisions\nstatus: active\ntimestamp: 2026-07-21T08:00:00Z\n---\n' \
+  > "$TMP/board15/projects/wants-me/project.md"
+printf -- '---\ntype: Project\ntitle: No timestamp\nstatus: active\n---\n' \
+  > "$TMP/board15/projects/nostamp/project.md"
+# The file a `..` slug reaches if the slug is joined to a path untested. It sits one
+# level ABOVE projects/, which is the whole point: nothing here may read it.
+printf -- '---\ntype: Project\ntitle: Outside projects\nstatus: active\ntimestamp: 1999-12-31T00:00:00Z\n---\n' \
+  > "$TMP/board15/project.md"
+BOUT="$TMP/board15.html"
+brc=0; bash "$GEN" --out "$BOUT" "$TMP/board15" >/dev/null 2>&1 || brc=$?
+
+echo "== the collapsed line answers 'which projects need me?' =="
+assert "the fixture renders and exits 0"             "$(eq "$brc" 0)"
+# (1) THE COUNT. Two awaiting items on that project, so the chip says two — the same
+# number the pooled list used to contribute for it.
+assert "a project with items carries a weighted count" \
+  "$(fhas '<span class="c you"><b>2</b> awaiting you</span>' "$BOUT")"
+assert "…and only the project that has items carries one" \
+  "$(eq "$(grep -oF 'class="c you"' "$BOUT" | wc -l | tr -d ' ')" 1)"
+# (2) THE MARKED CARD. Not the same fact as the chip: the chip is one pill among six in
+# a row; this is the whole card, readable at a glance from any scroll position.
+assert "…and the card itself is marked"              "$(fhas '<details class="proj wants">' "$BOUT")"
+assert "a project with none is NOT marked"           "$(fhas '<details class="proj"><summary' "$BOUT")"
+assert "…and carries no count chip inside it"        "$(card "$BOUT" 'Nothing waiting' | fhasnt_in 'class="c you"')"
+# (3) THE ORDER — the colour-free channel. The snapshot lists `quiet` first; a project
+# that wants you must still come out on top, or a reader who cannot see the chip has
+# nothing left.
+assert "…and it sorts ABOVE a project that wants nothing" "$(yes_if python3 -c "
+import sys; t=open('$BOUT').read()
+sys.exit(0 if t.index('Two decisions') < t.index('Nothing waiting') else 1)")"
+# NON-VACUITY for that ordering: the snapshot really does list them the other way, so
+# the assertion above measures the sort rather than the input's own order.
+assert "…and the snapshot really lists them the other way round" "$(yes_if python3 -c "
+import json, sys
+s = json.load(open('$TMP/board15/SNAPSHOT.json'))
+slugs = [p['slug'] for p in s['projects']]
+sys.exit(0 if slugs.index('quiet') < slugs.index('wants-me') else 1)")"
+
+echo "== each project's queue is INSIDE it, and the pooled one is gone =="
+assert "the rail moved into the project"             "$(card "$BOUT" 'Two decisions' | fhas_in 'class="rail"')"
+assert "…holding only THAT project's items"          \
+  "$(eq "$(card "$BOUT" 'Two decisions' | grep -oF 'class="ask"' | grep -c . || true)" 2)"
+assert "…above its task table, not below it"         "$(card "$BOUT" 'Two decisions' | before_in 'class="rail"' '<table>')"
+# THE POOLED LIST IS GONE, and this is how that is stated without banning `.rail`
+# outright: no rail may appear before the first project card. One that survived above
+# them all would sit before that index.
+assert "no pooled queue above the first project"     "$(yes_if python3 -c "
+import sys
+t = open('$BOUT').read()
+sys.exit(0 if t.index('<details class=\"proj') < t.index('class=\"rail\"') else 1)")"
+assert "…replaced by one line saying where to look" \
+  "$(fhas '2 waiting on you, in 1 project — marked and sorted to the top below.' "$BOUT")"
+
+echo "== the creation date comes from project.md, and ONLY a date does =="
+assert "the date renders on the collapsed line" \
+  "$(fhas '<span class="pdate" title="Project created 2026-07-21">2026-07-21</span>' "$BOUT")"
+assert "…for the other project too"                  "$(fhas '>2026-03-04</span>' "$BOUT")"
+# ONLY A DATE. frontmatter() does not strip a trailing YAML comment off `timestamp:`,
+# so the raw value still carries whatever follows it — rendering the VALUE rather than
+# the matched date would put an absolute path on a page that may be published.
+assert "…never the time of day"                      "$(fhasnt '10:11:12' "$BOUT")"
+assert "…and never a path hidden in that line's comment" "$(fhasnt 'attacker' "$BOUT")"
+assert "a project.md with no timestamp renders no date" "$(card "$BOUT" 'No timestamp' | fhasnt_in 'class="pdate"')"
+assert "…and so does a project with no project.md at all" "$(card "$BOUT" 'No project md' | fhasnt_in 'class="pdate"')"
+# THE SLUG IS SHAPE-CHECKED BEFORE IT IS JOINED TO A PATH, exactly as it is for a
+# deliverable path. `projects/../project.md` is a read OUTSIDE projects/, and the
+# fixture plants a readable file there so this fails loudly rather than vacuously.
+assert "a \`..\` slug reads nothing outside projects/" "$(fhasnt '1999-12-31' "$BOUT")"
+assert "…and the file it would have read really is there" \
+  "$(yes_if test -s "$TMP/board15/project.md")"
+
+echo "== the ✕ copies a command and can never close anything =="
+assert "it copies /close-project <slug>"             "$(fhas 'data-copy="/close-project wants-me"' "$BOUT")"
+assert "…one per well-formed project"                "$(eq "$(grep -oF 'class="pclose"' "$BOUT" | wc -l | tr -d ' ')" 4)"
+assert "…and none for a slug that is not one segment" "$(card "$BOUT" 'Hostile slug here' | fhasnt_in 'class="pclose"')"
+# The tooltip is a promise to the reader, and the wrong wording IS the failure: a
+# control labelled "close this project" that only copies is a lie, and one that really
+# closed would be a rendered page performing /close-project's consolidation, log entry
+# and folder removal. Both directions are asserted.
+assert "the tooltip says it COPIES"                  "$(fhas 'title="Copy the command to close this project' "$BOUT")"
+assert "…and no pclose tooltip starts any other way" "$(yes_if python3 -c "
+import re, sys
+t = open('$BOUT').read()
+btns = re.findall(r'<button class=\"pclose\"[^>]*>', t)
+bad = [b for b in btns if 'title=\"Copy the command to close this project' not in b]
+sys.exit(0 if btns and not bad else 1)")"
+# It is a BUTTON with no href, no form and no target: there is nothing for it to
+# navigate to and nothing to submit, whatever any handler does or does not do.
+assert "…and it is inert markup: no href, form or target" "$(yes_if python3 -c "
+import re, sys
+t = open('$BOUT').read()
+btns = re.findall(r'<button class=\"pclose\"[^>]*>', t)
+sys.exit(0 if btns and not any(a in b for b in btns
+                               for a in ('href=', 'formaction=', 'target=')) else 1)")"
+
+echo "== …reusing the ONE clipboard helper: no second script, no second link =="
+assert "still exactly one <script>"                  "$(eq "$(grep -oF '<script' "$BOUT" | wc -l | tr -d ' ')" 1)"
+assert "…and still exactly two <link> elements"      "$(eq "$(grep -cF '<link' "$BOUT")" 2)"
+assert "…the ✕ using the same [data-copy] convention" "$(fhas 'data-what="Close command"' "$BOUT")"
+# A FAILED COPY MUST DEGRADE VISIBLY. This page is opened over file://, where a
+# clipboard write can be refused, and a control that appears to copy and does not is
+# worse than no control. The live behaviour was measured in a browser on that origin
+# (see the PR body); what is pinned HERE is that the shipped page still carries a
+# failure state that is distinct, selectable and does not fade — a three-second
+# unselectable notice is the regression this guards against.
+# Asserted on the RULE, not on the page: `fhas 'pointer-events:auto'` is green on any
+# page that happens to carry that declaration anywhere, including on a rule that has
+# nothing to do with the toast. The property has to be in `.toast.fail`'s own block, or
+# the failure notice is still the unclickable, unselectable one.
+toast_fail_rule() { # <file> -> the body of the `.toast.fail{...}` rule
+  python3 - "$1" <<'PYT'
+import re, sys
+m = re.search(r"\.toast\.fail\{([^}]*)\}", open(sys.argv[1], encoding="utf-8").read())
+sys.stdout.write(m.group(1) if m else "")
+PYT
+}
+assert "the failure state is its own toast rule"     "$(toast_fail_rule "$BOUT" | fhas_in 'background:var(--stop)')"
+assert "…that accepts the pointer"                   "$(toast_fail_rule "$BOUT" | fhas_in 'pointer-events:auto')"
+assert "…and whose text can be selected"             "$(toast_fail_rule "$BOUT" | fhas_in 'user-select:text')"
+assert "…carrying the exact text in a selectable <code>" \
+  "$(fhas '.toast.fail code{' "$BOUT")"
+assert "…entering a state the success path never sets" "$(fhas "el.classList.add('on','fail');" "$BOUT")"
+assert "…with a dismiss control, since it never fades" "$(fhas "dismiss.className='x'" "$BOUT")"
+
 echo "== untrusted title text is escaped for THIS medium =="
 assert "no raw <script> survives"                    "$(fhasnt '<script>alert(1)</script>' "$OUT")"
 assert "…the tag is entity-escaped"                  "$(fhas '&lt;script&gt;' "$OUT")"

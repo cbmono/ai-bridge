@@ -157,15 +157,24 @@
 #     there is no second one.
 #   · A FAILED COPY IS A STICKY, SELECTABLE FAILURE — because the page is opened over
 #     `file://`. The tick renders to `.board-live/board.html` and a human double-clicks
-#     it, and a `file://` origin is not a secure context in Chromium, so
-#     `navigator.clipboard` is simply `undefined` there and the async path never runs.
-#     The `document.execCommand('copy')` fallback below is what actually does the work
-#     on that origin — measured, not assumed — and it can itself be refused. When both
-#     fail, the toast STAYS UP, turns `user-select:text; pointer-events:auto`, carries
-#     the exact text in a <code>, and has to be dismissed. It is deliberately not a
-#     three-second message: a control that appears to copy and does not is worse than no
-#     control, and a failure notice you cannot select or read in time is the same defect
-#     one step removed. Do not restore auto-hide on the failure path.
+#     it, so the copy buttons have to work on an origin nobody serves.
+#     WHAT WAS ACTUALLY MEASURED THERE, on `file:///…/board.html` in Chrome 151 (macOS),
+#     because the intuition was wrong in a way worth writing down: `file:` IS a
+#     potentially trustworthy origin in Chromium — `window.isSecureContext` is **true**
+#     and `navigator.clipboard` is an **object**, not `undefined`. The async path is
+#     the one that runs, and a real click on the ✕ put `/close-project <slug>` on the
+#     system clipboard. So the fallback is not load-bearing for Chrome-on-file:// and
+#     must not be described as if it were. It stays because the async call can still be
+#     REFUSED — an unfocused document, a browser that does not extend trust to `file:`,
+#     a denied permission — and that was measured too: with `writeText` forced to
+#     reject, `document.execCommand('copy')` carried the same click through to the same
+#     clipboard.
+#     WHEN BOTH ARE REFUSED the toast STAYS UP, turns `user-select:text;
+#     pointer-events:auto`, carries the exact text in a `<code>` (`user-select:all`) and
+#     has to be dismissed. Deliberately not a three-second message: a control that
+#     appears to copy and does not is worse than no control, and a failure notice that
+#     fades before you can select it is that same defect one step removed. Do not
+#     restore auto-hide on the failure path.
 #   · A retained project's deliverables panel is built from `deliverable_paths:` in the
 #     project's own SNAPSHOT.json stanza — which write-snapshot.sh reads from
 #     project.md's frontmatter, and ONLY from there. This renderer never opens `tasks/`
@@ -874,9 +883,9 @@ TABLE_SCRIPT = r"""<script>
   }
   // A FAILED COPY DOES NOT FADE. It stays up, it is selectable, and it shows the exact
   // text — see "A FAILED COPY IS A STICKY, SELECTABLE FAILURE" in this file's header.
-  // The board is opened over file://, where the clipboard can be refused outright, and
-  // a three-second unselectable "copy failed" is barely better than the silent failure
-  // it reports.
+  // The board is opened over file://, where a clipboard write can be refused outright,
+  // and a three-second unselectable "copy failed" is barely better than the silent
+  // failure it reports.
   function fail(text){
     build(); clearTimeout(toast.t);
     msg.textContent='Copy failed — this page cannot reach the clipboard. Select and copy this yourself:';
@@ -894,9 +903,10 @@ TABLE_SCRIPT = r"""<script>
     var text = b.getAttribute('data-copy'), what = b.getAttribute('data-what') || 'Text';
     var ok = function(){ toast(what + ' copied — paste it to Claude'); };
     var bad = function(){ fail(text); };
-    // On a file:// origin navigator.clipboard is undefined — it is not a secure
-    // context — so legacy() is the path that actually runs there. Both are kept: the
-    // async API is the right one wherever this page is served over https.
+    // BOTH paths are live on file://, and which one runs there was measured rather
+    // than guessed — see the header. Chromium treats `file:` as trustworthy, so this
+    // branch is taken and succeeds; legacy() covers the refusal, which is the case
+    // that actually varies by browser and by focus.
     if(navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(ok, legacy);
     } else { legacy(); }
