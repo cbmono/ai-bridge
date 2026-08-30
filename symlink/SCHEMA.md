@@ -559,8 +559,8 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `worktreeRoot` | **yes** — an absolute path on this machine | `<reposRoot>/_wt`, which is also still swept as the legacy root |
 | `boardInstances` | **yes** — a list of paths to sibling instances | just this instance |
 | `board` | **no** — one instance, one answer, and `install.sh` reads it from the tracked file at stamp time | on: `SNAPSHOT.json` is seeded, and each tick renders `.board-live/board.html` |
-| `models` | **yes** — which model each tier costs **this human** | the tracked map; absent from both, `resolve-model.sh` prints nothing and the agent inherits the session model |
-| `roleTiers` | **yes** — the same bill, per agent. **A partial override replaces only the entries it names**, so moving one agent to a cheaper tier leaves every other agent's tier standing | as `models` above |
+| `models` | **yes**, and **seeded** — which model each tier costs **this human**. `install.sh` writes this key into the local file on any stamp that finds it missing, so local is normally the layer in force and the banner reads `local` | the tracked map, which stays as the fallback; absent from **both**, `resolve-model.sh` prints nothing on stdout, **says so on stderr**, and exits 1 |
+| `roleTiers` | **yes**, and **seeded** on the same terms — the same bill, per agent. **A partial override replaces only the entries it names**, so moving one agent to a cheaper tier leaves every other agent's tier standing, and the installer never tops a partial map up | as `models` above |
 | `maxAgentsInFlight` | **yes** — how many agents **this machine** can carry (below) | the tracked value; absent from both, `resolve-max-agents.sh` prints nothing and exits 1, and the caller applies the fallback its own document states |
 | `defaultOwner` | **no, by design** | step 4 above: unowned, so every clone treats it as its own |
 | `people` | **no** — a shared directory of who is who | no lookup; the `authorEmail` chain answers |
@@ -578,8 +578,44 @@ agents against a measured ceiling near 4.
 
 All three are read by a script rather than by whoever remembered to look:
 `scripts/resolve-model.sh <agent>` for the first two, `scripts/resolve-max-agents.sh` for
-the cap. Neither script invents a value it cannot find; both print nothing and exit 1
-instead, and the caller applies its own documented fallback.
+the cap. Neither script invents a value it cannot find; both print nothing on stdout and
+exit 1 instead, and the caller applies its own documented fallback.
+
+**`models` and `roleTiers` are SEEDED into the local file, and the tracked pair is the
+fallback — both halves are load-bearing.** `install.sh` writes them into
+`instance.config.local.json` on any stamp that finds the key missing, seeded from the
+tracked values when present and from the documented defaults (`light→haiku`,
+`standard→sonnet`, `deep→opus`, `apex→fable`) when not. That is what makes spend a
+per-machine decision in practice rather than only in principle: a tracked map is one
+human's choice charged to everyone, and until the local file exists the banner honestly
+reports `tracked`.
+
+The tracked keys were **not** removed in the same change, and that is the design.
+`resolve-model.sh` with neither layer resolves to nothing, and a caller that ignores its
+exit code inherits the session model — for every role at once, with nothing anywhere
+saying so. Removing the tracked pair first would open exactly that window on any instance
+the seeding step had not yet reached, and **a merge is not a stamp**: an instance is
+re-stamped only when somebody runs `install.sh`. With both layers present there is no
+ordering in which the pair resolves to nothing.
+
+**`maxAgentsInFlight` is deliberately NOT seeded.** It is overridable and per-machine
+exactly as the two above are, so the asymmetry is real and is not an oversight: seeding it
+was not asked for, and whether it should follow is the owner's call rather than a
+consistency argument's. Don't "fix" it in passing — decide it, then change this line.
+
+**Seeding is per KEY and never reconciles.** A key already in the local file is left
+exactly as it is — including one explicitly `null` (the documented unset above), and
+including a **partial** map, which is merged entry by entry over the tracked one. Topping
+a partial map up to the full set would be reconciling a human's edit, which this installer
+does not do anywhere.
+
+**And absence is never silent.** `resolve-model.sh` still prints nothing on stdout and
+still exits 1 when a role has no tier or a tier has no alias — every caller captures
+stdout, and a word printed there becomes a model alias. But it now writes a line to
+**stderr** naming the agent, which lookup failed, both files, and the consequence: a
+caller that ignores the exit code dispatches on the session model. A caller must surface
+that line rather than dispatch on a guess. `install.sh` asks the same resolver after
+seeding and warns by name about any role that still resolves to nothing.
 
 ### `maxAgentsInFlight` bounds an instance, not a machine — a known hole
 

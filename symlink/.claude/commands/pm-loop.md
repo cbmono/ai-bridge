@@ -239,7 +239,9 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    resolve it with `scripts/resolve-model.sh project-manager`, which applies
    `roleTiers` (default `deep`) → an alias via `models`
    (default `deep` → `opus`), and pass that as the tick's model. If `models`/`roleTiers`
-   are absent, inherit the session model. (The top `apex`/`fable` tier is reserved for
+   are absent the script says so on stderr — **report that line in the tick summary** and
+   then inherit the session model, so a tick running on an unchosen model is visible
+   rather than assumed. (The top `apex`/`fable` tier is reserved for
    the rarest, deepest reasoning — the `plan-architect` critique — not the routine tick.) A LIVE tick refines drafts, dispatches `ready` tasks,
    advances/reflects PRs, reports finished worktrees, proposes closing completed
    projects (all tasks terminal), and — **after reflecting merges** — may dispatch
@@ -290,7 +292,8 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
    Its model comes from `scripts/resolve-model.sh advisor` (`roleTiers.advisor` through `models`), exactly like
    every other role. **Absent ⇒ `light`**, the cheapest tier — an observer that costs
-   as much as the work it observes is not worth running.
+   as much as the work it observes is not worth running; the script prints why on stderr,
+   so report that line rather than silently taking whatever the session is on.
 
    Dispatch it once, read-only, with the tick's summary: what it promoted, what it
    dispatched to whom, what it closed, and the task documents it touched. It replies

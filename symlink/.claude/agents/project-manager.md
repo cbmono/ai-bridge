@@ -387,8 +387,9 @@ state, and act only on deltas.
    and pass it as the model when you spawn the agent — the same for **every**
    dispatch, including the `cataloguer` and an optional `plan-architect` critique:
    look their tiers up in `roleTiers` too, never a hard-coded default. If
-   `models`/`roleTiers` are absent (older instance config), just inherit the session
-   model — don't guess aliases.
+   `models`/`roleTiers` are absent (older instance config) the script prints why on
+   stderr — **report that line to the human**, then inherit the session model; don't
+   guess aliases, and don't let an unresolved role pass as a resolved one.
 
 4. **Advance in-flight work.** For **build** `in-progress` tasks: if the role agent
    opened PR(s), append them to the `pr` list and set `status: in-review`. If it
