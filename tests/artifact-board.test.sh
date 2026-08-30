@@ -160,6 +160,16 @@ if i < 0:
 j = t.find('</section>', i)
 sys.stdout.write(t[i:j if j > 0 else len(t)])"
 }
+# The renderer joins its parts with newlines, so two spans that render side by side sit
+# on two LINES in the file. Adjacency is a real property for some of what follows — "the
+# date sits with the title" is exactly that, and a before/after check would also pass a
+# date six chips away — so this joins tag boundaries back up rather than settling for the
+# weaker claim. Only whitespace BETWEEN tags is collapsed; nothing inside a tag or a text
+# node moves.
+flat() { python3 -c "
+import re, sys
+sys.stdout.write(re.sub(r'>\s*\n\s*<', '><', sys.stdin.read()))"
+}
 fhas_in()   { grep -qF -- "$1" && echo 0 || echo 1; }
 fhasnt_in() { grep -qF -- "$1" && echo 1 || echo 0; }
 before_in() { # <a> <b> — 0 when a appears before b on stdin
@@ -265,6 +275,20 @@ assert "…and so does a project with no project.md at all" "$(card "$BOUT" 'No 
 assert "a \`..\` slug reads nothing outside projects/" "$(fhasnt '1999-12-31' "$BOUT")"
 assert "…and the file it would have read really is there" \
   "$(yes_if test -s "$TMP/board15/project.md")"
+# …AND IT SITS WITH THE TITLE. The date qualifies the title — "this project, started
+# then" — and reading it used to mean crossing six count chips to the far end of the
+# line. ORDER is the whole assertion, so it is made on the order and not on presence.
+assert "the date follows the title immediately"      \
+  "$(card "$BOUT" 'Two decisions' | flat | fhas_in 'Two decisions</span><span class="pdate"')"
+assert "…with its treatment unchanged"               "$(fhas 'class="pdate" title="Project created' "$BOUT")"
+# THE CHIPS KEEP THEIR PLACE. They are still after the date and still before the ✕, and
+# `.counts` now takes the free space itself instead of being pushed right by `.ptitle`.
+assert "…and the chips still follow it"              \
+  "$(card "$BOUT" 'Two decisions' | before_in '<span class="pdate"' 'class="c you"')"
+assert "…still ahead of the ✕"                       \
+  "$(card "$BOUT" 'Two decisions' | before_in 'class="c you"' 'class="pclose"')"
+assert "…and .counts holds its own end of the line"  "$(fhas '.counts{display:flex;gap:.35rem;flex-wrap:wrap;margin-left:auto}' "$BOUT")"
+assert "…which needs .ptitle to stop growing"        "$(fhas '.ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto' "$BOUT")"
 
 echo "== the ✕ copies a command and can never close anything =="
 assert "it copies /close-project <slug>"             "$(fhas 'data-copy="/close-project wants-me"' "$BOUT")"
@@ -538,6 +562,171 @@ assert "…keeping its own Q handle"                   "$(card "$TM" 'Terminal a
 # close is exactly the case `.proj.fin.wants` exists for. The guard must not reach it.
 assert "a finished project still proposes its close" "$(card "$TM" 'Finished and proposing' | fhas_in 'class="verb">close')"
 assert "…and is still marked as wanting you"         "$(fhas '<details class="proj fin wants">' "$TM")"
+
+# ---------------------------------------------------------------------------
+# THE TASK ROW: THE JITTER IS THE DEFECT, NOT THE LINE COUNT.
+#
+# `014-banner-reaches-the-human Some title` and `001-local-board Some title` were two
+# inline runs in one cell, so every title started at a different x and the column read
+# as ragged; and the row reflowed between one and two lines as the window moved, so some
+# rows were one line and their neighbours two. Both are the same thing — nothing about
+# the row is fixed — and both are fixed by giving the filename a column of its own.
+#
+# A RENDERED PAGE CANNOT BE MEASURED HERE. There is no layout engine in this harness, so
+# what is asserted is the two things that DECIDE the layout and that a regression would
+# have to break: the markup that makes two columns possible at all (a flex wrapper
+# INSIDE the <td> — `display:flex` on the cell itself would take it out of the table's
+# column sizing), and the rules that switch between them. Anything past that is a claim
+# about pixels this file must not pretend to make; the PR body says what was looked at.
+mkdir -p "$TMP/rows"
+mk "$TMP/rows" "rows" '[
+ {"slug":"jitter","title":"Ragged titles","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001-local-board","title":"Short name, long title that will wrap",
+            "status":"draft","assignee":"software-engineer","awaiting":"","open_questions":0,
+            "advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]},
+           {"id":"task-017-write-for-a-human-who-will-not-read","title":"Longest filename present",
+            "status":"done","assignee":"qa-reviewer","awaiting":"","open_questions":0,
+            "advisor_notes":0,"depends_on":[],"in_flight":false,
+            "prs":[{"repo":"o/r","number":75,"url":"https://github.com/o/r/pull/75"}]}]}]'
+RW="$TMP/rows.html"
+rwrc=0; bash "$GEN" --out "$RW" "$TMP/rows" >/dev/null 2>&1 || rwrc=$?
+
+echo "== a task row has a filename column, not two inline runs =="
+assert "the fixture renders and exits 0"             "$(eq "$rwrc" 0)"
+assert "the cell holds a flex wrapper, not the flex itself" \
+  "$(fhas '<td><div class="trow"><span class="tid">' "$RW")"
+assert "…and the title lives in its own second column" "$(fhas '</span><div class="tmain">' "$RW")"
+assert "…for every task row, not just the first"     \
+  "$(eq "$(grep -oF '<div class="trow">' "$RW" | wc -l | tr -d ' ')" 2)"
+# NARROW IS THE DEFAULT, and that is what makes "uniform" true by construction rather
+# than by luck: the base rule is a COLUMN, so below the breakpoint there is no width at
+# which one row is one line and the next is two.
+assert "the base rule stacks filename over title"    "$(fhas '.trow{display:flex;flex-direction:column;' "$RW")"
+assert "…and .tmain stacks inside it"                "$(fhas '.tmain{display:flex;flex-direction:column;' "$RW")"
+# ≥1200px: a FIXED filename column, so every title starts at the same x. 41ch = the 39
+# characters of `017-write-for-a-human-who-will-not-read`, the longest filename actually
+# present in this bundle, plus a 2ch gutter — `.tid` is monospaced, so 1ch is one
+# character exactly. The fixture renders that very filename so the number is anchored to
+# something real rather than to a comment.
+tidrule() { python3 - "$1" <<'PYR'
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r"@media \(min-width:1200px\)\{(.*?)\n\}", src, re.S)
+sys.stdout.write(m.group(1) if m else "")
+PYR
+}
+assert "the switch is at 1200px"                     "$(fhas '@media (min-width:1200px){' "$RW")"
+assert "…where the row becomes a row"                "$(tidrule "$RW" | fhas_in '.trow{flex-direction:row')"
+assert "…the filename column is fixed at 41ch"       "$(tidrule "$RW" | fhas_in 'flex:0 0 41ch')"
+assert "…and the title column takes the rest"        "$(tidrule "$RW" | fhas_in '.tmain{flex:1 1 auto}')"
+assert "…41ch really covers the longest name present" "$(yes_if python3 -c "
+import sys
+sys.exit(0 if len('017-write-for-a-human-who-will-not-read') == 39 else 1)")"
+assert "…and that name really is on the page"        "$(fhas '>017-write-for-a-human-who-will-not-read</span>' "$RW")"
+# DEGRADATION when a longer name appears later: the column does not grow and the title
+# column is not pushed — the name wraps inside its own 41ch. Without both of these a
+# longer filename either overflows the cell or shoves every title to a new x, which is
+# the property the whole block exists to hold.
+assert "…a longer name wraps inside its own column"  "$(tidrule "$RW" | fhas_in 'overflow-wrap:anywhere')"
+assert "…rather than widening it"                    "$(tidrule "$RW" | fhas_in 'min-width:0')"
+# VERTICALLY CENTRED. Against a two-line title the assignee, the state and the PR link
+# sat pinned to the first line and read as though they belonged to it.
+assert "cells are centred, not baselined"            "$(fhas 'td{padding:.4rem .45rem;vertical-align:middle;' "$RW")"
+assert "…and no baseline rule survives on td"        "$(fhasnt 'td{padding:.4rem .45rem;vertical-align:baseline' "$RW")"
+
+echo "== the promote control leads the row, and looks like one at rest =="
+assert "it sits after the filename, above the title" "$(flat < "$RW" | fhas_in '<div class="tmain"><button class="promote"')"
+assert "…before the title button, not after it"      "$(python3 -c "
+import sys
+t = open('$RW').read()
+sys.exit(0 if t.index('class=\"promote\"') < t.index('Short name, long title') else 1)" && echo 0 || echo 1)"
+assert "…only on a draft row"                        "$(eq "$(grep -oF 'class="promote"' "$RW" | wc -l | tr -d ' ')" 1)"
+assert "…still only COPYING a prompt"                "$(fhas 'class="promote" data-copy="In the ai-bridge instance, promote' "$RW")"
+# THE STATES ARE INVERTED. The accent outline is the RESTING appearance — a control that
+# only looks like one under a pointer is invisible to a touch screen — and hover drops
+# the accent for a filled neutral, so hovering says "you are on this one" instead of
+# "this is a button". Both halves are asserted: a rule that adds the accent at rest and
+# leaves it on hover would pass the first alone.
+assert "the accent is the resting appearance"        "$(fhas 'border-color:var(--accent);color:var(--accent);background:transparent}' "$RW")"
+assert "…and hover drops it for a neutral fill"      "$(fhas '.promote:hover,.promote:focus-visible{border-color:var(--ink);color:var(--ink);' "$RW")"
+assert "…so no greenish fill arrives on hover"       "$(yes_if python3 -c "
+import re, sys
+m = re.search(r'\.promote:hover[^{]*\{([^}]*)\}', open('$RW').read())
+sys.exit(0 if m and 'accent' not in m.group(1) and 'var(--ok)' not in m.group(1) else 1)")"
+
+echo "== a waiting row carries the task filename, so the file can be found =="
+assert "the filename precedes the title"             \
+  "$(rail_of "$TM" 'Terminal and live' | flat | fhas_in '<span class="tid">014-still-live</span><span class="what">Still live</span>')"
+assert "…with task- and .md both dropped"            "$(rail_of "$TM" 'Terminal and live' | fhasnt_in '>task-014')"
+# A close item has no task id at all, so it gets no filename rather than an empty span.
+assert "…and a close item carries none"              "$(rail_of "$TM" 'Finished and proposing' | fhasnt_in 'class="tid"')"
+assert "…the close item really is there"             "$(rail_of "$TM" 'Finished and proposing' | fhas_in 'class="verb">close')"
+
+echo "== the waiting block separates from the card holding it =="
+# ITS FILL WAS 1.12:1 AGAINST THE CARD — `--signal` 8% on `--surface`, against a
+# `.proj.wants` head of 7% of the same hue, so the one block that says "you are the
+# blocker" dissolved into its container. Now `--signal` 16% on `--sunk`: 1.42:1 in light
+# and 1.47:1 in dark. Same hue, deeper and desaturated — a second accent would compete
+# with the one that already means "needs you" everywhere on this page.
+assert "the fill is built on the recessed neutral"   "$(fhas 'background:color-mix(in srgb,var(--signal) 16%,var(--sunk))' "$BOUT")"
+assert "…and is no longer the card's own surface"    "$(fhasnt 'color-mix(in srgb,var(--signal) 8%,var(--surface))' "$BOUT")"
+assert "the amber left rail is kept"                 "$(fhas '.rail{border-left:.22rem solid var(--signal)' "$BOUT")"
+assert "…and so is the WAITING FOR YOU · N label"    "$(fhas '<h2>Waiting for you · ' "$BOUT")"
+assert "…rendered upper case, as it reads on the page" "$(fhas '.rail h2{margin:0 0 .7rem;font-size:.68rem;text-transform:uppercase' "$BOUT")"
+# NO SECOND ACCENT. Every colour the block uses is --signal, --ink, --sunk, --surface,
+# --line or --muted; --accent and --ok appearing inside a .rail rule would be a second
+# thing competing for "this one needs you".
+assert "no second accent enters the block"           "$(yes_if python3 -c "
+import re, sys
+src = open('$BOUT', encoding='utf-8').read()
+rules = re.findall(r'(?:^|\})\s*(\.rail[^{}]*)\{([^}]*)\}', src)
+bad = [s for s, b in rules if 'var(--accent)' in b or 'var(--ok)' in b or 'var(--stop)' in b]
+sys.exit(0 if rules and not bad else 1)")"
+# THE LABEL MOVED WITH THE FILL. Plain --signal on the deeper ground is 3.93:1, under AA
+# for text this small; 22% of --ink brings it to 5.22:1 light / 6.05:1 dark and keeps it
+# amber. Mixing toward --ink rather than toward black is what makes ONE rule right in
+# both themes, the same trick .c.you uses.
+assert "the label is darkened, not left at 3.93:1"   "$(fhas 'color:color-mix(in srgb,var(--signal) 78%,var(--ink))' "$BOUT")"
+# THE BREADCRUMB WAS THE LEAST LEGIBLE THING IN THE BLOCK, measurably: --dim on .ask's
+# surface is 3.18:1 in light and 3.79:1 in dark, both under AA's 4.5:1 for .75rem text.
+assert "the breadcrumb is off --dim"                 "$(fhas '.where{width:100%;font-size:.75rem;color:var(--muted)}' "$BOUT")"
+assert "…and --dim is not still on it"               "$(fhasnt '.where{width:100%;font-size:.75rem;color:var(--dim)}' "$BOUT")"
+# THE RATIOS ARE COMPUTED HERE, not copied from the PR body — a number quoted in prose
+# and nowhere else is a number nobody re-checks. Both themes, since the palette is
+# redefined for dark and a fix that only holds in one is half a fix.
+contrast_ok() { # <fg> <bg> <min> -> 0 when the pair clears <min>
+  python3 - "$1" "$2" "$3" <<'PYC'
+import sys
+def lin(c):
+    c /= 255
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+def lum(h):
+    h = h.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+a, b = lum(sys.argv[1]), lum(sys.argv[2])
+lo, hi = sorted((a, b))
+sys.exit(0 if (hi + 0.05) / (lo + 0.05) >= float(sys.argv[3]) else 1)
+PYC
+}
+# --muted on --surface, the pair the breadcrumb actually renders as (.ask is --surface).
+assert "…clearing AA in light (5.98:1)"              "$(yes_if contrast_ok '#5c6470' '#ffffff' 4.5)"
+assert "…and in dark (6.67:1)"                       "$(yes_if contrast_ok '#98a1ac' '#171a1e' 4.5)"
+# NON-VACUITY: the colour it replaced must FAIL the same check, or this asserts nothing
+# about the change.
+assert "…where --dim failed it in light (3.18:1)"    "$(contrast_ok '#89919c' '#ffffff' 4.5 && echo 1 || echo 0)"
+assert "…and failed it in dark too (3.79:1)"         "$(contrast_ok '#6d7681' '#171a1e' 4.5 && echo 1 || echo 0)"
+# The label's new colour, resolved as the browser would resolve the color-mix, against
+# the fill resolved the same way.
+assert "the label clears AA on the new fill, light"  "$(yes_if contrast_ok '#7e4811' '#dfd7cd' 4.5)"
+assert "…and dark"                                   "$(yes_if contrast_ok '#deac6d' '#3d362f' 4.5)"
+assert "…where plain --signal would not, in light"   "$(contrast_ok '#9c560d' '#dfd7cd' 4.5 && echo 1 || echo 0)"
+# SEPARATION from the card is the point of the whole change, so it is measured too —
+# as a ratio against --surface, which is what the card is.
+assert "the fill separates from the card, light"     "$(yes_if contrast_ok '#dfd7cd' '#ffffff' 1.35)"
+assert "…and dark"                                   "$(yes_if contrast_ok '#3d362f' '#171a1e' 1.35)"
+assert "…where the old fill did not"                 "$(contrast_ok '#f7f1ec' '#ffffff' 1.35 && echo 1 || echo 0)"
 
 echo "== advisor_notes is information, not a demand =="
 assert "an untriaged concern shows as a concern pill" "$(fhas 'concern' "$OUT")"
