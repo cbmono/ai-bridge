@@ -248,8 +248,9 @@ emit_json() { # <exit-status>
   # unterminated, and half a string spliced into an object is the malformed output this check
   # exists to make impossible. Falling back to the plain banner is a channel regression,
   # never a parse error, and it is the same text the reader would have got before this block
-  # existed — stripped, because a fallback that dumps escape codes into a pipe read by a
-  # model is the failure this whole file is written around.
+  # existed. `${plain:-$body}` and not `$plain`: with no `sed` on the machine there is nothing
+  # to strip WITH, and a banner carrying its escape codes into that fallback is a cosmetic
+  # loss on a channel nothing renders — where losing the banner would not be.
   case "$enc" in '"'*'"') ;; *) printf '%s\n' "${plain:-$body}"; exit "$1" ;; esac
   case "$encp" in '"'*'"') ;; *) printf '%s\n' "${plain:-$body}"; exit "$1" ;; esac
   printf '{"systemMessage":%s,"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \

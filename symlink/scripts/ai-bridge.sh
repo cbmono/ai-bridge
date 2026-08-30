@@ -162,7 +162,6 @@ if [ "$FORM" != banner ]; then
       --list)        LIST=1; shift ;;
       --style)       [ $# -ge 2 ] || { echo "ai-bridge: --style needs a value" >&2; exit 2; }; STYLE="$2"; shift 2 ;;
       --style=*)     STYLE="${1#--style=}"; shift ;;
-      --no-color)    STYLE=plain; shift ;;
       --fetch)       FETCH=1; shift ;;
       -h|--help)     usage; exit 0 ;;
       *)             echo "ai-bridge: unknown argument: $1" >&2; usage; exit 2 ;;
