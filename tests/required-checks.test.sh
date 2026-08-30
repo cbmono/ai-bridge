@@ -39,12 +39,16 @@ case "${1:-}" in
   pr)
     case "${2:-}" in
       view)
-        # Two different `pr view` calls now reach this stub: required-checks.sh asks for
-        # a TSV of PR facts, review-clearance.sh asks for the PR's own facts as JSON.
-        # Branch on the field list, not on argument position — and not on `comments`,
-        # which review-clearance.sh no longer asks `pr view` for at all. `author` is the
-        # field only it wants; both ask for headRefOid.
-        if printf '%s\n' "$@" | grep -q author; then
+        # THREE different `pr view` calls now reach this stub: required-checks.sh asks
+        # for a TSV of PR facts, review-clearance.sh asks for the PR's own facts as
+        # JSON, and pr-body-clearance.sh asks for the BODY as JSON. Branch on the field
+        # list, not on argument position — and not on `comments`, which
+        # review-clearance.sh no longer asks `pr view` for at all. `body` and `author`
+        # are each wanted by exactly one caller; all three ask for headRefOid.
+        if printf '%s\n' "$@" | grep -q body; then
+          [ -f "$FIX/pr_body_json" ] || { echo "no PR" >&2; exit 1; }
+          cat "$FIX/pr_body_json"
+        elif printf '%s\n' "$@" | grep -q author; then
           [ -f "$FIX/pr_json" ] || { echo "no PR" >&2; exit 1; }
           cat "$FIX/pr_json"
         else
@@ -155,11 +159,32 @@ reviewed_pr() {
     > "$FIX/reviews_json"
 }
 
-setup() { # start from: a readable, REVIEWED PR, no protection, no declared list, no diff
+# The PR's BODY, as pr-body-clearance.sh reads it (precondition 3). The default is a
+# CONFORMING one for the same reason `reviewed_pr` carries a review: clearance is asked
+# for on every pull request, so a fixture with a malformed body would make every
+# "-> clear" case below refuse for a reason none of them is about. `pr_body` overrides it
+# where the body is the point being tested.
+CONFORMING_BODY='## Description (TL;DR)
+Adds the thing, and the harness covers it.
+
+| Criterion | ✓ | Verified by |
+|---|---|---|
+| it works | ✓ | `a.test.sh` 3/0 |'
+
+pr_body() { # <body text> — at <head>, defaulting to whatever pr_meta says
+  [ "$HAVE_JQ" = 1 ] || return 0
+  jq -n --arg h "${2:-$HEAD_SHA}" --arg b "$1" \
+    '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
+      body:$b}' > "$FIX/pr_body_json"
+}
+
+setup() { # start from: a readable, REVIEWED PR with a conforming body, no protection,
+          # no declared list, no diff
   rm -rf "$FIX"; mkdir -p "$FIX"
   printf 'https://github.com/acme/widgets/pull/42\tmain\t%s\n' "$HEAD_SHA" > "$FIX/pr_meta"
   : > "$FIX/checks"
   reviewed_pr
+  pr_body "$CONFORMING_BODY"
 }
 
 checks() { printf '%s\n' "$@" > "$FIX/checks"; }        # each arg: "bucket<TAB>name"
@@ -311,6 +336,9 @@ reviewer_pr() { # <body-file>|"" — the artifacts review-clearance.sh will read
   jq -n --arg h "$CR_HEAD" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
       author:{login:"dev"}}' > "$FIX/pr_json"
+  # It moves the head, so the PR-body fixture has to follow it or precondition 3 refuses
+  # on a stale head in every case this helper sets up.
+  pr_body "$CONFORMING_BODY" "$CR_HEAD"
   if [ -n "${1:-}" ]; then
     jq -n --rawfile b "$1" '[{user:{login:"coderabbitai"}, body:$b}]' > "$FIX/comments_json"
   else
@@ -543,6 +571,10 @@ two_vendors() { # <coderabbit-body> <sourcery-body>
   jq -n --rawfile a "$1" --rawfile b "$2" \
     '[{user:{login:"coderabbitai"}, body:$a},
       {user:{login:"sourcery-ai"},  body:$b}]' > "$FIX/comments_json"
+  # Same reason as reviewer_pr: this helper moves the head, so the PR-body fixture has to
+  # follow it or precondition 3 refuses on a stale head rather than on anything this
+  # section is about.
+  pr_body "$CONFORMING_BODY" "$CR_HEAD"
 }
 
 setup; checks "pass	Build" "pass	CodeRabbit" "pass	Sourcery review"
@@ -655,6 +687,10 @@ sibling_case "…including the deleted third answer -> refuse" \
 REALSIB="$TMP/realsib"; mkdir -p "$REALSIB"
 cp "$SCRIPT" "$REALSIB/required-checks.sh"
 cp "$(dirname "$SCRIPT")/review-clearance.sh" "$REALSIB/review-clearance.sh"
+# Precondition 3's sibling travels with the other two: this control asserts that an
+# INTACT install clears, so a copy missing one of the three would make it pass for the
+# wrong reason (or, as here, fail for one).
+cp "$(dirname "$SCRIPT")/pr-body-clearance.sh" "$REALSIB/pr-body-clearance.sh"
 setup; checks "pass	Build"; declared "Build"
 out="$("$REALSIB/required-checks.sh" 42 2>&1)"; rc=$?
 if [ "$rc" -eq 0 ]; then

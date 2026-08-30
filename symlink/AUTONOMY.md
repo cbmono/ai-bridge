@@ -124,6 +124,37 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    box — is a criterion nobody verified (`SCHEMA.md`), and green CI is not evidence for one
    no check covers. This is the condition that catches the class of bug deterministic checks
    cannot see.
+
+   **And the table has to BE THERE for that to mean anything**, which is a separate
+   question with a separate reader. Two halves, stated together because neither is worth
+   anything without the other, and **neither can talk the loop into a merge** — which is
+   what the rule above forbids: both are one-way, able only to *refuse*. No wording anyone
+   can put in a body makes this precondition pass that would not have passed without it.
+
+   **That the shape is there at all is `scripts/pr-body-clearance.sh <pr> --head
+   <verified-sha>` exiting 0**, and `scripts/required-checks.sh` asks it for every PR it
+   is about to clear, exactly as it asks precondition 2. It reads the **actual body from
+   the host** and requires a **TL;DR line** (the heading `## Description (TL;DR)`, a
+   leading `**TL;DR**`, or the bare token opening a line) **and a well-formed criteria
+   table** — a header row, a delimiter row with the same number of cells, at least one
+   data row, and at least one `✓`/`✗` among them, read from a rendering with fenced code
+   blocks removed so a body that merely *quotes* the convention's example does not clear
+   on the example. It refuses at **exit 1** naming which element is missing, and at
+   **exit 2** when the body cannot be fetched or read — unreadable is never clearance.
+   It exists because the short-form rule's only reader used to be a test asserting the
+   rule **is named in `CONVENTIONS.md`**, and five hours after that rule merged an agent
+   that had it opened a 14,673-character description.
+
+   **It refuses on missing STRUCTURE and never on length**, and that is deliberate: a
+   1,137-line change may honestly need more than a tweet, `CONVENTIONS.md` already permits
+   "longer when it genuinely needs it", and a gate that punished size would be wrong on
+   exactly the pull requests that most need explaining. **The 14,673-character body that
+   motivated it PASSES if it carries both elements.** The character count is printed as
+   information; no exit code is derived from it.
+
+   **Whether every row is `✓` stays this clause's own job**, not the predicate's — one
+   question, one reader, so the repo never ends up with two answers to it. The predicate
+   asks only whether the artifact the clause reads is present and well-formed.
 4. **The head is still the verified SHA.**
 
 Then merge that exact commit:
