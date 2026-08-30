@@ -393,6 +393,36 @@ no entry prints nothing and exits 1 — the caller then inherits the session mod
 than guessing. This applies to **every** dispatch, including an ad-hoc one from a main
 session, which is the path the prose version of this rule never reached.
 
+### One tick at a time (the dispatch lock)
+
+`/pm-loop` has always promised at most one PM tick at a time, and until 2026-08-30 that
+promise was kept by the launching session **remembering** it had dispatched. Memory does
+not survive a compaction, a `--resume`, or a human asking "what's next?" — measured
+2026-08-29, two ticks ran concurrently for about 34 minutes and did the same refinement
+work twice. The tick's own ledger check cannot close that window either: it runs *inside*
+the tick, seconds to minutes after the dispatch decision, and in between the ledger
+truthfully reports nothing running.
+
+So the launcher takes a lock immediately before it dispatches — `scripts/tick-lock.sh
+acquire`, which creates the gitignored `.tick-lock` with `O_EXCL`, so the check and the
+write are one operation with nothing to interleave. The file carries an ISO-8601 UTC
+timestamp and the dispatched agent id, so "is this stale?" is **computed from the file**
+rather than judged. Past `TICK_LOCK_STALE_MINUTES` (default 120) the loop neither deletes
+the lock nor assumes it is live: it prints the timestamp and the agent and asks you.
+Deleting it silently would re-open the double-dispatch; adopting it silently is the
+pressure that makes a stalled loop tempting to override. `scripts/tick-lock.sh status`
+reads it without touching it, and `release` clears it once you have decided.
+
+**Absence is never an error.** No lock file means the launcher dispatches exactly as it
+always did, in silence — the same absence-is-off contract `SNAPSHOT.json` and the board
+link keep.
+
+**It is per clone, and it is not a cross-machine lock.** One gitignored file in one
+working tree, which says nothing about the other human's clone of a shared bundle — two
+loops from two clones is the *supported design*, and what stops them dispatching the same
+task is `scripts/task-owner.sh`. And it bounds **PM ticks only**: the cap below is a
+different limit, and a held lock never blocks the role agents that tick dispatched.
+
 ### Concurrency
 
 `maxAgentsInFlight` (default **10**) caps how many role agents the PM runs at once. With
