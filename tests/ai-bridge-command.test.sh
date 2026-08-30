@@ -79,6 +79,21 @@ mkinstance() {
   GIT -C "$1" commit -qm "instance"
 }
 
+# EVERY `fix` IN THIS FILE TAKES THIS COPY AS ITS TEMPLATE, NEVER $TPL, and the reason is a
+# measured false pass. `install.sh` REFUSES to run from a git worktree (its symlinks would
+# point into a tree that can be removed), so on a developer machine where $TPL is a
+# worktree `fix` silently stamped nothing — and §4/§5 then asserted "fix did not touch the
+# config / the lock" about a run that had not acted at all. The same file on CI, where the
+# checkout is a plain clone, DID stamp, and three assertions that had never really been
+# exercised failed there. A plain-directory copy stamps identically in both places.
+#
+# It is also what keeps the suite off the repo under test: `fix` pulls the template clone,
+# and with $TPL that is `git pull` against the real checkout and the network. The copy
+# carries no `.git`, so that row reports "not a git checkout" and reaches nothing.
+SRC="$TMP/tplcopy"; mkdir -p "$SRC"
+( cd "$TPL" && tar cf - --exclude .git . ) | ( cd "$SRC" && tar xf - )
+[ -f "$SRC/install.sh" ] || { echo "ai-bridge-command.test: the template copy is missing install.sh" >&2; exit 2; }
+
 # =======================================================================================
 echo "== 1. the bare form INVOKES the banner — it does not reproduce it =="
 # =======================================================================================
@@ -151,6 +166,14 @@ ok "…and names the added file when the range has one" \
   "$(printf '%s\n' "$S2" | grep -c 'symlink/scripts/two.sh' | tr -d ' ')" 1
 ok "…while the edited file is NOT reported as added (that is the whole distinction)" \
   "$(printf '%s\n' "$S2" | grep -c '^      A.*one\.sh' | tr -d ' ')" 0
+# AN UNASKED QUESTION IS ALSO A FACT. $RTPL ships no check-template-version.sh, so the
+# VERSION half of the template row cannot be answered — and staying silent about that would
+# let a level commit graph print a clean row while half the question went unasked. Raised in
+# review on this branch.
+ok "an unavailable version checker is REPORTED, not skipped" \
+  "$(printf '%s\n' "$S1" | grep -c 'cannot compare VERSION drift' | tr -d ' ')" 1
+ok "…as a fact, not a warning (it never reaches the banner)" \
+  "$(printf '%s\n' "$S1" | grep -c '^⚠.*cannot compare VERSION drift' | tr -d ' ')" 0
 
 # =======================================================================================
 echo "== 3. ONE list: check and fix cannot drift apart =="
@@ -166,7 +189,7 @@ ok "every row declares one of the three tiers" \
 ok "…and every row declares whether it may speak on the banner path" \
   "$(printf '%s\n' "$LIST" | awk -F'\t' '$3!="yes" && $3!="no"' | grep -c . | tr -d ' ')" 0
 
-FIXOUT="$(bash "$SH" fix --instance "$INST1" --template "$TPL" 2>&1)"
+FIXOUT="$(bash "$SH" fix --instance "$INST1" --template "$SRC" 2>&1)"
 missing_fix=""
 for id in $ids; do
   printf '%s\n' "$FIXOUT" | grep -q -- "── $id \[" || missing_fix="${missing_fix:+$missing_fix }$id"
@@ -205,9 +228,9 @@ printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$INST2/instance.conf
 
 cfg_before="$(sha "$INST2/instance.config.json")"
 loc_before="$(sha "$INST2/instance.config.local.json")"
-idx_before="$(GIT -C "$INST2" status --porcelain; GIT -C "$INST2" rev-parse HEAD)"
+head_before="$(GIT -C "$INST2" rev-parse HEAD)"
 
-CHK2="$(bash "$SH" check --instance "$INST2" --template "$TPL" 2>&1)"
+CHK2="$(bash "$SH" check --instance "$INST2" --template "$SRC" 2>&1)"
 ok "check SEES the uncommitted config"                     "$(printf '%s\n' "$CHK2" | grep -c 'instance.config.json has uncommitted changes' | tr -d ' ')" 1
 # Scoped to the warning line itself. `maxPrLoc` also appears in the config-LAYERS row's
 # per-key listing, which is a different fact about a different question — counting both
@@ -217,8 +240,14 @@ ok "…and names the key that moved, not its value" \
 ok "…without printing the value anywhere"                  "$(printf '%s\n' "$CHK2" | grep -c '500' | tr -d ' ')" 0
 ok "…and frames it as a question, not a defect"            "$(printf '%s\n' "$CHK2" | grep -c 'QUESTION, NOT A DEFECT' | tr -d ' ')" 1
 
-FIX2="$(bash "$SH" fix --instance "$INST2" --template "$TPL" 2>&1)"
+FIX2="$(bash "$SH" fix --instance "$INST2" --template "$SRC" 2>&1)"
 ok "fix reported it"                                       "$(printf '%s\n' "$FIX2" | grep -c 'config-uncommitted \[ambiguous\]' | tr -d ' ')" 1
+# THE ASSERTION THAT MAKES THE REST OF THIS SECTION MEAN ANYTHING: the same run DID act on
+# the idempotent tier. Without it, "fix left the config alone" is also satisfied by a `fix`
+# that could not act at all — which is exactly how this section passed on a machine where
+# install.sh refused the template and failed on CI, where it did not.
+ok "…in a run that DID act on the idempotent tier (not a vacuous non-action)" \
+  "$(printf '%s\n' "$FIX2" | grep -c 'running: bash .*install.sh' | tr -d ' ')" 1
 # Under the row it belongs to, not merely somewhere in the output: awk takes the lines
 # between this row's header and the next one. A bare count would pass with the refusal
 # attached to the wrong check, which is the confusion the tiers exist to prevent.
@@ -227,7 +256,13 @@ ok "…and said so under that row, not as a footnote" \
      | grep -c 'NOT ACTED ON' | tr -d ' ')" 1
 ok "instance.config.json is byte-identical after fix"      "$(sha "$INST2/instance.config.json")" "$cfg_before"
 ok "instance.config.local.json is byte-identical after fix" "$(sha "$INST2/instance.config.local.json")" "$loc_before"
-ok "…and nothing was staged, committed or reverted"        "$(GIT -C "$INST2" status --porcelain; GIT -C "$INST2" rev-parse HEAD)" "$idx_before"
+# NOT WRITTEN (the two hashes above), NOT STAGED, NOT COMMITTED — asked of the two files by
+# name rather than of the whole `status --porcelain`. The stamp this same run performs
+# legitimately turns the fixture's `SCHEMA.md` stub into a symlink, so a whole-tree
+# comparison would fail on a correct `fix`; the criterion is about these two paths.
+ok "…and neither config file was staged"                   "$(GIT -C "$INST2" diff --cached --name-only -- instance.config.json instance.config.local.json | grep -c . | tr -d ' ')" 0
+ok "…and the tracked one is still modified-but-uncommitted" "$(GIT -C "$INST2" status --porcelain -- instance.config.json)" " M instance.config.json"
+ok "…and nothing was committed"                            "$(GIT -C "$INST2" rev-parse HEAD)" "$head_before"
 ok "…and the local file still exists at all"               "$(yn test -f "$INST2/instance.config.local.json")" yes
 
 # =======================================================================================
@@ -251,12 +286,15 @@ ok "…which tick-lock.sh reports as exit 2"                 "$lockrc" 2
 
 lock_before="$(sha "$INST3/.tick-lock")"
 claim_before="$(sha "$INST3/.tick-lock.claim")"
-CHK3="$(bash "$SH" check --instance "$INST3" --template "$TPL" 2>&1)"
+CHK3="$(bash "$SH" check --instance "$INST3" --template "$SRC" 2>&1)"
 ok "check SEES the stale lock"                             "$(printf '%s\n' "$CHK3" | grep -c 'tick lock needs YOUR decision' | tr -d ' ')" 1
 ok "…and names release as the human's override"            "$(printf '%s\n' "$CHK3" | grep -c 'release --instance' | tr -d ' ')" 1
 
-FIX3="$(bash "$SH" fix --instance "$INST3" --template "$TPL" 2>&1)"
+FIX3="$(bash "$SH" fix --instance "$INST3" --template "$SRC" 2>&1)"
 ok "fix reported it at the human tier"                     "$(printf '%s\n' "$FIX3" | grep -c 'tick-lock \[human\]' | tr -d ' ')" 1
+# Same non-vacuity guard as §4: the lock survived a run that was acting, not one that
+# happened to be unable to act.
+ok "…in a run that DID act on the idempotent tier"         "$(printf '%s\n' "$FIX3" | grep -c 'running: bash .*install.sh' | tr -d ' ')" 1
 ok ".tick-lock still exists after fix"                     "$(yn test -f "$INST3/.tick-lock")" yes
 ok "…byte-identical"                                       "$(sha "$INST3/.tick-lock")" "$lock_before"
 ok ".tick-lock.claim still exists after fix"               "$(yn test -f "$INST3/.tick-lock.claim")" yes
@@ -302,11 +340,8 @@ ok "…naming the unwired row"                               "$(printf '%s\n' "$
 echo "== 7. fix ACTS on the idempotent tier — the other direction =="
 # =======================================================================================
 # A harness that only asserted the refusals would pass a `fix` that does nothing at all.
-# This one stamps a real instance from a real template copy and asserts the missing links
-# arrive. The template copy is a plain directory, not a worktree: install.sh refuses to run
-# from one, before any write.
-SRC="$TMP/tplcopy"; mkdir -p "$SRC"
-( cd "$TPL" && tar cf - --exclude .git . ) | ( cd "$SRC" && tar xf - )
+# This one stamps a real instance from the plain-directory template copy made at the top of
+# this file and asserts the missing links arrive.
 INST4="$TMP/inst4"; mkinstance "$INST4"
 ok "before fix: SCHEMA.md is the instance's own stub, not a link" "$(yn test -L "$INST4/SCHEMA.md")" no
 ok "before fix: no commit-as.sh"                           "$(yn test -e "$INST4/scripts/commit-as.sh")" no
@@ -322,6 +357,31 @@ ok "running fix twice changes nothing the second time"     "$([ "$snap1" = "$sna
 CHK4="$(bash "$SH" check --instance "$INST4" --template "$SRC" 2>&1)"
 ok "…and check now reports nothing left to stamp"          "$(printf '%s\n' "$CHK4" | grep -c 'nothing to stamp' | tr -d ' ')" 1
 
+# A COPY AT A MACHINERY PATH IS NOT STAMPED, and this is the case a presence test misses.
+# `install.sh` only ever symlinks a `symlink/` path, so a real file there is detached from
+# every future template pull while reading as present — the instance keeps calling it and
+# nothing says the template moved on. Raised in review on this branch: the check tested
+# `-e` first, so a copy counted as linked and `fix` skipped the installer forever.
+cp -f "$INST4/scripts/commit-as.sh" "$TMP/copy-of-commit-as.sh"
+rm -f "$INST4/scripts/commit-as.sh"
+cp "$TMP/copy-of-commit-as.sh" "$INST4/scripts/commit-as.sh"
+ok "the fixture really is a regular file, not a link"      "$(yn test -L "$INST4/scripts/commit-as.sh")" no
+CHK4C="$(bash "$SH" check --instance "$INST4" --template "$SRC" 2>&1)"
+ok "a COPIED machinery file is reported as not linked"     "$(printf '%s\n' "$CHK4C" | grep -c 'scripts/commit-as.sh' | tr -d ' ')" 1
+ok "…so the instance is no longer reported as fully stamped" "$(printf '%s\n' "$CHK4C" | grep -c 'nothing to stamp' | tr -d ' ')" 0
+# And the repair the row names actually repairs it: `install.sh` moves the copy aside and
+# links. A warning whose hint does not work would be worse than no warning.
+bash "$SH" fix --instance "$INST4" --template "$SRC" >/dev/null 2>&1
+ok "…and fix relinks it"                                   "$(yn test -L "$INST4/scripts/commit-as.sh")" yes
+# A DANGLING link stays a different defect — the banner's machinery probes own it, and
+# double-reporting it here is how a banner becomes wallpaper.
+ln -sfn "$SRC/symlink/scripts/does-not-exist.sh" "$INST4/.claude/hooks/session-banner.sh"
+CHK4D="$(bash "$SH" check --instance "$INST4" --template "$SRC" 2>&1)"
+ok "a DANGLING link is NOT counted as unstamped"           "$(printf '%s\n' "$CHK4D" | grep -c 'nothing to stamp' | tr -d ' ')" 1
+# Restored by hand, not by `fix`: the installer's retire-dangling sweep would REMOVE this
+# link rather than repoint it, and §8 below reads INST4 as the healthy instance.
+ln -sfn "$SRC/symlink/.claude/hooks/session-banner.sh" "$INST4/.claude/hooks/session-banner.sh"
+
 # =======================================================================================
 echo "== 8. the SessionStart path: silent when clean, bounded when not =="
 # =======================================================================================
@@ -332,7 +392,11 @@ echo "== 8. the SessionStart path: silent when clean, bounded when not =="
 # and a section that scrolled would lose that.
 B4="$(bash "$SH" check --only-problems --banner --instance "$INST4" --template "$SRC" 2>&1)"
 ok "a stamped instance adds BYTE-NOTHING to the banner"    "$(printf '%s' "$B4" | wc -c | tr -d ' ')" 0
-B1="$(bash "$SH" check --only-problems --banner --instance "$INST1" --template "$TPL" 2>&1)"
+# A FRESH instance, not INST1: §3 ran `fix` against INST1 and stamped it, so reusing it
+# here asserted "an unstamped instance speaks" about an instance that was no longer
+# unstamped — and it only ever passed where the stamp had silently refused to run.
+INST5="$TMP/inst5"; mkinstance "$INST5"
+B1="$(bash "$SH" check --only-problems --banner --instance "$INST5" --template "$SRC" 2>&1)"
 ok "an unstamped one does speak (not vacuous)"             "$([ -n "$B1" ] && echo yes || echo no)" yes
 ok "…and names the repair"                                 "$(printf '%s\n' "$B1" | grep -c 'install.sh' | tr -d ' ')" 1
 ok "…in at most 2 lines per failing check, plus a header"  "$([ "$(printf '%s\n' "$B1" | grep -c .)" -le 4 ] && echo yes || echo no)" yes
