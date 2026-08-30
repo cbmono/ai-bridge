@@ -190,6 +190,50 @@ ok "BOTH halves are said to bind"         "$(saw "$CONV_FLAT" '**Both halves bin
 ok "re-surveying the reviewer is refused" "$(saw "$CONV_FLAT" 'rather than surveying past reviewer behaviour to re-derive it')" yes
 
 echo
+echo "== 5d. the two-sided bar has a READER, and its numbers are the measured ones =="
+# 5b asserts the bar is WRITTEN. This asserts it is READ, which is a different claim and
+# the one that was false: the bar shipped 2026-08-29 with nothing checking it and a PR
+# breached it the next day. The numbers are pinned here as well as in the script because a
+# threshold whose derivation lives only in a shell constant reads as a round number to the
+# next agent, and a round number is the first thing somebody "adjusts".
+ok "the reader is named at the rule"      "$(saw "$CONV_FLAT" 'That bar has a reader, and the reader is the same one that reads the shape.')" yes
+ok "…it measures the EVIDENCE cell"       "$(saw "$CONV_FLAT" "measures **each criteria row's EVIDENCE cell**")" yes
+ok "…refuses at its own exit code"        "$(saw "$CONV_FLAT" 'refuses at **exit 3**')" yes
+ok "…and names the offending row"         "$(saw "$CONV_FLAT" 'names every offending row by index, length and criterion text')" yes
+ok "both bounds are stated as numbers"    "$(saw "$CONV_FLAT" '**Floor 13 bytes, ceiling 400 bytes.**')" yes
+ok "evidence goes in the LAST column"     "$(saw "$CONV_FLAT" '**Evidence goes in the LAST column**')" yes
+ok "the bound is ONE CELL, not the body"  "$(saw "$CONV_FLAT" '**The bound is on ONE CELL, never on the body.**')" yes
+ok "…stated as the OPPOSITE of a cap"     "$(saw "$CONV_FLAT" 'it is the opposite of a body cap')" yes
+ok "…and the criterion text is exempt"    "$(saw "$CONV_FLAT" 'The criterion text does not count against the bound')" yes
+ok "the corpus and the unit travel too"   "$(saw "$CONV_FLAT" 'Over 34 criteria rows of three real PRs at 2026-08-30T16:24Z (bytes, `LC_ALL=C`)')" yes
+ok "…with the per-PR measurements"        "$(saw "$CONV_FLAT" '#67 **92–377**, #70 **19–189**, #71 **160–341** plus **422, 462, 487**')" yes
+ok "the ceiling is derived, not chosen"   "$(saw "$CONV_FLAT" '400 is the midpoint of the empty band 378–421')" yes
+ok "the floor is derived, not chosen"     "$(saw "$CONV_FLAT" '13 is the midpoint of `see above` (9)')" yes
+ok "moving a number means re-measuring"   "$(saw "$CONV_FLAT" '**Moving either number means re-measuring**')" yes
+ok "a body in this style clears with room" "$(saw "$CONV_FLAT" '**A body written to this style clears it with room to spare**')" yes
+ok "…with that corroborating measurement"  "$(saw "$CONV_FLAT" 'has a longest row of **264 bytes** and a longest evidence cell of **189**')" yes
+ok "…so it refuses bloat, not thoroughness" "$(saw "$CONV_FLAT" 'The bound refuses bloat, not thoroughness.')" yes
+
+echo
+echo "== 5e. one house style, and the trim/record split that bounds every length rule =="
+# The split is the load-bearing half. "Be concise" without it is read as "write less
+# everywhere", which trims the commit message and the task doc — the two places the
+# reasoning was moved TO. Each surface is therefore named on the side it belongs to.
+ok "the style has a name"                 "$(saw "$CONV_FLAT" '**Write for a human who will not read it.**')" yes
+ok "…say the thing, then stop"            "$(saw "$CONV_FLAT" 'Say the thing, then stop')" yes
+ok "short sentences, one idea each"       "$(saw "$CONV_FLAT" '**Short sentences.** One idea each.')" yes
+ok "bullets, tables and icons"            "$(saw "$CONV_FLAT" '**Bullets, tables and icons over paragraphs.**')" yes
+ok "…two of a thing makes it a table"     "$(saw "$CONV_FLAT" 'More than two of a thing is a table.')" yes
+ok "lead with the outcome"                "$(saw "$CONV_FLAT" '**Lead with the outcome** — what happened and what it means')" yes
+ok "the split is stated as a rule"        "$(saw "$CONV_FLAT" '**Trim the transmission, never the record.**')" yes
+ok "…the CONCISE surfaces are listed"     "$(saw "$CONV_FLAT" '| PR bodies, review comments and replies, status reports, code comments | **concise**')" yes
+ok "…the RECORD surfaces are listed"      "$(saw "$CONV_FLAT" '| Task docs, commit messages, `Finding`s | **as long as the reasoning needs**')" yes
+ok "brevity never drops evidence"         "$(saw "$CONV_FLAT" '**Brevity is never an excuse to drop evidence, a criterion or a caveat.**')" yes
+ok "…it is licence to drop NARRATION"     "$(saw "$CONV_FLAT" 'It is licence to drop *narration*')" yes
+ok "…the record has no length limit"      "$(saw "$CONV_FLAT" 'neither of which has a length limit')" yes
+ok "…so reasoning has nowhere to be lost" "$(saw "$CONV_FLAT" '**So there is nowhere for reasoning to be lost:**')" yes
+
+echo
 echo "== 6. review replies: one line per finding, evidence listed, nothing restated =="
 ok "one line per finding fixed"           "$(saw "$CONV_FLAT" 'One line per finding **fixed**')" yes
 ok "one line per finding not taken"       "$(saw "$CONV_FLAT" 'one line per finding **not taken** (with the reason)')" yes
@@ -254,6 +298,12 @@ ok "mutant: narration-refused is gone"    "$(saw "$MUT_FLAT" '**Narration is not
 ok "mutant: the readability floor is gone" "$(saw "$MUT_FLAT" '**Short is the goal; cryptic is a failure**')" no
 ok "mutant: Q1's recorded answer is gone" "$(saw "$MUT_FLAT" 'or another external reviewer? **No.**')" no
 ok "mutant: both-halves-bind is gone"     "$(saw "$MUT_FLAT" '**Both halves bind**')" no
+# The reader and its two numbers live in this bullet too. Losing them is the worse half of
+# the cut: the bar would still READ as a rule while nothing measured it again.
+ok "mutant: the named reader is gone"     "$(saw "$MUT_FLAT" 'That bar has a reader, and the reader is the same one that reads the shape.')" no
+ok "mutant: the two bounds are gone"      "$(saw "$MUT_FLAT" '**Floor 13 bytes, ceiling 400 bytes.**')" no
+ok "mutant: the measurement is gone"      "$(saw "$MUT_FLAT" '400 is the midpoint of the empty band 378–421')" no
+ok "mutant: one-cell-not-the-body is gone" "$(saw "$MUT_FLAT" '**The bound is on ONE CELL, never on the body.**')" no
 
 echo
 echo "== 10. MUTATION: cut the review bullet, and the reply rules all flip =="
@@ -308,6 +358,26 @@ ok "mutant: character-for-character gone" "$(saw "$SHAPE_FLAT" '**That exact str
 ok "mutant: the named gate is gone"       "$(saw "$SHAPE_FLAT" 'pr-body-clearance.sh` looks for it at the clearance gate')" no
 ok "mutant: the one-line ⚠️ bound is gone" "$(saw "$SHAPE_FLAT" '**Each `⚠️` stays one line')" no
 ok "mutant: the ## Notes bound is gone"   "$(saw "$SHAPE_FLAT" '**one line per note, bounded exactly as the `⚠️` lines are.**')" no
+
+echo
+echo "== 14. MUTATION: cut the house-style bullet, and the trim/record split goes =="
+# The bullet most likely to be deleted as "meta", because it states a principle rather
+# than a procedure. What goes with it is the sentence that stops "be concise" from being
+# applied to the commit message and the task doc — so the surfaces on BOTH sides of the
+# split are asserted to vanish together, and the length rules that depend on the split
+# (the PR-body shape, the criteria bullet) are the control.
+strip_bullet "$CONV" '**Write for a human who will not read it.**' > "$TMP/conv-no-style.md"
+STYLE_FLAT="$(flatten "$TMP/conv-no-style.md")"
+ok "the mutation removed something"       "$([ "$(wc -c < "$TMP/conv-no-style.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
+ok "CONTROL: the PR-body shape survives"  "$(saw "$STYLE_FLAT" '**The heading `## Description (TL;DR)`, first**')" yes
+ok "CONTROL: the criteria bullet survives" "$(saw "$STYLE_FLAT" '**Required, always**')" yes
+ok "mutant: the style name is gone"       "$(saw "$STYLE_FLAT" '**Write for a human who will not read it.**')" no
+ok "mutant: short sentences are gone"     "$(saw "$STYLE_FLAT" '**Short sentences.** One idea each.')" no
+ok "mutant: tables-over-prose is gone"    "$(saw "$STYLE_FLAT" '**Bullets, tables and icons over paragraphs.**')" no
+ok "mutant: the trim/record split is gone" "$(saw "$STYLE_FLAT" '**Trim the transmission, never the record.**')" no
+ok "mutant: the CONCISE surfaces are gone" "$(saw "$STYLE_FLAT" '| PR bodies, review comments and replies, status reports, code comments | **concise**')" no
+ok "mutant: the RECORD surfaces are gone" "$(saw "$STYLE_FLAT" '| Task docs, commit messages, `Finding`s | **as long as the reasoning needs**')" no
+ok "mutant: evidence-is-never-cut is gone" "$(saw "$STYLE_FLAT" '**Brevity is never an excuse to drop evidence, a criterion or a caveat.**')" no
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

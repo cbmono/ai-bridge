@@ -95,6 +95,26 @@ in `cbmono/ai-bridge` enforces this.
   `origin` early (don't wait until the end) so an interrupted worktree loses nothing.
 - PR title format: `<type>: <subject> [<task-id>]` (OKF task id, e.g.
   `[ci-hardening/task-001]`). Target the default branch. **Never merge.**
+- **Write for a human who will not read it.** They scan. Say the thing, then stop —
+  a reader who wants depth will ask, and asking is cheap where re-reading to find the
+  point is not. **One house style, for every surface below:**
+  - **Short sentences.** One idea each.
+  - **Bullets, tables and icons over paragraphs.** More than two of a thing is a table.
+  - **Lead with the outcome** — what happened and what it means, before how you got there.
+
+  **Trim the transmission, never the record.** This split decides every length question
+  in this document, and getting it backwards deletes the reasoning the work runs on:
+
+  | Surface | Rule |
+  |---|---|
+  | PR bodies, review comments and replies, status reports, code comments | **concise** — a reader is deciding something, now |
+  | Task docs, commit messages, `Finding`s | **as long as the reasoning needs** — these are the durable record |
+
+  **Brevity is never an excuse to drop evidence, a criterion or a caveat.** It is licence
+  to drop *narration* — the story of how you got there — because that story is already
+  carried by the commit message and the task doc, both of which travel with the change and
+  neither of which has a length limit. **So there is nowhere for reasoning to be lost:**
+  every rule below that says "short" is telling you where to put it, not to delete it.
 - **The PR body has a required shape, and it is short.** Its reader is a **human deciding
   whether to merge** — not an agent reconstructing how you worked. **It opens with the
   literal heading `## Description (TL;DR)`.** Three required parts, in this order, plus an
@@ -186,6 +206,31 @@ in `cbmono/ai-bridge` enforces this.
   no person can act on fails just as surely as a paragraph neither of them needed. The
   answer is the owner's, so settle a row against the bar above rather than surveying past
   reviewer behaviour to re-derive it.
+  **That bar has a reader, and the reader is the same one that reads the shape.** The
+  ceiling and the floor shipped as prose on 2026-08-29 with nothing checking them, and a
+  day later a PR landed three criteria rows of 500–600 characters carrying shell
+  one-liners and their own reasoning — so `pr-body-clearance.sh` now measures **each
+  criteria row's EVIDENCE cell**, refuses at **exit 3**, and names every offending row by
+  index, length and criterion text. **Floor 13 bytes, ceiling 400 bytes.**
+  **Evidence goes in the LAST column** — `| Criterion | ✓ | Verified by |` — which is
+  where a reader looks for it and the only cell the bound reads.
+  **The bound is on ONE CELL, never on the body.** That is not a compromise between the
+  two, it is the opposite of a body cap: a body grows because the change is large, which
+  is honest; a row grows because its author put the reasoning in the table instead of the
+  task doc. Bounding the body would refuse the first. The criterion text does not count
+  against the bound either — you copy it verbatim, so it is not yours to shorten.
+  **Both numbers are measured, not round.** Over 34 criteria rows of three real PRs at
+  2026-08-30T16:24Z (bytes, `LC_ALL=C`): #67 **92–377**, #70 **19–189**, #71 **160–341**
+  plus **422, 462, 487**. 400 is the midpoint of the empty band 378–421 — 23 clear of the
+  largest honest cell, 22 short of the smallest offending one — and it fails exactly those
+  three rows and no other of the 34. 13 is the midpoint of `see above` (9), the longest
+  floor failure named above, and `CI run 1234 green` (17), the shortest evidence named
+  above. **Moving either number means re-measuring**; the harness pins all four boundary
+  values as fixtures, so a change made without the measurement goes red.
+  **A body written to this style clears it with room to spare** — #70's round-2 body,
+  rewritten to these rules and complete on all 11 criteria, has a longest row of **264
+  bytes** and a longest evidence cell of **189**, under half the ceiling that catches #71.
+  The bound refuses bloat, not thoroughness.
 - **Get the repo's build and lint green before opening a PR, and its tests green for what
   you touched** — the tests being **the ones your change touches, not the whole suite**
   (next bullet, which is where the scope of "tests" is settled). If you can't get that
