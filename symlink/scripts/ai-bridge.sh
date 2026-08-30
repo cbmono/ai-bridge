@@ -253,6 +253,7 @@ fi
 #                                            it covers markdown too: bold is not "not colour"
 #                                            when the client renders it AS colour, and one
 #                                            switch a reader already knows beats a second one.
+#   --style markdown|ansi|plain -> as asked. A caller that knows its reader.
 #   --banner                    -> plain.    session-banner.sh inlines this block and colours
 #                                            it; see the header.
 #   stdout is a terminal        -> ansi.     A human ran it by hand.
@@ -262,16 +263,26 @@ fi
 #                                            ANSI, so this is the branch `/ai-bridge check`
 #                                            actually takes.
 #
+# `NO_COLOR` IS TESTED BEFORE `--style`, AND THAT ORDER IS THE WHOLE OF THE CONTRACT. It is
+# the READER's opt-out, set in their environment; `--style` is the CALLER's guess about that
+# reader. A caller cannot consent on the reader's behalf, so `--style ansi` under `NO_COLOR=1`
+# is the one combination that has to lose — the alternative is an opt-out that holds only for
+# the paths which happen not to pass a style, i.e. one that works until something uses the
+# flag. `markdown` loses to it for the same reason `auto` does: the client renders bold AS
+# emphasis, so it is not "not colour" (see the first entry above).
+#
 # AN UNRECOGNISED VALUE IS `auto`, not fatal: `check` can be called from a SessionStart hook,
 # and exiting 2 over a spelling mistake in a style name would cost the whole banner.
-case "$STYLE" in
-  markdown|ansi|plain) ;;
-  *) if [ -n "${NO_COLOR:-}" ];   then STYLE=plain
-     elif [ "$BANNER_ONLY" -eq 1 ]; then STYLE=plain
-     elif [ -t 1 ];               then STYLE=ansi
-     else                              STYLE=markdown
-     fi ;;
-esac
+if [ -n "${NO_COLOR:-}" ]; then STYLE=plain
+else
+  case "$STYLE" in
+    markdown|ansi|plain) ;;
+    *) if   [ "$BANNER_ONLY" -eq 1 ]; then STYLE=plain
+       elif [ -t 1 ];                 then STYLE=ansi
+       else                                STYLE=markdown
+       fi ;;
+  esac
+fi
 # Spelled out with `printf` rather than typed: an ESC in a string literal is invisible in a
 # diff and in a grep, and `${_esc}[` is braced because `"$_esc[1m"` is bash's array-subscript
 # spelling (shellcheck SC1087).
