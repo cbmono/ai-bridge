@@ -41,31 +41,30 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Local override first, then the tracked file — the precedence every overridable key uses
-# (SCHEMA.md, "Per-machine config overrides"). The per-key merge matches resolve-model.sh
-# so a local file naming ONE key never blanks the rest of the config.
-python3 - "$inst" <<'PY'
-import json, sys, os
-inst = sys.argv[1]
-cfg = {}
-for name in ("instance.config.json", "instance.config.local.json"):
-    p = os.path.join(inst, name)
-    try:
-        with open(p) as fh:
-            layer = json.load(fh)
-    except Exception:
-        continue
-    if not isinstance(layer, dict):
-        continue
-    for k, v in layer.items():
-        if isinstance(v, dict) and isinstance(cfg.get(k), dict):
-            cfg[k] = {**cfg[k], **v}
-        else:
-            cfg[k] = v
-cap = cfg.get("maxAgentsInFlight")
-# `isinstance(True, int)` is True in Python, so booleans are excluded explicitly: a
-# `"maxAgentsInFlight": true` would otherwise resolve to a cap of 1 and look deliberate.
-if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
-    sys.exit(1)
-print(cap)
-PY
+# Local override first, then the tracked file — the precedence every overridable key
+# uses (SCHEMA.md, "Per-machine config overrides"), implemented ONCE in
+# `scripts/resolve-config.sh` and delegated to here. The per-key merge lives there too, so
+# a local file naming one key never blanks the rest of the config.
+#
+# THE SELF PATH IS RESOLVED THROUGH THE SYMLINK for the reason resolve-model.sh states: an
+# instance stamped before that helper shipped has no copy in its own `scripts/`, and
+# `dirname "$0"` would look exactly there.
+self="${BASH_SOURCE[0]:-$0}"
+[ -L "$self" ] && self="$(readlink "$self" 2>/dev/null || printf '%s' "$self")"
+here="$(cd "$(dirname "$self")" 2>/dev/null && pwd)" || here=""
+resolver="$here/resolve-config.sh"
+[ -n "$here" ] && [ -f "$resolver" ] || {
+  echo "resolve-max-agents: scripts/resolve-config.sh not found beside this script" >&2; exit 2; }
+
+cap="$(bash "$resolver" --instance "$inst" maxAgentsInFlight)" || exit 1
+
+# REFUSED, NOT ROUNDED, and the test is on the RENDERED value rather than on a JSON type
+# because that is what a shell can see. `true` renders as the word `true` and fails this
+# match, which is the case worth naming: Python's `isinstance(True, int)` is True, so a
+# `"maxAgentsInFlight": true` would otherwise have resolved to a cap of 1 and looked
+# deliberate. A float, a string, a negative number and 0 fail it too.
+case "$cap" in
+  ""|*[!0-9]*) exit 1 ;;
+esac
+[ "$cap" -ge 1 ] || exit 1
+printf '%s\n' "$cap"

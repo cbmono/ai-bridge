@@ -50,15 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-machinery.sh"
-          },
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/show-awaiting.sh"
-          },
-          {
-            "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/show-board-link.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-banner.sh"
           }
         ]
       }
