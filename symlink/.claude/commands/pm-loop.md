@@ -101,7 +101,18 @@ Do **not** read task documents, `log.md`, the tick ledger, `AWAITING.md`,
 `gh pr list` here — not the whole thing, not a summary, not "just to orient". **The
 tick does every one of them** (`.claude/agents/project-manager.md`, steps 0–1), which
 is why `allowed-tools` above lists no reader beyond `pwd`/`ls` and the one exception
-named next.
+named at the end of this section.
+
+Two reasons, and the second is the one that matters. The human ran a command, not a
+briefing, so nothing should scroll before "tick dispatched". And every byte read here
+lands in the **main session's** context — the one context this loop has to survive on
+for hours across many ticks — while the tick is a backgrounded agent with its own
+context, where a full state read is free and is discarded when it ends. The
+launcher's answer is thrown away the moment it dispatches either way, so a state read
+here buys nothing and is paid for twice.
+
+**This is not "print less".** Collapsing, quieting or redirecting the output would
+keep every token and lose the trail. The work does not belong here at all.
 
 **The one exception, named on purpose: the tick lock.** `scripts/tick-lock.sh acquire`
 reads `.tick-lock` and writes it in the same create, and step 1 runs it immediately
@@ -124,17 +135,6 @@ grew by exactly `Bash(scripts/tick-lock.sh:*)`, one script that touches one giti
 file. And **never call `scripts/tick-lock.sh status` before `acquire`** — the check and
 the write are deliberately one operation, and looking first would rebuild the very race
 this closes.
-
-Two reasons, and the second is the one that matters. The human ran a command, not a
-briefing, so nothing should scroll before "tick dispatched". And every byte read here
-lands in the **main session's** context — the one context this loop has to survive on
-for hours across many ticks — while the tick is a backgrounded agent with its own
-context, where a full state read is free and is discarded when it ends. The
-launcher's answer is thrown away the moment it dispatches either way, so a state read
-here buys nothing and is paid for twice.
-
-**This is not "print less".** Collapsing, quieting or redirecting the output would
-keep every token and lose the trail. The work does not belong here at all.
 
 ### Why there is no publish grant, and no publish step
 
@@ -220,10 +220,9 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
    **When that notification arrives, release the lock** — run
    `scripts/tick-lock.sh release` before you schedule the gap. That is the only place it
-   is released in the
-   normal path, and releasing it on anything weaker than the notification (a status
-   listing, elapsed time, a quiet repo) hands the next tick a dispatch the running one
-   has not finished. A loop that dies before it releases leaves the lock to age out
+   is released in the normal path, and releasing it on anything weaker than the
+   notification (a status listing, elapsed time, a quiet repo) hands the next tick a
+   dispatch the running one has not finished. A loop that dies before it releases leaves the lock to age out
    into step 1's case 2, where a human sees it — which is the intended failure, not a
    leak.
 

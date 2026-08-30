@@ -131,6 +131,16 @@ esac
 STALE_SECONDS=$((STALE_MINUTES * 60))
 
 NOW="$(date -u +%s)"
+# The two timestamps in a lock are ONE moment, not two `date` calls a second apart: the
+# epoch is what staleness is computed from and the ISO string is what a human reads, and
+# a reader who saw them disagree would rightly wonder which one to trust. BSD `-r` first,
+# GNU `-d @` second, and a plain `date` only if a machine has neither.
+epoch_to_iso() { # <epoch>
+  date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
+    || date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
+    || date -u +%Y-%m-%dT%H:%M:%SZ
+}
+NOW_ISO="$(epoch_to_iso "$NOW")"
 
 # --- reading a lock -------------------------------------------------------------------
 # Only the FIRST occurrence of a key counts, and `#` lines are comments — the same reader
@@ -236,7 +246,7 @@ case "$cmd" in
            "# bundle each have their own, and each dispatches independently by design." \
            "# Stale after ${STALE_MINUTES}m (TICK_LOCK_STALE_MINUTES). Clear it with:" \
            "#   scripts/tick-lock.sh release" \
-           "timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+           "timestamp: $NOW_ISO" \
            "epoch: $NOW" \
            "agent: $agent" > "$LOCK"
        ) 2>/dev/null; then
