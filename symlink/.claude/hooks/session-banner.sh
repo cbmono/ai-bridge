@@ -80,7 +80,8 @@
 # failed section is a banner that stopped reporting without saying so.
 #
 # Verified by tests/session-banner.test.sh, tests/banner-board-line.test.sh,
-# tests/awaiting-queue.test.sh and tests/moved-template.test.sh.
+# tests/awaiting-queue.test.sh, tests/moved-template.test.sh and — for the drift line under
+# the header — tests/template-version.test.sh.
 set -uo pipefail
 
 COLOR=auto
@@ -276,6 +277,40 @@ say "$C_B" "$head_line"
 # multibyte character; tests/session-banner.test.sh pins the whole file against the shape.
 rule="$(printf "%*s" "${#head_line}" "" | sed "s/ /─/g")"
 say "$C_DIM" "$rule"
+
+# ---------------------------------------------------------------------------------------
+# 2b. TEMPLATE DRIFT — is the version in that header the current one?
+# ---------------------------------------------------------------------------------------
+# DIRECTLY UNDER THE VERSION IT CONTRADICTS, because the two lines are one statement: the
+# header says which template version this instance links, and this says the remote's default
+# branch has a newer one. Above the tables and below the rule keeps it attached to the
+# number rather than filed among the settings.
+#
+# THE VERDICT IS NOT COMPUTED HERE. `scripts/check-template-version.sh` owns every way this
+# can be wrong — equal, ahead, offline, unauthenticated, no checkout, no remote-tracking
+# ref, no VERSION on either side, a version it cannot parse — and every one of those is
+# byte-empty output. This prints what it is given and nothing else, so there is no second
+# reader of that question here to drift from the first.
+#
+# NO NETWORK CALL ON THIS PATH. The helper reaches the network only with `--fetch`, which is
+# deliberately not passed at session start: a banner must not wait on a socket, and a
+# comparison against the remote-tracking ref already on disk can only ever under-report,
+# never raise a false alarm.
+#
+# ABSENT ⇒ NOTHING, like every other optional section. An instance stamped before this
+# script shipped has no file to run — and that is exactly the state the line reports, so it
+# stays silent about itself rather than erroring about its own absence.
+if [ -f "$bin/check-template-version.sh" ]; then
+  if [ -n "$tmpl" ]; then
+    drift="$(bash "$bin/check-template-version.sh" --instance "$root" --template "$tmpl" 2>/dev/null)"
+  else
+    drift="$(bash "$bin/check-template-version.sh" --instance "$root" 2>/dev/null)"
+  fi
+  if [ -n "$drift" ]; then
+    echo
+    printf '%s\n' "$drift"
+  fi
+fi
 
 # ---------------------------------------------------------------------------------------
 # 3+4. THE TWO TABLES — settings, then roleTiers resolved end to end.
