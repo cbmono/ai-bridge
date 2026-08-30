@@ -148,9 +148,10 @@
 # the sequence it gets wrong is the exact one the claimed branch was kept for: launcher S
 # dispatches tick A, A claims, S resumes tick R, and R reads A's claim as its own. That is
 # the 34-minute double-dispatch of 2026-08-29, waved through by the guard meant to catch
-# it. `CLAUDE_CODE_CHILD_SESSION` does not rescue it (`1` on both sides), and the per-agent
-# id that WOULD work — subagent transcripts live at `<session-id>/subagents/<agent-id>` — is
-# not exported to the shell at all. There is no per-tick identity to read here today.
+# it. `CLAUDE_CODE_CHILD_SESSION` does not rescue it (`1` on both sides). A per-agent id
+# DOES exist on disk — see "THE PER-TICK IDENTITY IS REACHABLE" below, which corrects the
+# path this comment used to guess at — but nothing per-agent is exported to the shell, so
+# there is no per-tick identity this script can read.
 #
 # THEREFORE THE TRUST IS ASYMMETRIC: A DERIVED ID MAY REFUSE, BUT MAY NEVER CLEAR. That one
 # rule is what makes this safe, and it is the whole difference from the first attempt:
@@ -202,11 +203,19 @@
 # tick is still running under.
 #
 # THE WINDOW IS NOT MICROSECONDS, AND AN EARLIER DRAFT OF THIS PARAGRAPH IMPLIED IT WAS.
-# Measured in a live instance 2026-08-30: lock taken 16:00:11Z, claimed 16:00:58Z — FORTY-
-# SEVEN SECONDS, covering the spawn and everything the tick does before it reaches step 0.5.
-# The previous wording said "the seconds between" and called this "the rarer half of an
-# already rare race"; neither adjective had a measurement behind it, and both are gone. The
-# microsecond race in this file is a different one — `release`'s two `rm`s, below.
+# Measured twice in a live instance on 2026-08-30, hours apart, on two unrelated dispatches:
+#
+#   taken       claimed     window   the tick's transcript was created at
+#   16:00:11Z   16:00:58Z   47s      16:00:38Z  (spawn 27s in, claim 20s after that)
+#   18:18:30Z   18:19:11Z   41s      18:18:56Z  (spawn 26s in, claim 15s after that)
+#
+# FORTY-SEVEN and FORTY-ONE seconds, covering the spawn and everything the tick does before
+# it reaches step 0.5. The previous wording said "the seconds between" and called this "the
+# rarer half of an already rare race"; neither adjective had a measurement behind it, and
+# both are gone. Two numbers rather than one because the first could have been an outlier
+# and is not: agent-spawn latency alone is 26-27s in both, so no reordering of the existing
+# calls gets this under half a minute. The microsecond race in this file is a different one
+# — `release`'s two `rm`s, below.
 #
 # IT IS NOT CLOSED HERE, AND THE REASON IS THAT EVERY CANDIDATE REMEDY IS ALREADY-DECIDED
 # GROUND. Named, so the next reader does not spend the same afternoon on them:
@@ -223,10 +232,79 @@
 #   agent-spawn latency — and it would put the guarantee back into a model following prose,
 #   which is the mechanism class this file exists to replace.
 #
-# What closes it is a PER-TICK identity delivered through a channel that is neither the
+# What would close it is a PER-TICK identity delivered through a channel that is neither the
 # dispatch prompt nor `CLAUDE_CODE_SESSION_ID` (which names the SESSION — measured below).
-# That is a mechanism decision with its own trade-offs, not a rider on this one, so it is
-# tracked as its own task rather than parked in this comment.
+# That channel was looked for on 2026-08-30, and the next two sections are what was found:
+# it EXISTS, it is not usable from here, and both halves are written down so the search is
+# not repeated.
+#
+# THE PER-TICK IDENTITY IS REACHABLE — MEASURED FROM INSIDE A DISPATCHED AGENT, NOT INFERRED.
+# The question is not open any more, and the answer is not the one this file used to assume:
+#
+#   NOTHING PER-AGENT IS EXPORTED. Every variable in a dispatched agent's environment was
+#   read. The ids among them are all SESSION- or PROCESS-POOL-scoped, none per-agent:
+#     CLAUDE_CODE_SESSION_ID     the session (byte-identical to the parent's — a third
+#                                independent confirmation of the measurement above)
+#     CLAUDE_JOB_DIR             ~/.claude/jobs/<session-id-short> — the session again
+#     CLAUDE_PID, and the socket path derived from it — a REUSED CLI process, not an
+#                                agent: 19 live sockets against a handful of live agents
+#     CLAUDE_CODE_CHILD_SESSION  `1` — a boolean, so it separates subagents from parents
+#                                and never one subagent from another
+#
+#   THE ID EXISTS ON DISK, AND THIS FILE HAD ITS PATH WRONG. It is not `<session-id>/
+#   subagents/<agent-id>` and not `<session-dir>/tasks/<agent-id>.output`; both guesses
+#   predate anyone looking. Measured shape, CLI 2.1.251:
+#     <session-dir>/subagents/agent-<agent-id>.jsonl        the transcript
+#     <session-dir>/subagents/agent-<agent-id>.meta.json    {agentType, description,
+#                                                            toolUseId, parentAgentId,
+#                                                            spawnDepth, model}
+#     $CLAUDE_JOB_DIR/state.json  ->  fan[] of {id, kind, label, startedAt}
+#   The session dir needs no path-slug arithmetic: `~/.claude/projects/*/$CLAUDE_CODE_
+#   SESSION_ID/subagents` reaches it from the one variable that IS exported.
+#
+#   AN AGENT CAN FIND ITS OWN RECORD IN A SINGLE INVOCATION. The `tool_use` record carrying
+#   a command is committed to the agent's own transcript BEFORE that command runs, so a
+#   literal appearing only in this invocation's argv is already on disk when the process
+#   starts. Measured: such a literal matched exactly 1 of 15 transcripts, and it was the
+#   right one. No second tool call, no round-trip, nothing carried in a prompt.
+#
+#   AND THE ID SURVIVES A RESUME, which is the property a guard here would need. A resumed
+#   agent APPENDS to its existing transcript — three of the fifteen carry two or three
+#   user turns — so the file name, and the first record's timestamp, stay the ORIGINAL
+#   dispatch. That is exactly the ordering fact the window needs: a resumed tick's
+#   transcript predates the lock it is about to meet, and a dispatched tick's does not.
+#
+# AND IT IS STILL NOT USED HERE. THREE REASONS, EACH SUFFICIENT ON ITS OWN.
+#
+#   1. SELF-IDENTIFICATION NEEDS A PER-INVOCATION LITERAL, AND THIS SCRIPT'S ARGV HAS NONE.
+#      Every tick runs the same `acquire --as tick` command line, so the match above has
+#      nothing unique to match on. Supplying one means a model generating and typing a fresh
+#      value per tick — which is the nonce this design has refused twice, moved one boundary
+#      inward rather than removed. The measurement is real; the hook for it is not there.
+#   2. WITHOUT ONE, THE FALLBACK IS AMBIGUOUS EXACTLY WHERE IT MATTERS. The remaining
+#      discriminator is "the newest-mtime `project-manager` transcript", and in the window
+#      this guard exists for there are two: the genuine tick, mid-spawn and being written,
+#      and the resumed tick, whose own `tool_use` record was appended microseconds ago.
+#      A guard that ties in its own motivating case is the stage-for-an-actor mistake again.
+#   3. IT WOULD COUPLE A GENERIC TEMPLATE TO AN UNDOCUMENTED PRIVATE LAYOUT. This file reads
+#      no org, repo or path literal by design. The layout above is one CLI version's
+#      internals, and the evidence that it is not knowable from the outside is this file
+#      itself: two documents guessed that path and BOTH were wrong.
+#
+# THE ORDERING-INVARIANT VARIANT WAS ALSO TRIED, AND IT IS THE ALREADY-REJECTED REMEDY IN A
+# NEW COAT. "Adopt only if SOME project-manager agent was spawned after this lock was taken"
+# needs no identity at all and is genuinely sound — but the table above prices it: the
+# transcript appears 26-27s in and the claim lands 15-20s later, so it shrinks 41s to about
+# 15s and CANNOT CLOSE IT. Shortens-but-cannot-close is precisely why "make the tick acquire
+# earlier" is refused above, and a second mechanism earning the same verdict is not an
+# improvement over a gap that is documented and shrinking. It is recorded so that the next
+# reader prices it before building it.
+#
+# WHERE THIS LEAVES THE ASYMMETRIC RULE, STATED BEFORE ANY OF IT COULD BE USED. The
+# transcript channel is DERIVED — read from the runtime, promised by nobody — so under the
+# rule below it could only ever REFUSE, never clear. That direction happens to be the one
+# the window needs, which is why it was worth measuring at all; the three reasons above are
+# what stop it, not the asymmetry.
 #
 # AND THIS FILE STRICTLY SHRINKS THAT RACE RATHER THAN CREATING IT, which is why the gap
 # does not block the refusal above. Before exit 4, a resumed tick meeting NO lock took one
@@ -240,7 +318,7 @@
 #
 #   1. A resume that arrives INSIDE the launcher's dispatch window meets a live UNCLAIMED
 #      lock and is, at that instant, indistinguishable from the tick the launcher took it
-#      for — so it adopts and runs. That is the 47-second window measured above, and it is
+#      for — so it adopts and runs. That is the 47s/41s window measured above, and it is
 #      the one way a resumed tick still gets through. Open, named, and not closed here.
 #   2. Whether a resume of any OTHER agent is "the same task" cannot be seen from here or
 #      from anywhere else: nothing can read a `SendMessage`'s intent. That half is a
