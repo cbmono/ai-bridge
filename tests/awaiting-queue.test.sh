@@ -139,11 +139,15 @@ check() { # <name> <expected-item-count: 0 = the awaiting SECTION must be absent
   else
     printf '%s' "$HUMAN" | grep -qF '🔔' && { human_ok=0; human_why="a count line with nothing to count"; }
   fi
-  if [ "$RC" -eq 0 ] && [ "$got" = "$expect" ] && [ "$silent_ok" -eq 1 ] && [ "$human_ok" -eq 1 ]; then
+  # STDERR IS PART OF THE CONTRACT NOW THAT THE OUTPUT IS PARSED. It used to be merged into
+  # stdout here and a stray warning was merely noise; on a channel that has to be one JSON
+  # object it is a corrupted envelope, so it is captured apart and asserted empty.
+  if [ "$RC" -eq 0 ] && [ -z "$ERR" ] && [ "$got" = "$expect" ] \
+     && [ "$silent_ok" -eq 1 ] && [ "$human_ok" -eq 1 ]; then
     printf '  PASS  %-52s (%s item(s) to the model, rc=%s)\n' "$name" "$got" "$RC"; pass=$((pass+1))
   else
-    printf '  FAIL  %-52s expected %s item(s) rc=0 (silent=%s, human=%s%s), got %s (rc=%s)\n' \
-      "$name" "$expect" "$silent_ok" "$human_ok" "${human_why:+: $human_why}" "$got" "$RC"
+    printf '  FAIL  %-52s expected %s item(s) rc=0 err="" (silent=%s, human=%s%s), got %s (rc=%s, err=%s)\n' \
+      "$name" "$expect" "$silent_ok" "$human_ok" "${human_why:+: $human_why}" "$got" "$RC" "${ERR:-none}"
     printf '        model: %s\n' "$(printf '%s' "$MODEL" | head -4 | tr '\n' '|')"
     printf '        human: %s\n' "$(printf '%s' "$HUMAN" | head -4 | tr '\n' '|')"
     fail=$((fail+1))

@@ -266,15 +266,29 @@ strip_sgr() { LC_ALL=C sed "s/$(printf '\033')\[[0-9;]*m//g" 2>/dev/null; }
 # diff and in a grep.
 MODEL_MARK="$(printf '\001')"
 
-# model_only — stdin is a block of lines for the MODEL's copy alone.
+# model_only — stdin is a block of lines for the MODEL's copy alone. THREE MODES, one per
+# answer to "who reads this run's output", because there are three and not two:
 #
-# IN TEXT MODE IT DISCARDS, and that is the whole of the text/JSON difference. Text has one
-# channel and every reader of it is a human (a terminal, `/ai-bridge` relaying it back), so
-# there is no field to put the block in and no reader who wants it. Nothing bundle-authored
-# is lost from a human-facing surface by this: the items are in AWAITING.md, on the board,
-# and in the next `/pm-loop` tick, each of which renders them better than a banner can.
+#   mark   two channels: JSON asked for and a buffer to build it in. Prefix the lines and
+#          let emit_json route them.
+#   drop   ONE channel and its reader is a HUMAN — plain `--format text`, which is what a
+#          terminal and `/ai-bridge` (it `exec`s this file with no arguments and relays the
+#          output) get. There is no field to put the block in and no reader who wants it.
+#          Nothing is lost from a human-facing surface: the items are in AWAITING.md, on
+#          the board, and in the next /pm-loop tick, each of which renders them better.
+#   plain  ONE channel and its reader is the MODEL — `--format json` was asked for but the
+#          buffer could not be made, so this falls back to writing plain text at a stdout
+#          that settings.json pointed into the session's CONTEXT. Print the block, without
+#          markers. DEGRADE TOWARDS THE OLD BEHAVIOUR, NEVER PAST IT: before the split, the
+#          model got the fenced list on exactly this path, and the human sees nothing here
+#          either way (that is the failure #72 fixed, reappearing only when the wrapper
+#          itself breaks). The fence goes with the items on every one of the three.
 model_only() {
-  if [ "$FORMAT" = json ]; then LC_ALL=C sed "s/^/${MODEL_MARK}/"; else cat >/dev/null; fi
+  case "$MODEL_BLOCK" in
+    mark)  LC_ALL=C sed "s/^/${MODEL_MARK}/" ;;
+    plain) cat ;;
+    *)     cat >/dev/null ;;
+  esac
 }
 
 emit_json() { # <exit-status>
@@ -308,22 +322,31 @@ emit_json() { # <exit-status>
   # awk on the machine, no sed, or an encoder that died halfway, leaves one of these empty or
   # unterminated, and half a string spliced into an object is the malformed output this check
   # exists to make impossible. Falling back to the plain banner is a channel regression,
-  # never a parse error, and it is the human's copy that falls back, because that is the one
-  # text that is safe to print on any channel at all. `${plain:-$model}` and not `$plain`:
-  # with no `sed` on the machine there is nothing to strip WITH, and a banner carrying its
-  # escape codes into that fallback is a cosmetic loss on a channel nothing renders — where
-  # losing the banner would not be.
-  case "$enc_h" in '"'*'"') ;; *) printf '%s\n' "$human"; exit "$1" ;; esac
-  case "$enc_m" in '"'*'"') ;; *) printf '%s\n' "$human"; exit "$1" ;; esac
+  # never a parse error.
+  #
+  # AND IT IS THE MODEL'S COPY THAT FALLS BACK, for the same reason `model_only`'s `plain`
+  # mode exists: this stream is the stdout settings.json pointed into the session's context,
+  # so its one reader is the model, and the model's copy is what it got before the split.
+  # The human sees nothing on this path either way — that is the #72 failure, back only for
+  # as long as the encoder is broken — so handing the human's abridged copy to the model
+  # would lose the list for a reader that has no other copy of it. `${plain:-$model}` and
+  # not `$plain`: with no `sed` on the machine there is nothing to strip WITH, and a banner
+  # carrying its escape codes into that fallback is a cosmetic loss on a channel nothing
+  # renders — where losing the banner would not be.
+  case "$enc_h" in '"'*'"') ;; *) printf '%s\n' "${plain:-$model}"; exit "$1" ;; esac
+  case "$enc_m" in '"'*'"') ;; *) printf '%s\n' "${plain:-$model}"; exit "$1" ;; esac
   printf '{"systemMessage":%s,"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
     "$enc_h" "$enc_m"
   exit "$1"
 }
 
 JSONBUF=""
+# `drop` is the default because text is: one channel, and its reader is a human.
+MODEL_BLOCK=drop
 if [ "$FORMAT" = json ]; then
   JSONBUF="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-banner.XXXXXX" 2>/dev/null || true)"
   if [ -n "$JSONBUF" ] && [ -f "$JSONBUF" ]; then
+    MODEL_BLOCK=mark
     # fd 3 is the real stdout, held open for emit_json. Redirecting stdout to a file also
     # makes `[ -t 1 ]` false below, which is the right answer twice over: this path is a
     # pipe into Claude Code, and an escape sequence inside a JSON string would be a
@@ -331,7 +354,10 @@ if [ "$FORMAT" = json ]; then
     exec 3>&1 1>"$JSONBUF"
     trap 'emit_json $?' EXIT
   else
-    JSONBUF=""; FORMAT=text
+    # No buffer ⇒ plain text at a stdout that settings.json aimed at the MODEL, so the
+    # model-only block prints unmarked rather than being dropped: the reader here is the
+    # one this run cannot address in a field, and it is not the human.
+    JSONBUF=""; FORMAT=text; MODEL_BLOCK=plain
   fi
 fi
 
