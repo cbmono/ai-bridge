@@ -351,7 +351,12 @@ bullet_of() { # <file> <regex> — the whole `- ` bullet containing <regex>
     { buf = buf "\n" $0 }
     END { if (buf ~ n) print buf }' "$1"
 }
-CONV_BULLET="$(bullet_of "$CONVENTIONS" "check-dispatch")"
+# Selected on the FULL PATH, not on the bare name: `check-dispatch.sh` is now cited by a
+# second, earlier bullet (the no-polling clause of the local-vs-CI rule, which calls a
+# 40-minute poll the parked-watcher failure this script exists for). `bullet_of` returns
+# the FIRST bullet that matches, so a bare-name regex silently retargeted all four
+# assertions below onto that bullet and reported the rule missing when it was intact.
+CONV_BULLET="$(bullet_of "$CONVENTIONS" "scripts/check-dispatch\\.sh")"
 ok "CONVENTIONS.md names scripts/check-dispatch.sh in a bullet of its own" \
    "$([ -n "$CONV_BULLET" ] && echo yes || echo no)" yes
 ok "…giving the exact path to run"  "$(grep -qF 'scripts/check-dispatch.sh' <<<"$CONV_BULLET" && echo yes || echo no)" yes
