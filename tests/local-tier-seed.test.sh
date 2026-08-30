@@ -213,6 +213,20 @@ ok "a further stamp exits 0"               "$RC" 0
 ok "…changes the file not one byte"        "$([ "$(cat "$LC")" = "$BEFORE" ] && echo yes || echo no)" yes
 ok "…and reports that it left it alone"    "$(said 'already set — left alone')" yes
 
+# THE FILE'S MODE TRAVELS WITH ITS CONTENT. The seeded key is written through a temp
+# file, and a fresh temp takes the umask — so rewriting a local file somebody had
+# tightened would quietly widen it. This file can hold a commit address; a permission
+# that loosens itself on a re-stamp is exactly the kind of change nobody looks for.
+I="$(newinst 8)"
+stamp "$I" >/dev/null 2>&1
+LC="$I/instance.config.local.json"
+printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$LC"
+chmod 600 "$LC"
+stamp "$I" >/dev/null 2>&1
+ok "a 0600 local file keeps its mode through the seed" \
+   "$(ls -l "$LC" | cut -c1-10)" "-rw-------"
+ok "…and was really seeded, so the check is not vacuous" "$(jcount "$LC" models)" 4
+
 # An explicit null is SCHEMA.md's documented UNSET. Seeding over it would silently
 # re-enable the thing the human switched off — the one edit that must not be "helped".
 I="$(newinst 4)"

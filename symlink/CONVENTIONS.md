@@ -411,9 +411,8 @@ in `cbmono/ai-bridge` enforces this.
   shape rather than the fallback: an unresolved role looks exactly like a resolved one at
   the call site, so every role can run on the wrong tier with nothing anywhere saying so.
   `install.sh` seeds `models`/`roleTiers` into `instance.config.local.json`, which is where
-  the fix goes. This applies to **every**
-  dispatch, including an ad-hoc dispatch from a main session, which is exactly the
-  path the prose never reached.
+  the fix goes. This applies to **every** dispatch, including an ad-hoc dispatch from a
+  main session, which is exactly the path the prose never reached.
 - **Don't grow the harness without a reason — and past ~150 lines, ask.** This machinery
   is a means, not the product. Before you open a PR, measure what you added to it:
 

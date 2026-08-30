@@ -2005,6 +2005,16 @@ with open(tmp_path, "w") as fh:
     json.dump(local, fh, indent=2)
     fh.write("\n")
 
+# The existing file's MODE travels with its content. A fresh temp takes the umask, so
+# rewriting a file somebody had tightened to 0600 would quietly widen it — the same
+# reason the roster block above copies the target's mode with `cp -p` rather than
+# renaming a 0600 mktemp over a config.
+if existed:
+    try:
+        os.chmod(tmp_path, os.stat(local_path).st_mode & 0o7777)
+    except OSError:
+        pass
+
 # Parsed back BEFORE it lands, and checked for the pairs we claim to have written — a
 # file can parse perfectly and still be missing them, which is the false-success shape
 # this codebase has already been bitten by (migrate-bundle.sh).

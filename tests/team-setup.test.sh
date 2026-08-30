@@ -80,7 +80,7 @@ same_as_seed() { [ "$(cat "$1/instance.config.json")" = "$SEED_CFG" ] && echo ye
 # it exits 130 from inside the roster block, so step 4c never runs at all.)
 no_identity() { # <instance>
   [ -e "$1/instance.config.local.json" ] || { echo yes; return 0; }
-  grep -q 'ownerGithubUser' "$1/instance.config.local.json" && echo no || echo yes
+  grep -q '"ownerGithubUser"' "$1/instance.config.local.json" && echo no || echo yes
 }
 # Two complete pairs and a confirmation — the answer the positive path expects.
 ANSWER='example-user-007 example-user-007@example.com
