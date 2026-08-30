@@ -211,11 +211,20 @@ EOF
 ok "…and dispatched on the tier the row declares"          "$mismatch" 0
 
 # =======================================================================================
-echo "== 4. SHIP-BLOCKER: fix never touches a config file =="
+echo "== 4. SHIP-BLOCKER: fix never overwrites a config value a human set =="
 # =======================================================================================
 # Uncommitted config is a QUESTION, never a defect. The fixture is the measured case: a
 # tracked config edited but not committed, plus a per-machine file beside it. A `fix` that
 # reverted, staged or rewrote either would have destroyed a decision made minutes earlier.
+#
+# THE TRACKED FILE IS BYTE-IDENTICAL; THE LOCAL ONE IS ASSERTED PER KEY, and that is a
+# narrowing rather than a relaxation. `install.sh` step 4c seeds this machine's absent
+# `models`/`roleTiers` into the per-machine file — seeds-if-absent, the same contract that
+# already covers seed content, AWAITING.md and SNAPSHOT.json — so a byte-for-byte hash
+# would now be asserting that seeding OFF rather than asserting the criterion. The
+# criterion was never "the bytes did not move": it is that no value a human set was
+# rewritten and no key nobody asked for appeared. Both halves are checked below, against a
+# run that really did seed, so neither can pass vacuously.
 INST2="$TMP/inst2"; mkinstance "$INST2"
 python3 - "$INST2" <<'PY' 2>/dev/null || sed -i.bak 's/"maxPrLoc": 2000/"maxPrLoc": 500/' "$INST2/instance.config.json"
 import json, os, sys
@@ -227,7 +236,6 @@ rm -f "$INST2/instance.config.json.bak"
 printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$INST2/instance.config.local.json"
 
 cfg_before="$(sha "$INST2/instance.config.json")"
-loc_before="$(sha "$INST2/instance.config.local.json")"
 head_before="$(GIT -C "$INST2" rev-parse HEAD)"
 
 CHK2="$(bash "$SH" check --instance "$INST2" --template "$SRC" 2>&1)"
@@ -255,8 +263,21 @@ ok "…and said so under that row, not as a footnote" \
   "$(printf '%s\n' "$FIX2" | awk '/^── config-uncommitted \[/{f=1;next} /^── /{f=0} f' \
      | grep -c 'NOT ACTED ON' | tr -d ' ')" 1
 ok "instance.config.json is byte-identical after fix"      "$(sha "$INST2/instance.config.json")" "$cfg_before"
-ok "instance.config.local.json is byte-identical after fix" "$(sha "$INST2/instance.config.local.json")" "$loc_before"
-# NOT WRITTEN (the two hashes above), NOT STAGED, NOT COMMITTED — asked of the two files by
+# The value that was there before, still exactly there afterwards — the actual criterion.
+ok "the local file's existing value is untouched by fix" \
+  "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("ownerGithubUser","-"))' "$INST2/instance.config.local.json")" \
+  example-user-007
+# And nothing else appeared: exactly the two documented spend keys, and no third.
+ok "…and the ONLY keys added are the seeded spend pair" \
+  "$(python3 -c '
+import json, sys
+after = set(json.load(open(sys.argv[1])))
+print(",".join(sorted(after - {"ownerGithubUser", "$schema"})))' "$INST2/instance.config.local.json")" \
+  models,roleTiers
+# Non-vacuity for both: this run really did seed, so "untouched" is a measurement rather
+# than the absence of any action at all.
+ok "…in a run that really did seed them"                   "$(printf '%s\n' "$FIX2" | grep -c 'wrote instance.config.local.json' | tr -d ' ')" 1
+# NOT REWRITTEN (above), NOT STAGED, NOT COMMITTED — asked of the two files by
 # name rather than of the whole `status --porcelain`. The stamp this same run performs
 # legitimately turns the fixture's `SCHEMA.md` stub into a symlink, so a whole-tree
 # comparison would fail on a correct `fix`; the criterion is about these two paths.
