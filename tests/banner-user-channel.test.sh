@@ -57,6 +57,14 @@ eq()    { [ "$1" = "$2" ] && echo 0 || echo 1; }
 TAB="$(printf '\t')"
 BEL="$(printf '\007')"
 ESC="$(printf '\033')"
+# `ESC[…m` deleted. The human's copy is COLOURED and the model's is not (see section 5), so
+# every "same bytes" assertion below compares the model's copy to the human's WITH ITS SGR
+# REMOVED — which is a stronger statement than the byte equality it replaces, not a weaker
+# one: it says the two channels cannot differ in a single character of CONTENT while
+# allowing the one difference that is deliberate.
+strip_sgr() { printf '%s' "$1" | LC_ALL=C sed "s/$ESC\[[0-9;]*m//g"; }
+has_esc()   { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 0 || echo 1; }
+no_esc()    { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 1 || echo 0; }
 
 # --- the two probes, written once and reused against every shape below ------------------
 # `parses` and `user_visible` are THE check. Section 2 runs them against outputs that must
@@ -146,11 +154,13 @@ assert "…and the board path, the line the human never saw" \
   "$(user_visible "$OUT" "$INST/.board-live/board.html")"
 assert "…and the awaiting block"                       "$(user_visible "$OUT" 'need your input')"
 
-# BYTE FOR BYTE, not "contains the important lines". A field carrying a summary, a first
-# line, or the banner minus one section would pass every check above; this is what says the
-# human receives the whole artifact.
+# CHARACTER FOR CHARACTER, not "contains the important lines". A field carrying a summary, a
+# first line, or the banner minus one section would pass every check above; this is what says
+# the human receives the whole artifact. Compared with the SGR removed, because this channel
+# renders colour and the plain form does not carry any — see section 5.
 TEXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"
-assert "…and it is the WHOLE banner, byte for byte"    "$(eq "$SM" "$TEXT")"
+assert "…and it is the WHOLE banner, character for character" \
+  "$(eq "$(strip_sgr "$SM")" "$TEXT")"
 
 # The model's copy, on purpose, in the field the harness reads for SessionStart.
 assert "hookSpecificOutput names the event" \
@@ -158,7 +168,8 @@ assert "hookSpecificOutput names the event" \
 AC="$(field "$OUT" hookSpecificOutput.additionalContext)"
 assert "…and additionalContext keeps the model informed too" \
   "$([ -n "$AC" ] && echo 0 || echo 1)"
-assert "…with the same bytes, so the two channels cannot diverge" "$(eq "$AC" "$SM")"
+assert "…with the same content, so the two channels cannot diverge" \
+  "$(eq "$AC" "$(strip_sgr "$SM")")"
 
 # ONE LINE OF STDOUT. The banner's own newlines are escaped INSIDE the string, so a reader
 # that consumes the hook's output line-wise still sees one whole object.
@@ -213,7 +224,7 @@ assert "…the quote, the backslash and the tab survive intact" \
   "$(has "a \"quoted\" \\ back\\slash, a tab>${TAB}<" "$SM")"
 assert "…so does the multibyte run"                    "$(has 'unicode → · ─' "$SM")"
 assert "…and the user-visible copy still equals the text banner" \
-  "$(eq "$SM" "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)")"
+  "$(eq "$(strip_sgr "$SM")" "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)")"
 printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
 
 # =======================================================================================
@@ -283,12 +294,30 @@ assert "an unknown --format value degrades to text, exit 0" \
 assert "…and a bare --format with no value does too" \
   "$(eq "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format 2>/dev/null)" "$OUT")"
 
-# NO ESCAPE SEQUENCE MAY REACH THE USER CHANNEL. Colour is auto and the JSON path writes to
-# a buffer, never a terminal, so the human's copy must be plain: an escape inside a JSON
-# string arrives as text a reader sees, which is worse than no colour at all.
+# THE ESCAPES BELONG ON THE USER CHANNEL AND NOWHERE ELSE — and this assertion is the
+# INVERSE of the one that shipped here, on purpose. It used to read "the user-visible copy
+# carries no escape sequences", on the reasoning that the JSON path writes to a buffer rather
+# than a terminal so an escape there would arrive as text. Measured against Claude Code
+# 2.1.251 on 2026-08-30, by emitting a probe payload from a real SessionStart hook and reading
+# the bytes the terminal received: `systemMessage` is rendered BY THE CLIENT and it parses
+# SGR — bold, 3/4-bit colour, dim and truecolor all came back out as the client's own escape
+# codes. Markdown is what does not survive there. So the old assertion was pinning the
+# absence of the one mechanism that channel does carry.
+#
+# `additionalContext` keeps the old rule, because nothing renders it: it is the model's
+# context, and styling bytes in a field whose job is carrying instructions are pure noise.
 hook_run
-assert "the user-visible copy carries no escape sequences" \
-  "$(printf '%s' "$(field "$OUT" systemMessage)" | LC_ALL=C grep -q "$ESC" && echo 1 || echo 0)"
+assert "the user-visible copy IS coloured — that channel renders SGR" \
+  "$(has_esc "$(field "$OUT" systemMessage)")"
+assert "…while the model's copy carries none of it" \
+  "$(no_esc "$(field "$OUT" hookSpecificOutput.additionalContext)")"
+# NO_COLOR is the opt-out and it reaches this channel too. Without this the assertion above
+# would be satisfied by a hook that had simply stopped honouring it.
+OUT_NC="$(NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>/dev/null)"
+assert "NO_COLOR=1 ⇒ the user-visible copy is plain again" \
+  "$(no_esc "$(field "$OUT_NC" systemMessage)")"
+assert "…and says exactly what the coloured one says" \
+  "$(eq "$(field "$OUT_NC" systemMessage)" "$(strip_sgr "$(field "$OUT" systemMessage)")")"
 
 # =======================================================================================
 echo "== 6. /ai-bridge INVOKES this hook, it does not reproduce it =="

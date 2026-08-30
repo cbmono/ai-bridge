@@ -91,14 +91,44 @@
 # board is rendered by a `/pm-loop` tick or `scripts/watch-board.sh`; the machinery repair
 # is the human's `install.sh` re-run.
 #
-# COLOUR IS AUTO AND IT IS OFF BY DEFAULT WHERE IT MATTERS. A SessionStart hook's stdout is
-# a PIPE into Claude Code, never a terminal, so `[ -t 1 ]` is false on the path this file
-# actually runs — and that is the correct outcome, because escape codes entering the
-# transcript as text are worse than no colour at all. What colour buys is the human running
-# `bash .claude/hooks/session-banner.sh` by hand in a terminal. `NO_COLOR` (set and
-# non-empty) turns it off there too, the same contract `scripts/print-board.sh` states.
+# COLOUR IS ON FOR `--format json`, AND THAT IS A MEASUREMENT, NOT A GUESS. `[ -t 1 ]` is
+# still the right question for a PIPE and it is still false here — but it stopped being the
+# whole question the moment the banner started travelling as `systemMessage`, because that
+# field is rendered BY THE CLIENT rather than dumped into a transcript. Measured 2026-08-30
+# against Claude Code 2.1.251, by emitting a probe payload from a real SessionStart hook and
+# reading the bytes the terminal actually received:
+#
+#     \033[1m  \033[33m  \033[1;33m  \033[2m  \033[38;2;r;g;b   ALL RENDER on systemMessage.
+#                                                   The client re-emits them as its own SGR
+#                                                   (`\033[0m` comes back out as `[22m`/`[39m`),
+#                                                   so it PARSES the escapes — it does not
+#                                                   accidentally pass them through.
+#     `**bold**`, `| a | b |`                       DO NOT render there. Markdown arrives as
+#                                                   literal asterisks and literal pipes.
+#     multi-space runs, leading indent, ─ · →, emoji  survive verbatim, so the tables below
+#                                                   keep their columns.
+#
+# The `/ai-bridge` path is the OPPOSITE and is handled in `scripts/ai-bridge.sh`, not here:
+# its output is relayed by the model into an assistant message, 0 of 4 ESC bytes survived
+# that relay, and the human is left reading a literal `[1m`. One answer does not fit both
+# channels, which is why each one is asked separately.
+#
+# SO THE MODEL'S COPY IS STRIPPED AND THE HUMAN'S IS NOT (see `emit_json`). One rendering
+# still, exactly as before — `additionalContext` is derived from the same bytes by deleting
+# their SGR, so the two channels cannot come to say different things. Escapes are simply
+# noise in a field whose whole job is carrying instructions to the session.
+#
+# `NO_COLOR` (set and non-empty) turns it off on every path, the same contract
+# `scripts/print-board.sh` states, and the banner must stay correct and readable with it set.
 # `--color always|never|auto` overrides, so the degraded paths and the coloured one are all
-# testable; a hook registered in settings.json is invoked with no arguments and gets `auto`.
+# testable; a hook registered in settings.json is invoked with `--format json` and gets
+# `auto`, which is now colour ON.
+#
+# WHAT THE COLOUR IS FOR: SIGNIFICANCE, NEVER CATEGORY. Red is the machinery alarm, yellow is
+# something that needs the human, bold is the header and the dispatchable count, dim is
+# chrome. A row that is FINE gets nothing at all — which is the entire mechanism: the reader
+# scans for the one line with colour on it. Colouring every row by what KIND of row it is
+# would be prettier and would make nothing faster to find.
 #
 # THE VERSION COMES FROM `VERSION` AT THE TEMPLATE ROOT, read through this script's own
 # resolved path — not from a literal here, which is one more thing to forget on a release.
@@ -192,24 +222,39 @@ json_string() { # stdin -> ONE quoted JSON string on stdout
   '
 }
 
+# strip_sgr — stdin, minus every `ESC[…m`. The MODEL's copy of the banner goes through this
+# and the HUMAN's does not, which is the only difference between the two fields below.
+# `LC_ALL=C` so sed walks bytes and cannot mangle the `─ · → ⚠️` the banner is full of; the
+# ESC is built with `printf` rather than typed, for the reason every other escape in this
+# file is — a literal one is invisible in a diff and in a grep.
+strip_sgr() { LC_ALL=C sed "s/$(printf '\033')\[[0-9;]*m//g" 2>/dev/null; }
+
 emit_json() { # <exit-status>
   exec 1>&3 3>&-
   body=""
   [ -n "$JSONBUF" ] && [ -f "$JSONBUF" ] && body="$(cat "$JSONBUF" 2>/dev/null || true)"
   [ -z "$JSONBUF" ] || rm -f "$JSONBUF" 2>/dev/null || true
   [ -n "$body" ] || exit "$1"
+  # ONE RENDERING, TWO FIELDS, AND THE SECOND IS DERIVED FROM THE FIRST. `plain` is `body`
+  # with its SGR deleted — never a second pass over the sections, which is how two copies of
+  # a banner come to disagree. With colour off the two are already identical and this costs
+  # one `sed`; a `sed` that fails leaves `plain` empty and the guard below sends the WHOLE
+  # thing down the plain-text fallback rather than shipping an empty model channel.
+  plain="$(printf '%s\n' "$body" | strip_sgr || true)"
   enc="$(printf '%s\n' "$body" | json_string 2>/dev/null || true)"
-  # THE ONLY THING THAT MAY REACH THAT CHANNEL IS A COMPLETE JSON STRING. No awk on the
-  # machine, or an encoder that died halfway, leaves `enc` empty or unterminated — and
-  # half a string spliced into an object is the malformed output this check exists to make
-  # impossible. Falling back to the plain banner is a channel regression, never a parse
-  # error, and it is the same text the reader would have got before this block existed.
-  case "$enc" in
-    '"'*'"')
-      printf '{"systemMessage":%s,"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
-        "$enc" "$enc" ;;
-    *) printf '%s\n' "$body" ;;
-  esac
+  encp="$(printf '%s\n' "$plain" | json_string 2>/dev/null || true)"
+  # THE ONLY THING THAT MAY REACH THAT CHANNEL IS A COMPLETE JSON STRING — BOTH OF THEM. No
+  # awk on the machine, no sed, or an encoder that died halfway, leaves one of these empty or
+  # unterminated, and half a string spliced into an object is the malformed output this check
+  # exists to make impossible. Falling back to the plain banner is a channel regression,
+  # never a parse error, and it is the same text the reader would have got before this block
+  # existed. `${plain:-$body}` and not `$plain`: with no `sed` on the machine there is nothing
+  # to strip WITH, and a banner carrying its escape codes into that fallback is a cosmetic
+  # loss on a channel nothing renders — where losing the banner would not be.
+  case "$enc" in '"'*'"') ;; *) printf '%s\n' "${plain:-$body}"; exit "$1" ;; esac
+  case "$encp" in '"'*'"') ;; *) printf '%s\n' "${plain:-$body}"; exit "$1" ;; esac
+  printf '{"systemMessage":%s,"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
+    "$enc" "$encp"
   exit "$1"
 }
 
@@ -272,7 +317,15 @@ use_color=0
 case "$COLOR" in
   always) use_color=1 ;;
   never)  use_color=0 ;;
-  *)      [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && use_color=1 ;;
+  *)      # TWO CHANNELS RENDER SGR, AND `[ -t 1 ]` ONLY KNOWS ABOUT ONE OF THEM. A terminal
+          # is the obvious one. The other is `--format json`, where the banner leaves as
+          # `systemMessage` and the CLIENT draws it — measured rendering bold, colour, dim and
+          # truecolor, and measured NOT rendering markdown. `[ -t 1 ]` is false on that path by
+          # construction (stdout is pointed at the buffer above), so it is asked SECOND rather
+          # than being made to answer a question it cannot see.
+          if [ -z "${NO_COLOR:-}" ]; then
+            if [ "$FORMAT" = json ] || [ -t 1 ]; then use_color=1; fi
+          fi ;;
 esac
 C_B=""; C_DIM=""; C_RED=""; C_YEL=""; C_OFF=""
 if [ "$use_color" -eq 1 ]; then
@@ -288,6 +341,30 @@ fi
 # PADDED FIELD: `printf '%-20s'` counts the escape bytes as width and the column silently
 # drifts, so every escape in this file wraps a line that is already laid out.
 say() { local c="$1"; shift; printf '%s%s%s\n' "$c" "$*" "$C_OFF"; }
+
+# emphasise — colour a block this file did NOT compose, by SIGNIFICANCE, one whole line at a
+# time. `check-template-version.sh` (§2b) and `ai-bridge.sh check` (§8) are printed verbatim
+# so that this hook carries no second opinion about what they say — but "verbatim" left their
+# warnings the same weight as the settings table, and the whole point of the banner is that
+# the line needing a human is the one you find first. So the CONTENT still comes from them
+# and only the WEIGHT is decided here, off the sigil each already prints:
+#
+#     ⚠ / ⚠️ / ⬆️ at the start of a line   a fact that is false here     -> yellow
+#     everything else (evidence, hints)  context for the line above  -> untouched
+#
+# UNTOUCHED IS THE DEFAULT AND IT IS THE IMPORTANT HALF. Colouring the hint lines too would
+# put colour on every line of the block and leave nothing to scan for.
+#
+# WHOLE LINES ONLY, like every other escape in this file: `say` and `pad` exist because an
+# escape inside a padded field is counted as width and silently shifts a column.
+emphasise() { # stdin -> stdout
+  while IFS= read -r ln; do
+    case "$ln" in
+      ⚠*|⬆*) printf '%s%s%s\n' "$C_YEL" "$ln" "$C_OFF" ;;
+      *)      printf '%s\n' "$ln" ;;
+    esac
+  done
+}
 
 # pad <string> <width> — `printf '%-*s'` pads by BYTES in bash 3.2 (macOS ships it), and
 # `→` is three bytes for one column, so a table containing one drifts two places right per
@@ -439,7 +516,7 @@ if [ -f "$bin/check-template-version.sh" ]; then
   fi
   if [ -n "$drift" ]; then
     echo
-    printf '%s\n' "$drift"
+    printf '%s\n' "$drift" | emphasise
   fi
 fi
 
@@ -744,7 +821,7 @@ if [ -f "$bin/ai-bridge.sh" ]; then
   fi
   if [ -n "$state" ]; then
     echo
-    printf '%s\n' "$state"
+    printf '%s\n' "$state" | emphasise
   fi
 fi
 

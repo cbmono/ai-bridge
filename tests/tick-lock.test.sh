@@ -846,11 +846,64 @@ ok "…and the asymmetry that follows from it" \
 ok "…and that CHILD_SESSION does not rescue it" \
   "$(has "$LOCKSH" 'CLAUDE_CODE_CHILD_SESSION')" yes
 ok "…and where a per-tick id would have to come from" \
-  "$(has "$LOCKSH" 'not exported to the shell at all')" yes
+  "$(has "$LOCKSH" 'nothing per-agent is exported to the shell')" yes
 # The two windows this deliberately does not close, written down rather than found later.
 ok "…and release's two non-atomic rm's"  "$(has "$LOCKSH" 'CANNOT REMOVE THEM AS ONE')" yes
 ok "…and a session id that moves mid-tick" \
   "$(has "$LOCKSH" 'CHANGES ITS ID MID-TICK STILL DEADLOCKS')" yes
+
+echo
+echo "== the dispatch window is a NUMBER, and the identity question has an ANSWER =="
+# WHY THESE ARE PINNED. This window was prose twice before it was a measurement — "the
+# seconds between", "the rarer half of an already rare race" — and prose is what let it read
+# as microseconds when it is most of a minute. So both figures, and the spawn latency that
+# prices every "just acquire earlier" remedy, are asserted as digits in both the file a
+# maintainer reads and the page an operator reads. A future edit that rounds them, drops the
+# second one, or reverts to an adjective goes red here rather than in an incident.
+OPSDOC="$TPL/docs/operations.md"
+for f in "$LOCKSH" "$OPSDOC"; do
+  n="$(basename "$f")"
+  ok "$n keeps the first window as digits"  "$(has "$f" '16:00:11Z')" yes
+  ok "…and what it was claimed at"          "$(has "$f" '16:00:58Z')" yes
+  ok "…and the second, independent one"     "$(has "$f" '18:18:30Z')" yes
+  ok "…claimed at"                          "$(has "$f" '18:19:11Z')" yes
+  ok "…the first duration, as digits"       "$(has "$f" '47')" yes
+  ok "…and the second"                      "$(has "$f" '41')" yes
+  ok "…and the spawn latency that prices a reorder" "$(has "$f" '26-27s')" yes
+done
+# The retracted phrasing may survive ONLY as the retraction itself, and nowhere else. An
+# operator page has no reason to quote it at all, so there it must be absent outright.
+ok "the retraction is quoted once, in the script" \
+  "$(grep -cF 'the seconds between' "$LOCKSH" | tr -d ' ')" 1
+ok "…and the operator page never says it"  "$(grep -cF 'the seconds between' "$OPSDOC" | tr -d ' ')" 0
+ok "…nor the other unmeasured adjective"   "$(grep -cF 'rarer half' "$OPSDOC" | tr -d ' ')" 0
+
+# THE ANSWER, which is the deliverable this window's task actually asked for: the per-tick
+# identity is REACHABLE, and is still not wired in. Both halves are asserted, because either
+# one alone reads as the opposite conclusion — "reachable" alone invites a mechanism nobody
+# priced, and "not wired in" alone reads as "we never looked".
+ok "the script records that the id is reachable" \
+  "$(has "$LOCKSH" 'THE PER-TICK IDENTITY IS REACHABLE')" yes
+ok "…with the corrected on-disk path"      "$(has "$LOCKSH" 'subagents/agent-<agent-id>.jsonl')" yes
+ok "…and says the old guess was wrong"     "$(has "$LOCKSH" 'both guesses')" yes
+ok "…and that nothing per-agent is exported" \
+  "$(has "$LOCKSH" 'NOTHING PER-AGENT IS EXPORTED')" yes
+ok "…naming the pooled process it is not"  "$(has "$LOCKSH" 'a REUSED CLI process')" yes
+ok "…and that the id survives a resume"    "$(has "$LOCKSH" 'THE ID SURVIVES A RESUME')" yes
+ok "…and that it is STILL not used"        "$(has "$LOCKSH" 'AND IT IS STILL NOT USED HERE')" yes
+ok "…reason 1: no per-invocation literal"  "$(has "$LOCKSH" 'THIS SCRIPT'\''S ARGV HAS NONE')" yes
+ok "…reason 2: it ties where it matters"   "$(has "$LOCKSH" 'AMBIGUOUS EXACTLY WHERE IT MATTERS')" yes
+ok "…reason 3: a generic template"         "$(has "$LOCKSH" 'UNDOCUMENTED PRIVATE LAYOUT')" yes
+# The variant that needs no identity at all is the one a reader is most likely to re-derive,
+# so it is priced in the file rather than left to be rebuilt and then measured.
+ok "…and the ordering variant is priced, not left open" \
+  "$(has "$LOCKSH" 'THE ORDERING-INVARIANT VARIANT')" yes
+ok "…as shrinking, never closing"          "$(has "$LOCKSH" 'CANNOT CLOSE IT')" yes
+# Classifying the channel BEFORE anything could use it is the asymmetric rule doing its job.
+ok "…and the channel is classed as derived" "$(has "$LOCKSH" 'transcript channel is DERIVED')" yes
+ok "the operator page carries the answer too" "$(has "$OPSDOC" 'It exists, and this bundle still cannot use it')" yes
+ok "…and classes the channel as derived"   "$(has "$OPSDOC" 'The channel is **derived**, not declared')" yes
+
 # The launcher's own page must not read as if the claim now lets anything through.
 ok "the launcher says its step 1 is unchanged" \
   "$(has "$LAUNCHER" 'Your step 1 is unchanged')" yes
