@@ -60,14 +60,27 @@ pass=0; fail=0
 assert() { if [ "$2" -eq 0 ]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
 eq()   { [ "$1" = "$2" ] && echo 0 || echo 1; }
-has()  { printf '%s\n' "$2" | grep -qF -- "$1" && echo 0 || echo 1; }
-hasnt(){ printf '%s\n' "$2" | grep -qF -- "$1" && echo 1 || echo 0; }
+# NOTHING IN THIS FILE PIPES INTO `grep -q`, AND THAT IS NOT A STYLE PREFERENCE.
+# `grep -q` exits at the FIRST match, so `printf … | grep -q` leaves printf writing into a
+# pipe whose reader is already gone; the EPIPE becomes the PIPELINE's status under the
+# `set -o pipefail` on the line above, and the assertion reports FAIL on output it actually
+# matched. It is a race on where the writer's buffer boundary falls, so it is intermittent:
+# these same three `^⚠` assertions ran 53/0, 51/2, 53/0 over three local runs and cost this
+# PR one red CI (ai-bridge#77, run 33331091704, `--style ansi keeps ⚠ at the start of the
+# line`). A here-string has no such reader — bash writes the whole string first, then runs
+# grep — so every matcher below is fed by `<<<` and every multi-stage grep ends in a
+# capture rather than in a `-q`. `python3` and `sed` below keep their pipes: both read to
+# EOF, so neither can close one early.
+has()    { grep -qF -- "$1" <<<"$2" && echo 0 || echo 1; }
+hasnt()  { grep -qF -- "$1" <<<"$2" && echo 1 || echo 0; }
+# matches <regex> <text> — `has` for a basic regex rather than a literal.
+matches(){ grep -q -- "$1" <<<"$2" && echo 0 || echo 1; }
 
 # Named once. A literal ESC is invisible in a diff and in a grep, which is why nothing in
 # this repo types one.
 ESC="$(printf '\033')"
-has_esc() { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 0 || echo 1; }
-no_esc()  { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 1 || echo 0; }
+has_esc() { LC_ALL=C grep -q "$ESC" <<<"$1" && echo 0 || echo 1; }
+no_esc()  { LC_ALL=C grep -q "$ESC" <<<"$1" && echo 1 || echo 0; }
 strip_sgr() { printf '%s' "$1" | LC_ALL=C sed "s/$ESC\[[0-9;]*m//g"; }
 
 parses() { # <stdout> -> 0 when it is one JSON object
@@ -156,7 +169,7 @@ assert "…and both equal the plain text banner"            "$(eq "$AC" "$TEXT")
 # mechanism chosen for the relay path must not leak onto this one. (The awaiting ITEM in the
 # fixture contains `**approve**`, which is bundle-authored data the banner quotes verbatim
 # and must keep quoting verbatim; the assertion is scoped to the lines the hook composes.)
-COMPOSED="$(printf '%s\n' "$SM" | sed -n '/BEGIN AWAITING ITEMS/,/END AWAITING ITEMS/!p')"
+COMPOSED="$(sed -n '/BEGIN AWAITING ITEMS/,/END AWAITING ITEMS/!p' <<<"$SM")"
 assert "the lines the banner composes carry no markdown emphasis" "$(hasnt '**' "$COMPOSED")"
 
 # =======================================================================================
@@ -213,25 +226,24 @@ echo "== 3. SIGNIFICANCE, not category — the fine rows carry nothing to look a
 # lines that are FALSE carry SGR, and the lines that are FINE carry none.
 run_registered
 SM="$(field "$OUT" systemMessage)"
-esc_lines="$(printf '%s\n' "$SM"   | LC_ALL=C grep -c "$ESC" | tr -d ' ')"
-all_lines="$(printf '%s\n' "$SM"   | grep -c '' | tr -d ' ')"
+esc_lines="$(LC_ALL=C grep -c "$ESC" <<<"$SM" | tr -d ' ')"
+all_lines="$(grep -c '' <<<"$SM" | tr -d ' ')"
 
 # The alarm and the warning, by name and on the human's channel.
 assert "the machinery alarm fired in this fixture" "$(has 'machinery is DANGLING' "$SM")"
 assert "…and that line is coloured" \
-  "$(printf '%s\n' "$SM" | grep 'machinery is DANGLING' | LC_ALL=C grep -q "$ESC" && echo 0 || echo 1)"
+  "$(has_esc "$(grep 'machinery is DANGLING' <<<"$SM")")"
 assert "the awaiting block fired"                  "$(has 'need your input' "$SM")"
 assert "…and that line is coloured" \
-  "$(printf '%s\n' "$SM" | grep 'need your input' | LC_ALL=C grep -q "$ESC" && echo 0 || echo 1)"
+  "$(has_esc "$(grep 'need your input' <<<"$SM")")"
 
 # THE OTHER HALF. A settings row is a fact that is TRUE and must be quiet — this is what
 # stops the feature from being "colour every row by what kind of row it is".
 assert "the settings table fired"                  "$(has 'maxAgentsInFlight' "$SM")"
 assert "…and its rows are NOT coloured" \
-  "$(printf '%s\n' "$SM" | grep -E '^(owner|maxAgentsInFlight|maxPrLoc|software-engineer|cataloguer) ' \
-     | LC_ALL=C grep -q "$ESC" && echo 1 || echo 0)"
+  "$(no_esc "$(grep -E '^(owner|maxAgentsInFlight|maxPrLoc|software-engineer|cataloguer) ' <<<"$SM")")"
 assert "…nor are the awaiting ITEMS, which are quoted data" \
-  "$(printf '%s\n' "$SM" | grep -F '• ' | LC_ALL=C grep -q "$ESC" && echo 1 || echo 0)"
+  "$(no_esc "$(grep -F '• ' <<<"$SM")")"
 
 # A MINORITY, COUNTED. "Findable at a glance" is a claim about the ratio, and a banner whose
 # every line is coloured satisfies every per-line assertion above while satisfying none of
@@ -244,9 +256,9 @@ assert "coloured lines are a minority of the banner ($esc_lines of $all_lines)" 
 # `--banner` and `emphasise` decides the weight here.
 assert "the inlined ai-bridge check block fired"   "$(has 'ai-bridge check — state worth a look' "$SM")"
 assert "…its ⚠ line is coloured" \
-  "$(printf '%s\n' "$SM" | grep 'NOT linked in this instance' | LC_ALL=C grep -q "$ESC" && echo 0 || echo 1)"
+  "$(has_esc "$(grep 'NOT linked in this instance' <<<"$SM")")"
 assert "…while its ↳ hint line, which is context, is not" \
-  "$(printf '%s\n' "$SM" | grep -F '↳ bash' | LC_ALL=C grep -q "$ESC" && echo 1 || echo 0)"
+  "$(no_esc "$(grep -F '↳ bash' <<<"$SM")")"
 
 # =======================================================================================
 echo "== 4. it DEGRADES, and the degradation is demonstrated rather than asserted =="
@@ -291,16 +303,16 @@ PIPED="$(ab)"
 assert "a piped check produces output"             "$([ -n "$PIPED" ] && echo 0 || echo 1)"
 assert "…with NO escape byte anywhere in it"       "$(no_esc "$PIPED")"
 assert "…and its ⚠ lines carry markdown emphasis" \
-  "$(printf '%s\n' "$PIPED" | grep '^⚠ ' | grep -qF '**' && echo 0 || echo 1)"
+  "$(has '**' "$(grep '^⚠ ' <<<"$PIPED")")"
 # The other half, again: a ✓ line is a fact that is true and gets nothing.
 assert "…while its ✓ lines carry none"             \
-  "$(printf '%s\n' "$PIPED" | grep '^✓ ' | grep -qF '**' && echo 1 || echo 0)"
+  "$(hasnt '**' "$(grep '^✓ ' <<<"$PIPED")")"
 
 # THE BANNER'S COPY IS PLAIN, and that is not a detail: markdown arrives literal on the
 # systemMessage channel, so a `**` here would be two asterisks in the human's banner.
 BANNERED="$(ab --only-problems --banner)"
 assert "the --banner form still emits its ⚠ lines" \
-  "$(printf '%s\n' "$BANNERED" | grep -q '^⚠' && echo 0 || echo 1)"
+  "$(matches '^⚠' "$BANNERED")"
 assert "…with no markdown"                         "$(hasnt '**' "$BANNERED")"
 assert "…and no escape"                            "$(no_esc "$BANNERED")"
 
@@ -313,6 +325,19 @@ assert "--style plain uses neither"                \
   "$([ "$(no_esc "$(ab --style plain)")" = 0 ] && [ "$(hasnt '**' "$(ab --style plain)")" = 0 ] && echo 0 || echo 1)"
 assert "NO_COLOR reaches this script too"          \
   "$(hasnt '**' "$(NO_COLOR=1 ab)")"
+# AND IT OUTRANKS `--style`, WHICH IS THE HALF THAT SHIPPED BROKEN. `NO_COLOR` is the
+# READER's opt-out and `--style` is the CALLER's guess about that reader, so the flag loses.
+# The first cut resolved the explicit values first and never reached the `NO_COLOR` test, so
+# the opt-out held on exactly the paths that passed no style — an opt-out that works until
+# something uses the flag, and nothing above would have caught it.
+assert "…and outranks an explicit --style ansi"    \
+  "$(no_esc "$(NO_COLOR=1 ab --style ansi)")"
+assert "…and an explicit --style markdown"         \
+  "$(hasnt '**' "$(NO_COLOR=1 ab --style markdown)")"
+# The other direction, so "always plain" cannot pass as the fix: the contract is set AND
+# non-empty, and §4 pins the same one on the hook.
+assert "…while an EMPTY NO_COLOR leaves --style ansi coloured" \
+  "$(has_esc "$(NO_COLOR='' ab --style ansi)")"
 # An unrecognised style must not kill a command a SessionStart hook can call.
 assert "an unknown --style value is not fatal"     \
   "$(eq "$( ( cd "$INST" && bash "$AB" check --style wat --instance "$INST" --template "$TPL" >/dev/null 2>&1 ); echo $? )" 0)"
@@ -323,7 +348,7 @@ assert "an unknown --style value is not fatal"     \
 # single content grep.
 for st in markdown ansi plain; do
   assert "--style $st keeps ⚠ at the start of the line" \
-    "$(printf '%s\n' "$(ab --style "$st")" | grep -q '^⚠' && echo 0 || echo 1)"
+    "$(matches '^⚠' "$(ab --style "$st")")"
 done
 
 # =======================================================================================
@@ -334,7 +359,7 @@ echo "== 6. the relay instruction travels with the command that needs it =="
 # exists to replace — so the command document says so, and this is the reader for that.
 DOC="$(cat "$CMDDOC")"
 assert "the /ai-bridge command tells the session not to fence the output" \
-  "$(printf '%s\n' "$DOC" | grep -qi 'code fence' && echo 0 || echo 1)"
+  "$(matches '[Cc]ode [Ff]ence' "$DOC")"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
