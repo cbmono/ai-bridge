@@ -431,8 +431,33 @@ lock the launcher took **has not yet been claimed by a tick**, and a lock a tick
 under **has**. The claim is `.tick-lock.claim`, created with `O_EXCL` exactly like the lock
 itself, so two ticks cannot both adopt one dispatch. It is part of the lock rather than a
 second lock — its timestamp is never a second staleness clock, and `release` removes both,
-unconditionally. A tick releases only a lock it *created* (the resume case); one it
-*adopted* is the launcher's, released when the tick reports.
+unconditionally. A tick releases **nothing**, in every case: the only lock it can be
+running under is one it *adopted*, and that one is the launcher's, released when the tick
+reports.
+
+**And a tick that finds NO lock is refused (exit 4) rather than allowed to take one — a
+tick is never resumed, without exception.** The launcher takes the lock in the same breath
+as the spawn, so a tick that finds none did not come through the launcher: it was woken
+with a message, or started by hand. Until 2026-08-30 it created a lock of its own and
+carried on, which made the *next* genuine dispatch stand down instead. Exactly one tick ran
+— the property the lock defends — and it was the wrong one: a tick re-entering a loop whose
+state has moved on, carrying context from work that is already finished. That is also why a
+tick can no longer release anything: the case where it owned a lock no longer exists.
+
+**Which half of the resume rule has a reader, plainly.** The rule itself is stated once, in
+`symlink/CONVENTIONS.md` → "A subagent works ONE task": same task and same PR ⇒ resume; a
+different task, a different PR or an unrelated job ⇒ dispatch fresh; a tick ⇒ never. Only
+the tick half has a mechanism, and it is the exit-4 refusal above. The rest is a
+**convention with no reader anywhere** — nothing can see the intent behind a message — so
+it is held by whoever dispatches (the main session and the tick) and is written where they
+read it rather than dressed up as enforced. One case stays open on the checked half too,
+and is stated rather than left to be found: a resume arriving *inside* the launcher's
+dispatch window meets a live unclaimed lock, which is indistinguishable from the tick that
+lock was taken for, so it adopts and runs.
+
+There is deliberately **no "delete the agent" primitive**, here or anywhere in the bundle.
+Agents complete on their own; resumption is the only lever there is, which is why the rule
+governs resumption rather than an agent's lifetime.
 
 **And it must not refuse its own claim either**, which is the same shape one level down and
 is what actually happened hours after the paragraph above shipped: a dispatched tick held

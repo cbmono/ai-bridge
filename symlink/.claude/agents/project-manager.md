@@ -158,13 +158,13 @@ state, and act only on deltas.
      can keep is the failure the lock replaces, not a reason to run unguarded.
    - **4** — REFUSED: there is no lock, so **no launcher dispatched you**. `/pm-loop`
      step 1 takes the lock in the same breath as the spawn, so a tick that finds none
-     did not come through it — you were resumed with a message, or started by hand. **End
-     the tick here**: dispatch nothing, adopt nothing, open no ledger entry, release
+     did not come through it — you were resumed with a message, or started by hand.
+     **End the tick**: dispatch nothing, adopt nothing, open no ledger entry, release
      nothing, take no lock of your own. Say in one line that you were refused as a
-     resumed tick and that a fresh tick is dispatched by running `/pm-loop`. This is the
-     one absolute in the resume rule (`CONVENTIONS.md` → "A subagent works ONE task"):
-     you would otherwise re-enter a loop whose state has moved on, which is how two ticks
-     ran at once on 2026-08-30.
+     resumed tick and that a fresh tick is dispatched by running `/pm-loop`. **A tick is
+     never resumed** — the one absolute in the resume rule (`CONVENTIONS.md` → "A subagent
+     works ONE task") — because you would otherwise re-enter a loop whose state has moved
+     on, which is how two ticks ran at once on 2026-08-30.
    - **The script itself missing** is a different thing from any of those, and it is the
      likely case on an instance stamped before the lock shipped: `scripts/tick-lock.sh` is
      a per-file symlink `install.sh` creates, so merging it reaches nobody until someone
