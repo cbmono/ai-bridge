@@ -232,6 +232,50 @@ if command -v python3 >/dev/null 2>&1; then
   OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null )"; RC=$?
   assert "…and a float is refused rather than truncated"  \
     "$([ -z "$OUT" ] && [ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  # A JSON `null` IS ABSENCE, at every layer and in every mode. THE DEFECT THIS PINS,
+  # reproduced before it was fixed: with `"models": {"deep": null}` and a role on `deep`,
+  # `resolve-model.sh` printed the four letters `null` and exited 0 — so a dispatcher would
+  # have asked for a model NAMED "null" instead of falling back to the session model. The
+  # `--dump` side matters just as much: the banner reads the dump, and a null leaf there is
+  # a settings row asserting a value the config does not have.
+  printf '%s\n' '{
+  "org": "o",
+  "maxAgentsInFlight": 9,
+  "models":    { "light": "haiku", "standard": "sonnet", "deep": null },
+  "roleTiers": { "software-engineer": "deep", "cataloguer": "standard" }
+}' > "$INST/instance.config.json"
+  no_local
+  OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-model.sh" software-engineer 2>/dev/null )"; RC=$?
+  assert "a null model alias prints nothing…" "$([ -z "$OUT" ] && echo 0 || echo 1)"
+  assert "…and exits 1, exactly as an absent key does" "$([ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  assert "…never the literal string 'null' as an alias" \
+    "$([ "$OUT" != null ] && echo 0 || echo 1)"
+  assert "…while the sibling entry still resolves (standard -> sonnet)" \
+    "$([ "$(MODEL cataloguer)" == sonnet ] && echo 0 || echo 1)"
+  DUMP="$( bash "$SCRIPTS/resolve-config.sh" --instance "$INST" --dump 2>/dev/null )"
+  assert "--dump omits the null leaf entirely" \
+    "$(printf '%s\n' "$DUMP" | grep -qE '^[a-z]+	models	deep	' && echo 1 || echo 0)"
+  assert "…and still carries the leaves beside it" \
+    "$(printf '%s\n' "$DUMP" | grep -q 'models	standard	sonnet' && echo 0 || echo 1)"
+  for M in "" --source --json; do
+    OUT="$( bash "$SCRIPTS/resolve-config.sh" --instance "$INST" $M models deep 2>/dev/null )"; RC=$?
+    assert "resolve-config ${M:---value} models.deep: nothing, exit 1" \
+      "$([ -z "$OUT" ] && [ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  done
+  # A whole key set to null, and the same key nulled in the LOCAL file over a real tracked
+  # value: "null is absence" has to hold at every layer, or the per-machine file could not
+  # UNSET an inherited key at all.
+  printf '{\n  "maxAgentsInFlight": null\n}\n' > "$INST/instance.config.json"
+  OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null )"; RC=$?
+  assert "a null cap is refused, not read as a value" \
+    "$([ -z "$OUT" ] && [ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  printf '{\n  "maxAgentsInFlight": 9\n}\n' > "$INST/instance.config.json"
+  local_cfg '{ "maxAgentsInFlight": null }'
+  OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null )"; RC=$?
+  assert "a LOCAL null unsets the tracked value rather than being ignored" \
+    "$([ -z "$OUT" ] && [ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  no_local
+
   # Non-vacuity for the three refusals above: the same resolver still answers a real one.
   printf '{\n  "maxAgentsInFlight": 4\n}\n' > "$INST/instance.config.json"
   assert "…while a plain integer cap still resolves"      \

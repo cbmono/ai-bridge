@@ -31,6 +31,16 @@
 # is skipped rather than fatal — a half-typed local file must not blank the tracked
 # answer, which is the same direction `build-board.sh` takes for the same reason.
 #
+# JSON `null` IS ABSENCE, and that is a correctness rule rather than a nicety. Rendered, it
+# would print the four letters `null`, and `resolve-model.sh` would hand those back AS A
+# MODEL ALIAS: with `"models": {"deep": null}`, `resolve-model.sh project-manager` printed
+# `null` and exited 0, so a dispatcher would ask for a model named "null" instead of
+# falling back to the session model. So a key or entry resolving to null exits 1 with no
+# output — byte for byte what an absent key does — and `--dump` omits null leaves entirely.
+# It follows that a LOCAL null MASKS a tracked value: `"maxAgentsInFlight": null` in the
+# per-machine file is how you UNSET an inherited key, which is the only reading under which
+# "null is absent" holds at every layer rather than only at the last one.
+#
 # REQUIRES python3, as both resolvers already did. A caller that must survive its absence
 # (the SessionStart banner does — a hook that prints a stack trace at every session start
 # is worse than one that omits a block) tests for it first and omits the section.
@@ -111,17 +121,24 @@ for origin, name in LAYERS:
             cfg[k] = v
             src[k] = {ek: origin for ek in v} if isinstance(v, dict) else origin
 
+def absent(v):
+    """JSON null is ABSENCE, everywhere and at every layer — the one predicate, so the
+    dump path and the value path cannot come to disagree about it. `render()` has no null
+    branch precisely because nothing may ever render one: the four letters `null` printed
+    into a caller's `$(...)` become an alias, a cap or a path that looks like a value and
+    is not (see the header)."""
+    return v is None
+
 def render(v):
     """One line of plain text for a JSON value. Strings print bare — the banner is
-    printing a path or an address for a human, not re-serialising the config."""
+    printing a path or an address for a human, not re-serialising the config. Never
+    called with None; `absent()` filters that out first."""
     if isinstance(v, str):
         return v
     if v is True:
         return "true"
     if v is False:
         return "false"
-    if v is None:
-        return "null"
     if isinstance(v, (int, float)):
         return json.dumps(v)
     return json.dumps(v, separators=(",", ":"))
@@ -141,19 +158,23 @@ if mode == "dump":
         v = cfg[k]
         if isinstance(v, dict):
             for ek in sorted(v):
+                if absent(v[ek]):
+                    continue          # a null entry is one the reader must not see at all
                 where = src[k][ek] if isinstance(src.get(k), dict) else src.get(k, "")
                 out.append("%s\t%s\t%s\t%s" % (where, k, ek, flat(render(v[ek]))))
         else:
+            if absent(v):
+                continue
             out.append("%s\t%s\t\t%s" % (src.get(k, ""), k, flat(render(v))))
     sys.stdout.write("".join(line + "\n" for line in out))
     sys.exit(0)
 
-if key not in cfg:
+if key not in cfg or absent(cfg[key]):
     sys.exit(1)
 val = cfg[key]
 where = src.get(key, "")
 if entry:
-    if not isinstance(val, dict) or entry not in val:
+    if not isinstance(val, dict) or entry not in val or absent(val[entry]):
         sys.exit(1)
     where = where[entry] if isinstance(where, dict) else where
     val = val[entry]
