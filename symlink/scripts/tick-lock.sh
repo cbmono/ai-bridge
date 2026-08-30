@@ -259,8 +259,8 @@
 #                                                            toolUseId, parentAgentId,
 #                                                            spawnDepth, model}
 #     $CLAUDE_JOB_DIR/state.json  ->  fan[] of {id, kind, label, startedAt}
-#   The session dir needs no path-slug arithmetic: `~/.claude/projects/*/$CLAUDE_CODE_
-#   SESSION_ID/subagents` reaches it from the one variable that IS exported.
+#   The session dir needs no path-slug arithmetic. A glob on the one exported variable
+#   reaches it: `~/.claude/projects/*/"$CLAUDE_CODE_SESSION_ID"/subagents`.
 #
 #   AN AGENT CAN FIND ITS OWN RECORD IN A SINGLE INVOCATION. The `tool_use` record carrying
 #   a command is committed to the agent's own transcript BEFORE that command runs, so a
@@ -269,10 +269,12 @@
 #   right one. No second tool call, no round-trip, nothing carried in a prompt.
 #
 #   AND THE ID SURVIVES A RESUME, which is the property a guard here would need. A resumed
-#   agent APPENDS to its existing transcript — three of the fifteen carry two or three
-#   user turns — so the file name, and the first record's timestamp, stay the ORIGINAL
-#   dispatch. That is exactly the ordering fact the window needs: a resumed tick's
-#   transcript predates the lock it is about to meet, and a dispatched tick's does not.
+#   agent APPENDS to its existing transcript — 4 of the 15 here do, each with a fresh user
+#   turn arriving 394-1455s after the previous record, so they are resumes and not inline
+#   injections — and one of the four is a PM TICK. The file name, and the first record's
+#   timestamp, therefore stay the ORIGINAL dispatch. That is exactly the ordering fact the
+#   window needs: a resumed tick's transcript predates the lock it is about to meet, and a
+#   dispatched tick's does not.
 #
 # AND IT IS STILL NOT USED HERE. THREE REASONS, EACH SUFFICIENT ON ITS OWN.
 #
@@ -302,7 +304,7 @@
 #
 # WHERE THIS LEAVES THE ASYMMETRIC RULE, STATED BEFORE ANY OF IT COULD BE USED. The
 # transcript channel is DERIVED — read from the runtime, promised by nobody — so under the
-# rule below it could only ever REFUSE, never clear. That direction happens to be the one
+# rule stated above it could only ever REFUSE, never clear. That direction happens to be the one
 # the window needs, which is why it was worth measuring at all; the three reasons above are
 # what stop it, not the asymmetry.
 #

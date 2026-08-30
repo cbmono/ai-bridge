@@ -476,7 +476,7 @@ Every obvious remedy is ground this bundle has already decided:
 | a one-time capability handed to the spawned tick | it is the **nonce carried by the dispatch prompt**, refused in the lock's own design and again in the claimant's — a value a model carries as prose is this project's recurring failure class |
 | verify the claimant before releasing | `release` is **deliberately unconditional** — it is the human's override, and `release --as tick` is exit 3 so it cannot be scoped |
 | make the tick acquire earlier | shortens the window, cannot close it (the residue is spawn latency), and puts the guarantee back into a model following prose |
-| refuse unless *some* agent was spawned after the lock | needs no identity and is sound, but the table above prices it: the transcript appears 26-27s in, so it shrinks 41s to about **15s** and cannot close it — the same verdict as the row above, earned a second way |
+| refuse unless *some* `project-manager` agent was spawned after the lock | needs no identity and is sound, but the table above prices it: the transcript appears 26-27s in, so it shrinks 41s to about **15s** and cannot close it — the same verdict as the row above, earned a second way |
 
 **What would close it is a per-tick identity, and on 2026-08-30 the runtime was asked
 directly. It exists, and this bundle still cannot use it.** Measured from inside a
@@ -489,12 +489,13 @@ dispatched agent, on CLI 2.1.251:
   separates a subagent from a parent and never one subagent from another.
 - **The id does exist on disk**, at `<session-dir>/subagents/agent-<agent-id>.jsonl` with an
   `agent-<agent-id>.meta.json` beside it, plus a `fan[]` array in `$CLAUDE_JOB_DIR/state.json`.
-  Both places this bundle previously guessed that path were wrong, which is itself the
+  The path this bundle previously recorded was a guess and was wrong, which is itself the
   evidence for how knowable this surface is from outside.
 - **An agent can find its own record in one call**, because the `tool_use` record is written
   before the command runs; a literal unique to one invocation's argv matched exactly 1 of 15
-  transcripts, and the right one. **And the id survives a resume** — a resumed agent appends
-  to its existing transcript, so the first record's timestamp stays the original dispatch.
+  transcripts, and the right one. **And the id survives a resume** — 4 of the 15 here were
+  resumed and each appended to its existing transcript, so the first record's timestamp
+  stays the original dispatch.
 - **It is still not wired in**, for three reasons each sufficient alone: this script's argv
   carries no per-invocation literal to match on, and adding one means a model typing a fresh
   value per tick — the refused nonce, one boundary inward; without one the fallback ties in
