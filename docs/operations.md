@@ -454,8 +454,26 @@ Only the tick half has a mechanism, and it is the exit-4 refusal above. The rest
 it is held by whoever dispatches (the main session and the tick) and is written where they
 read it rather than dressed up as enforced. One case stays open on the checked half too,
 and is stated rather than left to be found: a resume arriving *inside* the launcher's
-dispatch window meets a live unclaimed lock, which is indistinguishable from the tick that
-lock was taken for, so it adopts and runs.
+**dispatch window** — between the launcher taking the lock and its spawned tick claiming it
+— meets a live *unclaimed* lock, which is indistinguishable from the tick that lock was
+taken for, so it adopts and runs while the genuine tick holds.
+
+**That window is not microseconds, and it is not closed.** Measured in a live instance
+2026-08-30: lock taken 16:00:11Z, claimed 16:00:58Z — **47 seconds**, covering the spawn and
+everything the tick does before its own acquire. Every obvious remedy is ground this bundle
+has already decided:
+
+| remedy | why not |
+|---|---|
+| a one-time capability handed to the spawned tick | it is the **nonce carried by the dispatch prompt**, refused in the lock's own design and again in the claimant's — a value a model carries as prose is this project's recurring failure class |
+| verify the claimant before releasing | `release` is **deliberately unconditional** — it is the human's override, and `release --as tick` is exit 3 so it cannot be scoped |
+| make the tick acquire earlier | shortens the window, cannot close it (the residue is spawn latency), and puts the guarantee back into a model following prose |
+
+What closes it is a **per-tick identity** delivered through a channel that is neither the
+dispatch prompt nor `CLAUDE_CODE_SESSION_ID` — a mechanism decision of its own, tracked as
+its own task. Note that the refusal above **shrinks** this race rather than creating it:
+before it, a resumed tick that met no lock took one and ran *every* time, with no window to
+hit at all.
 
 There is deliberately **no "delete the agent" primitive**, here or anywhere in the bundle.
 Agents complete on their own; resumption is the only lever there is, which is why the rule

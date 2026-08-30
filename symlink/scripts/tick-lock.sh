@@ -192,15 +192,46 @@
 # recognising yourself is not a licence to run past a deadline a human has to rule on.
 # `release` removes both, and nothing else removes either.
 #
-# WHAT THIS DOES NOT CLOSE, STATED RATHER THAN LEFT TO BE DISCOVERED. Two ticks can still
-# swap places inside the launcher's own dispatch window: if a resumed tick reaches its
-# `acquire` in the seconds between the launcher taking the lock and the dispatched tick
-# starting, the RESUMED tick adopts that lock and the dispatched one then holds. Exactly one
-# tick runs, which is the property that matters — but `/pm-loop` step 2 then releases that
-# lock when its own (held) tick reports, freeing a lock the resumed tick is still running
-# under. Closing it would mean asking `release` who is calling, which is the one thing an
-# override must never do; it is bounded, it is the rarer half of an already rare race, and
-# it is written down here rather than found later.
+# WHAT THIS DOES NOT CLOSE — STATED RATHER THAN LEFT TO BE DISCOVERED, AND MEASURED RATHER
+# THAN CALLED SMALL. Two ticks can still swap places inside the launcher's own DISPATCH
+# WINDOW: the interval between the launcher taking the lock and the tick it spawned claiming
+# it. A resumed tick reaching its `acquire` in that window meets a live UNCLAIMED lock —
+# which is exactly what a fresh dispatch looks like — so it adopts and runs, and the genuine
+# tick then holds. Exactly one tick runs, which is the property that matters, but `/pm-loop`
+# step 2 releases that lock when its own (held) tick reports, freeing a lock the resumed
+# tick is still running under.
+#
+# THE WINDOW IS NOT MICROSECONDS, AND AN EARLIER DRAFT OF THIS PARAGRAPH IMPLIED IT WAS.
+# Measured in a live instance 2026-08-30: lock taken 16:00:11Z, claimed 16:00:58Z — FORTY-
+# SEVEN SECONDS, covering the spawn and everything the tick does before it reaches step 0.5.
+# The previous wording said "the seconds between" and called this "the rarer half of an
+# already rare race"; neither adjective had a measurement behind it, and both are gone. The
+# microsecond race in this file is a different one — `release`'s two `rm`s, below.
+#
+# IT IS NOT CLOSED HERE, AND THE REASON IS THAT EVERY CANDIDATE REMEDY IS ALREADY-DECIDED
+# GROUND. Named, so the next reader does not spend the same afternoon on them:
+#
+#   A ONE-TIME CAPABILITY handed to the spawned tick is a NONCE CARRIED BY THE DISPATCH
+#   PROMPT under another name — prose carried across an agent boundary by a model, refused
+#   twice above and the failure class this whole file keeps being bitten by.
+#
+#   VERIFYING THE CLAIMANT BEFORE RELEASING means asking `release` who is calling, which an
+#   override must never do. `release --as tick` is exit 3 precisely so `release` cannot be
+#   scoped, and that is pinned by tests rather than left to discipline.
+#
+#   MAKING THE TICK ACQUIRE EARLIER shortens the window and cannot close it — the residue is
+#   agent-spawn latency — and it would put the guarantee back into a model following prose,
+#   which is the mechanism class this file exists to replace.
+#
+# What closes it is a PER-TICK identity delivered through a channel that is neither the
+# dispatch prompt nor `CLAUDE_CODE_SESSION_ID` (which names the SESSION — measured below).
+# That is a mechanism decision with its own trade-offs, not a rider on this one, so it is
+# tracked as its own task rather than parked in this comment.
+#
+# AND THIS FILE STRICTLY SHRINKS THAT RACE RATHER THAN CREATING IT, which is why the gap
+# does not block the refusal above. Before exit 4, a resumed tick meeting NO lock took one
+# and ran — every time, with no window to hit. After it, the resume path gets through only
+# by landing inside the dispatch window. The gap is open in both versions and smaller here.
 #
 # WHAT IS CHECKED HERE AND WHAT IS ONLY A CONVENTION, SAID PLAINLY SO NEITHER IS MISTAKEN
 # FOR THE OTHER. Refusing a resumed tick HAS a reader and it is this file: no lock, no
@@ -209,8 +240,8 @@
 #
 #   1. A resume that arrives INSIDE the launcher's dispatch window meets a live UNCLAIMED
 #      lock and is, at that instant, indistinguishable from the tick the launcher took it
-#      for — so it adopts and runs. That is the bounded race in the paragraph above, and
-#      it is the one way a resumed tick still gets through.
+#      for — so it adopts and runs. That is the 47-second window measured above, and it is
+#      the one way a resumed tick still gets through. Open, named, and not closed here.
 #   2. Whether a resume of any OTHER agent is "the same task" cannot be seen from here or
 #      from anywhere else: nothing can read a `SendMessage`'s intent. That half is a
 #      convention held by whoever dispatches, written in CONVENTIONS.md and in the

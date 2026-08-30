@@ -191,8 +191,9 @@ one line:
 
 > same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
 
-Nothing can see the intent behind a message, so apart from the tick — which the
-dispatch lock refuses outright — **you** are the only reader this rule has. It is
+Nothing can see the intent behind a message, so apart from a tick that finds
+**no dispatch lock** — which the lock refuses outright, because the absence proves
+no launcher spawned it — **you** are the only reader this rule has. It is
 not paperwork: one agent resumed across three unrelated jobs ended a day carrying
 163k tokens, and one resumed tick produced two concurrent ticks.
 

@@ -943,8 +943,30 @@ ok "step 8 releases nothing, in every case" \
   "$(rel | grep -qF 'a tick releases no lock, ever' && echo yes || echo no)" yes
 ok "…leaving the adopted one to the launcher" \
   "$(rel | grep -qF 'adopted:' && echo yes || echo no)" yes
-ok "…and a tick that held releases nothing either" \
-  "$(rel | grep -qF 'releases' && echo yes || echo no)" yes
+# A `grep 'releases'` matched "releases nothing" AND "releases it", so it passed on the
+# instruction's own inverse — the "test that cannot fail" shape this repo has hit repeatedly.
+# What has to hold is semantic and has two halves, a positive and a negative:
+#
+#   POSITIVE  every exit that is NOT a dispatch is named as releasing nothing, so a step
+#             that quietly covered only exit 1 fails here.
+unwrap() { tr '\n' ' ' | tr -s ' '; }   # the prose is hard-wrapped; the sentence is not
+ok "…and every non-dispatch exit is named as releasing nothing" \
+  "$(rel | unwrap | grep -qF 'all release nothing too' && echo yes || echo no)" yes
+for code in 1 2 4; do
+  ok "…exit $code among them"            "$(rel | grep -qF "exit $code" && echo yes || echo no)" yes
+done
+#   NEGATIVE  step 8's command block RUNS NOTHING — every line in it is a comment or blank.
+#             This is the assertion the old one should have been: put `tick-lock.sh release`
+#             back into that block and it fails, which is the only mutation that matters.
+fence() { rel | awk '/^   ```/{f=!f; next} f'; }
+ok "…and the command block was extractable (or the next line is vacuous)" \
+  "$([ "$(fence | wc -l | tr -d ' ')" -gt 0 ] && echo yes || echo no)" yes
+ok "…and it runs nothing at all"         "$(fence | grep -cvE '^[[:space:]]*(#.*)?$' | tr -d ' ')" 0
+# `release` is still NAMED in step 8's prose, and must be — as the human's override, not
+# as something the tick may run. Asserted on that framing, because deleting the framing is
+# how the command comes back as an instruction.
+ok "…and the release command is named only as the human's" \
+  "$(rel | unwrap | grep -qF "not yours to run at the end of a tick" && echo yes || echo no)" yes
 # The case that used to be here — a tick releasing a lock it created — must not come back
 # by itself: it can only exist again if a tick can take a lock, which step 0.5 refuses.
 ok "…with no surviving instruction to release a lock the tick took" \
