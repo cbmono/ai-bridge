@@ -461,7 +461,8 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # same commit.
 # 54 -> 55: symlink/.claude/hooks/deny-destructive.sh (ai-bridge-v5/task-006) is one more
 # executable machinery file, so the per-file enumeration runs one more assertion.
-EXPECTED_ASSERTIONS=55
+# 55 -> 56: symlink/scripts/tick-lock.sh (ai-bridge-v5/task-003), same reason.
+EXPECTED_ASSERTIONS=56
 TOTAL=$((pass + fail))
 assert "exactly $EXPECTED_ASSERTIONS assertions ran — a silently skipped block shows up here (got $TOTAL)" \
   "$([ "$TOTAL" -eq "$EXPECTED_ASSERTIONS" ] && echo 0 || echo 1)"

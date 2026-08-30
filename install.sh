@@ -1214,6 +1214,22 @@ if ! grep -qE '^/?\.board-others\.json$' "$gi"; then
 GI
 fi
 
+# The PM dispatch lock (scripts/tick-lock.sh), appended for the third time for exactly the
+# same reason: every instance in existence was stamped before this file existed, and a lock
+# that got committed would stop being per-clone — which is the one property it has.
+if ! grep -qE '^/?\.tick-lock$' "$gi"; then
+  cat >> "$gi" <<'GI'
+
+# The PM dispatch lock (scripts/tick-lock.sh) — written by /pm-loop immediately before it
+# dispatches a tick and released when that tick reports, so the one-tick-at-a-time
+# guarantee survives a compaction instead of resting on a session's memory. PER CLONE and
+# never committed: two humans sharing one bundle work from two clones and each dispatches
+# independently, which a shared lock would break. Derived and safe to delete when no tick
+# is running.
+/.tick-lock
+GI
+fi
+
 # 3b. Two more ignores, appended once each if missing — OUTSIDE the managed block,
 # for the same reason as /repos/ above.
 #

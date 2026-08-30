@@ -32,6 +32,17 @@
 # so the absence of the grant, the absence of the step, and the switch that replaced them
 # are asserted together at the bottom.
 #
+# AND IT OWNS THE ONE GRANT THAT WAS DELIBERATELY ADDED BACK. `Bash(scripts/tick-lock.sh:*)`
+# joined the allowlist on 2026-08-30, and a file whose subject is "the launcher stays
+# closed" is exactly where that has to be visible. The reason it is not a regression: the
+# launcher is the ONLY place that knows "I am dispatching right now" — the tick learns it
+# seconds later, which is the window that let two ticks run concurrently for 34 minutes on
+# 2026-08-29 — so the dispatch lock cannot live one context deeper the way every other read
+# on this list can. What keeps it from being a hole is its shape: one script over one
+# gitignored file, which WRITES and returns an exit code rather than returning content, and
+# which prints nothing at all on the path that dispatches. The approved list below grows by
+# that one entry and by nothing else, so any second addition still fails here.
+#
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
 
@@ -90,6 +101,7 @@ readers_granted() { # <file> -> count of grants that are NOT on the approved lis
     | grep -v '^$' \
     | grep -v -x -e 'Bash(pwd)' -e 'Bash(ls:\*)' -e 'Agent' \
                  -e 'ScheduleWakeup' -e 'CronList' -e 'CronDelete' \
+                 -e 'Bash(scripts/tick-lock.sh:\*)' \
     | wc -l | tr -d ' '
 }
 
@@ -111,9 +123,16 @@ for probe in 'Bash(curl:*)' 'Bash(python:*)' 'Bash(node:*)' 'Read' 'Bash'; do
 done
 # …while the real launcher's exact grant list still passes, so the allowlist is not
 # simply rejecting everything.
-printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Agent, ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
+printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Bash(scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
   > "$TMP/probe.md"
 ok "…and PASSES on the approved set alone" "$(readers_granted "$TMP/probe.md")" 0
+# The approved set is EXACTLY those seven. A near-miss — another script under the same
+# directory — is not covered by the tick-lock entry and must still count as a grant, or
+# "one exception" would quietly mean "any script".
+printf -- '---\nallowed-tools: Bash(pwd), Bash(scripts/write-snapshot.sh:*), Agent\n---\nbody\n' \
+  > "$TMP/probe.md"
+ok "…and FAILS on a different script grant" \
+  "$( [ "$(readers_granted "$TMP/probe.md")" -ge 1 ] && echo yes || echo no )" yes
 
 # --- the launcher says, in the file, that it reads nothing else -------------------
 # `The launcher reads nothing else` is an anchor both files cite, so it is grepped
@@ -125,6 +144,21 @@ forbidden_named() { # <file> -> count of the four costly sources named in that s
     | grep -o -E 'log\.md|tick ledger|git log|gh pr list' | sort -u | wc -l | tr -d ' '
 }
 ok "the rule names what it forbids" "$(forbidden_named "$LAUNCHER")" 4
+# THE ONE EXCEPTION, AND THE SENTENCE THAT STOPS IT BECOMING A PRECEDENT. The rule was
+# amended, not ignored and not relaxed: the lock read is named in the section, the
+# context-economy argument it is measured against is still there, and the section says in
+# as many words that nothing else may be added by analogy. All three are asserted, because
+# dropping the third is how a narrow exception becomes an open door while the file still
+# reads as if it had a rule.
+section() { awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$LAUNCHER"; }
+in_section() { section | grep -qF -- "$1" && echo yes || echo no; }
+ok "…and names the ONE exception"     "$(in_section 'The one exception, named on purpose: the tick lock')" yes
+ok "…which is the lock, by script name" "$(in_section 'scripts/tick-lock.sh acquire')" yes
+ok "…closing the list against analogy" "$(in_section 'No other reader may be added by analogy')" yes
+ok "…keeping the cost argument"       "$(in_section "main session's context")" yes
+# The launcher must never look before it takes it: a `status` then `acquire` would rebuild
+# the check-then-write window the lock exists to close.
+ok "…and forbids reading it separately" "$(in_section 'never call `scripts/tick-lock.sh status` before `acquire`')" yes
 # And the launcher must not carry the old imperative that made it do the re-derivation.
 ok "old launcher imperative gone" \
   "$(grep -c -E '^[[:space:]]*Re-derive it from the root' "$LAUNCHER" | tr -d ' ')" 0
