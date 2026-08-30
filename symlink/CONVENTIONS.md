@@ -433,6 +433,43 @@ in `cbmono/ai-bridge` enforces this.
   shared clone/worktree (the same collision the per-task isolation rule prevents). Skip it
   for small/sequential work (pure overhead). `/pm-loop` stays serial — a fan-out lives
   *inside* a task, never at the loop level.
+- **A subagent works ONE task, and is resumed only for that task's next round.** Waking a
+  completed agent with a message reuses its context, and reuse is right exactly while that
+  context is about *this* work. **This is the one statement of the rule.** Everywhere else
+  cites it and carries at most its one line, word for word, so the copies cannot drift:
+
+  > same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
+
+  In full:
+
+  | What you would hand it | |
+  |---|---|
+  | The **same task**, the **same PR**, the next round — review findings, a re-rebase, "open the PR on what you already have" | **RESUME.** It knows this repo squash-merges and which `--onto` base to use; a cold agent re-derives that at real cost. |
+  | A **different task**, a **different PR**, or an unrelated ad-hoc job | **DISPATCH FRESH.** |
+  | A `project-manager` **tick** | **NEVER RESUME — no exception, no "unless".** |
+
+  Measured 2026-08-30: one `software-engineer` resumed three times — two rebases and then
+  a round of review findings — ended carrying 163k tokens; a resumed tick produced two
+  concurrent ticks. The tick case is absolute because a resume never passes through the
+  launcher that takes the dispatch lock, and because it re-enters a loop whose state has
+  moved on.
+
+  **Which half of this has a reader, said plainly rather than left to sound enforced.**
+  The tick half is CHECKED, and the reader is named so you can go and look: the control
+  panel's `scripts/tick-lock.sh` refuses a tick acquire that finds no lock (exit 4) — no
+  lock means no launcher, and no launcher means nobody dispatched that tick. Nothing on
+  your path reads that file; only the loop and the tick do. The same-task half, by
+  contrast, is NOT checked and cannot be, because nothing can see the intent behind a
+  message; it is held by whoever dispatches, which is why it is written here and in the
+  dispatchers' own instructions instead of being asserted somewhere no one reads. **Most readers of this file dispatch nothing** (see the
+  wide-work bullet above), so for you it is the rule your dispatcher follows, and it
+  cashes out as one thing: a message picking up **your own task's** next round is
+  legitimate work; anything else should have been a fresh agent, and saying so is better
+  than quietly absorbing it.
+
+  **No "delete the agent" primitive exists and none is wanted** — agents complete on their
+  own, so resumption is the only lever there is. That is why this rule is about resumption
+  and not about how long an agent lives.
 - Write the PR URL and a `# Result` summary back into the task document, and set
   the task `status: in-review` (or `blocked`, with why, if you can't proceed).
 - **No customer PII** in code, commits, or PR text; **never echo, print, or log

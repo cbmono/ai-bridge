@@ -33,7 +33,7 @@
 # is also why `status` exists as a SEPARATE subcommand and why the launcher must never call
 # it: `status` then `acquire` would rebuild the very TOCTOU race this replaces.
 #
-# TWO PATHS MAKE A TICK RUN, SO THERE ARE TWO ACQUIRE SITES. The launcher takes the lock
+# TWO PATHS MAKE A TICK RUN, AND ONLY ONE OF THEM MAY. The launcher takes the lock
 # immediately before it dispatches, and that stays — only the launcher knows "I am
 # dispatching right now", which is the window above. But a tick can also START WITHOUT
 # PASSING THROUGH THE LAUNCHER: `SendMessage` wakes a completed agent directly, so no
@@ -43,7 +43,17 @@
 # machinery, spotted it. The guard behaved exactly as designed and the outcome was still two
 # ticks. A mechanism placed on the path you were thinking about is not a mechanism on every
 # path, and the second path is the one that bites because nobody audits it. So `--as tick`
-# is a second acquire site, taken by the tick itself.
+# is a second acquire site, run by the tick itself — but it is a GATE, not a second way in.
+#
+# A TICK RUNS ONLY UNDER A LOCK THE LAUNCHER TOOK, SO `--as tick` NEVER CREATES ONE. No
+# lock on disk means nobody dispatched you, because the launcher takes it in the same
+# breath as the spawn — so you are a resumed tick, or one somebody started by hand, and
+# both are REFUSED (exit 4). Until 2026-08-30 this path took a lock of its own instead:
+# the resumed tick then RAN and the next genuine dispatch stood down. Exactly one tick
+# ran, which was the property being defended, and it was the wrong one — a tick re-entering
+# a loop whose state has moved on, carrying context from work that is already finished. A
+# tick is the one thing that is never resumed, without exception; the rule for every other
+# agent (same task, same PR, next round) is in CONVENTIONS.md, where its readers are.
 #
 # THE CRUX: A DISPATCHED TICK MUST NOT REFUSE ITS OWN LOCK. The launcher takes the lock and
 # then spawns; the tick it spawned then finds a held lock that is ITS OWN. A tick that
@@ -55,13 +65,14 @@
 # here). It is this: a lock the launcher took has NOT YET BEEN CLAIMED BY A TICK, and a lock
 # a tick is running under HAS.
 #
-#   .tick-lock        the lock. Taken by whoever gets there first — launcher or resumed
-#                     tick. Its shape, its clock and its staleness rule are unchanged.
+#   .tick-lock        the lock. Taken by the LAUNCHER, and now only ever by it. Its shape,
+#                     its clock and its staleness rule are unchanged.
 #   .tick-lock.claim  the tick's claim on that lock, created with `O_EXCL` like the lock
 #                     itself the first time a tick runs under it. It records WHOSE it is —
 #                     see the next section, which is why it is no longer mere existence.
 #
-#   --as tick, no lock                  -> create both. You took it, so YOU release it.
+#   --as tick, no lock                  -> REFUSED (4). Nothing dispatched you, so you are
+#                                          a resume: end the tick, take nothing, run none.
 #   --as tick, live lock, unclaimed     -> the dispatch that spawned you. Claim it and
 #                                          proceed; the LAUNCHER releases it, not you.
 #   --as tick, live lock, PROVABLY your -> you are already running under it. Proceed,
@@ -75,9 +86,9 @@
 #   --as launcher (the default)         -> unchanged in every respect: any live lock
 #                                          refuses, claimed or not, and it never claims.
 #
-# Which of those an `--as tick` acquire got is printed on stdout — `took:` or `adopted:`,
-# optionally preceded by `re-entered:` — because the caller's obligation differs and nothing
-# else on disk distinguishes them. The `--as launcher` path stays byte-silent, as before.
+# An `--as tick` acquire that proceeds prints `adopted:` on stdout, optionally preceded by
+# `re-entered:`, and that is its only success — a tick never takes a lock of its own, so it
+# never releases one either. The `--as launcher` path stays byte-silent, exactly as before.
 #
 # A CLAIM THAT CANNOT SAY WHOSE IT IS TELLS A TICK IT IS AN INTRUDER. Existence was the
 # whole signal until 2026-08-30, and hours after that shipped a dispatched tick held and
@@ -181,15 +192,61 @@
 # recognising yourself is not a licence to run past a deadline a human has to rule on.
 # `release` removes both, and nothing else removes either.
 #
-# WHAT THIS DOES NOT CLOSE, STATED RATHER THAN LEFT TO BE DISCOVERED. Two ticks can still
-# swap places inside the launcher's own dispatch window: if a resumed tick reaches its
-# `acquire` in the seconds between the launcher taking the lock and the dispatched tick
-# starting, the RESUMED tick adopts that lock and the dispatched one then holds. Exactly one
-# tick runs, which is the property that matters — but `/pm-loop` step 2 then releases that
-# lock when its own (held) tick reports, freeing a lock the resumed tick is still running
-# under. Closing it would mean asking `release` who is calling, which is the one thing an
-# override must never do; it is bounded, it is the rarer half of an already rare race, and
-# it is written down here rather than found later.
+# WHAT THIS DOES NOT CLOSE — STATED RATHER THAN LEFT TO BE DISCOVERED, AND MEASURED RATHER
+# THAN CALLED SMALL. Two ticks can still swap places inside the launcher's own DISPATCH
+# WINDOW: the interval between the launcher taking the lock and the tick it spawned claiming
+# it. A resumed tick reaching its `acquire` in that window meets a live UNCLAIMED lock —
+# which is exactly what a fresh dispatch looks like — so it adopts and runs, and the genuine
+# tick then holds. Exactly one tick runs, which is the property that matters, but `/pm-loop`
+# step 2 releases that lock when its own (held) tick reports, freeing a lock the resumed
+# tick is still running under.
+#
+# THE WINDOW IS NOT MICROSECONDS, AND AN EARLIER DRAFT OF THIS PARAGRAPH IMPLIED IT WAS.
+# Measured in a live instance 2026-08-30: lock taken 16:00:11Z, claimed 16:00:58Z — FORTY-
+# SEVEN SECONDS, covering the spawn and everything the tick does before it reaches step 0.5.
+# The previous wording said "the seconds between" and called this "the rarer half of an
+# already rare race"; neither adjective had a measurement behind it, and both are gone. The
+# microsecond race in this file is a different one — `release`'s two `rm`s, below.
+#
+# IT IS NOT CLOSED HERE, AND THE REASON IS THAT EVERY CANDIDATE REMEDY IS ALREADY-DECIDED
+# GROUND. Named, so the next reader does not spend the same afternoon on them:
+#
+#   A ONE-TIME CAPABILITY handed to the spawned tick is a NONCE CARRIED BY THE DISPATCH
+#   PROMPT under another name — prose carried across an agent boundary by a model, refused
+#   twice above and the failure class this whole file keeps being bitten by.
+#
+#   VERIFYING THE CLAIMANT BEFORE RELEASING means asking `release` who is calling, which an
+#   override must never do. `release --as tick` is exit 3 precisely so `release` cannot be
+#   scoped, and that is pinned by tests rather than left to discipline.
+#
+#   MAKING THE TICK ACQUIRE EARLIER shortens the window and cannot close it — the residue is
+#   agent-spawn latency — and it would put the guarantee back into a model following prose,
+#   which is the mechanism class this file exists to replace.
+#
+# What closes it is a PER-TICK identity delivered through a channel that is neither the
+# dispatch prompt nor `CLAUDE_CODE_SESSION_ID` (which names the SESSION — measured below).
+# That is a mechanism decision with its own trade-offs, not a rider on this one, so it is
+# tracked as its own task rather than parked in this comment.
+#
+# AND THIS FILE STRICTLY SHRINKS THAT RACE RATHER THAN CREATING IT, which is why the gap
+# does not block the refusal above. Before exit 4, a resumed tick meeting NO lock took one
+# and ran — every time, with no window to hit. After it, the resume path gets through only
+# by landing inside the dispatch window. The gap is open in both versions and smaller here.
+#
+# WHAT IS CHECKED HERE AND WHAT IS ONLY A CONVENTION, SAID PLAINLY SO NEITHER IS MISTAKEN
+# FOR THE OTHER. Refusing a resumed tick HAS a reader and it is this file: no lock, no
+# launcher, exit 4, driven by tests/tick-lock.test.sh. Two neighbouring rules have no
+# reader anywhere, and must not be read as though this one covered them:
+#
+#   1. A resume that arrives INSIDE the launcher's dispatch window meets a live UNCLAIMED
+#      lock and is, at that instant, indistinguishable from the tick the launcher took it
+#      for — so it adopts and runs. That is the 47-second window measured above, and it is
+#      the one way a resumed tick still gets through. Open, named, and not closed here.
+#   2. Whether a resume of any OTHER agent is "the same task" cannot be seen from here or
+#      from anywhere else: nothing can read a `SendMessage`'s intent. That half is a
+#      convention held by whoever dispatches, written in CONVENTIONS.md and in the
+#      dispatchers' own instructions because that is where its only readers are. It is
+#      deliberately not implied to be enforced by anything.
 #
 # `release` REMOVES TWO FILES AND CANNOT REMOVE THEM AS ONE. Between `rm $CLAIM` and
 # `rm $LOCK` the pair reads live-and-unclaimed, so a tick acquiring in that window adopts a
@@ -236,13 +293,13 @@
 # release only a lock IT took: a `/pm-loop` session that skipped because another loop held
 # the lock and then released it on the way out would delete a LIVE holder's lock and
 # re-open the double-dispatch. `/pm-loop` step 5 states that condition. The second acquire
-# site does not relax this and inherits the same obligation: a tick releases only the lock
-# it CREATED (`took:`), never one it adopted (`adopted:`) — that one is the launcher's to
-# release when the tick reports — and a tick that was refused releases nothing at all. A
-# re-entry changes none of that: it re-prints the obligation its FIRST acquire printed,
-# read back from `origin:` in the claim, so a tick that re-enters cannot turn an adopted
-# lock into one it thinks it should release. `--as` and `--claimant` are `acquire` flags
-# only; `release` takes neither, on purpose.
+# site does not relax this and has the simplest obligation there is: A TICK RELEASES
+# NOTHING, EVER. The only lock it can be running under is one it ADOPTED, and that one is
+# the launcher's to release when the tick reports; a tick that was refused (1, 2 or 4) has
+# no lock to release either. A re-entry changes none of that: it re-prints the obligation
+# its FIRST acquire printed, read back from `origin:` in the claim, so a tick that
+# re-enters cannot turn an adopted lock into one it thinks it should release. `--as` and
+# `--claimant` are `acquire` flags only; `release` takes neither, on purpose.
 #
 # IT READS NO CONFIG. `TICK_LOCK_STALE_MINUTES` and `TICK_CLAIMANT` are environment
 # overrides in the shape `prune-worktrees.sh` already uses for `PRUNE_ACTIVE_MINUTES`;
@@ -262,6 +319,9 @@
 #      delete it on the lock's behalf.
 #   3  cannot answer: usage, a bad `--agent`/`--claimant`/threshold, or an unwritable root.
 #      Never a silent pass — a lock nothing can write is a guarantee nothing is keeping.
+#   4  REFUSED — `--as tick` with no lock: nobody dispatched you, so you are a resumed or
+#      hand-started tick. End the tick. `--as launcher` never sees this: taking a lock
+#      where there is none is exactly what a launcher is for.
 #
 # GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
 # instance. It reads no org, repo or path literal.
@@ -468,14 +528,18 @@ identity_lines() { # <indent>
 # below would otherwise have to special-case. `claimant-source:` travels with it because the
 # two tiers are judged differently and because a SILENT change of identity source would
 # otherwise have to be inferred from behaviour. `origin:` is not a judgement either; it is
-# the obligation this tick was given (`took:`/`adopted:`), stored so a re-entry can be told
-# the same thing rather than guessing.
+# the obligation this tick was given, stored so a re-entry can be told the same thing rather
+# than guessing. THIS VERSION ONLY EVER WRITES `adopted` — a tick no longer takes a lock, so
+# there is no `took` left to record. The field stays, and `reprint_obligation` keeps reading
+# it, because a claim already on disk when an instance updates was written by a version that
+# DID: dropping the read would tell that tick to release nothing, and the lock under it is
+# genuinely its own.
 #
 # NO TRAILING `:`. The old `{ …; [ -n "$X" ] && printf …; :; }` swallowed a failed write:
 # out of disk, the claim would be truncated before `claimant:`, the group would still exit 0
 # and the next tick would be told the claim "was written by hand". An `if` returns the
 # `printf`'s own status, so a claim that could not be finished is a failed claim.
-claim_exclusive() { # <origin: took|adopted>
+claim_exclusive() { # <origin: adopted — `took` is legacy-read only, never written>
   ( set -o noclobber
     { printf '%s\n' \
         "# The TICK's claim on the .tick-lock beside it — written by the tick, never by the" \
@@ -516,7 +580,9 @@ claim_attribution() {
 
 # Re-print the obligation the FIRST acquire printed, read back from the claim rather than
 # re-derived — a re-entering tick must not be told it may release a lock it only adopted.
-# An `origin:` that is missing or unrecognised reads as `adopted`, which is the safe half:
+# `took` is unreachable for a claim this version wrote and is kept for one written before a
+# tick was refused a lock of its own; see `claim_exclusive`. An `origin:` that is missing or
+# unrecognised reads as `adopted`, which is the safe half:
 # the cost of not releasing a lock you took is one stale lock a human clears, and the cost
 # of releasing one you adopted is a live tick's lock deleted under it.
 reprint_obligation() {
@@ -526,6 +592,22 @@ reprint_obligation() {
     echo "adopted: $LOCK — the dispatch lock the launcher took before spawning this tick."
     echo "         It releases that lock when this tick reports; do not release it yourself."
   fi
+}
+
+# The refusal a tick gets when nothing dispatched it. Its own function because two places
+# reach it — the ordinary check and the microsecond race in `acquire` — and a refusal that
+# read differently in the two would send somebody hunting for a second cause.
+refuse_unlaunched() {
+  echo "REFUSED — NO DISPATCH LOCK: $LOCK does not exist, so no launcher took one for you." >&2
+  echo "          A tick runs only under a lock the launcher took immediately before it" >&2
+  echo "          spawned that tick, so arriving here means you did not come through the" >&2
+  echo "          launcher — a SendMessage waking a completed tick is exactly this case." >&2
+  echo "          A tick is the one thing that is never resumed: it would re-enter a loop" >&2
+  echo "          whose state has moved on, holding context from work already finished." >&2
+  echo "          End the tick: dispatch nothing, adopt nothing, open no ledger entry," >&2
+  echo "          release nothing. To run a tick, run the loop command — it takes the" >&2
+  echo "          lock and dispatches a fresh tick." >&2
+  exit 4
 }
 
 # A failed claim create has the same two causes the lock's has, and they are the same two
@@ -638,13 +720,24 @@ case "$cmd" in
     claim_residue=no
     if [ -e "$CLAIM" ] && [ ! -e "$LOCK" ]; then claim_residue=yes; fi
 
+    # A TICK NEVER CREATES A LOCK — no lock means no launcher dispatched you, and that is
+    # a resume. Read BEFORE the create rather than inside it, which is safe here and would
+    # not be on the launcher's path, because this branch WRITES NOTHING: the worst a lock
+    # appearing in the microsecond after this read can cost is one refused tick, and a
+    # refused tick is the same outcome as no tick. The write path below keeps its single
+    # `O_EXCL` syscall exactly as before.
+    if [ "$as" = tick ] && [ ! -e "$LOCK" ]; then
+      refuse_unlaunched
+    fi
+
     # THE CHECK AND THE WRITE, IN ONE `O_EXCL` CREATE. Nothing runs between them because
     # there is no "between" — this is the whole reason the script exists rather than a
     # `[ -f ] && write` in the launcher's prose.
     if ( set -o noclobber
          printf '%s\n' \
-           "# ai-bridge PM tick lock. Taken by /pm-loop immediately before it dispatches a tick," \
-           "# or by a tick that started without passing through it (a SendMessage resume)." \
+           "# ai-bridge PM tick lock. Taken by the LAUNCHER immediately before it dispatches a" \
+           "# tick, and only by it: a tick that finds no lock was not dispatched — it was resumed" \
+           "# — and is refused rather than allowed to take one of its own." \
            "# PER CLONE and gitignored — NOT a cross-machine lock: two clones of one shared" \
            "# bundle each have their own, and each dispatches independently by design." \
            "# Stale after ${STALE_MINUTES}m (TICK_LOCK_STALE_MINUTES). Clear it with:" \
@@ -654,24 +747,20 @@ case "$cmd" in
            "agent: $agent" > "$LOCK"
        ) 2>/dev/null; then
       [ "$claim_residue" = yes ] && rm -f "$CLAIM" 2>/dev/null
+
+      # The lock was there at the check above and gone by this create, so this tick has
+      # just made a lock of its own — the case that check refuses, arriving through a
+      # microsecond race instead of the ordinary way in. Remove what WE created, which is
+      # never somebody else's lock (the `O_EXCL` create succeeded, so it is ours and it is
+      # microseconds old), and refuse, rather than letting the race be the way in.
+      if [ "$as" = tick ]; then
+        rm -f "$LOCK" 2>/dev/null
+        refuse_unlaunched
+      fi
+
       # Silence is the contract on the launcher's path: the human ran a command, not a
       # briefing. Nothing about that changes here.
-      [ "$as" = tick ] || exit 0
-
-      # A tick that created the lock is already the tick running under it, so it claims in
-      # the same breath — otherwise a later tick would find an unclaimed lock and adopt one
-      # that is very much taken. `O_EXCL` here too: if some other tick claimed this lock in
-      # the microseconds since the create, it is running and this one holds.
-      if claim_exclusive took; then
-        echo "took: $LOCK — this tick holds the lock; release it when the tick ends."
-        exit 0
-      fi
-      unwritable_claim
-      echo "HELD BY ANOTHER TICK: $LOCK was free a moment ago and is already claimed$(claim_note)." >&2
-      echo "                      Report and hold: dispatch nothing, adopt nothing, end the" >&2
-      echo "                      tick, and release nothing — the lock is not yours." >&2
-      identity_lines "                      " >&2
-      exit 1
+      exit 0
     fi
 
     # The create failed. Either something holds the lock, or this root cannot be written —

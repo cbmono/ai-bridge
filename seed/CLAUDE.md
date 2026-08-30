@@ -183,6 +183,20 @@ Subagents return only their final message, so brief each one completely. They do
 inherit this file (no PII, units, data-question routing); role agents additionally
 read `CONVENTIONS.md`.
 
+**One agent, one task — resume it only for that task's next round.** Waking a
+completed agent with a message reuses its context, which is worth having exactly
+while that context is about *this* work. The rule is stated once, in
+[`CONVENTIONS.md`](CONVENTIONS.md) → "A subagent works ONE task", and this is its
+one line:
+
+> same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
+
+Nothing can see the intent behind a message, so apart from a tick that finds
+**no dispatch lock** — which the lock refuses outright, because the absence proves
+no launcher spawned it — **you** are the only reader this rule has. It is
+not paperwork: one agent resumed across three unrelated jobs ended a day carrying
+163k tokens, and one resumed tick produced two concurrent ticks.
+
 ## Git workflow (this repo)
 - **This control-panel repo commits directly to `main` and pushes — no feature
   branches, no PRs.** It is operational state, co-edited with the user and by the
