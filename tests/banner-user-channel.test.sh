@@ -298,11 +298,19 @@ echo "== 6. /ai-bridge INVOKES this hook, it does not reproduce it =="
 # check and this section says so rather than asserting a vacuous pass; the moment it
 # merges, the assertion starts running with no edit here. What it guards is divergence — a
 # second renderer would answer differently the day either one changed.
+#
+# ASSERTED BEHAVIOURALLY, NOT BY GREPPING FOR AN `exec`. Which line does the handing off,
+# and through which variable, is that script's business; what must hold is that the two
+# forms SAY THE SAME THING. So the bare form is run and its output compared to the hook's,
+# byte for byte — a reimplementation fails that on the first line either one changes,
+# whatever it is spelled like.
 AB="$TPL/symlink/scripts/ai-bridge.sh"
 if [ -f "$AB" ]; then
-  assert "ai-bridge.sh invokes session-banner.sh" \
-    "$(grep -qE '(exec|bash) .*session-banner\.sh' "$AB" && echo 0 || echo 1)"
-  assert "…and prints no banner of its own" \
+  AB_OUT="$( cd "$INST" && CLAUDE_PROJECT_DIR="$INST" bash "$AB" 2>/dev/null )"
+  assert "the /ai-bridge bare form prints a banner" "$(has 'AI-Bridge' "$AB_OUT")"
+  assert "…byte for byte the one this hook prints" \
+    "$(eq "$AB_OUT" "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)")"
+  assert "…and carries no banner text of its own" \
     "$(grep -qF 'AI-Bridge' "$AB" && echo 1 || echo 0)"
 else
   echo "  SKIP  ai-bridge.sh is not in this template yet (task-011 / ai-bridge#70 is open)"
