@@ -320,7 +320,7 @@ rm -rf "$INST/.board-live" "$INST/AWAITING.md" "$INST/projects"
 run
 assert "no dangling machinery ⇒ no warning"   "$(hasnt 'DANGLING' "$OUT")"
 assert "no rendered board ⇒ no board line"    "$(hasnt 'Board   file://' "$OUT")"
-assert "no AWAITING.md ⇒ no awaiting block"   "$(hasnt 'need your input' "$OUT")"
+assert "no AWAITING.md ⇒ no awaiting block"   "$(hasnt '🔔' "$OUT")"
 assert "nothing ready ⇒ no 'Ready to dispatch' line" "$(hasnt 'Ready to dispatch' "$OUT")"
 assert "no drafts ⇒ no 'Drafts' line"         "$(hasnt 'Drafts' "$OUT")"
 # SHORT: an orientation, not a report. The identity line, a header, six rows at most, the
@@ -358,7 +358,7 @@ rm -rf "$INST/.board-live"
 
 printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
 run
-assert "…and an AWAITING item DOES print"     "$(has 'need your input' "$OUT")"
+assert "…and an AWAITING item DOES print"     "$(has '🔔 1 item needs you' "$OUT")"
 rm -f "$INST/AWAITING.md"
 
 mkdir -p "$INST/projects/demo/tasks"
@@ -522,7 +522,7 @@ mkdir -p "$INST/.board-live"; printf '<!doctype html>\n' > "$INST/.board-live/bo
 printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
 run
 assert "…not even from the board and awaiting sections" "$(plain "$OUT")"
-assert "…which did fire"                                "$(has 'need your input' "$OUT")"
+assert "…which did fire"                                "$(has '🔔 1 item needs you' "$OUT")"
 rm -rf "$INST/.board-live" "$INST/AWAITING.md"
 
 # THE CONTENT MUST NOT DEPEND ON THE COLOUR. This is the assertion that catches an escape
