@@ -62,6 +62,23 @@
 # 0 on every path except a usage error, because its caller can be a SessionStart hook and a
 # non-zero exit there is a failed hook, not a message.
 #
+# WHICH EMPHASIS SURVIVES DEPENDS ON WHO IS READING, AND IT WAS MEASURED. `check` output is
+# read three ways and two of them render different things — Claude Code 2.1.251, probed
+# 2026-08-30 by emitting candidates and reading the bytes the terminal received:
+#
+#   relayed by the model (`/ai-bridge check` in a session)   markdown renders; ANSI DOES NOT.
+#       0 of 4 ESC bytes survived the relay and the human was left reading a literal `[1m`.
+#       Single newlines and leading indent survive, so the block keeps its shape.
+#   a human's terminal (`bash scripts/ai-bridge.sh check`)   ANSI renders; markdown does not.
+#   inlined into the SessionStart banner (`--banner`)        NEITHER, here. That channel does
+#       render ANSI — but `session-banner.sh` owns the weight of every line it prints, so
+#       this side stays plain and the banner colours it. Two writers on one line is how a
+#       column drifts.
+#
+# Hence `--style`, resolved below. The SIGIL IS NEVER INSIDE THE EMPHASIS: `⚠ **text**`, not
+# `**⚠ text**`, so `^⚠` keeps matching for the banner's filter and for the harness whatever
+# the style is.
+#
 # GENERIC TEMPLATE FILE — symlinked from the template; it reads no org, repo or path
 # literal. Verified by tests/ai-bridge-command.test.sh.
 #
@@ -101,7 +118,7 @@ tick-lock|human|yes'
 # ARGUMENTS
 # =========================================================================================
 FORM=""; ROOT=""; TEMPLATE=""; ONLY_PROBLEMS=0; BANNER_ONLY=0; FETCH=0; SINCE=""
-LIST=0
+LIST=0; STYLE=auto
 
 # usage — the three forms and their flags, on stderr so `--help` never pollutes a pipeline.
 usage() {
@@ -109,7 +126,9 @@ usage() {
 Usage: ai-bridge.sh [banner]                       reprint the SessionStart banner
        ai-bridge.sh check [--instance DIR] [--template DIR] [--fetch]
                           [--since <ref>] [--only-problems] [--banner] [--list]
+                          [--style auto|markdown|ansi|plain]
        ai-bridge.sh fix   [--instance DIR] [--template DIR] [--fetch]
+                          [--style auto|markdown|ansi|plain]
 USAGE
 }
 
@@ -141,6 +160,9 @@ if [ "$FORM" != banner ]; then
       --only-problems) ONLY_PROBLEMS=1; shift ;;
       --banner)      BANNER_ONLY=1; shift ;;
       --list)        LIST=1; shift ;;
+      --style)       [ $# -ge 2 ] || { echo "ai-bridge: --style needs a value" >&2; exit 2; }; STYLE="$2"; shift 2 ;;
+      --style=*)     STYLE="${1#--style=}"; shift ;;
+      --no-color)    STYLE=plain; shift ;;
       --fetch)       FETCH=1; shift ;;
       -h|--help)     usage; exit 0 ;;
       *)             echo "ai-bridge: unknown argument: $1" >&2; usage; exit 2 ;;
@@ -222,10 +244,58 @@ fi
 # (tests/session-banner.test.sh), and a section that can grow with the number of affected
 # files would blow it the first time an instance is badly out of date — which is precisely
 # when the banner most needs to stay readable. Emit ONE `hint` per check.
+# ---------------------------------------------------------------------------------------
+# STYLE — which emphasis this run's reader can actually see.
+# ---------------------------------------------------------------------------------------
+# RESOLVED ONCE, HERE, AND THE ORDER OF THE TESTS IS THE WHOLE OF IT:
+#
+#   NO_COLOR set and non-empty  -> plain.    The template's one opt-out (print-board.sh,
+#                                            session-banner.sh state the same contract), and
+#                                            it covers markdown too: bold is not "not colour"
+#                                            when the client renders it AS colour, and one
+#                                            switch a reader already knows beats a second one.
+#   --banner                    -> plain.    session-banner.sh inlines this block and colours
+#                                            it; see the header.
+#   stdout is a terminal        -> ansi.     A human ran it by hand.
+#   otherwise                   -> markdown. A pipe here is the Bash tool, and what comes out
+#                                            of it is relayed into an assistant message. That
+#                                            was measured rendering markdown and DESTROYING
+#                                            ANSI, so this is the branch `/ai-bridge check`
+#                                            actually takes.
+#
+# AN UNRECOGNISED VALUE IS `auto`, not fatal: `check` can be called from a SessionStart hook,
+# and exiting 2 over a spelling mistake in a style name would cost the whole banner.
+case "$STYLE" in
+  markdown|ansi|plain) ;;
+  *) if [ -n "${NO_COLOR:-}" ];   then STYLE=plain
+     elif [ "$BANNER_ONLY" -eq 1 ]; then STYLE=plain
+     elif [ -t 1 ];               then STYLE=ansi
+     else                              STYLE=markdown
+     fi ;;
+esac
+# Spelled out with `printf` rather than typed: an ESC in a string literal is invisible in a
+# diff and in a grep, and `${_esc}[` is braced because `"$_esc[1m"` is bash's array-subscript
+# spelling (shellcheck SC1087).
+_B_ON=""; _B_OFF=""
+case "$STYLE" in
+  markdown) _B_ON='**'; _B_OFF='**' ;;
+  ansi)     _esc="$(printf '\033')"; _B_ON="${_esc}[1;33m"; _B_OFF="${_esc}[0m" ;;
+esac
+
 _warned=0
 # warn <text> — a fact that is FALSE here, and the only kind that sets the found-a-problem
 # flag its check returns. Survives `--only-problems`.
-warn() { _warned=1; printf '%s\n' "⚠ $*"; }
+#
+# THE ONE LINE IN THIS FILE THAT CARRIES EMPHASIS, AND THAT IS DELIBERATE. `good` is left
+# plain, `note` and `hint` are left plain: a reader scanning `check` is looking for the row
+# that is WRONG, and a page where every kind of line has its own decoration gives them
+# nothing to find. Emphasis here tracks significance, so it goes on exactly the lines that
+# set the found-a-problem flag.
+#
+# THE SIGIL STAYS OUTSIDE IT. `⚠ **text**`, never `**⚠ text**` — `session-banner.sh` filters
+# this block with `grep -e '^⚠'` and the harness pins the same anchor, so the line must start
+# with the sigil in every style.
+warn() { _warned=1; printf '%s\n' "⚠ ${_B_ON}$*${_B_OFF}"; }
 # good <text> — the same fact, true. Dropped by `--only-problems`; never silent otherwise.
 good() { printf '%s\n' "✓ $*"; }
 # note <text> — indented evidence under the line above it. Dropped by `--only-problems`.
