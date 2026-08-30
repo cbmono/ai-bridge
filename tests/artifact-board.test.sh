@@ -144,6 +144,22 @@ j = t.find('<details class="proj', i)
 sys.stdout.write(t[i:] if j < 0 else t[i:j])
 PYC
 }
+# THE RAIL, NOT THE WHOLE CARD. A card holds the rail AND the task table, and every
+# task title appears in that table whether or not the task is waiting on you — so
+# "this task is not in the queue" asserted over the card is asserting something else
+# entirely, and would be red for a reason that has nothing to do with the queue. Empty
+# output when the project has no rail at all, which is itself the answer to "is anything
+# waiting here?".
+rail_of() { # <file> <project title> -> just that project's rail section, on stdout
+  card "$1" "$2" | python3 -c "
+import sys
+t = sys.stdin.read()
+i = t.find('<section class=\"rail\"')
+if i < 0:
+    sys.exit(0)
+j = t.find('</section>', i)
+sys.stdout.write(t[i:j if j > 0 else len(t)])"
+}
 fhas_in()   { grep -qF -- "$1" && echo 0 || echo 1; }
 fhasnt_in() { grep -qF -- "$1" && echo 1 || echo 0; }
 before_in() { # <a> <b> — 0 when a appears before b on stdin
@@ -319,11 +335,209 @@ assert "…two render as a pair"                       "$(fhas '>002</button>' "
 assert "…never the full slug"                        "$(fhasnt '>task-001-<' "$OUT")"
 
 echo "== questions =="
-assert "a Qn handle exists per question"             "$(fhas 'Q2: ' "$OUT")"
-assert "carried question text is shown"              "$(fhas 'Q1 body?' "$OUT")"
+# The fixture's two entries are `Q1 body?` (numbered) and `advisor: escalated one?`
+# (escalated, and carrying NO number of its own) — so this one task exercises both
+# branches. The first is labelled Q1 because IT SAYS Q1, not because it is first.
+assert "a numbered handle is labelled from the text"  "$(fhas 'Q1: ' "$OUT")"
+assert "carried question text is shown"              "$(fhas 'Q1: body?' "$OUT")"
 assert "an escalated concern says where it came from" "$(fhas 'could not settle it' "$OUT")"
-assert "…and the advisor: marker is stripped"        "$(fhasnt 'Q2: advisor:' "$OUT")"
+assert "…and the advisor: marker is stripped"        "$(fhasnt 'advisor: escalated' "$OUT")"
+# THE SECOND QUESTION IS NOT `Q2`. It carries no number, it is merely SECOND, and
+# calling that Q2 is the entire defect this file now guards. Scoped to the card, so the
+# fixture's other project cannot make it pass or fail.
+assert "…and an unnumbered question is never named by its position" \
+  "$(card "$OUT" 'Live work' | fhasnt_in 'Q2')"
 assert "a question on a READY task reaches the rail" "$(fhas 'class="verb">question' "$OUT")"
+
+# ---------------------------------------------------------------------------
+# A QUESTION IS NAMED BY THE `Q<n>` IT CARRIES, NEVER BY ITS POSITION.
+#
+# THE DEFECT THIS BLOCK EXISTS FOR, from the live bundle on 2026-08-30:
+# `ai-bridge-v5/task-012` had Q1 in `answered_questions` and Q2 in `open_questions`, so
+# the count was 1 and the board rendered a button reading `answer Q1`. Every number on
+# it was internally consistent and it pointed at the wrong question. A human who clicks
+# it, opens the document and finds Q1 answered either answers the wrong one or stops
+# believing the board — and there is no way to tell from the page which happened.
+#
+# So the assertions come in PAIRS: the number that must appear, and the positional
+# number that must NOT. Asserting only the first is green on a renderer that guesses and
+# happens to guess right on a Q1-first fixture, which is exactly what the old test did.
+mkdir -p "$TMP/qnum"
+mk "$TMP/qnum" "qnum" '[
+ {"slug":"twelve","title":"The task-012 shape","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-012-claim-identity","title":"Claim identity","status":"ready",
+            "assignee":"software-engineer","awaiting":"","open_questions":1,
+            "advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["2026-08-30T19:06:51Z · Q2: ship this, or hold until a runtime exports a per-agent id?"]}]},
+ {"slug":"sparse","title":"Non contiguous numbers","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Gaps","status":"ready","assignee":"","awaiting":"",
+            "open_questions":3,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["Q7: seventh?","2026-01-02T03:04:05Z · Q9: ninth?","advisor: Q4: fourth?"]}]},
+ {"slug":"noprefix","title":"No number in the text","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Unnumbered","status":"ready","assignee":"","awaiting":"",
+            "open_questions":1,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["which region should this run in?"]}]},
+ {"slug":"notext","title":"Count only","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Two questions, no text","status":"ready","assignee":"",
+            "awaiting":"","open_questions":2,"advisor_notes":0,"depends_on":[],
+            "in_flight":false,"prs":[]}]},
+ {"slug":"prose","title":"Numbers in prose","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Prose","status":"ready","assignee":"","awaiting":"",
+            "open_questions":2,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["Q01: padded?","does the answer to Q7 change this?"]}]}]'
+QN="$TMP/qnum.html"
+qnrc=0; bash "$GEN" --out "$QN" "$TMP/qnum" >/dev/null 2>&1 || qnrc=$?
+
+echo "== THE BUG: a waiting row names the question the question names =="
+assert "the fixture renders and exits 0"             "$(eq "$qnrc" 0)"
+# THE SHIP-BLOCKER, on the real shape: one open question, and it is Q2.
+assert "the rail button reads 'answer Q2'"           "$(card "$QN" 'The task-012 shape' | fhas_in 'answer Q2</button>')"
+assert "…and never 'answer Q1'"                      "$(card "$QN" 'The task-012 shape' | fhasnt_in 'answer Q1')"
+assert "…the table handle is Q2 too"                 "$(card "$QN" 'The task-012 shape' | fhas_in '>Q2</button>')"
+assert "…and the copied handle is the right one"     "$(card "$QN" 'The task-012 shape' | fhas_in 'claim-identity Q2: ')"
+assert "…with no Q1 anywhere in that card"           "$(card "$QN" 'The task-012 shape' | fhasnt_in 'Q1')"
+# NON-VACUITY: the count really is 1, so a positional renderer really would say Q1 here.
+assert "…and the fixture's count really is 1"        "$(yes_if python3 -c "
+import json, sys
+s = json.load(open('$TMP/qnum/SNAPSHOT.json'))
+t = s['projects'][0]['tasks'][0]
+sys.exit(0 if t['open_questions'] == 1 and 'Q2' in t['open_question_text'][0] else 1)")"
+
+echo "== …for numbers that are neither contiguous nor in order =="
+for n in 7 9 4; do
+  assert "Q$n is labelled Q$n"                       "$(card "$QN" 'Non contiguous numbers' | fhas_in ">Q$n</button>")"
+done
+for n in 1 2 3; do
+  assert "…and no Q$n is invented for position $n"   "$(card "$QN" 'Non contiguous numbers' | fhasnt_in ">Q$n</button>")"
+done
+# ORDER IS PRESERVED, and it is the document's order — not sorted, which would be a
+# second way of deciding what a question is called.
+assert "…in the order the document lists them"       "$(card "$QN" 'Non contiguous numbers' | before_in '>Q7</button>' '>Q9</button>')"
+assert "…a stamped entry still yields its number"    "$(card "$QN" 'Non contiguous numbers' | fhas_in 'Q9: ')"
+assert "…and so does an escalated one"               "$(card "$QN" 'Non contiguous numbers' | fhas_in 'Q4: ')"
+
+echo "== …and says so honestly when there is no number to read =="
+assert "an unprefixed question gets an unnumbered handle" \
+  "$(card "$QN" 'No number in the text' | fhas_in 'answer question</button>')"
+assert "…drawn as the handle that admits it"         "$(card "$QN" 'No number in the text' | fhas_in 'class="qbtn nonum"')"
+assert "…and it invents no digit at all"             "$(yes_if python3 -c "
+import re, sys
+t = open('$TMP/qnum.html').read()
+i = t.index('No number in the text'); j = t.find('<details class=\"proj', i)
+sys.exit(0 if not re.search(r'Q\d', t[i:j if j > 0 else len(t)]) else 1)")"
+assert "…saying it will not invent one"              "$(card "$QN" 'No number in the text' | fhas_in 'will not invent one')"
+assert "…and naming which absence this is"           "$(card "$QN" 'No number in the text' | fhas_in 'carries no Qn prefix')"
+
+echo "== …and when the snapshot carries a count and no text at all =="
+assert "the count yields ONE honest handle, not N"   \
+  "$(eq "$(card "$QN" 'Count only' | grep -oF 'class="qbtn nonum"' | wc -l | tr -d ' ')" 2)"
+assert "…numbered neither Q1 nor Q2"                 "$(yes_if python3 -c "
+import re, sys
+t = open('$TMP/qnum.html').read()
+i = t.index('Count only'); j = t.find('<details class=\"proj', i)
+sys.exit(0 if not re.search(r'Q\d', t[i:j if j > 0 else len(t)]) else 1)")"
+assert "…and saying it is a count, not a name"       "$(card "$QN" 'Count only' | fhas_in 'carries a COUNT of open questions')"
+assert "…the copy value is the bare task ref"        "$(card "$QN" 'Count only' | fhas_in 'data-copy="notext/tasks/task-001 "')"
+
+echo "== …reading the token, not a number mentioned in the prose =="
+assert "Q01 normalises to Q1"                        "$(card "$QN" 'Numbers in prose' | fhas_in '>Q1</button>')"
+# The second question MENTIONS Q7 in its prose, and the explanation paragraph quotes
+# that prose verbatim — so the assertion is about the LABEL, not about the byte `Q7`
+# being absent from the card. A question is named by the token it opens with; a number
+# it merely talks about names nothing. The prefix scan is bounded for exactly this.
+for form in '>Q7</button>' 'answer Q7' 'Q7 handle' 'task-001 Q7: '; do
+  assert "…and a Q7 buried in a sentence yields no $form" \
+    "$(card "$QN" 'Numbers in prose' | fhasnt_in "$form")"
+done
+assert "…the mention itself is still quoted"         "$(card "$QN" 'Numbers in prose' | fhas_in 'answer to Q7 change this')"
+assert "…and that question gets the unnumbered handle" "$(card "$QN" 'Numbers in prose' | fhas_in 'class="qbtn nonum"')"
+
+# THE FALLBACK IS NOT MERELY UNUSED — IT IS ABSENT. A renderer that still contains the
+# positional path is one edit away from taking it again, and no page-level assertion can
+# tell "never reached" from "not reached by this fixture". So the source is read too.
+echo "== positional numbering is unreachable, because it is not there =="
+assert "q_range() is gone from the renderer"         "$(fhasnt 'def q_range' "$GEN")"
+assert "…and nothing calls it"                       "$(fhasnt 'q_range(' "$GEN")"
+assert "…no question label is enumerated"            "$(fhasnt 'enumerate(qs, 1)' "$GEN")"
+assert "…and no label is built from a range"         "$(yes_if python3 -c "
+import re, sys
+src = open('$GEN', encoding='utf-8').read()
+# Every 'Q%d'/'Q%s' format in the file must be fed q_split()'s number. Guard the shape
+# that produced the bug: a range/enumerate counter reaching a question label.
+bad = re.findall(r'for\s+\w+\s+in\s+(?:range|enumerate)\([^)]*\)[^\n]*', src)
+sys.exit(0 if not any('q' in b.lower() and 'Q%' not in b for b in bad if 'question' in b.lower()) else 1)")"
+assert "…and the header records why it may not come back" \
+  "$(fhas 'NEVER BY ITS POSITION' "$GEN")"
+
+# ---------------------------------------------------------------------------
+# THE SECOND DEFECT IN THE SAME ROW, DECIDED SEPARATELY.
+#
+# task-012 was `status: done` and still sat under "Waiting for you". That is not the
+# Q-number fault and must not be resolved by it. Decision (a): the board omits waiting
+# items for a TERMINAL task. Its rationale is on the guard in build-board.sh; what is
+# pinned here is that the two fixes are independent — the guard removes a terminal
+# task's item, and the Q fix leaves a LIVE task's item exactly where it was.
+mkdir -p "$TMP/term"
+mk "$TMP/term" "term" '[
+ {"slug":"mixed","title":"Terminal and live","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-012-claim-identity","title":"Shipped already","status":"done",
+            "assignee":"","awaiting":"","open_questions":1,"advisor_notes":0,
+            "depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["Q2: superseded, never answered"]},
+           {"id":"task-013-cancelled-one","title":"Cancelled already","status":"cancelled",
+            "assignee":"","awaiting":"","open_questions":1,"advisor_notes":0,
+            "depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["Q3: also stale"]},
+           {"id":"task-014-still-live","title":"Still live","status":"ready","assignee":"",
+            "awaiting":"","open_questions":1,"advisor_notes":0,"depends_on":[],
+            "in_flight":false,"prs":[],"open_question_text":["Q5: genuinely open"]},
+           {"id":"task-015-drifted","title":"Drifted done with a verb","status":"done",
+            "assignee":"","awaiting":"merge","open_questions":0,"advisor_notes":0,
+            "depends_on":[],"in_flight":false,"prs":[]}]},
+ {"slug":"finished","title":"Finished and proposing its close","kind":"build","status":"active",
+  "awaiting_close":true,"phase_progress":{"done":1,"total":1},
+  "tasks":[{"id":"task-001","title":"All done","status":"done","assignee":"","awaiting":"",
+            "open_questions":0,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]}]'
+TM="$TMP/term.html"
+tmrc=0; bash "$GEN" --out "$TM" "$TMP/term" >/dev/null 2>&1 || tmrc=$?
+
+echo "== a terminal task is not waiting on you (defect 2, decided as (a)) =="
+assert "the fixture renders and exits 0"             "$(eq "$tmrc" 0)"
+assert "a done task contributes no rail item"        "$(rail_of "$TM" 'Terminal and live' | fhasnt_in 'Shipped already')"
+assert "…nor does a cancelled one"                   "$(rail_of "$TM" 'Terminal and live' | fhasnt_in 'Cancelled already')"
+assert "…and neither leaves a stale Q handle in the queue" \
+  "$(rail_of "$TM" 'Terminal and live' | fhasnt_in 'answer Q2')"
+# …and the guard is on the whole contribution, so a hand-edited snapshot claiming a
+# done task is awaiting a merge is caught too. write-snapshot.sh cannot emit that shape;
+# a human editing SNAPSHOT.json can.
+assert "…nor a done task carrying a drifted awaiting verb" \
+  "$(rail_of "$TM" 'Terminal and live' | fhasnt_in 'class="verb">merge')"
+# THE INDEPENDENCE, in both directions. The Q fix must not delete rows, and the guard
+# must not be what makes Q numbers right.
+assert "a LIVE task's question still reaches the rail" \
+  "$(rail_of "$TM" 'Terminal and live' | fhas_in 'class="verb">question')"
+assert "…still labelled from its own text"           "$(rail_of "$TM" 'Terminal and live' | fhas_in 'answer Q5</button>')"
+assert "…exactly one item in the rail"               \
+  "$(eq "$(rail_of "$TM" 'Terminal and live' | grep -oF 'class="ask"' | wc -l | tr -d ' ')" 1)"
+# NON-VACUITY for rail_of() itself: it must be capable of returning something, or every
+# `fhasnt_in` above is green because the helper hands back an empty string.
+assert "…and rail_of really returns that project's rail" \
+  "$(rail_of "$TM" 'Terminal and live' | fhas_in '<section class="rail"')"
+assert "…and the collapsed count agrees"             "$(card "$TM" 'Terminal and live' | fhas_in '<b>1</b> awaiting you')"
+# THE TASK TABLE IS UNTOUCHED: the question is still visible where the task lives. The
+# guard removes it from the queue of things blocking you, not from the record.
+assert "the terminal task still renders in the table" "$(card "$TM" 'Terminal and live' | fhas_in 'Shipped already')"
+assert "…keeping its own Q handle"                   "$(card "$TM" 'Terminal and live' | fhas_in '>Q2</button>')"
+# A PROJECT'S OWN awaiting_close IS NOT A TASK, and a finished project proposing its
+# close is exactly the case `.proj.fin.wants` exists for. The guard must not reach it.
+assert "a finished project still proposes its close" "$(card "$TM" 'Finished and proposing' | fhas_in 'class="verb">close')"
+assert "…and is still marked as wanting you"         "$(fhas '<details class="proj fin wants">' "$TM")"
 
 echo "== advisor_notes is information, not a demand =="
 assert "an untriaged concern shows as a concern pill" "$(fhas 'concern' "$OUT")"
@@ -556,8 +770,15 @@ if kill -0 "$qpid" 2>/dev/null; then kill -9 "$qpid" 2>/dev/null; qrc=1; fi
 wait "$qpid" 2>/dev/null || true
 assert "the page renders instead of hanging"         "$(eq "$qrc" 0)"
 assert "…and it was written"                         "$(yes_if test -s "$QOUT")"
-assert "…with the first question handle"             "$(fhas 'Q1</button>' "$QOUT")"
-assert "…and the count capped, not unbounded"        "$(fhasnt 'Q25</button>' "$QOUT")"
+# THE COUNT NO LONGER PRODUCES LABELS AT ALL, which is a stronger answer to the same
+# hazard than the cap was: with no question text carried there is nothing to number, so
+# one honest unnumbered handle is emitted whatever the count says. Nine digits and one
+# digit render the same page.
+assert "…with one honest unnumbered handle"          "$(fhas '>?</button>' "$QOUT")"
+assert "…and no fabricated first question"           "$(fhasnt 'Q1</button>' "$QOUT")"
+assert "…and no fabricated twenty-fifth either"      "$(fhasnt 'Q25</button>' "$QOUT")"
+assert "…exactly one handle, not nine hundred million" \
+  "$(eq "$(grep -oF 'class="qbtn' "$QOUT" | wc -l | tr -d ' ')" 2)"
 
 echo "== a PR URL is a link only on http/https, here too =="
 mk "$TMP/hostile" "hostile" '[

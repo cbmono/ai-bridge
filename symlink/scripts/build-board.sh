@@ -204,7 +204,20 @@
 #     task that is no longer a draft. write-snapshot.sh only emits an `awaiting` verb for
 #     a question while the task IS a draft, so such a question is invisible in the queue;
 #     the rail adds it at the presentation layer, without touching the AWAITING.md
-#     contract that awaiting-queue.test.sh pins.
+#     contract that awaiting-queue.test.sh pins. It surfaces it only while the task is
+#     LIVE: a `done`/`cancelled` task contributes nothing to the rail, because the
+#     paragraph the rail writes for such an item ("an unanswered question blocks
+#     promotion") is not true of a task that already shipped, and answering it clears
+#     nothing on this page — a queue you cannot empty by doing what it asks is the one
+#     people stop reading. A project's own `awaiting_close` is unaffected.
+#   · A QUESTION IS LABELLED BY THE `Q<n>` IT CARRIES, NEVER BY ITS POSITION. The labels
+#     used to be `range(1, open_questions + 1)`, which is a position dressed as a name:
+#     a task whose Q1 was answered and whose Q2 is open rendered `answer Q1`, pointing a
+#     human at the wrong question in a document they then stop trusting. The number is
+#     read out of the question's own text (q_split), and where there is no number to
+#     read — question text not published, or an entry with no `Qn` prefix — the control
+#     renders unnumbered and says why. There is no positional fallback anywhere in this
+#     file, and reintroducing one is reintroducing the defect.
 #   · With no readable snapshot it writes NOTHING and exits 0. Publishing an empty board
 #     is not useful, and an instance off the board is a choice, not an error.
 #
@@ -660,10 +673,24 @@ h1{font-size:clamp(1.5rem,3.6vw,1.95rem);font-weight:600;letter-spacing:-.02em;
   color:var(--muted);font-variant-numeric:tabular-nums}
 .tally .live dd,.tally .live dt{color:var(--signal)}
 
+/* THE BLOCK THAT MATTERS HAS TO SEPARATE FROM THE CARD HOLDING IT. Its fill was
+   `--signal` 8% on `--surface` — 1.12:1 against the card it sits in, and the card's own
+   `.proj.wants` head is 7% of the same hue, so the one block on the page that says "you
+   are the blocker" dissolved into its container. It is now a DEEPER, DESATURATED amber
+   built on `--sunk` (the page's recessed neutral) rather than on `--surface`, so it
+   reads as a panel set INTO the card: 1.42:1 in light, 1.47:1 in dark. Still one hue —
+   the accent already means "needs you" everywhere here, and a second one would compete
+   with it — and the amber left rail and the label stay, since those are what the eye
+   finds first.
+   THE LABEL MOVES WITH THE FILL. Plain `--signal` on this deeper ground is 3.93:1,
+   under AA for text this small (.68rem), so it takes 22% of `--ink`: 5.22:1 in light and
+   6.05:1 in dark, and still visibly amber (#7e4811 / #dfb178). Mixing toward `--ink`
+   rather than toward black is what makes one rule right in both themes — `--ink` is
+   dark in light mode and light in dark mode, exactly as `.c.you` does it. */
 .rail{border-left:.22rem solid var(--signal);border-radius:0 6px 6px 0;
-  background:color-mix(in srgb,var(--signal) 8%,var(--surface));padding:.9rem 1rem}
+  background:color-mix(in srgb,var(--signal) 16%,var(--sunk));padding:.9rem 1rem}
 .rail h2{margin:0 0 .7rem;font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;
-  color:var(--signal);font-weight:600}
+  color:color-mix(in srgb,var(--signal) 78%,var(--ink));font-weight:600}
 .rail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem}
 .ask{display:flex;flex-direction:column;gap:.5rem;padding:.65rem .75rem;
   background:var(--surface);border:1px solid var(--line);border-radius:5px}
@@ -676,9 +703,17 @@ h1{font-size:clamp(1.5rem,3.6vw,1.95rem);font-weight:600;letter-spacing:-.02em;
   background:var(--surface)}
 .line{display:flex;flex-wrap:wrap;gap:.3rem .55rem;align-items:baseline}
 .what{font-weight:500}
+/* The task filename on a waiting row. `.tid` already owns this treatment in the task
+   table; the only difference here is that the flex gap supplies the separation, so its
+   own right margin would double it. */
+.line .tid{margin-right:0}
 .verb{font:600 .64rem/1.7 "IBM Plex Mono",ui-monospace,monospace;text-transform:uppercase;
   letter-spacing:.08em;color:var(--signal);white-space:nowrap}
-.where{width:100%;font-size:.75rem;color:var(--dim)}
+/* THE BREADCRUMB WAS THE LEAST LEGIBLE THING IN THE BLOCK, and it was measurably so,
+   not just to taste: `--dim` on `.ask`'s surface is 3.18:1 in light and 3.79:1 in dark,
+   both under AA's 4.5:1 for text this small (.75rem ≈ 12px). `--muted` is 5.98:1 and
+   6.67:1 — the same grey family one step up, no new colour. */
+.where{width:100%;font-size:.75rem;color:var(--muted)}
 .acts{display:flex;flex-wrap:wrap;gap:.35rem}
 /* The title line IS the toggle: click anywhere on it for the explanation. A caret
    marks it as expandable, since a heading that happens to be clickable is invisible. */
@@ -709,8 +744,12 @@ button.no{border-color:var(--stop);color:var(--stop)}
 .proj[open] .phead::before{transform:rotate(90deg)}
 .phead:hover{background:var(--raise)}
 .phead:hover .ptitle{color:var(--accent)}
-.ptitle{font-weight:600;letter-spacing:-.01em;flex:1 1 18rem;min-width:0;font-size:.97rem}
-.counts{display:flex;gap:.35rem;flex-wrap:wrap}
+/* The title no longer eats the free space — the date sits immediately after it, and a
+   growing title would have pushed the date to the far end again, which is where it just
+   came from. `.counts` takes the space instead, so the chips stay exactly where they
+   have always been: hard against the ✕ at the end of the line. */
+.ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto;min-width:0;font-size:.97rem}
+.counts{display:flex;gap:.35rem;flex-wrap:wrap;margin-left:auto}
 .c{font-size:.72rem;color:var(--muted);border:1px solid var(--line);border-radius:3px;
   padding:.15rem .42rem;white-space:nowrap}
 .c b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
@@ -778,17 +817,66 @@ th{text-align:left;font-size:.64rem;text-transform:uppercase;letter-spacing:.09e
 th.r,td.r{text-align:right}
 th:not(:first-child),td:not(:first-child){width:1%;white-space:nowrap}
 th:first-child,td:first-child{width:auto}
-td{padding:.4rem .45rem;vertical-align:baseline;
+/* MIDDLE, not baseline. Against a title that wraps to two lines the assignee, the state
+   and the PR link sat pinned to the first line and read as if they belonged to it. */
+td{padding:.4rem .45rem;vertical-align:middle;
   border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
 tbody tr:last-child td{border-bottom:0}
 tr.flight td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
 .tid{color:var(--dim);font-size:.74rem;margin-right:.4rem;
   font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 td:first-child{overflow-wrap:break-word}
+
+/* ---- THE TASK ROW: THE JITTER IS THE BUG, NOT THE LINE COUNT --------------------
+   `014-banner-reaches-the-human Some title` and `001-local-board Some title` are two
+   inline runs, so every title started at a different x and the whole column read as
+   ragged. Worse, the row reflowed between one and two lines as the window moved, and a
+   list where some rows are one line and their neighbours two is a list you re-find your
+   place in on every scroll. Both are the SAME defect — nothing about the row is fixed —
+   and both are fixed by giving the filename a column of its own.
+
+   NARROW IS THE DEFAULT, because it is the shape that needs no measurement: `.trow` is
+   a flex COLUMN, so filename is line 1 and title is line 2 on EVERY row. Uniform by
+   construction — there is no width at which one row can be one line and the next two.
+
+   `.tmain` stacks the promote control above the title; on a row that has no promote
+   control it holds the title alone and costs nothing. */
+.trow{display:flex;flex-direction:column;align-items:flex-start;gap:.15rem;min-width:0}
+.tmain{display:flex;flex-direction:column;align-items:flex-start;gap:.22rem;min-width:0}
+
+/* ≥1200px: the filename gets a FIXED column and every title starts at the same x.
+   WHERE 41ch COMES FROM — measured, not rounded. The longest task filename actually
+   present across this bundle's projects is `017-write-for-a-human-who-will-not-read`,
+   39 characters (`task-` and `.md` are dropped before it is rendered). `.tid` is set in
+   IBM Plex Mono, so 1ch is one character exactly: 39ch for the longest name that exists
+   plus 2ch of gutter before the title = 41ch. Round numbers were avoided deliberately —
+   40ch would clip today's longest name by one character, and 48ch buys nothing but a
+   wider gap on every row.
+   HOW IT DEGRADES when a longer filename appears later: the column does NOT grow and
+   the title column is NOT pushed. `min-width:0` plus `overflow-wrap:anywhere` wrap the
+   long name onto a second line INSIDE its own 41ch column; that one row grows a line
+   and every title on the page still starts at the same x, which is the property this
+   whole block exists to hold. No overflow, no reflowed neighbours, no horizontal
+   scrollbar. Re-measure and bump the 41 when that gets annoying — it is one number in
+   one place, and the wrapping is what makes forgetting to survivable. */
+@media (min-width:1200px){
+  .trow{flex-direction:row;align-items:baseline;gap:0}
+  .trow>.tid{flex:0 0 41ch;min-width:0;margin-right:0;overflow-wrap:anywhere}
+  .tmain{flex:1 1 auto}
+}
 .tbtn{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;
   border-bottom:1px dotted var(--dim);border-radius:0}
 .tbtn:hover{color:var(--accent);border-color:var(--accent)}
-.promote{font-size:.68rem;padding:.14rem .4rem;margin-left:.4rem}
+/* THE PROMOTE CONTROL LOOKS LIKE A CONTROL AT REST. It used to be a plain grey button
+   that only picked up the accent on hover — so the one row on the board asking for an
+   action announced itself only to a pointer already on top of it, and to a touch screen
+   never at all. The states are INVERTED: the accent outline is the resting
+   appearance, and hover drops it for a filled neutral. Hover is now a state change
+   ("you are on this one"), not the moment the button becomes visible. */
+.promote{font-size:.68rem;padding:.14rem .4rem;margin:0;
+  border-color:var(--accent);color:var(--accent);background:transparent}
+.promote:hover,.promote:focus-visible{border-color:var(--ink);color:var(--ink);
+  background:var(--sunk)}
 /* The Q count is a button only when there is something to ask about. Its TEXT is
    never on this page — the allowlist forbids question text, and AWAITING.md has it. */
 .qbtn{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.8rem;font-weight:600;
@@ -797,6 +885,12 @@ td:first-child{overflow-wrap:break-word}
   font-variant-numeric:tabular-nums}
 .qs{display:inline-flex;gap:.2rem}
 .qbtn:hover{border-color:var(--signal);background:color-mix(in srgb,var(--signal) 18%,transparent)}
+/* A HANDLE THE BOARD CANNOT NAME. It is drawn quieter and dashed on purpose: it does
+   not know which question it is, so it must not look as authoritative as one that does.
+   Its tooltip says which of the two absences produced it. What it must never do is
+   borrow a number from its position in the list — see q_split(). */
+.qbtn.nonum{color:var(--muted);border-style:dashed;background:transparent}
+.qbtn.nonum:hover{color:var(--signal);border-color:var(--signal);background:transparent}
 button.ghost{font-size:.72rem;padding:.28rem .5rem;color:var(--muted)}
 .deps{white-space:normal!important}
 /* Two refs must not wrap: reserve button.dep's own box (3ch digits + .7rem pad +
@@ -1093,17 +1187,85 @@ def task_number(tid):
 Q_BUTTON_CAP = 24
 
 
-def q_range(t):
-    """1..N for a task's open questions, N capped.
+# A QUESTION IS NAMED BY THE `Q<n>` IT CARRIES, NEVER BY WHERE IT SITS IN A LIST.
+#
+# THE BUG THESE TWO PATTERNS EXIST TO KILL, because it is the kind that looks right on
+# every board you have ever seen and is wrong on the one that matters: the labels used
+# to be `range(1, open_questions + 1)` — a POSITION. A task whose Q1 had been answered
+# and whose Q2 was still open rendered a button reading `answer Q1`. A human clicks it,
+# opens the document, finds Q1 answered, and either answers the wrong question or stops
+# believing the board. Positional numbering is not a fallback here and must never be
+# reintroduced as one: it is the defect. `q_split()` below returns None rather than a
+# guess, and every caller renders an honest unnumbered control for None.
+#
+# THE SHAPE A REAL ENTRY HAS, from the live documents this renders (SCHEMA.md, and
+# `write-snapshot.sh`'s `yaml_list_entries`), is a stamped one:
+#     "2026-08-30T16:01:52Z · Q2: should an instance that is behind the template …"
+# so the token is NOT at the start of the string, and an escalated one carries a leading
+# `advisor:` marker as well. Q_LEAD skips exactly that much and no more — at most one
+# `·`-delimited segment of at most 40 characters (an ISO stamp plus its space is 21),
+# with the marker allowed on either side of it. Bounded on purpose: an unbounded skip
+# would hunt for a `Q7` mentioned in the middle of a question's PROSE and name the
+# question after something it merely talks about.
+Q_LEAD = re.compile(r"^\s*(?:advisor\s*:\s*)?(?:[^·]{0,40}·\s*)?(?:advisor\s*:\s*)?", re.I)
+Q_NUM = re.compile(r"Q(\d{1,3})\b[:.)\]]?\s*", re.I)
 
-    `open_questions` is a COUNT the writer derives from the task document, and a button
-    is emitted per question — so a drifted `"open_questions": 900000000` is a valid int
-    that renders for hours and produces a page nobody can open. toint() cannot catch
-    that: the type is right and the value is absurd. The cap is deliberately far above
-    any real task (a document with two dozen open questions has a different problem) and
-    is not a silent truncation of anything that occurs in practice.
+Q_BUTTON_CAP = 24
+
+
+def q_split(q):
+    """`(number, body)` for one open question — number is None when it names none.
+
+    The number is read out of the question's own text and nowhere else. `Q01` and `Q1`
+    are the same question, so the value is normalised through int(); three digits is the
+    ceiling, which is far past any real document and keeps a drifted entry from
+    producing an absurd label.
     """
-    return range(1, min(toint(t.get("open_questions")), Q_BUTTON_CAP) + 1)
+    s = str(q)
+    lead = Q_LEAD.match(s)
+    if lead:
+        s = s[lead.end():]
+    m = Q_NUM.match(s)
+    if m:
+        return int(m.group(1)), s[m.end():].strip()
+    return None, s.strip()
+
+
+def q_handles(t):
+    """One entry per open question — its number, or None when the board cannot know.
+
+    TWO SOURCES, AND THEY ANSWER DIFFERENT QUESTIONS. `open_question_text` is opt-in
+    (SNAPSHOT_QUESTION_TEXT=1, off by default — see write-snapshot.sh) and is the only
+    thing that can carry a number. `open_questions` is a plain COUNT and carries none.
+    So:
+      · text carried  → one handle per question, numbered from its own text where the
+                        text names a number and unnumbered where it does not;
+      · no text       → ONE unnumbered handle for the whole task, not N of them. N
+                        identical `?` buttons all copying the same string say nothing
+                        the `N questions` chip on the collapsed line does not already
+                        say, and each one implies a question it cannot name.
+    The cap applies to the text path, where a drifted `open_question_text` of a thousand
+    entries would otherwise render a page nobody can open; the count path emits one
+    control regardless of how absurd the count is, so it needs no cap at all.
+    """
+    qs = [str(q) for q in tolist(t.get("open_question_text"))][:Q_BUTTON_CAP]
+    if qs:
+        return [q_split(q)[0] for q in qs]
+    return [None] if toint(t.get("open_questions")) > 0 else []
+
+
+# What an unnumbered handle says instead of a number. Two strings, because the two ways
+# a number can be missing are not the same fact and a reader acts on them differently.
+Q_NO_TEXT = ("The board carries a COUNT of open questions, not their numbers — this "
+             "instance does not publish question text. Open %s and use the Qn written "
+             "there; the board will not invent one.")
+Q_NO_NUM = ("This question's text carries no Qn prefix, so the board cannot name it. "
+            "Open %s and use the number written there; the board will not invent one.")
+
+
+def q_title(t, ref):
+    """The tooltip for an unnumbered handle — which of the two absences this is."""
+    return (Q_NO_NUM if tolist(t.get("open_question_text")) else Q_NO_TEXT) % ref
 
 
 def explain(verb, p, t, hint):
@@ -1136,14 +1298,20 @@ def explain(verb, p, t, hint):
         qs = [str(q) for q in tolist(t.get("open_question_text"))]
         if qs:
             # An escalated concern is prefixed `advisor:` by the project-manager. Say
-            # once, in prose, where it came from — then strip the marker, so the
-            # question does not read "Q1: advisor: …".
-            def strip(q):
-                return q[len("advisor:"):].lstrip() if q.lower().startswith("advisor:") else q
-            escalated = any(q.lower().startswith("advisor:") for q in qs)
+            # once, in prose, where it came from — then drop the marker, so the
+            # question does not read "Q2: advisor: …". q_split() removes it along with
+            # the entry's stamp, and returns the number THE QUESTION NAMES.
+            escalated = any(q.lower().lstrip().startswith("advisor:") for q in qs)
             lead = ("The advisor raised this and the project-manager could not settle it from "
                     "the documents, so it came to you. ") if escalated else ""
-            body = "  ".join("Q%d: %s" % (i, strip(q)) for i, q in enumerate(qs, 1))
+            # A question with no number of its own is rendered as its text alone. It was
+            # numbered by POSITION here too — so a stamped entry reading `… · Q2: …`
+            # came out as "Q1: 2026-08-30T16:01:52Z · Q2: …", naming it twice and
+            # getting it wrong the first time. Never label a question by its index.
+            def one(q):
+                n, body = q_split(q)
+                return ("Q%d: %s" % (n, body)) if n else body
+            body = "  ".join(one(q) for q in qs)
             return lead + body + ("  — an unanswered question blocks promotion, so the "
                                   "loop will not dispatch this task.")
         # No text carried (the default) — fall through to the count wording.
@@ -1213,6 +1381,32 @@ def render_table():
                 n_tasks += 1
                 if t.get("status") == "done":
                     n_done += 1
+                # A TERMINAL TASK IS NOT WAITING ON YOU, and this is a DIFFERENT defect
+                # from the Q-number one above — decided on its own, not absorbed by it.
+                #
+                # `done`/`cancelled` reached this list through the presentation-layer
+                # branch below, so a finished task with a stale unanswered question sat
+                # under "Waiting for you" for good. The other reading — that it is a real
+                # loose end — loses on two counts. It is not TRUE: the paragraph the rail
+                # writes for it says "an unanswered question blocks promotion, so the loop
+                # will not dispatch this task", and nothing about that is so for a task
+                # that already shipped; the loop will not dispatch it whatever you answer.
+                # And it is not ACTIONABLE: answering changes no state any tick reads, so
+                # the item can never be cleared from this page by doing what the page asks
+                # — only by editing the document. A queue that cannot be emptied by acting
+                # on it is the thing that teaches a human to stop reading the queue.
+                # The loose end is real; the place to raise it is the document, not the
+                # list of things blocking you today.
+                #
+                # The guard is on the WHOLE task contribution, not just the branch below,
+                # so a hand-edited snapshot carrying `"status":"done","awaiting":"merge"`
+                # is caught too. write-snapshot.sh emits an awaiting verb only for draft /
+                # in-review / blocked, so this costs nothing on a snapshot it wrote.
+                # A project's own `awaiting_close` is untouched: it is project-level, it
+                # is exactly what a finished project SHOULD ask for, and `.proj.fin.wants`
+                # exists to render it.
+                if t.get("status") in TERMINAL:
+                    continue
                 if t.get("awaiting"):
                     mine.append((g, p, t, None))
                 elif t.get("open_questions"):
@@ -1288,8 +1482,16 @@ def render_table():
             what = (tid_txt + " (" + str(t.get("title") or "") + ")") if tid_txt else str(t.get("title") or "")
             where = g + " › " + str(p.get("title") or "")
             o.append('<li class="ask"><details class="why"><summary class="line">'
-                     '<span class="verb">%s</span><span class="what">%s</span>'
-                     % (e(t.get("awaiting")), e(t.get("title"))))
+                     '<span class="verb">%s</span>' % e(t.get("awaiting")))
+            # THE FILENAME, BEFORE THE TITLE. A title is not a filename, and the reader
+            # of this row is trying to open the document — `012-claim-identity` is what
+            # they type into a file tree. Same form the task table's first column shows
+            # (`task-` and `.md` both dropped: constant, so neither carries information),
+            # and the close item has no task id at all, so it gets none.
+            if tid_txt:
+                o.append('<span class="tid">%s</span>'
+                         % e(tid_txt[5:] if tid_txt.startswith("task-") else tid_txt))
+            o.append('<span class="what">%s</span>' % e(t.get("title")))
             o.append('<span class="where">%s%s</span></summary>'
                      % (e(where), " · <code>%s</code>" % e(hint) if hint else ""))
             o.append('<p>%s</p></details>' % e(explain(t.get("awaiting"), p, t, hint)))
@@ -1298,11 +1500,19 @@ def render_table():
                 ref = short_ref(str(p.get("slug") or ""), tid_txt)
                 o.append('<button class="ghost" data-copy="%s" data-what="Task reference">'
                          "copy task ref</button>" % e(ref))
-                for i in q_range(t):
-                    o.append('<button class="qbtn" data-copy="%s" data-what="Q%d handle" '
-                             'title="Copy &quot;%s Q%d:&quot; ready to type your answer after">'
-                             "answer Q%d</button>"
-                             % (e("%s Q%d: " % (ref, i)), i, e(ref), i, i))
+                for qn in q_handles(t):
+                    # The number comes from the question's own text (q_split), never
+                    # from this loop's position. No number ⇒ no number is shown.
+                    if qn is None:
+                        o.append('<button class="qbtn nonum" data-copy="%s" '
+                                 'data-what="Task reference" title="%s">'
+                                 "answer question</button>"
+                                 % (e(ref + " "), e(q_title(t, ref))))
+                    else:
+                        o.append('<button class="qbtn" data-copy="%s" data-what="Q%d handle" '
+                                 'title="Copy &quot;%s Q%d:&quot; ready to type your answer after">'
+                                 "answer Q%d</button>"
+                                 % (e("%s Q%d: " % (ref, qn)), qn, e(ref), qn, qn))
             for verdict, (label, cls, lead) in ([] if t.get("awaiting") == "question"
                                                 else WORDING.items()):
                 msg = '%s Re the "%s" item on %s in %s.' % (lead, t.get("awaiting"), what, where)
@@ -1338,7 +1548,16 @@ def render_table():
         slug = str(p.get("slug") or "")
         o.append('<details class="proj%s%s"><summary class="phead">'
                  % (" fin" if fin else "", " wants" if mine else ""))
-        o.append('<span class="ptitle">%s</span><span class="counts">' % e(p.get("title")))
+        o.append('<span class="ptitle">%s</span>' % e(p.get("title")))
+        # THE DATE SITS WITH THE TITLE, not at the far end of the line. It qualifies the
+        # title — "this project, started then" — and reading it meant crossing six count
+        # chips to get to it. Same span, same class, same treatment; only the position
+        # moved, and `.counts` keeps its own place by taking the free space instead of
+        # being pushed there by `.ptitle`.
+        if created:
+            o.append('<span class="pdate" title="Project created %s">%s</span>'
+                     % (e(created), e(created)))
+        o.append('<span class="counts">')
         if mine:
             # THE SIGNAL, and the reason collapsing sixteen projects is not a
             # regression. FIRST in the row, so it is read before "done"/"in progress",
@@ -1372,9 +1591,6 @@ def render_table():
             o.append('<span class="tag">%d deliverable%s</span>'
                      % (len(dps), "" if len(dps) == 1 else "s"))
         o.append("</span>")
-        if created:
-            o.append('<span class="pdate" title="Project created %s">%s</span>'
-                     % (e(created), e(created)))
         if SLUG_SEG.fullmatch(slug):
             # THE ✕ COPIES A COMMAND. It does not close, mutate or navigate anything —
             # see the header, and do not reword this tooltip into "close this project".
@@ -1409,16 +1625,28 @@ def render_table():
             short = tid[5:] if tid.startswith("task-") else tid
             st = str(t.get("status") or "")
             o.append('<tr%s>' % (' class="flight"' if t.get("in_flight") else ""))
-            o.append('<td><span class="tid">%s</span>' % e(short))
-            o.append('<button class="tbtn" data-copy="%s" data-what="Task reference">%s</button>'
-                     % (e(short_ref(str(p.get("slug") or ""), tid)), e(t.get("title"))))
+            # TWO COLUMNS INSIDE ONE CELL, and the wrapper is what makes them possible:
+            # `display:flex` ON a <td> takes it out of the table's own column sizing, so
+            # the filename column lives in a <div> the cell contains. `.trow` is a column
+            # below 1200px (filename line 1, title line 2, EVERY row the same) and a row
+            # with a fixed-width filename above it (every title at the same x). See the
+            # `.trow` rules for why the width is what it is.
+            o.append('<td><div class="trow"><span class="tid">%s</span><div class="tmain">'
+                     % e(short))
             if st == "draft":
+                # THE PROMOTE CONTROL COMES FIRST — after the filename, above the title.
+                # It was inline AFTER the title, which is where the eye has already left
+                # the row; the one row on the board that wants an action now leads with
+                # it. It still only COPIES a prompt: promoting is `status: ready` in the
+                # document, a human authority (SCHEMA.md), and nothing here does it.
                 promo = ("In the ai-bridge instance, promote %s from draft to ready: review its "
                          "acceptance criteria, tighten any that are not testable, then set "
                          "status: ready." % short_ref(str(p.get("slug") or ""), tid))
                 o.append('<button class="promote" data-copy="%s" data-what="Promotion prompt">'
                          "promote → ready</button>" % e(promo))
-            o.append("</td>")
+            o.append('<button class="tbtn" data-copy="%s" data-what="Task reference">%s</button>'
+                     % (e(short_ref(str(p.get("slug") or ""), tid)), e(t.get("title"))))
+            o.append("</div></div></td>")
             o.append('<td><span class="state %s">%s</span></td>' % (TONE.get(st, ""), e(st)))
             o.append('<td class="dim">%s</td>' % e(t.get("assignee") or "—"))
             deps = [str(d) for d in tolist(t.get("depends_on"))]
@@ -1432,20 +1660,24 @@ def render_table():
                        e(task_number(d))) for d in deps))
             else:
                 o.append('<td class="dim">—</td>')
-            q = toint(t.get("open_questions"))
-            if q:
-                # One handle per question. The snapshot carries only a COUNT, and
-                # SCHEMA.md requires every entry to be numbered Q1, Q2, … — so the
-                # labels are derivable without ever carrying question text. See the
-                # caveat in the footer: this assumes the numbering starts at 1 and is
-                # contiguous, which the schema asks for but does not enforce.
+            handles = q_handles(t)
+            if handles:
+                # ONE HANDLE PER QUESTION, LABELLED BY THE NUMBER THE QUESTION CARRIES.
+                # This used to derive the labels from the COUNT — `Q1 … QN` — on the
+                # reasoning that SCHEMA.md asks every entry to be numbered contiguously
+                # from Q1. It asks; it does not enforce, and answering Q1 leaves Q2 open
+                # and the count at 1, so the assumption broke on the first real task it
+                # met and put the wrong number on the button. A `?` that admits it does
+                # not know is worth more than a number that is confidently wrong.
                 ref = short_ref(str(p.get("slug") or ""), tid)
                 o.append('<td class="r"><span class="qs">%s</span></td>' % "".join(
-                    '<button class="qbtn" data-copy="%s" data-what="Q%d handle" '
-                    'title="Copy &quot;%s Q%d:&quot; ready to type your answer after">'
-                    'Q%d</button>' % (e("%s Q%d: " % (ref, i)), i,
-                                      e(ref), i, i)
-                    for i in q_range(t)))
+                    ('<button class="qbtn nonum" data-copy="%s" data-what="Task reference" '
+                     'title="%s">?</button>' % (e(ref + " "), e(q_title(t, ref))))
+                    if qn is None else
+                    ('<button class="qbtn" data-copy="%s" data-what="Q%d handle" '
+                     'title="Copy &quot;%s Q%d:&quot; ready to type your answer after">'
+                     'Q%d</button>' % (e("%s Q%d: " % (ref, qn)), qn, e(ref), qn, qn))
+                    for qn in handles))
             else:
                 o.append('<td class="r dim">—</td>')
             # The http/https rule applies here too: a PR URL is a link only on that
