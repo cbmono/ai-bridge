@@ -1,7 +1,7 @@
 ---
 description: Start the Project Manager loop as a SERIAL, completion-driven loop (one tick at a time) in this control-panel instance repo
 argument-hint: "[gap]  pause between ticks, default 10m  (e.g. 0m for back-to-back, 30m)"
-allowed-tools: Bash(pwd), Bash(ls:*), Agent, ScheduleWakeup, CronList, CronDelete
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronList, CronDelete
 ---
 
 Start the **Project Manager loop** — but as a **SERIAL, completion-driven** loop:
@@ -29,13 +29,26 @@ fixed-interval loop shorter than a tick (e.g. a naive `/loop 15m`) makes ticks
 and a sibling's package install corrupts an in-flight worktree. So this loop is
 gated on **completion**, never on a clock.
 
-**This guarantee is per-session only — there is no cross-session lock.** The
-"one tick at a time" serialization lives in *this* session's wakeup chain; a
-second Claude session running `/pm-loop` against the **same working tree**
-reintroduces exactly the overlap bug (double-dispatch, shared-store corruption,
-racing pushes to the control panel's `main`). **Run at most one active `/pm-loop`
-per clone at a time** — that's a human responsibility, not something the loop can
-enforce. Before starting, make sure no other session is already looping this clone.
+**The guarantee is backed by a lock file, not by a session's memory.** The "one
+tick at a time" serialization lives in *this* session's wakeup chain — and a
+session's memory of "I dispatched" does not survive a compaction, a `--resume`, or a
+human asking "what's next?". Measured 2026-08-29: two ticks ran concurrently for
+about 34 minutes for exactly that reason, doing the same refinement work twice. So
+**step 1 takes `.tick-lock` immediately before it dispatches**
+(`scripts/tick-lock.sh acquire`), and a second session running `/pm-loop` against the
+**same working tree** is refused rather than overlapping (double-dispatch,
+shared-store corruption, racing pushes to the control panel's `main`). **Still run at
+most one active `/pm-loop` per clone** — the lock catches the mistake; it does not
+make two loops a good idea.
+
+**It is a PER-CLONE lock and it is not a cross-machine one.** `.tick-lock` is a single
+gitignored file in a single working tree, so it says nothing about the other human's
+clone of a shared bundle — and it must not be read as if it did. Two loops from two
+clones is the *design*, not the bug (next paragraph); what stops those two dispatching
+the same TASK is `scripts/task-owner.sh`, never this file. The lock also bounds **PM
+ticks only**: `maxAgentsInFlight` (`scripts/resolve-max-agents.sh`) is the other
+concurrency limit and is untouched, so a held lock never blocks the role agents a tick
+dispatches.
 
 **A bundle shared by two humans is different, and is supported.** Each human has
 their own clone on their own machine, with their own `reposRoot` and
@@ -87,7 +100,30 @@ Do **not** read task documents, `log.md`, the tick ledger, `AWAITING.md`,
 `SNAPSHOT.json`, a worktree listing, `git status`, `git log`, `gh repo view` or
 `gh pr list` here — not the whole thing, not a summary, not "just to orient". **The
 tick does every one of them** (`.claude/agents/project-manager.md`, steps 0–1), which
-is why `allowed-tools` above lists no reader beyond `pwd`/`ls`.
+is why `allowed-tools` above lists no reader beyond `pwd`/`ls` and the one exception
+named next.
+
+**The one exception, named on purpose: the tick lock.** `scripts/tick-lock.sh acquire`
+reads `.tick-lock` and writes it in the same create, and step 1 runs it immediately
+before it dispatches. It is an **exception, not a relaxation**, and it earns the
+carve-out on this section's own argument rather than in spite of it: the cost that
+matters here is what lands in the main session's context, and on the normal path this
+lands **nothing** — `acquire` prints not one byte when it takes the lock, and speaks
+only when it refuses, which is the one case worth the tokens. The economy argument is
+untouched.
+
+**No other reader may be added by analogy, and this is not a precedent.** `log.md`,
+the tick ledger, task documents, `AWAITING.md`, `SNAPSHOT.json`, a worktree listing,
+`git status`, `git log`, `gh repo view` and `gh pr list` all stay forbidden here; the
+list above is still closed and the tick still does every one of them. Two things make
+this exception different from all of them: it is a **write** the launcher is the only
+one able to make (only the launcher knows "I am dispatching right now" — the tick
+learns it seconds later, which is the window that let two ticks overlap), and it
+returns an exit code rather than content. Nor does `allowed-tools` grant a reader: it
+grew by exactly `Bash(scripts/tick-lock.sh:*)`, one script that touches one gitignored
+file. And **never call `scripts/tick-lock.sh status` before `acquire`** — the check and
+the write are deliberately one operation, and looking first would rebuild the very race
+this closes.
 
 Two reasons, and the second is the one that matters. The human ran a command, not a
 briefing, so nothing should scroll before "tick dispatched". And every byte read here
@@ -127,7 +163,39 @@ which is the one thing the section above exists to protect.
 
 Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
-1. **Run one tick now.** Spawn the `project-manager` agent
+1. **Take the lock, then dispatch — in that order, with nothing in between.**
+   Resolve the tick's model first (below), then run
+
+       scripts/tick-lock.sh acquire --agent project-manager
+
+   and act on its exit code. **The check and the write are that one call**, which is
+   the whole point: the tick's own ledger check (`project-manager.md` step 0.5) runs
+   *inside* the tick, after step 0's `git pull` and its re-derivation, so between your
+   dispatch and its ledger entry there is a window of seconds to minutes in which the
+   ledger truthfully reports nothing running. A second tick dispatched anywhere in that
+   window is exactly the 34-minute overlap of 2026-08-29. `acquire` closes it by
+   creating the file with `O_EXCL`, so there is no read-then-write for anything to
+   interleave with — and **nothing may sit between the acquire and the spawn either**:
+   no `git pull`, no state read, no other tool call.
+
+   - **0** — the lock is yours, and it printed nothing. **Spawn the tick now**, as the
+     very next thing you do.
+   - **1** — HELD: a tick is in flight. Do **not** dispatch. Schedule the gap
+     (step 3, `noop: true`) and skip, exactly as step 4 does.
+   - **2** — the lock is stale, dated in the future, or unreadable, and the script has
+     already printed its timestamp and the agent it names. Do **not** dispatch, and do
+     **not** delete it: put what it printed in front of the human and stop until they
+     answer. Both silent options are excluded on purpose — silently deleting it
+     re-opens the double-dispatch, and silently treating it as live is the pressure
+     that makes a stalled loop tempting to override. `scripts/tick-lock.sh release` is
+     the human's answer, not yours.
+   - **3** — it could not write the lock at all. Report that and stop; a guarantee
+     nothing can keep is the failure this replaces, not a reason to dispatch anyway.
+
+   If the spawn itself fails to start, run `scripts/tick-lock.sh release` before you
+   report — a lock with no tick behind it is the stale case, arriving hours early.
+
+   The tick itself: spawn the `project-manager` agent
    (`subagent_type: project-manager`) for ONE LIVE tick (background), with the
    standing guardrails below. **Brief it with the gap and the guardrails, not with
    state** — it reads the bundle, `git` and `gh` itself, so there is nothing for you
@@ -150,10 +218,21 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    verdict; a quiet repo proves nothing either (a tick holding for its own
    subagents is quiet by definition).
 
+   **When that notification arrives, release the lock** — run
+   `scripts/tick-lock.sh release` before you schedule the gap. That is the only place it
+   is released in the
+   normal path, and releasing it on anything weaker than the notification (a status
+   listing, elapsed time, a quiet repo) hands the next tick a dispatch the running one
+   has not finished. A loop that dies before it releases leaves the lock to age out
+   into step 1's case 2, where a human sees it — which is the intended failure, not a
+   leak.
+
    **After a compaction, that memory is gone — and the answer is still not yours to
    look up.** This loop is long-lived and its context gets summarised; the in-flight
    set is answered from session history, which is exactly what compaction discards.
-   **Do not go read the disk here to reconstruct it.** Dispatch a tick and let it
+   That is what `.tick-lock` is for, and you consult it in exactly one way: **by taking
+   it in step 1**, never as a separate look. **Do not go read the disk here to
+   reconstruct anything else.** Dispatch a tick and let it
    answer: re-deriving the in-flight set from disk is one of the tick's opening steps
    — right after it syncs the bundle — which it takes whether or not you ask — the
    root `log.md` tick ledger (whose open-with-no-close entry is the only thing on
@@ -235,12 +314,19 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    turn off because it scrolls. `reason` is one specific sentence about what this
    tick is waiting on ("holding for qa-reviewer on #214"), not "waiting".
 4. **When `/pm-loop` re-fires from that wakeup:** "still in flight" means **this
-   session dispatched a tick and has not yet seen its notification** — that is the
-   whole check, and it is answered from this session's own history, never by
-   querying a tool. If one is still in flight, just reschedule the gap and skip
-   (never overlap); otherwise dispatch the next tick (step 1) and repeat.
+   session dispatched a tick and has not yet seen its notification** — answered from
+   this session's own history, which is the cheap answer and usually the right one.
+   **It is no longer the only answer, and that is what the lock changed**: session
+   history is precisely what a compaction discards, so step 1's `acquire` is what
+   actually decides. If memory says one is still in flight, reschedule the gap and
+   skip (never overlap); otherwise go to step 1, whose `acquire` refuses the dispatch
+   by itself if a live tick is holding the lock. Query nothing else here — the lock is
+   the launcher's one disk read, and it makes it by taking it.
 5. **Stop** when the user says so (e.g. "stop the PM loop"): dispatch no further
-   ticks and cancel any pending wakeup. There is no cron to delete.
+   ticks and cancel any pending wakeup. There is no cron to delete. If no tick is in
+   flight, run `scripts/tick-lock.sh release` so the next loop starts clean; if one
+   still is, leave the lock exactly where it is — it belongs to that tick, not to the
+   loop you just stopped.
 
 This guarantees **at most one PM tick at any moment**, with a `gap` pause between
 ticks, regardless of how long a tick runs.
@@ -328,6 +414,12 @@ ticks, regardless of how long a tick runs.
   serial"): don't start a second session looping the same working tree. Two humans
   sharing one bundle from two clones is a different case and is supported — see
   there. To change the gap: stop, then `/pm-loop <gap>`.
+- **The dispatch lock is `.tick-lock` at the instance root** — gitignored, per clone,
+  written by step 1 and released in step 2. `scripts/tick-lock.sh status` reads it
+  without touching it (for a human, never for this launcher), `release` clears it, and
+  `TICK_LOCK_STALE_MINUTES` (default 120) sets how old a lock has to be before step 1
+  stops waiting on it and asks. A missing lock is never an error: the loop dispatches
+  exactly as it always did.
 - **Starting the loop prints a handful of lines, not a screen**: the preconditions
   when one fails, one line naming the gap, and that the tick is dispatched. If a
   start scrolls the terminal, the launcher did work that belonged in the tick — move

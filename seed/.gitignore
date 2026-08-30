@@ -31,6 +31,14 @@ board.html
 # instances stamped before the directory existed.
 /.board-live/
 
+# The PM dispatch lock (scripts/tick-lock.sh) — written by /pm-loop immediately before it
+# dispatches a tick and released when that tick reports, so the one-tick-at-a-time
+# guarantee survives a compaction instead of resting on a session's memory. PER CLONE and
+# never committed: two humans sharing one bundle work from two clones and each dispatches
+# independently, which a shared lock would break. Derived and safe to delete when no tick
+# is running.
+/.tick-lock
+
 # Per-machine identity overrides (authorEmail, ownerGithubUser). instance.config.json
 # is tracked and therefore SHARED, so on a bundle two humans clone its authorEmail
 # would author both people's commits as one person. This file wins over it for those
