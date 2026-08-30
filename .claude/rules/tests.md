@@ -20,6 +20,8 @@ runs everything against the merged base. Locally the same loop measured **39m 47
 your change touches shared machinery every harness loads, and say why in the PR body —
 `symlink/CONVENTIONS.md` → "The full suite belongs to CI" is the rule this defers to.
 
+The full loop, for that exception only — and never polled:
+
 ```bash
 for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done
 ```
