@@ -235,6 +235,25 @@ ok "…and names the window it closes"     "$(step1 | grep -qF 'seconds to minut
 ok "…refusing to delete a stale lock itself" \
   "$(step1 | grep -qF "the human's answer, not yours" && echo yes || echo no)" yes
 
+# STOPPING THE LOOP MUST NOT RELEASE SOMEBODY ELSE'S LOCK. `release` holds no session
+# identity — it is the human's override and cannot have one — so the condition has to live
+# in the caller. A session that skipped at step 1 because another loop held the lock, and
+# then released on its way out, would delete a LIVE holder's lock and re-open exactly the
+# double-dispatch this file closes. Raised by review on ai-bridge#62.
+step5() { awk '/^5\. \*\*Stop\*\*/{p=1;next} p&&/^[A-Za-z]/{p=0} p' "$LAUNCHER"; }
+ok "step 5 releases only a lock this session took" \
+  "$(step5 | grep -qF 'only if THIS session took it' && echo yes || echo no)" yes
+ok "…naming the sibling it would otherwise delete" \
+  "$(step5 | grep -qF 'live' && echo yes || echo no)" yes
+ok "…and leaves a dispatched tick's lock to age out" \
+  "$(step5 | grep -qF 'ages out' && echo yes || echo no)" yes
+# And clearance to dispatch is the lock being CREATED, not merely missing: an unwritable
+# root refuses rather than dispatching unguarded, which is the other way "absence is never
+# an error" gets read backwards.
+ok "the script says a failed create refuses" "$(has "$LOCKSH" 'A FAILED CREATE IS')" yes
+ok "…and the operator docs say so too" \
+  "$(has "$TPL/docs/operations.md" 'Dispatch follows the lock being')" yes
+
 echo
 echo "== the closed list gained ONE named exception, and stayed closed =="
 section() { awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$LAUNCHER"; }

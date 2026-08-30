@@ -413,9 +413,13 @@ Deleting it silently would re-open the double-dispatch; adopting it silently is 
 pressure that makes a stalled loop tempting to override. `scripts/tick-lock.sh status`
 reads it without touching it, and `release` clears it once you have decided.
 
-**Absence is never an error.** No lock file means the launcher dispatches exactly as it
-always did, in silence — the same absence-is-off contract `SNAPSHOT.json` and the board
-link keep.
+**Absence is never an error — but a failed create is.** No lock file means the launcher
+takes one and dispatches exactly as it always did, in silence: the same absence-is-off
+contract `SNAPSHOT.json` and the board link keep. Dispatch follows the lock being
+**created**, not merely being missing. If the instance root cannot be written, `acquire`
+exits 3 and the launcher refuses to dispatch rather than proceeding unguarded — a lock
+nothing can keep is not a guarantee, and dispatching anyway would restore precisely the
+failure this replaces.
 
 **It is per clone, and it is not a cross-machine lock.** One gitignored file in one
 working tree, which says nothing about the other human's clone of a shared bundle — two

@@ -322,10 +322,14 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    by itself if a live tick is holding the lock. Query nothing else here — the lock is
    the launcher's one disk read, and it makes it by taking it.
 5. **Stop** when the user says so (e.g. "stop the PM loop"): dispatch no further
-   ticks and cancel any pending wakeup. There is no cron to delete. If no tick is in
-   flight, run `scripts/tick-lock.sh release` so the next loop starts clean; if one
-   still is, leave the lock exactly where it is — it belongs to that tick, not to the
-   loop you just stopped.
+   ticks and cancel any pending wakeup. There is no cron to delete. **Release the lock
+   only if THIS session took it and its tick has since finished** — otherwise leave it
+   exactly where it is. `release` is unconditional by design (it is the human's
+   override), so it cannot tell your lock from a sibling's: a session that skipped at
+   step 1 because another loop held the lock would delete a **live** holder's lock and
+   re-open the double-dispatch. And if you dispatched but are stopping before the
+   notification arrives, say so and leave the lock — it ages out into step 1's case 2,
+   where a human sees it, which is the intended failure.
 
 This guarantees **at most one PM tick at any moment**, with a `gap` pause between
 ticks, regardless of how long a tick runs.
@@ -414,7 +418,8 @@ ticks, regardless of how long a tick runs.
   sharing one bundle from two clones is a different case and is supported — see
   there. To change the gap: stop, then `/pm-loop <gap>`.
 - **The dispatch lock is `.tick-lock` at the instance root** — gitignored, per clone,
-  written by step 1 and released in step 2. `scripts/tick-lock.sh status` reads it
+  written by step 1 and released in step 2 by the session that took it.
+  `scripts/tick-lock.sh status` reads it
   without touching it (for a human, never for this launcher), `release` clears it, and
   `TICK_LOCK_STALE_MINUTES` (default 120) sets how old a lock has to be before step 1
   stops waiting on it and asks. A missing lock is never an error: the loop dispatches

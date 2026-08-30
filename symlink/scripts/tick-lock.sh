@@ -51,9 +51,19 @@
 # is the other concurrency limit and is untouched: it caps the role agents a tick dispatches.
 # A held lock must never block those — nothing in the role-agent path reads this file.
 #
-# ABSENCE IS NEVER AN ERROR. No lock ⇒ `acquire` takes it and says nothing (exit 0), which
-# is the launcher behaving exactly as it did before this file existed. `release` on a
-# missing lock is a silent success too. The only silence this script breaks is a refusal.
+# ABSENCE IS NEVER AN ERROR — A FAILED CREATE IS. No lock ⇒ `acquire` takes it and says
+# nothing (exit 0), which is the launcher behaving exactly as it did before this file
+# existed. `release` on a missing lock is a silent success too. But clearance to dispatch
+# is the lock being CREATED, never merely being missing: an unwritable instance root is
+# exit 3 and a refusal, because dispatching unguarded is the failure this replaces. The
+# only silence this script breaks is a refusal.
+#
+# `release` IS UNCONDITIONAL, AND THAT PUTS AN OBLIGATION ON THE CALLER. It holds no
+# session identity and cannot tell your lock from a sibling's — it is the human's
+# override, and an override that asked who you were would not be one. So a caller must
+# release only a lock IT took: a `/pm-loop` session that skipped because another loop held
+# the lock and then released it on the way out would delete a LIVE holder's lock and
+# re-open the double-dispatch. `/pm-loop` step 5 states that condition.
 #
 # IT READS NO CONFIG. `TICK_LOCK_STALE_MINUTES` is an environment override in the shape
 # `prune-worktrees.sh` already uses for `PRUNE_ACTIVE_MINUTES`; there is deliberately no
