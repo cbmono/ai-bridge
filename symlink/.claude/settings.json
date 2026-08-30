@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-banner.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-banner.sh --format json"
           }
         ]
       }

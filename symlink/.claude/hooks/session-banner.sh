@@ -3,9 +3,42 @@
 # session-banner.sh — THE SessionStart hook (ai-bridge machinery).
 #
 # One banner at the top of a session: which instance this is, what it is configured to do,
-# where the board is, what needs a human, and how much work is queued. Claude Code adds
-# SessionStart stdout to the session context, so this is read by the human AND by the
-# session — which is why every line is deterministic and none of it asks a question.
+# where the board is, what needs a human, and how much work is queued. Every line is
+# deterministic and none of it asks a question, because it is read by the human AND by the
+# session.
+#
+# STDOUT IS THE MODEL'S CHANNEL, NOT THE HUMAN'S, AND THAT ONCE COST THE WHOLE FEATURE.
+# Measured 2026-08-30 on a freshly stamped instance with the hook correctly registered: it
+# fired, the session's first answer quoted the banner's own numbers back ("0 agents in
+# flight, 15 active projects, 8 items waiting on you") — and the human saw NO banner and NO
+# board link. A SessionStart hook's stdout is a pipe into Claude Code, so plain text on it
+# reaches the model's CONTEXT; whether a human ever sees it is the model's choice and the
+# client's rendering, neither of which this file controls. An artifact whose entire purpose
+# is being looked at was being delivered where only a model looks.
+#
+# SO THE HOOK PATH EMITS HOOK JSON, AND THE BANNER TRAVELS ON BOTH CHANNELS:
+#
+#     {"systemMessage": "<banner>",                                  <- the HUMAN sees this
+#      "hookSpecificOutput": {"hookEventName": "SessionStart",
+#                             "additionalContext": "<banner>"}}      <- the MODEL reads this
+#
+# BOTH, not the user channel alone, and the same bytes in each. The model's copy is load-
+# bearing rather than a nicety: the machinery alarm ends "report this to the human before
+# doing anything else", the awaiting block ends "surface these first", and seed/CLAUDE.md's
+# offer-the-loop rule keys off the `Ready to dispatch` count — every one of those is an
+# instruction to the SESSION, and dropping additionalContext would silently retire them.
+# And ONE rendering, not two: a human-facing copy that trimmed the fence lines would be a
+# second banner to keep in step with the first, which is the divergence `/ai-bridge` is
+# already written to avoid (it `exec`s this file rather than reproducing it).
+#
+# `--format json` IS PASSED BY settings.json, AND text REMAINS THE DEFAULT. Two reasons the
+# default did not simply flip. A human running `bash .claude/hooks/session-banner.sh` in a
+# terminal wants the banner, not a JSON envelope — and so does `/ai-bridge`, which `exec`s
+# this file with no arguments and relays what comes back verbatim. And an instance whose
+# settings.json somehow does not carry the flag degrades to exactly today's behaviour
+# rather than to nothing, because an unrecognised argument here is ignored and never fatal.
+# Both files are symlinks into this template's working tree, so the flag and the parser
+# that reads it can never be a version apart in a stamped instance.
 #
 # IT REPLACES THREE HOOKS, IT IS NOT A FOURTH. `check-machinery.sh`, `show-awaiting.sh`
 # and `show-board-link.sh` each printed a fragment and none of them knew the others
@@ -80,22 +113,120 @@
 # failed section is a banner that stopped reporting without saying so.
 #
 # Verified by tests/session-banner.test.sh, tests/banner-board-line.test.sh,
-# tests/awaiting-queue.test.sh, tests/moved-template.test.sh and — for the drift line under
-# the header — tests/template-version.test.sh.
+# tests/awaiting-queue.test.sh, tests/moved-template.test.sh, — for the drift line under
+# the header — tests/template-version.test.sh, and — for the channel the banner is
+# delivered on, which none of the others can see — tests/banner-user-channel.test.sh.
 set -uo pipefail
 
 COLOR=auto
+FORMAT=text
 while [ $# -gt 0 ]; do
   case "$1" in
     --color) shift; COLOR="${1:-auto}"; shift || true ;;
     --color=*) COLOR="${1#--color=}"; shift ;;
     --no-color) COLOR=never; shift ;;
+    --format) shift; FORMAT="${1:-text}"; shift || true ;;
+    --format=*) FORMAT="${1#--format=}"; shift ;;
     # An unknown argument is IGNORED rather than fatal. This is a SessionStart hook: if a
     # future settings.json passes it something it does not know, printing the banner is
     # still the better outcome than exiting 2 at every session start.
     *) shift ;;
   esac
 done
+# An unrecognised FORMAT is text, for the same reason an unrecognised argument is ignored:
+# this is a SessionStart hook, and printing the banner beats exiting 2 at every launch.
+case "$FORMAT" in json) ;; *) FORMAT=text ;; esac
+
+# ---------------------------------------------------------------------------------------
+# THE USER CHANNEL — buffer the banner, then wrap it. Nothing below this block knows.
+# ---------------------------------------------------------------------------------------
+# The whole file writes plain text to stdout and that does not change: `--format json`
+# points stdout at a buffer and an EXIT trap wraps whatever landed there. Threading a
+# "which channel" flag through forty `echo`s would be forty chances to leak one line onto
+# the wrong one, and re-executing this script to capture its own output would double every
+# python3 and awk call in it at session start.
+#
+# THE TRAP IS ON `EXIT` BECAUSE THE EARLY RETURNS ARE `exit 0`. "Not a bridge instance",
+# a missing config, a half-written projects/ tree — every one of them leaves through an
+# `exit` that predates this block, and each must still produce well-formed JSON or nothing
+# at all. It exits with the status it was handed rather than forcing 0: this file has no
+# `set -e` and ends in `exit 0` on every intended path, so a non-zero status here means
+# something genuinely died and masking it would only hide it.
+#
+# EMPTY BUFFER ⇒ NO OUTPUT, NOT `{"systemMessage":""}`. A directory that is not an
+# ai-bridge instance must stay silent on every channel, and an empty user-visible message
+# is a blank notification rather than silence.
+#
+# `mktemp` FAILING IS NOT FATAL EITHER — it falls back to plain stdout, which is precisely
+# the behaviour this template shipped before. Worse than the fix, better than no banner. A
+# hook KILLED outright leaves the buffer behind, which is why it is named for this template
+# in TMPDIR rather than given an anonymous one: a stray file somebody can identify beats an
+# fd-only scheme that cannot be read back.
+json_string() { # stdin -> ONE quoted JSON string on stdout
+  # LC_ALL=C so awk walks BYTES: every byte above 0x1f is copied through untouched, which
+  # passes UTF-8 sequences (`·`, `→`, `─`, the emoji in the awaiting heading) out intact
+  # without this needing to know what a character is. Records are lines, so the newline
+  # awk consumed is re-emitted as `\n` between them and the file's trailing one is
+  # dropped, which is what a JSON string should carry.
+  LC_ALL=C awk '
+    BEGIN {
+      # 1..31, not 0..31: awk cannot hold NUL in a string, and NUL cannot reach here
+      # anyway because it never survives a record boundary. Every other control byte is
+      # escaped, because a raw one inside a JSON string is invalid JSON — a literal tab
+      # from a config value would be enough on its own.
+      for (i = 1; i < 32; i++) esc[sprintf("%c", i)] = sprintf("\\u%04x", i)
+      esc["\""] = "\\\""
+      esc["\\"] = "\\\\"
+      printf "\""
+    }
+    {
+      if (NR > 1) printf "\\n"
+      out = ""; n = length($0)
+      for (i = 1; i <= n; i++) {
+        c = substr($0, i, 1)
+        if (c in esc) out = out esc[c]; else out = out c
+      }
+      printf "%s", out
+    }
+    END { printf "\"" }
+  '
+}
+
+emit_json() { # <exit-status>
+  exec 1>&3 3>&-
+  body=""
+  [ -n "$JSONBUF" ] && [ -f "$JSONBUF" ] && body="$(cat "$JSONBUF" 2>/dev/null || true)"
+  [ -z "$JSONBUF" ] || rm -f "$JSONBUF" 2>/dev/null || true
+  [ -n "$body" ] || exit "$1"
+  enc="$(printf '%s\n' "$body" | json_string 2>/dev/null || true)"
+  # THE ONLY THING THAT MAY REACH THAT CHANNEL IS A COMPLETE JSON STRING. No awk on the
+  # machine, or an encoder that died halfway, leaves `enc` empty or unterminated — and
+  # half a string spliced into an object is the malformed output this check exists to make
+  # impossible. Falling back to the plain banner is a channel regression, never a parse
+  # error, and it is the same text the reader would have got before this block existed.
+  case "$enc" in
+    '"'*'"')
+      printf '{"systemMessage":%s,"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
+        "$enc" "$enc" ;;
+    *) printf '%s\n' "$body" ;;
+  esac
+  exit "$1"
+}
+
+JSONBUF=""
+if [ "$FORMAT" = json ]; then
+  JSONBUF="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-banner.XXXXXX" 2>/dev/null || true)"
+  if [ -n "$JSONBUF" ] && [ -f "$JSONBUF" ]; then
+    # fd 3 is the real stdout, held open for emit_json. Redirecting stdout to a file also
+    # makes `[ -t 1 ]` false below, which is the right answer twice over: this path is a
+    # pipe into Claude Code, and an escape sequence inside a JSON string would be a
+    # `\u001b` a human reads as text.
+    exec 3>&1 1>"$JSONBUF"
+    trap 'emit_json $?' EXIT
+  else
+    JSONBUF=""; FORMAT=text
+  fi
+fi
 
 root="${CLAUDE_PROJECT_DIR:-$PWD}"
 
@@ -575,6 +706,46 @@ EOF
   # means something.
   [ "$n_ready"  -gt 0 ] && say "$C_B" "Ready to dispatch   $n_ready — /pm-loop hands them to role agents in the background"
   [ "$n_drafts" -gt 0 ] && echo "Drafts   $n_drafts — yours to promote \`draft → ready\`"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 8. STATE THAT COULD BE WRONG — `scripts/ai-bridge.sh check`, problems only.
+# ---------------------------------------------------------------------------------------
+# THIS IS THE READER FOR A TRAP THAT HAD NONE. "Pulling the template half-upgrades every
+# unstamped instance" was prose in a knowledge base: an edit to an already-linked file
+# arrives the moment the template clone is pulled, while a NEW file stays unlinked until
+# `install.sh` runs — so an instance ends up configured to call machinery it does not have,
+# with no error to say so, and the only defence was a human remembering to check. Wiring
+# the check in here is what turns that Finding into a mechanism.
+#
+# LAST, AND ONLY WHEN SOMETHING IS TRUE. `--only-problems` prints BYTE-NOTHING on a healthy
+# instance, the same contract every section above keeps: a block that appears every session
+# becomes wallpaper, and wallpaper is how the lines that matter come to be skipped. It sits
+# at the bottom because the alarm at the top (§0) is about machinery that is already broken,
+# while this is about machinery that is merely out of date.
+#
+# WHICH CHECKS SPEAK HERE IS THE SCRIPT'S DECISION, NOT THIS FILE'S. `--banner` filters on a
+# column each check declares for itself, so this hook does not carry the name of a single
+# check and cannot come to disagree with `/ai-bridge check` about what exists. Two of them
+# stay out for the banner's no-line-twice rule: the template VERSION drift already has §2b
+# above, and the config FROM column already has the settings table.
+#
+# ABSENT ⇒ NOTHING, like every other optional section — and that state is exactly what this
+# section reports about other files, so it stays silent about itself rather than erroring.
+# `--fetch` is deliberately not passed: no banner waits on a socket.
+if [ -f "$bin/ai-bridge.sh" ]; then
+  # Spelled out rather than `${tmpl:+--template "$tmpl"}`: that expansion is unquoted by
+  # construction, so a template path containing a space arrives as two arguments and the
+  # check reports on a directory that does not exist. Same shape as §2b above.
+  if [ -n "$tmpl" ]; then
+    state="$(bash "$bin/ai-bridge.sh" check --only-problems --banner --instance "$root" --template "$tmpl" 2>/dev/null || true)"
+  else
+    state="$(bash "$bin/ai-bridge.sh" check --only-problems --banner --instance "$root" 2>/dev/null || true)"
+  fi
+  if [ -n "$state" ]; then
+    echo
+    printf '%s\n' "$state"
+  fi
 fi
 
 exit 0

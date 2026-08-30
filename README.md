@@ -177,6 +177,7 @@ Run these inside an instance.
 | `/audit` | the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/fanout <task>` | parallel work across several repos |
 | `/close-project <slug>` | close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. [→](docs/schema.md#closing-a-project) |
+| `/ai-bridge [check\|fix]` | reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
 
 Flags `/new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 `browser=claude-for-chrome`, `/yolo`, `/cli …`, `/claudeforchrome`, `--no-commit`.
@@ -491,7 +492,7 @@ below are an example, not this repo's current pair; the only place the current o
 written down is [`VERSION`](VERSION):
 
 ```text
-⬆️  TEMPLATE UPDATE (ai-bridge) — this instance links 0.9.1, origin/main has 0.10.0
+⬆️  TEMPLATE UPDATE (ai-bridge) — this instance links 0.9.1, origin/main has 0.11.0
 ```
 
 `scripts/check-template-version.sh` decides it, and **silence is its normal answer**. Equal
