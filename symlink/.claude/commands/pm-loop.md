@@ -457,7 +457,8 @@ ticks, regardless of how long a tick runs.
   written by step 1 and released in step 2 by the session that took it. The tick takes it
   as well (its step 0.5, `--as tick`) and records that it is running under it in
   `.tick-lock.claim` beside it, which is how a dispatched tick tells your lock from
-  another tick's; a tick releases only a lock it created itself.
+  another tick's; a tick releases nothing, because the only lock it can be running
+  under is the one you took for it.
   `scripts/tick-lock.sh status` reads it
   without touching it (for a human, never for this launcher), `release` clears it, and
   `TICK_LOCK_STALE_MINUTES` (default 120) sets how old a lock has to be before step 1
