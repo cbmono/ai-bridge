@@ -328,6 +328,26 @@ assert "no drafts ⇒ no 'Drafts' line"         "$(hasnt 'Drafts' "$OUT")"
 lines="$(printf '%s\n' "$OUT" | grep -c .)"
 assert "the healthy banner is short ($lines non-blank lines, budget 20)" \
   "$([ "$lines" -le 20 ] && echo 0 || echo 1)"
+# …AND ON A REAL ROSTER. The fixture above carries two agents; a live instance carries
+# seven, and `roleTiers` is now a row per agent rather than a wrapped line — which is the
+# edit that could quietly push this banner past a screen. Measured on the full set.
+python3 - "$INST" <<'PYROLES'
+import json, os, sys
+p = os.path.join(sys.argv[1], "instance.config.json")
+cfg = json.load(open(p))
+cfg["models"] = {"light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable"}
+cfg["roleTiers"] = {"auditor": "deep", "cataloguer": "standard", "devops-engineer": "deep",
+                    "plan-architect": "apex", "project-manager": "deep",
+                    "qa-reviewer": "deep", "software-engineer": "deep"}
+json.dump(cfg, open(p, "w"), indent=2)
+PYROLES
+run
+lines7="$(printf '%s\n' "$OUT" | grep -c .)"
+assert "…and still short with all seven agents ($lines7 lines, budget 20)" \
+  "$([ "$lines7" -le 20 ] && echo 0 || echo 1)"
+assert "…with a row per agent, not a wrapped list" \
+  "$(eq "$(printf '%s\n' "$OUT" | grep -cE '^[a-z-]+ +[a-z]+→')" 7)"
+tracked_cfg
 
 # NON-VACUITY, one section at a time: a hook that had simply stopped printing would pass
 # every assertion above.

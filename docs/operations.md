@@ -458,34 +458,50 @@ decision and how much work is queued. It replaced three hooks that each printed 
 and none of which could say which instance the session was in — a question this project's
 owner asked three times in one session, for three different instances.
 
+```text
+AI-Bridge 0.9.1 · _ai-bridge-private · org: cbmono
+──────────────────────────────────────────────────
+
+SETTING               VALUE                               FROM
+owner                 example-user-007 <you@example.com>  local/tracked
+maxAgentsInFlight     2                                   local
+maxPrLoc              2000                                tracked
+
+ROLE                  TIER→MODEL                          FROM
+cataloguer            standard→sonnet                     tracked
+software-engineer     deep→opus                           local
 ```
-ai-bridge · _ai-bridge-private · org cbmono
 
-SETTING               VALUE                FROM
-ownerGithubUser       example-user-007     local
-authorEmail           you@example.com      tracked
-reposRoot             ~/workspace/private  tracked
-maxAgentsInFlight     2                    local
-maxPrLoc              2000                 tracked
+**The header is the line the owner kept asking for.** The version comes from `VERSION` at
+the template root, so a release bump needs no edit in the hook; absent or unreadable, the
+header simply prints without it. It is bold on a terminal and underlined with a rule
+either way — a `SessionStart` hook writes to a **pipe**, not a terminal, so `[ -t 1 ]` is
+false whenever the banner is doing its actual job, and everything below degrades to plain
+text there. `NO_COLOR` turns colour off on a terminal too; `--color always|never` overrides
+both, for a human piping the banner somewhere that renders escapes.
 
-roleTiers   cataloguer standard→sonnet · software-engineer deep→opus
-```
-
-**The `FROM` column is the point of the settings block**, not decoration: it says which of
-the two config files won, per key — `tracked` (`instance.config.json`) or `local`
+**The `FROM` column is the point of both tables**, not decoration: it says which of the two
+config files won, per key — `tracked` (`instance.config.json`) or `local`
 (`instance.config.local.json`) — and that is invisible in either file alone. It resolves
 through `scripts/resolve-config.sh`, the same code `resolve-model.sh` and
 `resolve-max-agents.sh` read through, so the banner reports what a dispatch will actually
 do rather than a second opinion about it. `roleTiers` is rendered end to end for the same
 reason: `software-engineer deep→opus` answers the question, where `deep` alone is half a
-lookup. An entry the local file won is marked `*`.
+lookup — and its provenance is per **entry**, because the merge is, so a one-line local
+override moving one agent leaves every other row reading `tracked`.
+
+**`owner` is one row for two keys** — `ownerGithubUser` and `authorEmail` are one fact
+about the human, in the shape git prints it. The column still answers per key: when the two
+sources disagree it reads `local/tracked`, in the same order as the values. **`reposRoot`
+and `worktreeRoot` are deliberately not shown**: the two longest values in the file and the
+two nobody asks about at session start.
 
 **Everything else is absent unless it is true.** No dangling machinery, no rendered board,
 no `AWAITING.md` items, nothing dispatchable and no drafts each mean that line does not
 print — not a `0`, not an "all clear". A block that appears every session becomes
 wallpaper, and wallpaper is how an `AWAITING.md` row comes to be skipped. On a healthy
-instance with nothing outstanding the banner is the identity line, the settings block and
-the `roleTiers` line, and nothing else.
+instance with nothing outstanding the banner is the header, the settings table and the
+`roleTiers` table, and nothing else.
 
 **It reads task documents for counts only.** How many tasks are dispatchable, how many are
 drafts — no title, no question text, no project slug. The `AWAITING.md` items are the one
