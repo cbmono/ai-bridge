@@ -56,13 +56,17 @@ resolver="$here/resolve-config.sh"
 [ -n "$here" ] && [ -f "$resolver" ] || {
   echo "resolve-max-agents: scripts/resolve-config.sh not found beside this script" >&2; exit 2; }
 
-cap="$(bash "$resolver" --instance "$inst" maxAgentsInFlight)" || exit 1
+# `--json`, NOT the plain value, and that is what preserves the type check. Plain mode
+# prints a string bare, so `"maxAgentsInFlight": "4"` and `: 4` would arrive here identical
+# and a quoted cap would start being accepted — a silent widening of a contract whose whole
+# job is to refuse. json.dumps keeps the quotes, so `"4"` fails the digits-only match below
+# exactly as Python's `isinstance(cap, int)` used to reject it.
+cap="$(bash "$resolver" --instance "$inst" --json maxAgentsInFlight)" || exit 1
 
-# REFUSED, NOT ROUNDED, and the test is on the RENDERED value rather than on a JSON type
-# because that is what a shell can see. `true` renders as the word `true` and fails this
-# match, which is the case worth naming: Python's `isinstance(True, int)` is True, so a
-# `"maxAgentsInFlight": true` would otherwise have resolved to a cap of 1 and looked
-# deliberate. A float, a string, a negative number and 0 fail it too.
+# REFUSED, NOT ROUNDED. Everything that is not an unquoted non-negative integer literal
+# fails this match: `true` (the case worth naming — Python's `isinstance(True, int)` is
+# True, so a boolean would otherwise have resolved to a cap of 1 and looked deliberate),
+# `"4"`, `4.0`, `-1`, `null`, and a list or an object.
 case "$cap" in
   ""|*[!0-9]*) exit 1 ;;
 esac

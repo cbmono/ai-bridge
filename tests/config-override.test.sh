@@ -218,6 +218,24 @@ if command -v python3 >/dev/null 2>&1; then
   OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null )"; RC=$?
   assert "a cap of 0 is refused rather than dispatching nothing forever" \
     "$([ -z "$OUT" ] && [ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  # THE TYPE, NOT JUST THE DIGITS, and this pair exists because the merge moved into
+  # resolve-config.sh. Its plain output prints a string BARE, so `"4"` and `4` would reach
+  # a shell caller identical and a quoted cap would silently start being accepted — a
+  # widening of a contract whose whole job is to refuse. `resolve-max-agents.sh` asks for
+  # `--json` precisely so the quotes survive; without that it passes this test's first
+  # half and fails its second.
+  printf '{\n  "maxAgentsInFlight": "4"\n}\n' > "$INST/instance.config.json"
+  OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null )"; RC=$?
+  assert "a QUOTED cap is refused, not read as the number 4" \
+    "$([ -z "$OUT" ] && [ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  printf '{\n  "maxAgentsInFlight": 4.0\n}\n' > "$INST/instance.config.json"
+  OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null )"; RC=$?
+  assert "…and a float is refused rather than truncated"  \
+    "$([ -z "$OUT" ] && [ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  # Non-vacuity for the three refusals above: the same resolver still answers a real one.
+  printf '{\n  "maxAgentsInFlight": 4\n}\n' > "$INST/instance.config.json"
+  assert "…while a plain integer cap still resolves"      \
+    "$([ "$( cd "$INST" && bash "$SCRIPTS/resolve-max-agents.sh" 2>/dev/null )" = 4 ] && echo 0 || echo 1)"
   tracked
 else
   echo "  (python3 absent — resolver cases skipped)"

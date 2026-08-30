@@ -4,6 +4,7 @@
 #
 #   Usage: scripts/resolve-config.sh [--instance DIR] <key> [<entry>]
 #          scripts/resolve-config.sh [--instance DIR] --source <key> [<entry>]
+#          scripts/resolve-config.sh [--instance DIR] --json <key> [<entry>]
 #          scripts/resolve-config.sh [--instance DIR] --dump
 #
 # WHY IT EXISTS, AND WHY IT IS NOT A FOURTH READER. `instance.config.local.json` is read
@@ -50,8 +51,13 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || { echo "resolve-config: --instance needs a directory" >&2; exit 2; }
       inst="$2"; shift 2 ;;
     --source) mode="source"; shift ;;
+    # `--json` exists so a SHELL caller can still see the JSON TYPE. Plain mode prints a
+    # string bare, which is right for a banner and wrong for a validator: `"4"` and `4`
+    # come out identical, and `resolve-max-agents.sh` refuses a cap that is not an
+    # unquoted integer. json.dumps keeps the quotes, so the distinction survives the pipe.
+    --json)   mode="json";   shift ;;
     --dump)   mode="dump";   shift ;;
-    -h|--help) sed -n '3,7p' "$0"; exit 0 ;;
+    -h|--help) sed -n '3,8p' "$0"; exit 0 ;;
     -*) echo "resolve-config: unknown flag $1" >&2; exit 2 ;;
     *)
       case "$nargs" in
@@ -67,7 +73,7 @@ if [ "$mode" = dump ]; then
   [ "$nargs" -eq 0 ] || { echo "resolve-config: --dump takes no key" >&2; exit 2; }
 else
   [ "$nargs" -ge 1 ] || {
-    echo "Usage: resolve-config.sh [--instance DIR] [--source] <key> [<entry>]" >&2; exit 2; }
+    echo "Usage: resolve-config.sh [--instance DIR] [--source|--json] <key> [<entry>]" >&2; exit 2; }
 fi
 
 python3 - "$inst" "$mode" "$key" "$entry" <<'PY'
@@ -157,6 +163,8 @@ elif isinstance(where, dict):
 
 if mode == "source":
     print("%s\t%s" % (where, flat(render(val))))
+elif mode == "json":
+    print(json.dumps(val, separators=(",", ":")))
 else:
     print(render(val))
 PY
