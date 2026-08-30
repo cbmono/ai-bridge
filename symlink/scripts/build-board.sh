@@ -66,7 +66,7 @@
 #
 # EVERYTHING FROM A SNAPSHOT IS UNTRUSTED TEXT. Titles, descriptions and URLs come
 # from task documents: human-written, quoting tool output and PR metadata, and none
-# of it authored here. This is the same boundary show-awaiting.sh keeps when it
+# of it authored here. This is the same boundary session-banner.sh keeps when it
 # fences items before they enter session context (see its closing comment) — the
 # difference is only the sink. Here the sink is an HTML page that gets published, so:
 #   · every string is HTML-escaped, attribute values included, at the single point

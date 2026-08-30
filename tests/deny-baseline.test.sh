@@ -287,8 +287,13 @@ ok "…scoped to the Bash tool" \
 # PreToolUse entry and adding a second one must not have moved or narrowed it.
 ok "…agent-control.sh is still registered, unmatched" \
    "$(jq -r '[.hooks.PreToolUse[] | select(.hooks[].command | test("agent-control.sh")) | (.matcher // "none")] | join(",")' "$SETTINGS")" "none"
+# 4 -> 2: ai-bridge-v5/task-002 consolidated the three SessionStart hooks into one
+# `session-banner.sh`, so this event carries one command where it carried three, and
+# UserPromptSubmit's one is untouched. The pin moves with the real shape rather than being
+# loosened to `>= 1` — its job is to notice that adding a PreToolUse entry did not disturb
+# the other events, and a floor would stop noticing exactly that.
 ok "…and the other hook events are unchanged" \
-   "$(jq -r '[.hooks.UserPromptSubmit[].hooks[].command, .hooks.SessionStart[].hooks[].command] | length' "$SETTINGS")" "4"
+   "$(jq -r '[.hooks.UserPromptSubmit[].hooks[].command, .hooks.SessionStart[].hooks[].command] | length' "$SETTINGS")" "2"
 
 echo "== the permissions.deny block: unconditional shapes only"
 # This block is the SECOND layer — the harness matches it before any hook runs — and every

@@ -27,7 +27,11 @@
 # behaviour when the keys are absent. Never guess an alias.
 #
 # Both keys are read from `instance.config.local.json` FIRST and the tracked
-# `instance.config.json` second, per entry — see the merge comment at the read below.
+# `instance.config.json` second, per entry. THAT RULE IS NOT WRITTEN HERE: it lives in
+# `scripts/resolve-config.sh`, which this delegates to, because the session banner needs
+# the same precedence plus the answer to "which file won" and a second copy of the merge
+# is how the two would come to disagree. This file owns the two-step lookup below and the
+# contract that absence is not an error; precedence is that file's.
 set -uo pipefail
 
 agent=""; inst="."
@@ -46,42 +50,25 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$agent" ] || { echo "Usage: resolve-model.sh <agent-name> [--instance DIR]" >&2; exit 2; }
 
-# Local override first, then the tracked file — the same precedence every other
-# overridable key uses (SCHEMA.md, "Per-machine config overrides"). `models` and
-# `roleTiers` belong to that set because they are SPEND: which model this human pays for,
-# agent by agent. Two clones disagreeing about them breaks nothing — each dispatch runs on
-# its own machine, and what differs is one person's bill.
-#
-# THE MERGE IS PER KEY, NOT `dict.update`. `roleTiers` is a map, and the override anyone
-# actually writes is a PARTIAL one — a single agent moved to a cheaper tier. A plain
-# `cfg.update()` replaces the whole map with that one entry, so every other agent silently
-# loses its tier and inherits the session model instead: a one-line local file would change
-# seven agents' models, six of them by accident. So a dict value present in BOTH files is
-# merged entry by entry (local wins per entry); anything else replaces wholesale, which is
-# what a list or a scalar override means.
-python3 - "$inst" "$agent" <<'PY'
-import json, sys, os
-inst, agent = sys.argv[1], sys.argv[2]
-cfg = {}
-for name in ("instance.config.json", "instance.config.local.json"):
-    p = os.path.join(inst, name)
-    try:
-        with open(p) as fh:
-            layer = json.load(fh)
-    except Exception:
-        continue
-    if not isinstance(layer, dict):
-        continue
-    for k, v in layer.items():
-        if isinstance(v, dict) and isinstance(cfg.get(k), dict):
-            cfg[k] = {**cfg[k], **v}
-        else:
-            cfg[k] = v
-tier = (cfg.get("roleTiers") or {}).get(agent)
-if not tier:
-    sys.exit(1)
-alias = (cfg.get("models") or {}).get(tier)
-if not alias:
-    sys.exit(1)
-print(alias)
-PY
+# THE SELF PATH IS RESOLVED THROUGH THE SYMLINK, and that is load-bearing rather than
+# tidy. `install.sh` links every machinery file individually into an instance, so an
+# instance stamped BEFORE `resolve-config.sh` shipped has no such file in its own
+# `scripts/` — a plain `dirname "$0"` would look there, miss it, and break a resolver that
+# worked yesterday. `readlink` lands in the template that is actually executing, where the
+# helper is guaranteed to sit beside this file. (The same idiom check-machinery.sh uses to
+# name the template's current location.)
+self="${BASH_SOURCE[0]:-$0}"
+[ -L "$self" ] && self="$(readlink "$self" 2>/dev/null || printf '%s' "$self")"
+here="$(cd "$(dirname "$self")" 2>/dev/null && pwd)" || here=""
+resolver="$here/resolve-config.sh"
+[ -n "$here" ] && [ -f "$resolver" ] || {
+  echo "resolve-model: scripts/resolve-config.sh not found beside this script" >&2; exit 2; }
+
+# roleTiers[<agent>] -> a tier name, then models[<tier>] -> an alias. Either step missing
+# means this prints nothing and exits 1: the caller then inherits the session model, which
+# is the documented behaviour when the keys are absent. Never guess an alias.
+tier="$(bash "$resolver" --instance "$inst" roleTiers "$agent")" || exit 1
+[ -n "$tier" ] || exit 1
+alias_name="$(bash "$resolver" --instance "$inst" models "$tier")" || exit 1
+[ -n "$alias_name" ] || exit 1
+printf '%s\n' "$alias_name"

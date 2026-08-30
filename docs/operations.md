@@ -137,11 +137,12 @@ original now exists again as a link of ours; a `.bak.*` **regular file** is cont
 owns and is never touched, and neither is a dangling `.bak.*` link that was not ours.
 `tests/moved-template.test.sh` pins all four negatives.
 
-**Detection.** `.claude/hooks/check-machinery.sh` runs at `SessionStart`, resolves four
+**Detection.** `.claude/hooks/session-banner.sh` runs at `SessionStart`, resolves four
 machinery links (a root document, a script, a role agent, a hook) and — if any dangle —
 names them, names where they pointed, and prints the exact `install.sh` line that repairs
-this instance. It never repairs anything itself. In a healthy instance, and in any
-non-bridge project that inherits the hook, it prints nothing and exits 0.
+this instance. It never repairs anything itself. In a healthy instance that section of the
+banner is **absent**, and in any non-bridge project that inherits the hook the banner
+prints nothing at all and exits 0.
 
 > **The hole this leaves, stated rather than implied.** `.claude/settings.json` is itself
 > one of the machinery symlinks, so when the **whole** checkout moves it dangles too —
@@ -449,6 +450,77 @@ line count cannot decide reviewability on its own. It is not a review criterion 
 reviewer withholds clearance over it. An existing instance whose config predates the key
 needs no edit.
 
+### The session banner
+
+One `SessionStart` hook, `.claude/hooks/session-banner.sh`, prints the whole orientation:
+which instance this is, what it is configured to do, where the board is, what needs a
+decision and how much work is queued. It replaced three hooks that each printed a fragment
+and none of which could say which instance the session was in — a question this project's
+owner asked three times in one session, for three different instances.
+
+```text
+AI-Bridge 0.9.1 · _ai-bridge-private · org: cbmono
+──────────────────────────────────────────────────
+
+SETTING               VALUE                               FROM
+owner                 example-user-007 <you@example.com>  local/tracked
+maxAgentsInFlight     2                                   local
+maxPrLoc              2000                                tracked
+
+ROLE                  TIER→MODEL                          FROM
+cataloguer            standard→sonnet                     tracked
+software-engineer     deep→opus                           local
+```
+
+**The header is the line the owner kept asking for.** The version comes from `VERSION` at
+the template root, so a release bump needs no edit in the hook; absent or unreadable, the
+header simply prints without it. It is bold on a terminal and underlined with a rule
+either way — a `SessionStart` hook writes to a **pipe**, not a terminal, so `[ -t 1 ]` is
+false whenever the banner is doing its actual job, and everything below degrades to plain
+text there. `NO_COLOR` turns colour off on a terminal too; `--color always|never` overrides
+both, for a human piping the banner somewhere that renders escapes.
+
+**The `FROM` column is the point of both tables**, not decoration: it says which of the two
+config files won, per key — `tracked` (`instance.config.json`) or `local`
+(`instance.config.local.json`) — and that is invisible in either file alone. It resolves
+through `scripts/resolve-config.sh`, the same code `resolve-model.sh` and
+`resolve-max-agents.sh` read through, so the banner reports what a dispatch will actually
+do rather than a second opinion about it. `roleTiers` is rendered end to end for the same
+reason: `software-engineer deep→opus` answers the question, where `deep` alone is half a
+lookup — and its provenance is per **entry**, because the merge is, so a one-line local
+override moving one agent leaves every other row reading `tracked`.
+
+**`owner` is one row for two keys** — `ownerGithubUser` and `authorEmail` are one fact
+about the human, in the shape git prints it. The column still answers per key: when the two
+sources disagree it reads `local/tracked`, in the same order as the values. **`reposRoot`
+and `worktreeRoot` are deliberately not shown**: the two longest values in the file and the
+two nobody asks about at session start.
+
+**Everything else is absent unless it is true.** No dangling machinery, no rendered board,
+no `AWAITING.md` items, nothing dispatchable and no drafts each mean that line does not
+print — not a `0`, not an "all clear". A block that appears every session becomes
+wallpaper, and wallpaper is how an `AWAITING.md` row comes to be skipped. On a healthy
+instance with nothing outstanding the banner is the header, the settings table and the
+`roleTiers` table, and nothing else.
+
+**It reads task documents for counts only.** How many tasks are dispatchable, how many are
+drafts — no title, no question text, no project slug. The `AWAITING.md` items are the one
+exception, and they are fenced and labelled as untrusted data, because they carry human
+questions and tool output into session context.
+
+**The offer is not the hook's.** A hook cannot ask a question, so the rule that the
+session offers `/pm-loop` when there is dispatchable work lives in the instance's
+`CLAUDE.md` (seeded from `seed/CLAUDE.md`, beside the ad-hoc-vs-tracked-work section). The
+hook owes it one number: the `Ready to dispatch` count, which is `ready` **and** every
+`depends_on` terminal **and** owned by this clone. **An instance stamped before this
+shipped does not have the rule** — `CLAUDE.md` is seed content, copied once and never
+overwritten, so merge the paragraph in by hand if you want the offer.
+
+**A new hook reaches an instance only when you re-stamp it.** `bash <ai-bridge>/install.sh
+<instance>` links `session-banner.sh` and retires the three dangling links its predecessors
+left behind. Until then the instance runs whatever its own `.claude/hooks/` still points
+at.
+
 ### Per-instance settings
 
 `.claude/settings.json` is **shared machinery** (symlinked) — editing it changes every
@@ -607,12 +679,15 @@ per-machine override row are all gone; the cross-owner section survives untouche
 it never came from the published page — `build-board.sh` reads it from the tracked task
 documents at your current git `HEAD`.
 
-**A `SessionStart` hook surfaces the path too.** `.claude/hooks/show-board-link.sh` prints
-the rendered board when a session starts, so the human can open it instead of digging for
-it: a `file://` link **and** the bare path on its own line, because `file://` is a
-hyperlink in some terminals and inert text in others, and the bare line is the one you can
-copy. Same off switch as everything else here — no instance signature, `board: false`, or
-no rendered page yet all mean exit 0 in silence, and so does a non-bridge project that
-happens to inherit the hook. It reads nothing else: no task document, no `AWAITING.md`, so
-it is not a second, unvalidated copy of `show-awaiting.sh`'s field discipline. It prints
-the path and nothing more.
+**The `SessionStart` banner surfaces the path too.** `.claude/hooks/session-banner.sh`
+prints the rendered board when a session starts, so the human can open it instead of
+digging for it: a `file://` link **and** the bare path on its own line, because `file://`
+is a hyperlink in some terminals and inert text in others, and the bare line is the one
+you can copy. Same off switch as everything else here — no instance signature, `board:
+false`, or no rendered page yet all mean the section is **absent**, in silence, and a
+non-bridge project that happens to inherit the hook gets no banner at all. The section
+prints the path and nothing more: not the page it points at, and nothing out of a task
+document. The banner as a whole reads task documents only for **counts** — how many tasks
+are dispatchable, how many are drafts — plus the `AWAITING.md` items it fences and labels
+as untrusted data. No title, no question text, no project slug ever reaches session
+context.

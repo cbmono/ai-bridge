@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
-# Exercises the SessionStart awaiting-you queue in show-awaiting.sh.
+# Exercises the AWAITING section of the SessionStart banner (session-banner.sh).
+#
+# WAS AGAINST `show-awaiting.sh`, a hook of its own. That hook is deleted: it,
+# `check-machinery.sh` and `show-board-link.sh` are now one `session-banner.sh`. Two
+# consequences shape this file, and both are contract changes rather than test upkeep:
+#
+#   1. THE FIXTURE IS NOW AN INSTANCE. The banner prints nothing at all unless
+#      `instance.config.json` and `.claude/agents` are both present — the same "is this
+#      actually an instance" signature check-machinery.sh and push-state.sh use. That
+#      NARROWS the old hook deliberately: AWAITING.md is an ai-bridge artifact, and a
+#      stray file of that name in an unrelated project was never meant to print. The
+#      non-bridge case below asserts exactly that, against a fixture with no signature.
+#   2. "SILENT" NOW MEANS "THIS SECTION IS ABSENT", not "the process printed nothing".
+#      The banner always prints an identity line and a settings block, on purpose. An
+#      empty queue must still add no awaiting line, no fence and no bullet — which is the
+#      property this file was always really asserting.
 #
 # AWAITING.md is a deletable capability file, like AUTONOMY.md: its ABSENCE means
 # the queue is off, and that must be silent rather than an error. These cases pin
@@ -10,13 +25,21 @@
 set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
-HOOK="$TPL/symlink/.claude/hooks/show-awaiting.sh"
+HOOK="$TPL/symlink/.claude/hooks/session-banner.sh"
 TMP="$(mktemp -d)" || {
   echo "awaiting-queue.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 
-setup() { rm -rf "$TMP/inst"; mkdir -p "$TMP/inst"; }
+# An instance the banner will speak to at all: the two-part signature, and a config
+# minimal enough that no other section fires (no board key => on by default, but nothing
+# is rendered; no projects/ => no queue counts).
+setup() {
+  rm -rf "$TMP/inst"; mkdir -p "$TMP/inst/.claude/agents"
+  printf '{\n  "org": "example-org"\n}\n' > "$TMP/inst/instance.config.json"
+}
+# A project that is NOT an instance — used to prove the hook is safe to inherit anywhere.
+setup_plain() { rm -rf "$TMP/inst"; mkdir -p "$TMP/inst"; }
 
 # The layout the project-manager agent is specified to write. Kept verbatim here
 # so a drift in either place fails this test.
@@ -37,17 +60,19 @@ Last refreshed: 2026-08-11T10:04:00Z.
 EOF
 }
 
-check() { # <name> <expected-item-count: 0 = must be COMPLETELY silent>
+check() { # <name> <expected-item-count: 0 = the awaiting SECTION must be absent>
   local name="$1" expect="$2" out rc
   out="$(CLAUDE_PROJECT_DIR="$TMP/inst" bash "$HOOK" 2>&1)"; rc=$?
   local got
   got="$(printf '%s' "$out" | grep -c '^  • ' || true)"
-  # For a zero-item case, counting bullets isn't enough: a regression that prints
-  # an error or a stray warning and still exits 0 would pass. Silence means no
-  # output at all — this hook injects into session context, so anything it prints
-  # costs tokens on every single session start.
+  # For a zero-item case, counting bullets isn't enough: a regression that printed the
+  # heading, or an empty fence, or a stray warning, and still exited 0 would pass. So the
+  # section's every marker must be absent — this hook injects into session context, so
+  # anything it prints costs tokens on every single session start.
   local silent_ok=1
-  [ "$expect" -eq 0 ] && [ -n "$out" ] && silent_ok=0
+  [ "$expect" -eq 0 ] \
+    && printf '%s' "$out" | grep -qE 'need your input|AWAITING ITEMS|Surface these first' \
+    && silent_ok=0
   if [ "$rc" -eq 0 ] && [ "$got" = "$expect" ] && [ "$silent_ok" -eq 1 ]; then
     printf '  PASS  %-52s (%s item(s), rc=%s)\n' "$name" "$got" "$rc"; pass=$((pass+1))
   else
@@ -75,9 +100,19 @@ expect_output() { # <name> <grep-pattern>
 setup
 check "no AWAITING.md -> silent no-op (queue off)" 0
 
-# Proves the hook is safe to inherit in any non-bridge project.
-setup; printf 'unrelated project\n' > "$TMP/inst/README.md"
-check "non-bridge project -> silent no-op" 0
+# Proves the hook is safe to inherit in any non-bridge project — and there the bar is
+# still TOTAL silence, because the banner refuses to print anything without the instance
+# signature. Asserted directly rather than through check(), which now only scopes to the
+# awaiting section.
+setup_plain; printf 'unrelated project\n' > "$TMP/inst/README.md"
+printf '## 🔴 Awaiting you (1)\n* an item nobody here should surface\n' > "$TMP/inst/AWAITING.md"
+out="$(CLAUDE_PROJECT_DIR="$TMP/inst" bash "$HOOK" 2>&1)"
+if [ -z "$out" ]; then
+  printf '  PASS  %-52s (no output at all)\n' "non-bridge project -> silent no-op"; pass=$((pass+1))
+else
+  printf '  FAIL  %-52s printed: %s\n' "non-bridge project -> silent no-op" "$(printf '%s' "$out" | tr '\n' '|')"
+  fail=$((fail+1))
+fi
 
 # A pre-rename leftover must NOT be read: the rename has to be a real cutover,
 # not a fallback that keeps a stale board alive.
@@ -187,7 +222,8 @@ simple "first stamp creates the queue" \
 # A seeded queue must be a VALID EMPTY one — a new instance shouldn't spend
 # session tokens on a nudge listing nothing.
 out="$(CLAUDE_PROJECT_DIR="$inst" bash "$HOOK" 2>&1)"
-simple "seeded queue is silent until the first tick" "$([ -z "$out" ] && echo silent || echo "noisy")" silent
+simple "seeded queue adds no awaiting section until the first tick" \
+  "$(printf '%s' "$out" | grep -qE 'need your input|AWAITING ITEMS' && echo noisy || echo silent)" silent
 
 printf 'LOCAL EDIT\n' >> "$inst/AWAITING.md"
 bash "$BRIDGE_INSTALL" "$inst" >/dev/null 2>&1

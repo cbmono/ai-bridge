@@ -428,7 +428,7 @@ Run from an instance root unless noted.
 | A seed change from a pull never arrived | seed is copied only when absent, by design | `./upgrade.sh <instance>` and port what it reports |
 | Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `install.sh` from the main working tree |
 | Installer exits 2, "refusing to install from a git worktree" | working as designed | `git -C <src> worktree list` — the first entry is the main tree |
-| The startup nudge is empty | `AWAITING.md` was deleted, or the PM reshaped its layout | `touch AWAITING.md`; `show-awaiting.sh` greps the heading and bullets **literally** |
+| The startup nudge is empty | `AWAITING.md` was deleted, or the PM reshaped its layout | `touch AWAITING.md`; `session-banner.sh` greps the heading and bullets **literally** |
 | An instance is missing from the board | it has no `SNAPSHOT.json`, or `boardInstances` doesn't name it | `touch SNAPSHOT.json` in it |
 | `print-board.sh` printed nothing at all | it was not run from an instance root — that is silence by design, not an error | `cd` into the instance |
 | The terminal board is missing a status column | every row was zero there, so it was dropped to fit the width; the footer names which | widen the terminal, or `--width 0` |

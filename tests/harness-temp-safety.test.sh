@@ -635,15 +635,15 @@ done
 # with nothing to catch it, and every "$TMP/…" path built afterwards silently resolves to
 # a filesystem-root path instead of raising — which is criterion 2's actual target: a
 # harness that runs its whole suite to completion and reports a false green rather than
-# refusing. `show-board-link.test.sh` stands in for the class here because it is small,
+# refusing. `banner-board-line.test.sh` stands in for the class here because it is small,
 # offline (no network, no gh, no python3) and fast, so this regression stays cheap.
 # (Picked over the plainer `TMP="$(mktemp -d)"` form some harnesses use: on macOS that
 # call ignores a nonexistent TMPDIR and falls back to the real system temp directory, so
 # a template-less harness cannot be driven to a failing mktemp this way at all — measured
-# while writing this. `show-board-link.test.sh` gives mktemp an explicit
+# while writing this. `banner-board-line.test.sh` gives mktemp an explicit
 # "${TMPDIR:-/tmp}/…" template, the same shape the three cd-bearing harnesses above use,
 # so the bogus-TMPDIR technique actually reaches it.)
-for h in show-board-link; do
+for h in banner-board-line; do
   COPY="$TMP/checkout-$h"
   fresh_copy "$COPY" || die "could not copy the checkout for $h"
   ok "$h: fixture copy is a checkout" \
