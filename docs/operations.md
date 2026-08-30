@@ -439,8 +439,8 @@ is what actually happened hours after the paragraph above shipped: a dispatched 
 and dispatched nothing on a claim it had made itself (`taken 13:28:49Z` by the launcher,
 `claimed 13:29:33Z` by the tick it spawned). Existence was the claim's whole signal, so it
 said *that* somebody claimed and never *who* — correct only while a tick acquires exactly
-once, which a retry, a re-run of step 0.5 or a resume all break. So the claim records a
-**claimant** and the claimed branch splits: your own claim is a re-entry and proceeds
+once, which a retry, a re-run of the tick's acquire or a resume all break. So the claim
+records a **claimant** and the claimed branch splits: your own claim is a re-entry and proceeds
 (`re-entered:`, then the same `took:`/`adopted:` obligation your first acquire printed),
 and anyone else's still reports and holds. The narrower reading — "the launcher spawns one
 tick per lock, so a claimed lock met by a tick must *be* that tick" — has a true premise

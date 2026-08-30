@@ -72,9 +72,9 @@
 #   --as launcher (the default)         -> unchanged in every respect: any live lock
 #                                          refuses, claimed or not, and it never claims.
 #
-# Which of the two an `--as tick` acquire got is printed on stdout — `took:` or `adopted:` —
-# because the caller's obligation differs and nothing else on disk distinguishes them. The
-# `--as launcher` path stays byte-silent, exactly as before.
+# Which of those an `--as tick` acquire got is printed on stdout — `took:` or `adopted:`,
+# optionally preceded by `re-entered:` — because the caller's obligation differs and nothing
+# else on disk distinguishes them. The `--as launcher` path stays byte-silent, as before.
 #
 # A CLAIM THAT CANNOT SAY WHOSE IT IS TELLS A TICK IT IS AN INTRUDER. Existence was the
 # whole signal until 2026-08-30, and hours after that shipped a dispatched tick held and
@@ -100,7 +100,7 @@
 # "claimed means it is you" would let both run. That is the 34-minute double-dispatch of
 # 2026-08-29, reopened. The claimed branch has to stay; it only has to learn whose.
 #
-# WHERE THE IDENTITY COMES FROM, AND WHY NOT FROM THE THREE OBVIOUS PLACES. It must be
+# WHERE THE IDENTITY COMES FROM, AND WHY NOT FROM THE FOUR OBVIOUS PLACES. It must be
 # reproducible by the same tick on a later call — including across a resume, where the
 # process is gone — and different between two concurrent ticks:
 #
@@ -215,7 +215,7 @@ CLAIM_NAME=".tick-lock.claim"
 
 usage() {
   echo "Usage: $(basename "$0") acquire [--as launcher|tick] [--agent <id>] [--claimant <id>]" >&2
-  echo "                               [--instance DIR]" >&2
+  echo "                            [--instance DIR]" >&2
   echo "       $(basename "$0") release [--instance DIR]" >&2
   echo "       $(basename "$0") status  [--instance DIR]" >&2
   exit 3
