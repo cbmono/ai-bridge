@@ -1016,7 +1016,7 @@ fi
 # It must NOT run on a refresh: re-creating the file would silently undo a
 # deliberate `rm`, which is the one thing the off switch has to survive. That's
 # what FIRST_STAMP guards. It's also gitignored, so this never becomes tracked
-# state. Content is a valid empty queue, so show-awaiting.sh stays silent until
+# state. Content is a valid empty queue, so session-banner.sh stays silent until
 # the first tick fills it in.
 if [ "$FIRST_STAMP" = yes ] && [ ! -e "$TARGET/AWAITING.md" ]; then
   cat > "$TARGET/AWAITING.md" <<'AWAITING'
@@ -1227,6 +1227,23 @@ if ! grep -qE '^/?\.tick-lock$' "$gi"; then
 # independently, which a shared lock would break. Derived and safe to delete when no tick
 # is running.
 /.tick-lock
+GI
+fi
+
+# The tick's claim on that lock — the second half of the same mechanism, appended under its
+# OWN guard rather than inside the block above. That is the whole point: every instance
+# stamped since the lock shipped already carries `/.tick-lock`, so the guard above is
+# satisfied and would never append a line added to its heredoc. A second file needs a second
+# guard, or the ignore silently reaches nobody who has the first one.
+if ! grep -qE '^/?\.tick-lock\.claim$' "$gi"; then
+  cat >> "$gi" <<'GI'
+
+# The tick's claim on the dispatch lock (scripts/tick-lock.sh) — the tick takes the lock
+# too, because a resumed tick never passes through the launcher, and this file is what tells
+# "held by the launcher that dispatched me" from "held by another tick". Per clone and
+# derived exactly like the lock beside it, and removed with it by
+# `scripts/tick-lock.sh release`.
+/.tick-lock.claim
 GI
 fi
 

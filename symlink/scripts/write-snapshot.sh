@@ -634,7 +634,7 @@ EOF
       dep_json="$dep_json$(jstr "$dep")"
     done <<< "$(depends_ids "$tfm")"
 
-    # The awaiting verb, and ONLY the verb — mirrors show-awaiting.sh's glyph set
+    # The awaiting verb, and ONLY the verb — mirrors session-banner.sh's glyph set
     # (✅ approve · ❓ answer · 🔀 merge · ⛔ unblock · 🏁 close) minus the reason text.
     # A `draft` with no acceptance_criteria is still being refined, so it awaits
     # nothing yet; with questions open it awaits an answer, not an approval.

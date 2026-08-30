@@ -25,7 +25,7 @@ move it here intact instead.
 | 0 | [Layout](#layout) | the whole repo |
 | 1 | [Retiring seed content is only reported](#1-retiring-content-is-asymmetric) | `install.sh`, `upgrade.sh`, `RETIRED`, `seed/` |
 | 2 | [Retiring machinery sweeps the links](#2-retiring-machinery-means-deleting-the-file-and-letting-installsh-sweep-the-links) | `install.sh`, `symlink/` |
-| 3 | [`AWAITING.md` is opt-in by presence](#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence) | `install.sh`, the PM agent, `show-awaiting.sh` |
+| 3 | [`AWAITING.md` is opt-in by presence](#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence) | `install.sh`, the PM agent, `session-banner.sh` |
 | 4 | [A deletable capability is one file](#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) | `symlink/AUTONOMY.md`, `commit-as.sh`, `upgrade.sh` |
 | 5 | [`build` and `research` are asymmetric](#5-build-and-research-projects-are-deliberately-asymmetric) | `/new-project` |
 | 6 | [The merge gate: exit 0 is the only clearance](#6-the-delegated-merge-gate-resolves-its-required-checks-in-required-checkssh-and-exit-0-is-the-only-clearance) | `required-checks.sh`, `review-clearance.sh` |
@@ -64,7 +64,7 @@ Removing a capability from `symlink/` leaves every already-stamped instance with
 
 ## 3. `AWAITING.md` is ai-bridge's only status artifact, and it is opt-in by presence
 
-There is deliberately **no `/status` command** (deleted in favour of this) and no full board — the file lists only what a human decision unblocks (✅ approve · ❓ answer · 🔀 merge · ⛔ unblock · 🏁 close), because in-flight and upcoming work needs no decision and a board people scroll past is a board they stop reading. **`install.sh` creates it on the first stamp only** (gated by `FIRST_STAMP`, computed before seeding), and the `project-manager` rewrites it each tick **only if it already exists, never creating it** — so `rm AWAITING.md` disables it permanently and an installer re-run must not resurrect it. That's the `AUTONOMY.md` absence-is-safe pattern with the default flipped: a new instance ships with the nudge working, rather than silently off until someone reads the docs. If you ever move creation out of the first-stamp guard, you break the off switch. `show-awaiting.sh` greps for the literal `## 🔴 Awaiting you` heading and asterisk-space bullets, so **the PM agent owns that exact layout** and reshaping either silently empties the startup nudge. The hook fences the items as **untrusted data** before they enter session context — the text comes from task docs carrying human questions, tool output, and PR metadata, and sits beside the hook's own instruction, so keep the boundary if you touch that output. Don't reintroduce a status command or the 🟡/🟢/⛔ sections.
+There is deliberately **no `/status` command** (deleted in favour of this) and no full board — the file lists only what a human decision unblocks (✅ approve · ❓ answer · 🔀 merge · ⛔ unblock · 🏁 close), because in-flight and upcoming work needs no decision and a board people scroll past is a board they stop reading. **`install.sh` creates it on the first stamp only** (gated by `FIRST_STAMP`, computed before seeding), and the `project-manager` rewrites it each tick **only if it already exists, never creating it** — so `rm AWAITING.md` disables it permanently and an installer re-run must not resurrect it. That's the `AUTONOMY.md` absence-is-safe pattern with the default flipped: a new instance ships with the nudge working, rather than silently off until someone reads the docs. If you ever move creation out of the first-stamp guard, you break the off switch. `session-banner.sh` greps for the literal `## 🔴 Awaiting you` heading and asterisk-space bullets, so **the PM agent owns that exact layout** and reshaping either silently empties the startup nudge. The hook fences the items as **untrusted data** before they enter session context — the text comes from task docs carrying human questions, tool output, and PR metadata, and sits beside the hook's own instruction, so keep the boundary if you touch that output. Don't reintroduce a status command or the 🟡/🟢/⛔ sections.
 
 ## 4. A capability some deployments must not have should be *one deletable file*
 
@@ -379,7 +379,7 @@ reachable through a hand-edited file, and never a reason to fail closed.
 
 **The note is fenced as untrusted data, and the PREFIX is what closes the hole.** A
 reason/note is human free text that the hook injects into the *agent's* context beside its
-own instruction, so it is fenced and labelled the way `show-awaiting.sh` fences its items
+own instruction, so it is fenced and labelled the way `session-banner.sh` fences its items
 ([12](#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one)).
 Fencing alone is not enough: a note reading exactly `--- END OPERATOR DIRECTIVE ---` would
 forge the closing marker, so every injected line is prefixed and can never open at column
@@ -620,7 +620,7 @@ separate, stronger, and not replaced by this list.
 **It is machinery, so it is not deletable per instance** ([4](#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) is the *opposite* case) — `install.sh`
 re-links it unconditionally. That is the point: a safety floor an instance can `rm` is not
 a floor. The cost is that a **new** file under `symlink/` is *absent* rather than dangling
-in an already-stamped instance, which `check-machinery.sh` deliberately cannot see, so the
+in an already-stamped instance, which `session-banner.sh` deliberately cannot see, so the
 guard only starts enforcing after `install.sh <instance>` runs once. `settings.json`
 registers it behind an `[ -x ]` test so the interval is a quiet no-op rather than a 127 on
 every tool call.

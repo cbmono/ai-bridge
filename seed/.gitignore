@@ -39,6 +39,14 @@ board.html
 # is running.
 /.tick-lock
 
+# The tick's claim on that lock (the second half of the same mechanism): a tick takes the
+# lock too, because a resumed tick never passes through the launcher, and the claim is what
+# tells "held by the launcher that dispatched me" from "held by another tick". Per clone and
+# derived exactly like the lock, removed with it by `scripts/tick-lock.sh release`. Its own
+# line because `/.tick-lock` does not match it and instances stamped before it exists carry
+# the first line already — install.sh appends this one separately for that reason.
+/.tick-lock.claim
+
 # Per-machine identity overrides (authorEmail, ownerGithubUser). instance.config.json
 # is tracked and therefore SHARED, so on a bundle two humans clone its authorEmail
 # would author both people's commits as one person. This file wins over it for those

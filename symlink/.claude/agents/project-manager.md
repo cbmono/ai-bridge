@@ -126,8 +126,51 @@ state, and act only on deltas.
    fail, so leave the tree untouched instead and report it. Either way the rule is the
    same: **change nothing, dispatch nothing, report.**
 
-0.5. **Re-derive the in-flight set from disk, then open the tick ledger entry — before
-   dispatching anything.**
+0.5. **Take the tick lock, re-derive the in-flight set from disk, then open the tick
+   ledger entry — before dispatching anything.**
+
+   **The lock comes first — before you re-derive anything, and whatever woke you:**
+
+   ```bash
+   scripts/tick-lock.sh acquire --as tick --agent project-manager
+   ```
+
+   - **0** — the lock is yours; carry on with this step. It printed which of the two
+     cases you got, and that decides exactly one thing, in step 8: `took:` means you
+     created the lock and you release it when your tick ends; `adopted:` means it is the
+     launcher's dispatch lock and **the launcher** releases it when you report — release
+     that one yourself and you delete a lock the loop is still holding for you.
+   - **1** — a DIFFERENT tick is already running under that lock. **Report and hold**:
+     dispatch nothing, adopt nothing as your in-flight set, open no ledger entry, release
+     nothing, and end the tick — the same behaviour this step already prescribes for a
+     stale open ledger entry, for the same reason, so that the loop schedules its gap
+     instead of reading the hold as a failure.
+   - **2** — the lock is stale, dated in the future, or unreadable, and the script has
+     already printed its timestamp and the agent it names. Put that in front of the human
+     and stop. Do **not** delete it: `scripts/tick-lock.sh release` is their answer, not
+     yours.
+   - **3** — it could not be written at all. Report that and stop; a guarantee nothing
+     can keep is the failure the lock replaces, not a reason to run unguarded.
+   - **The script itself missing** is a different thing from any of those, and it is the
+     likely case on an instance stamped before the lock shipped: `scripts/tick-lock.sh` is
+     a per-file symlink `install.sh` creates, so merging it reaches nobody until someone
+     re-stamps. Carry on with the tick — a mechanism that is not installed cannot be
+     applied, and halting every tick until someone re-stamps is a bigger outage than the
+     one this closes — but say so in your report, in one line:
+     `TICK LOCK: absent — re-stamp this instance`. Never silently. A guard nobody knows is
+     missing is the exact failure this whole step exists because of.
+
+   **Why you take it and not only the launcher.** `/pm-loop` step 1 takes it immediately
+   before it dispatches, which is the only moment anybody knows "I am dispatching right
+   now" — that is a window nothing in here can close, and it stays. But **a resume never
+   passes through the launcher at all**: a SendMessage wakes a completed tick directly, so
+   no acquire runs, nothing is written, and a genuine dispatch seconds later correctly
+   reports the lock free — because it is. Measured 2026-08-30, an hour after the lock
+   merged: a resumed tick and a dispatched tick ran at once and the human spotted it
+   before the machinery did. Whatever makes a tick run must take the lock, so you take it
+   too. That the lock is already held by the launcher that spawned you is not a conflict
+   and the script does not treat it as one — an unclaimed lock is precisely the dispatch
+   you are.
 
    **Read it from disk, never from your brief and never from anyone's memory.** The loop
    that spawned you is long-lived and its context gets summarised, so it cannot tell you
@@ -573,7 +616,7 @@ state, and act only on deltas.
    ```
 
    Keep the `## 🔴 Awaiting you` heading and the `*` marker followed by one space exactly as shown —
-   `show-awaiting.sh` greps for them, and reshaping either silently empties the
+   `session-banner.sh` greps for them, and reshaping either silently empties the
    startup nudge. Render `_None._` under the heading when there is nothing, so the
    shape stays stable. `AWAITING.md` is **derived and gitignored**: rewrite it, but
    **never stage or commit it**.
@@ -628,7 +671,7 @@ state, and act only on deltas.
    3. End your report with exactly one line — `BOARD: rendered <path>` — giving the
       **absolute** path, because opening it is the only thing anyone does with it. There
       is no second half to that line and no one has to finish the job; a `SessionStart`
-      hook (`show-board-link.sh`) surfaces the same path at the start of every session.
+      hook (`session-banner.sh`) surfaces the same path at the start of every session.
 
    **Say the path, never that it is live.** A rendered file is only as fresh as the tick
    that wrote it, and between ticks it is stale — the page's masthead timestamp is what
@@ -639,6 +682,24 @@ state, and act only on deltas.
    **A render is not a state change.** Both the snapshot and the page are derived from
    documents that did not move, so a tick whose only act was refreshing them still
    reports `noop: true` (`/pm-loop` step 3). Never stage or commit the rendered page.
+
+   **Finally, release the tick lock — but only the one that is yours to release.** The
+   last act of the tick, decided by what step 0.5 printed and by nothing else:
+
+   ```bash
+   scripts/tick-lock.sh release      # ONLY if step 0.5 printed `took:`
+   ```
+
+   `took:` means **you** created the lock — the resumed-tick case, where no launcher is
+   waiting on you and nothing else will ever clear it, so skipping this strands a dead
+   lock that refuses every dispatch until it goes stale hours later. `adopted:` means the
+   launcher created it and releases it when your completion notification arrives
+   (`/pm-loop` step 2); that notification is a signal you cannot see, and releasing here
+   would free the lock while the loop still counts you as in flight. A tick that **held**
+   at step 0.5 releases nothing at all — that lock belongs to the tick still running, and
+   deleting it re-opens the double-dispatch the lock exists to close. `release` is
+   unconditional and cannot check any of this for you: it holds no identity because it is
+   the human's override, so the condition lives here, in the caller.
 
 9. **Leave for the human.** By default, do not act on a `draft` beyond surfacing it — it
    awaits the human's approval (a project that delegates promotion is the one exception,
