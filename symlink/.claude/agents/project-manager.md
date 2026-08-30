@@ -151,6 +151,14 @@ state, and act only on deltas.
      yours.
    - **3** — it could not be written at all. Report that and stop; a guarantee nothing
      can keep is the failure the lock replaces, not a reason to run unguarded.
+   - **The script itself missing** is a different thing from any of those, and it is the
+     likely case on an instance stamped before the lock shipped: `scripts/tick-lock.sh` is
+     a per-file symlink `install.sh` creates, so merging it reaches nobody until someone
+     re-stamps. Carry on with the tick — a mechanism that is not installed cannot be
+     applied, and halting every tick until someone re-stamps is a bigger outage than the
+     one this closes — but say so in your report, in one line:
+     `TICK LOCK: absent — re-stamp this instance`. Never silently. A guard nobody knows is
+     missing is the exact failure this whole step exists because of.
 
    **Why you take it and not only the launcher.** `/pm-loop` step 1 takes it immediately
    before it dispatches, which is the only moment anybody knows "I am dispatching right

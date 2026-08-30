@@ -439,6 +439,14 @@ ok "…and never deleting a stale lock itself" \
   "$(step05 | grep -qF 'their answer, not' && echo yes || echo no)" yes
 ok "…naming the path the launcher is not on" \
   "$(step05 | grep -qF 'a resume never' && echo yes || echo no)" yes
+# The tick now calls a script that a merge alone does not deliver: `scripts/tick-lock.sh` is
+# a per-file symlink `install.sh` creates, and it was measured ABSENT in all three instances
+# after it merged. A step that stopped dead on that would take every un-re-stamped loop with
+# it, and one that carried on silently would hide a missing guard — which is the failure
+# this whole step exists because of. So: carry on, and say so.
+ok "…and handles the script not being installed at all" \
+  "$(step05 | grep -qF 'TICK LOCK: absent' && echo yes || echo no)" yes
+ok "…visibly rather than silently"       "$(step05 | grep -qF 'Never silently' && echo yes || echo no)" yes
 # The release obligation from #62 is unchanged and now has a second caller, so the tick has
 # to say which lock is its own to release. A tick that released an ADOPTED lock would free
 # one the launcher is still holding for it.
