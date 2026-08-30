@@ -434,6 +434,29 @@ second lock — its timestamp is never a second staleness clock, and `release` r
 unconditionally. A tick releases only a lock it *created* (the resume case); one it
 *adopted* is the launcher's, released when the tick reports.
 
+**And it must not refuse its own claim either**, which is the same shape one level down and
+is what actually happened hours after the paragraph above shipped: a dispatched tick held
+and dispatched nothing on a claim it had made itself (`taken 13:28:49Z` by the launcher,
+`claimed 13:29:33Z` by the tick it spawned). Existence was the claim's whole signal, so it
+said *that* somebody claimed and never *who* — correct only while a tick acquires exactly
+once, which a retry, a re-run of step 0.5 or a resume all break. So the claim records a
+**claimant** and the claimed branch splits: your own claim is a re-entry and proceeds
+(`re-entered:`, then the same `took:`/`adopted:` obligation your first acquire printed),
+and anyone else's still reports and holds. The narrower reading — "the launcher spawns one
+tick per lock, so a claimed lock met by a tick must *be* that tick" — has a true premise
+and a false conclusion: the concurrency this guard exists for has only **one** launcher in
+it, because a resumed tick never passes through one.
+
+The identity is the caller's session, read from the environment at run time
+(`CLAUDE_CODE_SESSION_ID`; `TICK_CLAIMANT` overrides it and `--claimant` overrides that),
+so the tick runs one fixed command line and nothing is carried in a prompt or remembered by
+a model — the two mechanisms already known wrong here are elapsed time and a nonce passed
+down the dispatch. Where no identity can be resolved, no claimant is written, no claim
+matches, and the script behaves exactly as it did before claimants existed; the refusal
+says so in a line rather than reading as a live sibling. The claimant is checked **last**,
+after staleness, so recognising yourself is never a licence to run past a deadline a human
+has to rule on.
+
 **Absence is never an error — but a failed create is.** No lock file means the launcher
 takes one and dispatches exactly as it always did, in silence: the same absence-is-off
 contract `SNAPSHOT.json` and the board link keep. Dispatch follows the lock being

@@ -604,6 +604,46 @@ ok "…while the cap stays resolve-max-agents.sh" "$(has "$LAUNCHER" 'resolve-ma
 ok "the script says it reads no config"  "$(has "$LOCKSH" 'IT READS NO CONFIG')" yes
 
 echo
+echo "== the contract in prose says what the code does, in all four places =="
+# A header that still called existence the signal would be the more dangerous half of this
+# change: the code would be right and every reader of it wrong. Asserted as an ABSENCE,
+# because that sentence is the one a partial revert leaves behind.
+ok "no file still calls existence the whole signal" \
+  "$(grep -rlF 'EXISTENCE is the' "$TPL/symlink" "$TPL/docs" "$TPL/README.md" 2>/dev/null | wc -l | tr -d ' ')" 0
+ok "the header says the claim records whose it is" \
+  "$(has "$LOCKSH" 'It records WHOSE it is')" yes
+ok "…and the claim it writes says so too"  "$(has "$LOCKSH" 'It records WHOSE the claim is')" yes
+# The argument, not just the conclusion: the narrower fix has a true premise and is still
+# wrong, and a future reader who re-derives only the premise would delete this branch.
+ok "…and answers the narrower fix rather than ignoring it" \
+  "$(has "$LOCKSH" 'THE NARROWER FIX WAS CONSIDERED AND DOES NOT HOLD')" yes
+ok "…naming the one-launcher sequence that refutes it" \
+  "$(has "$LOCKSH" 'has only ONE launcher in it')" yes
+# Both known-wrong mechanisms stay named as wrong, so neither is rediscovered as an idea.
+ok "…still refusing elapsed time"        "$(has "$LOCKSH" 'NOT elapsed time.')" yes
+ok "…and a nonce in the dispatch prompt" "$(has "$LOCKSH" 'NOT a nonce in the')" yes
+ok "…and saying why --agent cannot be the identity" "$(has "$LOCKSH" 'NOT `--agent`.')" yes
+ok "…and which way it degrades"          "$(has "$LOCKSH" 'DEGRADES TOWARDS THE OLD BEHAVIOUR')" yes
+ok "…and that the claimant is judged after staleness" \
+  "$(has "$LOCKSH" 'checked LAST')" yes
+# The launcher's own page must not read as if the claim now lets anything through.
+ok "the launcher says its step 1 is unchanged" \
+  "$(has "$LAUNCHER" 'Your step 1 is unchanged')" yes
+ok "…and that it refuses a claimed lock too" \
+  "$(has "$LAUNCHER" 'refuses any live lock,')" yes
+ok "…naming the tick'\''s own claim as not a conflict" \
+  "$(has "$LAUNCHER" 'own claim')" yes
+# And the operator page, which is where a human goes when the loop is not dispatching.
+OPS="$TPL/docs/operations.md"
+ok "the operator docs carry the re-entry rule" "$(has "$OPS" 're-entered:')" yes
+ok "…and the argument for keeping the hold"    "$(has "$OPS" 'only **one** launcher in')" yes
+ok "…and where the identity comes from"        "$(has "$OPS" 'CLAUDE_CODE_SESSION_ID')" yes
+ok "…and that no identity means the old behaviour" \
+  "$(has "$OPS" 'exactly as it did before claimants existed')" yes
+ok "the README summary says the claim records whose it is" \
+  "$(has "$TPL/README.md" 'the claim records **whose** it is')" yes
+
+echo
 echo "== the tick's own ledger is untouched: this ADDS a gate, it does not move one =="
 ok "step 0.5 still opens a ledger entry" "$(has "$TICK" '* TICK <ISO-8601 timestamp> open:')" yes
 ok "…still re-deriving from disk first"  "$(has "$TICK" 're-derive the in-flight set from disk')" yes
@@ -631,6 +671,20 @@ ok "…and opening no ledger entry when it holds" \
   "$(step05 | grep -qF 'open no ledger entry' && echo yes || echo no)" yes
 ok "…and never deleting a stale lock itself" \
   "$(step05 | grep -qF 'their answer, not' && echo yes || echo no)" yes
+# The claimant, in the one place a tick reads before it acts. A step that documented only
+# `took:`/`adopted:` would leave a tick meeting `re-entered:` to improvise — and this step
+# is the whole of what the tick knows about the lock.
+ok "…documenting the re-entry line on exit 0" \
+  "$(step05 | grep -qF 're-entered:' && echo yes || echo no)" yes
+ok "…saying a re-entry changed nothing"  "$(step05 | grep -qF 'nothing' && echo yes || echo no)" yes
+ok "…and that exit 1 therefore means somebody else" \
+  "$(step05 | grep -qF 'somebody else' && echo yes || echo no)" yes
+# The identity must not become something the tick carries: the command line is fixed, and a
+# step that told a tick to remember a token would be the nonce this design already refused.
+ok "…with nothing to remember between calls" \
+  "$(step05 | grep -qF 'nothing to remember between calls' && echo yes || echo no)" yes
+ok "…and the command line unchanged from the one acquire above" \
+  "$(step05 | grep -c 'scripts/tick-lock.sh acquire --as tick --agent project-manager' | tr -d ' ')" 1
 ok "…naming the path the launcher is not on" \
   "$(step05 | grep -qF 'a resume never' && echo yes || echo no)" yes
 # The tick now calls a script that a merge alone does not deliver: `scripts/tick-lock.sh` is

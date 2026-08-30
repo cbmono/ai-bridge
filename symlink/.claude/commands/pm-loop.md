@@ -49,8 +49,12 @@ before the machinery did. So the tick takes the lock as well, in its own step 0.
 (`scripts/tick-lock.sh acquire --as tick`). **That does not move the lock out of here**:
 your acquire is still the only one that happens *before* a dispatch exists, and moving it
 into the tick alone would re-open the window this closes. Nor does a tick refuse the lock
-you took for it — an unclaimed lock is precisely the dispatch it is — so nothing about
-step 1 changes.
+you took for it — an unclaimed lock is precisely the dispatch it is — nor its **own claim**
+on that lock, which it meets again on a retry or a resume and which, since 2026-08-30,
+records *whose* it is rather than merely that it exists. Before that it recorded only that
+somebody had claimed, and a dispatched tick duly stood down on its own claim and dispatched
+nothing. **Your step 1 is unchanged by all of it**: `--as launcher` refuses any live lock,
+claimed or not, and never claims one.
 
 **It is a PER-CLONE lock and it is not a cross-machine one.** `.tick-lock` is a single
 gitignored file in a single working tree, so it says nothing about the other human's

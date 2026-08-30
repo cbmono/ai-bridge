@@ -135,11 +135,14 @@ state, and act only on deltas.
    scripts/tick-lock.sh acquire --as tick --agent project-manager
    ```
 
-   - **0** — the lock is yours; carry on with this step. It printed which of the two
-     cases you got, and that decides exactly one thing, in step 8: `took:` means you
-     created the lock and you release it when your tick ends; `adopted:` means it is the
-     launcher's dispatch lock and **the launcher** releases it when you report — release
-     that one yourself and you delete a lock the loop is still holding for you.
+   - **0** — the lock is yours; carry on with this step. It printed which case you got,
+     and that decides exactly one thing, in step 8: `took:` means you created the lock and
+     you release it when your tick ends; `adopted:` means it is the launcher's dispatch
+     lock and **the launcher** releases it when you report — release that one yourself and
+     you delete a lock the loop is still holding for you. A third line, `re-entered:`, may
+     precede either: it means this is not your first acquire in this tick and **nothing
+     changed** — carry on exactly as you would have, and obey the `took:`/`adopted:` line
+     printed with it, which is the same obligation your first acquire gave you.
    - **1** — a DIFFERENT tick is already running under that lock. **Report and hold**:
      dispatch nothing, adopt nothing as your in-flight set, open no ledger entry, release
      nothing, and end the tick — the same behaviour this step already prescribes for a
@@ -171,6 +174,14 @@ state, and act only on deltas.
    too. That the lock is already held by the launcher that spawned you is not a conflict
    and the script does not treat it as one — an unclaimed lock is precisely the dispatch
    you are.
+
+   **Nor is your own claim a conflict, and run this step's command however many times you
+   reach it.** Until 2026-08-30 the claim recorded only *that* a tick had claimed, so a
+   second acquire inside one tick — a retry, a re-run of this step, a resume — read as a
+   different tick and the tick stood down on its own claim, dispatching nothing. The claim
+   now records **whose** it is, so meeting it again is a `re-entered:` and a 0. Exit **1**
+   therefore means what it says: somebody else. There is nothing to remember between calls
+   and nothing to pass — the command above is the whole of it, unchanged, every time.
 
    **Read it from disk, never from your brief and never from anyone's memory.** The loop
    that spawned you is long-lived and its context gets summarised, so it cannot tell you
@@ -702,6 +713,10 @@ state, and act only on deltas.
    ```bash
    scripts/tick-lock.sh release      # ONLY if step 0.5 printed `took:`
    ```
+
+   If step 0.5 ran more than once, the LAST thing it printed is still the same obligation
+   as the first — a `re-entered:` re-states it rather than changing it — so there is no
+   ambiguity to resolve here.
 
    `took:` means **you** created the lock — the resumed-tick case, where no launcher is
    waiting on you and nothing else will ever clear it, so skipping this strands a dead
