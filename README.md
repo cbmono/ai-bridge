@@ -492,7 +492,7 @@ below are an example, not this repo's current pair; the only place the current o
 written down is [`VERSION`](VERSION):
 
 ```text
-⬆️  TEMPLATE UPDATE (ai-bridge) — this instance links 0.9.1, origin/main has 0.10.0
+⬆️  TEMPLATE UPDATE (ai-bridge) — this instance links 0.9.1, origin/main has 0.11.0
 ```
 
 `scripts/check-template-version.sh` decides it, and **silence is its normal answer**. Equal
