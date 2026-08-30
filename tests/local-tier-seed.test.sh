@@ -156,6 +156,16 @@ ok "cataloguer resolves"                   "$(MODEL "$I" cataloguer)" sonnet
 # The human-visible half: the banner reports WHOSE decision is operating, per leaf.
 ok "the banner's FROM says local for a role" "$(FROM "$I" roleTiers software-engineer)" local
 ok "…and for a tier"                       "$(FROM "$I" models deep)" local
+# …AND THE REAL BANNER SAYS SO, not merely the resolver the banner reads. The criterion
+# is about the column a human looks at, so it is asserted against the hook's own output:
+# `<role>  <tier>→<alias>  <from>`, whitespace-separated, last field.
+BANNER="$TPL/symlink/.claude/hooks/session-banner.sh"
+BOUT="$(CLAUDE_PROJECT_DIR="$I" bash "$BANNER" 2>&1)"
+brow() { printf '%s\n' "$BOUT" | awk -v r="$1" '$1==r { print $NF }' | head -n1; }
+ok "the banner prints a row for the role"   "$(printf '%s\n' "$BOUT" | awk '$1=="software-engineer"' | grep -c 'deep→opus' | tr -d ' ')" 1
+ok "…and its FROM column reads local"       "$(brow software-engineer)" local
+ok "…for a second role on another tier too" "$(brow cataloguer)" local
+
 # Not moved, and deliberately so — the owner did not ask for it.
 ok "maxAgentsInFlight is NOT in the local file" "$(jget "$LC" maxAgentsInFlight)" -
 ok "…and still resolves from the tracked one"  "$(FROM "$I" maxAgentsInFlight)" tracked
