@@ -32,6 +32,24 @@
 #      limit and is untouched; nothing on the role-agent path may read this file, or a
 #      held lock would block the very agents the tick holding it dispatched.
 #
+# AND TWO MORE, ADDED 2026-08-30 AFTER THE MECHANISM SHIPPED AND THE BUG HAPPENED ANYWAY.
+# About an hour after the lock merged, two `project-manager` agents ran at once: one was
+# **resumed** with a message rather than dispatched, so it never passed through the launcher,
+# took no lock, and was invisible to one. The guard behaved exactly as designed. So:
+#
+#   5. THE TICK TAKES THE LOCK TOO, NOT ONLY THE LAUNCHER. A tick that began without a
+#      dispatch acquires it, and a later acquire sees it held. Everything above this line
+#      passed while that gap was open, which is precisely how it survived a whole harness:
+#      a mechanism on the path you were thinking about is not a mechanism on every path.
+#   6. AND A DISPATCHED TICK MUST NOT REFUSE ITS OWN LOCK — the crux, and the failure mode
+#      of the obvious fix. The launcher takes the lock and then spawns; the tick then finds
+#      a held lock that is its own. Get that wrong and EVERY dispatched tick deadlocks on
+#      entry, a total outage strictly worse than the concurrency bug. So the sequence is
+#      driven here for real, in order, and the tick is asserted to PROCEED — and to proceed
+#      by ADOPTING (`adopted:`) rather than by taking a lock of its own, because a tick that
+#      "proceeded" because the lock had vanished would pass a weaker test for the wrong
+#      reason.
+#
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
 
@@ -76,6 +94,26 @@ attempt() { # <instance-dir> [agent-id]
 }
 dispatches() { # <instance-dir> -> how many ticks the launcher actually spawned
   [ -f "$1/dispatched.log" ] && wc -l < "$1/dispatched.log" | tr -d ' ' || echo 0
+}
+
+# And the TICK's own step 0.5, transcribed the same way: `project-manager.md` runs the
+# acquire before it re-derives anything, and does its tick if and only if that exits 0. A
+# line in `ran.log` stands in for the tick actually running. `dispatched.log` counts what
+# the launcher spawned; `ran.log` counts what actually RAN — and the two differ precisely
+# in the cases this file was extended for, which is why they are counted separately.
+TICK_RC=0; TICK_OUT=""
+tick() { # <instance-dir> [agent-id] — a tick reaching its step 0.5, however it began
+  local inst="$1" agent="${2:-project-manager}"
+  TICK_OUT="$(bash "$LOCKSH" acquire --as tick --instance "$inst" --agent "$agent" 2>&1)"
+  TICK_RC=$?
+  [ "$TICK_RC" -eq 0 ] && printf 'tick ran: %s\n' "$agent" >> "$inst/ran.log"
+  return 0
+}
+ran() { # <instance-dir> -> how many ticks actually proceeded past step 0.5
+  [ -f "$1/ran.log" ] && wc -l < "$1/ran.log" | tr -d ' ' || echo 0
+}
+said() { # <fixed-string> -> yes|no, against the last tick's output
+  printf '%s' "$TICK_OUT" | grep -qF -- "$1" && echo yes || echo no
 }
 
 echo "== absence is never an error: no lock, so it dispatches, in silence =="
@@ -197,13 +235,175 @@ ok "…each holding its own lock" \
 attempt "$C1"; ok "…and clone 1 still refuses ITSELF" "$ATTEMPT_RC" 1
 
 echo
+echo "== THE CRUX: the launcher takes it, then the tick it spawned takes it and PROCEEDS =="
+# The real sequence, in order, with nothing mocked: /pm-loop step 1 acquires and spawns;
+# project-manager.md step 0.5 acquires. If the tick cannot tell "held by the launcher that
+# spawned me" from "held by someone else", this is where every dispatched tick deadlocks —
+# an outage of the whole loop, worse than the bug being fixed.
+H="$TMP/handoff"; mkdir -p "$H"
+attempt "$H"
+ok "the launcher took the lock"          "$ATTEMPT_RC" 0
+ok "…and spawned a tick"                 "$(dispatches "$H")" 1
+tick "$H"
+ok "the tick it spawned PROCEEDS"        "$TICK_RC" 0
+ok "…and actually ran"                   "$(ran "$H")" 1
+ok "…by adopting the launcher's lock"    "$(said 'adopted:')" yes
+# Not by taking one of its own: a tick that "proceeded" because the lock had gone would
+# pass the exit-code assertion above for entirely the wrong reason.
+ok "…not by taking a lock of its own"    "$(said 'took:')" no
+ok "…and the lock is still the launcher's one lock" \
+  "$(yn test -f "$H/.tick-lock")" yes
+ok "…now carrying the tick's claim"      "$(yn test -f "$H/.tick-lock.claim")" yes
+
+echo
+echo "== …and a DIFFERENT tick, at that same lock, reports and holds =="
+# The resumed tick of 2026-08-30 arriving while a dispatched one is running.
+tick "$H" cataloguer
+ok "the second tick is refused"          "$TICK_RC" 1
+ok "…and did NOT run"                    "$(ran "$H")" 1
+ok "…saying another tick holds it"       "$(said 'HELD BY ANOTHER TICK')" yes
+ok "…naming who claimed it"              "$(said 'project-manager')" yes
+ok "…and telling it to hold, not adopt"  "$(said 'adopt nothing')" yes
+ok "…and to release nothing"             "$(said 'release nothing')" yes
+# The launcher, meanwhile, sees exactly what it saw before this change: a held lock.
+attempt "$H"
+ok "the launcher still just sees HELD"   "$ATTEMPT_RC" 1
+ok "…and dispatched nothing more"        "$(dispatches "$H")" 1
+ok "…and can see the tick is RUNNING, not merely dispatched" \
+  "$(printf '%s' "$ATTEMPT_OUT" | grep -qF 'it is RUNNING' && echo yes || echo no)" yes
+
+echo
+echo "== the measured bug: a RESUMED tick takes the lock, and a dispatch then sees it =="
+# The whole point. `SendMessage` wakes a completed agent directly — no launcher, no
+# acquire — so before this change nothing was written and the next dispatch correctly
+# found the lock free. Two project-managers ran concurrently for exactly that reason.
+R2="$TMP/resume"; mkdir -p "$R2"
+tick "$R2"                                # resumed: it did not pass through the launcher
+ok "the resumed tick proceeds"           "$TICK_RC" 0
+ok "…and took the lock ITSELF"           "$(said 'took:')" yes
+ok "…so the lock now exists"             "$(yn test -f "$R2/.tick-lock")" yes
+ok "…already claimed, since it is running" "$(yn test -f "$R2/.tick-lock.claim")" yes
+attempt "$R2"
+ok "the launcher is refused"             "$ATTEMPT_RC" 1
+ok "…and dispatches NOTHING"             "$(dispatches "$R2")" 0
+ok "…so exactly one tick ran"            "$(ran "$R2")" 1
+
+echo
+echo "== two concurrent ticks cannot both proceed, whichever order they arrive in =="
+# Order A is the paragraph above (resume first, dispatch refused). Order B is the launcher
+# first: the resumed tick adopts the dispatch lock and the dispatched tick then holds —
+# still exactly one tick running, which is the property, though not the same one.
+B="$TMP/order-b"; mkdir -p "$B"
+attempt "$B"                              # launcher takes the lock…
+tick "$B" cataloguer                      # …a resumed tick gets to step 0.5 first
+tick "$B" project-manager                 # …and the dispatched tick arrives after
+ok "exactly one of the two ticks ran"    "$(ran "$B")" 1
+ok "…and it is the one that got there first" \
+  "$(grep -c 'cataloguer' "$B/ran.log" | tr -d ' ')" 1
+
+echo
+echo "== 20 ticks racing for ONE unclaimed dispatch lock: exactly one adopts it =="
+# The claim is created with O_EXCL for the same reason the lock is. A claim written by
+# read-then-write would re-open, one layer down, the very race `acquire` exists to close —
+# and it would do it in the adoption path, which is the one nobody would think to test.
+A2="$TMP/adopt-race"; mkdir -p "$A2"
+bash "$LOCKSH" acquire --instance "$A2" >/dev/null 2>&1     # the launcher's lock
+for i in $(seq 1 20); do
+  ( bash "$LOCKSH" acquire --as tick --instance "$A2" >/dev/null 2>&1 && : > "$A2/adopted.$i" ) &
+done
+wait
+ok "exactly one tick adopted it" \
+  "$(find "$A2" -maxdepth 1 -name 'adopted.*' | wc -l | tr -d ' ')" 1
+
+echo
+echo "== the claim is part of the lock, not a second clock and not a second lock =="
+# A tick must not be able to refresh its own deadline by claiming: staleness is computed
+# from `.tick-lock` alone, exactly as before this change.
+SC="$TMP/stale-claim"; mkdir -p "$SC"
+printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$OLD_ISO" "$OLD" > "$SC/.tick-lock"
+printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$(iso_of "$(date -u +%s)")" "$(date -u +%s)" \
+  > "$SC/.tick-lock.claim"
+attempt "$SC"
+ok "a fresh claim does not rejuvenate a stale lock" "$ATTEMPT_RC" 2
+ok "…and it still says STALE"            "$(printf '%s' "$ATTEMPT_OUT" | grep -qF 'STALE' && echo yes || echo no)" yes
+tick "$SC"
+ok "…and a TICK gets the same verdict, not an adoption" "$TICK_RC" 2
+ok "…so it did not run"                  "$(ran "$SC")" 0
+# `release` is the human's override and stays unconditional — it asks nobody who they are,
+# and it takes the claim with the lock rather than leaving half a mechanism behind.
+bash "$LOCKSH" release --instance "$SC"
+ok "release clears the lock"             "$(yn test -e "$SC/.tick-lock")" no
+ok "…and the claim with it"              "$(yn test -e "$SC/.tick-lock.claim")" no
+OUT="$(bash "$LOCKSH" release --as tick --instance "$SC" 2>&1)"; RC=$?
+ok "release refuses an identity argument" "$RC" 3
+ok "…saying it is unconditional"         "$(printf '%s' "$OUT" | grep -qF 'unconditional' && echo yes || echo no)" yes
+
+echo
+echo "== a claim that outlived its lock is residue, and must not deadlock the next tick =="
+# The other way to get this wrong: leave a claim behind (a hand-removed lock, a release
+# that died between its two rm's) and every subsequently dispatched tick refuses a lock
+# nobody holds. `acquire` clears it on the create — and only when it was there BEFORE the
+# create, so it can never delete a live tick's claim.
+RS="$TMP/residue"; mkdir -p "$RS"
+printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$OLD_ISO" "$OLD" > "$RS/.tick-lock.claim"
+ok "status says the claim outlived its lock" \
+  "$(bash "$LOCKSH" status --instance "$RS" 2>&1 | grep -qF 'outlived' && echo yes || echo no)" yes
+attempt "$RS"
+ok "the launcher still dispatches"       "$ATTEMPT_RC" 0
+ok "…having cleared the residue"         "$(yn test -e "$RS/.tick-lock.claim")" no
+tick "$RS"
+ok "…and its tick is not deadlocked by it" "$TICK_RC" 0
+ok "…and ran"                            "$(ran "$RS")" 1
+
+echo
+echo "== absence is never an error on the tick's path either =="
+N="$TMP/tick-absent"; mkdir -p "$N"
+OUT="$(bash "$LOCKSH" acquire --as tick --instance "$N" 2>/dev/null)"; RC=$?
+ok "no lock: the tick takes one and runs" "$RC" 0
+ok "…and says so on stdout, not stderr"  "$(printf '%s' "$OUT" | grep -qF 'took:' && echo yes || echo no)" yes
+# The launcher's path stays byte-silent — that contract is unchanged and is asserted at the
+# top of this file; what follows only pins that `--as` is validated rather than assumed.
+OUT="$(bash "$LOCKSH" acquire --as sideways --instance "$N" 2>&1)"; RC=$?
+ok "an unknown --as is refused"          "$RC" 3
+ok "…naming the two it accepts"          "$(printf '%s' "$OUT" | grep -qF 'launcher or tick' && echo yes || echo no)" yes
+OUT="$(bash "$LOCKSH" acquire --as --instance "$N" 2>&1)"; RC=$?
+ok "a bare trailing --as is refused too" "$RC" 3
+
+echo
+echo "== a claim that cannot be WRITTEN is not a claim somebody else holds =="
+# Two causes, two answers — the distinction `acquire` already refuses to collapse for the
+# lock. Collapsing it here would report an unwritable instance root as "another tick is
+# running", which is the one message nobody would think to debug.
+if [ "$(id -u)" = 0 ]; then
+  echo "  SKIP  running as root: permission bits refuse nobody"
+else
+  W="$TMP/readonly"; mkdir -p "$W"
+  attempt "$W"                              # the launcher takes the lock while it can
+  chmod a-w "$W"
+  tick "$W"; RC_RO="$TICK_RC"; OUT_RO="$TICK_OUT"
+  REL_OUT="$(bash "$LOCKSH" release --instance "$W" 2>&1)"; REL_RC=$?
+  chmod u+w "$W"                            # …restored before anything else runs
+  ok "the tick refuses with exit 3"        "$RC_RO" 3
+  ok "…naming the unwritable root"         "$(printf '%s' "$OUT_RO" | grep -qF 'not writable' && echo yes || echo no)" yes
+  ok "…and NOT blaming another tick"       "$(printf '%s' "$OUT_RO" | grep -qF 'HELD BY ANOTHER TICK' && echo yes || echo no)" no
+  ok "…so it did not run"                  "$(ran "$W")" 0
+  # And a release that cannot remove says which file it left, rather than reporting a
+  # success the caller would take as "the lock is gone".
+  ok "a release that cannot remove exits 3" "$REL_RC" 3
+  ok "…naming the file still on disk"      "$(printf '%s' "$REL_OUT" | grep -qF '.tick-lock' && echo yes || echo no)" yes
+fi
+
+echo
 echo "== it bounds TICKS, not role agents =="
-# A held lock must never block the role agents the tick holding it dispatched, so nothing
-# on that path may read the file. The check is that only the launcher and the script name
-# it at all — no agent body does.
-readers="$(grep -rlF 'tick-lock' "$TPL/symlink" 2>/dev/null | sed "s|^$TPL/||" | sort | tr '\n' ' ')"
-ok "no agent file names the lock" \
-  "$(printf '%s' "$readers" | grep -q 'symlink/.claude/agents/' && echo yes || echo no)" no
+# A held lock must never block the role agents the tick holding it dispatched, so nothing on
+# THAT path may read the file. This assertion was "no agent names the lock" until 2026-08-30
+# and is now an exact set, deliberately: the tick had to become a reader (property 5 above),
+# and "no agent" would have had to be deleted to let it, which is how a guard quietly becomes
+# "some agents". Naming the one file that may read it keeps the other half enforced — add a
+# second agent to this list and you are back to a held lock blocking role agents.
+agent_readers="$(grep -rlF 'tick-lock' "$TPL/symlink/.claude/agents" 2>/dev/null \
+  | sed 's|.*/||' | sort | tr '\n' ' ' | sed 's/ *$//')"
+ok "exactly one agent may name the lock — the tick" "$agent_readers" "project-manager.md"
 ok "the launcher does"                   "$(has "$LAUNCHER" 'scripts/tick-lock.sh')" yes
 ok "…and says which limit this is"       "$(has "$LAUNCHER" 'bounds **PM')" yes
 ok "…while the cap stays resolve-max-agents.sh" "$(has "$LAUNCHER" 'resolve-max-agents.sh')" yes
@@ -212,8 +412,51 @@ ok "the script says it reads no config"  "$(has "$LOCKSH" 'IT READS NO CONFIG')"
 echo
 echo "== the tick's own ledger is untouched: this ADDS a gate, it does not move one =="
 ok "step 0.5 still opens a ledger entry" "$(has "$TICK" '* TICK <ISO-8601 timestamp> open:')" yes
-ok "…still re-deriving from disk first"  "$(has "$TICK" 'Re-derive the in-flight set from disk')" yes
-ok "…and the tick knows nothing of the lock" "$(has "$TICK" 'tick-lock')" no
+ok "…still re-deriving from disk first"  "$(has "$TICK" 're-derive the in-flight set from disk')" yes
+
+echo
+echo "== the second acquire site: the TICK takes the lock, and holds when it is another's =="
+# This assertion is the exact inverse of the one that stood here until 2026-08-30 ("the tick
+# knows nothing of the lock"). It was a faithful pin of the design that shipped, and the
+# design was wrong: the launcher is on one of the two paths that start a tick, and the other
+# one — a resume — is where two project-managers ran at once. Inverted deliberately, in the
+# same change that puts the acquire in the tick, so neither half can drift from the other.
+step05() { awk '/^0\.5\. \*\*Take the tick lock/{p=1;next} p&&/^1\. \*\*Orient/{p=0} p' "$TICK"; }
+ok "step 0.5 runs the tick's own acquire" \
+  "$(step05 | grep -qF 'scripts/tick-lock.sh acquire --as tick' && echo yes || echo no)" yes
+ok "…before it re-derives anything"      "$(step05 | grep -qF 'The lock comes first' && echo yes || echo no)" yes
+# Every exit code the script can return has a branch here too — the launcher's step 1 has
+# had one since #62, and a second caller with three of the four is a caller improvising on
+# the one that mattered.
+for code in 0 1 2 3; do
+  ok "step 0.5 handles exit $code"       "$(step05 | grep -qE "^   - \*\*$code\*\*" && echo yes || echo no)" yes
+done
+ok "…holding, not adopting, on a live sibling" \
+  "$(step05 | grep -qF 'adopt nothing as your in-flight set' && echo yes || echo no)" yes
+ok "…and opening no ledger entry when it holds" \
+  "$(step05 | grep -qF 'open no ledger entry' && echo yes || echo no)" yes
+ok "…and never deleting a stale lock itself" \
+  "$(step05 | grep -qF 'their answer, not' && echo yes || echo no)" yes
+ok "…naming the path the launcher is not on" \
+  "$(step05 | grep -qF 'a resume never' && echo yes || echo no)" yes
+# The tick now calls a script that a merge alone does not deliver: `scripts/tick-lock.sh` is
+# a per-file symlink `install.sh` creates, and it was measured ABSENT in all three instances
+# after it merged. A step that stopped dead on that would take every un-re-stamped loop with
+# it, and one that carried on silently would hide a missing guard — which is the failure
+# this whole step exists because of. So: carry on, and say so.
+ok "…and handles the script not being installed at all" \
+  "$(step05 | grep -qF 'TICK LOCK: absent' && echo yes || echo no)" yes
+ok "…visibly rather than silently"       "$(step05 | grep -qF 'Never silently' && echo yes || echo no)" yes
+# The release obligation from #62 is unchanged and now has a second caller, so the tick has
+# to say which lock is its own to release. A tick that released an ADOPTED lock would free
+# one the launcher is still holding for it.
+rel() { awk '/\*\*Finally, release the tick lock/{p=1} p&&/^9\. /{p=0} p' "$TICK"; }
+ok "step 8 releases only a lock the tick created" \
+  "$(rel | grep -qF 'ONLY if step 0.5 printed `took:`' && echo yes || echo no)" yes
+ok "…leaving an adopted one to the launcher" \
+  "$(rel | grep -qF 'adopted:' && echo yes || echo no)" yes
+ok "…and a tick that held releases nothing" \
+  "$(rel | grep -qF 'releases nothing at all' && echo yes || echo no)" yes
 
 echo
 echo "== the wiring: the launcher runs the acquire, and holds exactly the grant for it =="
@@ -312,6 +555,28 @@ bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 ok "a re-stamp appends it back"          "$(grep -cxF '/.tick-lock' "$INST/.gitignore" | tr -d ' ')" 1
 bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 ok "…and a third stamp adds no duplicate" "$(grep -cxF '/.tick-lock' "$INST/.gitignore" | tr -d ' ')" 1
+
+echo
+echo "== …and so is the claim beside it, under its OWN guard =="
+# `/.tick-lock` does not match `.tick-lock.claim`, so the claim needs its own line — and,
+# more importantly, its own GUARD. Every instance stamped since the lock shipped already
+# carries `/.tick-lock`, which satisfies that guard, so a line added inside its heredoc
+# would reach exactly nobody who has the first one. That is the case asserted here: remove
+# ONLY the claim line, leave the lock's, and a re-stamp must still append it.
+ok "seed/.gitignore carries the claim too" "$(grep -qxF '/.tick-lock.claim' "$TPL/seed/.gitignore" && echo yes || echo no)" yes
+ok "a fresh stamp gets it"               "$(grep -cxF '/.tick-lock.claim' "$INST/.gitignore" | tr -d ' ')" 1
+printf 'agent: x\n' > "$INST/.tick-lock.claim"
+ok "git itself ignores the claim"        "$( ( cd "$INST" && git check-ignore -q .tick-lock.claim ) && echo yes || echo no)" yes
+( cd "$INST" && git add -A >/dev/null 2>&1 )
+ok "…so a git add -A never stages it" \
+  "$( ( cd "$INST" && git diff --cached --name-only ) | grep -qxF '.tick-lock.claim' && echo yes || echo no)" no
+grep -v '^/\.tick-lock\.claim$' "$INST/.gitignore" > "$INST/.gi" && mv "$INST/.gi" "$INST/.gitignore"
+ok "…(removed, with the lock's line left in place)" \
+  "$(grep -cxF '/.tick-lock' "$INST/.gitignore" | tr -d ' ')" 1
+bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
+ok "a re-stamp appends the claim anyway" "$(grep -cxF '/.tick-lock.claim' "$INST/.gitignore" | tr -d ' ')" 1
+bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
+ok "…and a third stamp adds no duplicate" "$(grep -cxF '/.tick-lock.claim' "$INST/.gitignore" | tr -d ' ')" 1
 
 echo
 printf '%s passed, %s failed\n' "$pass" "$fail"

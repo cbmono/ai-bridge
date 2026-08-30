@@ -1230,6 +1230,23 @@ if ! grep -qE '^/?\.tick-lock$' "$gi"; then
 GI
 fi
 
+# The tick's claim on that lock — the second half of the same mechanism, appended under its
+# OWN guard rather than inside the block above. That is the whole point: every instance
+# stamped since the lock shipped already carries `/.tick-lock`, so the guard above is
+# satisfied and would never append a line added to its heredoc. A second file needs a second
+# guard, or the ignore silently reaches nobody who has the first one.
+if ! grep -qE '^/?\.tick-lock\.claim$' "$gi"; then
+  cat >> "$gi" <<'GI'
+
+# The tick's claim on the dispatch lock (scripts/tick-lock.sh) — the tick takes the lock
+# too, because a resumed tick never passes through the launcher, and this file is what tells
+# "held by the launcher that dispatched me" from "held by another tick". Per clone and
+# derived exactly like the lock beside it, and removed with it by
+# `scripts/tick-lock.sh release`.
+/.tick-lock.claim
+GI
+fi
+
 # 3b. Two more ignores, appended once each if missing — OUTSIDE the managed block,
 # for the same reason as /repos/ above.
 #

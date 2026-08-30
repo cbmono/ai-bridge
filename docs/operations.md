@@ -414,6 +414,26 @@ Deleting it silently would re-open the double-dispatch; adopting it silently is 
 pressure that makes a stalled loop tempting to override. `scripts/tick-lock.sh status`
 reads it without touching it, and `release` clears it once you have decided.
 
+**The tick takes it too, because there are two paths and the launcher is only on one.**
+Waking a completed tick directly — a resume — never passes through `/pm-loop` at all, so
+no `acquire` runs, nothing is written, and a dispatch seconds later truthfully reports the
+lock free. Measured 2026-08-30, an hour after the lock merged: a resumed tick and a
+dispatched tick ran at once, and the human spotted it before the machinery did. The guard
+worked exactly as designed; it was simply not on that path. So the tick runs
+`scripts/tick-lock.sh acquire --as tick` itself, before it re-derives anything, and on
+finding the lock held by a *different* live tick it reports and holds — dispatches nothing,
+adopts nothing, ends the tick — the same thing it already does for a stale open ledger
+entry.
+
+**A dispatched tick must not refuse its own lock**, or every dispatch deadlocks on entry,
+which is worse than the bug being fixed. What tells the two apart is one bit of state: a
+lock the launcher took **has not yet been claimed by a tick**, and a lock a tick is running
+under **has**. The claim is `.tick-lock.claim`, created with `O_EXCL` exactly like the lock
+itself, so two ticks cannot both adopt one dispatch. It is part of the lock rather than a
+second lock — its timestamp is never a second staleness clock, and `release` removes both,
+unconditionally. A tick releases only a lock it *created* (the resume case); one it
+*adopted* is the launcher's, released when the tick reports.
+
 **Absence is never an error — but a failed create is.** No lock file means the launcher
 takes one and dispatches exactly as it always did, in silence: the same absence-is-off
 contract `SNAPSHOT.json` and the board link keep. Dispatch follows the lock being
