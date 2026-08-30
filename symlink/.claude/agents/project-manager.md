@@ -308,12 +308,14 @@ state, and act only on deltas.
    them.
 
    **One agent per task, and a resume only for that task's next round.** The rule is
-   stated once, in `CONVENTIONS.md` → "A subagent works ONE task", and this step does not
-   restate it: same task and same PR, wake the agent that already did it; a different
-   task, a different PR or an unrelated job, spawn a fresh one. Nothing can check that
-   from the outside — you hold it — and handing a second task to an agent that finished
-   its first is how one of them ended a day carrying 163k tokens across three unrelated
-   jobs.
+   stated once, in `CONVENTIONS.md` → "A subagent works ONE task", and this is its one
+   line:
+
+   > same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
+
+   Nothing can check that from the outside — **you** hold it — and handing a second task
+   to an agent that finished its first is how one of them ended a day carrying 163k tokens
+   across three unrelated jobs.
 
    **Dispatch only your own human's work.** Before spawning anything for a task, run
    `scripts/task-owner.sh <task-path>` — it implements the four-step chain above, so

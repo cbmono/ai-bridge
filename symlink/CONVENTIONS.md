@@ -435,8 +435,12 @@ in `cbmono/ai-bridge` enforces this.
   *inside* a task, never at the loop level.
 - **A subagent works ONE task, and is resumed only for that task's next round.** Waking a
   completed agent with a message reuses its context, and reuse is right exactly while that
-  context is about *this* work. **This is the one statement of the rule; everywhere else
-  points here rather than restating it:**
+  context is about *this* work. **This is the one statement of the rule.** Everywhere else
+  cites it and carries at most its one line, word for word, so the copies cannot drift:
+
+  > same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
+
+  In full:
 
   | What you would hand it | |
   |---|---|

@@ -445,9 +445,11 @@ state has moved on, carrying context from work that is already finished. That is
 tick can no longer release anything: the case where it owned a lock no longer exists.
 
 **Which half of the resume rule has a reader, plainly.** The rule itself is stated once, in
-`symlink/CONVENTIONS.md` → "A subagent works ONE task": same task and same PR ⇒ resume; a
-different task, a different PR or an unrelated job ⇒ dispatch fresh; a tick ⇒ never. Only
-the tick half has a mechanism, and it is the exit-4 refusal above. The rest is a
+`symlink/CONVENTIONS.md` → "A subagent works ONE task", and this is its one line:
+
+> same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
+
+Only the tick half has a mechanism, and it is the exit-4 refusal above. The rest is a
 **convention with no reader anywhere** — nothing can see the intent behind a message — so
 it is held by whoever dispatches (the main session and the tick) and is written where they
 read it rather than dressed up as enforced. One case stays open on the checked half too,

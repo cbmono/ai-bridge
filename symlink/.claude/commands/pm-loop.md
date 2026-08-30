@@ -64,9 +64,13 @@ was resumed, and **a tick is never resumed, without exception**. Until 2026-08-3
 tick took a lock of its own and ran, and the next genuine dispatch stood down instead:
 exactly one tick ran and it was the wrong one, re-entering a loop whose state had moved
 on. **So never wake a completed tick with a message — dispatch a fresh one, every time.**
-The general rule for every other agent (same task and same PR ⇒ resume; anything else ⇒
-fresh) is stated once in `CONVENTIONS.md` → "A subagent works ONE task"; only the tick
-half of it has a mechanism, and this is that mechanism.
+The rule for every other agent is stated once in
+`CONVENTIONS.md` → "A subagent works ONE task", and this is its one line:
+
+> same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
+
+Only the tick half of it has a mechanism, and this is that mechanism; the rest is a
+convention nothing can check, because nothing can see the intent behind a message.
 
 **It is a PER-CLONE lock and it is not a cross-machine one.** `.tick-lock` is a single
 gitignored file in a single working tree, so it says nothing about the other human's
