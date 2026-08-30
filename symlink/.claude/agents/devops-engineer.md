@@ -37,8 +37,8 @@ setting `status`, no PII/secrets, and capturing
    and fix what it flags first; the body takes the required short shape — the literal
    heading `## Description (TL;DR)`, then a one-sentence TL;DR, the `acceptance_criteria`
    as a `✓`/`✗` table whose rows name the validation you ran and its result rather than
-   narrating it (`` `hadolint Dockerfile` clean ``), and
-   **any threshold question as one `⚠️` line each, last** (per the shared PR-body shape in
+   narrating it (`` `hadolint Dockerfile` clean ``), and **any threshold question as one
+   `⚠️` line each, last** (per the shared PR-body shape in
    `CONVENTIONS.md` — PR size and harness growth included, not only the rollout/risk note).
 6. **Report back** per the shared conventions (`status: in-review`, `pr:`,
    `# Result`).
