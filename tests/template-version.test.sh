@@ -87,8 +87,11 @@ echo "== 2. one source, MIRRORED not duplicated: a doc that shows the number agr
 # the one shape that is a DISPLAY of the current version: the banner header, `AI-Bridge
 # X.Y.Z`. A new display form means adding its shape here, and the non-vacuity assertion
 # below is what makes forgetting that visible rather than silent.
+# `/dev/null` as a fixed argument to grep, not decoration: BSD xargs runs the utility even
+# on empty input, and a `grep` with no file operands reads STDIN — so an empty file list
+# would hang this harness rather than fail it.
 displays="$(cd "$TPL" && git ls-files '*.md' | grep -v '^tests/' \
-            | xargs grep -hoE 'AI-Bridge [0-9]+\.[0-9]+\.[0-9]+' 2>/dev/null \
+            | xargs grep -hoE 'AI-Bridge [0-9]+\.[0-9]+\.[0-9]+' /dev/null 2>/dev/null \
             | sed 's/^AI-Bridge //' | sort -u)"
 n_displays="$(printf '%s' "$displays" | grep -c . || true)"
 ok "at least one doc displays the version (the scan is not vacuous)" \
@@ -100,6 +103,39 @@ ok "every displayed version equals VERSION" "$mismatched" 0
 # the assertion above would pass on a scan that matches nothing.
 planted="$(printf 'AI-Bridge 0.0.1 · x\n' | grep -oE 'AI-Bridge [0-9]+\.[0-9]+\.[0-9]+' | sed 's/^AI-Bridge //' | grep -vc "^${ver}$")"
 ok "…and that comparison catches a planted mismatch" "$planted" 1
+
+# A DISPLAY IS A SAMPLE OF REAL OUTPUT, so it has to stay one. The banner underlines its
+# header with a rule exactly as wide as the header, and the first bump caught the sample
+# drifting out of that shape by one character — the `0.9.1` -> `0.10.0` edit lengthened the
+# line and left the rule where it was. Checked here rather than left to the eye, since the
+# whole point of the sample is that it looks like what the hook prints.
+#
+# IN PYTHON BECAUSE THE COMPARISON IS IN CHARACTERS, NOT BYTES. `·` is two bytes and `─` is
+# three, so an `awk length()` reads a correctly underlined header as 53 against 153 and
+# fails it — the same multibyte trap the banner's own `pad()` exists for. (The sibling
+# session-banner harness already depends on python3 for its scan.)
+# One scanner, run twice: over the real docs, and over a planted sample whose rule is one
+# character short. A check that can only pass is not a check.
+rule_drift() { # reads file names on stdin, prints how many headers are mis-underlined
+  python3 -c '
+import io, re, sys
+hdr = re.compile(r"^AI-Bridge [0-9]+\.[0-9]+\.[0-9]+ ")
+drifted = 0
+for name in sys.stdin.read().split():
+    lines = io.open(name, encoding="utf-8").read().splitlines()
+    for prev, cur in zip(lines, lines[1:]):
+        if hdr.match(prev) and cur and set(cur) == {u"\u2500"} and len(cur) != len(prev):
+            sys.stderr.write("        RULE %d vs HEADER %d in %s\n" % (len(cur), len(prev), name))
+            drifted += 1
+print(drifted)
+'
+}
+widths="$(cd "$TPL" && git ls-files '*.md' | grep -v '^tests/' | rule_drift)"
+ok "every sampled banner header is underlined to its own width" "$widths" 0
+mkdir -p "$TMP/planted"
+{ printf 'AI-Bridge %s \xc2\xb7 x\n' "$ver"; printf '\xe2\x94\x80\xe2\x94\x80\n'; } > "$TMP/planted/sample.md"
+ok "…and that scan flags a rule that is too short" \
+  "$(printf '%s\n' "$TMP/planted/sample.md" | rule_drift 2>/dev/null)" 1
 
 # =======================================================================================
 echo "== 3. \`core\` is a closed list, and it is the list the rule files govern =="

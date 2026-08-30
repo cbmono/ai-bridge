@@ -413,7 +413,7 @@ Run from an instance root unless noted.
 | `resolve-model.sh` | `<agent>` — prints the model alias it should run on, from `roleTiers`/`models` | no |
 | `tick-lock.sh` | `acquire [--as launcher\|tick]`/`release`/`status` — the per-clone PM dispatch lock; exit 0 is the only clearance to dispatch or to run a tick | `acquire`/`release` only, `.tick-lock` + `.tick-lock.claim` (gitignored) |
 | `task-owner.sh` | resolves and compares a task's owner | no |
-| `check-template-version.sh` | is the template this instance links older than the remote's default branch — prints a line **only when behind**, silence on every failure | **never** (only with `--fetch`, which touches the network and nothing else) |
+| `check-template-version.sh` | is the template this instance links older than the remote's default branch — prints a line **only when behind**, silence on every failure | not the instance — `--fetch` (opt-in) updates the template checkout's remote-tracking refs, nothing else |
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) | yes, the output file |

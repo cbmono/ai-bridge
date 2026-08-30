@@ -138,8 +138,13 @@ git -C "$TEMPLATE" rev-parse --git-dir >/dev/null 2>&1 || exit 0
 # silence rather than falling through to the on-disk ref: the caller asked for a fresh
 # answer, could not have one, and inventing a verdict out of stale data is the shape of
 # false alarm this whole file is written to avoid.
+# `GIT_TERMINAL_PROMPT=0` because the failure to survive here is not an error, it is a
+# HANG: a remote whose credentials expired asks for a username on the terminal, and a check
+# that stops a human's shell to ask them to log in is worse than the silence it was written
+# to prefer. With the prompt off, that case fails immediately and exits like every other
+# unreachable remote.
 if [ "$FETCH" -eq 1 ]; then
-  git -C "$TEMPLATE" fetch --quiet origin >/dev/null 2>&1 || exit 0
+  GIT_TERMINAL_PROMPT=0 git -C "$TEMPLATE" fetch --quiet origin >/dev/null 2>&1 || exit 0
 fi
 
 # NEVER ASSUME `main`. `origin/HEAD` is what the remote itself says its default branch is;
