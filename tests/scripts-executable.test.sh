@@ -469,8 +469,18 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # 56 -> 55: ai-bridge-v5/task-002 nets one file OFF the enumeration — `resolve-config.sh`
 # is new (+1) while `check-machinery.sh`, `show-awaiting.sh` and `show-board-link.sh`
 # became one `session-banner.sh` (-2).
-EXPECTED_ASSERTIONS=55
+# 55 -> 56: symlink/scripts/pr-body-clearance.sh (ai-bridge-v5/task-005), same reason.
+EXPECTED_ASSERTIONS=56
 TOTAL=$((pass + fail))
+# EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
+# it annotates, so a merge can plausibly keep the annotations and lose the assignment —
+# which is exactly what merging main into ai-bridge-v5/task-005 did. Without this guard
+# the next read aborts under `set -u` with a bash line number and no summary line, and the
+# suite wrapper reports an opaque harness crash. Name the variable instead. The guard sits
+# at the first READ rather than beside `set -uo pipefail`, because the assignment lives at
+# the bottom of the file with the history it belongs to: at the top it would refuse every
+# run.
+: "${EXPECTED_ASSERTIONS:?EXPECTED_ASSERTIONS not set — a merge likely dropped it}"
 assert "exactly $EXPECTED_ASSERTIONS assertions ran — a silently skipped block shows up here (got $TOTAL)" \
   "$([ "$TOTAL" -eq "$EXPECTED_ASSERTIONS" ] && echo 0 || echo 1)"
 
