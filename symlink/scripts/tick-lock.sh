@@ -77,6 +77,16 @@
 # from `.tick-lock` alone, exactly as before, so claiming cannot refresh a lock's deadline.
 # `release` removes both, and nothing else removes either.
 #
+# WHAT THIS DOES NOT CLOSE, STATED RATHER THAN LEFT TO BE DISCOVERED. Two ticks can still
+# swap places inside the launcher's own dispatch window: if a resumed tick reaches its
+# `acquire` in the seconds between the launcher taking the lock and the dispatched tick
+# starting, the RESUMED tick adopts that lock and the dispatched one then holds. Exactly one
+# tick runs, which is the property that matters — but `/pm-loop` step 2 then releases that
+# lock when its own (held) tick reports, freeing a lock the resumed tick is still running
+# under. Closing it would mean asking `release` who is calling, which is the one thing an
+# override must never do; it is bounded, it is the rarer half of an already rare race, and
+# it is written down here rather than found later.
+#
 # LIVENESS IS DATA, NOT A JUDGEMENT. The lock carries an ISO-8601 UTC timestamp and the id
 # of the agent that was dispatched, so "is this stale?" is computed from the file alone —
 # never from session memory, `git log` or the tick ledger, none of which can answer it. A
