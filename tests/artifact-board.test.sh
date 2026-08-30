@@ -413,7 +413,12 @@ mk "$TMP/qnum" "qnum" '[
   "awaiting_close":false,"phase_progress":{"done":0,"total":0},
   "tasks":[{"id":"task-001","title":"Prose","status":"ready","assignee":"","awaiting":"",
             "open_questions":2,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
-            "open_question_text":["Q01: padded?","does the answer to Q7 change this?"]}]}]'
+            "open_question_text":["Q01: padded?","does the answer to Q7 change this?"]}]},
+ {"slug":"runon","title":"A run that does not end","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Run on","status":"ready","assignee":"","awaiting":"",
+            "open_questions":2,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["Q1234: a four digit run","Q2x: a letter straight after"]}]}]'
 QN="$TMP/qnum.html"
 qnrc=0; bash "$GEN" --out "$QN" "$TMP/qnum" >/dev/null 2>&1 || qnrc=$?
 
@@ -484,6 +489,27 @@ assert "…and that question gets the unnumbered handle" "$(card "$QN" 'Numbers 
 # THE FALLBACK IS NOT MERELY UNUSED — IT IS ABSENT. A renderer that still contains the
 # positional path is one edit away from taking it again, and no page-level assertion can
 # tell "never reached" from "not reached by this fixture". So the source is read too.
+echo "== …and a number must END where it is read, or it is not read at all =="
+# THE TRUNCATION THIS PREVENTS IS THE SHIP-BLOCKER'S OWN FAILURE MODE, arriving by a
+# different route. `Q(\d{1,3})` with no boundary after it reads `Q1234` as `Q123` — a
+# number that is not in the text, on a control that claims to have read the text, and
+# indistinguishable on the page from a correct one. `Q2x` is the same defect one character
+# smaller. Both must fall through to the handle that admits it cannot name the question.
+assert "a four-digit run is not truncated to three"  "$(card "$QN" 'A run that does not end' | fhasnt_in '>answer Q123<')"
+assert "…and no number is invented from it at all"   "$(card "$QN" 'A run that does not end' | fhasnt_in '>answer Q1<')"
+assert "…it gets the handle that admits it"          "$(card "$QN" 'A run that does not end' | fhas_in 'class="qbtn nonum"')"
+assert "a letter straight after the digits is not Q2" "$(card "$QN" 'A run that does not end' | fhasnt_in '>answer Q2<')"
+# BOTH questions fall through, so both handles in the RAIL are unnumbered. Counted on the
+# rail and not the card: a numbered handle is rendered in two places — the waiting row and
+# the task table's Q column — so a card-wide count is 2 per question and reads like a bug.
+assert "…so both questions render unnumbered"        \
+  "$(eq "$(rail_of "$QN" 'A run that does not end' | grep -oF 'class="qbtn nonum"' | wc -l | tr -d ' ')" 2)"
+assert "…and the card carries no numbered handle"    "$(card "$QN" 'A run that does not end' | fhasnt_in 'class="qbtn">answer Q')"
+# NON-VACUITY: a number that DOES end where it is read still reads, in the same fixture
+# set — otherwise the four assertions above are satisfied by a renderer that numbers
+# nothing at all.
+assert "…while a bounded number still reads"         "$(card "$QN" 'The task-012 shape' | fhas_in '>answer Q2<')"
+
 echo "== positional numbering is unreachable, because it is not there =="
 assert "q_range() is gone from the renderer"         "$(fhasnt 'def q_range' "$GEN")"
 assert "…and nothing calls it"                       "$(fhasnt 'q_range(' "$GEN")"

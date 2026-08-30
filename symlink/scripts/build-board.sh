@@ -1207,8 +1207,19 @@ Q_BUTTON_CAP = 24
 # with the marker allowed on either side of it. Bounded on purpose: an unbounded skip
 # would hunt for a `Q7` mentioned in the middle of a question's PROSE and name the
 # question after something it merely talks about.
-Q_LEAD = re.compile(r"^\s*(?:advisor\s*:\s*)?(?:[^·]{0,40}·\s*)?(?:advisor\s*:\s*)?", re.I)
-Q_NUM = re.compile(r"Q(\d{1,3})\b[:.)\]]?\s*", re.I)
+# SPELLED WITHOUT `\s` AND `\b`, AND NOT BECAUSE PYTHON MINDS. It does not — these are
+# Python `re` patterns and both escapes are portable there. The rule they obey is the
+# repo's, and it is a STATIC one: this file is symlinked into instances on machines this
+# repo never sees, where a GNU-only escape in a `grep`/`sed` is a silent wrong ANSWER
+# rather than an error, so `tests/snapshot.test.sh` refuses either escape ANYWHERE in the
+# shipped script. A file-wide ban is the only version of that check that can be trusted —
+# one that tried to tell a Python region from a shell one would be a place for a real
+# offender to hide. `[ \t\r\n]` is the same class here, and `(?![0-9A-Za-z_])` is exactly
+# what the `\b` after a digit run meant: the number must END where it is read.
+Q_LEAD = re.compile(
+    r"^[ \t\r\n]*(?:advisor[ \t\r\n]*:[ \t\r\n]*)?"
+    r"(?:[^·]{0,40}·[ \t\r\n]*)?(?:advisor[ \t\r\n]*:[ \t\r\n]*)?", re.I)
+Q_NUM = re.compile(r"Q(\d{1,3})(?![0-9A-Za-z_])[:.)\]]?[ \t\r\n]*", re.I)
 
 Q_BUTTON_CAP = 24
 
