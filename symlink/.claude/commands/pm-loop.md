@@ -233,9 +233,9 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    (`subagent_type: project-manager`) for ONE LIVE tick (background), with the
    standing guardrails below. **Fresh every time — never wake a completed tick with a
    message**, whatever it says about being idle or ready for another round; that is the
-   one absolute of the resume rule, and step 0.5 refuses such a tick anyway. **Brief it with the gap and the guardrails, not with
-   state** — it reads the bundle, `git` and `gh` itself, so there is nothing for you
-   to look up first. **Run the tick on the orchestrator's configured model:**
+   one absolute of the resume rule, and step 0.5 refuses such a tick anyway.
+   **Brief it with the gap and the guardrails, not with state** — it reads the bundle,
+   `git` and `gh` itself, so there is nothing for you to look up first. **Run the tick on the orchestrator's configured model:**
    resolve it with `scripts/resolve-model.sh project-manager`, which applies
    `roleTiers` (default `deep`) → an alias via `models`
    (default `deep` → `opus`), and pass that as the tick's model. If `models`/`roleTiers`
