@@ -142,6 +142,7 @@ tracked_cfg() {
   cat > "$INST/instance.config.json" <<'EOF'
 {
   "org": "example-org",
+  "ownerGithubUser": "example-user-009",
   "authorEmail": "you@example.com",
   "maxAgentsInFlight": 9,
   "maxPrLoc": 2000,
@@ -157,7 +158,16 @@ assert "exit 0"                                  "$(eq "$RC" 0)"
 assert "no local file: maxAgentsInFlight is tracked"  "$(eq "$(from maxAgentsInFlight)" tracked)"
 assert "…and it is the tracked VALUE, 9"              "$(eq "$(value maxAgentsInFlight)" 9)"
 assert "…and maxPrLoc is tracked too"                 "$(eq "$(from maxPrLoc)" tracked)"
-assert "…and authorEmail is tracked"                  "$(eq "$(from authorEmail)" tracked)"
+# ONE `owner` ROW FOR TWO KEYS, and the FROM column still answers per key. Asserted in both
+# arrangements below: agreeing sources collapse to one word, disagreeing ones print both in
+# the order the values appear, because a merged row that reported one source would be
+# silently wrong about the other half — the exact failure the column exists to prevent.
+assert "…and the owner row is tracked"                "$(eq "$(from owner)" tracked)"
+assert "…carrying the github user"                    "$(has 'owner ' "$OUT")"
+assert "…and the address beside it, one row not two"  "$(has '<you@example.com>' "$OUT")"
+assert "…with authorEmail no longer a row of its own" "$(eq "$(row authorEmail)" '')"
+assert "reposRoot is not in the settings block"       "$(eq "$(row reposRoot)" '')"
+assert "…nor worktreeRoot"                            "$(eq "$(row worktreeRoot)" '')"
 
 # The SAME instance, one key moved into the local file. Everything else must stay tracked
 # — a FROM column that flips wholesale is reporting which files exist, not which one won.
@@ -166,7 +176,19 @@ run
 assert "local override: maxAgentsInFlight now reads local" "$(eq "$(from maxAgentsInFlight)" local)"
 assert "…and shows the LOCAL value, 2"                     "$(eq "$(value maxAgentsInFlight)" 2)"
 assert "…while maxPrLoc, untouched, still reads tracked"   "$(eq "$(from maxPrLoc)" tracked)"
-assert "…and authorEmail too"                              "$(eq "$(from authorEmail)" tracked)"
+assert "…and the owner row too"                            "$(eq "$(from owner)" tracked)"
+
+# The two halves of the merged row disagreeing: the FROM column must say so rather than
+# pick one. `local/tracked` reads in the same order as `<user> <address>`.
+printf '{ "maxAgentsInFlight": 2, "ownerGithubUser": "example-user-007" }\n' \
+  > "$INST/instance.config.local.json"
+run
+assert "a split owner row reports BOTH sources, in value order" \
+  "$(eq "$(from owner)" local/tracked)"
+assert "…and still shows the local user with the tracked address" \
+  "$(has 'example-user-007 <you@example.com>' "$OUT")"
+printf '{ "maxAgentsInFlight": 2 }\n' > "$INST/instance.config.local.json"
+run
 
 # THE CROSS-CHECK, which is what makes the column worth printing: the banner must agree
 # with the script the dispatcher actually consults. It does because both read through
@@ -193,45 +215,101 @@ assert "…nor does a key outside the allowlist"   "$(hasnt 'some-internal-repo'
 tracked_cfg
 
 # =======================================================================================
-echo "== 2b. roleTiers resolves END TO END, and per-entry provenance =="
+echo "== 2b. roleTiers is a TABLE, resolved end to end, with per-entry provenance =="
 # =======================================================================================
+# It is the same three columns as the settings table above it — role, the resolved
+# `tier→model`, and which file won — rather than an inline list with a `*` legend, so one
+# `FROM` column runs down the whole banner. `row`/`value`/`from` therefore read a role row
+# exactly as they read a setting row, which is the point of making them the same shape.
 rm -f "$INST/instance.config.local.json"
 run
 assert "an agent's tier AND the alias it maps to are printed" \
-  "$(has 'software-engineer deep→opus' "$OUT")"
+  "$(eq "$(value software-engineer)" 'deep→opus')"
 assert "…for a second agent on a different tier too" \
-  "$(has 'cataloguer standard→sonnet' "$OUT")"
+  "$(eq "$(value cataloguer)" 'standard→sonnet')"
+assert "…under a header matching the settings table's" "$(has 'ROLE ' "$OUT")"
+assert "…whose value column is TIER→MODEL"             "$(has 'TIER→MODEL' "$OUT")"
 se_alias="$( cd "$INST" && bash "$SCRIPTS/resolve-model.sh" software-engineer 2>/dev/null )"
 assert "…and the alias is the one resolve-model.sh would dispatch on ($se_alias)" \
-  "$(has "software-engineer deep→$se_alias" "$OUT")"
-assert "no local overrides ⇒ no override legend" "$(hasnt '* = this machine' "$OUT")"
+  "$(eq "$(value software-engineer)" "deep→$se_alias")"
+assert "no local override ⇒ the entry reads tracked" "$(eq "$(from software-engineer)" tracked)"
 
 # A PARTIAL override: one agent moved, the rest must keep their tracked tier. That is the
 # merge `dict.update()` gets wrong, and the banner is where a human would see it.
 printf '{ "roleTiers": { "cataloguer": "light" }, "models": { "light": "haiku" } }\n' \
   > "$INST/instance.config.local.json"
 run
-assert "the overridden entry moves and is marked local" \
-  "$(has 'cataloguer light→haiku*' "$OUT")"
-assert "…the entries it does not name are untouched" \
-  "$(has 'software-engineer deep→opus' "$OUT")"
-assert "…and they are NOT marked as overridden" \
-  "$(hasnt 'software-engineer deep→opus*' "$OUT")"
-assert "…and the legend appears only now that one is" "$(has '* = this machine' "$OUT")"
+assert "the overridden entry moves…"                  "$(eq "$(value cataloguer)" 'light→haiku')"
+assert "…and its FROM column says local"              "$(eq "$(from cataloguer)" local)"
+assert "…the entries it does not name are untouched"  "$(eq "$(value software-engineer)" 'deep→opus')"
+assert "…and they still read tracked"                 "$(eq "$(from software-engineer)" tracked)"
+rm -f "$INST/instance.config.local.json"
+
+# A TIER WITH NO `models` ENTRY renders `→?` rather than vanishing: that agent inherits the
+# session model, which is worth seeing. Its own model key is absent, not wrong.
+printf '{ "roleTiers": { "cataloguer": "mystery" } }\n' > "$INST/instance.config.local.json"
+run
+assert "a tier that maps to no model renders →? rather than hiding" \
+  "$(eq "$(value cataloguer)" 'mystery→?')"
 rm -f "$INST/instance.config.local.json"
 
 # =======================================================================================
-echo "== 3. the identity line =="
+echo "== 3. the identity HEADER, and the version in it =="
 # =======================================================================================
 run
-assert "names the harness"            "$(has 'ai-bridge · ' "$OUT")"
+assert "names the harness"            "$(has 'AI-Bridge' "$OUT")"
 assert "…and this instance directory" "$(has "$(basename "$INST")" "$OUT")"
-assert "…and the org"                 "$(has 'org example-org' "$OUT")"
-assert "…on the first line"           "$(eq "$(printf '%s\n' "$OUT" | head -1 | cut -c1-9)" 'ai-bridge')"
-# An org-less config must not print a dangling `· org`.
+assert "…and the org"                 "$(has 'org: example-org' "$OUT")"
+assert "…on the first line"           "$(eq "$(printf '%s\n' "$OUT" | head -1 | cut -c1-9)" 'AI-Bridge')"
+# READS AS A HEADER WITH COLOUR OFF, which is the normal case: a SessionStart hook writes
+# to a pipe, never a terminal, so the bold is gone exactly where the banner is read. The
+# rule under it is what carries the header across that degradation, and it is as wide as
+# the line it underlines rather than a fixed run of dashes.
+h1="$(printf '%s\n' "$OUT" | sed -n 1p)"
+h2="$(printf '%s\n' "$OUT" | sed -n 2p)"
+assert "the second line is a rule under it"  "$(printf '%s' "$h2" | grep -qE '^─+$' && echo 0 || echo 1)"
+assert "…exactly as wide as the header"      "$(eq "${#h2}" "${#h1}")"
+
+# THE VERSION comes from `VERSION` at the template root — a real file this repo ships, read
+# through the hook's own resolved path, so a release that bumps it needs no edit here.
+tpl_ver="$(head -n 1 "$TPL/VERSION" 2>/dev/null | tr -d '[:space:]')"
+assert "the template ships a VERSION file"   "$([ -n "$tpl_ver" ] && echo 0 || echo 1)"
+assert "…and the header prints that version" "$(has "AI-Bridge $tpl_ver ·" "$OUT")"
+
+# ABSENT, UNREADABLE OR JUNK ⇒ THE REST OF THE BANNER, NEVER A CRASH AND NEVER A GUESS. A
+# copy of the hook outside the template cannot find a VERSION at all; the fixtures below
+# put a real but unusable one where a copy inside a fake template will look.
+FAKETPL="$TMP/faketpl/symlink/.claude/hooks"
+mkdir -p "$FAKETPL" "$TMP/faketpl/symlink/scripts"
+cp "$HOOK" "$FAKETPL/session-banner.sh"
+# The resolver travels with it, so a missing VERSION is the ONLY thing different about
+# this copy — otherwise "the rest of the banner is intact" would pass for a banner that
+# lost its settings block for an unrelated reason.
+cp "$SCRIPTS/resolve-config.sh" "$TMP/faketpl/symlink/scripts/"
+vrun() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/session-banner.sh" 2>&1)"; RC=$?; }
+rm -f "$TMP/faketpl/VERSION"
+vrun
+assert "no VERSION file: still exit 0"            "$(eq "$RC" 0)"
+assert "…header prints without a version"         "$(has 'AI-Bridge · ' "$OUT")"
+assert "…and the rest of the banner is intact"    "$(has 'FROM' "$OUT")"
+printf '' > "$TMP/faketpl/VERSION"
+vrun
+assert "an EMPTY VERSION is the same as none"     "$(has 'AI-Bridge · ' "$OUT")"
+# Not version-shaped is dropped rather than printed: this file's contents go straight into
+# session context, and an ESC sequence there would repaint the terminal from line one.
+printf 'not a version\n\033[31mred\n' > "$TMP/faketpl/VERSION"
+vrun
+assert "junk in VERSION is dropped, not printed"  "$(has 'AI-Bridge · ' "$OUT")"
+assert "…and none of it reaches the banner"       "$(hasnt 'not a version' "$OUT")"
+assert "…still exit 0"                            "$(eq "$RC" 0)"
+printf '9.9.9-rc1\n' > "$TMP/faketpl/VERSION"
+vrun
+assert "a version-shaped value IS printed"        "$(has 'AI-Bridge 9.9.9-rc1 ·' "$OUT")"
+
+# An org-less config must not print a dangling `· org:`.
 printf '{ "maxPrLoc": 2000 }\n' > "$INST/instance.config.json"
 run
-assert "no org configured ⇒ no empty org clause" "$(hasnt 'org ' "$OUT")"
+assert "no org configured ⇒ no empty org clause" "$(hasnt 'org:' "$OUT")"
 tracked_cfg
 
 # =======================================================================================
@@ -337,7 +415,7 @@ cp "$HOOK" "$TMP/orphan-banner.sh"
 OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$TMP/orphan-banner.sh" 2>&1)"; RC=$?
 assert "no resolver reachable: still exit 0"        "$(eq "$RC" 0)"
 assert "…and the settings block is simply absent"   "$(hasnt 'FROM' "$OUT")"
-assert "…while the identity line still prints"      "$(has 'ai-bridge · ' "$OUT")"
+assert "…while the identity line still prints"      "$(has 'AI-Bridge' "$OUT")"
 assert "…and the queue counts still do"             "$(has 'Ready to dispatch' "$OUT")"
 assert "…with nothing on stderr"                    "$(hasnt 'Traceback' "$OUT")"
 
@@ -364,6 +442,143 @@ assert "the hook does not try to ask the question itself" \
   "$(grep -E '^[[:space:]]*(echo|printf)' "$HOOK" \
      | grep -qiE 'shall I|would you like|do you want|\?["'"'"']?[[:space:]]*$' && echo 1 || echo 0)"
 
+
+# =======================================================================================
+echo "== 9. colour: on for a terminal, GONE everywhere else =="
+# =======================================================================================
+# THE DEGRADED PATH IS THE DEFAULT PATH, and that is why it is tested from both sides. A
+# SessionStart hook's stdout is a pipe into Claude Code, so `[ -t 1 ]` is false whenever the
+# banner is doing its actual job — escape codes reaching that transcript would be text, not
+# colour, and a transcript full of `\033[1m` is strictly worse than a plain banner. So:
+# escapes appear only on a real terminal, only with NO_COLOR unset, and the CONTENT is
+# identical either way.
+tracked_cfg
+rm -f "$INST/instance.config.local.json"
+
+# A pty is the only way to make `[ -t 1 ]` true, and the auto branch is the branch that
+# ships — testing it through `--color always` alone would leave the shipped condition
+# unasserted. python3 is already a hard dependency of the settings block above.
+tty_run() { # [NO_COLOR value]
+  python3 - "$HOOK" "$INST" "${1-}" <<'PYTTY'
+import os, pty, subprocess, sys
+hook, inst, nocolor = sys.argv[1], sys.argv[2], sys.argv[3]
+env = dict(os.environ, CLAUDE_PROJECT_DIR=inst)
+env.pop("NO_COLOR", None)
+if nocolor:
+    env["NO_COLOR"] = nocolor
+main, sub = pty.openpty()
+proc = subprocess.Popen(["bash", hook], stdout=sub, stderr=subprocess.DEVNULL, env=env)
+os.close(sub)
+buf = b""
+while True:
+    try:
+        chunk = os.read(main, 65536)
+    except OSError:
+        break
+    if not chunk:
+        break
+    buf += chunk
+proc.wait()
+os.close(main)
+sys.stdout.write(buf.decode("utf-8", "replace"))
+PYTTY
+}
+ESC="$(printf '\033')"
+CR="$(printf '\r')"
+coloured() { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 0 || echo 1; }
+plain()    { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 1 || echo 0; }
+# `\033[…m` stripped, and the `\r` with it: a pty ends every line with CRLF.
+strip()    { printf '%s' "$1" | LC_ALL=C sed -e "s/$ESC\[[0-9;]*m//g" -e "s/$CR\$//"; }
+
+TTYOUT="$(tty_run)"
+assert "on a terminal, the banner is coloured"       "$(coloured "$TTYOUT")"
+assert "…and NO_COLOR=1 turns it off there"          "$(plain "$(tty_run 1)")"
+# NO_COLOR's contract is "set and NON-EMPTY": an empty value is not an opt-out.
+assert "…while an EMPTY NO_COLOR is not an opt-out"  "$(coloured "$(tty_run '')")"
+run
+assert "not a terminal ⇒ no escapes at all"          "$(plain "$OUT")"
+# Every optional section firing at once — the coloured lines outside the two tables.
+mkdir -p "$INST/.board-live"; printf '<!doctype html>\n' > "$INST/.board-live/board.html"
+printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
+run
+assert "…not even from the board and awaiting sections" "$(plain "$OUT")"
+assert "…which did fire"                                "$(has 'need your input' "$OUT")"
+rm -rf "$INST/.board-live" "$INST/AWAITING.md"
+
+# THE CONTENT MUST NOT DEPEND ON THE COLOUR. This is the assertion that catches an escape
+# leaking into a padded field, which would silently shift a column.
+run
+assert "the coloured banner says exactly what the plain one says" \
+  "$(eq "$(strip "$TTYOUT")" "$OUT")"
+# The two tables are one table's worth of alignment: `FROM` starts at the same column in
+# both, which is what `pad` exists for — `printf '%-*s'` pads by BYTES and `→` costs three.
+# Measured in CHARACTERS, not bytes: `awk`'s index() and `printf`'s width both count
+# bytes, and `TIER→MODEL` carries two bytes that occupy no column — which is the whole
+# reason `pad` exists. A byte-wise check here would fail on a correctly aligned banner.
+cols="$(printf '%s\n' "$OUT" | python3 -c '
+import sys
+cols = {line.index("FROM") for line in sys.stdin.read().splitlines()
+        if line.startswith("SETTING ") or line.startswith("ROLE ")}
+print(len(cols))
+')"
+assert "SETTING and ROLE put FROM in the same column"  "$(eq "$cols" 1)"
+
+# The explicit switch, for a human piping the banner somewhere that renders escapes.
+OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --color always 2>&1)"
+assert "--color always colours a pipe"                 "$(coloured "$OUT")"
+assert "…and an unknown argument is ignored, not fatal" \
+  "$(eq "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --wat >/dev/null 2>&1; echo $?)" 0)"
+
+# =======================================================================================
+echo "== 10. no \$var may touch a non-ASCII character, anywhere in the shipped shell =="
+# =======================================================================================
+# THIS DEFECT CLASS HAS BITTEN THIS FILE TWICE. `"$tier→$alias"` reads as a variable named
+# `tier→` — bash takes the following bytes as part of the identifier — and under `set -u`
+# that kills the hook at session start; `"$rule─"` did the same to the header rule. `bash
+# -n` passes both. The banner is full of `·`, `→` and `─`, so the guard is repo-wide over
+# every shell file this template ships rather than a note on the two lines that broke.
+trap_scan="$(python3 - "$TPL" <<'PYSCAN'
+import io, os, re, sys
+root = sys.argv[1]
+bad = []
+for base, dirs, files in os.walk(root):
+    dirs[:] = [d for d in dirs if d not in (".git", "tests")]
+    for name in files:
+        if not name.endswith(".sh"):
+            continue
+        path = os.path.join(base, name)
+        try:
+            src = io.open(path, encoding="utf-8").read()
+        except Exception:
+            continue
+        # Whole-line comments are dropped first: the files that were bitten by this now
+        # DOCUMENT the broken spelling in prose, and a guard that flags its own warning
+        # label teaches everyone to delete the warning.
+        code = "\n".join(l for l in src.splitlines() if not l.lstrip().startswith("#"))
+        for hit in re.findall(r"\$\{?[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]", code):
+            bad.append("%s: %s" % (os.path.relpath(path, root), hit))
+for line in bad:
+    sys.stderr.write("        UNBRACED  %s\n" % line)
+print(1 if bad else 0)
+PYSCAN
+)"
+assert "no bare \$var is followed by a non-ASCII byte" "$(eq "$trap_scan" 0)"
+# NON-VACUOUS: the scanner must actually catch the shape it is named for.
+mkdir -p "$TMP/trapdir"
+printf '#!/usr/bin/env bash\nx=1\necho "$x\xe2\x86\x92y"\n' > "$TMP/trapdir/bad.sh"
+assert "…and the scan is not vacuous — it flags a planted one" \
+  "$(eq "$(python3 - "$TMP/trapdir" <<'PYSCAN2'
+import io, os, re, sys
+bad = 0
+for base, dirs, files in os.walk(sys.argv[1]):
+    for name in files:
+        if name.endswith(".sh"):
+            src = io.open(os.path.join(base, name), encoding="utf-8").read()
+            bad += len(re.findall(r"\$\{?[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]", src))
+print(1 if bad else 0)
+PYSCAN2
+)" 1)"
+rm -rf "$TMP/trapdir"
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]
