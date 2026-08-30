@@ -145,7 +145,11 @@ esac
 C_B=""; C_DIM=""; C_RED=""; C_YEL=""; C_OFF=""
 if [ "$use_color" -eq 1 ]; then
   esc="$(printf '\033')"
-  C_B="$esc[1m"; C_DIM="$esc[2m"; C_RED="$esc[1;31m"; C_YEL="$esc[1;33m"; C_OFF="$esc[0m"
+  # `${esc}[` braced: `"$esc[1m"` is bash's ARRAY-SUBSCRIPT spelling and shellcheck calls
+  # it an error (SC1087). It happens to work while `esc` is a scalar, which is exactly the
+  # kind of accident that stops working later.
+  C_B="${esc}[1m"; C_DIM="${esc}[2m"; C_RED="${esc}[1;31m"
+  C_YEL="${esc}[1;33m"; C_OFF="${esc}[0m"
 fi
 
 # say <colour> <text…> — one whole line, coloured end to end. COLOUR NEVER GOES INSIDE A
