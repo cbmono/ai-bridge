@@ -49,9 +49,12 @@ setting `status`, no PII/secrets, and capturing
    green first (check `package.json`, `Makefile`, CI config); if you can't get them
    green, report the failure and **don't** open the PR. **Self-review your diff and fix
    what it flags** (per the shared conventions) before opening it. PR body: the required
-   short shape — a one-sentence TL;DR, the task's `acceptance_criteria` as a `✓`/`✗` table
-   with how each was verified, and any threshold question as one `⚠️` line (per the shared
-   conventions). The table is what the independent reviewer checks against; the reasoning
+   short shape — opening with the literal heading `## Description (TL;DR)`, then a
+   one-sentence TL;DR, the task's `acceptance_criteria` as a `✓`/`✗` table with how each
+   was verified, and any threshold question as one `⚠️` line (per the shared conventions).
+   **Each row carries a command and its result** — `` `foo.test.sh` 40/0 `` — not a
+   narration of how you got there, and stays readable enough that a person can check the
+   claim from it. The table is what the independent reviewer checks against; the reasoning
    goes in the commit message and the task doc, not the PR body.
 6. **Report back** per the shared conventions (`status: in-review`, `pr:`,
    `# Result`). Your final message summarizes the same.

@@ -35,11 +35,14 @@ in `cbmono/ai-bridge` enforces this.
 - PR title format: `<type>: <subject> [<task-id>]` (OKF task id, e.g.
   `[ci-hardening/task-001]`). Target the default branch. **Never merge.**
 - **The PR body has a required shape, and it is short.** Its reader is a **human deciding
-  whether to merge** — not an agent reconstructing how you worked. Three required parts, in
-  this order, plus an optional `## Notes` section (below) and nothing else:
+  whether to merge** — not an agent reconstructing how you worked. **It opens with the
+  literal heading `## Description (TL;DR)`.** Three required parts, in this order, plus an
+  optional `## Notes` section (below) and nothing else:
 
   ```md
-  **TL;DR** — one sentence: what changes, and why it is safe to merge.
+  ## Description (TL;DR)
+
+  One sentence: what changes, and why it is safe to merge.
 
   | Criterion | ✓ | Verified by |
   |---|---|---|
@@ -49,19 +52,29 @@ in `cbmono/ai-bridge` enforces this.
   ⚠️ Needs your call: harness growth 414 lines.
   ```
 
-  1. **A one-sentence TL;DR**, first.
+  1. **The heading `## Description (TL;DR)`, first**, then **a one-sentence TL;DR** under
+     it. **That exact string, character for character** — it is the shape's only greppable
+     anchor, which is why the rule names a fixed heading rather than "open with a
+     sentence". `symlink/scripts/pr-body-clearance.sh` looks for it at the clearance gate,
+     so a body that opens some other way is refused there rather than merged.
   2. **The task's `acceptance_criteria` as a table** — one row per criterion, its text
      verbatim, a `✓`/`✗`, and the evidence. **Required, always** (next bullet).
   3. **A short flagged line per threshold question** the owner must answer — harness
      growth, PR size, a wide change you could not split. One line each, `⚠️`-prefixed,
-     last. Not a section, not an essay.
+     last. Not a section, not an essay. **Each `⚠️` stays one line — the figure, and the
+     call you need from the owner.** A `⚠️` that runs to a paragraph has stopped being a
+     flag and become the essay it replaced; when the reasoning does not fit on the line it
+     belongs in the task doc, and the line points at it.
 
   **Reasoning goes in the commit message and the task doc.** Why you chose this design,
   what you rejected, the incident that motivated it, what you tried first — all of it is
   already carried by those two, both travel with the change, and **none of it is needed to
   decide a merge.** A reader who wants the story has `git log` and the task document; a
   reader deciding a merge has thirty seconds. Add a `## Notes` section only for something a
-  *reviewer* cannot see from the diff (a hint about where to look, a deliberate omission).
+  *reviewer* cannot see from the diff (a hint about where to look, a deliberate omission)
+  — **one line per note, bounded exactly as the `⚠️` lines are.** "Judgement calls for the
+  reviewer" is the heading this section grows under once it is unbounded, and that is the
+  same essay arriving by another name.
 - **The criteria table is the merge gate — so it is required, and terseness never costs
   evidence.** It is what the independent reviewer — an external one (e.g. CodeRabbit) or
   the `qa-reviewer` fallback — evaluates the change against, so it must travel with the
@@ -91,6 +104,27 @@ in `cbmono/ai-bridge` enforces this.
   to assert without evidence — "verified, works as expected" is a long way of saying
   nothing. Name the command, the test file and its tally, the CI run, or the URL you
   loaded.
+  **A row carries what a reviewer needs to CHECK THE CLAIM, and stops** — a command and
+  its result wherever that suffices: `` `foo.test.sh` 40/0 ``, `` `shellcheck -x run.sh`
+  clean ``, `CI run 1234 green`, the URL you loaded. **Narration is not wanted** — not what
+  you tried first, not why the approach is right, not the criterion restated in your own
+  words, not the incident behind it. Every one of those is already in the commit message
+  and the task doc, and repeating it in the row costs the reviewer the one thing the table
+  exists to give them.
+  **The floor is readability, and it binds exactly as hard as the ceiling: a person reading
+  a row can check the claim from it.** `` `foo.test.sh` 40/0 `` clears the floor — a reader
+  knows what to run and what they should see. `ok`, `done`, `see above` and a bare commit
+  SHA do not: none tells a reader what to do next. **Short is the goal; cryptic is a
+  failure**, and cutting past the point a human can act on the row fails this rule as
+  surely as a paragraph does.
+  **That two-sided bar is the rule's own test, and it settles a question already asked and
+  answered — do not re-open it.** Asked 2026-08-30: is any of this verbosity required for
+  CodeRabbit or another external reviewer? **No.** Treat the reviewer as an **AI agent**
+  reading the table to review code — give it enough to check the claim and no more — **and
+  keep every row human-understandable.** **Both halves bind**: a row an AI could parse but
+  no person can act on fails just as surely as a paragraph neither of them needed. The
+  answer is the owner's, so settle a row against the bar above rather than surveying past
+  reviewer behaviour to re-derive it.
 - **Get the repo's build and lint green before opening a PR, and its tests green for what
   you touched** — the tests being **the ones your change touches, not the whole suite**
   (next bullet, which is where the scope of "tests" is settled). If you can't get that

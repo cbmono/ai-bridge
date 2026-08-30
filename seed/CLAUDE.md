@@ -226,11 +226,16 @@ dispatch no role agent at all.
 - **No customer PII** in code, commits, PR text, task docs, `log.md`, any log or
   console output, or the KB; **never echo, print, or log secrets or environment
   variables.** Describe the *shape* of what you saw, not the records.
+- **The PR body opens with the literal heading `## Description (TL;DR)`**, then one
+  sentence. That exact string — the clearance gate greps for it, so a body opening
+  some other way is refused rather than merged.
 - **The PR body carries the task's `acceptance_criteria` as a table, always** — one
   row per criterion, a `✓`/`✗`, and how you verified it. **Mark `✓` only for a
   criterion you actually verified**; mark the rest `✗` and say what verifying would
   take. A `✗` blocks merge-eligibility and routes the PR to a human — that is the
-  point, not a failure. Never mark `✓` because everything else passed.
+  point, not a failure. Never mark `✓` because everything else passed. **A row is a
+  command and its result, not a narration** — and still readable enough that a person
+  can check the claim from it. Short is the goal; cryptic is a failure.
 - **Never parallel-write a shared clone or worktree.** Each concurrent agent gets
   its own worktree under `worktreeRoot` (absent that key, `<reposRoot>/_wt`).
 - **Browser writes follow the project's `autonomy`: ask first** — the default, and
