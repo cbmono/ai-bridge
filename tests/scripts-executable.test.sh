@@ -247,10 +247,14 @@ echo "== symlink/scripts — install.sh chmods these on stamp, but the repo itse
 # drop out of the check. Quoting routes the pattern through git's own index-backed glob
 # matching instead — the one source this test's header already says to trust. See the
 # "guard D" reproduction below, and the anchored call-site pin that keeps it quoted.
-check_group "$TPL" "symlink/scripts/*.sh" 16 'symlink/scripts/*.sh'
+check_group "$TPL" "symlink/scripts/*.sh" 17 'symlink/scripts/*.sh'
 
 echo "== symlink/.claude/hooks — bare paths off settings.json, NO installer chmod at all =="
-check_group "$TPL" "symlink/.claude/hooks/*.sh" 5 'symlink/.claude/hooks/*.sh'
+# 5 -> 4: the three SessionStart hooks became one `session-banner.sh`
+# (ai-bridge-v5/task-002), so this directory holds four files, not six. The floor is a
+# vacuity guard — "the glob matched something" — not a ceiling, so it moves DOWN with the
+# real count rather than being left high enough to pass by luck.
+check_group "$TPL" "symlink/.claude/hooks/*.sh" 4 'symlink/.claude/hooks/*.sh'
 
 if [[ $IS_CHILD -eq 0 ]]; then
   echo "== guard C: a failed 'mktemp -d' must ABORT with its own refusal line, not run the fixture in place =="
@@ -462,7 +466,10 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # 54 -> 55: symlink/.claude/hooks/deny-destructive.sh (ai-bridge-v5/task-006) is one more
 # executable machinery file, so the per-file enumeration runs one more assertion.
 # 55 -> 56: symlink/scripts/tick-lock.sh (ai-bridge-v5/task-003), same reason.
-EXPECTED_ASSERTIONS=56
+# 56 -> 55: ai-bridge-v5/task-002 nets one file OFF the enumeration — `resolve-config.sh`
+# is new (+1) while `check-machinery.sh`, `show-awaiting.sh` and `show-board-link.sh`
+# became one `session-banner.sh` (-2).
+EXPECTED_ASSERTIONS=55
 TOTAL=$((pass + fail))
 assert "exactly $EXPECTED_ASSERTIONS assertions ran — a silently skipped block shows up here (got $TOTAL)" \
   "$([ "$TOTAL" -eq "$EXPECTED_ASSERTIONS" ] && echo 0 || echo 1)"

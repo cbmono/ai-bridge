@@ -154,7 +154,7 @@ that cannot work is a widened tool contract bought for nothing.
 `.claude/agents/project-manager.md` step 8, which renders as its last act and reports the
 path in one `BOARD: rendered <path>` line — surfaced to the human with the rest of the
 tick's report, and printed again at the start of every session by the
-`show-board-link.sh` hook. Rendering needs `Bash`, which the tick already holds and this
+`session-banner.sh` hook. Rendering needs `Bash`, which the tick already holds and this
 launcher deliberately does not, so there is nothing left for the launcher to do about the
 board at all: no grant, no step, and no page body landing in **this** session's context,
 which is the one thing the section above exists to protect.

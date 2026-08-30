@@ -32,7 +32,7 @@
 # FENCED AS DATA. The text is derived from the bundle's own paths and frontmatter.
 # A project slug or task id is still human-authored text sitting beside this
 # hook's own closing instruction, so it is fenced and labelled, exactly as
-# `show-awaiting.sh` fences its items.
+# `session-banner.sh` fences its items.
 #
 # DELIBERATELY SELF-CONTAINED: it derives everything from the bundle on each run
 # and depends on no generated snapshot file. Bash + find + awk only, no jq.
@@ -43,7 +43,7 @@ set -euo pipefail
 root="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 # Not an instance ⇒ silent, zero. Absence of the bundle is the off switch here,
-# the same way an absent AWAITING.md silences show-awaiting.sh.
+# the same way an absent AWAITING.md silences session-banner.sh.
 [ -f "$root/SCHEMA.md" ] && [ -f "$root/instance.config.json" ] && [ -d "$root/.claude/agents" ] || exit 0
 
 # NORMALISED TO BASE 10 BEFORE ANY ARITHMETIC. The digit check below accepts a
@@ -195,7 +195,7 @@ if [ "${#FILES[@]}" -gt 0 ]; then
 fi
 
 # ---------------------------------------------------------------- awaiting count
-# Counted from AWAITING.md with the same extraction show-awaiting.sh uses — this
+# Counted from AWAITING.md with the same extraction session-banner.sh uses — this
 # hook only READS that file and never reshapes it. Absent means the human turned
 # the queue off, which is not the same claim as "nothing awaits you", so say so
 # rather than printing a 0 nobody measured.

@@ -97,7 +97,7 @@
 # ------------------------------------------------------------------ UNTRUSTED TEXT
 # A reason/note is human-written free text that this hook injects into the AGENT's
 # context, right next to its own instruction. So it is fenced and labelled as data,
-# exactly as `show-awaiting.sh` fences its items — and each line is PREFIXED
+# exactly as `session-banner.sh` fences its items — and each line is PREFIXED
 # (`  • `), which is what actually stops the text starting at column 0 with a
 # forged `--- END … ---` marker. `control.sh` encodes the reason to ONE LINE at
 # write time (its single choke point); the TAB-separated record format then makes a

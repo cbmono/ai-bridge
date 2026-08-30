@@ -190,7 +190,7 @@ printf '\n## Notes\n* not an action item\n' >> "$INST/AWAITING.md"
 run
 assert "sections after the queue are not counted" "$(has 'awaiting 4' "$OUT")"
 
-# The file is READ-ONLY to this hook. show-awaiting.sh greps its literal layout,
+# The file is READ-ONLY to this hook. session-banner.sh greps its literal layout,
 # so a hook that rewrote or normalised it would silently empty the startup nudge.
 new_instance; queue 3
 before="$(shasum "$INST/AWAITING.md" | awk '{print $1}')"

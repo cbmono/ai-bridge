@@ -573,7 +573,7 @@ state, and act only on deltas.
    ```
 
    Keep the `## 🔴 Awaiting you` heading and the `*` marker followed by one space exactly as shown —
-   `show-awaiting.sh` greps for them, and reshaping either silently empties the
+   `session-banner.sh` greps for them, and reshaping either silently empties the
    startup nudge. Render `_None._` under the heading when there is nothing, so the
    shape stays stable. `AWAITING.md` is **derived and gitignored**: rewrite it, but
    **never stage or commit it**.
@@ -628,7 +628,7 @@ state, and act only on deltas.
    3. End your report with exactly one line — `BOARD: rendered <path>` — giving the
       **absolute** path, because opening it is the only thing anyone does with it. There
       is no second half to that line and no one has to finish the job; a `SessionStart`
-      hook (`show-board-link.sh`) surfaces the same path at the start of every session.
+      hook (`session-banner.sh`) surfaces the same path at the start of every session.
 
    **Say the path, never that it is live.** A rendered file is only as fresh as the tick
    that wrote it, and between ticks it is stale — the page's masthead timestamp is what

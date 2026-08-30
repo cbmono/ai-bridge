@@ -1016,7 +1016,7 @@ fi
 # It must NOT run on a refresh: re-creating the file would silently undo a
 # deliberate `rm`, which is the one thing the off switch has to survive. That's
 # what FIRST_STAMP guards. It's also gitignored, so this never becomes tracked
-# state. Content is a valid empty queue, so show-awaiting.sh stays silent until
+# state. Content is a valid empty queue, so session-banner.sh stays silent until
 # the first tick fills it in.
 if [ "$FIRST_STAMP" = yes ] && [ ! -e "$TARGET/AWAITING.md" ]; then
   cat > "$TARGET/AWAITING.md" <<'AWAITING'
