@@ -465,23 +465,35 @@ ok "…and to release nothing"             "$(said 'release nothing')" yes
 ok "…and it is not called a re-entry"    "$(said 're-entered:')" no
 
 echo
-echo "== the resume path: the same tick, a new process, its own claim =="
-# `SendMessage` wakes a completed tick — no launcher, and the process it ran in is gone.
-# Every call in this file is already a separate process, so that half is real rather than
-# simulated; what carries across it is the identity, which is the whole point.
+echo "== a resume is refused in BOTH directions, which is why both guards are here =="
+# THE COMPOSED PROPERTY, and the reason neither guard replaces the other. `SendMessage` wakes
+# a completed tick in a NEW process — no launcher, nothing in memory surviving — and it meets
+# exactly one of two states on disk, in neither of which it may run:
+#
+#   its predecessor is STILL RUNNING  a live lock carrying that tick's claim. The CLAIMANT
+#                                     check answers it: a different id holds (1), a merely
+#                                     matching one is a human's call (2).
+#   its predecessor already RELEASED  no lock at all. The ABSENCE is the evidence, because
+#                                     only a launcher takes one before a tick exists (4).
+#
+# Drop the second and a resume takes a lock of its own and stands the next genuine dispatch
+# down; drop the first and a resume runs beside a live tick. Both halves, driven in order.
 RE="$TMP/resume-id"; mkdir -p "$RE"
-tick "$RE" project-manager resumed-tick
-ok "the resumed tick takes the lock itself" "$TICK_RC" 0
-ok "…as one it must release"             "$(said 'took:')" yes
-tick "$RE" project-manager resumed-tick   # woken again, later
-ok "woken again, it proceeds"            "$TICK_RC" 0
-ok "…recognising its own claim"          "$(said 're-entered:')" yes
-ok "…and is still told to release it"    "$(said 'took:')" yes
-ok "…never handed to the launcher instead" "$(said 'adopted:')" no
-ok "…and it ran both times"              "$(ran "$RE")" 2
-tick "$RE" project-manager other-tick
-ok "a different tick at that lock holds" "$TICK_RC" 1
-ok "…and did not run"                    "$(ran "$RE")" 2
+attempt "$RE"                             # the launcher, dispatching tick A
+tick "$RE" project-manager tick-A
+ok "the dispatched tick adopts"          "$TICK_RC" 0
+ok "…the launcher's lock, not one of its own" "$(said 'adopted:')" yes
+ok "…so it is never told it may release it"   "$(said 'took:')" no
+tick "$RE" project-manager resumed-R      # woken while A is still running
+ok "a resume beside a live tick holds"   "$TICK_RC" 1
+ok "…saying another tick holds it"       "$(said 'HELD BY ANOTHER TICK')" yes
+ok "…and did not run"                    "$(ran "$RE")" 1
+bash "$LOCKSH" release --instance "$RE" >/dev/null 2>&1   # A ends; the launcher releases
+tick "$RE" project-manager resumed-R      # woken again, after its predecessor is gone
+ok "a resume after that lock went is REFUSED" "$TICK_RC" 4
+ok "…saying no launcher took one for it" "$(said 'NO DISPATCH LOCK')" yes
+ok "…and still did not run"              "$(ran "$RE")" 1
+ok "…leaving no lock of its own behind"  "$(yn test -e "$RE/.tick-lock")" no
 
 echo
 echo "== the claimant is checked LAST: a stale lock is stale even to its own claimant =="
@@ -503,8 +515,9 @@ echo "== --as launcher is unchanged: it refuses a claimed lock, identity or not 
 # The strict path must not learn the new trick. A launcher carrying the very identity that
 # made the claim still gets HELD, and still writes no claim of its own.
 LA="$TMP/launcher-id"; mkdir -p "$LA"
+attempt "$LA"                             # the dispatch lock a tick may claim
 tick "$LA" project-manager L
-ok "a tick holds the lock, claimed by L" "$TICK_RC" 0
+ok "a tick claims that lock as L"        "$TICK_RC" 0
 OUT="$(TICK_CLAIMANT=L bash "$LOCKSH" acquire --instance "$LA" 2>&1)"; RC=$?
 ok "the launcher is refused even as L"   "$RC" 1
 ok "…and is not offered a re-entry"      "$(printf '%s' "$OUT" | grep -qF 're-entered:' && echo yes || echo no)" no
@@ -644,6 +657,7 @@ echo "== an empty value is not a declaration, and an empty flag is =="
 # while `--claimant ''` is a caller declaring nothing and stays exit 3. The header says so;
 # this asserts the header is describing the code and not the other way round.
 EMPTY="$TMP/empty-id"; mkdir -p "$EMPTY"
+bash "$LOCKSH" acquire --instance "$EMPTY" >/dev/null 2>&1   # a tick only ever claims
 OUT="$(TICK_CLAIMANT= CLAUDE_CODE_SESSION_ID=sess-fallback bash "$LOCKSH" acquire --as tick --instance "$EMPTY" 2>&1)"; RC=$?
 ok "an empty TICK_CLAIMANT falls through" "$RC" 0
 ok "…to the runtime's id, recorded as such" \
@@ -662,6 +676,7 @@ for combo in "session:::sess-env-only" "env::envwins:sess-loser" "flag:flagwins:
   want="${combo%%:*}"; rest="${combo#*:}"
   fl="${rest%%:*}"; rest="${rest#*:}"; ev="${rest%%:*}"; se="${rest##*:}"
   d="$PR-$want"; mkdir -p "$d"
+  bash "$LOCKSH" acquire --instance "$d" >/dev/null 2>&1     # a tick only ever claims
   CLAUDE_CODE_SESSION_ID="$se" TICK_CLAIMANT="$ev" bash "$LOCKSH" acquire --as tick \
     --instance "$d" ${fl:+--claimant "$fl"} >/dev/null 2>&1
   ok "$want wins"                        "$(lock_field_of "$d/.tick-lock.claim" claimant-source)" "$want"
@@ -669,6 +684,7 @@ done
 # A runtime that renames or reshapes its variable must not stop ticks: an unusable IMPLICIT
 # identity is ignored (no identity, old behaviour), where an unusable EXPLICIT one refuses.
 EV2="$TMP/env-junk"; mkdir -p "$EV2"
+bash "$LOCKSH" acquire --instance "$EV2" >/dev/null 2>&1     # a tick only ever claims
 OUT="$(CLAUDE_CODE_SESSION_ID='not a plain id' bash "$LOCKSH" acquire --as tick --instance "$EV2" 2>&1)"; RC=$?
 ok "a malformed session id is ignored, not fatal" "$RC" 0
 ok "…and simply leaves the claim unattributed" \
