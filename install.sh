@@ -2064,7 +2064,18 @@ PY
   done <<EOF
 $spend_roles
 EOF
-  if [ -n "$spend_unresolved" ]; then
+  if [ -z "$spend_roles" ]; then
+    # THE EMPTY CASE IS THE LOUDEST ONE, and it is the case a per-role loop cannot see:
+    # with `roleTiers` resolving to nothing at all there are no roles to iterate, so a
+    # loop alone reports success by having nothing to complain about. That is precisely
+    # the silent degradation this section exists against — every dispatch inherits the
+    # session model, and the instance looks fine. Reachable by design, since a local
+    # `"roleTiers": null` is the documented way to unset an inherited key.
+    echo "  warn  this instance has NO roleTiers at all, in either config file, so every" >&2
+    echo "        dispatched agent will resolve to NO model and inherit whatever model the" >&2
+    echo "        session happens to be on." >&2
+    spend_manual_note >&2
+  elif [ -n "$spend_unresolved" ]; then
     echo "  warn  these roles resolve to NO model, so a dispatch inherits whatever the" >&2
     echo "        session happens to be:$spend_unresolved" >&2
     echo "        Give each one's tier an entry in \`models\`, in instance.config.local.json." >&2

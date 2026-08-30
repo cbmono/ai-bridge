@@ -71,6 +71,17 @@ owner()   { sed -n 's/.*"defaultOwner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/
 # The seeded config, byte for byte, so "unchanged" is a comparison rather than a spot check.
 SEED_CFG="$(cat "$TPL/seed/instance.config.json")"
 same_as_seed() { [ "$(cat "$1/instance.config.json")" = "$SEED_CFG" ] && echo yes || echo no; }
+# WHAT "NOTHING WAS WRITTEN" MEANS FOR THE LOCAL FILE, since install.sh's step 4c now
+# seeds this machine's `models`/`roleTiers` into it on EVERY completed stamp. Its mere
+# existence therefore says nothing about the roster, and asserting `test -e` == no would
+# be asserting the seeder off rather than the prompt refused. The property these cases
+# were always about is narrower and still exact: NO IDENTITY was invented for a human who
+# was never asked. (The interrupt case is the exception and keeps the file-absent form —
+# it exits 130 from inside the roster block, so step 4c never runs at all.)
+no_identity() { # <instance>
+  [ -e "$1/instance.config.local.json" ] || { echo yes; return 0; }
+  grep -q 'ownerGithubUser' "$1/instance.config.local.json" && echo no || echo yes
+}
 # Two complete pairs and a confirmation — the answer the positive path expects.
 ANSWER='example-user-007 example-user-007@example.com
 example-user-008 example-user-008@example.com
@@ -88,7 +99,8 @@ ok "…it says why"                          "$(said 'stdin is not a terminal')"
 ok "…and prints the manual instruction"    "$(said 'ownerGithubUser')" yes
 ok "the config is byte-identical to the seed" "$(same_as_seed "$I")" yes
 ok "…so the placeholder roster survives"   "$(said 'nothing was asked')" yes
-ok "no instance.config.local.json"         "$(yn test -e "$I/instance.config.local.json")" no
+ok "no identity in instance.config.local.json" "$(no_identity "$I")" yes
+ok "…though step 4c seeded this machine's tiers" "$(yn grep -q '"roleTiers"' "$I/instance.config.local.json")" yes
 ok "the instance is otherwise stamped"     "$(yn test -L "$I/SCHEMA.md")" yes
 ok "…machinery and all"                    "$(yn test -L "$I/scripts/commit-as.sh")" yes
 
@@ -153,7 +165,7 @@ ok "a skipped roster stays the placeholder" "$(same_as_seed "$I")" yes
 printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
 ok "refreshing it still asks nothing"     "$(asked)" no
 ok "…and writes nothing"                  "$(same_as_seed "$I")" yes
-ok "…not even the local file"              "$(yn test -e "$I/instance.config.local.json")" no
+ok "…and no identity into the local file"  "$(no_identity "$I")" yes
 
 # =========================================================================== #
 echo "-- 4. a value already there is never overwritten"
@@ -170,7 +182,7 @@ ok "an existing defaultOwner: exits 0"    "$?" 0
 ok "…nothing is asked"                    "$(asked)" no
 ok "…it says the roster is left alone"    "$(said 'already set')" yes
 ok "…and the value is untouched"          "$(owner "$I")" example-user-008
-ok "…no local file is written either"     "$(yn test -e "$I/instance.config.local.json")" no
+ok "…no identity is written either"       "$(no_identity "$I")" yes
 # The other half: a `people` entry that is not the seeded placeholder shape. The
 # placeholder is recognised as `"x": "x@example.com"`, so an address that is not the
 # login's own is somebody's real roster, whatever the login looks like.
@@ -242,7 +254,7 @@ ok "EOF mid-answer: exits 0"              "$?" 0
 ok "…it asked"                            "$(asked)" yes
 ok "…and wrote nothing"                   "$(said 'nothing written (input ended)')" yes
 ok "…config byte-identical"               "$(same_as_seed "$I")" yes
-ok "…no local file"                       "$(yn test -e "$I/instance.config.local.json")" no
+ok "…and no identity in the local file"   "$(no_identity "$I")" yes
 
 # (c) The confirmation declined. The whole reason the write is a separate step.
 I="$(newinst 9)"
