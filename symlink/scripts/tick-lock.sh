@@ -239,7 +239,10 @@
 # not repeated.
 #
 # THE PER-TICK IDENTITY IS REACHABLE — MEASURED FROM INSIDE A DISPATCHED AGENT, NOT INFERRED.
-# The question is not open any more, and the answer is not the one this file used to assume:
+# The question is not open any more, and the answer is not the one this file used to assume.
+# EVERY PATH BELOW IS RECORDED, NOT READ: this script opens none of them and depends on none
+# of them, which is reason 3 further down and not an oversight. They are stamped with the CLI
+# version they were measured on so a reader can tell a stale note from a current one:
 #
 #   NOTHING PER-AGENT IS EXPORTED. Every variable in a dispatched agent's environment was
 #   read. The ids among them are all SESSION- or PROCESS-POOL-scoped, none per-agent:
