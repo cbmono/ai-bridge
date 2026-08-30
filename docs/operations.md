@@ -862,6 +862,8 @@ false`, or no rendered page yet all mean the section is **absent**, in silence, 
 non-bridge project that happens to inherit the hook gets no banner at all. The section
 prints the path and nothing more: not the page it points at, and nothing out of a task
 document. The banner as a whole reads task documents only for **counts** — how many tasks
-are dispatchable, how many are drafts — plus the `AWAITING.md` items it fences and labels
-as untrusted data on the model's channel alone. No title, no question text, no project slug
-ever reaches session context, and none of them reaches the human's copy at all.
+are dispatchable, how many are drafts — with one exception, the `AWAITING.md` items, which
+reach the **model's** copy alone and only inside the untrusted-data fence. Those item lines
+are the single place task-derived text (a title, a question, a project path) enters session
+context, and they enter it labelled as data. **The human's copy carries counts and nothing
+else**: no title, no question text, no project slug.

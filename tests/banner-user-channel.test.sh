@@ -397,12 +397,15 @@ else
 fi
 
 # =======================================================================================
-echo "== 7. the two ways the wrapper itself can fail, and neither may corrupt the channel =="
+echo "== 7. the three ways the wrapper itself can fail, and none may corrupt the channel =="
 # =======================================================================================
 # "Never malformed" is a claim about the paths where the WRAPPER breaks, not only about
 # the paths where an input is missing — and half an object spliced onto that channel is
-# the one outcome worse than the bug this whole change fixes. Both tools it leans on are
-# taken away here, one at a time, with a stub earlier in PATH than the real one.
+# the one outcome worse than the bug this whole change fixes. The three tools it leans on
+# (`awk`, `mktemp`, `sed`) are taken away here, one at a time, with a stub earlier in PATH
+# than the real one. 7c is the newest and guards a failure the other two cannot reach: a
+# projection that fails and is replaced by the MIXED buffer would deliver the fenced
+# transcript to the human, which is this change in reverse.
 STUBBIN="$TMP/stubbin"; mkdir -p "$STUBBIN"
 # §4 emptied the fixture. The awaiting queue is put back because these fallbacks are also
 # where the model's copy has to survive, and an absent AWAITING.md would make that half of
@@ -447,12 +450,31 @@ assert "…with no partial envelope around it"           "$(hasnt '{"systemMessa
 assert "…and the same fenced list, by the other route" "$(fenced "$OUT")"
 # AND NOT BY ACCIDENT OF TEXT MODE. `--format text` is the OTHER single-stream case and its
 # reader is a human, so the same block must be absent there — which is what says the two
-# fallbacks above are answering "who reads this run" rather than just "am I JSON".
-assert "…while plain --format text, read by a human, has neither" \
-  "$(eq "$(fenced "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format text 2>/dev/null)")" 1)"
+# fallbacks above are answering "who reads this run" rather than just "am I JSON". The run
+# is asserted to have SUCCEEDED and produced a banner first: `fenced ""` is 1, so a text mode
+# that had simply died would satisfy the absence and hide the regression.
+TEXT_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format text 2>/dev/null)"; TEXT_RC=$?
+assert "plain --format text still exits 0 and prints a banner" \
+  "$([ "$TEXT_RC" = 0 ] && [ "$(has 'AI-Bridge' "$TEXT_OUT")" = 0 ] && echo 0 || echo 1)"
+assert "…and it carries the count line the human gets"  "$(has '1 item needs you' "$TEXT_OUT")"
+assert "…while, being read by a human, it has neither items nor fence" \
+  "$(eq "$(fenced "$TEXT_OUT")" 1)"
 
-# NON-VACUITY: with both tools present the same command produces the envelope, so the
-# three assertions above are measuring the fallback and not a permanently broken path.
+# 7c. NO WORKING `sed`. The projection ITSELF is what breaks here, and the rule is that a
+# failed projection produces NO envelope rather than one built from the mixed buffer: that
+# buffer still carries the marked lines, so using it for the human's field would put the
+# fenced transcript in `systemMessage` — this change's own failure, on the path nobody looks
+# at. `tr` removes the markers instead, and the single stream is the model's plain copy.
+printf '#!/bin/sh\nexit 1\n' > "$STUBBIN/sed"; chmod +x "$STUBBIN/sed"
+OUT="$(PATH="$STUBBIN:$PATH" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>/dev/null)"; RC=$?
+rm -f "$STUBBIN/sed"
+assert "a broken sed: still exit 0"                    "$(eq "$RC" 0)"
+assert "…and the banner still comes out"               "$(has 'AI-Bridge' "$OUT")"
+assert "…as ONE plain stream, never a two-field envelope" "$(hasnt '{"systemMessage"' "$OUT")"
+assert "…with no marker byte left in it"               "$(hasnt "$(printf '\001')" "$OUT")"
+
+# NON-VACUITY: with every tool present the same command produces the envelope, so the
+# assertions above are measuring the fallbacks and not a permanently broken path.
 hook_run
 assert "…while the unstubbed run still emits the envelope" "$(has '{"systemMessage"' "$OUT")"
 

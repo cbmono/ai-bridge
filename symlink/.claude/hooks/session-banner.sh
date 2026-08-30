@@ -309,12 +309,21 @@ emit_json() { # <exit-status>
   # `LC_ALL=C` on both filters so sed walks BYTES — the model's copy carries item text this
   # file did not author, and a sequence that is not valid UTF-8 in the ambient locale is an
   # error from some seds and a dropped line from others. Either would silently edit the
-  # banner. A sed that fails leaves the derived string empty, and every use below falls back
-  # rather than shipping an empty channel.
+  # banner.
   human="$(printf '%s\n' "$body" | LC_ALL=C sed "/^${MODEL_MARK}/d" 2>/dev/null || true)"
   model="$(printf '%s\n' "$body" | LC_ALL=C sed "s/^${MODEL_MARK}//" 2>/dev/null || true)"
-  [ -n "$human" ] || human="$body"
-  [ -n "$model" ] || model="$body"
+  # A FAILED PROJECTION MEANS NO ENVELOPE AT ALL — never the raw buffer in its place. The
+  # buffer still carries the MARKED lines, so falling back to it for the human's field would
+  # encode the fenced transcript into `systemMessage`: the one outcome this whole section
+  # exists to prevent, arriving on the path nobody looks at. Either derivation empty (no sed
+  # on the machine, an encoder that died) is therefore the single-stream case — one plain
+  # stream, whose reader is the model, with the markers removed by `tr` since `sed` is the
+  # thing that just failed. Empty is unambiguous here: the identity line is never model-only,
+  # so a non-empty buffer always yields a non-empty human copy.
+  if [ -z "$human" ] || [ -z "$model" ]; then
+    printf '%s\n' "$(printf '%s\n' "$body" | tr -d "$MODEL_MARK" 2>/dev/null || printf '%s' "$body")"
+    exit "$1"
+  fi
   plain="$(printf '%s\n' "$model" | strip_sgr || true)"
   enc_h="$(printf '%s\n' "$human" | json_string 2>/dev/null || true)"
   enc_m="$(printf '%s\n' "${plain:-$model}" | json_string 2>/dev/null || true)"
