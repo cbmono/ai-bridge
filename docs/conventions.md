@@ -629,6 +629,71 @@ Covered by `tests/deny-baseline.test.sh` (102 assertions), and mutation-checked 
 directions: neutering one rule fails 7 assertions, making one unconditional fails 6, and
 adding a rule to `RULES` with no test here fails by name.
 
+## 20. The version is a number a change PROPOSES, and the drift check speaks only when behind
+
+**There was no version anywhere in this repo until 0.9.1** — no `VERSION` file, no
+`package.json`, no string in `README.md` or `install.sh`. That was survivable while one
+person ran one instance, and it stopped being survivable the week three instances went
+seven days missing four scripts with nothing reporting it.
+
+**Why a version at all, when the machinery is symlinked.** An instance consumes the
+template through per-file symlinks, so most merges reach it live and a "commits behind"
+counter would fire for changes that already arrived. Two kinds do *not* arrive by
+themselves, and they are the expensive ones: a **new** file under `symlink/` reaches an
+instance only when `install.sh` runs again — measured twice in one week, `deny-destructive.sh`
+([#61](https://github.com/cbmono/ai-bridge/pull/61)) and `tick-lock.sh`
+([#62](https://github.com/cbmono/ai-bridge/pull/62)) were absent in all three instances
+after merge, and the deny guard was **inert** until stamped — and `seed/` content is copied
+**once, ever**. A number that moves when those move is a signal; a number that moves on
+every merge is not.
+
+**A plain `VERSION` file, no extension.** `cat VERSION` — no parser, no dependency, no
+format to get wrong, which is the right shape for a repo made of shell and markdown. The
+alternatives were worked through and rejected: `README.md` as the *source* means parsing a
+heading out of prose (the brittle-grep class this project keeps finding broken); `VERSION.md`
+or `.txt` implies a structure that is not there; a `package.json` would exist only to hold
+one string, in a repo that publishes no package. **One source, mirrored not duplicated** —
+where a doc *displays* the number, `tests/template-version.test.sh` asserts the two agree,
+because a version that lies is worse than no version, and this repo has already shipped docs
+claiming behaviour the code did not have.
+
+**The bump is PROPOSED by the change and APPROVED by the owner. Not automatic, not
+silent.** Automatic-on-merge makes the number noise; "remember to bump" is forgotten by the
+third PR. So a change to the **core** arrives with the bump already in its diff and stated
+in its PR body, and the owner accepts it by merging or rejects it by asking for the commit
+to go. There is deliberately **no release process** behind this — no changelog, no tags, no
+packaging, no publish step. This repo has one consumer group and a symlinked template; a
+release pipeline here would be exactly the team-scale apparatus `ai-bridge-v4` spent ten
+cancellations removing.
+
+**`core` is a closed list of paths, not a judgement call**, because "is this a core change?"
+asked of every PR is a question that gets answered "no" by default. Core is what the
+installer ships or runs — `symlink/`, `seed/`, `config/`, `install.sh`, `upgrade.sh`,
+`RETIRED` — which is *exactly* the union of the two path-scoped rule files' `paths:` globs
+([`.claude/rules/machinery.md`](../.claude/rules/machinery.md),
+[`.claude/rules/installer.md`](../.claude/rules/installer.md)), so the rule loads precisely
+when an agent opens a file it governs. `tests/template-version.test.sh` asserts that
+equality, so the list cannot rot away from the globs that deliver it. Everything else —
+`docs/`, `tests/`, this repo's own `.claude/`, `.github/`, the root `scripts/` — is not
+core, and a PR touching only those proposes nothing.
+
+**The drift check speaks ONLY when behind, and a failure is never "behind".** Equal or ahead
+is byte-empty; a line at every session start is wallpaper, and wallpaper is how `AWAITING.md`
+rows come to be skipped. Unreachable, unauthenticated, offline, no git, no remote-tracking
+ref, no `VERSION` on either side, a version it cannot parse — every one of those is silence
+too, for the reason absence is never an error anywhere else in this machinery: a false "you
+are behind" trains the human to ignore the true one. The comparison is **numeric field by
+field**, so `0.10.0` is newer than `0.9.1` and the string compare that says otherwise is
+the one way this could quietly lie. And there is **no network call on the session path** at
+all: `scripts/check-template-version.sh` reaches the remote only with `--fetch`, so the
+banner reads the remote-tracking ref already on disk, which can under-report and can never
+false-alarm.
+
+**What it cannot see, stated rather than glossed:** a template checkout parked on an old
+commit whose `VERSION` happens to equal the remote's is invisible. The number moves when
+the bump convention says it moves, so this detects drift across a bump and nothing finer —
+which is why the convention and the check are one invariant and not two.
+
 ---
 
 ## Repo conventions that are not invariants
