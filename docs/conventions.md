@@ -42,6 +42,8 @@ move it here intact instead.
 | 17 | [An instruction is executable only if the agent *holds* the tool](#17-an-instruction-addressed-to-an-agent-is-executable-only-if-that-agent-holds-the-tool) | every agent body, `symlink/CONVENTIONS.md`, `seed/CLAUDE.md` |
 | 18 | [The allowlist check is pinned from both sides](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure) | `agent-tool-allowlist.test.sh` |
 | 19 | [The destructive-action baseline is a hook, and it is narrow on purpose](#19-the-destructive-action-baseline-is-a-hook-and-it-is-narrow-on-purpose) | `deny-destructive.sh`, `permissions.deny` |
+| 20 | [The version is a number a change PROPOSES](#20-the-version-is-a-number-a-change-proposes-and-the-drift-check-speaks-only-when-behind) | `VERSION`, `check-template-version.sh`, `core` paths |
+| 21 | [`/ai-bridge` reports facts that can be false, and `fix` is tiered in code](#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) | `ai-bridge.sh`, `/ai-bridge`, `session-banner.sh` |
 
 ---
 
@@ -693,6 +695,72 @@ false-alarm.
 commit whose `VERSION` happens to equal the remote's is invisible. The number moves when
 the bump convention says it moves, so this detects drift across a bump and nothing finer —
 which is why the convention and the check are one invariant and not two.
+
+## 21. `/ai-bridge` reports facts that can be false, and `fix` is tiered in code
+
+**The rejected shape first, because it is the one that keeps getting proposed.** The
+original ask was a command that *loads the rules* at session start — conventions,
+guardrails, "always defer to subagents", "always use the pm-loop". It was rejected on
+evidence and must not be quietly reintroduced. The rules are already loaded: `CLAUDE.md` is
+injected into every turn and the banner fires unprompted. More decisively, of the failures
+measured on 2026-08-30, **not one was caused by a rule not being loaded** — a stamp taken
+from a stale template clone that printed `already linked` and changed nothing, three config
+keys left uncommitted, an instance configured to call a hook it did not have, a `.tick-lock`
+bypassed by a resume. Four invisible states and one missing reader. Reciting rules into
+context enforces nothing and costs context every session; two of the proposed lines
+(*"always use the pm-loop"*) even contradict `seed/CLAUDE.md`, which says ad-hoc work must
+**not** go through the loop.
+
+**So every line the command prints is a fact that CAN BE FALSE, with its evidence.** If a
+line would read the same on a healthy instance and a broken one, it does not belong there.
+That is the test to apply to the next line somebody wants to add.
+
+**The bare form INVOKES the banner; it does not reprint it.** `/ai-bridge` `exec`s
+`session-banner.sh`, because its whole purpose is that a long session scrolled the real
+banner out of view — and the moment the two print differently, the form is a lie about what
+the session was told. `tests/ai-bridge-command.test.sh` asserts byte-identical output, so a
+header or a courtesy blank line fails the build.
+
+**`check` and `fix` read ONE list, and each row declares its own tier.** Two lists drift —
+the checker learns about seven things, the fixer about five, and the gap is silent — so
+`fix` does not know the name of a single check: it walks the same rows and dispatches on
+the declared tier. Adding a check is one edit in one place. The banner's filter is a third
+column on the same row rather than a name in the hook, for the same reason.
+
+**The three tiers are a risk classification, and collapsing them is how this becomes
+dangerous.** `idempotent` (pull the template clone, re-stamp) is repaired; `ambiguous` and
+`human` are printed and never acted on. The two that must never be repaired have live
+evidence behind them, and both are enforced structurally — the functions do not exist, and
+the script **refuses to run at all** if one is ever added:
+
+- **Uncommitted config is a QUESTION, never a defect.** An instance carried an uncommitted
+  `maxPrLoc: 2000 → 500` that was a deliberate decision by its owner, taken minutes
+  earlier and indistinguishable from drift to anything reading only the file. A `fix` that
+  reverted it would have destroyed that choice while printing a success line.
+- **A stale `.tick-lock` is not a dead one.** `scripts/tick-lock.sh release` is documented
+  as the human's override. A tick that dispatched role agents can legitimately run long, so
+  "stale" is a threshold, not a death certificate — and clearing a lock on that evidence
+  re-opens the double-dispatch that ran two ticks concurrently for 34 minutes on
+  2026-08-29.
+
+**Wiring `check` into the SessionStart hook is what turns a Finding into a mechanism.** The
+trap it reads for — pulling the template half-upgrades every unstamped instance, because an
+edit to an already-linked file arrives on the pull while a *new* file waits for a stamp —
+had no reader at all: it was prose someone had to remember to apply. On that path the
+section prints **byte-nothing** when the instance is healthy and at most two lines per
+failing check when it is not: the verdict and the one command that addresses it. The bound
+is deliberate. The banner has a measured line budget, and a section that grew with the
+number of affected files would blow it exactly when the banner most needs to be read.
+
+**What the on-disk inventory answers that the git diff cannot.** After a merge the question
+is `git diff --name-status <old>..<new> -- symlink/ | grep '^A'`, and `--since` runs
+exactly that. But **no instance records `<old>`** — there is no stamp receipt anywhere in
+this machinery — so from inside an instance that range cannot be built. The equivalent that
+can always be answered is "which of the files a stamp *would* link are not linked here",
+enumerated with the same `find` the installer walks, so the two cannot disagree about what
+a stamp covers. **Empty output is a reported answer**, never silence.
+
+---
 
 ---
 

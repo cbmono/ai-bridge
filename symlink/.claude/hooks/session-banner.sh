@@ -577,4 +577,44 @@ EOF
   [ "$n_drafts" -gt 0 ] && echo "Drafts   $n_drafts — yours to promote \`draft → ready\`"
 fi
 
+# ---------------------------------------------------------------------------------------
+# 8. STATE THAT COULD BE WRONG — `scripts/ai-bridge.sh check`, problems only.
+# ---------------------------------------------------------------------------------------
+# THIS IS THE READER FOR A TRAP THAT HAD NONE. "Pulling the template half-upgrades every
+# unstamped instance" was prose in a knowledge base: an edit to an already-linked file
+# arrives the moment the template clone is pulled, while a NEW file stays unlinked until
+# `install.sh` runs — so an instance ends up configured to call machinery it does not have,
+# with no error to say so, and the only defence was a human remembering to check. Wiring
+# the check in here is what turns that Finding into a mechanism.
+#
+# LAST, AND ONLY WHEN SOMETHING IS TRUE. `--only-problems` prints BYTE-NOTHING on a healthy
+# instance, the same contract every section above keeps: a block that appears every session
+# becomes wallpaper, and wallpaper is how the lines that matter come to be skipped. It sits
+# at the bottom because the alarm at the top (§0) is about machinery that is already broken,
+# while this is about machinery that is merely out of date.
+#
+# WHICH CHECKS SPEAK HERE IS THE SCRIPT'S DECISION, NOT THIS FILE'S. `--banner` filters on a
+# column each check declares for itself, so this hook does not carry the name of a single
+# check and cannot come to disagree with `/ai-bridge check` about what exists. Two of them
+# stay out for the banner's no-line-twice rule: the template VERSION drift already has §2b
+# above, and the config FROM column already has the settings table.
+#
+# ABSENT ⇒ NOTHING, like every other optional section — and that state is exactly what this
+# section reports about other files, so it stays silent about itself rather than erroring.
+# `--fetch` is deliberately not passed: no banner waits on a socket.
+if [ -f "$bin/ai-bridge.sh" ]; then
+  # Spelled out rather than `${tmpl:+--template "$tmpl"}`: that expansion is unquoted by
+  # construction, so a template path containing a space arrives as two arguments and the
+  # check reports on a directory that does not exist. Same shape as §2b above.
+  if [ -n "$tmpl" ]; then
+    state="$(bash "$bin/ai-bridge.sh" check --only-problems --banner --instance "$root" --template "$tmpl" 2>/dev/null || true)"
+  else
+    state="$(bash "$bin/ai-bridge.sh" check --only-problems --banner --instance "$root" 2>/dev/null || true)"
+  fi
+  if [ -n "$state" ]; then
+    echo
+    printf '%s\n' "$state"
+  fi
+fi
+
 exit 0
