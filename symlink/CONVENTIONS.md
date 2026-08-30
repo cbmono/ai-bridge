@@ -82,8 +82,46 @@ in `cbmono/ai-bridge` enforces this.
   to assert without evidence — "verified, works as expected" is a long way of saying
   nothing. Name the command, the test file and its tally, the CI run, or the URL you
   loaded.
-- Run the repo's build, lint, and tests green before opening a PR. If you can't
-  get them green, report rather than open the PR.
+- **Get the repo's build and lint green before opening a PR, and its tests green for what
+  you touched** — the tests being **the ones your change touches, not the whole suite**
+  (next bullet, which is where the scope of "tests" is settled). If you can't get that
+  green, report rather than open the PR.
+- **The full suite belongs to CI — locally, run the tests your change touches.** The
+  required check on the PR runs everything on a clean machine anyway, so a full local run
+  buys the same answer twice and the second copy is the expensive one. Concretely:
+  **run the tests your change touches, plus anything that exercises the file you edited**,
+  and **do not run the full suite locally as a matter of course**.
+  **This is a rule about RE-RUNNING, not about testing.** Follow it literally and you still
+  test before every push — that is the point of it, not a loophole in it.
+  **Keep the per-branch signal, and this is why:** an agent needs a result **for its own
+  branch, before it pushes**, because batching several agents' work tells you *the batch*
+  is broken without telling you *whose change* broke it. Delete that sentence and the rule
+  reads as "stop testing locally", which is the one thing it does not say.
+  **The escape hatch exists and is bounded.** A full local run is legitimate when your
+  change touches **shared machinery every test loads** — a common fixture, a helper each
+  file sources, a config every test reads — and in that case **the PR body must state why
+  the full run was needed**. It is an exception carrying a stated cost, not a free choice.
+  **Do not poll a long-running local run.** This is its own prohibition, not a restatement
+  of the one above: you can obey "don't run the full suite" and still burn an hour
+  watching some *other* long job. A run you started and are now checking every minute is
+  the **parked-watcher failure `check-dispatch.sh` exists for, with a pulse** — a
+  40-minute poll and a parked watcher cost the same and look equally busy. Start a long
+  job only if you will leave it alone; otherwise stop it.
+  **The trade, with the measured numbers, so you can tell when it stops applying.** One CI
+  round-trip costs **about 9 minutes of wall clock and no tokens** (8-10 minutes on a
+  clean runner, measured across `cbmono/ai-bridge`'s recent runs); the local full run
+  measured **2026-08-29** cost **39m 47s and 269.4k tokens** on a machine that was also
+  running a `/pm-loop` tick. Same answer, several times the wall clock, and tokens on top.
+  This is a **proportion argument, not a ban**: a *red* local run would have saved a CI
+  round-trip, and the day a repo's CI is slower than its local suite, this rule inverts.
+  **The local run never was the gate.** In `cbmono/ai-bridge`, the `harness suite` job is a
+  **required check** on every PR
+  ([ai-bridge#42](https://github.com/cbmono/ai-bridge/pull/42)), and branch protection sets
+  **`strict=true`**, which forces that check to run **against the merged base** before the
+  PR can land. Your machine cannot produce that verdict, so skipping the local full run
+  asks nobody to trust **less** verification — it moves the verification to the only place
+  the merge gate actually reads. `tests/local-vs-ci-testing.test.sh` in `cbmono/ai-bridge`
+  pins the clauses above by name.
 - **PR size is a heuristic that suggests a split, never a gate.** Before opening, check
   the diff against **`maxPrLoc`** in `instance.config.json` (**absent that key, 500**);
   past it, say so in the PR body as one `⚠️` line — the figure and the split you would make
