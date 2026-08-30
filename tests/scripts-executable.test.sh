@@ -472,7 +472,8 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # 55 -> 56: symlink/scripts/pr-body-clearance.sh (ai-bridge-v5/task-005), same reason.
 # 56 -> 57: symlink/scripts/check-template-version.sh (ai-bridge-v5/task-008), one more
 # executable machinery file in the per-file enumeration.
-EXPECTED_ASSERTIONS=57
+# 57 -> 58: symlink/scripts/ai-bridge.sh (ai-bridge-v5/task-011), same reason.
+EXPECTED_ASSERTIONS=58
 TOTAL=$((pass + fail))
 # EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
 # it annotates, so a merge can plausibly keep the annotations and lose the assignment —
