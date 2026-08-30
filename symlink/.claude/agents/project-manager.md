@@ -135,14 +135,13 @@ state, and act only on deltas.
    scripts/tick-lock.sh acquire --as tick --agent project-manager
    ```
 
-   - **0** — the lock is yours; carry on with this step. It printed which case you got,
-     and that decides exactly one thing, in step 8: `took:` means you created the lock and
-     you release it when your tick ends; `adopted:` means it is the launcher's dispatch
-     lock and **the launcher** releases it when you report — release that one yourself and
-     you delete a lock the loop is still holding for you. A third line, `re-entered:`, may
-     precede either: it means this is not your first acquire in this tick and **nothing
-     changed** — carry on exactly as you would have, and obey the `took:`/`adopted:` line
-     printed with it, which is the same obligation your first acquire gave you.
+   - **0** — the lock is yours; carry on with this step. It printed `adopted:`, which is
+     now its only success: that lock is the launcher's dispatch lock and **the launcher**
+     releases it when you report. Release it yourself and you delete a lock the loop is
+     still holding for you — which is why step 8 releases nothing at all. A `re-entered:`
+     line may precede it: that means this is not your first acquire in this tick and
+     **nothing changed** — carry on exactly as you would have, under the same `adopted:`
+     obligation your first acquire gave you.
    - **1** — the claim on that lock is **not yours** as far as anything on disk can show;
      read it as somebody else. **Report and hold**: dispatch nothing,
      adopt nothing as your in-flight set, open no ledger entry, release nothing, and end
@@ -157,6 +156,15 @@ state, and act only on deltas.
      `scripts/tick-lock.sh release` is their answer, not yours.
    - **3** — it could not be written at all. Report that and stop; a guarantee nothing
      can keep is the failure the lock replaces, not a reason to run unguarded.
+   - **4** — REFUSED: there is no lock, so **no launcher dispatched you**. `/pm-loop`
+     step 1 takes the lock in the same breath as the spawn, so a tick that finds none
+     did not come through it — you were resumed with a message, or started by hand. **End
+     the tick here**: dispatch nothing, adopt nothing, open no ledger entry, release
+     nothing, take no lock of your own. Say in one line that you were refused as a
+     resumed tick and that a fresh tick is dispatched by running `/pm-loop`. This is the
+     one absolute in the resume rule (`CONVENTIONS.md` → "A subagent works ONE task"):
+     you would otherwise re-enter a loop whose state has moved on, which is how two ticks
+     ran at once on 2026-08-30.
    - **The script itself missing** is a different thing from any of those, and it is the
      likely case on an instance stamped before the lock shipped: `scripts/tick-lock.sh` is
      a per-file symlink `install.sh` creates, so merging it reaches nobody until someone
@@ -173,7 +181,7 @@ state, and act only on deltas.
    no acquire runs, nothing is written, and a genuine dispatch seconds later correctly
    reports the lock free — because it is. Measured 2026-08-30, an hour after the lock
    merged: a resumed tick and a dispatched tick ran at once and the human spotted it
-   before the machinery did. Whatever makes a tick run must take the lock, so you take it
+   before the machinery did. Whatever makes a tick run must pass this gate, so you run it
    too. That the lock is already held by the launcher that spawned you is not a conflict
    and the script does not treat it as one — an unclaimed lock is precisely the dispatch
    you are.
@@ -188,6 +196,13 @@ state, and act only on deltas.
    a re-entry and not an accusation — hand it to the human. There is
    nothing to remember between calls and nothing to pass along: the command above is the
    whole of it, unchanged, every time you run it.
+
+   **And you never take a lock of your own, which is the whole of the exit-4 case above.**
+   Until 2026-08-30 a tick that found no lock created one and carried on; the resumed tick
+   then ran and the next genuine dispatch stood down instead. Exactly one tick ran, and it
+   was the wrong one. A tick is now the one thing that is **never** resumed — no
+   exception, no "unless" — and the absence of a lock is the evidence, because the only
+   thing that takes one before a tick exists is the launcher.
 
    **Read it from disk, never from your brief and never from anyone's memory.** The loop
    that spawned you is long-lived and its context gets summarised, so it cannot tell you
@@ -292,6 +307,14 @@ state, and act only on deltas.
    moves them through `in-progress`/`in-review`/`done`); never spawn an agent for
    them.
 
+   **One agent per task, and a resume only for that task's next round.** The rule is
+   stated once, in `CONVENTIONS.md` → "A subagent works ONE task", and this step does not
+   restate it: same task and same PR, wake the agent that already did it; a different
+   task, a different PR or an unrelated job, spawn a fresh one. Nothing can check that
+   from the outside — you hold it — and handing a second task to an agent that finished
+   its first is how one of them ended a day carrying 163k tokens across three unrelated
+   jobs.
+
    **Dispatch only your own human's work.** Before spawning anything for a task, run
    `scripts/task-owner.sh <task-path>` — it implements the four-step chain above, so
    never re-derive ownership by reading the fields yourself. **Exit 0 is the only
@@ -386,7 +409,8 @@ state, and act only on deltas.
    this check exists precisely so that failure is not automated. On exit 1, read the
    agent's final message and its worktree first: the work is usually already committed,
    sometimes already pushed, and one message asking it to open the PR on what it has
-   recovers it. Anything beyond that is the human's call — surface it in `AWAITING.md`.
+   recovers it — the same task and the same PR, which is precisely the resume the rule in
+   step 3 allows. Anything beyond that is the human's call — surface it in `AWAITING.md`.
    Measured 2026-08-28: two agents parked this way and both reported as `completed`; the
    wall-clock rule missed it (one parked at 16 minutes), the two-round review cap missed it
    (neither reached review), and the completion notification *was* the failure.
@@ -713,27 +737,27 @@ state, and act only on deltas.
    documents that did not move, so a tick whose only act was refreshing them still
    reports `noop: true` (`/pm-loop` step 3). Never stage or commit the rendered page.
 
-   **Finally, release the tick lock — but only the one that is yours to release.** The
-   last act of the tick, decided by what step 0.5 printed and by nothing else:
+   **Finally, release the tick lock — which means: do not.** There is no lock a tick may
+   release, so the last act of the tick is to run nothing here:
 
    ```bash
-   scripts/tick-lock.sh release      # ONLY if step 0.5 printed `took:`
+   # nothing to run: a tick releases no lock, ever
    ```
 
-   If step 0.5 ran more than once, the LAST thing it printed is still the same obligation
-   as the first — a `re-entered:` re-states it rather than changing it — so there is no
-   ambiguity to resolve here.
-
-   `took:` means **you** created the lock — the resumed-tick case, where no launcher is
-   waiting on you and nothing else will ever clear it, so skipping this strands a dead
-   lock that refuses every dispatch until it goes stale hours later. `adopted:` means the
-   launcher created it and releases it when your completion notification arrives
-   (`/pm-loop` step 2); that notification is a signal you cannot see, and releasing here
-   would free the lock while the loop still counts you as in flight. A tick that **held**
-   at step 0.5 releases nothing at all — that lock belongs to the tick still running, and
-   deleting it re-opens the double-dispatch the lock exists to close. `release` is
-   unconditional and cannot check any of this for you: it holds no identity because it is
-   the human's override, so the condition lives here, in the caller.
+   **You have no lock to release, and that is now true in every case.** The only lock you
+   can be running under is the launcher's, printed `adopted:` at step 0.5, and the
+   launcher releases it when your completion notification arrives (`/pm-loop` step 2) —
+   that notification is a signal you cannot see, and releasing here would free the lock
+   while the loop still counts you as in flight. If step 0.5 ran more than once, a
+   `re-entered:` re-stated that same obligation rather than changing it, so there is
+   nothing to resolve here either. A tick that **held** (exit 1), one handed a claim it
+   could not attribute (exit 2), and one refused as a resume (exit 4) all release nothing
+   too: that lock belongs to the tick still running, or to the human the script handed the
+   decision to, and deleting it re-opens the double-dispatch the lock exists to close.
+   There is no longer a fourth case — a tick that created its own lock — because creating
+   one is exactly what step 0.5 now refuses. `scripts/tick-lock.sh release` stays
+   unconditional and holds no identity, because it is **the human's override**; it is not
+   yours to run at the end of a tick.
 
 9. **Leave for the human.** By default, do not act on a `draft` beyond surfacing it — it
    awaits the human's approval (a project that delegates promotion is the one exception,
