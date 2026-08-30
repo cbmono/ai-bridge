@@ -54,6 +54,35 @@ OTHER_SHA="0123456789abcdef0123456789abcdef01234567"
 # below this number turns the `a very long body` case red.
 INCIDENT_CHARS=14673
 
+# --- the corpus behind the ROW bound ------------------------------------------
+# THESE ARE FIXTURES, NOT A LIVE READ, AND THAT IS DELIBERATE. They were measured on
+# 2026-08-30T16:24Z in bytes under `LC_ALL=C` over every acceptance-criteria row of three
+# real pull requests (34 rows). Two of the three were OPEN, and #70's body was edited
+# between two reads twenty-four minutes apart — its worst evidence cell went 325 -> 189
+# while this change was being written. A gate calibrated against a body anyone can edit
+# has no baseline at all, so the boundary values live here as constants and the harness
+# never asks the host for them.
+#
+# The bound separates the corpus exactly: everything in #67 and #70 clears, and the three
+# rows of #71 that carried shell one-liners and their own reasoning do not.
+ROW_CEILING=400            # midpoint of the empty band 378-421, the widest gap
+ROW_FLOOR=13               # midpoint of `see above` (9) and `CI run 1234 green` (17)
+PR67_WORST_CELL=377        # largest honest cell in the corpus  -> must CLEAR
+PR70_WORST_CELL=189        #                                    -> must CLEAR
+PR70_SHORTEST_CELL=19      # shortest honest cell in the corpus -> must CLEAR
+# #70's ROUND-2 body is the strongest single case for this ceiling, because it was
+# rewritten to the house style AFTER the style was written and it is criteria-complete:
+# 11 rows, longest whole ROW 264 bytes, longest evidence CELL 189. A recently-written,
+# fully-evidenced body therefore sits at less than half the ceiling that catches #71 —
+# so the bound is refusing bloat and not refusing thoroughness. A ceiling this case could
+# not clear would be set too tight, and that is asserted below rather than asserted in a
+# PR body nobody can re-run.
+PR70_R2_WORST_ROW=264
+PR71_BLOATED_CELLS="422 462 487"   # the three rows of #71      -> must REFUSE
+# #71's evidence cells in the order they appear in its table, so a whole-table fixture
+# reproduces which rows the reader names, not merely how many.
+PR71_ROW_CELLS="341 317 462 334 271 298 187 340 487 422 160 266"
+
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pr-body-clearance.XXXXXX")" || {
   echo "pr-body-clearance.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -231,6 +260,163 @@ ok "the only magnitude comparison is on \$#"       "$mags" 0
 ok "the count is printed on the clearing path"     \
    "$(serve "$(body_file '## Description (TL;DR)' 'x' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
       "$SCRIPT" 42 2>&1 | grep -c 'characters (information only')" 1
+# The awk side of the same question, because the ONE length this script does compare is
+# computed there. Two comparisons read a measured length: the ceiling and the floor. A
+# third would be a bound nobody measured. And the classifier is asserted never to SEE the
+# body's character count at all — a stronger statement than "it is not compared", since a
+# body cap can only be built out of a number the comparing code can reach.
+ok "the classifier compares a length twice"        \
+   "$(grep -cE 'len > ceiling|len < floor' "$SCRIPT" || true)" 2
+ok "…and never sees the body's own count"          \
+   "$(sed -n '/^table_scan() {/,/^}/p' "$SCRIPT" | grep -c 'body_chars' || true)" 0
+# The two thresholds are pinned to the measured values HERE as well as in the script, so
+# "somebody rounded it up" is a red test and not a diff nobody reads.
+ok "the ceiling is the measured one"               \
+   "$(grep -c "^CRITERIA_EVIDENCE_CEILING=$ROW_CEILING\$" "$SCRIPT" || true)" 1
+ok "the floor is the measured one"                 \
+   "$(grep -c "^CRITERIA_EVIDENCE_FLOOR=$ROW_FLOOR\$" "$SCRIPT" || true)" 1
+
+echo
+echo "== the ROW bound: the reader #66's two-sided bar never had =="
+# THE RULE EXISTED AND NOTHING READ IT. `CONVENTIONS.md` bounded the evidence column on
+# both sides on 2026-08-29; ai-bridge#71 breached it the next day with three rows of
+# 500-600 characters, inside the machinery built to end unread rules. Everything below
+# drives the reader that closes that, at the measured boundaries rather than near them.
+cell() { printf '%*s' "$1" '' | tr ' ' 'x'; }   # an evidence cell of exactly <n> bytes
+
+row_body() { # <evidence-bytes>... -> a conforming body with one criteria row per argument
+  local -a lines
+  lines=('## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE")
+  local n i=0
+  for n in "$@"; do
+    i=$((i+1))
+    lines+=("| criterion number $i | ✓ | $(cell "$n") |")
+  done
+  body_file "${lines[@]}"
+}
+
+serve "$(row_body "$PR67_WORST_CELL")"
+expect "#67's largest honest cell ($PR67_WORST_CELL) -> clear" 0 42
+serve "$(row_body "$PR70_WORST_CELL")"
+expect "#70's largest cell ($PR70_WORST_CELL) -> clear" 0 42
+serve "$(row_body "$PR70_SHORTEST_CELL")"
+expect "#70's shortest cell ($PR70_SHORTEST_CELL) -> clear" 0 42
+# The round-2 case, built as a WHOLE ROW of exactly 264 bytes so the number in the comment
+# above is the number under test: criterion text padded out, evidence at #70's own worst
+# cell. It must clear with margin, not by a byte.
+r2_evidence="$(cell "$PR70_WORST_CELL")"
+# The mark is 3 bytes in UTF-8 and `${#var}` counts characters, so the width is computed
+# from the parts rather than from a string length that would disagree with the gate.
+r2_pad=$(( PR70_R2_WORST_ROW - PR70_WORST_CELL - 23 ))
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
+                   "| criterion $(cell "$r2_pad") | ✓ | $r2_evidence |")"
+r2_row="| criterion $(cell "$r2_pad") | ✓ | $r2_evidence |"
+ok "…and the fixture row really is that wide" \
+   "$(printf '%s' "$r2_row" | LC_ALL=C wc -c | tr -d ' ')" "$PR70_R2_WORST_ROW"
+expect "#70 round-2's worst ROW (${PR70_R2_WORST_ROW}B, cell ${PR70_WORST_CELL}B) -> clear" 0 42
+for n in $PR71_BLOATED_CELLS; do
+  serve "$(row_body "$n")"
+  expect "#71's bloated cell ($n) -> refuse" 3 42
+done
+
+# ON the boundary, both sides, so a threshold moved by one goes red here.
+serve "$(row_body "$ROW_CEILING")"
+expect "exactly the ceiling ($ROW_CEILING) -> clear" 0 42
+serve "$(row_body "$((ROW_CEILING + 1))")"
+expect "one byte over the ceiling -> refuse" 3 42
+serve "$(row_body "$ROW_FLOOR")"
+expect "exactly the floor ($ROW_FLOOR) -> clear" 0 42
+serve "$(row_body "$((ROW_FLOOR - 1))")"
+expect "one byte under the floor -> refuse" 3 42
+
+# THE WHOLE OF #71'S TABLE, in its own row order. This is the regression: not "a long row
+# is caught" but "these three rows, and only these three, and by their index".
+# shellcheck disable=SC2086
+serve "$(row_body $PR71_ROW_CELLS)"
+expect "#71's twelve rows -> refuse" 3 42
+says   "  ...counting exactly the three that breached" "but 3 acceptance-criteria"
+says   "  ...naming row 3 by index and length"  "row 3 over the CEILING at 462 bytes"
+says   "  ...naming row 9 by index and length"  "row 9 over the CEILING at 487 bytes"
+says   "  ...naming row 10 by index and length" "row 10 over the CEILING at 422 bytes"
+says   "  ...and quoting the criterion text"    "criterion number 9"
+says_not "  ...while row 1, inside the bound, is not named" "row 1 over"
+
+echo
+echo "== the bound is on ONE CELL — not the row, and never the body =="
+# A row is criterion text + mark + evidence. The criterion is copied VERBATIM out of the
+# task document, so an author cannot shorten it; a bound that charged for it would refuse
+# a correct PR for obeying a different rule. #67's worst whole ROW is 489 bytes with a
+# 377-byte cell, so this case is the corpus, not a hypothetical.
+LONGCRIT="$(cell 600)"
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
+                   "| $LONGCRIT | ✓ | \`foo.test.sh\` 40/0 |")"
+expect "a 600-byte CRITERION with short evidence -> clear" 0 42
+# …and the same row with the lengths swapped is the case that must refuse, which is what
+# makes the one above a statement about the COLUMN rather than about leniency.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
+                   "| a short criterion | ✓ | $LONGCRIT |")"
+expect "…the same 600 bytes in the EVIDENCE cell -> refuse" 3 42
+
+echo
+echo "== the floor refuses what CONVENTIONS.md names as failing it =="
+for evidence in 'ok' 'done' 'see above' 'yes' 'verified'; do
+  serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
+                     "| the retry backs off on 429 | ✓ | $evidence |")"
+  expect "evidence '$evidence' -> refuse" 3 42
+done
+says "  ...telling the author what to name instead" "Name the artifact a reader can re-run"
+# …and the shortest thing the document offers as REAL evidence clears, so the floor is a
+# bound and not a general demand for more words.
+for evidence in '`foo.test.sh` 40/0' 'CI run 1234 green' '`shellcheck -x run.sh` clean'; do
+  serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
+                     "| the retry backs off on 429 | ✓ | $evidence |")"
+  expect "evidence '$evidence' -> clear" 0 42
+done
+
+# An EMPTY evidence cell is the one a "skip the mark column" reader would have missed
+# entirely: it would take the criterion text as the evidence and clear the single row in
+# the table that has no evidence at all.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
+                   '| the retry backs off on 429 | ✓ |  |')"
+expect "an EMPTY evidence cell -> refuse" 3 42
+says   "  ...at length zero, not at the criterion's length" "under the FLOOR at 0 bytes"
+
+# The mark in the last column means the evidence is somewhere this reader does not look,
+# and saying that is more useful than measuring a glyph.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+                   '| Criterion | Verified by | ✓ |' "$TABLE_RULE" \
+                   '| the retry backs off on 429 | `foo.test.sh` 40/0 | ✓ |')"
+expect "the ✓ column LAST -> refuse" 3 42
+says   "  ...naming that, rather than measuring the mark" "has NO evidence column"
+
+echo
+echo "== the row bound never becomes a body bound =="
+# THE ANTI-LENGTH-GATE CASE, RE-RUN THROUGH THE NEW ELEMENT. The incident body clears
+# above; this is the same statement made at the scale the row bound could have tempted
+# someone to sum: forty rows, each just inside the ceiling, is a criteria table of ~16,000
+# bytes and it clears, because nothing adds these numbers up.
+# shellcheck disable=SC2046
+serve "$(row_body $(for _ in $(seq 40); do printf '%s ' "$ROW_CEILING"; done))"
+expect "forty rows each AT the ceiling -> clear" 0 42
+says   "  ...with the total still reported as information only" "characters (information only"
+
+# A refusal for a missing element still carries its promise WORD FOR WORD. The row bound
+# is a different refusal with a different code, and it must not have edited this one.
+serve "$(body_file 'No shape at all here.')"
+expect "a shapeless body -> refuse on STRUCTURE" 1 42
+says   "  ...with the never-on-length promise verbatim" \
+       "This refuses on missing STRUCTURE, never on length: a long body carrying"
+says   "  ...and it is a DIFFERENT code from the row bound" "MISSING:"
+
+# Untrusted text: the excerpt of a criterion is the one thing from the body this script
+# echoes, so an escape sequence in it must not reach the terminal.
+ESC="$(printf 'a\033[31mred\033[0m criterion')"
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
+                   "| $ESC | ✓ | ok |")"
+expect "a criterion carrying an ANSI escape -> refuse" 3 42
+ok "…and the escape does not survive into the message" \
+   "$(printf '%s' "$LAST_OUT" | grep -c "$(printf '\033')" || true)" 0
+says "  ...while the readable part of it still names the row" "red"
 
 echo
 echo "== a missing element is a refusal, and it is named =="

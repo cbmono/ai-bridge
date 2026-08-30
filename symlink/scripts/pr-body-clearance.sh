@@ -88,28 +88,43 @@
 #      evidence column carried shell one-liners and their own reasoning — inside the very
 #      machinery built to end unread rules. This element is that reader.
 #
-#      THE CELL, NOT THE ROW, AND THAT CHOICE IS FORCED BY THE DATA. A row also carries
-#      the criterion text VERBATIM from the task document, which its author may not
-#      shorten; charging that against a bound would punish an author for obeying a
-#      different rule. Measured over the whole criteria table of three real pull requests
-#      on 2026-08-30 (34 rows), whole-row length does not separate them at all — #70's
-#      worst row is 577 bytes and #71's is 588 — while the evidence cell separates them
-#      cleanly:
+#      THE CELL, NOT THE ROW. A row also carries the criterion text VERBATIM from the
+#      task document, which its author may not shorten; charging that against a bound
+#      would punish an author for obeying a different rule. Whole-row length is also
+#      empirically useless here: at 2026-08-30T16:00Z the worst whole ROW of #70 (577
+#      bytes) and of #71 (588) were eleven bytes apart, while their evidence cells were
+#      325 and 487.
 #
-#          PR     rows   evidence cell, worst      verdict wanted
-#          #67     11    377                       pass
-#          #70     11    325                       pass
-#          #71     12    422, 462, 487             fail (exactly these three)
+#      THE CORPUS, re-read at 2026-08-30T16:24Z — every row of the acceptance-criteria
+#      table of three real pull requests, 34 rows, bytes under LC_ALL=C:
+#
+#          PR              rows   evidence cell                 verdict wanted
+#          #67 (merged)     11    92 .. 377                     pass
+#          #70 (open)       11    19 .. 189                     pass
+#          #71 (open)       12    160 .. 341, then 422/462/487  fail (exactly those 3)
 #
 #      CEILING 400 BYTES — the midpoint of the empty band 378-421, which is the widest
 #      gap in the corpus. It leaves 23 bytes over the largest honest cell and stops 22
 #      short of the smallest offending one, and it fails EXACTLY the three rows the
 #      incident names and no other row of the 34. FLOOR 13 BYTES — the midpoint of 9 and
 #      17, likewise measured: `see above` (9) is the longest thing `CONVENTIONS.md` names
-#      as a floor FAILURE, and `CI run 1234 green` (17) is the shortest thing it offers as
-#      real evidence, with #70's shortest genuine cell also 17. Both numbers therefore
-#      have a margin on each side rather than sitting on an observation, and neither was
+#      as a floor FAILURE, and `CI run 1234 green` (17) is the shortest thing it offers
+#      as real evidence, with the corpus bottoming out at 19. Both numbers therefore have
+#      a margin on each side rather than sitting on an observation, and neither was
 #      chosen for being round.
+#
+#      THE STRONGEST SINGLE CASE FOR 400 IS #70'S ROUND-2 BODY, because it was rewritten
+#      to this house style AFTER the style was written and it is complete on all 11
+#      criteria: longest whole ROW 264 bytes, longest evidence CELL 189. A recent,
+#      fully-evidenced body sits at less than half the ceiling that catches #71 — so this
+#      bound refuses bloat and not thoroughness, and a ceiling that could not clear that
+#      body would be set too tight. `tests/pr-body-clearance.test.sh` drives that exact
+#      row rather than leaving the claim in a PR body nobody can re-run.
+#
+#      TWO OF THE THREE WERE OPEN, AND ONE MOVED UNDER THE MEASUREMENT — #70's body was
+#      edited between the 16:00 and 16:24 reads (worst cell 325 then 189). A live PR body
+#      is not a fixture, so the four boundary values are pinned as FIXTURES in
+#      `tests/pr-body-clearance.test.sh` and never re-derived from the host.
 #
 #      IT IS COUNTED IN BYTES, UNDER `LC_ALL=C`, ON PURPOSE. `length()` counts characters
 #      in some awks and bytes in others, so an unpinned locale would put the threshold in
@@ -496,8 +511,12 @@ report_rows() { # <scan> <label> -> 0 clear, 3 at least one row outside the boun
   echo "refuse: $label carries both structural elements, but $n acceptance-criteria" >&2
   echo "        row(s) fall outside the two-sided bound CONVENTIONS.md puts on the" >&2
   echo "        EVIDENCE column — floor $CRITERIA_EVIDENCE_FLOOR bytes, ceiling $CRITERIA_EVIDENCE_CEILING bytes:" >&2
+  # `set -u` is on and a short line would leave a field unset, so every field is read
+  # through a default. The emitted lines always carry five, but a refusal that aborted the
+  # script on an unset variable would be a gate that stopped reporting half-way.
   while IFS="$tab" read -r _ kind idx len text; do
-    [ -n "${kind:-}" ] || continue
+    kind="${kind:-}"; idx="${idx:-?}"; len="${len:-?}"; text="${text:-}"
+    [ -n "$kind" ] || continue
     if [ "$kind" = mark ]; then
       echo "        row $idx has NO evidence column: \"$text\"" >&2
       echo "          Its last cell is the ✓/✗ mark. Evidence goes in the LAST column —" >&2
