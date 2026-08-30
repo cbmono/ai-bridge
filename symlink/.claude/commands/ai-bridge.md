@@ -11,6 +11,13 @@ That is the whole command. Every fact, every warning and every repair lives in t
 script, so the answer is the same whether a human runs it in a terminal or a session runs
 it here — and there is no second copy of any of it in this file to drift from the first.
 
+**Relay it as markdown — never inside a code fence, and never re-wrapped.** The script
+already emitted the emphasis this channel renders: piped output is styled with `**bold**`
+on the `⚠` lines, because a relayed answer is rendered as markdown and ANSI does not
+survive the relay at all (measured — 0 of 4 escape bytes reached the reader). A fence turns
+that emphasis back into literal asterisks and hands the human the flat page the styling
+exists to replace.
+
 ## The three forms
 
 | You ran | It does |

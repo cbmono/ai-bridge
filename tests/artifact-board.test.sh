@@ -144,6 +144,32 @@ j = t.find('<details class="proj', i)
 sys.stdout.write(t[i:] if j < 0 else t[i:j])
 PYC
 }
+# THE RAIL, NOT THE WHOLE CARD. A card holds the rail AND the task table, and every
+# task title appears in that table whether or not the task is waiting on you — so
+# "this task is not in the queue" asserted over the card is asserting something else
+# entirely, and would be red for a reason that has nothing to do with the queue. Empty
+# output when the project has no rail at all, which is itself the answer to "is anything
+# waiting here?".
+rail_of() { # <file> <project title> -> just that project's rail section, on stdout
+  card "$1" "$2" | python3 -c "
+import sys
+t = sys.stdin.read()
+i = t.find('<section class=\"rail\"')
+if i < 0:
+    sys.exit(0)
+j = t.find('</section>', i)
+sys.stdout.write(t[i:j if j > 0 else len(t)])"
+}
+# The renderer joins its parts with newlines, so two spans that render side by side sit
+# on two LINES in the file. Adjacency is a real property for some of what follows — "the
+# date sits with the title" is exactly that, and a before/after check would also pass a
+# date six chips away — so this joins tag boundaries back up rather than settling for the
+# weaker claim. Only whitespace BETWEEN tags is collapsed; nothing inside a tag or a text
+# node moves.
+flat() { python3 -c "
+import re, sys
+sys.stdout.write(re.sub(r'>\s*\n\s*<', '><', sys.stdin.read()))"
+}
 fhas_in()   { grep -qF -- "$1" && echo 0 || echo 1; }
 fhasnt_in() { grep -qF -- "$1" && echo 1 || echo 0; }
 before_in() { # <a> <b> — 0 when a appears before b on stdin
@@ -249,6 +275,20 @@ assert "…and so does a project with no project.md at all" "$(card "$BOUT" 'No 
 assert "a \`..\` slug reads nothing outside projects/" "$(fhasnt '1999-12-31' "$BOUT")"
 assert "…and the file it would have read really is there" \
   "$(yes_if test -s "$TMP/board15/project.md")"
+# …AND IT SITS WITH THE TITLE. The date qualifies the title — "this project, started
+# then" — and reading it used to mean crossing six count chips to the far end of the
+# line. ORDER is the whole assertion, so it is made on the order and not on presence.
+assert "the date follows the title immediately"      \
+  "$(card "$BOUT" 'Two decisions' | flat | fhas_in 'Two decisions</span><span class="pdate"')"
+assert "…with its treatment unchanged"               "$(fhas 'class="pdate" title="Project created' "$BOUT")"
+# THE CHIPS KEEP THEIR PLACE. They are still after the date and still before the ✕, and
+# `.counts` now takes the free space itself instead of being pushed right by `.ptitle`.
+assert "…and the chips still follow it"              \
+  "$(card "$BOUT" 'Two decisions' | before_in '<span class="pdate"' 'class="c you"')"
+assert "…still ahead of the ✕"                       \
+  "$(card "$BOUT" 'Two decisions' | before_in 'class="c you"' 'class="pclose"')"
+assert "…and .counts holds its own end of the line"  "$(fhas '.counts{display:flex;gap:.35rem;flex-wrap:wrap;margin-left:auto}' "$BOUT")"
+assert "…which needs .ptitle to stop growing"        "$(fhas '.ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto' "$BOUT")"
 
 echo "== the ✕ copies a command and can never close anything =="
 assert "it copies /close-project <slug>"             "$(fhas 'data-copy="/close-project wants-me"' "$BOUT")"
@@ -319,11 +359,400 @@ assert "…two render as a pair"                       "$(fhas '>002</button>' "
 assert "…never the full slug"                        "$(fhasnt '>task-001-<' "$OUT")"
 
 echo "== questions =="
-assert "a Qn handle exists per question"             "$(fhas 'Q2: ' "$OUT")"
-assert "carried question text is shown"              "$(fhas 'Q1 body?' "$OUT")"
+# The fixture's two entries are `Q1 body?` (numbered) and `advisor: escalated one?`
+# (escalated, and carrying NO number of its own) — so this one task exercises both
+# branches. The first is labelled Q1 because IT SAYS Q1, not because it is first.
+assert "a numbered handle is labelled from the text"  "$(fhas 'Q1: ' "$OUT")"
+assert "carried question text is shown"              "$(fhas 'Q1: body?' "$OUT")"
 assert "an escalated concern says where it came from" "$(fhas 'could not settle it' "$OUT")"
-assert "…and the advisor: marker is stripped"        "$(fhasnt 'Q2: advisor:' "$OUT")"
+assert "…and the advisor: marker is stripped"        "$(fhasnt 'advisor: escalated' "$OUT")"
+# THE SECOND QUESTION IS NOT `Q2`. It carries no number, it is merely SECOND, and
+# calling that Q2 is the entire defect this file now guards. Scoped to the card, so the
+# fixture's other project cannot make it pass or fail.
+assert "…and an unnumbered question is never named by its position" \
+  "$(card "$OUT" 'Live work' | fhasnt_in 'Q2')"
 assert "a question on a READY task reaches the rail" "$(fhas 'class="verb">question' "$OUT")"
+
+# ---------------------------------------------------------------------------
+# A QUESTION IS NAMED BY THE `Q<n>` IT CARRIES, NEVER BY ITS POSITION.
+#
+# THE DEFECT THIS BLOCK EXISTS FOR, from the live bundle on 2026-08-30:
+# `ai-bridge-v5/task-012` had Q1 in `answered_questions` and Q2 in `open_questions`, so
+# the count was 1 and the board rendered a button reading `answer Q1`. Every number on
+# it was internally consistent and it pointed at the wrong question. A human who clicks
+# it, opens the document and finds Q1 answered either answers the wrong one or stops
+# believing the board — and there is no way to tell from the page which happened.
+#
+# So the assertions come in PAIRS: the number that must appear, and the positional
+# number that must NOT. Asserting only the first is green on a renderer that guesses and
+# happens to guess right on a Q1-first fixture, which is exactly what the old test did.
+mkdir -p "$TMP/qnum"
+mk "$TMP/qnum" "qnum" '[
+ {"slug":"twelve","title":"The task-012 shape","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-012-claim-identity","title":"Claim identity","status":"ready",
+            "assignee":"software-engineer","awaiting":"","open_questions":1,
+            "advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["2026-08-30T19:06:51Z · Q2: ship this, or hold until a runtime exports a per-agent id?"]}]},
+ {"slug":"sparse","title":"Non contiguous numbers","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Gaps","status":"ready","assignee":"","awaiting":"",
+            "open_questions":3,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["Q7: seventh?","2026-01-02T03:04:05Z · Q9: ninth?","advisor: Q4: fourth?"]}]},
+ {"slug":"noprefix","title":"No number in the text","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Unnumbered","status":"ready","assignee":"","awaiting":"",
+            "open_questions":1,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["which region should this run in?"]}]},
+ {"slug":"notext","title":"Count only","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Two questions, no text","status":"ready","assignee":"",
+            "awaiting":"","open_questions":2,"advisor_notes":0,"depends_on":[],
+            "in_flight":false,"prs":[]}]},
+ {"slug":"prose","title":"Numbers in prose","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Prose","status":"ready","assignee":"","awaiting":"",
+            "open_questions":2,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["Q01: padded?","does the answer to Q7 change this?"]}]},
+ {"slug":"runon","title":"A run that does not end","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Run on","status":"ready","assignee":"","awaiting":"",
+            "open_questions":2,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["Q1234: a four digit run","Q2x: a letter straight after"]}]}]'
+QN="$TMP/qnum.html"
+qnrc=0; bash "$GEN" --out "$QN" "$TMP/qnum" >/dev/null 2>&1 || qnrc=$?
+
+echo "== THE BUG: a waiting row names the question the question names =="
+assert "the fixture renders and exits 0"             "$(eq "$qnrc" 0)"
+# THE SHIP-BLOCKER, on the real shape: one open question, and it is Q2.
+assert "the rail button reads 'answer Q2'"           "$(card "$QN" 'The task-012 shape' | fhas_in 'answer Q2</button>')"
+assert "…and never 'answer Q1'"                      "$(card "$QN" 'The task-012 shape' | fhasnt_in 'answer Q1')"
+assert "…the table handle is Q2 too"                 "$(card "$QN" 'The task-012 shape' | fhas_in '>Q2</button>')"
+assert "…and the copied handle is the right one"     "$(card "$QN" 'The task-012 shape' | fhas_in 'claim-identity Q2: ')"
+assert "…with no Q1 anywhere in that card"           "$(card "$QN" 'The task-012 shape' | fhasnt_in 'Q1')"
+# NON-VACUITY: the count really is 1, so a positional renderer really would say Q1 here.
+assert "…and the fixture's count really is 1"        "$(yes_if python3 -c "
+import json, sys
+s = json.load(open('$TMP/qnum/SNAPSHOT.json'))
+t = s['projects'][0]['tasks'][0]
+sys.exit(0 if t['open_questions'] == 1 and 'Q2' in t['open_question_text'][0] else 1)")"
+
+echo "== …for numbers that are neither contiguous nor in order =="
+for n in 7 9 4; do
+  assert "Q$n is labelled Q$n"                       "$(card "$QN" 'Non contiguous numbers' | fhas_in ">Q$n</button>")"
+done
+for n in 1 2 3; do
+  assert "…and no Q$n is invented for position $n"   "$(card "$QN" 'Non contiguous numbers' | fhasnt_in ">Q$n</button>")"
+done
+# ORDER IS PRESERVED, and it is the document's order — not sorted, which would be a
+# second way of deciding what a question is called.
+assert "…in the order the document lists them"       "$(card "$QN" 'Non contiguous numbers' | before_in '>Q7</button>' '>Q9</button>')"
+assert "…a stamped entry still yields its number"    "$(card "$QN" 'Non contiguous numbers' | fhas_in 'Q9: ')"
+assert "…and so does an escalated one"               "$(card "$QN" 'Non contiguous numbers' | fhas_in 'Q4: ')"
+
+echo "== …and says so honestly when there is no number to read =="
+assert "an unprefixed question gets an unnumbered handle" \
+  "$(card "$QN" 'No number in the text' | fhas_in 'answer question</button>')"
+assert "…drawn as the handle that admits it"         "$(card "$QN" 'No number in the text' | fhas_in 'class="qbtn nonum"')"
+assert "…and it invents no digit at all"             "$(yes_if python3 -c "
+import re, sys
+t = open('$TMP/qnum.html').read()
+i = t.index('No number in the text'); j = t.find('<details class=\"proj', i)
+sys.exit(0 if not re.search(r'Q\d', t[i:j if j > 0 else len(t)]) else 1)")"
+assert "…saying it will not invent one"              "$(card "$QN" 'No number in the text' | fhas_in 'will not invent one')"
+assert "…and naming which absence this is"           "$(card "$QN" 'No number in the text' | fhas_in 'carries no Qn prefix')"
+
+echo "== …and when the snapshot carries a count and no text at all =="
+assert "the count yields ONE honest handle, not N"   \
+  "$(eq "$(card "$QN" 'Count only' | grep -oF 'class="qbtn nonum"' | wc -l | tr -d ' ')" 2)"
+assert "…numbered neither Q1 nor Q2"                 "$(yes_if python3 -c "
+import re, sys
+t = open('$TMP/qnum.html').read()
+i = t.index('Count only'); j = t.find('<details class=\"proj', i)
+sys.exit(0 if not re.search(r'Q\d', t[i:j if j > 0 else len(t)]) else 1)")"
+assert "…and saying it is a count, not a name"       "$(card "$QN" 'Count only' | fhas_in 'carries a COUNT of open questions')"
+assert "…the copy value is the bare task ref"        "$(card "$QN" 'Count only' | fhas_in 'data-copy="notext/tasks/task-001 "')"
+
+echo "== …reading the token, not a number mentioned in the prose =="
+assert "Q01 normalises to Q1"                        "$(card "$QN" 'Numbers in prose' | fhas_in '>Q1</button>')"
+# The second question MENTIONS Q7 in its prose, and the explanation paragraph quotes
+# that prose verbatim — so the assertion is about the LABEL, not about the byte `Q7`
+# being absent from the card. A question is named by the token it opens with; a number
+# it merely talks about names nothing. The prefix scan is bounded for exactly this.
+for form in '>Q7</button>' 'answer Q7' 'Q7 handle' 'task-001 Q7: '; do
+  assert "…and a Q7 buried in a sentence yields no $form" \
+    "$(card "$QN" 'Numbers in prose' | fhasnt_in "$form")"
+done
+assert "…the mention itself is still quoted"         "$(card "$QN" 'Numbers in prose' | fhas_in 'answer to Q7 change this')"
+assert "…and that question gets the unnumbered handle" "$(card "$QN" 'Numbers in prose' | fhas_in 'class="qbtn nonum"')"
+
+# THE FALLBACK IS NOT MERELY UNUSED — IT IS ABSENT. A renderer that still contains the
+# positional path is one edit away from taking it again, and no page-level assertion can
+# tell "never reached" from "not reached by this fixture". So the source is read too.
+echo "== …and a number must END where it is read, or it is not read at all =="
+# THE TRUNCATION THIS PREVENTS IS THE SHIP-BLOCKER'S OWN FAILURE MODE, arriving by a
+# different route. `Q(\d{1,3})` with no boundary after it reads `Q1234` as `Q123` — a
+# number that is not in the text, on a control that claims to have read the text, and
+# indistinguishable on the page from a correct one. `Q2x` is the same defect one character
+# smaller. Both must fall through to the handle that admits it cannot name the question.
+assert "a four-digit run is not truncated to three"  "$(card "$QN" 'A run that does not end' | fhasnt_in '>answer Q123<')"
+assert "…and no number is invented from it at all"   "$(card "$QN" 'A run that does not end' | fhasnt_in '>answer Q1<')"
+assert "…it gets the handle that admits it"          "$(card "$QN" 'A run that does not end' | fhas_in 'class="qbtn nonum"')"
+assert "a letter straight after the digits is not Q2" "$(card "$QN" 'A run that does not end' | fhasnt_in '>answer Q2<')"
+# BOTH questions fall through, so both handles in the RAIL are unnumbered. Counted on the
+# rail and not the card: a numbered handle is rendered in two places — the waiting row and
+# the task table's Q column — so a card-wide count is 2 per question and reads like a bug.
+assert "…so both questions render unnumbered"        \
+  "$(eq "$(rail_of "$QN" 'A run that does not end' | grep -oF 'class="qbtn nonum"' | wc -l | tr -d ' ')" 2)"
+assert "…and the card carries no numbered handle"    "$(card "$QN" 'A run that does not end' | fhasnt_in 'class="qbtn">answer Q')"
+# NON-VACUITY: a number that DOES end where it is read still reads, in the same fixture
+# set — otherwise the four assertions above are satisfied by a renderer that numbers
+# nothing at all.
+assert "…while a bounded number still reads"         "$(card "$QN" 'The task-012 shape' | fhas_in '>answer Q2<')"
+
+echo "== positional numbering is unreachable, because it is not there =="
+assert "q_range() is gone from the renderer"         "$(fhasnt 'def q_range' "$GEN")"
+assert "…and nothing calls it"                       "$(fhasnt 'q_range(' "$GEN")"
+assert "…no question label is enumerated"            "$(fhasnt 'enumerate(qs, 1)' "$GEN")"
+assert "…and no label is built from a range"         "$(yes_if python3 -c "
+import re, sys
+src = open('$GEN', encoding='utf-8').read()
+# Every 'Q%d'/'Q%s' format in the file must be fed q_split()'s number. Guard the shape
+# that produced the bug: a range/enumerate counter reaching a question label.
+bad = re.findall(r'for\s+\w+\s+in\s+(?:range|enumerate)\([^)]*\)[^\n]*', src)
+sys.exit(0 if not any('q' in b.lower() and 'Q%' not in b for b in bad if 'question' in b.lower()) else 1)")"
+assert "…and the header records why it may not come back" \
+  "$(fhas 'NEVER BY ITS POSITION' "$GEN")"
+
+# ---------------------------------------------------------------------------
+# THE SECOND DEFECT IN THE SAME ROW, DECIDED SEPARATELY.
+#
+# task-012 was `status: done` and still sat under "Waiting for you". That is not the
+# Q-number fault and must not be resolved by it. Decision (a): the board omits waiting
+# items for a TERMINAL task. Its rationale is on the guard in build-board.sh; what is
+# pinned here is that the two fixes are independent — the guard removes a terminal
+# task's item, and the Q fix leaves a LIVE task's item exactly where it was.
+mkdir -p "$TMP/term"
+mk "$TMP/term" "term" '[
+ {"slug":"mixed","title":"Terminal and live","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-012-claim-identity","title":"Shipped already","status":"done",
+            "assignee":"","awaiting":"","open_questions":1,"advisor_notes":0,
+            "depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["Q2: superseded, never answered"]},
+           {"id":"task-013-cancelled-one","title":"Cancelled already","status":"cancelled",
+            "assignee":"","awaiting":"","open_questions":1,"advisor_notes":0,
+            "depends_on":[],"in_flight":false,"prs":[],
+            "open_question_text":["Q3: also stale"]},
+           {"id":"task-014-still-live","title":"Still live","status":"ready","assignee":"",
+            "awaiting":"","open_questions":1,"advisor_notes":0,"depends_on":[],
+            "in_flight":false,"prs":[],"open_question_text":["Q5: genuinely open"]},
+           {"id":"task-015-drifted","title":"Drifted done with a verb","status":"done",
+            "assignee":"","awaiting":"merge","open_questions":0,"advisor_notes":0,
+            "depends_on":[],"in_flight":false,"prs":[]}]},
+ {"slug":"finished","title":"Finished and proposing its close","kind":"build","status":"active",
+  "awaiting_close":true,"phase_progress":{"done":1,"total":1},
+  "tasks":[{"id":"task-001","title":"All done","status":"done","assignee":"","awaiting":"",
+            "open_questions":0,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]}]'
+TM="$TMP/term.html"
+tmrc=0; bash "$GEN" --out "$TM" "$TMP/term" >/dev/null 2>&1 || tmrc=$?
+
+echo "== a terminal task is not waiting on you (defect 2, decided as (a)) =="
+assert "the fixture renders and exits 0"             "$(eq "$tmrc" 0)"
+assert "a done task contributes no rail item"        "$(rail_of "$TM" 'Terminal and live' | fhasnt_in 'Shipped already')"
+assert "…nor does a cancelled one"                   "$(rail_of "$TM" 'Terminal and live' | fhasnt_in 'Cancelled already')"
+assert "…and neither leaves a stale Q handle in the queue" \
+  "$(rail_of "$TM" 'Terminal and live' | fhasnt_in 'answer Q2')"
+# …and the guard is on the whole contribution, so a hand-edited snapshot claiming a
+# done task is awaiting a merge is caught too. write-snapshot.sh cannot emit that shape;
+# a human editing SNAPSHOT.json can.
+assert "…nor a done task carrying a drifted awaiting verb" \
+  "$(rail_of "$TM" 'Terminal and live' | fhasnt_in 'class="verb">merge')"
+# THE INDEPENDENCE, in both directions. The Q fix must not delete rows, and the guard
+# must not be what makes Q numbers right.
+assert "a LIVE task's question still reaches the rail" \
+  "$(rail_of "$TM" 'Terminal and live' | fhas_in 'class="verb">question')"
+assert "…still labelled from its own text"           "$(rail_of "$TM" 'Terminal and live' | fhas_in 'answer Q5</button>')"
+assert "…exactly one item in the rail"               \
+  "$(eq "$(rail_of "$TM" 'Terminal and live' | grep -oF 'class="ask"' | wc -l | tr -d ' ')" 1)"
+# NON-VACUITY for rail_of() itself: it must be capable of returning something, or every
+# `fhasnt_in` above is green because the helper hands back an empty string.
+assert "…and rail_of really returns that project's rail" \
+  "$(rail_of "$TM" 'Terminal and live' | fhas_in '<section class="rail"')"
+assert "…and the collapsed count agrees"             "$(card "$TM" 'Terminal and live' | fhas_in '<b>1</b> awaiting you')"
+# THE TASK TABLE IS UNTOUCHED: the question is still visible where the task lives. The
+# guard removes it from the queue of things blocking you, not from the record.
+assert "the terminal task still renders in the table" "$(card "$TM" 'Terminal and live' | fhas_in 'Shipped already')"
+assert "…keeping its own Q handle"                   "$(card "$TM" 'Terminal and live' | fhas_in '>Q2</button>')"
+# A PROJECT'S OWN awaiting_close IS NOT A TASK, and a finished project proposing its
+# close is exactly the case `.proj.fin.wants` exists for. The guard must not reach it.
+assert "a finished project still proposes its close" "$(card "$TM" 'Finished and proposing' | fhas_in 'class="verb">close')"
+assert "…and is still marked as wanting you"         "$(fhas '<details class="proj fin wants">' "$TM")"
+
+# ---------------------------------------------------------------------------
+# THE TASK ROW: THE JITTER IS THE DEFECT, NOT THE LINE COUNT.
+#
+# `014-banner-reaches-the-human Some title` and `001-local-board Some title` were two
+# inline runs in one cell, so every title started at a different x and the column read
+# as ragged; and the row reflowed between one and two lines as the window moved, so some
+# rows were one line and their neighbours two. Both are the same thing — nothing about
+# the row is fixed — and both are fixed by giving the filename a column of its own.
+#
+# A RENDERED PAGE CANNOT BE MEASURED HERE. There is no layout engine in this harness, so
+# what is asserted is the two things that DECIDE the layout and that a regression would
+# have to break: the markup that makes two columns possible at all (a flex wrapper
+# INSIDE the <td> — `display:flex` on the cell itself would take it out of the table's
+# column sizing), and the rules that switch between them. Anything past that is a claim
+# about pixels this file must not pretend to make; the PR body says what was looked at.
+mkdir -p "$TMP/rows"
+mk "$TMP/rows" "rows" '[
+ {"slug":"jitter","title":"Ragged titles","kind":"build","status":"active",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001-local-board","title":"Short name, long title that will wrap",
+            "status":"draft","assignee":"software-engineer","awaiting":"","open_questions":0,
+            "advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]},
+           {"id":"task-017-write-for-a-human-who-will-not-read","title":"Longest filename present",
+            "status":"done","assignee":"qa-reviewer","awaiting":"","open_questions":0,
+            "advisor_notes":0,"depends_on":[],"in_flight":false,
+            "prs":[{"repo":"o/r","number":75,"url":"https://github.com/o/r/pull/75"}]}]}]'
+RW="$TMP/rows.html"
+rwrc=0; bash "$GEN" --out "$RW" "$TMP/rows" >/dev/null 2>&1 || rwrc=$?
+
+echo "== a task row has a filename column, not two inline runs =="
+assert "the fixture renders and exits 0"             "$(eq "$rwrc" 0)"
+assert "the cell holds a flex wrapper, not the flex itself" \
+  "$(fhas '<td><div class="trow"><span class="tid">' "$RW")"
+assert "…and the title lives in its own second column" "$(fhas '</span><div class="tmain">' "$RW")"
+assert "…for every task row, not just the first"     \
+  "$(eq "$(grep -oF '<div class="trow">' "$RW" | wc -l | tr -d ' ')" 2)"
+# NARROW IS THE DEFAULT, and that is what makes "uniform" true by construction rather
+# than by luck: the base rule is a COLUMN, so below the breakpoint there is no width at
+# which one row is one line and the next is two.
+assert "the base rule stacks filename over title"    "$(fhas '.trow{display:flex;flex-direction:column;' "$RW")"
+assert "…and .tmain stacks inside it"                "$(fhas '.tmain{display:flex;flex-direction:column;' "$RW")"
+# ≥1200px: a FIXED filename column, so every title starts at the same x. 41ch = the 39
+# characters of `017-write-for-a-human-who-will-not-read`, the longest filename actually
+# present in this bundle, plus a 2ch gutter — `.tid` is monospaced, so 1ch is one
+# character exactly. The fixture renders that very filename so the number is anchored to
+# something real rather than to a comment.
+tidrule() { python3 - "$1" <<'PYR'
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r"@media \(min-width:1200px\)\{(.*?)\n\}", src, re.S)
+sys.stdout.write(m.group(1) if m else "")
+PYR
+}
+assert "the switch is at 1200px"                     "$(fhas '@media (min-width:1200px){' "$RW")"
+assert "…where the row becomes a row"                "$(tidrule "$RW" | fhas_in '.trow{flex-direction:row')"
+assert "…the filename column is fixed at 41ch"       "$(tidrule "$RW" | fhas_in 'flex:0 0 41ch')"
+assert "…and the title column takes the rest"        "$(tidrule "$RW" | fhas_in '.tmain{flex:1 1 auto}')"
+assert "…41ch really covers the longest name present" "$(yes_if python3 -c "
+import sys
+sys.exit(0 if len('017-write-for-a-human-who-will-not-read') == 39 else 1)")"
+assert "…and that name really is on the page"        "$(fhas '>017-write-for-a-human-who-will-not-read</span>' "$RW")"
+# DEGRADATION when a longer name appears later: the column does not grow and the title
+# column is not pushed — the name wraps inside its own 41ch. Without both of these a
+# longer filename either overflows the cell or shoves every title to a new x, which is
+# the property the whole block exists to hold.
+assert "…a longer name wraps inside its own column"  "$(tidrule "$RW" | fhas_in 'overflow-wrap:anywhere')"
+assert "…rather than widening it"                    "$(tidrule "$RW" | fhas_in 'min-width:0')"
+# VERTICALLY CENTRED. Against a two-line title the assignee, the state and the PR link
+# sat pinned to the first line and read as though they belonged to it.
+assert "cells are centred, not baselined"            "$(fhas 'td{padding:.4rem .45rem;vertical-align:middle;' "$RW")"
+assert "…and no baseline rule survives on td"        "$(fhasnt 'td{padding:.4rem .45rem;vertical-align:baseline' "$RW")"
+
+echo "== the promote control leads the row, and looks like one at rest =="
+assert "it sits after the filename, above the title" "$(flat < "$RW" | fhas_in '<div class="tmain"><button class="promote"')"
+assert "…before the title button, not after it"      "$(python3 -c "
+import sys
+t = open('$RW').read()
+sys.exit(0 if t.index('class=\"promote\"') < t.index('Short name, long title') else 1)" && echo 0 || echo 1)"
+assert "…only on a draft row"                        "$(eq "$(grep -oF 'class="promote"' "$RW" | wc -l | tr -d ' ')" 1)"
+assert "…still only COPYING a prompt"                "$(fhas 'class="promote" data-copy="In the ai-bridge instance, promote' "$RW")"
+# THE STATES ARE INVERTED. The accent outline is the RESTING appearance — a control that
+# only looks like one under a pointer is invisible to a touch screen — and hover drops
+# the accent for a filled neutral, so hovering says "you are on this one" instead of
+# "this is a button". Both halves are asserted: a rule that adds the accent at rest and
+# leaves it on hover would pass the first alone.
+assert "the accent is the resting appearance"        "$(fhas 'border-color:var(--accent);color:var(--accent);background:transparent}' "$RW")"
+assert "…and hover drops it for a neutral fill"      "$(fhas '.promote:hover,.promote:focus-visible{border-color:var(--ink);color:var(--ink);' "$RW")"
+assert "…so no greenish fill arrives on hover"       "$(yes_if python3 -c "
+import re, sys
+m = re.search(r'\.promote:hover[^{]*\{([^}]*)\}', open('$RW').read())
+sys.exit(0 if m and 'accent' not in m.group(1) and 'var(--ok)' not in m.group(1) else 1)")"
+
+echo "== a waiting row carries the task filename, so the file can be found =="
+assert "the filename precedes the title"             \
+  "$(rail_of "$TM" 'Terminal and live' | flat | fhas_in '<span class="tid">014-still-live</span><span class="what">Still live</span>')"
+assert "…with task- and .md both dropped"            "$(rail_of "$TM" 'Terminal and live' | fhasnt_in '>task-014')"
+# A close item has no task id at all, so it gets no filename rather than an empty span.
+assert "…and a close item carries none"              "$(rail_of "$TM" 'Finished and proposing' | fhasnt_in 'class="tid"')"
+assert "…the close item really is there"             "$(rail_of "$TM" 'Finished and proposing' | fhas_in 'class="verb">close')"
+
+echo "== the waiting block separates from the card holding it =="
+# ITS FILL WAS 1.12:1 AGAINST THE CARD — `--signal` 8% on `--surface`, against a
+# `.proj.wants` head of 7% of the same hue, so the one block that says "you are the
+# blocker" dissolved into its container. Now `--signal` 16% on `--sunk`: 1.42:1 in light
+# and 1.47:1 in dark. Same hue, deeper and desaturated — a second accent would compete
+# with the one that already means "needs you" everywhere on this page.
+assert "the fill is built on the recessed neutral"   "$(fhas 'background:color-mix(in srgb,var(--signal) 16%,var(--sunk))' "$BOUT")"
+assert "…and is no longer the card's own surface"    "$(fhasnt 'color-mix(in srgb,var(--signal) 8%,var(--surface))' "$BOUT")"
+assert "the amber left rail is kept"                 "$(fhas '.rail{border-left:.22rem solid var(--signal)' "$BOUT")"
+assert "…and so is the WAITING FOR YOU · N label"    "$(fhas '<h2>Waiting for you · ' "$BOUT")"
+assert "…rendered upper case, as it reads on the page" "$(fhas '.rail h2{margin:0 0 .7rem;font-size:.68rem;text-transform:uppercase' "$BOUT")"
+# NO SECOND ACCENT. Every colour the block uses is --signal, --ink, --sunk, --surface,
+# --line or --muted; --accent and --ok appearing inside a .rail rule would be a second
+# thing competing for "this one needs you".
+assert "no second accent enters the block"           "$(yes_if python3 -c "
+import re, sys
+src = open('$BOUT', encoding='utf-8').read()
+rules = re.findall(r'(?:^|\})\s*(\.rail[^{}]*)\{([^}]*)\}', src)
+bad = [s for s, b in rules if 'var(--accent)' in b or 'var(--ok)' in b or 'var(--stop)' in b]
+sys.exit(0 if rules and not bad else 1)")"
+# THE LABEL MOVED WITH THE FILL. Plain --signal on the deeper ground is 3.93:1, under AA
+# for text this small; 22% of --ink brings it to 5.22:1 light / 6.05:1 dark and keeps it
+# amber. Mixing toward --ink rather than toward black is what makes ONE rule right in
+# both themes, the same trick .c.you uses.
+assert "the label is darkened, not left at 3.93:1"   "$(fhas 'color:color-mix(in srgb,var(--signal) 78%,var(--ink))' "$BOUT")"
+# THE BREADCRUMB WAS THE LEAST LEGIBLE THING IN THE BLOCK, measurably: --dim on .ask's
+# surface is 3.18:1 in light and 3.79:1 in dark, both under AA's 4.5:1 for .75rem text.
+assert "the breadcrumb is off --dim"                 "$(fhas '.where{width:100%;font-size:.75rem;color:var(--muted)}' "$BOUT")"
+assert "…and --dim is not still on it"               "$(fhasnt '.where{width:100%;font-size:.75rem;color:var(--dim)}' "$BOUT")"
+# THE RATIOS ARE COMPUTED HERE, not copied from the PR body — a number quoted in prose
+# and nowhere else is a number nobody re-checks. Both themes, since the palette is
+# redefined for dark and a fix that only holds in one is half a fix.
+contrast_ok() { # <fg> <bg> <min> -> 0 when the pair clears <min>
+  python3 - "$1" "$2" "$3" <<'PYC'
+import sys
+def lin(c):
+    c /= 255
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+def lum(h):
+    h = h.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+a, b = lum(sys.argv[1]), lum(sys.argv[2])
+lo, hi = sorted((a, b))
+sys.exit(0 if (hi + 0.05) / (lo + 0.05) >= float(sys.argv[3]) else 1)
+PYC
+}
+# --muted on --surface, the pair the breadcrumb actually renders as (.ask is --surface).
+assert "…clearing AA in light (5.98:1)"              "$(yes_if contrast_ok '#5c6470' '#ffffff' 4.5)"
+assert "…and in dark (6.67:1)"                       "$(yes_if contrast_ok '#98a1ac' '#171a1e' 4.5)"
+# NON-VACUITY: the colour it replaced must FAIL the same check, or this asserts nothing
+# about the change.
+assert "…where --dim failed it in light (3.18:1)"    "$(contrast_ok '#89919c' '#ffffff' 4.5 && echo 1 || echo 0)"
+assert "…and failed it in dark too (3.79:1)"         "$(contrast_ok '#6d7681' '#171a1e' 4.5 && echo 1 || echo 0)"
+# The label's new colour, resolved as the browser would resolve the color-mix, against
+# the fill resolved the same way.
+assert "the label clears AA on the new fill, light"  "$(yes_if contrast_ok '#7e4811' '#dfd7cd' 4.5)"
+assert "…and dark"                                   "$(yes_if contrast_ok '#deac6d' '#3d362f' 4.5)"
+assert "…where plain --signal would not, in light"   "$(contrast_ok '#9c560d' '#dfd7cd' 4.5 && echo 1 || echo 0)"
+# SEPARATION from the card is the point of the whole change, so it is measured too —
+# as a ratio against --surface, which is what the card is.
+assert "the fill separates from the card, light"     "$(yes_if contrast_ok '#dfd7cd' '#ffffff' 1.35)"
+assert "…and dark"                                   "$(yes_if contrast_ok '#3d362f' '#171a1e' 1.35)"
+assert "…where the old fill did not"                 "$(contrast_ok '#f7f1ec' '#ffffff' 1.35 && echo 1 || echo 0)"
 
 echo "== advisor_notes is information, not a demand =="
 assert "an untriaged concern shows as a concern pill" "$(fhas 'concern' "$OUT")"
@@ -432,12 +861,12 @@ assert "a hostile slug cannot render a path out of the bundle" \
 # VALUE.
 assert "a combining mark in the slug does not smuggle in another project's path" \
   "$(yes_if no_copy_value_with 'elsewhere.md' "$DOUT")"
-assert "…and that project gets no deliverables panel at all" "$(yes_if python3 -c "
-import sys
-t = open('$DOUT').read()
-i = t.index('Hostile slug')
-j = t.index('</details>', i)
-sys.exit(0 if 'class=\"delivs\"' not in t[i:j] else 1)")"
+# THROUGH `card`, NOT `t.index('</details>')`. This is an ABSENCE claim, and the old
+# boundary made it a much smaller one than it reads as: a card nests a <details> per rail
+# item, so the slice ended at the first ask and said nothing about the rest of the card. A
+# panel rendered just past that point satisfied it.
+assert "…and that project gets no deliverables panel at all" \
+  "$(card "$DOUT" 'Hostile slug' | fhasnt_in 'class="delivs"')"
 # Not a second `Deliverables · 3` grep — that was byte-identical to the assertion above
 # and could not fail independently of it. Counting the BUTTONS is the half the heading
 # cannot certify: heading and list are built from the same filtered sequence, so a
@@ -450,18 +879,99 @@ echo "== absent/empty deliverable_paths renders no panel, and no error =="
 # and then failed would still pass a `test -s` check.
 assert "it still exits 0"                             "$(eq "$rc4" 0)"
 assert "…and produces non-empty output"               "$(yes_if test -s "$DOUT")"
-assert "no deliverables panel for a project with none" "$(yes_if python3 -c "
-import sys
-t = open('$DOUT').read()
-i = t.index('Closed with nothing stamped')
-j = t.index('</details>', i)
-sys.exit(0 if 'class=\"delivs\"' not in t[i:j] else 1)")"
+assert "no deliverables panel for a project with none" \
+  "$(card "$DOUT" 'Closed with nothing stamped' | fhasnt_in 'class="delivs"')"
 echo "== it reuses the ONE existing clipboard helper — no second <script> =="
 # -c counts LINES, not occurrences — a second <script> on the SAME line as the first
 # would still read 1 and pass. -o prints one match per line, so piping to `wc -l` counts
 # occurrences regardless of how many share a line.
 assert "exactly one <script> element on this page too" \
   "$(eq "$(grep -oF '<script' "$DOUT" | wc -l | tr -d ' ')" 1)"
+
+echo "== collapsing is still <details>, and no script drives it =="
+# A SCRIPT-DRIVEN VERSION WAS TRIED AND REJECTED BEFORE, so this is a constraint rather
+# than a preference — and the page carries a <script> for the clipboard, which is exactly
+# what makes "no script drives the collapsing" a thing that can rot quietly. So it is
+# asserted on the script's BODY: the one function on this page must not know that
+# <details> exists.
+board_script() { # <file> -> the body of the single <script> element
+  python3 - "$1" <<'PYS'
+import re, sys
+m = re.search(r"<script>(.*?)</script>", open(sys.argv[1], encoding="utf-8").read(), re.S)
+sys.stdout.write(m.group(1) if m else "")
+PYS
+}
+for f in "$OUT" "$BOUT" "$TM" "$RW" "$DOUT"; do
+  assert "exactly one <script> on $(basename "$f")" \
+    "$(eq "$(grep -oF '<script' "$f" | wc -l | tr -d ' ')" 1)"
+done
+# ASSERTED ON THE CONSTRUCTS, NOT ON THE WORD. The helper's own comments discuss <details>
+# at length — they have to, because the one thing it deliberately does NOT do is cancel the
+# toggle, and that decision belongs where the next editor reads it. So `fhasnt 'details'`
+# would be red on a correct file for the wrong reason. These are the only ways a script can
+# drive a <details>, and not one of them appears in prose.
+for k in ".open=" ".open =" "toggleAttribute" "querySelector('details" "closest('details" "setAttribute('open" "removeAttribute('open"; do
+  assert "the script never does: $k"                 "$(board_script "$RW" | fhasnt_in "$k")"
+done
+# NON-VACUITY, both halves: the extractor really returned the helper (not an empty string
+# that trivially contains none of the above), and the same check FLAGS a planted driver.
+assert "…and that script really is the clipboard helper" "$(board_script "$RW" | fhas_in 'clipboard')"
+assert "…while the same check flags a planted driver" \
+  "$(printf '%s\n' "d.open=true" | fhas_in ".open=")"
+# THE ROWS ARE STILL <details>-COLLAPSED. The markup is the mechanism; if it were gone the
+# assertions above would be true of a page that no longer collapses at all.
+assert "the cards are still <details> elements"      "$(fhas '<details class="proj' "$RW")"
+
+echo "== the ONE clipboard helper is reused, and file:// is not re-derived =="
+# `navigator.clipboard` DOES work over file:// — Chromium treats `file:` as potentially
+# trustworthy — measured during ai-bridge#74 and deliberately not re-measured here. What
+# this pins is that the settled shape is still the shipped one and that nobody added a
+# SECOND helper beside it: one async write, one legacy fallback, on the whole page.
+# THE CALL, not the name — `navigator.clipboard.writeText` appears twice on a correct page,
+# once in the capability GUARD and once in the call it guards, so counting the name counts
+# the guard as a second helper.
+assert "one navigator.clipboard write, not two"      \
+  "$(eq "$(grep -oF 'navigator.clipboard.writeText(' "$RW" | wc -l | tr -d ' ')" 1)"
+assert "…and one legacy fallback behind it"          \
+  "$(eq "$(grep -oF "document.execCommand('copy')" "$RW" | wc -l | tr -d ' ')" 1)"
+# THE NEW CONTROLS USE IT RATHER THAN BRINGING THEIR OWN. Both of this task's new/moved
+# buttons copy through the same [data-copy] convention — a promote control with its own
+# onclick would be the second helper this criterion forbids.
+assert "the promote control copies via [data-copy]"  "$(fhas 'class="promote" data-copy=' "$RW")"
+assert "…and the unnumbered Q handle does too"       "$(fhas 'class="qbtn nonum" data-copy=' "$QN")"
+assert "no inline handler anywhere on the page"      "$(fhasnt 'onclick=' "$RW")"
+
+echo "== no slice in this file cuts a card at the first nested </details> =="
+# THE TRAP THIS GUARDS, recorded in task-015's doc: a card now nests a <details> per rail
+# item, so `t.index('</details>', i)` ends the slice at the FIRST ask. An absence asserted
+# that way reads a few hundred bytes and reports green on a page that is wrong immediately
+# after them. `card()` ends a card where the NEXT card begins instead.
+#
+# A SCAN, not a promise, because the boundary is retyped at every new call site and the
+# failure is invisible in review — the assertion still passes, it just stops meaning what
+# it says.
+# THE NEEDLE IS ASSEMBLED, NOT TYPED, and the planted offender below is built from the same
+# piece. A scanner whose own body — or whose own fixture line — contains the pattern it scans
+# for reports a permanent offender, and a check that is red on a correct file is a check
+# somebody deletes. Splitting the literal keeps both lines from matching.
+CLOSE_TAG="</de""tails>"
+slice_offenders() { # <file> -> offending lines, if any
+  grep -nE "(index|find)\\('$CLOSE_TAG'" "$1" | grep -v '^[0-9]*:[[:space:]]*#' || true
+}
+assert "no </details> slice boundary survives here"  "$(eq "$(slice_offenders "$0")" '')"
+# NON-VACUITY: the same scan must find a planted one, or it is asserting nothing.
+PLANT="$TMP/planted-slice.sh"
+printf '%s\n' "j = t.index('$CLOSE_TAG', i)" > "$PLANT"
+assert "…and the same scan flags a planted one"      \
+  "$([ -n "$(slice_offenders "$PLANT")" ] && echo 0 || echo 1)"
+# AND THE HELPER REALLY SPANS THEM. The scan above says nobody uses the bad boundary; this
+# says the good one reaches past the rail — `$TM`'s first card nests a <details> per ask,
+# and the task TABLE is rendered after the rail closes, so a slice that stopped at the
+# first ask could not contain it.
+assert "a card slice reaches past its nested asks"   \
+  "$(card "$TM" 'Terminal and live' | fhas_in '<table')"
+assert "…and the rail it had to cross really nests one" \
+  "$(rail_of "$TM" 'Terminal and live' | fhas_in '<details')"
 
 echo "== both themes are defined on bare :root =="
 assert "no token defined only in a media/theme block" "$(yes_if python3 -c "
@@ -556,8 +1066,15 @@ if kill -0 "$qpid" 2>/dev/null; then kill -9 "$qpid" 2>/dev/null; qrc=1; fi
 wait "$qpid" 2>/dev/null || true
 assert "the page renders instead of hanging"         "$(eq "$qrc" 0)"
 assert "…and it was written"                         "$(yes_if test -s "$QOUT")"
-assert "…with the first question handle"             "$(fhas 'Q1</button>' "$QOUT")"
-assert "…and the count capped, not unbounded"        "$(fhasnt 'Q25</button>' "$QOUT")"
+# THE COUNT NO LONGER PRODUCES LABELS AT ALL, which is a stronger answer to the same
+# hazard than the cap was: with no question text carried there is nothing to number, so
+# one honest unnumbered handle is emitted whatever the count says. Nine digits and one
+# digit render the same page.
+assert "…with one honest unnumbered handle"          "$(fhas '>?</button>' "$QOUT")"
+assert "…and no fabricated first question"           "$(fhasnt 'Q1</button>' "$QOUT")"
+assert "…and no fabricated twenty-fifth either"      "$(fhasnt 'Q25</button>' "$QOUT")"
+assert "…exactly one handle, not nine hundred million" \
+  "$(eq "$(grep -oF 'class="qbtn' "$QOUT" | wc -l | tr -d ' ')" 2)"
 
 echo "== a PR URL is a link only on http/https, here too =="
 mk "$TMP/hostile" "hostile" '[
