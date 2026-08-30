@@ -370,6 +370,30 @@ OUT="$(bash "$LOCKSH" acquire --as --instance "$N" 2>&1)"; RC=$?
 ok "a bare trailing --as is refused too" "$RC" 3
 
 echo
+echo "== a claim that cannot be WRITTEN is not a claim somebody else holds =="
+# Two causes, two answers — the distinction `acquire` already refuses to collapse for the
+# lock. Collapsing it here would report an unwritable instance root as "another tick is
+# running", which is the one message nobody would think to debug.
+if [ "$(id -u)" = 0 ]; then
+  echo "  SKIP  running as root: permission bits refuse nobody"
+else
+  W="$TMP/readonly"; mkdir -p "$W"
+  attempt "$W"                              # the launcher takes the lock while it can
+  chmod a-w "$W"
+  tick "$W"; RC_RO="$TICK_RC"; OUT_RO="$TICK_OUT"
+  REL_OUT="$(bash "$LOCKSH" release --instance "$W" 2>&1)"; REL_RC=$?
+  chmod u+w "$W"                            # …restored before anything else runs
+  ok "the tick refuses with exit 3"        "$RC_RO" 3
+  ok "…naming the unwritable root"         "$(printf '%s' "$OUT_RO" | grep -qF 'not writable' && echo yes || echo no)" yes
+  ok "…and NOT blaming another tick"       "$(printf '%s' "$OUT_RO" | grep -qF 'HELD BY ANOTHER TICK' && echo yes || echo no)" no
+  ok "…so it did not run"                  "$(ran "$W")" 0
+  # And a release that cannot remove says which file it left, rather than reporting a
+  # success the caller would take as "the lock is gone".
+  ok "a release that cannot remove exits 3" "$REL_RC" 3
+  ok "…naming the file still on disk"      "$(printf '%s' "$REL_OUT" | grep -qF '.tick-lock' && echo yes || echo no)" yes
+fi
+
+echo
 echo "== it bounds TICKS, not role agents =="
 # A held lock must never block the role agents the tick holding it dispatched, so nothing on
 # THAT path may read the file. This assertion was "no agent names the lock" until 2026-08-30

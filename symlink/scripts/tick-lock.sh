@@ -277,6 +277,18 @@ claim_exclusive() {
   ) 2>/dev/null
 }
 
+# A failed claim create has the same two causes the lock's has, and they are the same two
+# different answers: somebody holds it, or this root cannot be written. `acquire` already
+# refuses to collapse those for the lock, and collapsing them here would report an
+# unwritable instance as "another tick is running" — the one message nobody would debug.
+unwritable_claim() { # exits 3 when the claim is missing AFTER a failed create
+  [ -e "$CLAIM" ] && return 0
+  echo "tick-lock: cannot write $CLAIM — the instance root is not writable." >&2
+  echo "           Refusing to run the tick: a tick that cannot record its claim is" >&2
+  echo "           invisible to the next one, which is the failure this file prevents." >&2
+  exit 3
+}
+
 # BSD first, then GNU: `date -j` is macOS's and `date -d` is coreutils', each is an illegal
 # option to the other, and this repo's suite runs on macOS while instances run on both.
 # Only an all-digits answer is accepted, so a shell that "succeeds" while printing a usage
@@ -399,6 +411,7 @@ case "$cmd" in
         echo "took: $LOCK — this tick holds the lock; release it when the tick ends."
         exit 0
       fi
+      unwritable_claim
       echo "HELD BY ANOTHER TICK: $LOCK was free a moment ago and is already claimed$(claim_note)." >&2
       echo "                      Report and hold: dispatch nothing, adopt nothing, end the" >&2
       echo "                      tick, and release nothing — the lock is not yours." >&2
@@ -431,6 +444,7 @@ case "$cmd" in
       echo "         It releases that lock when this tick reports; do not release it yourself."
       exit 0
     fi
+    unwritable_claim
     echo "HELD BY ANOTHER TICK: $LOCK is live and a tick already claimed it$(claim_note)." >&2
     echo "                      You are not that tick — a tick that began outside the" >&2
     echo "                      launcher (a SendMessage resume) is exactly this case." >&2
@@ -449,8 +463,11 @@ case "$cmd" in
     # next tick refuse. Either half surviving is cleared by the next `acquire` anyway.
     rm -f "$CLAIM" 2>/dev/null
     rm -f "$LOCK" 2>/dev/null
-    if [ -e "$LOCK" ] || [ -e "$CLAIM" ]; then
-      echo "tick-lock: could not remove $LOCK (and $CLAIM)" >&2
+    left=""
+    [ -e "$LOCK" ] && left="$LOCK"
+    [ -e "$CLAIM" ] && left="${left:+$left and }$CLAIM"
+    if [ -n "$left" ]; then
+      echo "tick-lock: could not remove $left" >&2
       exit 3
     fi
     exit 0
