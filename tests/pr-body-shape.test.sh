@@ -105,9 +105,16 @@ saw() { # <haystack> <fixed string> -> yes|no
   printf '%s' "$1" | grep -qF -- "$2" && echo yes || echo no
 }
 
-echo "== 1. the PR body has a stated shape: TL;DR, criteria table, flagged line =="
-ok "a one-sentence TL;DR is named"        "$(saw "$CONV_FLAT" '**A one-sentence TL;DR**, first.')" yes
-ok "the example shows the TL;DR line"     "$(saw "$CONV_FLAT" '**TL;DR** — one sentence')" yes
+echo "== 1. the shape: the heading LITERAL, TL;DR, criteria table, flagged line =="
+# The heading is asserted as the exact string a gate greps for, in the rule AND in the
+# example, because `pr-body-clearance.sh` matches on it: a doc that renamed the heading
+# while the predicate kept the old one would refuse every conforming PR.
+ok "the opening heading is a LITERAL"     "$(saw "$CONV_FLAT" 'It opens with the literal heading `## Description (TL;DR)`')" yes
+ok "…named first among the parts"         "$(saw "$CONV_FLAT" '**The heading `## Description (TL;DR)`, first**')" yes
+ok "…required character for character"    "$(saw "$CONV_FLAT" '**That exact string, character for character**')" yes
+ok "the example opens with that heading"  "$(saw "$CONV_FLAT" '```md ## Description (TL;DR)')" yes
+ok "a one-sentence TL;DR follows it"      "$(saw "$CONV_FLAT" 'then **a one-sentence TL;DR** under it')" yes
+ok "the gate that reads it is named"      "$(saw "$CONV_FLAT" 'pr-body-clearance.sh` looks for it at the clearance gate')" yes
 ok "the criteria go in a TABLE"           "$(saw "$CONV_FLAT" "task's \`acceptance_criteria\` as a table")" yes
 ok "one row per criterion, text verbatim" "$(saw "$CONV_FLAT" 'one row per criterion, its text verbatim')" yes
 ok "the example carries a table header"   "$(saw "$CONV_FLAT" '| Criterion | ✓ | Verified by |')" yes
@@ -121,6 +128,13 @@ echo
 echo "== 2. the threshold rules emit that one line, rather than their own sections =="
 ok "harness growth is one ⚠️ line"        "$(saw "$CONV_FLAT" '⚠️ Needs your call: harness growth 414 lines.')" yes
 ok "PR size is one ⚠️ line"               "$(saw "$CONV_FLAT" 'say so in the PR body as one `⚠️` line')" yes
+# The reviewer-notes surfaces are bounded to one line each. Without this, "not an essay"
+# is advice; with it, the ceiling is a countable property of each ⚠️ and each ## Notes
+# entry — and the section is pinned under the NAME it actually grows back under.
+ok "each ⚠️ is bounded to ONE line"       "$(saw "$CONV_FLAT" '**Each `⚠️` stays one line')" yes
+ok "…a ⚠️ paragraph is not a flag"        "$(saw "$CONV_FLAT" 'has stopped being a flag')" yes
+ok "## Notes is bounded the same way"     "$(saw "$CONV_FLAT" '**one line per note, bounded exactly as the `⚠️` lines are.**')" yes
+ok "…named as the section that regrows"   "$(saw "$CONV_FLAT" '"Judgement calls for the reviewer" is the heading this section grows under')" yes
 
 echo
 echo "== 3. THE GATE: the criteria table is required and blocks a merge when unmet =="
@@ -147,6 +161,33 @@ ok "a tally is shorter than a paragraph"  "$(saw "$CONV_FLAT" 'is *shorter* than
 ok "…because the reader can re-run it"    "$(saw "$CONV_FLAT" 'names an artifact the reader can re-run')" yes
 ok "never licence to assert w/o evidence" "$(saw "$CONV_FLAT" 'licence to assert without evidence')" yes
 ok "what counts as evidence is named"     "$(saw "$CONV_FLAT" 'Name the command, the test file and its tally, the CI run, or the URL you loaded.')" yes
+
+echo
+echo "== 5b. the row bound is TWO-SIDED: a ceiling AND a readability floor =="
+# Both halves are asserted separately, because the failure mode of deleting either one is
+# a rule that still reads as sensible. Cut the ceiling and rows grow back to prose; cut
+# the floor and "be brief" licenses `ok` and `see above`, which are shorter than a
+# paragraph and check nothing — a cheaper failure, not a fixed one.
+ok "a row stops at the CLAIM's evidence"  "$(saw "$CONV_FLAT" '**A row carries what a reviewer needs to CHECK THE CLAIM, and stops**')" yes
+ok "narration is refused outright"        "$(saw "$CONV_FLAT" '**Narration is not wanted**')" yes
+ok "…and what narration means is listed"  "$(saw "$CONV_FLAT" 'not the criterion restated in your own words')" yes
+ok "the FLOOR is stated as a floor"       "$(saw "$CONV_FLAT" '**The floor is readability, and it binds exactly as hard as the ceiling')" yes
+ok "…a person can check the claim"        "$(saw "$CONV_FLAT" 'a person reading a row can check the claim from it')" yes
+ok "…and the cryptic failures are named"  "$(saw "$CONV_FLAT" '`ok`, `done`, `see above` and a bare commit SHA do not')" yes
+ok "short is the goal, cryptic a failure" "$(saw "$CONV_FLAT" '**Short is the goal; cryptic is a failure**')" yes
+
+echo
+echo "== 5c. Q1's answer is recorded AT the rule, so it is not re-opened =="
+# The question ("is the verbosity required for the external reviewer?") was answered by
+# the owner on 2026-08-30. Recorded only in a task doc it would be re-derived by the next
+# agent, who reads the rule and not the task — so the answer is pinned beside the rule.
+ok "the bar is called the rule's test"    "$(saw "$CONV_FLAT" "**That two-sided bar is the rule's own test")" yes
+ok "…the question is quoted and dated"    "$(saw "$CONV_FLAT" 'Asked 2026-08-30: is any of this verbosity required for CodeRabbit')" yes
+ok "…and answered: NO"                    "$(saw "$CONV_FLAT" 'or another external reviewer? **No.**')" yes
+ok "the reviewer is treated as an agent"  "$(saw "$CONV_FLAT" 'Treat the reviewer as an **AI agent**')" yes
+ok "…and rows stay human-understandable"  "$(saw "$CONV_FLAT" '**and keep every row human-understandable.**')" yes
+ok "BOTH halves are said to bind"         "$(saw "$CONV_FLAT" '**Both halves bind**')" yes
+ok "re-surveying the reviewer is refused" "$(saw "$CONV_FLAT" 'rather than surveying past reviewer behaviour to re-derive it')" yes
 
 echo
 echo "== 6. review replies: one line per finding, evidence listed, nothing restated =="
@@ -183,21 +224,36 @@ ok "decisions last, and short"            "$(saw "$SEED_FLAT" '**What needs a de
 ok "same discipline as a PR body"         "$(saw "$SEED_FLAT" 'same discipline as a PR body')" yes
 ok "reasoning lives where it is durable"  "$(saw "$SEED_FLAT" 'Reasoning belongs where it is durable')" yes
 ok "the criteria table invariant is here" "$(saw "$SEED_FLAT" "The PR body carries the task's \`acceptance_criteria\` as a table, always")" yes
+# The seed carries the invariants that must hold whether or not an agent reached
+# CONVENTIONS.md. The heading is now one of them — it is gated, so an agent that never
+# read the long rule still has to know the string.
+ok "the seed names the heading literal"   "$(saw "$SEED_FLAT" 'The PR body opens with the literal heading `## Description (TL;DR)`')" yes
+ok "…and says the gate greps for it"      "$(saw "$SEED_FLAT" 'the clearance gate greps for it')" yes
+ok "the seed carries the row bound"       "$(saw "$SEED_FLAT" '**A row is a command and its result, not a narration**')" yes
+ok "…and the readability floor with it"   "$(saw "$SEED_FLAT" 'Short is the goal; cryptic is a failure.')" yes
 
 echo
 echo "== 9. MUTATION: cut the gate bullet out and every gate assertion flips =="
 # The edit this file exists to catch: someone "shortens" CONVENTIONS.md by deleting the
-# bullet that carries the gate, leaving the shape bullet (and its TL;DR) intact.
+# bullet that carries the gate, leaving the shape bullet (and its heading) intact.
 strip_bullet "$CONV" '**The criteria table is the merge gate' > "$TMP/conv-no-gate.md"
 MUT_FLAT="$(flatten "$TMP/conv-no-gate.md")"
 ok "the mutation removed something"       "$([ "$(wc -c < "$TMP/conv-no-gate.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
-ok "CONTROL: the TL;DR line survives it"  "$(saw "$MUT_FLAT" '**TL;DR** — one sentence')" yes
+ok "CONTROL: the heading survives it"     "$(saw "$MUT_FLAT" '**The heading `## Description (TL;DR)`, first**')" yes
 ok "CONTROL: the shape bullet survives"   "$(saw "$MUT_FLAT" '**Required, always**')" yes
 ok "mutant: ✓-only-if-verified is gone"   "$(saw "$MUT_FLAT" '**Mark `✓` only for a criterion you actually verified')" no
 ok "mutant: the merge block is gone"      "$(saw "$MUT_FLAT" 'A `✗` **blocks the PR from being merge-eligible**')" no
 ok "mutant: the SCHEMA citation is gone"  "$(saw "$MUT_FLAT" 'An unverified acceptance criterion blocks clearance')" no
 ok "mutant: short-AND-auditable is gone"  "$(saw "$MUT_FLAT" '**Short and auditable are the same thing here')" no
 ok "mutant: the evidence rule is gone"    "$(saw "$MUT_FLAT" 'licence to assert without evidence')" no
+# The row bound, the floor and Q1's answer live in this same bullet, so the "just make it
+# shorter" edit takes them too — and each must flip, or its assertion above is passing for
+# a reason other than the rule being present.
+ok "mutant: the row bound is gone"        "$(saw "$MUT_FLAT" '**A row carries what a reviewer needs to CHECK THE CLAIM, and stops**')" no
+ok "mutant: narration-refused is gone"    "$(saw "$MUT_FLAT" '**Narration is not wanted**')" no
+ok "mutant: the readability floor is gone" "$(saw "$MUT_FLAT" '**Short is the goal; cryptic is a failure**')" no
+ok "mutant: Q1's recorded answer is gone" "$(saw "$MUT_FLAT" 'or another external reviewer? **No.**')" no
+ok "mutant: both-halves-bind is gone"     "$(saw "$MUT_FLAT" '**Both halves bind**')" no
 
 echo
 echo "== 10. MUTATION: cut the review bullet, and the reply rules all flip =="
@@ -233,6 +289,25 @@ ok "mutant: the stated shape is gone"     "$(saw "$COMMENT_FLAT" '**The shape is
 ok "mutant: don't-restate-the-diff gone"  "$(saw "$COMMENT_FLAT" '**Never restate the diff back at the reader**')" no
 ok "mutant: the agent-reader answer gone" "$(saw "$COMMENT_FLAT" '**The verbosity is not needed for the agent readers either**')" no
 ok "mutant: the measurement is gone"      "$(saw "$COMMENT_FLAT" 'averaged **2,027 characters** across 6 inline comments')" no
+
+echo
+echo "== 13. MUTATION: cut the shape bullet, and the heading assertions flip =="
+# The heading is the one element a machine depends on: `pr-body-clearance.sh` greps for
+# `## Description (TL;DR)` and refuses a body without it. So the assertions that pin the
+# literal need their own mutation — otherwise a future edit could drop the heading from
+# the document while the predicate kept refusing on it, and every PR would be refused by
+# a rule nobody could find. The gate bullet is the control, since it is a separate bullet.
+strip_bullet "$CONV" '**The PR body has a required shape' > "$TMP/conv-no-shape.md"
+SHAPE_FLAT="$(flatten "$TMP/conv-no-shape.md")"
+ok "the mutation removed something"       "$([ "$(wc -c < "$TMP/conv-no-shape.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
+ok "CONTROL: the gate bullet survives"    "$(saw "$SHAPE_FLAT" '**The criteria table is the merge gate')" yes
+ok "CONTROL: the row bound survives"      "$(saw "$SHAPE_FLAT" '**Narration is not wanted**')" yes
+ok "mutant: the heading literal is gone"  "$(saw "$SHAPE_FLAT" 'It opens with the literal heading `## Description (TL;DR)`')" no
+ok "mutant: the example heading is gone"  "$(saw "$SHAPE_FLAT" '```md ## Description (TL;DR)')" no
+ok "mutant: character-for-character gone" "$(saw "$SHAPE_FLAT" '**That exact string, character for character**')" no
+ok "mutant: the named gate is gone"       "$(saw "$SHAPE_FLAT" 'pr-body-clearance.sh` looks for it at the clearance gate')" no
+ok "mutant: the one-line ⚠️ bound is gone" "$(saw "$SHAPE_FLAT" '**Each `⚠️` stays one line')" no
+ok "mutant: the ## Notes bound is gone"   "$(saw "$SHAPE_FLAT" '**one line per note, bounded exactly as the `⚠️` lines are.**')" no
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
