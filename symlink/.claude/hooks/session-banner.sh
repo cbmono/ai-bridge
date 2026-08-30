@@ -578,7 +578,7 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------------------
-# 7. STATE THAT COULD BE WRONG — `scripts/ai-bridge.sh check`, problems only.
+# 8. STATE THAT COULD BE WRONG — `scripts/ai-bridge.sh check`, problems only.
 # ---------------------------------------------------------------------------------------
 # THIS IS THE READER FOR A TRAP THAT HAD NONE. "Pulling the template half-upgrades every
 # unstamped instance" was prose in a knowledge base: an edit to an already-linked file

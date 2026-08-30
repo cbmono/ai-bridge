@@ -4,7 +4,8 @@ allowed-tools: Bash(scripts/ai-bridge.sh:*), Bash(bash scripts/ai-bridge.sh:*), 
 ---
 
 Run `scripts/ai-bridge.sh $ARGUMENTS` from the instance root and **relay its output
-verbatim**.
+verbatim**. `$ARGUMENTS` is empty, `check` or `fix` — nothing else; anything else is a
+typo and the script will say so rather than guess.
 
 That is the whole command. Every fact, every warning and every repair lives in the
 script, so the answer is the same whether a human runs it in a terminal or a session runs
