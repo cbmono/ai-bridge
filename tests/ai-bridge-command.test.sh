@@ -209,7 +209,11 @@ idx_before="$(GIT -C "$INST2" status --porcelain; GIT -C "$INST2" rev-parse HEAD
 
 CHK2="$(bash "$SH" check --instance "$INST2" --template "$TPL" 2>&1)"
 ok "check SEES the uncommitted config"                     "$(printf '%s\n' "$CHK2" | grep -c 'instance.config.json has uncommitted changes' | tr -d ' ')" 1
-ok "…and names the key that moved, not its value"          "$(printf '%s\n' "$CHK2" | grep -c 'maxPrLoc' | tr -d ' ')" 1
+# Scoped to the warning line itself. `maxPrLoc` also appears in the config-LAYERS row's
+# per-key listing, which is a different fact about a different question — counting both
+# would make this assertion pass or fail on the other check's output.
+ok "…and names the key that moved, not its value" \
+  "$(printf '%s\n' "$CHK2" | grep '^⚠ instance.config.json has uncommitted' | grep -c 'maxPrLoc' | tr -d ' ')" 1
 ok "…without printing the value anywhere"                  "$(printf '%s\n' "$CHK2" | grep -c '500' | tr -d ' ')" 0
 ok "…and frames it as a question, not a defect"            "$(printf '%s\n' "$CHK2" | grep -c 'QUESTION, NOT A DEFECT' | tr -d ' ')" 1
 
