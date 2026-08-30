@@ -12,7 +12,7 @@ its own git repo under `~/workspace/<group>/_ai-bridge-<group>/`.
 - `seed/` — starting content, copied into an instance **once, only if absent**. A change here reaches nothing automatically.
 - `install.sh` — stamps out / refreshes an instance. `upgrade.sh` — walks a pull's four cases and reports what's left for the human.
 - `RETIRED` — seed paths the template has stopped shipping; reported, never deleted.
-- `tests/` — bash harnesses. **There is a test suite and it must pass**: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. No build step, no lint. CI (`.github/workflows/tests.yml`) runs the same full suite on every PR and push to `main`, and `harness suite` is a required check.
+- `tests/` — bash harnesses. **There is a test suite and it must pass — in CI.** `.github/workflows/tests.yml` runs the full suite on every PR and push to `main`; `harness suite` is a **required check** with `strict=true`, so it runs against the merged base and it, not your machine, is the gate. **Locally, run only the harnesses your change touches** (`bash tests/<name>.test.sh`) — the full loop `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done` measured **39m 47s and 269.4k tokens** on 2026-08-29 against ~9 minutes and no tokens in CI, so it is the exception (shared machinery every harness loads) and the PR body says why. See `symlink/CONVENTIONS.md` → "The full suite belongs to CI". No build step, no lint.
 - `docs/` — human-facing depth. `.claude/rules/` — the same prohibitions, path-scoped for agents.
 
 **Keep machinery generic.** No org, repo, path, team or channel literals under `symlink/` —

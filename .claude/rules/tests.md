@@ -6,7 +6,19 @@ paths:
 # Test conventions
 
 Loads when you read anything under `tests/`. bash harnesses, no framework, no
-build step. Run them all before pushing:
+build step.
+
+**Run the harnesses your change touches before pushing — not all of them:**
+
+```bash
+bash tests/<the-one-you-touched>.test.sh
+```
+
+The full suite is CI's job: `harness suite` is a required check with `strict=true`, and it
+runs everything against the merged base. Locally the same loop measured **39m 47s and
+269.4k tokens** (2026-08-29) against ~9 minutes and no tokens in CI. So run it only when
+your change touches shared machinery every harness loads, and say why in the PR body —
+`symlink/CONVENTIONS.md` → "The full suite belongs to CI" is the rule this defers to.
 
 ```bash
 for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done
