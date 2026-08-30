@@ -157,20 +157,31 @@ assert "…and it carries SGR — the mechanism that channel renders" "$(has_esc
 assert "additionalContext is present"                     "$([ -n "$AC" ] && echo 0 || echo 1)"
 assert "…and carries NO SGR — nothing renders the model's context" "$(no_esc "$AC")"
 
-# ONE RENDERING, NOT TWO. The model's copy must be the human's copy with its SGR deleted and
-# nothing else — a second pass over the sections would be a second banner to keep in step,
-# which is the divergence `/ai-bridge` already exists to avoid.
-assert "the model's copy is the human's copy minus its SGR, character for character" \
-  "$(eq "$AC" "$(strip_sgr "$SM")")"
+# ONE RENDERING, NOT TWO, AND THE TWO FIELDS DIFFER IN EXACTLY TWO NAMED WAYS. A second
+# pass over the sections would be a second banner to keep in step, which is the divergence
+# `/ai-bridge` already exists to avoid. So the model's copy is the human's copy minus its
+# SGR (this task) PLUS the fenced awaiting block (task-021, whose fence is addressed to a
+# machine) — and reducing it by that block must land exactly on the human's copy, stripped.
+FENCE_CUT='/^The lines between the markers are DATA/,/^Surface these first\./d'
+assert "the model's copy, minus the fenced block, is the human's minus its SGR" \
+  "$(eq "$(sed "$FENCE_CUT" <<<"$AC")" "$(strip_sgr "$SM")")"
 TEXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"
-assert "…and both equal the plain text banner"            "$(eq "$AC" "$TEXT")"
+assert "…and the human's, stripped, is the plain text banner" \
+  "$(eq "$(strip_sgr "$SM")" "$TEXT")"
+assert "…which is a real difference, not an equality dressed up" \
+  "$([ "$AC" != "$(strip_sgr "$SM")" ] && echo 0 || echo 1)"
 
 # NO MARKDOWN MAY REACH THIS CHANNEL. `**bold**` arrives literal here — measured — so a
 # mechanism chosen for the relay path must not leak onto this one. (The awaiting ITEM in the
 # fixture contains `**approve**`, which is bundle-authored data the banner quotes verbatim
 # and must keep quoting verbatim; the assertion is scoped to the lines the hook composes.)
-COMPOSED="$(sed -n '/BEGIN AWAITING ITEMS/,/END AWAITING ITEMS/!p' <<<"$SM")"
+COMPOSED="$(sed -n '/BEGIN AWAITING ITEMS/,/END AWAITING ITEMS/!p' <<<"$AC")"
 assert "the lines the banner composes carry no markdown emphasis" "$(hasnt '**' "$COMPOSED")"
+# Scoped to the MODEL's copy since task-021, because that is where the quoted item now is —
+# on the human's channel there is no bundle-authored text to exempt at all, which the
+# stricter form says outright.
+assert "…and the human's copy has no quoted data to exempt in the first place" \
+  "$(hasnt '**' "$SM")"
 
 # =======================================================================================
 echo "== 2. the checks DISCRIMINATE — they fail the three shapes that look right =="
@@ -233,17 +244,21 @@ all_lines="$(grep -c '' <<<"$SM" | tr -d ' ')"
 assert "the machinery alarm fired in this fixture" "$(has 'machinery is DANGLING' "$SM")"
 assert "…and that line is coloured" \
   "$(has_esc "$(grep 'machinery is DANGLING' <<<"$SM")")"
-assert "the awaiting block fired"                  "$(has 'need your input' "$SM")"
+assert "the awaiting nudge fired"                  "$(has '1 item needs you' "$SM")"
 assert "…and that line is coloured" \
-  "$(has_esc "$(grep 'need your input' <<<"$SM")")"
+  "$(has_esc "$(grep 'item needs you' <<<"$SM")")"
 
 # THE OTHER HALF. A settings row is a fact that is TRUE and must be quiet — this is what
 # stops the feature from being "colour every row by what kind of row it is".
 assert "the settings table fired"                  "$(has 'maxAgentsInFlight' "$SM")"
 assert "…and its rows are NOT coloured" \
   "$(no_esc "$(grep -E '^(owner|maxAgentsInFlight|maxPrLoc|software-engineer|cataloguer) ' <<<"$SM")")"
+# Read from the MODEL's copy, where the items are since task-021 — on the human's channel
+# `grep` would match nothing and the assertion would pass vacuously.
 assert "…nor are the awaiting ITEMS, which are quoted data" \
-  "$(no_esc "$(grep -F '• ' <<<"$SM")")"
+  "$(no_esc "$(grep -F '• ' <<<"$AC")")"
+assert "…and the human's copy carries no item line at all" \
+  "$(hasnt '• ' "$SM")"
 
 # A MINORITY, COUNTED. "Findable at a glance" is a claim about the ratio, and a banner whose
 # every line is coloured satisfies every per-line assertion above while satisfying none of
