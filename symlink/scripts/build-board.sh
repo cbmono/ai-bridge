@@ -1,8 +1,40 @@
 #!/usr/bin/env bash
 #
 # build-board.sh — render every instance's SNAPSHOT.json as ONE self-contained HTML
-# page: projects collapsed to one summary line, each expandable to its task table,
-# with a decision rail on top. A page a teammate opens on a phone.
+# page: projects collapsed to one summary line, each expandable to its task table and
+# its own decision rail. A page a teammate opens on a phone.
+#
+# THE DECISION RAIL IS PER PROJECT, AND THE COLLAPSED LINE CARRIES ITS WEIGHT. It was
+# one pooled list above every project until 2026-08-30. At sixteen live projects that
+# list stopped being scannable — the section that exists to say what needs you is the
+# section you skip — so each project's items moved INSIDE that project, above its task
+# table, holding only its own.
+#
+# That move is only safe because of what replaces it. Sixteen collapsed rows with the
+# queues hidden inside them is STRICTLY WORSE than the clutter it removes: the clutter
+# was at least honest about which projects wanted you. So the summary line carries the
+# signal, and "can I tell, from the collapsed view alone, exactly which projects need
+# me?" is the question this design answers. THE WEIGHTING, in full — it is three
+# reinforcing channels for one number, not decoration:
+#   · the COUNT itself — `<b>N</b> awaiting you`, the number of that project's rail
+#     items, so the same N the pooled list would have shown for it;
+#   · that count rendered as a FILLED chip in the signal colour (`.c.you`, ground-on-
+#     signal, the page's only filled count pill) and placed FIRST in the count row, so
+#     it reads before "done"/"in progress"/"pending"; plus a signal border and inset
+#     bar on the whole card (`.proj.wants`), which is visible even where a chip is not;
+#   · ORDER — a project with items sorts above one without, inside its own half of the
+#     board (live above, finished below), the snapshot's order preserved within each.
+# A project with nothing waiting gets none of the three. Colour alone would fail a
+# reader who cannot see it; the count and the order do not depend on it.
+#
+# THE ✕ COPIES A COMMAND. IT NEVER CLOSES ANYTHING. Closing a project is
+# `/close-project`, a human-run command with its own consolidation, log entry and
+# folder removal (SCHEMA.md); nothing on a rendered page may perform any of that, and
+# this page has no way to. The control is a `[data-copy]` button on the SAME clipboard
+# helper every other copy button uses — it writes `/close-project <slug>` to the
+# clipboard and nothing else, has no href, no form and no target, and its tooltip says
+# it copies a command rather than that it closes the project. Do not reword it into
+# "close this project", and do not give it any behaviour beyond the copy.
 #
 # THE PAGE IS PER OWNER, AND HAS TWO HALVES. Your own projects come from this clone's
 # SNAPSHOT.json, as they always did. Every OTHER owner's come from the tracked task
@@ -120,8 +152,20 @@
 #     — instead of a link, and every button says what it copied so a failed copy is
 #     visible rather than silent) and a webfont stylesheet. Nothing from a snapshot ever
 #     reaches either of them; the escaping rules above are what hold, not "no script". A
-#     retained project's deliverables panel copies with this SAME helper — every
-#     `[data-copy]` button on the page shares it, and there is no second one.
+#     retained project's deliverables panel copies with this SAME helper, and so does the
+#     ✕ close-command control — every `[data-copy]` button on the page shares it, and
+#     there is no second one.
+#   · A FAILED COPY IS A STICKY, SELECTABLE FAILURE — because the page is opened over
+#     `file://`. The tick renders to `.board-live/board.html` and a human double-clicks
+#     it, and a `file://` origin is not a secure context in Chromium, so
+#     `navigator.clipboard` is simply `undefined` there and the async path never runs.
+#     The `document.execCommand('copy')` fallback below is what actually does the work
+#     on that origin — measured, not assumed — and it can itself be refused. When both
+#     fail, the toast STAYS UP, turns `user-select:text; pointer-events:auto`, carries
+#     the exact text in a <code>, and has to be dismissed. It is deliberately not a
+#     three-second message: a control that appears to copy and does not is worse than no
+#     control, and a failure notice you cannot select or read in time is the same defect
+#     one step removed. Do not restore auto-hide on the failure path.
 #   · A retained project's deliverables panel is built from `deliverable_paths:` in the
 #     project's own SNAPSHOT.json stanza — which write-snapshot.sh reads from
 #     project.md's frontmatter, and ONLY from there. This renderer never opens `tasks/`
@@ -134,6 +178,19 @@
 #     to deliverables and no wider ON PURPOSE: this page renders a `/projects/<slug>/`
 #     from an unvalidated slug elsewhere (the other-owners section), which this check
 #     does not cover and does not claim to.
+#   · THE ONE THING IT READS OFF DISK THAT IS NOT A SNAPSHOT: `projects/<slug>/project.md`,
+#     for its `timestamp:` and for nothing else, to put a creation date on the collapsed
+#     line. This is not a new source — it is the SAME document the other-owners section
+#     already reads, from the working tree instead of from HEAD, which is the right side
+#     for a project that is YOURS (the snapshot beside it is derived from that same tree).
+#     Three limits keep it inside the published-page rules: the slug must be one
+#     well-formed segment (DELIV_SEG) before it can be joined to a path, so a snapshot
+#     claiming `"slug": ".."` reads nothing; only a strict leading `YYYY-MM-DD` is taken
+#     from the value, so a trailing YAML comment, an absolute path or any other text on
+#     that line cannot reach the page; and an absent, unreadable or unparseable
+#     project.md renders no date at all rather than an error. Do not widen this to read
+#     any other field — every other field a board needs comes through write-snapshot.sh's
+#     allowlist, on purpose.
 #   · Its decision rail surfaces one thing AWAITING.md does not: an open question on a
 #     task that is no longer a draft. write-snapshot.sh only emits an `awaiting` verb for
 #     a question while the task IS a draft, so such a question is invisible in the queue;
@@ -669,6 +726,34 @@ button.no{border-color:var(--stop);color:var(--stop)}
 .proj.other .ptitle{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.9rem;
   color:var(--muted)}
 .proj.other[open] .ptitle{color:var(--ink)}
+/* THE AWAITING SIGNAL ON A COLLAPSED LINE. Three channels for one number, so the
+   collapsed board still answers "which projects need me?" — see the header's WEIGHTING
+   block. These rules sit AFTER .proj.fin/.proj.other on purpose: a finished project
+   proposing its own close is exactly a project that wants you, and must not be
+   quietened by the dashed, shadowless treatment above. */
+.proj.wants{border-color:color-mix(in srgb,var(--signal) 55%,var(--line));
+  border-style:solid;box-shadow:inset .3rem 0 0 var(--signal),var(--shadow)}
+.proj.wants .phead{padding-left:1.25rem;
+  background:color-mix(in srgb,var(--signal) 7%,transparent)}
+.proj.wants .phead:hover{background:color-mix(in srgb,var(--signal) 13%,transparent)}
+.proj.wants .ptitle{color:var(--ink);font-weight:600}
+.proj.fin.wants .phead{opacity:1}
+/* The page's ONLY filled count pill, and first in the row. Ground-on-signal rather
+   than a hard-coded white: --signal is dark in light mode and light in dark mode, so
+   the contrast holds in both without a second rule. */
+.c.you{background:var(--signal);border-color:var(--signal);color:var(--ground);
+  font-weight:600}
+.c.you b{color:var(--ground);font-weight:700}
+/* Creation date, read from project.md's `timestamp:`. Mono and tabular so a column of
+   them lines up down the page. */
+.pdate{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.72rem;
+  color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}
+/* The ✕. It COPIES `/close-project <slug>` and does nothing else — see the header. */
+button.pclose{font-size:.85rem;line-height:1;padding:.2rem .42rem;color:var(--dim);
+  background:none;border-color:transparent;flex-shrink:0}
+button.pclose:hover{color:var(--stop);border-color:var(--stop);background:var(--surface)}
+/* A project's own rail, inside its body and above its task table. */
+.body>.rail{margin:.85rem 0 .1rem}
 .c.q{color:var(--signal);border-color:color-mix(in srgb,var(--signal) 40%,var(--line))}
 .c.q b{color:var(--signal)}
 .c.note{color:var(--dim);border-style:dashed}
@@ -735,10 +820,24 @@ td a:hover,td a:focus-visible{border-bottom-color:currentColor}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 .toast{position:fixed;left:50%;bottom:1.3rem;transform:translateX(-50%);z-index:9;
+  display:flex;gap:.6rem;align-items:flex-start;
   background:var(--ink);color:var(--ground);font-size:.83rem;padding:.55rem .9rem;
   border-radius:5px;box-shadow:var(--shadow);max-width:calc(100vw - 2rem);
   opacity:0;pointer-events:none;transition:opacity .18s}
 .toast.on{opacity:1}
+/* THE FAILURE STATE, and why it is not just a red message. On a `file://` origin the
+   clipboard can be refused outright, and a notice that fades after three seconds and
+   cannot be selected leaves the reader with nothing — the same as a control that
+   silently did nothing. So a failed copy is SELECTABLE and STAYS until dismissed. */
+.toast.fail{background:var(--stop);color:var(--ground);pointer-events:auto;
+  user-select:text;-webkit-user-select:text}
+.toast.fail code{display:block;margin-top:.3rem;padding:.2rem .35rem;font-size:.86em;
+  background:rgba(0,0,0,.28);border-radius:3px;word-break:break-all;
+  user-select:all;-webkit-user-select:all}
+.toast .x{display:none}
+.toast.fail .x{display:block;flex-shrink:0;background:none;border-color:transparent;
+  color:var(--ground);font-size:1rem;line-height:1;padding:.1rem .3rem}
+.toast.fail .x:hover{border-color:var(--ground)}
 footer{border-top:1px solid var(--line);padding-top:.9rem}
 footer p{margin:0 0 .5rem;font-size:.76rem;color:var(--dim);max-width:45rem}
 footer p:last-child{margin:0}
@@ -751,19 +850,53 @@ TABLE_SCRIPT = r"""<script>
 // else — layout, collapse, links — is markup and CSS, so scripting off costs the
 // page nothing but this.
 (function(){
-  var el;
+  var el, msg, code, dismiss;
+  // Built once, from NODES rather than from markup: every string that lands in here is
+  // written with textContent, so nothing a copy button carries can become an element.
+  function build(){
+    if(el) return;
+    el=document.createElement('div'); el.className='toast'; el.setAttribute('role','status');
+    var wrap=document.createElement('div');
+    msg=document.createElement('span'); code=document.createElement('code');
+    wrap.appendChild(msg); wrap.appendChild(code);
+    dismiss=document.createElement('button');
+    dismiss.type='button'; dismiss.className='x'; dismiss.textContent='×';
+    dismiss.setAttribute('aria-label','Dismiss');
+    dismiss.addEventListener('click', function(){ el.classList.remove('on','fail'); });
+    el.appendChild(wrap); el.appendChild(dismiss);
+    document.body.appendChild(el);
+  }
   function toast(m){
-    if(!el){ el=document.createElement('div'); el.className='toast'; document.body.appendChild(el); }
-    el.textContent=m; el.classList.add('on');
-    clearTimeout(toast.t); toast.t=setTimeout(function(){ el.classList.remove('on'); },3000);
+    build(); clearTimeout(toast.t);
+    msg.textContent=m; code.textContent=''; el.classList.remove('fail');
+    el.classList.add('on');
+    toast.t=setTimeout(function(){ el.classList.remove('on'); },3000);
+  }
+  // A FAILED COPY DOES NOT FADE. It stays up, it is selectable, and it shows the exact
+  // text — see "A FAILED COPY IS A STICKY, SELECTABLE FAILURE" in this file's header.
+  // The board is opened over file://, where the clipboard can be refused outright, and
+  // a three-second unselectable "copy failed" is barely better than the silent failure
+  // it reports.
+  function fail(text){
+    build(); clearTimeout(toast.t);
+    msg.textContent='Copy failed — this page cannot reach the clipboard. Select and copy this yourself:';
+    code.textContent=text;
+    el.classList.add('on','fail');
   }
   document.addEventListener('click', function(e){
     var b = e.target.closest ? e.target.closest('[data-copy]') : null;
     if(!b) return;
+    // This is also what stops a copy button inside a <summary> from toggling the
+    // <details> around it: the toggle is that click's DEFAULT ACTION, and cancelling
+    // it here cancels that too. The ✕ on a project line copies without opening,
+    // closing or navigating anything.
     e.preventDefault();
     var text = b.getAttribute('data-copy'), what = b.getAttribute('data-what') || 'Text';
     var ok = function(){ toast(what + ' copied — paste it to Claude'); };
-    var bad = function(){ toast('Copy failed. Select this instead: ' + text); };
+    var bad = function(){ fail(text); };
+    // On a file:// origin navigator.clipboard is undefined — it is not a secure
+    // context — so legacy() is the path that actually runs there. Both are kept: the
+    // async API is the right one wherever this page is served over https.
     if(navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(ok, legacy);
     } else { legacy(); }
@@ -848,6 +981,14 @@ TABLE_SCRIPT = r"""<script>
 DELIV_SEG = r"\w[\w.+-]*"
 DELIV_PATH = re.compile(
     r"/projects/(%s)/deliverables/%s(?:/%s)*" % (DELIV_SEG, DELIV_SEG, DELIV_SEG))
+# The same segment shape, on its own, for the one place a slug is joined to a real
+# filesystem path (project_created). Stated as a reuse rather than a second literal:
+# two spellings of "what a slug may be" is two things to drift.
+SLUG_SEG = re.compile(DELIV_SEG)
+# A date, and only a date. `timestamp:` is an ISO 8601 stamp, and anything after the
+# day — the time, a `Z`, a trailing YAML comment, a second value somebody hand-edited
+# in — is not rendered and cannot be. See project_created().
+ISO_DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def bundle_deliverable(path, slug):
@@ -877,6 +1018,40 @@ def bundle_deliverable(path, slug):
     if not DELIV_PATH.fullmatch(probe):
         return None
     return value if value.startswith("/projects/%s/deliverables/" % slug) else None
+
+
+def project_created(d, slug):
+    """`YYYY-MM-DD` from `<instance>/projects/<slug>/project.md`'s `timestamp:`, or "".
+
+    The ONE read this renderer makes off disk that is not a snapshot, and the header's
+    "THE ONE THING IT READS OFF DISK" block is where the case for it lives. Three
+    things keep it inside the published-page rules, and each is a separate failure it
+    would otherwise have:
+
+      · THE SLUG IS SHAPE-CHECKED BEFORE IT TOUCHES A PATH. `slug` comes from a
+        SNAPSHOT.json this renderer reads back without knowing who wrote it, and
+        `d / "projects" / ".." / "project.md"` is a read outside `projects/` — the same
+        traversal bundle_deliverable() already refuses, by the same rule, so there is
+        one definition of "a slug" here rather than two.
+      · ONLY A DATE IS TAKEN FROM THE VALUE. frontmatter() strips a trailing `#`
+        comment for three enum fields and deliberately not for the rest, so the raw
+        value of `timestamp: 2026-08-29T18:13:34Z  # see /Users/somebody/notes` still
+        carries that path. Matching a leading `YYYY-MM-DD` and rendering the MATCH —
+        never the value — means no byte outside `[0-9-]` can reach the page from this
+        file, whatever else is on the line.
+      · EVERY ABSENCE IS A BLANK, NEVER AN ERROR. No projects/ directory (every
+        hand-written fixture), no project.md, an unreadable one, one with no
+        frontmatter, one with no `timestamp:` — each renders no date and nothing else
+        changes. A board must not fail because a document it does not need is missing.
+    """
+    if not SLUG_SEG.fullmatch(str(slug or "")):
+        return ""
+    try:
+        text = (d / "projects" / str(slug) / "project.md").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError, ValueError):
+        return ""
+    m = ISO_DAY.match(str(frontmatter(text).get("timestamp") or ""))
+    return m.group(0) if m else ""
 
 
 def short_ref(slug, tid):
@@ -1018,27 +1193,38 @@ def render_table():
             # tasks yet is NOT done — it has not started.
             done_proj = bool(p.get("status") == "done" or (
                 ts and all(t.get("status") in TERMINAL for t in ts)))
-            rows.append((g, p, done_proj))
+            # THIS project's rail items, collected into their own list rather than only
+            # into the pooled one. `asks` still exists and is still the page-wide count
+            # in the masthead tally; what changed is that the list is also carried on
+            # the row, so the block renders INSIDE the project it belongs to and the
+            # summary line can weigh it. Same items, same order, same derivation.
+            mine = []
             for t in ts:
                 n_tasks += 1
                 if t.get("status") == "done":
                     n_done += 1
                 if t.get("awaiting"):
-                    asks.append((g, p, t, None))
+                    mine.append((g, p, t, None))
                 elif t.get("open_questions"):
                     # A question only produces an `awaiting` verb while the task is a
                     # DRAFT (write-snapshot.sh, `case draft)`), so a question on a
                     # ready or in-progress task is invisible in the queue. Surfacing
                     # it here fixes that at the presentation layer, without touching
                     # the AWAITING.md contract that awaiting-queue.test.sh pins.
-                    asks.append((g, p, dict(t, awaiting="question"), None))
+                    mine.append((g, p, dict(t, awaiting="question"), None))
             if p.get("awaiting_close"):
-                asks.append((g, p, {"awaiting": "close", "title": "all tasks terminal",
+                mine.append((g, p, {"awaiting": "close", "title": "all tasks terminal",
                                     "id": ""}, "/close-project " + str(p.get("slug") or "")))
+            asks += mine
+            rows.append((g, p, done_proj, project_created(d, p.get("slug")), mine))
 
-    # Finished projects sink to the bottom; among themselves and among the live ones
-    # the snapshot's order is preserved, so the list does not reshuffle between renders.
-    rows.sort(key=lambda r: r[2])
+    # Finished projects sink to the bottom, and WITHIN each half a project that wants
+    # you rises above one that does not — the third channel of the awaiting weighting
+    # (see the header), and the one that survives a reader who cannot see colour or a
+    # phone that shows four rows at a time. Everything else keeps the snapshot's order,
+    # so the list does not reshuffle between renders. `sort` is stable, which is what
+    # makes "within each half" true rather than approximately true.
+    rows.sort(key=lambda r: (r[2], not r[4]))
 
     head = [TABLE_HEAD.replace("__TITLE__", e(title))]
     o = ['<div class="board">']
@@ -1048,6 +1234,15 @@ def render_table():
     if stamps:
         o.append('<p class="sub">Snapshot %s UTC</p>'
                  % e(stamps[-1].replace("T", " ").replace("Z", "")))
+    # WHAT IS LEFT OF THE POOLED QUEUE, and all that is left of it: one line saying how
+    # many projects to look for. The list itself is inside those projects now (see the
+    # header), so this says where to look rather than repeating what is there — a
+    # second copy of sixteen items is the thing being deleted, not something to shrink.
+    n_wanting = sum(1 for r in rows if r[4])
+    if asks:
+        o.append('<p class="sub">%d waiting on you, in %d project%s — marked and sorted '
+                 "to the top below.</p>"
+                 % (len(asks), n_wanting, "" if n_wanting == 1 else "s"))
     o.append("</div><dl class=\"tally\">")
     o.append('<div><dt>Projects</dt><dd>%d</dd></div>' % len(rows))
     o.append('<div><dt>Done</dt><dd>%d/%d</dd></div>' % (n_done, n_tasks))
@@ -1061,10 +1256,19 @@ def render_table():
                  'not on the board. Re-run <code>scripts/write-snapshot.sh</code> there. '
                  '<br>%s</div>' % (e(d), e(msg)))
 
-    # ---- the decision rail: one click copies a complete prompt --------------
-    if asks:
-        o.append('<section class="rail"><h2>Awaiting you</h2><ul>')
-        for g, p, t, hint in asks:
+    # ---- one project's decision rail: one click copies a complete prompt ----
+    #
+    # This was a single pooled `<section class="rail">` above every project until
+    # 2026-08-30. It is now called once per project, from inside that project's own
+    # <details>, with only that project's items — the markup of an item is UNCHANGED,
+    # which is deliberate: the move is where the list is rendered, not what an item
+    # says, and `.where` still carries `<group> › <project>` because a board can show
+    # more than one instance and the close hint rides in that same span.
+    def rail(items):
+        if not items:
+            return
+        o.append('<section class="rail"><h2>Waiting for you · %d</h2><ul>' % len(items))
+        for g, p, t, hint in items:
             # str() on the id, not just on the title: a snapshot carrying `"id": 5`
             # parses, so the malformed-snapshot path never sees it, and `5 + " ("` then
             # raised TypeError — which meant NO FILE WAS WRITTEN AT ALL, one drifted
@@ -1105,7 +1309,7 @@ def render_table():
 
     # ---- one <details> per project, collapsed by default -------------------
     n_fin = sum(1 for r in rows if r[2])
-    for idx, (g, p, fin) in enumerate(rows):
+    for idx, (g, p, fin, created, mine) in enumerate(rows):
         if fin and (idx == 0 or not rows[idx - 1][2]):
             o.append('<h2 class="sep">Finished · %d</h2>' % n_fin)
         tasks = [todict(t) for t in tolist(p.get("tasks"))]
@@ -1121,8 +1325,18 @@ def render_table():
         # shape before it ever reaches a button.
         dps = [d for d in (bundle_deliverable(x, str(p.get("slug") or ""))
                            for x in tolist(p.get("deliverable_paths"))) if d]
-        o.append('<details class="proj%s"><summary class="phead">' % (" fin" if fin else ""))
+        slug = str(p.get("slug") or "")
+        o.append('<details class="proj%s%s"><summary class="phead">'
+                 % (" fin" if fin else "", " wants" if mine else ""))
         o.append('<span class="ptitle">%s</span><span class="counts">' % e(p.get("title")))
+        if mine:
+            # THE SIGNAL, and the reason collapsing sixteen projects is not a
+            # regression. FIRST in the row, so it is read before "done"/"in progress",
+            # and the only FILLED pill on the page — see the header's WEIGHTING block
+            # for the other two channels (the card's own marking, and the sort). It is
+            # a count of this project's rail items, which is exactly what the pooled
+            # list above used to contribute for it.
+            o.append('<span class="c you"><b>%d</b> awaiting you</span>' % len(mine))
         if fin:
             o.append('<span class="c done-tag">✓ done</span>')
         o.append('<span class="c ok"><b>%d</b> done</span>' % nd)
@@ -1147,9 +1361,36 @@ def render_table():
         if dps:
             o.append('<span class="tag">%d deliverable%s</span>'
                      % (len(dps), "" if len(dps) == 1 else "s"))
-        o.append("</span></summary>")
+        o.append("</span>")
+        if created:
+            o.append('<span class="pdate" title="Project created %s">%s</span>'
+                     % (e(created), e(created)))
+        if SLUG_SEG.fullmatch(slug):
+            # THE ✕ COPIES A COMMAND. It does not close, mutate or navigate anything —
+            # see the header, and do not reword this tooltip into "close this project".
+            # It is a plain [data-copy] button on the ONE clipboard helper this page
+            # already ships, so it adds no script, no link and no second implementation;
+            # the helper's preventDefault is what keeps a click inside this <summary>
+            # from toggling the card open.
+            #
+            # THE SHAPE CHECK, not a truthiness test, and for the reason every other
+            # value on this page is shape-checked: a slug comes from a SNAPSHOT.json
+            # read back without knowing who wrote it, and `"slug": "/Users/me/secret"`
+            # would otherwise put an absolute path inside a data-copy value — the one
+            # thing the whole no-filesystem-paths rule exists to prevent. A slug that
+            # is not one well-formed segment names nothing `/close-project` could act
+            # on either, so dropping the control loses nothing real.
+            o.append('<button class="pclose" data-copy="/close-project %s" '
+                     'data-what="Close command" title="Copy the command to close this '
+                     'project (%s) — this button only copies; closing is something you '
+                     'run yourself">✕</button>'
+                     % (e(slug), e("/close-project " + slug)))
+        o.append("</summary>")
 
-        o.append('<div class="body"><div class="scroll"><table><thead><tr>'
+        o.append('<div class="body">')
+        # THIS project's queue, above its task table and holding only its own items.
+        rail(mine)
+        o.append('<div class="scroll"><table><thead><tr>'
                  "<th>Task</th><th>State</th><th>Role</th><th>Depends on</th>"
                  "<th class=\"r\">Q</th><th>PR</th>"
                  "</tr></thead><tbody>")
