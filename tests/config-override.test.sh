@@ -207,6 +207,17 @@ if command -v python3 >/dev/null 2>&1; then
   OUT="$( cd "$INST" && bash "$SCRIPTS/resolve-model.sh" software-engineer 2>/dev/null )"; RC=$?
   assert "no roleTiers in either file -> prints nothing" "$([ -z "$OUT" ] && echo 0 || echo 1)"
   assert "…and exits 1, so the agent inherits the session model" "$([ "$RC" -eq 1 ] && echo 0 || echo 1)"
+  # …AND IT IS NOT QUIET ABOUT IT. Absence is still not an error and stdout is still
+  # empty — every caller captures stdout, and a word printed there becomes a model alias
+  # — but exiting silently was the failure shape rather than the fallback: an unresolved
+  # role is indistinguishable from a resolved one at the call site, so every role can run
+  # on the wrong tier with nothing anywhere saying so. `local-tier-seed.test.sh` owns the
+  # detail of that line; what belongs HERE, beside the two-file precedence, is that the
+  # per-machine layering can never end in silence.
+  ERR="$( cd "$INST" && bash "$SCRIPTS/resolve-model.sh" software-engineer 2>&1 >/dev/null )"
+  assert "…and says so on stderr rather than exiting quietly" \
+    "$([ -n "$ERR" ] && echo 0 || echo 1)"
+  assert "…naming the agent it could not resolve" "$(has 'software-engineer' "$ERR")"
 
   # A cap that is not a positive integer is refused, not rounded. `isinstance(True, int)`
   # is True in Python, so `true` would otherwise resolve to a cap of 1 and look chosen.
@@ -275,6 +286,18 @@ if command -v python3 >/dev/null 2>&1; then
   assert "a LOCAL null unsets the tracked value rather than being ignored" \
     "$([ -z "$OUT" ] && [ "$RC" -eq 1 ] && echo 0 || echo 1)"
   no_local
+
+  # And the mirror, without which the assertion above would pass a resolver that
+  # complained on every call — as useless as one that never complained, since a warning
+  # printed on the happy path is a warning nobody reads.
+  printf '%s\n' '{
+  "org": "o",
+  "models":    { "deep": "opus" },
+  "roleTiers": { "software-engineer": "deep" }
+}' > "$INST/instance.config.json"
+  ERR="$( cd "$INST" && bash "$SCRIPTS/resolve-model.sh" software-engineer 2>&1 >/dev/null )"
+  assert "…while a RESOLVABLE agent prints nothing on stderr at all" \
+    "$([ -z "$ERR" ] && echo 0 || echo 1)"
 
   # Non-vacuity for the three refusals above: the same resolver still answers a real one.
   printf '{\n  "maxAgentsInFlight": 4\n}\n' > "$INST/instance.config.json"

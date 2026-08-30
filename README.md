@@ -412,7 +412,7 @@ Run from an instance root unless noted.
 | `review-clearance.sh` | asserts an artifact **evidencing a completed review** exists on a PR (never a green check) | no |
 | `review-rounds.sh` | counts a PR's completed verification **rounds**; exit non-zero at or past **two** | no |
 | `check-dispatch.sh` | `<task-doc>` — did the dispatch actually produce the PR it promised | **never** |
-| `resolve-model.sh` | `<agent>` — prints the model alias it should run on, from `roleTiers`/`models` | no |
+| `resolve-model.sh` | `<agent>` — prints the model alias it should run on, from `roleTiers`/`models` (local file first; `install.sh` seeds both there). No entry ⇒ nothing on stdout, exit 1, and **a line on stderr** saying the caller would otherwise inherit the session model | no |
 | `tick-lock.sh` | `acquire [--as launcher\|tick]`/`release`/`status` — the per-clone PM dispatch lock; exit 0 is the only clearance to dispatch or to run a tick | `acquire`/`release` only, `.tick-lock` + `.tick-lock.claim` (gitignored) |
 | `task-owner.sh` | resolves and compares a task's owner | no |
 | `check-template-version.sh` | is the template this instance links older than the remote's default branch — prints a line **only when behind**, silence on every failure | not the instance — `--fetch` (opt-in) updates the template checkout's remote-tracking refs, nothing else |

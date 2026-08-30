@@ -390,9 +390,12 @@ verbatim. Omit both maps and everything just inherits the session model.
 
 **Resolve it with `scripts/resolve-model.sh <agent>`, never from memory.** It prints the
 one alias for that agent (`roleTiers[<agent>]` → `models[<tier>]`), and for an agent with
-no entry prints nothing and exits 1 — the caller then inherits the session model rather
-than guessing. This applies to **every** dispatch, including an ad-hoc one from a main
-session, which is the path the prose version of this rule never reached.
+no entry prints nothing on stdout and exits 1 — the caller then inherits the session model
+rather than guessing. **Absence is not silent, though: it writes a line to stderr naming
+the agent, the lookup that failed and that consequence — report that line to the human
+rather than dispatching on a guess.** The fix goes in `instance.config.local.json`, which
+`install.sh` seeds with both keys. This applies to **every** dispatch, including an ad-hoc
+one from a main session, which is the path the prose version of this rule never reached.
 
 ### One tick at a time (the dispatch lock)
 
@@ -604,7 +607,7 @@ and none of which could say which instance the session was in — a question thi
 owner asked three times in one session, for three different instances.
 
 ```text
-AI-Bridge 0.11.1 · _ai-bridge-private · org: cbmono
+AI-Bridge 0.12.0 · _ai-bridge-private · org: cbmono
 ───────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM

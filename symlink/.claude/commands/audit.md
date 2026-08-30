@@ -15,7 +15,8 @@ and stop.
 ## Steps
 1. Read `instance.config.json`. **Resolve the auditor's model** the same way the PM
    routes dispatches: run `scripts/resolve-model.sh auditor` — it looks `auditor` up in `roleTiers` (default `deep`) and maps it to an
-   alias via `models`; if those maps are absent, inherit the session model.
+   alias via `models`; if those maps are absent it prints why on stderr — report that line,
+   then inherit the session model rather than dispatching on a guess.
 2. Dispatch the **`auditor`** agent (`subagent_type: auditor`) for one pass, passing the
    resolved model. It's read-only — it grounds each objective's `success_criteria`
    against live `gh`/`git` reality, flags the four drift modes (Goodhart · measurement

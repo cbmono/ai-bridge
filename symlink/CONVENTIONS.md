@@ -405,10 +405,14 @@ in `cbmono/ai-bridge` enforces this.
   2026-08-28: three separate sessions each reported, independently, that they had
   dispatched agents all day without consulting the file. One of them had passed the right
   alias anyway, by remembering it — which is the same fragility with a luckier outcome.
-  The script prints the alias, or prints nothing and exits 1 when the agent has no entry —
-  in which case inherit the session model and do not guess. This applies to **every**
-  dispatch, including an ad-hoc dispatch from a main session, which is exactly the
-  path the prose never reached.
+  The script prints the alias, or prints nothing and exits 1 when the agent has no entry.
+  **It is not quiet about that: it prints why on stderr — report that line to the human,
+  then inherit the session model and do not guess.** Exiting silently was the failure
+  shape rather than the fallback: an unresolved role looks exactly like a resolved one at
+  the call site, so every role can run on the wrong tier with nothing anywhere saying so.
+  `install.sh` seeds `models`/`roleTiers` into `instance.config.local.json`, which is where
+  the fix goes. This applies to **every** dispatch, including an ad-hoc dispatch from a
+  main session, which is exactly the path the prose never reached.
 - **Don't grow the harness without a reason — and past ~150 lines, ask.** This machinery
   is a means, not the product. Before you open a PR, measure what you added to it:
 

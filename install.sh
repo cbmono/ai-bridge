@@ -1858,7 +1858,7 @@ if [ "${team_state:-}" = write ]; then
     team_ltmp="$TEAM_LCFG.tmp.$$"
     {
       echo "{"
-      echo "  \"\$schema\": \"Per-machine overrides for THIS clone -- gitignored, never committed. Which GitHub login this clone is, plus any absolute path or address that cannot be right on both machines. See SCHEMA.md, 'Per-machine config overrides'.\","
+      echo "  \"\$schema\": \"Per-machine overrides for THIS clone -- gitignored, never committed. Which GitHub login this clone is, what each model tier costs THIS human, plus any absolute path or address that cannot be right on both machines. See SCHEMA.md, 'Per-machine config overrides'.\","
       printf '  "ownerGithubUser": "%s"\n' "$TEAM_OWNER"
       echo "}"
     } > "$team_ltmp"
@@ -1873,6 +1873,223 @@ if [ "${team_state:-}" = write ]; then
     fi
   fi
   rm -f "$TEAM_ROSTER"
+fi
+
+# ===========================================================================
+# 4c. PER-MACHINE SPEND — seed `models` and `roleTiers` into the local file.
+# ===========================================================================
+#
+# WHY THE INSTALLER WRITES THEM AT ALL. These two keys decide what every dispatched
+# agent COSTS, and the bill is per human rather than per bundle (SCHEMA.md →
+# "Per-machine config overrides"). Left only in the TRACKED `instance.config.json`,
+# the map one human committed is the map every clone of that bundle pays for, and the
+# session banner's FROM column says `tracked` — which is the honest report of a
+# decision the reader did not make. Seeding them here makes the per-machine file the
+# one in force on every machine, so the banner reads `local` and the human can see
+# whose decision is operating.
+#
+# THE TRACKED KEYS DELIBERATELY STAY, AS A FALLBACK. That is the migration design and
+# not an oversight. `scripts/resolve-model.sh` with NEITHER source resolves to nothing,
+# and a caller that gets nothing inherits the session model — for every role at once,
+# with no error. Removing the tracked keys in the same change would open exactly that
+# window on any instance this step had not yet reached, and a merge is not a stamp: an
+# instance is only re-stamped when somebody runs this script. Keeping them means there
+# is no ordering in which the pair resolves to nothing. Local wins wherever it exists;
+# tracked answers wherever it does not; this step is what makes local exist.
+#
+# SEEDS PER KEY, AND NEVER RECONCILES. A key already present in the local file is left
+# exactly as it is — including one explicitly `null`, which is how SCHEMA.md says a
+# human UNSETS an inherited key, and including a PARTIAL map, which
+# `resolve-config.sh` merges entry by entry over the tracked one. Topping a partial map
+# up to the full set would be reconciling a human's edit, which this installer does not
+# do anywhere else either. So the unit is the key: present ⇒ untouched, absent ⇒ seeded.
+#
+# PYTHON3 OR NOTHING, and the reason is that the only reader of these keys is
+# `scripts/resolve-config.sh`, which requires python3 outright. On a machine without it
+# a seeded value would be a value nothing can read, so the honest outcome is to say so
+# and leave the tracked fallback answering — the same "no verifier, no write" rule the
+# roster block above applies, for the same reason. Never silent: the skip prints.
+SPEND_TCFG="$TARGET/instance.config.json"
+SPEND_LCFG="$TARGET/instance.config.local.json"
+
+spend_manual_note() {
+  echo "        Set them by hand instead (SCHEMA.md → 'Per-machine config overrides'):"
+  echo "          instance.config.local.json  { \"models\": { \"deep\": \"opus\", … },"
+  echo "                                        \"roleTiers\": { \"software-engineer\": \"deep\", … } }"
+}
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "  skip  per-machine models/roleTiers (no python3 here, and scripts/resolve-config.sh"
+  echo "        needs it to read them at all — the tracked instance.config.json still answers)."
+  spend_manual_note
+else
+  # Temp file BESIDE the target for the reason the roster block states: a rename out of
+  # $TMPDIR would carry mktemp's 0600, and a cross-filesystem mv degrades to
+  # copy-and-remove, where an interruption leaves a half-written config.
+  spend_tmp="$SPEND_LCFG.tmp.$$"
+  spend_rc=0
+  spend_out="$(python3 - "$SPEND_TCFG" "$SPEND_LCFG" "$spend_tmp" <<'PY'
+import json, os, sys
+
+tracked_path, local_path, tmp_path = sys.argv[1], sys.argv[2], sys.argv[3]
+
+# THE DOCUMENTED DEFAULTS, and this list is the fallback of a fallback: it is used only
+# when the tracked file has no such key at all (an instance whose config predates it, or
+# one somebody trimmed). Keep it in step with seed/instance.config.json and with
+# SCHEMA.md — tests/local-tier-seed.test.sh asserts the two agree, so drift fails there
+# rather than on a machine.
+DEFAULTS = {
+    "models": {"light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable"},
+    "roleTiers": {
+        "project-manager": "deep",
+        "software-engineer": "deep",
+        "devops-engineer": "deep",
+        "qa-reviewer": "deep",
+        "cataloguer": "standard",
+        "plan-architect": "apex",
+        "auditor": "deep",
+    },
+}
+SCHEMA_NOTE = (
+    "Per-machine overrides for THIS clone -- gitignored, never committed. Which GitHub "
+    "login this clone is, what each model tier costs THIS human, plus any absolute path "
+    "or address that cannot be right on both machines. See SCHEMA.md, 'Per-machine "
+    "config overrides'."
+)
+
+
+def load(path):
+    """A layer, or None when it is missing/unreadable/not an object. None is NOT {}:
+    an unreadable local file must stop this step rather than be overwritten with a
+    fresh one, because the thing we cannot read is somebody's hand-edited config."""
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as fh:
+            data = json.load(fh)
+    except Exception:
+        return False
+    return data if isinstance(data, dict) else False
+
+
+local = load(local_path)
+if local is False:
+    print("unreadable")
+    sys.exit(3)
+
+tracked = load(tracked_path)
+if tracked in (None, False):
+    tracked = {}
+
+existed = local is not None
+if not existed:
+    local = {"$schema": SCHEMA_NOTE}
+
+seeded = []
+for key in ("models", "roleTiers"):
+    # `in`, not a truth test: a key present and null is a deliberate unset, and a key
+    # present and empty is a deliberate empty map. Both are answers, so both are kept.
+    if key in local:
+        continue
+    value = tracked.get(key)
+    if not isinstance(value, dict) or not value:
+        value = DEFAULTS[key]
+    local[key] = dict(value)
+    seeded.append(key)
+
+if not seeded:
+    print("keep")
+    sys.exit(1)
+
+with open(tmp_path, "w") as fh:
+    json.dump(local, fh, indent=2)
+    fh.write("\n")
+
+# The existing file's MODE travels with its content. A fresh temp takes the umask, so
+# rewriting a file somebody had tightened to 0600 would quietly widen it — the same
+# reason the roster block above copies the target's mode with `cp -p` rather than
+# renaming a 0600 mktemp over a config.
+if existed:
+    try:
+        os.chmod(tmp_path, os.stat(local_path).st_mode & 0o7777)
+    except OSError:
+        pass
+
+# Parsed back BEFORE it lands, and checked for the pairs we claim to have written — a
+# file can parse perfectly and still be missing them, which is the false-success shape
+# this codebase has already been bitten by (migrate-bundle.sh).
+with open(tmp_path) as fh:
+    back = json.load(fh)
+for key in seeded:
+    if back.get(key) != local[key]:
+        print("verify-failed")
+        sys.exit(4)
+
+print("wrote %s" % " ".join(seeded))
+PY
+  )" || spend_rc=$?
+
+  case "${spend_out%% *}" in
+    wrote)
+      spend_keys="${spend_out#wrote }"
+      if mv "$spend_tmp" "$SPEND_LCFG"; then
+        echo "  wrote instance.config.local.json ($spend_keys — this machine's model spend)"
+      else
+        rm -f "$spend_tmp"
+        echo "  warn  could not write instance.config.local.json; the tracked models/roleTiers" >&2
+        echo "        still answer, so nothing is degraded." >&2
+        spend_manual_note >&2
+      fi ;;
+    keep)
+      echo "  keep  instance.config.local.json models/roleTiers (already set — left alone)" ;;
+    unreadable)
+      rm -f "$spend_tmp"
+      echo "  warn  instance.config.local.json does not parse as JSON, so models/roleTiers" >&2
+      echo "        were NOT seeded and the tracked map is what answers. Fix that file." >&2 ;;
+    *)
+      rm -f "$spend_tmp"
+      echo "  warn  models/roleTiers were not seeded (installer exit $spend_rc); the tracked" >&2
+      echo "        instance.config.json still answers, so no role is left without a model." >&2
+      spend_manual_note >&2 ;;
+  esac
+
+  # AND THEN ASK THE REAL READER, every time — not only when something was written.
+  # The property this whole step exists for is "every role this instance dispatches
+  # resolves to a model", and that is a question for `resolve-model.sh`, not for the
+  # bytes we just wrote. A role that resolves to nothing would otherwise inherit the
+  # session model in silence, which is the one outcome this section is against; so it
+  # is named here, at the only moment a human is reading this script's output.
+  spend_unresolved=""
+  # `|| true` on the ASSIGNMENT, not inside it: under `set -e` with `pipefail` a pipeline
+  # assigned to a variable outside an `if` condition kills the whole script when any stage
+  # exits non-zero, and an instance with no roleTiers at all is exactly that case. Recorded
+  # in this codebase once already (a `grep|head|cut` assignment beside a guard that was fine).
+  spend_roles="$(bash "$SYMLINK_SRC/scripts/resolve-config.sh" --instance "$TARGET" --dump 2>/dev/null \
+                 | awk -F'\t' '$2=="roleTiers" && $3!="" { print $3 }')" || true
+  while IFS= read -r spend_role; do
+    [ -n "$spend_role" ] || continue
+    if [ -z "$(bash "$SYMLINK_SRC/scripts/resolve-model.sh" --instance "$TARGET" "$spend_role" 2>/dev/null)" ]; then
+      spend_unresolved="$spend_unresolved $spend_role"
+    fi
+  done <<EOF
+$spend_roles
+EOF
+  if [ -z "$spend_roles" ]; then
+    # THE EMPTY CASE IS THE LOUDEST ONE, and it is the case a per-role loop cannot see:
+    # with `roleTiers` resolving to nothing at all there are no roles to iterate, so a
+    # loop alone reports success by having nothing to complain about. That is precisely
+    # the silent degradation this section exists against — every dispatch inherits the
+    # session model, and the instance looks fine. Reachable by design, since a local
+    # `"roleTiers": null` is the documented way to unset an inherited key.
+    echo "  warn  this instance has NO roleTiers at all, in either config file, so every" >&2
+    echo "        dispatched agent will resolve to NO model and inherit whatever model the" >&2
+    echo "        session happens to be on." >&2
+    spend_manual_note >&2
+  elif [ -n "$spend_unresolved" ]; then
+    echo "  warn  these roles resolve to NO model, so a dispatch inherits whatever the" >&2
+    echo "        session happens to be:$spend_unresolved" >&2
+    echo "        Give each one's tier an entry in \`models\`, in instance.config.local.json." >&2
+  fi
 fi
 
 echo "Done. Machinery symlinked & gitignored; seed content in place."
