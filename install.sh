@@ -1238,9 +1238,9 @@ fi
 if ! grep -qE '^/?\.tick-lock\.claim$' "$gi"; then
   cat >> "$gi" <<'GI'
 
-# The tick's claim on the dispatch lock (scripts/tick-lock.sh) — the tick takes the lock
-# too, because a resumed tick never passes through the launcher, and this file is what tells
-# "held by the launcher that dispatched me" from "held by another tick". Per clone and
+# The tick's claim on the dispatch lock (scripts/tick-lock.sh) — the tick checks the lock on
+# entry too, because a resumed tick never passes through the launcher, and this file is what
+# tells "held by the launcher that dispatched me" from "held by another tick". Per clone and
 # derived exactly like the lock beside it, and removed with it by
 # `scripts/tick-lock.sh release`.
 /.tick-lock.claim

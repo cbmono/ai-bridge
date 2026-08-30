@@ -37,10 +37,10 @@
 # **resumed** with a message rather than dispatched, so it never passed through the launcher,
 # took no lock, and was invisible to one. The guard behaved exactly as designed. So:
 #
-#   5. THE TICK TAKES THE LOCK TOO, NOT ONLY THE LAUNCHER. A tick that began without a
-#      dispatch acquires it, and a later acquire sees it held. Everything above this line
-#      passed while that gap was open, which is precisely how it survived a whole harness:
-#      a mechanism on the path you were thinking about is not a mechanism on every path.
+#   5. THE TICK RUNS THE ACQUIRE TOO, NOT ONLY THE LAUNCHER. A tick that began without a
+#      dispatch reaches the same gate. Everything above this line passed while that gap was
+#      open, which is precisely how it survived a whole harness: a mechanism on the path
+#      you were thinking about is not a mechanism on every path.
 #   6. AND A DISPATCHED TICK MUST NOT REFUSE ITS OWN LOCK — the crux, and the failure mode
 #      of the obvious fix. The launcher takes the lock and then spawns; the tick then finds
 #      a held lock that is its own. Get that wrong and EVERY dispatched tick deadlocks on
@@ -81,6 +81,22 @@
 #      merely matches is exit 2, a human's call. THIS IS THE PROPERTY TO REFUSE A CHANGE ON:
 #      a diff that turns any exit 2 below into an exit 0 has re-opened 2026-08-29, and no
 #      other assertion in this file would notice.
+#
+#
+# AND A NINTH, WHICH IS WHERE THE FIFTH TURNED OUT TO BE HALF AN ANSWER:
+#
+#   9. A RESUMED TICK IS REFUSED, NOT MERELY DETECTED. Property 5 let the resumed tick take
+#      a lock of its own, so the next genuine dispatch stood down instead: exactly one tick
+#      ran, and it was the wrong one — a tick re-entering a loop whose state has moved on.
+#      A tick may now only ADOPT a launcher's lock; finding none is proof that nothing
+#      dispatched it, and it exits 4 without running, without taking a lock, and without
+#      leaving a claim. Asserted on the exit code, on the empty instance directory
+#      afterwards, and — because a guard nobody can break is not a guard — against a MUTANT
+#      copy of the script with the refusal stripped out, which must proceed where the real
+#      one refuses. The half that has no reader is named here too, and asserted in the
+#      "whichever order they arrive in" section: a resume landing inside the launcher's
+#      dispatch window meets an unclaimed lock and is indistinguishable from the tick that
+#      lock was taken for.
 #
 # EVERY TICK IN THIS FILE STATES ITS IDENTITY, AND THE ENVIRONMENT'S IS UNSET ON PURPOSE.
 # `--claimant` is the explicit source; absent one the script falls back to `TICK_CLAIMANT`
@@ -325,26 +341,65 @@ ok "…and can see the tick is RUNNING, not merely dispatched" \
   "$(printf '%s' "$ATTEMPT_OUT" | grep -qF 'it is RUNNING' && echo yes || echo no)" yes
 
 echo
-echo "== the measured bug: a RESUMED tick takes the lock, and a dispatch then sees it =="
-# The whole point. `SendMessage` wakes a completed agent directly — no launcher, no
-# acquire — so before this change nothing was written and the next dispatch correctly
-# found the lock free. Two project-managers ran concurrently for exactly that reason.
+echo "== the measured bug: a RESUMED tick is REFUSED, and never runs at all =="
+# The whole point, and property 9. A message wakes a completed agent directly — no
+# launcher, no dispatch — so nothing took a lock before it started, and the ABSENCE of one
+# is the evidence: the launcher takes the lock in the same breath as the spawn, so a tick
+# that finds none did not come through it.
+#
+# THE FIRST FIX HERE LET THAT TICK TAKE A LOCK OF ITS OWN, and this section asserted it.
+# That made the next genuine dispatch stand down, so exactly one tick ran — the property
+# being defended — and it was the WRONG one: a tick re-entering a loop whose state has
+# moved on, holding context from work already finished. Inverted deliberately, in the same
+# change that makes a tick never resumable; the ordering assertions below are what proves
+# the inversion did not simply delete the guarantee.
 R2="$TMP/resume"; mkdir -p "$R2"
 tick "$R2"                                # resumed: it did not pass through the launcher
-ok "the resumed tick proceeds"           "$TICK_RC" 0
-ok "…and took the lock ITSELF"           "$(said 'took:')" yes
-ok "…so the lock now exists"             "$(yn test -f "$R2/.tick-lock")" yes
-ok "…already claimed, since it is running" "$(yn test -f "$R2/.tick-lock.claim")" yes
+ok "the resumed tick is REFUSED"         "$TICK_RC" 4
+ok "…and did NOT run"                    "$(ran "$R2")" 0
+ok "…saying no launcher took a lock for it" "$(said 'NO DISPATCH LOCK')" yes
+ok "…naming the resume as the case"      "$(said 'never resumed')" yes
+ok "…and telling it to end the tick"     "$(said 'End the tick')" yes
+# It must leave NOTHING behind. A refusal that still created the lock would block the next
+# genuine dispatch for two hours, turning a refused resume into an outage.
+ok "…taking no lock of its own"          "$(yn test -e "$R2/.tick-lock")" no
+ok "…and writing no claim either"        "$(yn test -e "$R2/.tick-lock.claim")" no
+# …so the loop is entirely unaffected: the next real dispatch proceeds exactly as it would
+# have if the resumed tick had never happened.
 attempt "$R2"
-ok "the launcher is refused"             "$ATTEMPT_RC" 1
-ok "…and dispatches NOTHING"             "$(dispatches "$R2")" 0
-ok "…so exactly one tick ran"            "$(ran "$R2")" 1
+ok "the launcher then dispatches normally" "$ATTEMPT_RC" 0
+ok "…and its own tick adopts that lock"  "$(tick "$R2"; said 'adopted:')" yes
+ok "…so exactly one tick ran, the dispatched one" "$(ran "$R2")" 1
+
+echo
+echo "== and the refusal is not decoration: strip it and the resumed tick runs again =="
+# A guard is only a guard if its removal is detectable, so the removal is performed here.
+# `MUTANT` is this script with the two `refuse_unlaunched` calls in `acquire` deleted —
+# nothing else — which is exactly the edit a future "simplification" would make.
+MUT="$TMP/mutant"; mkdir -p "$MUT"
+MUTANT="$MUT/tick-lock.sh"
+sed 's/^\( *\)refuse_unlaunched$/\1: # refusal removed/' "$LOCKSH" > "$MUTANT"
+ok "the mutant differs from the real script" \
+  "$(cmp -s "$MUTANT" "$LOCKSH" && echo same || echo differs)" differs
+ok "…and is still valid shell"           "$(yn bash -n "$MUTANT")" yes
+# The same sequence against both scripts, from identical empty instances, so the only
+# variable is the refusal itself.
+MR="$TMP/mutant-run"; MRR="$TMP/real-run"; mkdir -p "$MR" "$MRR"
+bash "$MUTANT" acquire --as tick --instance "$MR"  >/dev/null 2>&1; MUT_RC=$?
+bash "$LOCKSH" acquire --as tick --instance "$MRR" >/dev/null 2>&1; REAL_RC=$?
+ok "the real script refuses that resumed tick"    "$REAL_RC" 4
+ok "…and with the refusal stripped it does not"   "$MUT_RC" 0
+ok "…so an assertion here fails the moment the refusal is removed" \
+  "$(if [ "$MUT_RC" != "$REAL_RC" ]; then echo detectable; else echo invisible; fi)" detectable
 
 echo
 echo "== two concurrent ticks cannot both proceed, whichever order they arrive in =="
-# Order A is the paragraph above (resume first, dispatch refused). Order B is the launcher
-# first: the resumed tick adopts the dispatch lock and the dispatched tick then holds —
-# still exactly one tick running, which is the property, though not the same one.
+# Order A is the paragraph above (the resume never starts). Order B is the launcher
+# first: a resumed tick reaching step 0.5 before the dispatched one meets an unclaimed
+# lock and adopts it, and the dispatched tick then holds — still exactly one tick running,
+# which is the property, though not the same one. This is the one way a resumed tick still
+# gets through, and it is asserted rather than left implicit: closing it would mean telling
+# two ticks apart at the instant neither has claimed anything.
 B="$TMP/order-b"; mkdir -p "$B"
 attempt "$B"                              # launcher takes the lock…
 tick "$B" cataloguer                      # …a resumed tick gets to step 0.5 first
@@ -410,23 +465,35 @@ ok "…and to release nothing"             "$(said 'release nothing')" yes
 ok "…and it is not called a re-entry"    "$(said 're-entered:')" no
 
 echo
-echo "== the resume path: the same tick, a new process, its own claim =="
-# `SendMessage` wakes a completed tick — no launcher, and the process it ran in is gone.
-# Every call in this file is already a separate process, so that half is real rather than
-# simulated; what carries across it is the identity, which is the whole point.
+echo "== a resume is refused in BOTH directions, which is why both guards are here =="
+# THE COMPOSED PROPERTY, and the reason neither guard replaces the other. `SendMessage` wakes
+# a completed tick in a NEW process — no launcher, nothing in memory surviving — and it meets
+# exactly one of two states on disk, in neither of which it may run:
+#
+#   its predecessor is STILL RUNNING  a live lock carrying that tick's claim. The CLAIMANT
+#                                     check answers it: a different id holds (1), a merely
+#                                     matching one is a human's call (2).
+#   its predecessor already RELEASED  no lock at all. The ABSENCE is the evidence, because
+#                                     only a launcher takes one before a tick exists (4).
+#
+# Drop the second and a resume takes a lock of its own and stands the next genuine dispatch
+# down; drop the first and a resume runs beside a live tick. Both halves, driven in order.
 RE="$TMP/resume-id"; mkdir -p "$RE"
-tick "$RE" project-manager resumed-tick
-ok "the resumed tick takes the lock itself" "$TICK_RC" 0
-ok "…as one it must release"             "$(said 'took:')" yes
-tick "$RE" project-manager resumed-tick   # woken again, later
-ok "woken again, it proceeds"            "$TICK_RC" 0
-ok "…recognising its own claim"          "$(said 're-entered:')" yes
-ok "…and is still told to release it"    "$(said 'took:')" yes
-ok "…never handed to the launcher instead" "$(said 'adopted:')" no
-ok "…and it ran both times"              "$(ran "$RE")" 2
-tick "$RE" project-manager other-tick
-ok "a different tick at that lock holds" "$TICK_RC" 1
-ok "…and did not run"                    "$(ran "$RE")" 2
+attempt "$RE"                             # the launcher, dispatching tick A
+tick "$RE" project-manager tick-A
+ok "the dispatched tick adopts"          "$TICK_RC" 0
+ok "…the launcher's lock, not one of its own" "$(said 'adopted:')" yes
+ok "…so it is never told it may release it"   "$(said 'took:')" no
+tick "$RE" project-manager resumed-R      # woken while A is still running
+ok "a resume beside a live tick holds"   "$TICK_RC" 1
+ok "…saying another tick holds it"       "$(said 'HELD BY ANOTHER TICK')" yes
+ok "…and did not run"                    "$(ran "$RE")" 1
+bash "$LOCKSH" release --instance "$RE" >/dev/null 2>&1   # A ends; the launcher releases
+tick "$RE" project-manager resumed-R      # woken again, after its predecessor is gone
+ok "a resume after that lock went is REFUSED" "$TICK_RC" 4
+ok "…saying no launcher took one for it" "$(said 'NO DISPATCH LOCK')" yes
+ok "…and still did not run"              "$(ran "$RE")" 1
+ok "…leaving no lock of its own behind"  "$(yn test -e "$RE/.tick-lock")" no
 
 echo
 echo "== the claimant is checked LAST: a stale lock is stale even to its own claimant =="
@@ -448,8 +515,9 @@ echo "== --as launcher is unchanged: it refuses a claimed lock, identity or not 
 # The strict path must not learn the new trick. A launcher carrying the very identity that
 # made the claim still gets HELD, and still writes no claim of its own.
 LA="$TMP/launcher-id"; mkdir -p "$LA"
+attempt "$LA"                             # the dispatch lock a tick may claim
 tick "$LA" project-manager L
-ok "a tick holds the lock, claimed by L" "$TICK_RC" 0
+ok "a tick claims that lock as L"        "$TICK_RC" 0
 OUT="$(TICK_CLAIMANT=L bash "$LOCKSH" acquire --instance "$LA" 2>&1)"; RC=$?
 ok "the launcher is refused even as L"   "$RC" 1
 ok "…and is not offered a re-entry"      "$(printf '%s' "$OUT" | grep -qF 're-entered:' && echo yes || echo no)" no
@@ -589,6 +657,7 @@ echo "== an empty value is not a declaration, and an empty flag is =="
 # while `--claimant ''` is a caller declaring nothing and stays exit 3. The header says so;
 # this asserts the header is describing the code and not the other way round.
 EMPTY="$TMP/empty-id"; mkdir -p "$EMPTY"
+bash "$LOCKSH" acquire --instance "$EMPTY" >/dev/null 2>&1   # a tick only ever claims
 OUT="$(TICK_CLAIMANT= CLAUDE_CODE_SESSION_ID=sess-fallback bash "$LOCKSH" acquire --as tick --instance "$EMPTY" 2>&1)"; RC=$?
 ok "an empty TICK_CLAIMANT falls through" "$RC" 0
 ok "…to the runtime's id, recorded as such" \
@@ -607,6 +676,7 @@ for combo in "session:::sess-env-only" "env::envwins:sess-loser" "flag:flagwins:
   want="${combo%%:*}"; rest="${combo#*:}"
   fl="${rest%%:*}"; rest="${rest#*:}"; ev="${rest%%:*}"; se="${rest##*:}"
   d="$PR-$want"; mkdir -p "$d"
+  bash "$LOCKSH" acquire --instance "$d" >/dev/null 2>&1     # a tick only ever claims
   CLAUDE_CODE_SESSION_ID="$se" TICK_CLAIMANT="$ev" bash "$LOCKSH" acquire --as tick \
     --instance "$d" ${fl:+--claimant "$fl"} >/dev/null 2>&1
   ok "$want wins"                        "$(lock_field_of "$d/.tick-lock.claim" claimant-source)" "$want"
@@ -614,6 +684,7 @@ done
 # A runtime that renames or reshapes its variable must not stop ticks: an unusable IMPLICIT
 # identity is ignored (no identity, old behaviour), where an unusable EXPLICIT one refuses.
 EV2="$TMP/env-junk"; mkdir -p "$EV2"
+bash "$LOCKSH" acquire --instance "$EV2" >/dev/null 2>&1     # a tick only ever claims
 OUT="$(CLAUDE_CODE_SESSION_ID='not a plain id' bash "$LOCKSH" acquire --as tick --instance "$EV2" 2>&1)"; RC=$?
 ok "a malformed session id is ignored, not fatal" "$RC" 0
 ok "…and simply leaves the claim unattributed" \
@@ -678,11 +749,18 @@ ok "…and its tick is not deadlocked by it" "$TICK_RC" 0
 ok "…and ran"                            "$(ran "$RS")" 1
 
 echo
-echo "== absence is never an error on the tick's path either =="
+echo "== absence is never an error for the LAUNCHER — and is the refusal for a tick =="
+# The two halves of "absence" are opposite answers on purpose, and neither may drift into
+# the other: for the launcher an absent lock is the ordinary case it exists to take, and
+# for a tick it is proof that no launcher ran.
 N="$TMP/tick-absent"; mkdir -p "$N"
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$N" 2>/dev/null)"; RC=$?
-ok "no lock: the tick takes one and runs" "$RC" 0
-ok "…and says so on stdout, not stderr"  "$(printf '%s' "$OUT" | grep -qF 'took:' && echo yes || echo no)" yes
+ok "no lock: the tick is refused"        "$RC" 4
+ok "…with nothing on stdout"             "$([ -z "$OUT" ] && echo empty || echo "$OUT")" empty
+OUT="$(bash "$LOCKSH" acquire --instance "$N" 2>&1)"; RC=$?
+ok "…while the LAUNCHER takes one, silently" "$RC" 0
+ok "…byte-empty, exactly as before"      "$([ -z "$OUT" ] && echo empty || echo "$OUT")" empty
+bash "$LOCKSH" release --instance "$N" >/dev/null 2>&1
 # The launcher's path stays byte-silent — that contract is unchanged and is asserted at the
 # top of this file; what follows only pins that `--as` is validated rather than assumed.
 OUT="$(bash "$LOCKSH" acquire --as sideways --instance "$N" 2>&1)"; RC=$?
@@ -815,9 +893,16 @@ ok "…before it re-derives anything"      "$(step05 | grep -qF 'The lock comes 
 # Every exit code the script can return has a branch here too — the launcher's step 1 has
 # had one since #62, and a second caller with three of the four is a caller improvising on
 # the one that mattered.
-for code in 0 1 2 3; do
+for code in 0 1 2 3 4; do
   ok "step 0.5 handles exit $code"       "$(step05 | grep -qE "^   - \*\*$code\*\*" && echo yes || echo no)" yes
 done
+# Exit 4 is the resume refusal, and the tick's branch for it has to say the two things a
+# refused tick could still get wrong: run nothing, and take no lock of its own.
+ok "…and its exit-4 branch ends the tick" \
+  "$(step05 | grep -qF 'End the tick' && echo yes || echo no)" yes
+ok "…taking no lock of its own"          "$(step05 | grep -qF 'take no lock of your own' && echo yes || echo no)" yes
+ok "…and naming the rule it is the absolute of" \
+  "$(step05 | grep -qF 'never resumed' && echo yes || echo no)" yes
 ok "…holding, not adopting, on a live sibling" \
   "$(step05 | grep -qF 'adopt nothing as your in-flight set' && echo yes || echo no)" yes
 ok "…and opening no ledger entry when it holds" \
@@ -852,12 +937,40 @@ ok "…visibly rather than silently"       "$(step05 | grep -qF 'Never silently'
 # to say which lock is its own to release. A tick that released an ADOPTED lock would free
 # one the launcher is still holding for it.
 rel() { awk '/\*\*Finally, release the tick lock/{p=1} p&&/^9\. /{p=0} p' "$TICK"; }
-ok "step 8 releases only a lock the tick created" \
-  "$(rel | grep -qF 'ONLY if step 0.5 printed `took:`' && echo yes || echo no)" yes
-ok "…leaving an adopted one to the launcher" \
+ok "step 8 was extractable (or the next assertions are vacuous)" \
+  "$([ -n "$(rel)" ] && echo yes || echo no)" yes
+ok "step 8 releases nothing, in every case" \
+  "$(rel | grep -qF 'a tick releases no lock, ever' && echo yes || echo no)" yes
+ok "…leaving the adopted one to the launcher" \
   "$(rel | grep -qF 'adopted:' && echo yes || echo no)" yes
-ok "…and a tick that held releases nothing" \
-  "$(rel | grep -qF 'releases nothing at all' && echo yes || echo no)" yes
+# A `grep 'releases'` matched "releases nothing" AND "releases it", so it passed on the
+# instruction's own inverse — the "test that cannot fail" shape this repo has hit repeatedly.
+# What has to hold is semantic and has two halves, a positive and a negative:
+#
+#   POSITIVE  every exit that is NOT a dispatch is named as releasing nothing, so a step
+#             that quietly covered only exit 1 fails here.
+unwrap() { tr '\n' ' ' | tr -s ' '; }   # the prose is hard-wrapped; the sentence is not
+ok "…and every non-dispatch exit is named as releasing nothing" \
+  "$(rel | unwrap | grep -qF 'all release nothing too' && echo yes || echo no)" yes
+for code in 1 2 4; do
+  ok "…exit $code among them"            "$(rel | grep -qF "exit $code" && echo yes || echo no)" yes
+done
+#   NEGATIVE  step 8's command block RUNS NOTHING — every line in it is a comment or blank.
+#             This is the assertion the old one should have been: put `tick-lock.sh release`
+#             back into that block and it fails, which is the only mutation that matters.
+fence() { rel | awk '/^   ```/{f=!f; next} f'; }
+ok "…and the command block was extractable (or the next line is vacuous)" \
+  "$([ "$(fence | wc -l | tr -d ' ')" -gt 0 ] && echo yes || echo no)" yes
+ok "…and it runs nothing at all"         "$(fence | grep -cvE '^[[:space:]]*(#.*)?$' | tr -d ' ')" 0
+# `release` is still NAMED in step 8's prose, and must be — as the human's override, not
+# as something the tick may run. Asserted on that framing, because deleting the framing is
+# how the command comes back as an instruction.
+ok "…and the release command is named only as the human's" \
+  "$(rel | unwrap | grep -qF "not yours to run at the end of a tick" && echo yes || echo no)" yes
+# The case that used to be here — a tick releasing a lock it created — must not come back
+# by itself: it can only exist again if a tick can take a lock, which step 0.5 refuses.
+ok "…with no surviving instruction to release a lock the tick took" \
+  "$(rel | grep -qF 'printed `took:`' && echo yes || echo no)" no
 
 echo
 echo "== the wiring: the launcher runs the acquire, and holds exactly the grant for it =="

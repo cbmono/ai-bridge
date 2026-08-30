@@ -45,7 +45,7 @@ make two loops a good idea.
 completed tick directly runs no `acquire` at all, so nothing is written and a dispatch
 seconds later correctly reports the lock free — measured 2026-08-30, an hour after the
 lock merged: a resumed tick and a dispatched tick ran at once, and the human spotted it
-before the machinery did. So the tick takes the lock as well, in its own step 0.5
+before the machinery did. So the tick runs the same acquire in its own step 0.5
 (`scripts/tick-lock.sh acquire --as tick`). **That does not move the lock out of here**:
 your acquire is still the only one that happens *before* a dispatch exists, and moving it
 into the tick alone would re-open the window this closes. Nor does a tick refuse the lock
@@ -57,6 +57,20 @@ runtime — `CLAUDE_CODE_SESSION_ID` names the **session**, so every tick you st
 the same one — so a merely-matching id is exit **2** and lands on your desk rather than
 being guessed either way. **Your step 1 is unchanged by all of it**: `--as launcher`
 refuses any live lock, claimed or not, and never claims one.
+
+**And a tick that finds NO lock is refused (exit 4), not allowed to take one.** No lock
+means nobody dispatched it, because you take one in the same breath as the spawn — so it
+was resumed, and **a tick is never resumed, without exception**. Until 2026-08-30 that
+tick took a lock of its own and ran, and the next genuine dispatch stood down instead:
+exactly one tick ran and it was the wrong one, re-entering a loop whose state had moved
+on. **So never wake a completed tick with a message — dispatch a fresh one, every time.**
+The rule for every other agent is stated once in
+`CONVENTIONS.md` → "A subagent works ONE task", and this is its one line:
+
+> same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
+
+Only the tick half of it has a mechanism, and this is that mechanism; the rest is a
+convention nothing can check, because nothing can see the intent behind a message.
 
 **It is a PER-CLONE lock and it is not a cross-machine one.** `.tick-lock` is a single
 gitignored file in a single working tree, so it says nothing about the other human's
@@ -209,14 +223,19 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    - **3** — it could not write the lock at all. Report that and stop; a guarantee
      nothing can keep is the failure this replaces, not a reason to dispatch anyway.
 
+   **Exit 4 cannot reach you**, and the list is complete without it: it is the tick's
+   refusal for finding no lock, and taking a lock where there is none is what you are for.
+
    If the spawn itself fails to start, run `scripts/tick-lock.sh release` before you
    report — a lock with no tick behind it is the stale case, arriving hours early.
 
-   The tick itself: spawn the `project-manager` agent
+   The tick itself: spawn a **fresh** `project-manager` agent
    (`subagent_type: project-manager`) for ONE LIVE tick (background), with the
-   standing guardrails below. **Brief it with the gap and the guardrails, not with
-   state** — it reads the bundle, `git` and `gh` itself, so there is nothing for you
-   to look up first. **Run the tick on the orchestrator's configured model:**
+   standing guardrails below. **Fresh every time — never wake a completed tick with a
+   message**, whatever it says about being idle or ready for another round; that is the
+   one absolute of the resume rule, and step 0.5 refuses such a tick anyway.
+   **Brief it with the gap and the guardrails, not with state** — it reads the bundle,
+   `git` and `gh` itself, so there is nothing for you to look up first. **Run the tick on the orchestrator's configured model:**
    resolve it with `scripts/resolve-model.sh project-manager`, which applies
    `roleTiers` (default `deep`) → an alias via `models`
    (default `deep` → `opus`), and pass that as the tick's model. If `models`/`roleTiers`
@@ -438,7 +457,8 @@ ticks, regardless of how long a tick runs.
   written by step 1 and released in step 2 by the session that took it. The tick takes it
   as well (its step 0.5, `--as tick`) and records that it is running under it in
   `.tick-lock.claim` beside it, which is how a dispatched tick tells your lock from
-  another tick's; a tick releases only a lock it created itself.
+  another tick's; a tick releases nothing, because the only lock it can be running
+  under is the one you took for it.
   `scripts/tick-lock.sh status` reads it
   without touching it (for a human, never for this launcher), `release` clears it, and
   `TICK_LOCK_STALE_MINUTES` (default 120) sets how old a lock has to be before step 1
