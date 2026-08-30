@@ -536,12 +536,19 @@ check_config_layers() {
   local_n="$(printf '%s\n' "$dump"   | awk -F'\t' '$1=="local"   && $2!="people"' | wc -l | tr -d ' ')"
   local_keys="$(printf '%s\n' "$dump" | awk -F'\t' '$1=="local" && $2!="people" {print ($3=="" ? $2 : $2 "." $3)}' \
                 | sort -u | tr '\n' ' ' | sed 's/ $//')"
+  # Counted per RESOLVED LEAF, not per top-level key, because that is the granularity the
+  # precedence actually works at: a one-line local override moves one entry of `roleTiers`
+  # and leaves every other entry tracked, and a per-file count would report that as the
+  # whole map having been overridden.
   if [ "$local_n" -gt 0 ]; then
-    good "config resolves: local($local_n) over tracked($tracked_n) — local wins: $local_keys"
+    good "config resolves: $((local_n + tracked_n)) keys — $local_n from local, $tracked_n from tracked"
+    note "local wins for: $local_keys"
   else
-    good "config resolves: tracked($tracked_n), no local override in force"
+    good "config resolves: $tracked_n keys, all from tracked — no local override is in force"
   fi
-  note "(key names only — values and the people map are never printed into a session)"
+  # NO TRAILING CAVEAT LINE. "values are not shown here" would read the same on a healthy
+  # instance and a broken one, which is this command's own test for a line that does not
+  # belong. Why values and `people` stay out is stated above, where the next editor reads it.
   return 0
 }
 
