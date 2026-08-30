@@ -167,7 +167,7 @@ ok "…and every row declares whether it may speak on the banner path" \
   "$(printf '%s\n' "$LIST" | awk -F'\t' '$3!="yes" && $3!="no"' | grep -c . | tr -d ' ')" 0
 
 FIXOUT="$(bash "$SH" fix --instance "$INST1" --template "$TPL" 2>&1)"
-missing_fix=""; missing_check=""
+missing_fix=""
 for id in $ids; do
   printf '%s\n' "$FIXOUT" | grep -q -- "── $id \[" || missing_fix="${missing_fix:+$missing_fix }$id"
 done
@@ -275,7 +275,7 @@ ok "no fix_ function exists for a print-only tier" \
 ROGUE="$TMP/rogue.sh"
 # BEFORE the call, not after: a function defined after `assert_no_rogue_fixers` runs would
 # not be visible to it, and this test would then "pass" against a guard that never fired.
-awk '/^assert_no_rogue_fixers$/ && !d { print "fix_tick_lock() { :; }"; d=1 }
+awk '/^assert_list_is_wired$/ && !d { print "fix_tick_lock() { :; }"; d=1 }
      { print }' "$SH" > "$ROGUE"
 # The planted line must land BEFORE the call, or this proves nothing about ordering.
 ok "the rogue fixture really does define one"              "$(grep -c '^fix_tick_lock()' "$ROGUE" | tr -d ' ')" 1
@@ -283,6 +283,16 @@ rrc=0; rout="$(bash "$ROGUE" check --instance "$INST1" --template "$TPL" 2>&1)" 
 ok "a rogue fixer makes the command REFUSE TO RUN"         "$rrc" 2
 ok "…naming the offending function"                        "$(printf '%s\n' "$rout" | grep -c 'fix_tick_lock' | tr -d ' ')" 1
 ok "…and the shipped file does not refuse (not vacuous)"   "$(bash "$SH" check --instance "$INST1" --template "$TPL" >/dev/null 2>&1; echo $?)" 0
+# The other half of the same guard: a row added WITHOUT its check function. Bash would call
+# a command that does not exist, hand back 127, and this file's convention reads a non-zero
+# return as "a problem was found" — so an idempotent row added with a typo would run its
+# REPAIR on the strength of it. The guard must catch that before anything executes.
+UNWIRED="$TMP/unwired.sh"
+awk "/^CHECKS='/ { print; print \"invented-check|idempotent|yes\"; next } { print }" "$SH" > "$UNWIRED"
+ok "the unwired fixture really does carry the extra row"   "$(grep -c '^invented-check|' "$UNWIRED" | tr -d ' ')" 1
+urc=0; uout="$(bash "$UNWIRED" check --instance "$INST1" --template "$TPL" 2>&1)" || urc=$?
+ok "a row with no check function makes it REFUSE TO RUN"   "$urc" 2
+ok "…naming the unwired row"                               "$(printf '%s\n' "$uout" | grep -c 'invented-check' | tr -d ' ')" 1
 
 # =======================================================================================
 echo "== 7. fix ACTS on the idempotent tier — the other direction =="
@@ -327,7 +337,10 @@ ok "…in at most 2 lines per failing check, plus a header"  "$([ "$(printf '%s\
 ok "a banner:no row stays off the banner path" \
   "$(printf '%s\n' "$B1" | grep -c 'config resolves' | tr -d ' ')" 0
 # The hook actually calls it. Not "a function exists" — the shipped hook, by name.
-ok "session-banner.sh invokes the check"                   "$(grep -c 'ai-bridge.sh" check --only-problems --banner' "$BANNER" | tr -d ' ')" 2
+# At least once, not exactly twice: the hook spells the call out in two branches today so a
+# template path with a space survives, and pinning the count would fail a correct refactor.
+ok "session-banner.sh invokes the check" \
+  "$([ "$(grep -c 'ai-bridge.sh" check --only-problems --banner' "$BANNER" | tr -d ' ')" -ge 1 ] && echo yes || echo no)" yes
 ok "…and the hook carries the name of no individual check" \
   "$(for id in $ids; do grep -c -- "$id" "$BANNER"; done | awk '{s+=$1} END {print s+0}')" 0
 

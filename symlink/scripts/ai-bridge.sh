@@ -47,8 +47,9 @@
 #
 # The two SHIP-BLOCKERS are structural, not a promise: there is no `fix_config_uncommitted`
 # and no `fix_tick_lock` in this file, the dispatcher calls `fix_<id>` only for a row whose
-# declared tier is `idempotent`, and it REFUSES TO RUN AT ALL if either function is ever
-# defined. `tests/ai-bridge-command.test.sh` asserts the non-action against a modified
+# declared tier is `idempotent`, and `check` and `fix` both REFUSE TO RUN if either function
+# is ever defined (the banner form `exec`s before that point, deliberately — it dispatches
+# no repair, and nothing may come between it and the hook). `tests/ai-bridge-command.test.sh` asserts the non-action against a modified
 # config and a stale lock — the two files come out byte-identical, unstaged and unremoved.
 #
 # ---------------------------------------------------------------------------------------
@@ -63,6 +64,13 @@
 #
 # GENERIC TEMPLATE FILE — symlinked from the template; it reads no org, repo or path
 # literal. Verified by tests/ai-bridge-command.test.sh.
+#
+# EVERY `check_*` AND `fix_*` FUNCTION IS INVOKED INDIRECTLY, by a name built from the row
+# in `CHECKS` — which is the whole design, and is exactly what shellcheck cannot see. The
+# disable is file-scoped rather than repeated eleven times, and the wiring the linter is
+# thereby stopped from checking is checked properly instead, at runtime, by
+# `assert_list_is_wired`: a row with no function makes the command refuse to start.
+# shellcheck disable=SC2329
 set -uo pipefail
 
 # =========================================================================================
@@ -182,11 +190,11 @@ fi
 # moment they differ this form is wrong. `exec` rather than a call so even the exit status
 # is the hook's own. `tests/ai-bridge-command.test.sh` asserts the two are BYTE-IDENTICAL.
 #
-# `CLAUDE_PROJECT_DIR` is exported because that is the only thing the hook reads to decide
-# which instance it is describing, and this file may have been handed a `--instance`… no:
-# the banner form takes no flags of ours at all, so the value is whatever the environment
-# already said, or this directory. Setting it explicitly makes `bash scripts/ai-bridge.sh`
-# from an instance root behave like the hook, which is the whole point.
+# `CLAUDE_PROJECT_DIR` is exported because it is the only thing the hook reads to decide
+# which instance it is describing. This form takes none of our own flags — `--instance` is a
+# `check`/`fix` option — so the value is whatever the environment already said, or this
+# directory; setting it explicitly is what makes `bash scripts/ai-bridge.sh` from an
+# instance root print the same thing the hook prints at session start.
 if [ "$FORM" = banner ]; then
   hook="$HOOKS/session-banner.sh"
   if [ ! -f "$hook" ]; then
@@ -296,12 +304,11 @@ check_template_behind() {
   fi
 
   # The version half, delegated. Its output is multi-line and already written for a human.
+  # `--fetch` is NOT passed on even when we were given it: the fetch above already updated
+  # the remote-tracking ref this helper reads, so passing it would be a second network
+  # round-trip for an answer that is already on disk.
   if [ -f "$BIN/check-template-version.sh" ]; then
-    if [ "$FETCH" -eq 1 ]; then
-      version="$(bash "$BIN/check-template-version.sh" --template "$TEMPLATE" --instance "$ROOT" --fetch 2>/dev/null)"
-    else
-      version="$(bash "$BIN/check-template-version.sh" --template "$TEMPLATE" --instance "$ROOT" 2>/dev/null)"
-    fi
+    version="$(bash "$BIN/check-template-version.sh" --template "$TEMPLATE" --instance "$ROOT" 2>/dev/null)"
     if [ -n "$version" ]; then
       _warned=1
       printf '%s\n' "$version" | sed 's/^/    /'
@@ -585,29 +592,47 @@ check_tick_lock() {
 # =========================================================================================
 # THE DRIFT GUARD — a refusal, not a convention
 # =========================================================================================
-# A `fix_<id>` defined for a row whose declared tier is not `idempotent` is the exact shape
-# of the two ship-blockers, and it would be invisible in review the day someone adds one.
-# So it is not a rule: the whole command REFUSES TO RUN, loudly, exit 2. `check` is guarded
-# too — a command that reports on an instance while carrying a fixer it must not have
-# should not be trusted to report either.
-assert_no_rogue_fixers() {
-  local id tier bad=""
+# TWO WAYS THE ONE LIST CAN BE WIRED WRONG, AND BOTH ARE FATAL RATHER THAN NOTED.
+#
+#   1. A `fix_<id>` defined for a row whose declared tier is NOT `idempotent`. That is the
+#      exact shape of the two ship-blockers, and it is invisible in review the day somebody
+#      adds one — a function beside four other functions, in a file full of them.
+#   2. A row with no `check_<id>` at all. Bash would call a command that does not exist,
+#      print `command not found` and hand back 127 — which this file's own convention reads
+#      as "a problem was found", so an idempotent row added without its checker would go
+#      straight to running its REPAIR on the strength of a typo.
+#
+# So neither is a rule: `check` and `fix` both REFUSE TO RUN, loudly, exit 2. `check` is
+# guarded and not only `fix`, because a command that reports on an instance while carrying a
+# fixer it must not have should not be trusted to report either. The banner form is already
+# gone by here, by design: it repairs nothing, and its whole contract is that nothing comes
+# between it and the hook.
+assert_list_is_wired() {
+  local id tier rogue="" unwired=""
   while IFS='|' read -r id tier _; do
     [ -n "$id" ] || continue
+    declare -F "$(fn_of "$id")" >/dev/null 2>&1 || unwired="${unwired:+$unwired, }$id"
     [ "$tier" = idempotent ] && continue
     if declare -F "$(fixfn_of "$id")" >/dev/null 2>&1; then
-      bad="${bad:+$bad, }$(fixfn_of "$id") (tier: $tier)"
+      rogue="${rogue:+$rogue, }$(fixfn_of "$id") (tier: $tier)"
     fi
   done <<EOF
 $CHECKS
 EOF
-  [ -z "$bad" ] && return 0
-  echo "ai-bridge: REFUSING TO RUN — a repair exists for a tier that must never be repaired:" >&2
-  echo "           $bad" >&2
-  echo "           The tier declared in CHECKS is the only dispatch. Delete the function." >&2
+  [ -z "$rogue" ] && [ -z "$unwired" ] && return 0
+  if [ -n "$rogue" ]; then
+    echo "ai-bridge: REFUSING TO RUN — a repair exists for a tier that must never be repaired:" >&2
+    echo "           $rogue" >&2
+    echo "           The tier declared in CHECKS is the only dispatch. Delete the function." >&2
+  fi
+  if [ -n "$unwired" ]; then
+    echo "ai-bridge: REFUSING TO RUN — a row in CHECKS has no check function:" >&2
+    echo "           $unwired" >&2
+    echo "           Add check_<id>, or remove the row. A missing one reads as a problem." >&2
+  fi
   exit 2
 }
-assert_no_rogue_fixers
+assert_list_is_wired
 
 # rows_for <mode> — the one list, filtered. `banner` keeps only the rows that declare
 # themselves fit for the SessionStart path. Every consumer below reads THIS list: `check`
@@ -632,11 +657,9 @@ fi
 if [ "$FORM" = check ]; then
   mode=all; [ "$BANNER_ONLY" -eq 1 ] && mode=banner
   header_printed=0
-  n_problems=0
   while IFS='|' read -r id tier _; do
     [ -n "$id" ] || continue
     out="$("$(fn_of "$id")")"; rc=$?
-    [ "$rc" -eq 0 ] || n_problems=$((n_problems + 1))
     if [ "$ONLY_PROBLEMS" -eq 1 ]; then
       # THE SessionStart CONTRACT: only fire what is true. A clean instance prints
       # BYTE-NOTHING here, because a block that appears every session becomes wallpaper and
