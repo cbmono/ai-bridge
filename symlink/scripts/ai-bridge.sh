@@ -103,6 +103,7 @@ tick-lock|human|yes'
 FORM=""; ROOT=""; TEMPLATE=""; ONLY_PROBLEMS=0; BANNER_ONLY=0; FETCH=0; SINCE=""
 LIST=0
 
+# usage — the three forms and their flags, on stderr so `--help` never pollutes a pipeline.
 usage() {
   cat >&2 <<'USAGE'
 Usage: ai-bridge.sh [banner]                       reprint the SessionStart banner
@@ -222,9 +223,15 @@ fi
 # files would blow it the first time an instance is badly out of date — which is precisely
 # when the banner most needs to stay readable. Emit ONE `hint` per check.
 _warned=0
+# warn <text> — a fact that is FALSE here, and the only kind that sets the found-a-problem
+# flag its check returns. Survives `--only-problems`.
 warn() { _warned=1; printf '%s\n' "⚠ $*"; }
+# good <text> — the same fact, true. Dropped by `--only-problems`; never silent otherwise.
 good() { printf '%s\n' "✓ $*"; }
+# note <text> — indented evidence under the line above it. Dropped by `--only-problems`.
 note() { printf '%s\n' "    $*"; }
+# hint <text> — the ONE command that addresses the warning above it. Survives
+# `--only-problems`; emit at most one per check, which is what bounds the banner section.
 hint() { printf '%s\n' "    ↳ $*"; }
 
 # tier_note <tier> — what `fix` does with a row of this tier, said in `fix`'s own output so
@@ -238,6 +245,8 @@ tier_note() {
   esac
 }
 
+# fn_of <id> / fixfn_of <id> — the ONLY place a row's id becomes a function name. Both
+# forms build the name the same way, which is what makes the one list one list.
 fn_of() { printf 'check_%s' "$(printf '%s' "$1" | tr '-' '_')"; }
 fixfn_of() { printf 'fix_%s' "$(printf '%s' "$1" | tr '-' '_')"; }
 
@@ -307,12 +316,20 @@ check_template_behind() {
   # `--fetch` is NOT passed on even when we were given it: the fetch above already updated
   # the remote-tracking ref this helper reads, so passing it would be a second network
   # round-trip for an answer that is already on disk.
+  #
+  # AND ITS ABSENCE IS ITSELF REPORTED. Silence here would let a level commit graph print a
+  # clean row while the VERSION half of the same question went unasked — the one shape this
+  # file exists to prevent, since "no line" and "nothing wrong" would then look identical.
+  # A `note`, not a `warn`: a helper this instance never received is not a defect, and the
+  # SessionStart path (`--only-problems`) drops it.
   if [ -f "$BIN/check-template-version.sh" ]; then
     version="$(bash "$BIN/check-template-version.sh" --template "$TEMPLATE" --instance "$ROOT" 2>/dev/null)"
     if [ -n "$version" ]; then
       _warned=1
       printf '%s\n' "$version" | sed 's/^/    /'
     fi
+  else
+    note "cannot compare VERSION drift: no check-template-version.sh at $BIN"
   fi
   return "$_warned"
 }
@@ -376,10 +393,14 @@ check_unstamped_machinery() {
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
     total=$((total + 1))
-    # `-e` follows symlinks and is false for a dangling one; `-L` catches the dangling
-    # case, which is a DIFFERENT defect (the banner's machinery probes own it) and must not
-    # be counted as unstamped here. Present in either sense means a stamp reached it.
-    if [ ! -e "$ROOT/$rel" ] && [ ! -L "$ROOT/$rel" ]; then
+    # A LINK, OR IT IS NOT STAMPED — and a REGULAR FILE HERE IS NOT STAMPED. `install.sh`
+    # only ever symlinks a `symlink/` path (it moves anything else aside to `.bak.<ts>`
+    # first), so a real file at one of these paths is a copy that no template pull will
+    # ever reach again: it reads as present, the instance keeps calling it, and it silently
+    # stops tracking the template. That is this row's whole subject, so it counts.
+    # `-L` and not `-e`: `-e` is false for a DANGLING link, which is a different defect
+    # (the banner's machinery probes own it) and must not be reported as unstamped here.
+    if [ ! -L "$ROOT/$rel" ]; then
       n=$((n + 1))
       [ "$n" -le 12 ] && missing="${missing:+$missing
 }    $rel"
