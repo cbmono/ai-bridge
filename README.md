@@ -17,6 +17,7 @@ repos and holds only the state of the work — never application code.
 | **Time to first loop** | about 10 minutes |
 | **Storage format** | plain markdown ([OKF Knowledge Bundle](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)) — the commands write the files for you |
 | **License** | [MIT](LICENSE) |
+| **Version** | [`VERSION`](VERSION) — one line, no extension, the only copy. A core change proposes the bump in its PR; the owner approves it by merging ([versioning](#versioning-and-drift)) |
 
 ---
 
@@ -412,6 +413,7 @@ Run from an instance root unless noted.
 | `resolve-model.sh` | `<agent>` — prints the model alias it should run on, from `roleTiers`/`models` | no |
 | `tick-lock.sh` | `acquire [--as launcher\|tick]`/`release`/`status` — the per-clone PM dispatch lock; exit 0 is the only clearance to dispatch or to run a tick | `acquire`/`release` only, `.tick-lock` + `.tick-lock.claim` (gitignored) |
 | `task-owner.sh` | resolves and compares a task's owner | no |
+| `check-template-version.sh` | is the template this instance links older than the remote's default branch — prints a line **only when behind**, silence on every failure | **never** (only with `--fetch`, which touches the network and nothing else) |
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) | yes, the output file |
@@ -459,6 +461,54 @@ a group-level overlay can't exist. Instead each group gets a project-root contro
 whose role agents load **only** when you launch Claude inside it, never polluting
 `~/.claude`. The generic machinery stays DRY via symlinks; each instance keeps its own git
 history, so work and personal stay separate.
+
+## Versioning and drift
+
+The version lives in one place — [`VERSION`](VERSION) at this root, one line, no extension.
+`cat VERSION` reads it; nothing parses prose for it and there is no `package.json`, no tag
+and no changelog. **There is no release process here and none is wanted.**
+
+**A change to `core` proposes the bump; you approve it by merging.** `core` is a closed
+list — `symlink/`, `seed/`, `config/`, `install.sh`, `upgrade.sh`, `RETIRED` — and it is
+exactly what the two path-scoped rule files ([`.claude/rules/machinery.md`](.claude/rules/machinery.md),
+[`.claude/rules/installer.md`](.claude/rules/installer.md)) already govern, so an agent
+editing one of those paths meets the rule as it opens the file. A PR touching only `docs/`,
+`tests/`, `.claude/`, `.github/` or the root `scripts/` proposes nothing. The bump arrives
+as its own commit with a line in the PR body saying `old → new` and why, so rejecting it is
+dropping one commit rather than unpicking a release.
+
+Rough scale, enough to act on without a policy document: **patch** for a fix inside
+behaviour that already shipped, **minor** for a new capability or a new file under
+`symlink/`, **major** for anything an instance has to be repaired by hand to survive.
+
+**Why the number matters more than a label.** An instance consumes this template through
+per-file symlinks, so most merges reach it live — but a **new** file under `symlink/` does
+not arrive until `install.sh` runs again, and `seed/` content is copied once, ever. That
+gap has cost real time: two hooks merged and sat inert in every instance for a week.
+
+So the session banner prints one line — and only one, and only sometimes. The two numbers
+below are an example, not this repo's current pair; the only place the current one is
+written down is [`VERSION`](VERSION):
+
+```
+⬆️  ai-bridge template UPDATE — this instance links 0.9.1, origin/main has 0.10.0
+```
+
+`scripts/check-template-version.sh` decides it, and **silence is its normal answer**. Equal
+or ahead prints nothing; so do offline, unauthenticated, no checkout, no remote-tracking
+ref, a missing `VERSION` on either side, and a version it cannot parse — a false "you are
+behind" would train you to ignore the true one. It makes **no network call** at session
+start: it compares against the `origin/HEAD` ref already on disk, and only fetches when you
+run it by hand with `--fetch`.
+
+```bash
+scripts/check-template-version.sh          # from an instance root; prints only if behind
+scripts/check-template-version.sh --fetch  # refresh from the remote first
+```
+
+What it cannot see: a template checkout parked on an old commit whose `VERSION` happens to
+match the remote's. The number moves when the bump convention says it moves, so this
+catches drift **across a bump** and nothing finer.
 
 ## Changing this repo
 

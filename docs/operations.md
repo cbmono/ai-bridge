@@ -494,7 +494,21 @@ software-engineer     deep→opus                           local
 
 **The header is the line the owner kept asking for.** The version comes from `VERSION` at
 the template root, so a release bump needs no edit in the hook; absent or unreadable, the
-header simply prints without it. It is bold on a terminal and underlined with a rule
+header simply prints without it. A doc that *displays* that number — this block is the one
+that does — is held to it by `tests/template-version.test.sh`, because a version that lies
+is worse than no version.
+
+**Directly under the header, and almost never there: the drift line.** When the template
+checkout this instance links carries an older `VERSION` than the remote's default branch,
+`scripts/check-template-version.sh` says so once and names the re-stamp; the rest of the
+time it prints nothing at all. Equal, ahead, offline, unauthenticated, no checkout, no
+remote-tracking ref and a version it cannot parse are **all** silence — a false "you are
+behind" would train you to ignore the true one, and this is the one line in the banner that
+would otherwise fire on every session on a laptop with no network. Nothing is fetched at
+session start either: the comparison reads the `origin/HEAD` ref already on disk, and only
+`scripts/check-template-version.sh --fetch`, run by hand, touches the network. The
+convention that keeps the number worth comparing — a core change *proposes* a bump, the
+owner approves it by merging — is [invariant 20](conventions.md#20-the-version-is-a-number-a-change-proposes-and-the-drift-check-speaks-only-when-behind). It is bold on a terminal and underlined with a rule
 either way — a `SessionStart` hook writes to a **pipe**, not a terminal, so `[ -t 1 ]` is
 false whenever the banner is doing its actual job, and everything below degrades to plain
 text there. `NO_COLOR` turns colour off on a terminal too; `--color always|never` overrides
