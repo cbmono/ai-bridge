@@ -199,7 +199,7 @@ ok "step 0: names the duplicate-PR failure" "$(in_step0 'duplicate PRs')" yes
 #     seeding since #10 — but it was read only at STAMP time, so `board: false` could not
 #     stop a tick rendering once that file existed. The tick's own read is pinned here, as
 #     is the fact that it does not replace the installer's. The behavioural half, on the
-#     hook that actually runs, is in tests/show-board-link.test.sh.
+#     hook that actually runs, is in tests/banner-board-line.test.sh.
 #   · THE RENDER IS THE ONE `build-board.sh` CALL THAT OPENS IN A BROWSER. `--standalone`
 #     was FORBIDDEN in the publish step (a host supplied the wrapper) and is REQUIRED now
 #     (nothing does), so the flag flipping is not cosmetic and is asserted as such.
@@ -212,7 +212,7 @@ ok "step 0: names the duplicate-PR failure" "$(in_step0 'duplicate PRs')" yes
 #
 # THE DELETED KEY IS ASSEMBLED AT RUNTIME so this file does not contain the string it
 # asserts nobody contains, and needs no exemption from the repo-wide scan in
-# tests/show-board-link.test.sh. An exemption list is the part that rots.
+# tests/banner-board-line.test.sh. An exemption list is the part that rots.
 DEAD_KEY="board""ArtifactUrl"
 ok "launcher grants no publish tool"     "$(granted "$LAUNCHER" 'Artifact')" no
 ok "…and says so beside the list"        "$(has "$LAUNCHER" 'Why there is no publish grant, and no publish step')" yes

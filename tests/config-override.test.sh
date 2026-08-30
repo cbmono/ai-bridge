@@ -231,11 +231,27 @@ for pair in "link-repos.sh:reposRoot" "index-kb.sh:reposRoot" \
             "prune-worktrees.sh:reposRoot" "prune-worktrees.sh:worktreeRoot" \
             "build-board.sh:boardInstances" "commit-as.sh:authorEmail" \
             "task-owner.sh:ownerGithubUser" "resolve-model.sh:roleTiers" \
-            "resolve-model.sh:models" "resolve-max-agents.sh:maxAgentsInFlight"; do
+            "resolve-model.sh:models" "resolve-max-agents.sh:maxAgentsInFlight" \
+            "resolve-config.sh:instance.config.json"; do
   f="${pair%%:*}"; k="${pair##*:}"
   assert "$f reads $k, and knows the local file" \
     "$( grep -q "$k" "$SCRIPTS/$f" && grep -q 'instance.config.local.json' "$SCRIPTS/$f" && echo 0 || echo 1 )"
 done
+# THE TWO SPEND RESOLVERS NO LONGER IMPLEMENT THE RULE, THEY DELEGATE IT. The grep above
+# is satisfied by prose, which was tolerable while each script carried its own copy of the
+# merge and became a hole the moment they stopped. `resolve-config.sh` is now the single
+# implementation — one file to keep correct, and one file the banner's FROM column reads
+# through — so assert the delegation rather than the vocabulary.
+for f in resolve-model.sh resolve-max-agents.sh; do
+  assert "$f delegates the precedence to resolve-config.sh" \
+    "$( grep -q 'resolve-config\.sh' "$SCRIPTS/$f" && echo 0 || echo 1 )"
+  # And does not keep a private copy beside it: a second json.load of the two layers in
+  # the same file is the drift this consolidation exists to prevent.
+  assert "…and re-implements no second reader of its own" \
+    "$( grep -q 'json\.load' "$SCRIPTS/$f" && echo 1 || echo 0 )"
+done
+assert "resolve-config.sh reports which file won, per leaf" \
+  "$( grep -q -- '--source' "$SCRIPTS/resolve-config.sh" && echo 0 || echo 1 )"
 # And the keys that must NOT be overridable are read from the tracked file only.
 # `board` is the newest of them, and the sharpest illustration of why the direction
 # matters: it has TWO readers at opposite ends of an instance's life — `install.sh` at
@@ -243,11 +259,32 @@ done
 # /pm-loop tick afterwards, deciding whether the board is rendered and surfaced. The
 # installer reads the tracked file and nothing else, so a per-machine override would give
 # one key two answers, and the half that disagreed would be the silent one.
-HOOK="$TPL/symlink/.claude/hooks/show-board-link.sh"
-assert "show-board-link.sh reads board from the tracked config" \
-  "$( grep -q '\"board\"' "$HOOK" && echo 0 || echo 1 )"
-assert "…and never from the local one" \
-  "$( grep -q 'instance.config.local.json' "$HOOK" && echo 1 || echo 0 )"
+# ASSERTED BEHAVIOURALLY, NOT BY GREP, and the change is forced rather than stylistic.
+# The old form here grepped `show-board-link.sh` for `instance.config.local.json` and
+# demanded NO match. That hook is now one section of `session-banner.sh`, which reads the
+# local file legitimately for its settings block — so the grep would fail on a correct
+# hook, and relaxing it would leave the property untested. What matters is not which
+# strings the file contains but whether a LOCAL `board: false` can silence a board the
+# TRACKED file switched on. So flip the switch in each file in turn and look at the
+# output, which is the same two-sided shape that caught `board` shipping inert once
+# already (a reader that always answers "default" passes any one-sided test).
+BANNER="$TPL/symlink/.claude/hooks/session-banner.sh"
+BINST="$TMP/_board-gate"; mkdir -p "$BINST/.claude/agents" "$BINST/.board-live"
+printf '<!doctype html>\n' > "$BINST/.board-live/board.html"
+banner_out() { CLAUDE_PROJECT_DIR="$BINST" bash "$BANNER" 2>&1; }
+
+printf '{ "org": "o", "board": true }\n'  > "$BINST/instance.config.json"
+printf '{ "board": false }\n'             > "$BINST/instance.config.local.json"
+assert "a LOCAL board:false cannot switch off a tracked board:true" \
+  "$(has 'Board   file://' "$(banner_out)")"
+# The mirror: the tracked file is the one that decides, so flipping it there DOES work.
+# Without this half, a banner that never printed a board line would pass the assertion
+# above and the gate would be untested in the direction that matters.
+printf '{ "org": "o", "board": false }\n' > "$BINST/instance.config.json"
+printf '{ "board": true }\n'              > "$BINST/instance.config.local.json"
+assert "…while the TRACKED board:false still switches it off" \
+  "$(hasnt 'Board   file://' "$(banner_out)")"
+rm -rf "$BINST"
 assert "install.sh still reads the same key, at stamp time" \
   "$( grep -q 'cfg_bool board true' "$TPL/install.sh" && echo 0 || echo 1 )"
 assert "…from the tracked instance.config.json" \
