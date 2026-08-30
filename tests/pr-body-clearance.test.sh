@@ -286,6 +286,28 @@ serve "$(body_file 'This change follows the TL;DR rule in CONVENTIONS.md closely
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a mid-sentence mention of TL;DR does not count -> refuse" 1 42
 
+# THREE CASES FROM THE REVIEW OF THIS PR (ai-bridge#65), all in the dangerous direction —
+# each one is a body the first cut CLEARED and a human could not have read as shaped.
+serve "$(body_file '## Is the TL;DR rule required?' 'Some discussion of it.' '' \
+                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "a heading that only MENTIONS TL;DR -> refuse" 1 42
+says   "  ...naming the TL;DR line as missing" "MISSING: the TL;DR line"
+# …while the heading forms that ARE the marker still clear, so the fix is a narrowing and
+# not a break. (`## Description (TL;DR)` and `**TL;DR** —` are covered above; this is the
+# bare heading.)
+serve "$(body_file '## TL;DR' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "a bare '## TL;DR' heading -> still clear" 0 42
+
+# `|---|:|` is not a delimiter row: GitHub renders no table at all, so a marked row under
+# it is not the criteria table however much it looks like one.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+                   '| Criterion | ✓ |' '|---|:|' '| it works | ✓ |')"
+expect "a delimiter row with a non-delimiter cell -> refuse" 1 42
+# …and the alignment colons GFM does allow are still a delimiter row.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+                   "$TABLE_HEAD" '|:---|:---:|---:|' "$TABLE_ROW")"
+expect "alignment colons in the delimiter row -> clear" 0 42
+
 echo
 echo "== a quoted example is not a body =="
 # The one route to a false "structure present": `CONVENTIONS.md`'s example IS a TL;DR line
@@ -297,6 +319,15 @@ serve "$(body_file 'Here is the shape CONVENTIONS.md asks for:' '' '```md' \
 expect "both elements present ONLY inside a code fence -> refuse" 1 42
 says   "  ...naming the TL;DR line" "MISSING: the TL;DR line"
 says   "  ...and the table too"     "MISSING: the acceptance-criteria table"
+
+# A ``` inside a ````-opened fence is NOT a closer — CommonMark closes a fence only on a
+# run of the same character at least as long. A toggle that closed on any fence line let
+# the quoted content below it out, which is the same false "structure present" the fence
+# stripper exists to prevent.
+serve "$(body_file 'Here is the shape, quoted at four backticks:' '' '````md' \
+                   '**TL;DR** — one sentence.' '' '```sh' 'echo nested' '```' '' \
+                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '````' '' 'Anyway.')"
+expect "a nested fence does not close its outer fence -> refuse" 1 42
 
 # The other half of that: real content OUTSIDE a fence still clears when the body also
 # happens to contain a fence. Stripping must not eat the body.

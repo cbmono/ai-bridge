@@ -29,8 +29,8 @@
 # SO LENGTH IS INFORMATION, NEVER A VERDICT. The character count is computed once, printed
 # on stderr on every run that reads a body, and never read again: NO THRESHOLD, NO
 # CONSTANT AND NO COMPARISON ON IT EXISTS ANYWHERE BELOW. The only numbers this file
-# compares are an argument count, a cell count and an exit status, none of which is a
-# property of the prose. `tests/pr-body-clearance.test.sh` asserts that statically (the
+# compares are an argument count, a table's cell count, a code fence's width and an exit
+# status — none of which is a property of the prose, and none of which grows with it. `tests/pr-body-clearance.test.sh` asserts that statically (the
 # count variable never appears on a line with a comparison operator) as well as
 # behaviourally (a body far longer than the motivating one clears).
 #
@@ -44,10 +44,13 @@
 # clear on the example rather than on its own content, which is the one false positive
 # this file could plausibly have had.
 #
-#   1. A TL;DR MARKER LINE. Matched only where the marker LEADS the line — as an ATX
-#      heading, as a leading bold/italic run, or as a bare token followed by a separator.
-#      A sentence that merely mentions "the TL;DR rule" mid-paragraph does not match, so
-#      the failure is toward refusal. THE MARKER IS DELIBERATELY SPELLED THREE WAYS
+#   1. A TL;DR MARKER LINE. Matched only where the marker LEADS THE LINE'S OWN CONTENT —
+#      as the text of an ATX heading, as a CLOSED leading bold/italic run, or as a bare
+#      token followed by a separator. Neither a sentence that mentions "the TL;DR rule"
+#      mid-paragraph NOR a heading that merely contains the token (`## Is the TL;DR rule
+#      required?`) matches: the first cut anchored the heading row at the `#` and then
+#      allowed anything before the token, which cleared exactly that heading. The failure
+#      is toward refusal. THE MARKER IS DELIBERATELY SPELLED THREE WAYS
 #      BECAUSE THE RULE ITSELF IS MOVING: `CONVENTIONS.md` today specifies a bold
 #      `**TL;DR** —` line, and `ai-bridge-v5/task-007` will require the named heading
 #      `## Description (TL;DR)` opening every body. A gate that pinned either spelling
@@ -121,8 +124,8 @@ set -uo pipefail
 # specifies today; row 3 is the bare token followed by a separator, which is what an
 # author writes when they are not looking at either document.
 TLDR_MARKERS='
-^[[:space:]]{0,3}#{1,6}[[:space:]]+.*tl[;:/ ]?dr
-^[[:space:]]{0,3}(\*\*|__|\*|_)[[:space:]]*(description[[:space:]]*)?\(?tl[;:/ ]?dr
+^[[:space:]]{0,3}#{1,6}[[:space:]]+(description[[:space:]]*)?\(?tl[;:/ ]?dr
+^[[:space:]]{0,3}(\*\*|__|\*|_)[[:space:]]*(description[[:space:]]*)?\(?tl[;:/ ]?dr\)?[[:space:]]*(\*\*|__|\*|_)
 ^[[:space:]]{0,3}\(?tl[;:/ ]?dr\)?[[:space:]]*[]):：.,;—–-]
 '
 
@@ -186,11 +189,29 @@ render_body() { # <src> <dst>
   tr -d '\r' < "$1" | awk '
     {
       line = $0
-      if (match(line, /^[[:space:]]{0,3}(```|~~~)/)) {
-        if (fence == 0) { fence = 1; next }
-        fence = 0; next
+      if (fence == 0) {
+        if (match(line, /^[[:space:]]{0,3}(`{3,}|~{3,})/)) {
+          opener = substr(line, RSTART, RLENGTH)
+          sub(/^[[:space:]]+/, "", opener)
+          fchar = substr(opener, 1, 1)
+          fwidth = length(opener)
+          fence = 1
+          next
+        }
+        print line
+        next
       }
-      if (fence == 0) print line
+      # Inside a fence, and CommonMark closes one ONLY on a run of the SAME character
+      # that is at least as long, with nothing but whitespace after it. A toggle that
+      # closed on any fence line read a ``` nested inside a ````md block as the closer,
+      # exposing the QUOTED content below it as body content — which is the one direction
+      # that matters, because quoted content is exactly what must not clear this gate.
+      if (match(line, /^[[:space:]]{0,3}(`{3,}|~{3,})[[:space:]]*$/)) {
+        closer = substr(line, RSTART, RLENGTH)
+        gsub(/[[:space:]]/, "", closer)
+        if (substr(closer, 1, 1) == fchar && length(closer) >= fwidth) fence = 0
+      }
+      next
     }
   ' > "$2"
 }
@@ -236,11 +257,25 @@ table_state() { # <rendered-body>
       n = split(s, arr, "|")
       return n
     }
-    # A delimiter row is made of nothing but pipes, dashes, colons and spaces, and it
-    # carries at least one run of dashes. GitHub renders NO TABLE when its cell count
-    # differs from the header row above it, so that equality is checked at the call site.
-    function is_delim(s) {
-      return (s ~ /^[[:space:]]{0,3}[|: -]*-[|: -]*$/ && s ~ /-/ && s ~ /\|/)
+    # A delimiter row is one whose EVERY cell is a GFM delimiter cell — a run of dashes
+    # with an optional leading and/or trailing colon. Asking only whether the LINE is made
+    # of pipes, dashes, colons and spaces is not the same question and is weaker in the
+    # dangerous direction: `|---|:|` passes that test while GitHub renders no table at
+    # all, so a marked row underneath it would have cleared a non-table. GitHub also
+    # renders nothing when the cell count differs from the header row above, and that
+    # equality is checked at the call site.
+    function is_delim(s,   arr, n, i, c) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+      if (index(s, "|") == 0) return 0
+      sub(/^\|/, "", s); sub(/\|$/, "", s)
+      n = split(s, arr, "|")
+      if (n < 1) return 0
+      for (i = 1; i <= n; i++) {
+        c = arr[i]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", c)
+        if (c !~ /^:?-+:?$/) return 0
+      }
+      return 1
     }
     function has_mark(s,   i, n, m) {
       n = split(marks, m, "\036")
