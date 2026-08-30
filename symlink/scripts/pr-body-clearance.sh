@@ -19,10 +19,10 @@
 # not for the thing the rule governs. Nothing read a PR body. This file is that reader.
 #
 # IT REFUSES ON MISSING STRUCTURE AND NEVER ON LENGTH, AND THAT IS THE WHOLE DESIGN.
-# A 1,137-line change may honestly need more than a tweet, and `CONVENTIONS.md` itself
-# permits "longer when it genuinely needs it" — so a gate that punished size would be
-# wrong on precisely the pull requests that most need explaining, and would be switched
-# off within a week for refusing correct work. THE 14,673-CHARACTER BODY THAT MOTIVATED
+# A 1,137-line change may honestly need more than a tweet, and `CONVENTIONS.md` bounds
+# the body's SHAPE and never its size — so a gate that punished size would be wrong on
+# precisely the pull requests that most need explaining, and would be switched off within
+# a week for refusing correct work. THE 14,673-CHARACTER BODY THAT MOTIVATED
 # THIS FILE PASSES HERE if it carries a TL;DR and a criteria table. That is deliberate
 # scope, not an oversight.
 #

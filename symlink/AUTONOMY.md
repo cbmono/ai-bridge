@@ -146,8 +146,8 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    that had it opened a 14,673-character description.
 
    **It refuses on missing STRUCTURE and never on length**, and that is deliberate: a
-   1,137-line change may honestly need more than a tweet, `CONVENTIONS.md` already permits
-   "longer when it genuinely needs it", and a gate that punished size would be wrong on
+   1,137-line change may honestly need more than a tweet, `CONVENTIONS.md` bounds the
+   body's shape and never its size, and a gate that punished size would be wrong on
    exactly the pull requests that most need explaining. **The 14,673-character body that
    motivated it PASSES if it carries both elements.** The character count is printed as
    information; no exit code is derived from it.
