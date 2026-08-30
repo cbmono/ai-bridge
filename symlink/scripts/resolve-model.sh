@@ -19,12 +19,20 @@
 # answerable by one command, so "what model should X run on" has a mechanical answer
 # any caller can get without reading five documents.
 #
-# RESOLUTION ORDER, and absence is never an error:
+# RESOLUTION ORDER:
 #   roleTiers[<agent>]  ->  a tier name (light|standard|deep|apex)
 #   models[<tier>]      ->  an alias (e.g. sonnet)
-# An agent with no roleTiers entry, or a tier with no models entry, prints nothing and
-# exits 1 — the caller then inherits the session model, which is the documented
-# behaviour when the keys are absent. Never guess an alias.
+#
+# ABSENCE IS NOT AN ERROR, BUT IT IS NEVER SILENT — and that distinction is the whole
+# point of this block. An agent with no `roleTiers` entry, or a tier with no `models`
+# entry, still prints NOTHING on stdout and still exits 1, because every caller captures
+# stdout and a word printed there becomes a model alias. What changed is stderr: it now
+# says which agent, which lookup failed, in which two files, and what a caller that
+# ignores the exit code will actually do — INHERIT THE SESSION MODEL. Exiting quietly was
+# the failure shape, not the fallback: an unresolved role is indistinguishable from a
+# resolved one at the call site, so every role can quietly run on the wrong tier and
+# nothing anywhere says so. The line is what makes that visible; it costs nothing when
+# resolution succeeds, since it is only ever printed on the way out. Never guess an alias.
 #
 # Both keys are read from `instance.config.local.json` FIRST and the tracked
 # `instance.config.json` second, per entry. THAT RULE IS NOT WRITTEN HERE: it lives in
@@ -65,10 +73,30 @@ resolver="$here/resolve-config.sh"
   echo "resolve-model: scripts/resolve-config.sh not found beside this script" >&2; exit 2; }
 
 # roleTiers[<agent>] -> a tier name, then models[<tier>] -> an alias. Either step missing
-# means this prints nothing and exits 1: the caller then inherits the session model, which
-# is the documented behaviour when the keys are absent. Never guess an alias.
-tier="$(bash "$resolver" --instance "$inst" roleTiers "$agent")" || exit 1
-[ -n "$tier" ] || exit 1
-alias_name="$(bash "$resolver" --instance "$inst" models "$tier")" || exit 1
-[ -n "$alias_name" ] || exit 1
+# means this prints nothing on stdout and exits 1 — and says so on stderr first.
+#
+# The line names the CONSEQUENCE, not just the gap. "no roleTiers entry" is a fact about a
+# file; "this agent will run on whatever the session happens to be" is what the reader has
+# to decide about, and it is the half a caller cannot work out for itself. It also names
+# both files, because which one is missing the entry decides where the fix goes: the
+# per-machine file is where spend belongs, and `install.sh` seeds it.
+unresolved() { # <what-is-missing> <fix>
+  echo "resolve-model: no model for '$agent' — $1." >&2
+  echo "  Nothing was printed, so a caller that ignores this exit code will dispatch on" >&2
+  echo "  the SESSION model instead of a chosen one, silently, for this agent." >&2
+  echo "  Fix: $2" >&2
+  echo "       to instance.config.local.json — per-machine spend, and the tracked" >&2
+  echo "       instance.config.json is the fallback. Or re-run the template's" >&2
+  echo "       install.sh, which seeds both keys into the local file." >&2
+  exit 1
+}
+
+tier="$(bash "$resolver" --instance "$inst" roleTiers "$agent")" || tier=""
+[ -n "$tier" ] || unresolved \
+  "neither instance.config.local.json nor instance.config.json has a roleTiers entry for it" \
+  "add \"roleTiers\": { \"$agent\": \"<light|standard|deep|apex>\" }"
+alias_name="$(bash "$resolver" --instance "$inst" models "$tier")" || alias_name=""
+[ -n "$alias_name" ] || unresolved \
+  "its tier is '$tier', and neither config file maps that tier to a model alias" \
+  "add \"models\": { \"$tier\": \"<alias>\" }"
 printf '%s\n' "$alias_name"
