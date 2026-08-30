@@ -541,6 +541,14 @@ clone belongs to. Those go in **`instance.config.local.json`** beside it — git
 (`install.sh` adds the line), read **first**, and **entirely optional: no local file
 means the tracked file answers exactly as it always did.**
 
+**JSON `null` is ABSENCE, not a value.** A key or entry set to `null` in either file reads
+exactly as one that is not there: `scripts/resolve-config.sh` prints nothing and exits 1,
+and the caller applies the fallback its own document states. So a **local `null` unsets an
+inherited key** — `{ "maxAgentsInFlight": null }` in the per-machine file drops back to
+whatever the *caller's* documented default is, rather than to the tracked number. Without
+this rule the readers would hand `null` on as a value: a `"models": {"deep": null}` once
+made `resolve-model.sh` print the literal alias `null` and exit 0.
+
 **This is the one place the overridable set is listed. Don't scatter it.**
 
 | Key | Overridable? | Absent ⇒ |

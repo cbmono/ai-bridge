@@ -88,6 +88,15 @@ in `cbmono/ai-bridge` enforces this.
   rule, a flow only a human or a browser can walk — is exactly where green CI means
   nothing. Leaving it honestly unmarked routes the PR to a human instead of letting it
   ride the deterministic checks. Never mark `✓` because everything else passed.
+  **This rule has a reader, and it reads the body — not this document.**
+  `scripts/pr-body-clearance.sh <pr>` fetches the actual PR body from the host and
+  refuses one that is missing the TL;DR line or the criteria table;
+  `scripts/required-checks.sh` asks it for every PR it is about to clear, and
+  `AUTONOMY.md` precondition 3 names it. **It refuses on missing STRUCTURE, never on
+  length**: this bullet bounds the body's SHAPE and never its size, so a long body
+  carrying both elements clears and the character count is reported as information only.
+  A change that honestly needs more words is exactly the one that most needs explaining. Run it on your draft before you open the PR
+  (`scripts/pr-body-clearance.sh --body-file <file>`); it is the cheapest check you have.
   **Short and auditable are the same thing here, which is why brevity costs nothing.**
   `` `foo.test.sh` 40/0 `` is *shorter* than a paragraph and *more* checkable than one: it
   names an artifact the reader can re-run, and a claim a reader can re-run is the only

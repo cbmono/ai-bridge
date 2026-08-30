@@ -13,10 +13,15 @@
 #
 # Two halves, and the negative properties are most of the file:
 #
-#   check-machinery.sh (SessionStart hook)
+#   session-banner.sh (SessionStart hook — the MACHINERY section of it)
 #     · names the dead links, where they pointed, and the exact repair command;
-#     · SILENT and exit 0 in a healthy instance, and in any non-bridge project that
-#       inherits the hook — the whole reason it is safe to ship;
+#     · that section is ABSENT and exit 0 in a healthy instance; in a non-bridge project
+#       that inherits the hook the whole banner is silent, which is the reason it is safe
+#       to ship. (This hook was `check-machinery.sh` until the three SessionStart hooks
+#       were consolidated. A healthy INSTANCE is no longer wholly silent — the banner
+#       always prints an identity line and a settings block, on purpose — so the healthy
+#       case asserts the absence of the WARNING rather than of all output. The rest of
+#       the banner is tests/session-banner.test.sh's.);
 #     · does not identify an instance by SCHEMA.md. That is the trap: SCHEMA.md is itself
 #       machinery, `[ -f ]` on a dangling symlink is FALSE, and the obvious guard
 #       (push-state.sh's triple) would therefore silence the hook in exactly the case it
@@ -61,18 +66,22 @@ no_if()  { if "$@" >/dev/null 2>&1; then echo 1; else echo 0; fi; }
 has()    { printf '%s\n' "$2" | grep -qF -- "$1" && echo 0 || echo 1; }
 hasnt()  { printf '%s\n' "$2" | grep -qF -- "$1" && echo 1 || echo 0; }
 
-HOOK_SRC="$TPLSRC/symlink/.claude/hooks/check-machinery.sh"
+HOOK_SRC="$TPLSRC/symlink/.claude/hooks/session-banner.sh"
+# The one string that only the machinery section ever prints.
+WARN="ai-bridge machinery is DANGLING"
 
 echo "== the hook is wired up at all =="
-assert "check-machinery.sh ships"        "$(yes_if test -f "$HOOK_SRC")"
+assert "session-banner.sh ships"         "$(yes_if test -f "$HOOK_SRC")"
 assert "…and is executable"              "$(yes_if test -x "$HOOK_SRC")"
 assert "…and parses"                     "$(yes_if bash -n "$HOOK_SRC")"
 # A hook nothing registers is a file. settings.json is the only thing that runs it.
 SET="$TPLSRC/symlink/.claude/settings.json"
 assert "settings.json registers it at SessionStart" \
-  "$(yes_if bash -c "awk '/\"SessionStart\"/,0' '$SET' | grep -q 'check-machinery.sh'")"
-assert "…and show-awaiting.sh is still registered too" \
-  "$(yes_if grep -q 'show-awaiting.sh' "$SET")"
+  "$(yes_if bash -c "awk '/\"SessionStart\"/,0' '$SET' | grep -q 'session-banner.sh'")"
+# The consolidation, stated from this side too: the hook it replaced must not still be
+# registered beside it. A settings.json naming both would run the machinery probe twice.
+assert "…and check-machinery.sh is NOT registered any more" \
+  "$(no_if grep -q 'check-machinery.sh' "$SET")"
 
 echo "== every probe path is still real machinery =="
 # The probe list is four literal paths. It fails CLOSED — a path the template stops
@@ -100,9 +109,9 @@ bash "$TPL/install.sh" "$INST" >"$TMP/stamp" 2>&1
 assert "a fresh instance stamps"         "$(yes_if test -f "$INST/instance.config.json")"
 
 echo "== healthy instance: silent, exit 0 =="
-RC=0; OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/check-machinery.sh" 2>&1)" || RC=$?
+RC=0; OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)" || RC=$?
 assert "exit 0"                          "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
-assert "…and prints NOTHING"             "$([ -z "$OUT" ] && echo 0 || echo 1)"
+assert "…and raises no machinery warning" "$(hasnt "$WARN" "$OUT")"
 
 echo "== a non-bridge project that inherits the hook: silent, exit 0 =="
 # The realistic shape of the accident: someone copies .claude/ around, or the config layer
@@ -121,11 +130,11 @@ echo "== an absent, or real, probe path is not a broken one =="
 # Absent means the instance never had it. A real file is never ours to complain about.
 # Both must be distinguished from a dangling link, or the hook cries wolf on every start.
 rm -f "$INST/SCHEMA.md"
-OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/check-machinery.sh" 2>&1)"
-assert "an absent probe path says nothing"  "$([ -z "$OUT" ] && echo 0 || echo 1)"
+OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)"
+assert "an absent probe path says nothing"  "$(hasnt "$WARN" "$OUT")"
 printf 'my own SCHEMA\n' > "$INST/SCHEMA.md"
-OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/check-machinery.sh" 2>&1)"
-assert "a REAL file at a probe path too"    "$([ -z "$OUT" ] && echo 0 || echo 1)"
+OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)"
+assert "a REAL file at a probe path too"    "$(hasnt "$WARN" "$OUT")"
 rm -f "$INST/SCHEMA.md"
 
 echo "== one dead link is enough, and SCHEMA.md dangling must not silence the hook =="
@@ -135,7 +144,7 @@ echo "== one dead link is enough, and SCHEMA.md dangling must not silence the ho
 # assertion is about the guard and nothing else.
 ln -s "$TPL/symlink/SCHEMA.md" "$INST/SCHEMA.md"
 mv "$TPL/symlink/SCHEMA.md" "$TPL/symlink/SCHEMA.md.hidden"
-OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/check-machinery.sh" 2>&1)"
+OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)"
 assert "a dangling SCHEMA.md is reported"   "$(has 'SCHEMA.md' "$OUT")"
 assert "…and counted as 1 of 4"             "$(has '1 of 4' "$OUT")"
 assert "…and the repair is named"           "$(has "bash $TPL/install.sh $INST" "$OUT")"
@@ -146,7 +155,7 @@ echo "== the whole template moves =="
 # invoked from the template's NEW location, which is also how it knows the path to print.
 mv "$TMP/here" "$TMP/there"
 TPL2="$TMP/there/tpl"
-RC=0; OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$TPL2/symlink/.claude/hooks/check-machinery.sh" 2>&1)" || RC=$?
+RC=0; OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$TPL2/symlink/.claude/hooks/session-banner.sh" 2>&1)" || RC=$?
 assert "exit 0 even when reporting"      "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "all four probes are named"       "$(has '4 of 4' "$OUT")"
 assert "…the dead paths are listed"      "$(has 'scripts/commit-as.sh' "$OUT")"
@@ -174,7 +183,7 @@ assert "exactly one dead .bak link is left (the stranger)" \
 assert "a .bak REGULAR FILE survives"    "$(yes_if grep -q 'content a human wants back' "$INST/CONVENTIONS.md.bak.1700000000")"
 assert "a stranger's dead .bak link survives" "$(yes_if test -L "$INST/stranger.bak.1700000001")"
 assert "a .bak link that resolves survives"   "$(yes_if test -e "$INST/live.bak.1700000002")"
-assert "the instance is healthy again"   "$([ -z "$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/check-machinery.sh" 2>&1)" ] && echo 0 || echo 1)"
+assert "the instance is healthy again"   "$(hasnt "$WARN" "$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)")"
 
 echo "== idempotent =="
 bash "$TPL2/install.sh" "$INST" >"$TMP/again" 2>&1

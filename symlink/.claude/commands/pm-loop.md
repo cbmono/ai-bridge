@@ -41,6 +41,17 @@ shared-store corruption, racing pushes to the control panel's `main`). **Still r
 most one active `/pm-loop` per clone** — the lock catches the mistake; it does not
 make two loops a good idea.
 
+**The tick takes it too, because a resume never passes through this launcher.** Waking a
+completed tick directly runs no `acquire` at all, so nothing is written and a dispatch
+seconds later correctly reports the lock free — measured 2026-08-30, an hour after the
+lock merged: a resumed tick and a dispatched tick ran at once, and the human spotted it
+before the machinery did. So the tick takes the lock as well, in its own step 0.5
+(`scripts/tick-lock.sh acquire --as tick`). **That does not move the lock out of here**:
+your acquire is still the only one that happens *before* a dispatch exists, and moving it
+into the tick alone would re-open the window this closes. Nor does a tick refuse the lock
+you took for it — an unclaimed lock is precisely the dispatch it is — so nothing about
+step 1 changes.
+
 **It is a PER-CLONE lock and it is not a cross-machine one.** `.tick-lock` is a single
 gitignored file in a single working tree, so it says nothing about the other human's
 clone of a shared bundle — and it must not be read as if it did. Two loops from two
@@ -154,7 +165,7 @@ that cannot work is a widened tool contract bought for nothing.
 `.claude/agents/project-manager.md` step 8, which renders as its last act and reports the
 path in one `BOARD: rendered <path>` line — surfaced to the human with the rest of the
 tick's report, and printed again at the start of every session by the
-`show-board-link.sh` hook. Rendering needs `Bash`, which the tick already holds and this
+`session-banner.sh` hook. Rendering needs `Bash`, which the tick already holds and this
 launcher deliberately does not, so there is nothing left for the launcher to do about the
 board at all: no grant, no step, and no page body landing in **this** session's context,
 which is the one thing the section above exists to protect.
@@ -418,7 +429,10 @@ ticks, regardless of how long a tick runs.
   sharing one bundle from two clones is a different case and is supported — see
   there. To change the gap: stop, then `/pm-loop <gap>`.
 - **The dispatch lock is `.tick-lock` at the instance root** — gitignored, per clone,
-  written by step 1 and released in step 2 by the session that took it.
+  written by step 1 and released in step 2 by the session that took it. The tick takes it
+  as well (its step 0.5, `--as tick`) and records that it is running under it in
+  `.tick-lock.claim` beside it, which is how a dispatched tick tells your lock from
+  another tick's; a tick releases only a lock it created itself.
   `scripts/tick-lock.sh status` reads it
   without touching it (for a human, never for this launcher), `release` clears it, and
   `TICK_LOCK_STALE_MINUTES` (default 120) sets how old a lock has to be before step 1

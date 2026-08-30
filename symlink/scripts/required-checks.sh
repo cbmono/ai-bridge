@@ -15,13 +15,15 @@
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:
 #
-#   0  a non-empty required set resolved, every member passed, AND an independent
-#      review artifact clears the current head
-#   1  a required check is not green — failing, pending, or never reported; or no
-#      review cleared this head (see below)
-#   2  usage error, or the environment can't answer (no `gh` or `jq` — the sibling
-#      needs both — an unreadable PR, `review-clearance.sh` missing/unrunnable, or an
-#      unreadable reviewer state)
+#   0  a non-empty required set resolved, every member passed, an independent review
+#      artifact clears the current head, AND the PR body carries the shape
+#      `CONVENTIONS.md` requires
+#   1  a required check is not green — failing, pending, or never reported; no review
+#      cleared this head (see below); or the PR body is missing its TL;DR line or its
+#      acceptance-criteria table
+#   2  usage error, or the environment can't answer (no `gh` or `jq` — the siblings
+#      need both — an unreadable PR, `review-clearance.sh` or `pr-body-clearance.sh`
+#      missing/unrunnable, an unreadable reviewer state, or an unreadable PR body)
 #   3  no required set could be resolved — the merge authority is NOT exercisable
 #      here (this is the signal AUTONOMY.md's preflight surfaces to the human)
 #   4  this PR edits the declared list itself — changing the gate is a human call
@@ -345,5 +347,60 @@ else
   [ "$crc" -eq 0 ] || refuse_clearance "no independent review clears PR $pr" "$crc"
 fi
 
+# --- and a body nobody can read is not a merge anybody can decide ------------
+# THE THIRD PRECONDITION, AND IT IS HERE FOR THE SAME REASON THE SECOND ONE IS.
+# `CONVENTIONS.md` requires a PR body of a specific shape — a TL;DR line and the task's
+# acceptance criteria as a `✓`/`✗` table — and that table is not decoration: it is the
+# artifact `SCHEMA.md` clause 7 and `AUTONOMY.md` precondition 3 read to decide whether
+# every criterion was verified. Five hours after that rule merged, an agent that had it
+# opened a 14,673-character description, because the rule's only reader was a test
+# asserting THE RULE IS NAMED IN THE DOCUMENT. `pr-body-clearance.sh` is the reader for
+# the thing the rule governs, and this is the gate that consults it — a predicate no gate
+# calls would repeat the defect one level down.
+#
+# IT REFUSES ON MISSING STRUCTURE, NEVER ON LENGTH. A long body carrying both elements
+# clears; see that file's header for why a size gate would be wrong on exactly the pull
+# requests that most need explaining.
+#
+# SAME MISSING/BROKEN-SIBLING CONTRACT as review-clearance.sh above, for the same reason:
+# `[ -x ]` cannot tell a working script from a truncated one, and a sibling that fails
+# every invocation would be indistinguishable from a body that is fine. The expected
+# self-test string is spelled out here rather than sourced, because sourcing the file is
+# exactly what cannot be trusted when the file is the thing under suspicion.
+BODYGATE="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/pr-body-clearance.sh"
+BODYGATE_SELFTEST_OK="pr-body-clearance: self-test ok"
+if [ ! -f "$BODYGATE" ]; then
+  echo "error: pr-body-clearance.sh not found beside this script ($BODYGATE)." >&2
+  echo "       Without it nothing reads the PR body, so whether the acceptance-criteria" >&2
+  echo "       table the merge decision rests on is even present is unknown — and" >&2
+  echo "       unknown is never clearance. Refusing (fail closed)." >&2
+  exit 2
+fi
+if bg_selftest="$("$BODYGATE" --self-test 2>/dev/null)"; then :; else bg_selftest=""; fi
+if [ "$bg_selftest" != "$BODYGATE_SELFTEST_OK" ]; then
+  echo "error: pr-body-clearance.sh is present but does not run ($BODYGATE)." >&2
+  echo "       Its --self-test did not answer '$BODYGATE_SELFTEST_OK'. A script that" >&2
+  echo "       fails every invocation reads exactly like a gate doing its job, so the" >&2
+  echo "       body shape is unknown state and this refuses." >&2
+  exit 2
+fi
+
+body_err="$(mktemp)"
+trap 'rm -f "$probe_err" "$clearance_err" "$body_err"' EXIT
+if "$BODYGATE" "$pr" ${R[@]+"${R[@]}"} --head "$head_sha" >/dev/null 2>"$body_err"
+then brc=0; else brc=$?; fi
+if [ "$brc" -ne 0 ]; then
+  echo "refuse: the body of PR $pr does not carry the shape CONVENTIONS.md requires" >&2
+  echo "        (pr-body-clearance.sh exit $brc):" >&2
+  sed 's/^/        /' "$body_err" >&2
+  # Unreadable (exit 2) is a different answer from readable-and-malformed (exit 1) —
+  # keep the sibling's two codes distinguishable, exactly as refuse_clearance does.
+  if [ "$brc" -eq 2 ]; then exit 2; fi
+  exit 1
+fi
+# The character count the sibling reports is INFORMATION, and information nobody sees is
+# not information — so it is surfaced on the clearing path too, not only in a refusal.
+sed 's/^/  /' "$body_err" >&2
+
 count="$(printf '%s\n' "$required" | grep -c '^' || true)"
-echo "ok: $count required check(s) pass and a review clears PR $pr (source: $source, head $head_sha)"
+echo "ok: $count required check(s) pass, a review clears PR $pr, and its body carries the required shape (source: $source, head $head_sha)"
