@@ -316,6 +316,38 @@ else
   echo "  SKIP  ai-bridge.sh is not in this template yet (task-011 / ai-bridge#70 is open)"
 fi
 
+# =======================================================================================
+echo "== 7. the two ways the wrapper itself can fail, and neither may corrupt the channel =="
+# =======================================================================================
+# "Never malformed" is a claim about the paths where the WRAPPER breaks, not only about
+# the paths where an input is missing — and half an object spliced onto that channel is
+# the one outcome worse than the bug this whole change fixes. Both tools it leans on are
+# taken away here, one at a time, with a stub earlier in PATH than the real one.
+STUBBIN="$TMP/stubbin"; mkdir -p "$STUBBIN"
+
+# 7a. NO WORKING ENCODER. The banner must arrive as the plain text this template shipped
+# before — a channel regression, never a parse error, and never a truncated envelope.
+printf '#!/bin/sh\nexit 1\n' > "$STUBBIN/awk"; chmod +x "$STUBBIN/awk"
+OUT="$(PATH="$STUBBIN:$PATH" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>/dev/null)"; RC=$?
+rm -f "$STUBBIN/awk"
+assert "a broken awk: still exit 0"                    "$(eq "$RC" 0)"
+assert "…and the banner still comes out"               "$(has 'AI-Bridge' "$OUT")"
+assert "…as plain text, not as half an envelope"       "$(hasnt '{"systemMessage"' "$OUT")"
+
+# 7b. NO BUFFER. `mktemp` failing takes the JSON path away before it is entered, which is
+# the same fallback by a different route — and must not lose the banner either.
+printf '#!/bin/sh\nexit 1\n' > "$STUBBIN/mktemp"; chmod +x "$STUBBIN/mktemp"
+OUT="$(PATH="$STUBBIN:$PATH" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>/dev/null)"; RC=$?
+rm -f "$STUBBIN/mktemp"
+assert "no usable mktemp: still exit 0"                "$(eq "$RC" 0)"
+assert "…and the banner still comes out"               "$(has 'AI-Bridge' "$OUT")"
+assert "…with no partial envelope around it"           "$(hasnt '{"systemMessage"' "$OUT")"
+
+# NON-VACUITY: with both tools present the same command produces the envelope, so the
+# three assertions above are measuring the fallback and not a permanently broken path.
+hook_run
+assert "…while the unstubbed run still emits the envelope" "$(has '{"systemMessage"' "$OUT")"
+
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]
