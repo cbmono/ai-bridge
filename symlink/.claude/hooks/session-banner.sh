@@ -99,7 +99,10 @@ fi
 TAB="$(printf '\t')"
 
 # `~` for $HOME, so a settings block of absolute paths stays inside one screen width.
-tilde() { case "$1" in "$HOME"/*) printf '~%s' "${1#"$HOME"}" ;; *) printf '%s' "$1" ;; esac; }
+# `${HOME:-}` rather than `$HOME`: `set -u` is on, and a hook is not guaranteed the
+# environment a login shell has. An unset HOME must cost the abbreviation, not the banner.
+tilde() { local h="${HOME:-}"
+          case "${h:+$1}" in "$h"/*) printf '~%s' "${1#"$h"}" ;; *) printf '%s' "$1" ;; esac; }
 
 # ---------------------------------------------------------------------------------------
 # 0. MACHINERY — was check-machinery.sh. FIRST, and above the identity line, because it is
@@ -424,8 +427,9 @@ if [ -d "$root/projects" ]; then
         # task-owner.sh could not answer (no SCHEMA.md, an unreadable frontmatter), and an
         # unanswered question must not silently hide work from its owner.
         if [ -x "$bin/task-owner.sh" ]; then
-          ( cd "$root" && bash "$bin/task-owner.sh" "$root$val" >/dev/null 2>&1 )
-          [ "$?" -eq 1 ] || n_ready=$((n_ready+1))
+          orc=0
+          ( cd "$root" && bash "$bin/task-owner.sh" "$root$val" >/dev/null 2>&1 ) || orc=$?
+          [ "$orc" -eq 1 ] || n_ready=$((n_ready+1))
         else
           n_ready=$((n_ready+1))
         fi ;;

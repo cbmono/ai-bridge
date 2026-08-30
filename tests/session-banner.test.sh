@@ -357,8 +357,12 @@ assert "…bounded to once per session" \
 assert "…and placed beside the ad-hoc-vs-tracked-work section" \
   "$(awk '/^## Ad-hoc requests vs[.] the project loop/ { f=1; next } f && /^## / { f=0 } f' "$SEED" \
       | grep -qF 'Ready to dispatch' && echo 0 || echo 1)"
+# The hook must not attempt the offer itself. Scoped to what it PRINTS — an `echo` or
+# `printf` — rather than to every line in the file: `$?` ends a line with a question mark
+# and a header sentence may pose one, and neither is the hook asking the human anything.
 assert "the hook does not try to ask the question itself" \
-  "$(grep -qE 'shall I|would you like|\?$' "$HOOK" && echo 1 || echo 0)"
+  "$(grep -E '^[[:space:]]*(echo|printf)' "$HOOK" \
+     | grep -qiE 'shall I|would you like|do you want|\?["'"'"']?[[:space:]]*$' && echo 1 || echo 0)"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
