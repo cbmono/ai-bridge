@@ -525,7 +525,7 @@ check_config_layers() {
     good "config layers: not resolvable here (resolve-config.sh or python3 absent)"
     return 0
   fi
-  local dump local_keys tracked_n local_n
+  local dump local_keys tracked_keys tracked_n local_n
   dump="$(bash "$BIN/resolve-config.sh" --instance "$ROOT" --dump 2>/dev/null || true)"
   if [ -z "$dump" ]; then
     good "config layers: nothing resolved (no readable config in $ROOT)"
@@ -536,15 +536,23 @@ check_config_layers() {
   local_n="$(printf '%s\n' "$dump"   | awk -F'\t' '$1=="local"   && $2!="people"' | wc -l | tr -d ' ')"
   local_keys="$(printf '%s\n' "$dump" | awk -F'\t' '$1=="local" && $2!="people" {print ($3=="" ? $2 : $2 "." $3)}' \
                 | sort -u | tr '\n' ' ' | sed 's/ $//')"
+  tracked_keys="$(printf '%s\n' "$dump" | awk -F'\t' '$1=="tracked" && $2!="people" {print ($3=="" ? $2 : $2 "." $3)}' \
+                  | sort -u | tr '\n' ' ' | sed 's/ $//')"
   # Counted per RESOLVED LEAF, not per top-level key, because that is the granularity the
   # precedence actually works at: a one-line local override moves one entry of `roleTiers`
   # and leaves every other entry tracked, and a per-file count would report that as the
   # whole map having been overridden.
+  # BOTH SIDES ARE NAMED, not just the surprising one. "which layer won" has to be
+  # answerable FOR EACH KEY, and a list of only the local winners leaves the reader
+  # inferring the rest from a count — which is the same half-answer as printing the file
+  # and letting them work out what is in force.
   if [ "$local_n" -gt 0 ]; then
     good "config resolves: $((local_n + tracked_n)) keys — $local_n from local, $tracked_n from tracked"
-    note "local wins for: $local_keys"
+    note "local:   $local_keys"
+    [ -n "$tracked_keys" ] && note "tracked: $tracked_keys"
   else
     good "config resolves: $tracked_n keys, all from tracked — no local override is in force"
+    [ -n "$tracked_keys" ] && note "tracked: $tracked_keys"
   fi
   # NO TRAILING CAVEAT LINE. "values are not shown here" would read the same on a healthy
   # instance and a broken one, which is this command's own test for a line that does not
