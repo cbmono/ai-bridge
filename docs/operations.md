@@ -607,7 +607,7 @@ and none of which could say which instance the session was in — a question thi
 owner asked three times in one session, for three different instances.
 
 ```text
-AI-Bridge 0.11.1 · _ai-bridge-private · org: cbmono
+AI-Bridge 0.12.0 · _ai-bridge-private · org: cbmono
 ───────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
