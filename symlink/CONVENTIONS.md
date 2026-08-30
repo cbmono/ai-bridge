@@ -181,8 +181,10 @@ in `cbmono/ai-bridge` enforces this.
   touches what that repo's **consumers actually consume** — the paths other people or
   other systems install, link, copy or run, as opposed to its docs, tests and CI — then
   the change arrives with the new number already in the diff, in **its own commit** so it
-  can be dropped, plus one line in the PR body: the proposed `old → new`, which part of
-  the version moved, and why. **The human approves it by merging and rejects it by asking
+  can be dropped, plus **one `⚠️` line in the PR body** naming the proposed
+  `old → new` and which part of the version moved — it is a threshold question the owner
+  answers, so it is bounded like every other one, and the *why* lives in the task doc and
+  the commit message. **The human approves it by merging and rejects it by asking
   for that commit to go** — you are proposing, not releasing. Two things that are not
   yours to add: a **silent** bump (a number that moves with no line in the body is a
   number nobody agreed to), and a **release process** — no changelog, no tag, no publish
