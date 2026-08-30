@@ -434,6 +434,54 @@ second lock — its timestamp is never a second staleness clock, and `release` r
 unconditionally. A tick releases only a lock it *created* (the resume case); one it
 *adopted* is the launcher's, released when the tick reports.
 
+**And it must not refuse its own claim either**, which is the same shape one level down and
+is what actually happened hours after the paragraph above shipped: a dispatched tick held
+and dispatched nothing on a claim it had made itself (`taken 13:28:49Z` by the launcher,
+`claimed 13:29:33Z` by the tick it spawned). Existence was the claim's whole signal, so it
+said *that* somebody claimed and never *who* — correct only while a tick acquires exactly
+once, which a retry, a re-run of the tick's acquire or a resume all break. So the claim
+records a **claimant** and the claimed branch splits: your own claim is a re-entry and proceeds
+(`re-entered:`, then the same `took:`/`adopted:` obligation your first acquire printed),
+and anyone else's still reports and holds. The narrower reading — "the launcher spawns one
+tick per lock, so a claimed lock met by a tick must *be* that tick" — has a true premise
+and a false conclusion: the concurrency this guard exists for has only **one** launcher in
+it, because a resumed tick never passes through one.
+
+**The identity has two tiers, and only the explicit one is ever believed.** `--claimant`
+and `TICK_CLAIMANT` are **declared** — a caller stating "this names *this tick*" — and two
+matching declarations are a re-entry. `CLAUDE_CODE_SESSION_ID`, used when nothing was
+declared, is **derived**, and measured 2026-08-30 it is the same value byte-for-byte in a
+parent session and in a subagent it dispatched: it names the *session*, so every tick one
+loop starts shares it. That makes it useless as proof and dangerous as one, because the
+sequence it would wave through is the very one the claimed branch was kept for — launcher
+dispatches A, A claims, the same session resumes R, R reads A's claim as its own. So the
+trust is asymmetric: **a derived id may refuse a claim, but may never clear one.**
+
+| on disk vs. this caller | result |
+|---|---|
+| both **declared** and equal | re-entry — proceed (`re-entered:`, 0) |
+| the ids differ | not yours — hold (1) |
+| either side has no id | not yours — hold (1), exactly as before claimants |
+| equal, but either side **derived** | `CANNOT ATTRIBUTE` — **exit 2, a human decides** |
+
+The last row is the ordinary case under Claude Code, and it is deliberately neither 0 (that
+is the 2026-08-29 double-dispatch) nor 1 ("a different tick is running" is a statement the
+file cannot support, and stating it anyway is the 2026-08-30 stand-down). It is the same
+answer a stale lock gets, for the same reason, and it is rare by construction: a claim only
+exists while a tick is already running. **Both ids and the source of each are printed on
+every refusal and by `status`**, and `claimant-source: flag|env|session` is recorded in the
+claim, so "is that a sibling, or did my own id move?" is read rather than deduced. The two
+mechanisms already known wrong here — elapsed time, and a nonce passed down the dispatch —
+are still refused. The claimant is checked **last**, after staleness, so recognising
+yourself is never a licence to run past a deadline a human has to rule on.
+
+Two failure modes stay open and are named rather than assumed away. A session that **forks
+or compacts** gets a new id mid-tick, meets its own claim as a stranger and holds — the
+pre-claimant behaviour, costing a re-run rather than a duplicate dispatch. And `release`
+removes two files with two `rm`s, so a tick acquiring between them can adopt a lock that is
+about to vanish; it needs a human running the override in that microsecond, and the fix
+would mean asking `release` who is calling, which an override must never do.
+
 **Absence is never an error — but a failed create is.** No lock file means the launcher
 takes one and dispatches exactly as it always did, in silence: the same absence-is-off
 contract `SNAPSHOT.json` and the board link keep. Dispatch follows the lock being

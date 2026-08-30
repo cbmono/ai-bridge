@@ -50,8 +50,50 @@
 #      "proceeded" because the lock had vanished would pass a weaker test for the wrong
 #      reason.
 #
+# AND A SEVENTH, ADDED HOURS AFTER THE SIXTH SHIPPED, FOR THE SAME REASON ONE LEVEL DOWN.
+# A dispatched tick held and dispatched nothing, reporting a different tick — and the claim
+# it had found was its own (`taken 13:28:49Z` by the launcher, `claimed 13:29:33Z` by the
+# tick it spawned). Existence was the claim's whole signal, so it recorded THAT somebody
+# claimed and never WHO, and any re-entry — a second acquire, a resume, a retry — made a
+# tick an intruder to itself. So:
+#
+#   7. A TICK MEETING ITS OWN CLAIM PROCEEDS; A TICK MEETING A DIFFERENT ONE STILL HOLDS.
+#      Both halves, or neither is worth anything: drop the first and every re-entering
+#      dispatch deadlocks (the outage property 6 exists to prevent, moved one level down);
+#      drop the second and the 34-minute double-dispatch of 2026-08-29 is back. The exact
+#      failing sequence is driven below, in order, and so is a genuinely different tick at
+#      the same lock.
+#
+# AND AN EIGHTH, WHICH IS WHAT MADE THE SEVENTH SAFE TO SHIP. Property 7's first
+# implementation resolved identity from `CLAUDE_CODE_SESSION_ID`. That variable was then
+# MEASURED, in a parent session and in a subagent it dispatched:
+#
+#     parent    CLAUDE_CODE_SESSION_ID=aaf01a1c-fc30-4e96-99e9-a2c43733c10f
+#     subagent  CLAUDE_CODE_SESSION_ID=aaf01a1c-fc30-4e96-99e9-a2c43733c10f
+#
+# One id per SESSION, so every tick a loop starts is one claimant and a match proves nothing
+# — and the sequence it would wave through (launcher dispatches A, A claims, the SAME
+# session resumes R, R meets A's claim) is precisely the one property 7 keeps the claimed
+# branch for. Hence:
+#
+#   8. A DERIVED IDENTITY MAY REFUSE A CLAIM AND MAY NEVER CLEAR ONE. Only two DECLARED ids
+#      (`--claimant`, `TICK_CLAIMANT`) that match are a re-entry. A session-derived id that
+#      merely matches is exit 2, a human's call. THIS IS THE PROPERTY TO REFUSE A CHANGE ON:
+#      a diff that turns any exit 2 below into an exit 0 has re-opened 2026-08-29, and no
+#      other assertion in this file would notice.
+#
+# EVERY TICK IN THIS FILE STATES ITS IDENTITY, AND THE ENVIRONMENT'S IS UNSET ON PURPOSE.
+# `--claimant` is the explicit source; absent one the script falls back to `TICK_CLAIMANT`
+# and then to the runtime's `CLAUDE_CODE_SESSION_ID`. A harness that inherited either would
+# hand EVERY subshell here one identity — 20 "concurrent ticks" would all be the same tick,
+# correctly, and the race assertions would go quietly vacuous. Unset, so a call without
+# `--claimant` models the OTHER real case: a tick whose environment cannot identify it,
+# which must degrade to exactly the pre-claimant behaviour and never past it. The
+# environment-derived path gets its own block below, where it is set deliberately.
+#
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
+unset CLAUDE_CODE_SESSION_ID TICK_CLAIMANT
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
 LOCKSH="$TPL/symlink/scripts/tick-lock.sh"
@@ -69,6 +111,12 @@ ok() { # <name> <actual> <expected>
 yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 has() { # <file> <fixed-string> -> yes|no
   grep -qF -- "$2" "$1" && echo yes || echo no
+}
+# Read one field back out of a lock or claim, the way a human would. Deliberately a
+# different (and dumber) reader than the script's own, so a bug in one is not hidden by the
+# same bug in the other.
+lock_field_of() { # <file> <key>
+  sed -n "s/^$2: *//p" "$1" 2>/dev/null | head -1
 }
 
 # The same BSD-then-GNU order the script itself uses: `-r` is macOS's, `-d @…` is
@@ -102,9 +150,13 @@ dispatches() { # <instance-dir> -> how many ticks the launcher actually spawned
 # the launcher spawned; `ran.log` counts what actually RAN — and the two differ precisely
 # in the cases this file was extended for, which is why they are counted separately.
 TICK_RC=0; TICK_OUT=""
-tick() { # <instance-dir> [agent-id] — a tick reaching its step 0.5, however it began
-  local inst="$1" agent="${2:-project-manager}"
-  TICK_OUT="$(bash "$LOCKSH" acquire --as tick --instance "$inst" --agent "$agent" 2>&1)"
+tick() { # <instance-dir> [agent-id] [claimant] — a tick at its step 0.5, however it began
+  # The third argument is WHICH TICK this is, and it is what the same-tick / different-tick
+  # assertions turn on — `--agent` names a ROLE and cannot separate two ticks of one role,
+  # which is the case that failed. Omitted means no identity at all (see the header).
+  local inst="$1" agent="${2:-project-manager}" who="${3:-}"
+  TICK_OUT="$(bash "$LOCKSH" acquire --as tick --instance "$inst" --agent "$agent" \
+    ${who:+--claimant "$who"} 2>&1)"
   TICK_RC=$?
   [ "$TICK_RC" -eq 0 ] && printf 'tick ran: %s\n' "$agent" >> "$inst/ran.log"
   return 0
@@ -316,6 +368,276 @@ ok "exactly one tick adopted it" \
   "$(find "$A2" -maxdepth 1 -name 'adopted.*' | wc -l | tr -d ' ')" 1
 
 echo
+echo "== THE 2026-08-30 SEQUENCE: a tick meets its OWN claim and PROCEEDS =="
+# The exact failing sequence, in order and with nothing mocked: the launcher acquires
+# (13:28:49Z), the tick it spawned claims (13:29:33Z), and then THAT SAME TICK acquires
+# again — a retry, a resume, a re-run of step 0.5. Until the claim recorded a claimant it
+# read as a different tick, so the tick stood down on its own claim and dispatched nothing.
+# Note both ticks below carry `--agent project-manager`: the role is identical and cannot
+# be what separates them, which is precisely why `--agent` is not the identity.
+E="$TMP/reentry"; mkdir -p "$E"
+attempt "$E"
+ok "the launcher took the lock"          "$ATTEMPT_RC" 0
+tick "$E" project-manager pm-tick-1
+ok "the tick it spawned adopted it"      "$TICK_RC" 0
+ok "…and ran"                            "$(ran "$E")" 1
+CLAIM_BEFORE="$(cat "$E/.tick-lock.claim")"
+tick "$E" project-manager pm-tick-1       # ← THE SAME TICK, acquiring a second time
+ok "the SAME tick proceeds, not holds"   "$TICK_RC" 0
+ok "…and actually ran"                   "$(ran "$E")" 2
+ok "…saying it re-entered its own claim" "$(said 're-entered:')" yes
+ok "…and NOT that another tick holds it" "$(said 'HELD BY ANOTHER TICK')" no
+# The obligation is re-stated, not re-derived: this tick ADOPTED the launcher's lock, and a
+# re-entry that answered `took:` would have it delete a lock /pm-loop is still holding.
+ok "…re-stating the obligation it was given" "$(said 'adopted:')" yes
+ok "…and never turning it into one it may release" "$(said 'took:')" no
+# Nothing on disk moved. Asserted byte-for-byte because the claim carries a timestamp, and
+# a re-entry that refreshed it would have quietly built the second clock this design refuses.
+ok "…and the claim is byte-identical afterwards" \
+  "$( [ "$(cat "$E/.tick-lock.claim")" = "$CLAIM_BEFORE" ] && echo yes || echo no)" yes
+ok "…with the lock still the launcher's one lock" "$(yn test -f "$E/.tick-lock")" yes
+
+echo
+echo "== …and a genuinely DIFFERENT tick at that same claim still HOLDS =="
+# The other half, and the one that must not be paid for the half above: losing it re-opens
+# the 34-minute double-dispatch of 2026-08-29. Same role, same lock, different tick.
+tick "$E" project-manager pm-tick-2
+ok "the different tick is refused"       "$TICK_RC" 1
+ok "…and did NOT run"                    "$(ran "$E")" 2
+ok "…saying another tick holds it"       "$(said 'HELD BY ANOTHER TICK')" yes
+ok "…telling it to adopt nothing"        "$(said 'adopt nothing')" yes
+ok "…and to release nothing"             "$(said 'release nothing')" yes
+ok "…and it is not called a re-entry"    "$(said 're-entered:')" no
+
+echo
+echo "== the resume path: the same tick, a new process, its own claim =="
+# `SendMessage` wakes a completed tick — no launcher, and the process it ran in is gone.
+# Every call in this file is already a separate process, so that half is real rather than
+# simulated; what carries across it is the identity, which is the whole point.
+RE="$TMP/resume-id"; mkdir -p "$RE"
+tick "$RE" project-manager resumed-tick
+ok "the resumed tick takes the lock itself" "$TICK_RC" 0
+ok "…as one it must release"             "$(said 'took:')" yes
+tick "$RE" project-manager resumed-tick   # woken again, later
+ok "woken again, it proceeds"            "$TICK_RC" 0
+ok "…recognising its own claim"          "$(said 're-entered:')" yes
+ok "…and is still told to release it"    "$(said 'took:')" yes
+ok "…never handed to the launcher instead" "$(said 'adopted:')" no
+ok "…and it ran both times"              "$(ran "$RE")" 2
+tick "$RE" project-manager other-tick
+ok "a different tick at that lock holds" "$TICK_RC" 1
+ok "…and did not run"                    "$(ran "$RE")" 2
+
+echo
+echo "== the claimant is checked LAST: a stale lock is stale even to its own claimant =="
+# The claim must never become a second clock, and "recognise yourself" is the tempting way
+# to build one by accident. Staleness is computed from `.tick-lock` alone, before identity
+# is looked at at all — so the tick whose claim it is gets the same exit 2 as anyone else.
+SM="$TMP/stale-mine"; mkdir -p "$SM"
+printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$OLD_ISO" "$OLD" > "$SM/.tick-lock"
+printf 'timestamp: %s\nepoch: %s\nagent: project-manager\norigin: adopted\nclaimant: mine\n' \
+  "$(iso_of "$(date -u +%s)")" "$(date -u +%s)" > "$SM/.tick-lock.claim"
+tick "$SM" project-manager mine
+ok "its own fresh claim does not rejuvenate it" "$TICK_RC" 2
+ok "…it still says STALE"                "$(said 'STALE')" yes
+ok "…and it did not run"                 "$(ran "$SM")" 0
+ok "…and was not treated as a re-entry"  "$(said 're-entered:')" no
+
+echo
+echo "== --as launcher is unchanged: it refuses a claimed lock, identity or not =="
+# The strict path must not learn the new trick. A launcher carrying the very identity that
+# made the claim still gets HELD, and still writes no claim of its own.
+LA="$TMP/launcher-id"; mkdir -p "$LA"
+tick "$LA" project-manager L
+ok "a tick holds the lock, claimed by L" "$TICK_RC" 0
+OUT="$(TICK_CLAIMANT=L bash "$LOCKSH" acquire --instance "$LA" 2>&1)"; RC=$?
+ok "the launcher is refused even as L"   "$RC" 1
+ok "…and is not offered a re-entry"      "$(printf '%s' "$OUT" | grep -qF 're-entered:' && echo yes || echo no)" no
+LB="$TMP/launcher-claim"; mkdir -p "$LB"
+TICK_CLAIMANT=L bash "$LOCKSH" acquire --instance "$LB" >/dev/null 2>&1
+ok "…and a launcher never writes a claim" "$(yn test -e "$LB/.tick-lock.claim")" no
+# `release` is still the human's override: it asks nobody who they are and takes both files,
+# including a claim stamped with somebody else's identity.
+bash "$LOCKSH" release --instance "$LA" >/dev/null 2>&1
+ok "release still clears a claim that is not yours" \
+  "$(if [ -e "$LA/.tick-lock" ] || [ -e "$LA/.tick-lock.claim" ]; then echo no; else echo yes; fi)" yes
+
+echo
+echo "== no identity available: exactly the old behaviour, said out loud =="
+# The degradation that must never invert. With nothing to identify a tick, a claim it made
+# itself is indistinguishable from a sibling's — so it HOLDS, as it did before claimants
+# existed, and the refusal names the reason rather than letting it read as a live sibling.
+ND="$TMP/no-id"; mkdir -p "$ND"
+attempt "$ND"
+tick "$ND"                                # no --claimant, and the environment is unset
+ok "an unidentified tick still adopts"   "$TICK_RC" 0
+ok "…writing no claimant at all"         "$(grep -c '^claimant:' "$ND/.tick-lock.claim" | tr -d ' ')" 0
+tick "$ND"                                # the same tick again, still unidentifiable
+ok "…and a second acquire holds, as before" "$TICK_RC" 1
+ok "…naming the missing identity as the reason" "$(said 'No identity for THIS tick')" yes
+ok "…and it did not run twice"           "$(ran "$ND")" 1
+# The mirror: an identified tick meeting a claim written before claimants existed. It cannot
+# be matched to anybody, so it is nobody's — hold, and say which side is missing.
+OLDC="$TMP/old-claim"; mkdir -p "$OLDC"
+attempt "$OLDC"
+NOW_T="$(date -u +%s)"
+printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$(iso_of "$NOW_T")" "$NOW_T" > "$OLDC/.tick-lock.claim"
+tick "$OLDC" project-manager whoever
+ok "a claim with no claimant matches nobody" "$TICK_RC" 1
+ok "…and says the claim is the unmatchable side" "$(said 'records no claimant')" yes
+
+echo
+echo "== THE MEASUREMENT: the runtime's id names a SESSION, so it may never clear a claim =="
+# Parent and dispatched subagent were read side by side on 2026-08-30 and carried the SAME
+# `CLAUDE_CODE_SESSION_ID`, byte for byte. So this block drives the sequence that fact makes
+# dangerous — launcher dispatches A, A claims, the SAME SESSION arrives again (a resume) —
+# and asserts the one thing that keeps 2026-08-29 shut: it does NOT proceed.
+EV="$TMP/env-id"; mkdir -p "$EV"
+bash "$LOCKSH" acquire --instance "$EV" >/dev/null 2>&1
+OUT="$(CLAUDE_CODE_SESSION_ID=sess-aaa bash "$LOCKSH" acquire --as tick --instance "$EV" 2>&1)"; RC=$?
+ok "a session id is enough to claim"     "$RC" 0
+ok "…adopting the launcher's lock"       "$(printf '%s' "$OUT" | grep -qF 'adopted:' && echo yes || echo no)" yes
+ok "…recording which source answered"    "$(has "$EV/.tick-lock.claim" 'claimant-source: session')" yes
+OUT="$(CLAUDE_CODE_SESSION_ID=sess-aaa bash "$LOCKSH" acquire --as tick --instance "$EV" 2>&1)"; RC=$?
+ok "the same session does NOT proceed"   "$( [ "$RC" -eq 0 ] && echo yes || echo no)" no
+ok "…it is exit 2, a human's call"       "$RC" 2
+ok "…saying it cannot attribute the claim" "$(printf '%s' "$OUT" | grep -qF 'CANNOT ATTRIBUTE' && echo yes || echo no)" yes
+ok "…and never calling it a re-entry"    "$(printf '%s' "$OUT" | grep -qF 're-entered:' && echo yes || echo no)" no
+# The question an operator actually has, answerable from the output alone. Both sides, and
+# the source of each — without them, "is that a sibling or did my id move?" needs a probe,
+# which is exactly the probe that had to be run by hand to find this bug.
+ok "…printing this caller's identity"    "$(printf '%s' "$OUT" | grep -qF 'yours: sess-aaa (session)' && echo yes || echo no)" yes
+ok "…and the claim's, with its source"   "$(printf '%s' "$OUT" | grep -qF 'claim: sess-aaa (session)' && echo yes || echo no)" yes
+ok "…and how to make it decidable"       "$(printf '%s' "$OUT" | grep -qF -- '--claimant' && echo yes || echo no)" yes
+OUT="$(CLAUDE_CODE_SESSION_ID=sess-bbb bash "$LOCKSH" acquire --as tick --instance "$EV" 2>&1)"; RC=$?
+ok "…while another session still HOLDS"  "$RC" 1
+ok "…naming both ids there too"          "$(printf '%s' "$OUT" | grep -qF 'yours: sess-bbb (session)' && echo yes || echo no)" yes
+# The drift half, said out loud: two DIFFERENT session ids can also be one tick whose
+# session forked or compacted. It holds either way — the safe half — but the human is told
+# which reading they are looking at instead of deducing it.
+ok "…and naming the id-moved reading"    "$(printf '%s' "$OUT" | grep -qF 'session id moved' && echo yes || echo no)" yes
+
+echo
+echo "== the two tiers: a DECLARED match is proof, a mixed one is not =="
+# `--claimant`/`TICK_CLAIMANT` are a caller PROMISING "this names this tick"; the runtime's
+# variable promises only "this names this session". Equal strings from different tiers are
+# therefore not the same statement, and the script must not average them into one.
+TD="$TMP/tier-declared"; mkdir -p "$TD"
+bash "$LOCKSH" acquire --instance "$TD" >/dev/null 2>&1
+bash "$LOCKSH" acquire --as tick --instance "$TD" --claimant tick-x >/dev/null 2>&1
+OUT="$(TICK_CLAIMANT=tick-x bash "$LOCKSH" acquire --as tick --instance "$TD" 2>&1)"; RC=$?
+ok "declared on both sides re-enters"    "$RC" 0
+ok "…as a re-entry, not a fresh claim"   "$(printf '%s' "$OUT" | grep -qF 're-entered:' && echo yes || echo no)" yes
+OUT="$(CLAUDE_CODE_SESSION_ID=tick-x bash "$LOCKSH" acquire --as tick --instance "$TD" 2>&1)"; RC=$?
+ok "a DERIVED id matching a declared claim cannot clear it" "$RC" 2
+TM="$TMP/tier-mixed"; mkdir -p "$TM"
+bash "$LOCKSH" acquire --instance "$TM" >/dev/null 2>&1
+CLAUDE_CODE_SESSION_ID=tick-y bash "$LOCKSH" acquire --as tick --instance "$TM" >/dev/null 2>&1
+OUT="$(bash "$LOCKSH" acquire --as tick --instance "$TM" --claimant tick-y 2>&1)"; RC=$?
+ok "…and a declared id cannot clear a DERIVED claim either" "$RC" 2
+ok "…because the claim on disk was never a promise" \
+  "$(printf '%s' "$OUT" | grep -qF 'claim: tick-y (session)' && echo yes || echo no)" yes
+
+echo
+echo "== THE SEQUENCE THE COLLISION WOULD HAVE RE-OPENED, counted end to end =="
+# Not an exit code this time but a COUNT, because the failure is "two ticks ran" and only
+# ran.log can say that. One `/pm-loop` session S: it takes the lock, dispatches tick A, and
+# then — the bypass the whole claim exists for — resumes a completed tick R. Every one of
+# those carries S's session id, measured identical. Exactly one of A and R may run.
+SIB="$TMP/sibling-resume"; mkdir -p "$SIB"
+attempt "$SIB"
+ok "session S takes the lock and dispatches" "$ATTEMPT_RC" 0
+TICK_OUT="$(CLAUDE_CODE_SESSION_ID=sess-S bash "$LOCKSH" acquire --as tick --instance "$SIB" 2>&1)"
+TICK_RC=$?; [ "$TICK_RC" -eq 0 ] && printf 'tick ran: A\n' >> "$SIB/ran.log"
+ok "…tick A adopts it and runs"          "$TICK_RC" 0
+TICK_OUT="$(CLAUDE_CODE_SESSION_ID=sess-S bash "$LOCKSH" acquire --as tick --instance "$SIB" 2>&1)"
+TICK_RC=$?; [ "$TICK_RC" -eq 0 ] && printf 'tick ran: R\n' >> "$SIB/ran.log"
+ok "…and the resumed sibling does NOT run" "$(ran "$SIB")" 1
+ok "…it is escalated, not waved through" "$TICK_RC" 2
+
+echo
+echo "== status answers 'whose claim is that?' without a probe =="
+# The refusal and `status` must both print BOTH identities. Until they did, the only way to
+# answer the one question an operator has was to cat the claim and echo the environment by
+# hand — which is how the session id's real granularity went unnoticed until it shipped.
+ST="$TMP/status-id"; mkdir -p "$ST"
+bash "$LOCKSH" acquire --instance "$ST" >/dev/null 2>&1
+bash "$LOCKSH" acquire --as tick --instance "$ST" --claimant tick-s >/dev/null 2>&1
+OUT="$(CLAUDE_CODE_SESSION_ID=sess-other bash "$LOCKSH" status --instance "$ST" 2>&1)"; RC=$?
+ok "status on a claimed lock is still HELD" "$RC" 1
+ok "…and names the claim's owner"        "$(printf '%s' "$OUT" | grep -qF 'claim: tick-s (flag)' && echo yes || echo no)" yes
+ok "…and who is asking"                  "$(printf '%s' "$OUT" | grep -qF 'yours: sess-other (session)' && echo yes || echo no)" yes
+OUT="$(bash "$LOCKSH" status --instance "$ST" 2>&1)"
+ok "…spelling out an absent identity"    "$(printf '%s' "$OUT" | grep -qF 'yours: <none> (none)' && echo yes || echo no)" yes
+
+echo
+echo "== a claim that names a claimant always names its source =="
+# The invariant that a truncated write must not satisfy. `claim_exclusive` used to end its
+# group with a bare `:`, which swallowed a failed `printf` — out of disk, a claim missing
+# `claimant:` still returned success and the next tick was told it "was written by hand".
+# The two fields are written by one `printf`, so a claim carrying one carries both.
+for d in "$TD" "$TM" "$EV" "$ST"; do
+  c="$d/.tick-lock.claim"; [ -e "$c" ] || continue
+  ok "claim in $(basename "$d") pairs claimant with its source" \
+    "$( [ "$(grep -c '^claimant:' "$c")" = "$(grep -c '^claimant-source:' "$c")" ] && echo yes || echo no)" yes
+done
+
+echo
+echo "== an empty value is not a declaration, and an empty flag is =="
+# The one place the two declared sources differ, and it is deliberate: `TICK_CLAIMANT=` is
+# how a caller UNSETS a variable, so it falls through to the runtime rather than refusing,
+# while `--claimant ''` is a caller declaring nothing and stays exit 3. The header says so;
+# this asserts the header is describing the code and not the other way round.
+EMPTY="$TMP/empty-id"; mkdir -p "$EMPTY"
+OUT="$(TICK_CLAIMANT= CLAUDE_CODE_SESSION_ID=sess-fallback bash "$LOCKSH" acquire --as tick --instance "$EMPTY" 2>&1)"; RC=$?
+ok "an empty TICK_CLAIMANT falls through" "$RC" 0
+ok "…to the runtime's id, recorded as such" \
+  "$(lock_field_of "$EMPTY/.tick-lock.claim" claimant-source)" session
+mkdir -p "$TMP/empty-flag"
+OUT="$(bash "$LOCKSH" acquire --as tick --instance "$TMP/empty-flag" --claimant '' 2>&1)"; RC=$?
+ok "…while an empty --claimant is still refused" "$RC" 3
+
+echo
+echo "== precedence, and it is visible in the claim rather than inferred =="
+# A caller that names an identity and is quietly given a different one is worse off than one
+# that names none, so the order is asserted — and asserted on what gets WRITTEN, because
+# `claimant-source:` is what a later reader (and a human) judges the tier from.
+PR="$TMP/precedence"
+for combo in "session:::sess-env-only" "env::envwins:sess-loser" "flag:flagwins:envloser:sessloser"; do
+  want="${combo%%:*}"; rest="${combo#*:}"
+  fl="${rest%%:*}"; rest="${rest#*:}"; ev="${rest%%:*}"; se="${rest##*:}"
+  d="$PR-$want"; mkdir -p "$d"
+  CLAUDE_CODE_SESSION_ID="$se" TICK_CLAIMANT="$ev" bash "$LOCKSH" acquire --as tick \
+    --instance "$d" ${fl:+--claimant "$fl"} >/dev/null 2>&1
+  ok "$want wins"                        "$(lock_field_of "$d/.tick-lock.claim" claimant-source)" "$want"
+done
+# A runtime that renames or reshapes its variable must not stop ticks: an unusable IMPLICIT
+# identity is ignored (no identity, old behaviour), where an unusable EXPLICIT one refuses.
+EV2="$TMP/env-junk"; mkdir -p "$EV2"
+OUT="$(CLAUDE_CODE_SESSION_ID='not a plain id' bash "$LOCKSH" acquire --as tick --instance "$EV2" 2>&1)"; RC=$?
+ok "a malformed session id is ignored, not fatal" "$RC" 0
+ok "…and simply leaves the claim unattributed" \
+  "$(grep -c '^claimant:' "$EV2/.tick-lock.claim" | tr -d ' ')" 0
+mkdir -p "$TMP/env-bad"
+OUT="$(TICK_CLAIMANT='not a plain id' bash "$LOCKSH" acquire --as tick --instance "$TMP/env-bad" 2>&1)"; RC=$?
+ok "a malformed TICK_CLAIMANT is refused" "$RC" 3
+
+echo
+echo "== --claimant is validated, and belongs to acquire alone =="
+V="$TMP/claimant-args"; mkdir -p "$V"
+OUT="$(bash "$LOCKSH" acquire --as tick --instance "$V" --claimant 'two words' 2>&1)"; RC=$?
+ok "a non-id --claimant is refused"      "$RC" 3
+ok "…saying what an id may contain"      "$(printf '%s' "$OUT" | grep -qF 'plain id' && echo yes || echo no)" yes
+ok "…and it wrote no lock"               "$(yn test -e "$V/.tick-lock")" no
+OUT="$(bash "$LOCKSH" acquire --as tick --instance "$V" --claimant 2>&1)"; RC=$?
+ok "a bare trailing --claimant is refused" "$RC" 3
+for sub in release status; do
+  OUT="$(bash "$LOCKSH" "$sub" --instance "$V" --claimant x 2>&1)"; RC=$?
+  ok "$sub refuses an identity argument" "$RC" 3
+  ok "…saying it is unconditional"       "$(printf '%s' "$OUT" | grep -qF 'unconditional' && echo yes || echo no)" yes
+done
+
+echo
 echo "== the claim is part of the lock, not a second clock and not a second lock =="
 # A tick must not be able to refresh its own deadline by claiming: staleness is computed
 # from `.tick-lock` alone, exactly as before this change.
@@ -410,6 +732,71 @@ ok "…while the cap stays resolve-max-agents.sh" "$(has "$LAUNCHER" 'resolve-ma
 ok "the script says it reads no config"  "$(has "$LOCKSH" 'IT READS NO CONFIG')" yes
 
 echo
+echo "== the contract in prose says what the code does, in all four places =="
+# A header that still called existence the signal would be the more dangerous half of this
+# change: the code would be right and every reader of it wrong. Asserted as an ABSENCE,
+# because that sentence is the one a partial revert leaves behind.
+ok "no file still calls existence the whole signal" \
+  "$(grep -rlF 'EXISTENCE is the' "$TPL/symlink" "$TPL/docs" "$TPL/README.md" 2>/dev/null | wc -l | tr -d ' ')" 0
+ok "the header says the claim records whose it is" \
+  "$(has "$LOCKSH" 'It records WHOSE it is')" yes
+ok "…and the claim it writes says so too"  "$(has "$LOCKSH" 'It records WHOSE the claim is')" yes
+# The argument, not just the conclusion: the narrower fix has a true premise and is still
+# wrong, and a future reader who re-derives only the premise would delete this branch.
+ok "…and answers the narrower fix rather than ignoring it" \
+  "$(has "$LOCKSH" 'THE NARROWER FIX WAS CONSIDERED AND DOES NOT HOLD')" yes
+ok "…naming the one-launcher sequence that refutes it" \
+  "$(has "$LOCKSH" 'has only ONE launcher in it')" yes
+# Both known-wrong mechanisms stay named as wrong, so neither is rediscovered as an idea.
+ok "…still refusing elapsed time"        "$(has "$LOCKSH" 'NOT elapsed time.')" yes
+ok "…and a nonce in the dispatch prompt" "$(has "$LOCKSH" 'NOT a nonce in the')" yes
+ok "…and saying why --agent cannot be the identity" "$(has "$LOCKSH" 'NOT `--agent`.')" yes
+ok "…and which way it degrades"          "$(has "$LOCKSH" 'DEGRADES TOWARDS THE OLD BEHAVIOUR')" yes
+ok "…and that the claimant is judged after staleness" \
+  "$(has "$LOCKSH" 'checked LAST')" yes
+# THE MEASUREMENT AND THE RULE IT FORCED. Both are pinned because both were re-derived the
+# expensive way once: the first implementation of this claimant reasoned that the session id
+# "names that agent's own transcript", and the two ids above are what that reasoning cost.
+# A reader who deletes the asymmetry needs to see, in the same file, the measurement that
+# put it there.
+ok "…and the measured session/subagent collision" \
+  "$(has "$LOCKSH" 'THE RUNTIME'\''S ID NAMES A SESSION, NOT A TICK — MEASURED')" yes
+ok "…quoting both ids it was measured from" \
+  "$(has "$LOCKSH" 'subagent  CLAUDE_CODE_SESSION_ID=aaf01a1c')" yes
+ok "…and the asymmetry that follows from it" \
+  "$(has "$LOCKSH" 'A DERIVED ID MAY REFUSE, BUT MAY NEVER CLEAR')" yes
+ok "…and that CHILD_SESSION does not rescue it" \
+  "$(has "$LOCKSH" 'CLAUDE_CODE_CHILD_SESSION')" yes
+ok "…and where a per-tick id would have to come from" \
+  "$(has "$LOCKSH" 'not exported to the shell at all')" yes
+# The two windows this deliberately does not close, written down rather than found later.
+ok "…and release's two non-atomic rm's"  "$(has "$LOCKSH" 'CANNOT REMOVE THEM AS ONE')" yes
+ok "…and a session id that moves mid-tick" \
+  "$(has "$LOCKSH" 'CHANGES ITS ID MID-TICK STILL DEADLOCKS')" yes
+# The launcher's own page must not read as if the claim now lets anything through.
+ok "the launcher says its step 1 is unchanged" \
+  "$(has "$LAUNCHER" 'Your step 1 is unchanged')" yes
+ok "…and that it refuses a claimed lock too" \
+  "$(has "$LAUNCHER" 'refuses any live lock,')" yes
+ok "…naming the tick'\''s own claim as not a conflict" \
+  "$(has "$LAUNCHER" 'own claim')" yes
+# And the operator page, which is where a human goes when the loop is not dispatching.
+OPS="$TPL/docs/operations.md"
+ok "the operator docs carry the re-entry rule" "$(has "$OPS" 're-entered:')" yes
+ok "…and the argument for keeping the hold"    "$(has "$OPS" 'only **one** launcher in')" yes
+ok "…and where the identity comes from"        "$(has "$OPS" 'CLAUDE_CODE_SESSION_ID')" yes
+# The asymmetry is the whole safety argument, so the page a human reads must carry it in
+# words and not only the script's header. Same for the measurement it rests on: an operator
+# who does not know the runtime's id is per-SESSION cannot read an exit 2 correctly.
+ok "…and the rule that makes it safe"        "$(has "$OPS" 'may refuse a claim, but may never clear one')" yes
+ok "…and that the runtime's id names a session" "$(has "$OPS" 'it names the *session*')" yes
+ok "…and the exit 2 that follows from it"    "$(has "$OPS" 'CANNOT ATTRIBUTE')" yes
+ok "…and the drift failure mode it leaves open" "$(has "$OPS" 'gets a new id mid-tick')" yes
+ok "…and release's two-rm window"            "$(has "$OPS" 'removes two files with two')" yes
+ok "the README summary carries the asymmetry too" \
+  "$(has "$TPL/README.md" 'may refuse a claim but never clears one')" yes
+
+echo
 echo "== the tick's own ledger is untouched: this ADDS a gate, it does not move one =="
 ok "step 0.5 still opens a ledger entry" "$(has "$TICK" '* TICK <ISO-8601 timestamp> open:')" yes
 ok "…still re-deriving from disk first"  "$(has "$TICK" 're-derive the in-flight set from disk')" yes
@@ -437,6 +824,20 @@ ok "…and opening no ledger entry when it holds" \
   "$(step05 | grep -qF 'open no ledger entry' && echo yes || echo no)" yes
 ok "…and never deleting a stale lock itself" \
   "$(step05 | grep -qF 'their answer, not' && echo yes || echo no)" yes
+# The claimant, in the one place a tick reads before it acts. A step that documented only
+# `took:`/`adopted:` would leave a tick meeting `re-entered:` to improvise — and this step
+# is the whole of what the tick knows about the lock.
+ok "…documenting the re-entry line on exit 0" \
+  "$(step05 | grep -qF 're-entered:' && echo yes || echo no)" yes
+ok "…saying a re-entry changed nothing"  "$(step05 | grep -qF 'nothing' && echo yes || echo no)" yes
+ok "…and that exit 1 therefore means somebody else" \
+  "$(step05 | grep -qF 'somebody else' && echo yes || echo no)" yes
+# The identity must not become something the tick carries: the command line is fixed, and a
+# step that told a tick to remember a token would be the nonce this design already refused.
+ok "…with nothing to remember between calls" \
+  "$(step05 | grep -qF 'nothing to remember between calls' && echo yes || echo no)" yes
+ok "…and the command line unchanged from the one acquire above" \
+  "$(step05 | grep -c 'scripts/tick-lock.sh acquire --as tick --agent project-manager' | tr -d ' ')" 1
 ok "…naming the path the launcher is not on" \
   "$(step05 | grep -qF 'a resume never' && echo yes || echo no)" yes
 # The tick now calls a script that a merge alone does not deliver: `scripts/tick-lock.sh` is
