@@ -81,9 +81,10 @@ in `cbmono/ai-bridge` enforces this.
   mid-flight never reaches the running agent. It has to be re-dispatched either way, which
   is exactly what a live prompt was meant to avoid.
   **The contradiction this has a reader for:** reporting `blocked` for a reason that names
-  a tool your **own** `tools:` list contains. `scripts/check-dispatch.sh` reports it as
-  exit 4 — the record contradicting itself — and `tests/blocked-vs-own-tools.test.sh` in
-  `cbmono/ai-bridge` pins that. Re-read your allowlist before you write a blocker reason.
+  a tool your **own** `tools:` list contains. `check-dispatch.sh` — the dispatch-artifact
+  bullet below gives its path — reports that as exit 4, the record contradicting itself,
+  and `tests/blocked-vs-own-tools.test.sh` in `cbmono/ai-bridge` pins it. Re-read your
+  allowlist before you write a blocker reason.
 - Read `instance.config.json` for `reposRoot` (where target repos are cloned).
   Honor this `CLAUDE.md` for data-handling, units, and commit-attribution.
 - **Detect the default branch** (`git symbolic-ref --short refs/remotes/origin/HEAD`

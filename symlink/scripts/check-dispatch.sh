@@ -207,6 +207,10 @@ task_body() { # <task-doc> — everything after the closing frontmatter delimite
 # the backticks, "read the file" and "no bash on the runner" are hits; without the cue, an
 # acceptance criterion that merely names a tool is one. Same reasoning, and the same shape,
 # as tests/agent-tool-allowlist.test.sh — a mention is a backticked identifier, never a word.
+# The curly apostrophe is deliberate and sits beside the straight one: a blocker reason is
+# prose an agent typed, and a smart-quoted "can’t" must not slip past the cue. Same
+# accommodation tests/agent-tool-allowlist.test.sh makes, for the same reason.
+# shellcheck disable=SC1112
 LACK_CUE='(^|[^a-z])([Nn]o|[Nn]ot|[Nn]one|[Nn]ever|[Ww]ithout|[Cc]annot|[Cc]an['"'"'’]t|[Dd]on['"'"'’]t|[Dd]oesn['"'"'’]t|[Ll]ack|[Ll]acks|[Ll]acking|[Mm]issing|[Uu]navailable|[Aa]bsent|[Dd]enied|[Uu]nable|[Nn]eed|[Nn]eeds|[Rr]equire|[Rr]equires|[Bb]locked)([^a-z]|$)'
 
 # Prints one report line per contradicting mention and returns 0 when there is at least
