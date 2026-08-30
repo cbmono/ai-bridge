@@ -147,12 +147,21 @@ if [ "$FETCH" -eq 1 ]; then
   GIT_TERMINAL_PROMPT=0 git -C "$TEMPLATE" fetch --quiet origin >/dev/null 2>&1 || exit 0
 fi
 
-# NEVER ASSUME `main`. `origin/HEAD` is what the remote itself says its default branch is;
-# only when that symbolic ref is missing does this fall back to a name, and a name that is
-# wrong resolves to nothing and is therefore silent.
+# NEVER ASSUME `main` — NOT EVEN AS A FALLBACK. `origin/HEAD` is what the remote itself
+# says its default branch is, and it is the only source consulted here. The previous
+# fallback to the literal `origin/main` was defended as "a wrong name resolves to nothing
+# and is therefore silent", which is true only on a remote that has no `main` at all: a
+# template on a `master`, `next` or `trunk` remote that ALSO carries a stale `main` would
+# have been compared against a branch this file invented, reporting an update that does not
+# exist or missing one that does. A hardcoded branch name in the one script whose whole job
+# is detecting drift is the sharpest available version of that mistake, and it contradicts
+# the standing rule every other script here follows.
+#
+# UNRESOLVABLE ⇒ SILENCE, like every other thing this file cannot know. `--ref` stays the
+# way a caller that DOES know which branch to compare says so.
 if [ -z "$REF" ]; then
   REF="$(git -C "$TEMPLATE" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)"
-  [ -n "$REF" ] || REF="origin/main"
+  [ -n "$REF" ] || exit 0
 fi
 
 remote_raw="$(git -C "$TEMPLATE" show "$REF:VERSION" 2>/dev/null)" || exit 0
@@ -172,7 +181,18 @@ newer "$there" "$here" || exit 0
 # every file already linked, but a file that is NEW in that pull reaches this instance only
 # when install.sh runs again. Someone who pulls and stops is exactly the state this check
 # exists to end.
-printf '%s\n' "⬆️  ai-bridge template UPDATE — this instance links ${here}, ${REF} has ${there}"
+# THE NAME IS DERIVED, NEVER A LITERAL. This file is symlinked into instances from a
+# template checkout that is not required to be called anything in particular, and
+# `symlink/**` carries no org, repo or path literals (`.claude/rules/machinery.md`). The
+# checkout's own directory name is the honest label — it is also the name in the `git -C`
+# line below, so a fork or a renamed clone names itself instead of claiming to be some
+# other project. Control characters are stripped because the value comes from the
+# filesystem and this string is printed; an unnameable path drops the parenthetical rather
+# than printing an empty one.
+name="$(basename -- "$TEMPLATE" 2>/dev/null | tr -d '[:cntrl:]')"
+label="TEMPLATE UPDATE"
+[ -n "$name" ] && label="TEMPLATE UPDATE ($name)"
+printf '%s\n' "⬆️  $label — this instance links ${here}, ${REF} has ${there}"
 echo "    Pull the template, then RE-STAMP this instance (a file that is new in that pull"
 echo "    reaches an instance only through a stamp):"
 printf '        git -C %q pull\n' "$TEMPLATE"

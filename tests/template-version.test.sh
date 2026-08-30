@@ -286,6 +286,37 @@ GIT -C "$noref" symbolic-ref -d refs/remotes/origin/HEAD >/dev/null 2>&1
 run_check "$noref"
 ok "no origin/<default> ref: byte-empty"      "$(len)" 0
 
+# 5c-bis. THE FALLBACK THAT WAS REMOVED, pinned so it cannot come back. This remote's
+# default branch is `master`, and it ALSO carries a `main` — the ordinary shape of a repo
+# that renamed its default branch and kept the old ref. With `origin/HEAD` gone there is no
+# way to know which one is authoritative, and the earlier code assumed `origin/main`: it
+# resolved, it was newer, and the check would have announced an update against a branch
+# nobody asked about. "A wrong name resolves to nothing and is therefore silent" is only
+# true when the wrong name does not exist, which is exactly the case this fixture is not.
+assumed="$(mkfixture assumed 6.0.0 1.0.0 master)"
+GIT -C "$assumed" update-ref refs/remotes/origin/main refs/remotes/origin/master
+GIT -C "$assumed" symbolic-ref -d refs/remotes/origin/HEAD >/dev/null 2>&1
+run_check "$assumed"
+ok "no origin/HEAD but a stale origin/main: byte-empty" "$(len)" 0
+ok "…and exit 0"                                        "$RC" 0
+# THE POSITIVE CONTROL, without which the assertion above passes on a broken fixture: put
+# `origin/HEAD` back and the very same repo speaks. So the silence is the missing symbolic
+# ref, not a fixture that could never have answered.
+GIT -C "$assumed" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/master
+run_check "$assumed"
+ok "…and with origin/HEAD restored it DOES speak" \
+  "$(printf '%s\n' "$OUT" | grep -qF 'UPDATE' && echo yes || echo no)" yes
+# …against `master`, the branch origin/HEAD names — never the `main` that is still sitting
+# there. Both branches carry 6.0.0 here, so the ref NAMED in the line is what separates them.
+ok "…naming the default branch it actually resolved" \
+  "$(printf '%s\n' "$OUT" | grep -qF 'origin/master' && echo yes || echo no)" yes
+
+# Same fixture, one more property: THE LABEL IS DERIVED FROM THE CHECKOUT, not hardcoded — `symlink/**` carries no repo
+# literals, and a renamed clone must name itself. The fixture directory is `assumed`, so
+# that is what the line says.
+ok "…and the line names the template checkout, not a hardcoded project" \
+  "$(printf '%s\n' "$OUT" | grep -qF 'TEMPLATE UPDATE (assumed)' && echo yes || echo no)" yes
+
 # 5d. Not a git checkout at all (a template copied, not cloned).
 plain="$TMP/plain"
 mkdir -p "$plain/symlink/scripts"

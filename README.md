@@ -490,8 +490,8 @@ So the session banner prints one line — and only one, and only sometimes. The 
 below are an example, not this repo's current pair; the only place the current one is
 written down is [`VERSION`](VERSION):
 
-```
-⬆️  ai-bridge template UPDATE — this instance links 0.9.1, origin/main has 0.10.0
+```text
+⬆️  TEMPLATE UPDATE (ai-bridge) — this instance links 0.9.1, origin/main has 0.10.0
 ```
 
 `scripts/check-template-version.sh` decides it, and **silence is its normal answer**. Equal
