@@ -204,10 +204,20 @@ fi
 # A check function prints its lines and RETURNS 1 when it found a problem, 0 otherwise. The
 # return code is the only channel that survives the command substitution the runner wraps
 # it in, which is why `warn` sets a flag the function returns rather than a global.
+#
+# THREE LINE KINDS, AND THE DIFFERENCE IS NOT COSMETIC. `--only-problems` — the
+# SessionStart path — keeps `warn` and `hint` lines and drops everything else, so the
+# banner gains AT MOST TWO LINES PER FAILING CHECK: what is wrong, and the one command
+# that addresses it. That bound is the whole reason `hint` exists as its own helper rather
+# than as a `note` someone remembered to keep short: the banner has a measured line budget
+# (tests/session-banner.test.sh), and a section that can grow with the number of affected
+# files would blow it the first time an instance is badly out of date — which is precisely
+# when the banner most needs to stay readable. Emit ONE `hint` per check.
 _warned=0
 warn() { _warned=1; printf '%s\n' "⚠ $*"; }
 good() { printf '%s\n' "✓ $*"; }
 note() { printf '%s\n' "    $*"; }
+hint() { printf '%s\n' "    ↳ $*"; }
 
 # tier_note <tier> — what `fix` does with a row of this tier, said in `fix`'s own output so
 # the human is never left to infer why something was reported and not repaired.
@@ -281,7 +291,7 @@ check_template_behind() {
       0)           good "template clone is level with $ref — a stamp from here delivers what origin has" ;;
       *)           warn "template clone is $behind commit(s) behind $ref — a stamp from here would be inert"
                    note "it would print 'already linked' for everything and change nothing"
-                   note "git -C $TEMPLATE pull --ff-only" ;;
+                   hint "git -C $TEMPLATE pull --ff-only" ;;
     esac
   fi
 
@@ -382,7 +392,7 @@ EOF
     printf '%s\n' "$missing"
     [ "$n" -gt 12 ] && note "… and $((n - 12)) more"
     note "a merge alone never delivers a NEW file; only a stamp does:"
-    note "bash $TEMPLATE/install.sh $ROOT"
+    hint "bash $TEMPLATE/install.sh $ROOT"
   fi
 
   # THE LITERAL POST-MERGE FORM, on request. `<old>..<new>` is `<--since>..HEAD` in the
@@ -484,7 +494,7 @@ check_config_uncommitted() {
     note "git status code: '$n' (XY from git status --porcelain)"
     note "THIS IS A QUESTION, NOT A DEFECT — a value here can be a decision somebody made"
     note "minutes ago, and fix will not write, revert or stage this file. You decide:"
-    note "git -C $ROOT diff -- $f"
+    hint "yours, not fix's: git -C $ROOT diff -- $f"
   done
   return "$_warned"
 }
@@ -567,7 +577,7 @@ check_tick_lock() {
     *) warn "the tick lock needs YOUR decision — this is not repaired for you"
        printf '%s\n' "$out" | sed -n '1,4p' | sed 's/^/    /'
        note "a long tick is not a dead one. If you decide it is dead, YOU release it:"
-       note "bash $sh release --instance $ROOT" ;;
+       hint "yours, not fix's: bash $sh release --instance $ROOT" ;;
   esac
   return "$_warned"
 }
@@ -633,17 +643,17 @@ if [ "$FORM" = check ]; then
       # wallpaper is how the lines that matter come to be skipped.
       [ "$rc" -eq 0 ] && continue
       if [ "$header_printed" -eq 0 ]; then
-        printf '%s\n' "ai-bridge check — state that needs a look:"
+        printf '%s\n' "⚠️  ai-bridge check — state worth a look (/ai-bridge check for all of it):"
         header_printed=1
       fi
+      # The verdict and its one command, nothing else. See `hint` above for the bound.
+      printf '%s\n' "$out" | grep -e '^⚠' -e '^    ↳'
+      continue
     fi
     printf '%s\n' "$out"
   done <<EOF
 $(rows_for "$mode")
 EOF
-  if [ "$ONLY_PROBLEMS" -eq 1 ] && [ "$header_printed" -eq 1 ]; then
-    printf '%s\n' "    /ai-bridge fix repairs the idempotent ones and prints the rest."
-  fi
   exit 0
 fi
 
