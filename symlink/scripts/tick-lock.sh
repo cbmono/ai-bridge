@@ -64,11 +64,14 @@
 #   --as tick, no lock                  -> create both. You took it, so YOU release it.
 #   --as tick, live lock, unclaimed     -> the dispatch that spawned you. Claim it and
 #                                          proceed; the LAUNCHER releases it, not you.
-#   --as tick, live lock, YOUR claim    -> you are already running under it. Proceed,
-#                                          unchanged: `re-entered:`, then the same
+#   --as tick, live lock, PROVABLY your -> you are already running under it. Proceed,
+#                     claim               unchanged: `re-entered:`, then the same
 #                                          obligation line your first acquire printed.
-#   --as tick, live lock, ANOTHER claim -> a DIFFERENT tick is already running. Report and
-#                                          hold: dispatch nothing, adopt nothing, end.
+#   --as tick, live lock, NOT yours     -> report and hold: dispatch nothing, adopt
+#                                          nothing, end.
+#   --as tick, live lock, claim that    -> exit 2. Both identities are printed and a HUMAN
+#                     MIGHT be yours      decides. See the next two sections: this is the
+#                                          normal answer under Claude Code today.
 #   --as launcher (the default)         -> unchanged in every respect: any live lock
 #                                          refuses, claimed or not, and it never claims.
 #
@@ -112,22 +115,63 @@
 #   dispatch prompt.    class this whole design keeps being bitten by.
 #   NOT the process.    `$$`/`$PPID` are a new value on every call and gone on a resume.
 #
-# It is the CALLER'S SESSION, read from the environment at run time: `CLAUDE_CODE_SESSION_ID`
-# is one value per agent session, identical on every tool call that session makes and
-# preserved when a completed agent is woken with a message — which is precisely "the same
-# tick, later". Nothing is carried in a prompt and nothing is remembered by a model: the
-# tick's step 0.5 runs the SAME literal command line every time and the shell supplies the
-# identity. `TICK_CLAIMANT` overrides it (same shape as `TICK_LOCK_STALE_MINUTES`) and
-# `--claimant` overrides that; both exist so a harness and a non-Claude caller can drive
-# this deterministically rather than being at the mercy of an environment.
+# So there are three sources, and they fall into TWO TIERS, which is the whole of the
+# mechanism:
 #
-# AND IT DEGRADES TOWARDS THE OLD BEHAVIOUR, NEVER PAST IT. No identity resolvable (the
-# variable unset, or holding something that is not a plain id) means no `claimant:` is
-# written and no claim ever matches — which is exactly what this script did before, so an
-# environment that cannot supply one is no worse off, and the refusal says so in one line
-# instead of leaving a human to wonder. The reverse degradation is the one that must never
-# happen: an unidentifiable tick is never given the benefit of the doubt, because "I cannot
-# tell, so proceed" is the double-dispatch with extra steps.
+#   DECLARED   `--claimant <id>`, then `TICK_CLAIMANT`. The caller states "this names THIS
+#              TICK" — a promise, the way `--agent` is a promise. Two declared ids that
+#              match are the same tick, and that is the only thing this file ever treats
+#              as proof.
+#   DERIVED    `CLAUDE_CODE_SESSION_ID`, read from the environment when nothing was
+#              declared. It is whatever the runtime happens to export, and NOBODY promised
+#              it is per-tick. See below: it is not.
+#
+# THE RUNTIME'S ID NAMES A SESSION, NOT A TICK — MEASURED, NOT ASSUMED. On 2026-08-30 a
+# parent session and a subagent it dispatched were read side by side:
+#
+#     parent    CLAUDE_CODE_SESSION_ID=aaf01a1c-fc30-4e96-99e9-a2c43733c10f
+#     subagent  CLAUDE_CODE_SESSION_ID=aaf01a1c-fc30-4e96-99e9-a2c43733c10f
+#
+# Identical, character for character. Every tick one `/pm-loop` session starts carries the
+# same value, so as a positive signal it is worthless — and worse than worthless, because
+# the sequence it gets wrong is the exact one the claimed branch was kept for: launcher S
+# dispatches tick A, A claims, S resumes tick R, and R reads A's claim as its own. That is
+# the 34-minute double-dispatch of 2026-08-29, waved through by the guard meant to catch
+# it. `CLAUDE_CODE_CHILD_SESSION` does not rescue it (`1` on both sides), and the per-agent
+# id that WOULD work — subagent transcripts live at `<session-id>/subagents/<agent-id>` — is
+# not exported to the shell at all. There is no per-tick identity to read here today.
+#
+# THEREFORE THE TRUST IS ASYMMETRIC: A DERIVED ID MAY REFUSE, BUT MAY NEVER CLEAR. That one
+# rule is what makes this safe, and it is the whole difference from the first attempt:
+#
+#   both sides DECLARED and equal  -> a re-entry. Proceed (exit 0).
+#   the two ids differ             -> not yours. Hold (exit 1), as before claimants.
+#   either side has no id          -> not yours. Hold (exit 1), as before claimants.
+#   equal, but either side DERIVED -> CANNOT TELL. Exit 2, both ids printed, a human rules.
+#
+# The last row is the normal case under Claude Code, and exit 2 is deliberately not exit 0
+# and not exit 1. Not 0, because "the ids match" does not mean "you", and proceeding on it
+# is the double-dispatch. Not 1, because "a DIFFERENT tick is already running" is a claim
+# this file cannot support and stating it anyway is precisely what sent a tick home on
+# 2026-08-30. Exit 2 is this script's existing answer for a lock it will not judge — the
+# same answer a stale lock gets, for the same reason: surface it and let a human decide.
+# It is also RARE by construction, because a claim only exists when a tick is already
+# running, which on the ordinary dispatch path never happens twice.
+#
+# WHICH SOURCE ANSWERED IS RECORDED IN THE CLAIM (`claimant-source: flag|env|session`), so
+# a change of identity source is visible in the file rather than inferred from behaviour,
+# and both ids are printed on every refusal. The one question an operator has here — "is
+# that a real sibling, or is my own id not stable?" — must be answerable by reading the
+# output, because it is the question that got this mechanism rewritten once already.
+#
+# AND IT DEGRADES TOWARDS THE OLD BEHAVIOUR, NEVER PAST IT — IN BOTH DIRECTIONS. Identity
+# ABSENT (the variable unset, or holding something that is not a plain id) means no
+# `claimant:` is written and no claim matches: exactly what this script did before, and the
+# refusal says which side was missing instead of leaving a human to wonder. Identity
+# COLLAPSED — two ticks resolving to ONE id — is the direction that actually hurts, because
+# a false match would PROCEED, and it is closed by the asymmetry above rather than by hoping
+# it does not happen. There is no input to this file, environment or flag, that turns a
+# claimed lock into a dispatch unless a caller declared a per-tick identity and it matched.
 #
 # THE CLAIM IS PART OF THE LOCK, NOT A SECOND LOCK. It carries a timestamp for a human to
 # read, and that timestamp is NEVER a second staleness clock: "is this stale?" is computed
@@ -146,6 +190,20 @@
 # under. Closing it would mean asking `release` who is calling, which is the one thing an
 # override must never do; it is bounded, it is the rarer half of an already rare race, and
 # it is written down here rather than found later.
+#
+# `release` REMOVES TWO FILES AND CANNOT REMOVE THEM AS ONE. Between `rm $CLAIM` and
+# `rm $LOCK` the pair reads live-and-unclaimed, so a tick acquiring in that window adopts a
+# lock that is about to be deleted underneath it. It is microseconds wide, it needs a human
+# running the override at that instant, and the outcome is one tick running with no lock —
+# recoverable, and strictly smaller than what a caller-aware `release` would cost.
+#
+# A SESSION THAT CHANGES ITS ID MID-TICK STILL DEADLOCKS, and that is the safe half. One
+# conversation was observed running under two `CLAUDE_CODE_SESSION_ID`s in a day, because
+# sessions fork and compact. A long tick that does so meets its own claim as a stranger and
+# gets exit 1 — the pre-claimant behaviour, and the direction that costs a re-run rather
+# than a duplicate dispatch. It is detectable rather than mysterious: the refusal prints
+# both ids and the source that produced each, so "my own id moved" reads differently from
+# "somebody else is running".
 #
 # LIVENESS IS DATA, NOT A JUDGEMENT. The lock carries an ISO-8601 UTC timestamp and the id
 # of the agent that was dispatched, so "is this stale?" is computed from the file alone —
@@ -190,17 +248,18 @@
 # overrides in the shape `prune-worktrees.sh` already uses for `PRUNE_ACTIVE_MINUTES`;
 # there is deliberately no `instance.config.json` key for either, so this adds nothing to
 # the overridable-key surface. `CLAUDE_CODE_SESSION_ID` is read too and is not config
-# either — it is the runtime's answer to "which session is calling", the way `$PPID` would
-# be if `$PPID` survived a resume.
+# either — it is the runtime's answer to "which session is calling", which is a strictly
+# weaker question than "which tick is calling" and is treated as such above.
 #
 # Exit codes — 0 is the only clearance to dispatch:
 #
 #   0  acquire: the lock is now yours, dispatch.   release/status: nothing is held.
 #   1  HELD — a live lock, younger than the staleness threshold. Do not dispatch. For
-#      `--as tick` this means a DIFFERENT tick is already running under it: report and hold.
-#      Never your own claim — that is a 0 (`re-entered:`).
-#   2  needs a human: the lock is STALE, dated in the future, or unreadable. Do not
-#      dispatch, and do not delete it on the lock's behalf.
+#      `--as tick` this means the claim on it is NOT YOURS as far as anything on disk can
+#      show: report and hold. Never a claim proved to be yours — that is a 0 (`re-entered:`).
+#   2  needs a human: the lock is STALE, dated in the future, unreadable, or CLAIMED BY AN
+#      IDENTITY THAT MIGHT BE YOURS AND CANNOT BE PROVED TO BE. Do not dispatch, and do not
+#      delete it on the lock's behalf.
 #   3  cannot answer: usage, a bad `--agent`/`--claimant`/threshold, or an unwritable root.
 #      Never a silent pass — a lock nothing can write is a guarantee nothing is keeping.
 #
@@ -286,13 +345,19 @@ case "$agent" in
     echo "tick-lock: --agent must be a plain id ([A-Za-z0-9._-]), got: $agent" >&2; exit 3 ;;
 esac
 
-# WHO IS CALLING, in three sources of falling explicitness. An EXPLICIT source that cannot
-# be used is an error — a caller that named an identity and had it silently dropped would
-# believe it was protected by a check that never ran. The IMPLICIT one is different: it is
-# whatever runtime this happens to be under, so a value it cannot use leaves the claimant
-# empty and the script behaves exactly as it did before claimants existed. Never the other
-# way round; see "AND IT DEGRADES TOWARDS THE OLD BEHAVIOUR" above.
-claimant_id() {
+# WHO IS CALLING, in three sources of falling explicitness, printed as `<source> <id>` so
+# that WHICH source answered travels with the answer — the two tiers are judged differently
+# and a value with no provenance could not be. A DECLARED source that cannot be used is an
+# error: a caller that named an identity and had it silently dropped would believe it was
+# protected by a check that never ran. The DERIVED one is different — it is whatever runtime
+# this happens to be under, so a value it cannot use leaves the claimant empty and the
+# script behaves exactly as it did before claimants existed.
+#
+# `TICK_CLAIMANT=` (set but empty) is NOT a declaration and does not refuse: an empty
+# variable is how a caller unsets one, and `--claimant ''` — which IS a declaration, of
+# nothing — remains exit 3. That asymmetry is deliberate and is the only place the two
+# declared sources differ.
+claimant_resolve() { # -> "<flag|env|session> <id>", or "none " when nothing answered
   local c
   if [ "$claimant_given" = yes ]; then
     case "$claimant" in
@@ -300,28 +365,35 @@ claimant_id() {
         echo "tick-lock: --claimant must be a plain id ([A-Za-z0-9._-]), got: $claimant" >&2
         exit 3 ;;
     esac
-    printf '%s' "$claimant"; return 0
+    printf 'flag %s' "$claimant"; return 0
   fi
   if [ -n "${TICK_CLAIMANT:-}" ]; then
     case "$TICK_CLAIMANT" in
       *[!A-Za-z0-9._-]*)
         echo "tick-lock: TICK_CLAIMANT must be a plain id ([A-Za-z0-9._-])" >&2; exit 3 ;;
     esac
-    printf '%s' "$TICK_CLAIMANT"; return 0
+    printf 'env %s' "$TICK_CLAIMANT"; return 0
   fi
-  # One value per agent session, identical on every call that session makes and preserved
-  # when a completed agent is woken with a message — i.e. reproducible by "the same tick,
-  # later", which is the whole requirement. Anything else shaped unexpectedly is ignored
+  # One value per SESSION — measured, see the header — so it is recorded and compared but
+  # never believed as proof of "the same tick". Anything shaped unexpectedly is ignored
   # rather than refused, because a runtime that renames or drops this must not stop ticks.
   c="${CLAUDE_CODE_SESSION_ID:-}"
   case "$c" in
-    ''|*[!A-Za-z0-9._-]*) printf '' ;;
-    *) printf '%s' "$c" ;;
+    ''|*[!A-Za-z0-9._-]*) printf 'none ' ;;
+    *) printf 'session %s' "$c" ;;
   esac
 }
 # The `exit 3`s above run inside this command substitution's subshell, so they end only
 # that subshell — the status is what actually refuses, and it is checked rather than assumed.
-CLAIMANT="$(claimant_id)" || exit 3
+CLAIMANT_RESOLVED="$(claimant_resolve)" || exit 3
+CLAIMANT_SOURCE="${CLAIMANT_RESOLVED%% *}"
+CLAIMANT="${CLAIMANT_RESOLVED#* }"
+[ "$CLAIMANT_SOURCE" = none ] && CLAIMANT=""
+# Declared means a caller PROMISED this names one tick. Only a match between two promises
+# is ever treated as proof; see "THE TRUST IS ASYMMETRIC" in the header.
+claimant_is_declared() { # [source, default: this caller's]
+  case "${1:-$CLAIMANT_SOURCE}" in flag|env) return 0 ;; *) return 1 ;; esac
+}
 
 # Refused rather than rounded, for the reason resolve-max-agents.sh refuses a bad cap: a
 # threshold nobody can read is worse than one that says it does not know. `0` is rejected
@@ -361,9 +433,9 @@ lock_field() { # <key> [file, default: the lock]
     }' "${2:-$LOCK}" 2>/dev/null
 }
 
-# The claim's fields are for a HUMAN and for the refusal message — never for a judgement.
-# Nothing below computes staleness, liveness or ownership from them: `.tick-lock` alone
-# answers all three, which is what keeps the claim from becoming a second clock.
+# The claim's fields are for a HUMAN and for the refusal message. Only `claimant:` is ever
+# judged, and only under the rule in the header; staleness and liveness come from
+# `.tick-lock` alone, which is what keeps the claim from becoming a second clock.
 claim_note() { # -> " — <agent> at <ts>", or empty when the file says neither
   local cts cag out=""
   cag="$(lock_field agent "$CLAIM")"
@@ -373,6 +445,19 @@ claim_note() { # -> " — <agent> at <ts>", or empty when the file says neither
   printf '%s' "$out"
 }
 
+# BOTH IDENTITIES, ALWAYS, ON EVERY REFUSAL AND IN `status`. Printing only the timestamp and
+# the role left the one question an operator actually has — "is that a real sibling, or is
+# my own id not stable?" — unanswerable from the output, and answering it by hand is what
+# rewrote this mechanism once already. `<none>` is spelled out rather than left blank so a
+# missing id cannot be mistaken for a formatting slip.
+identity_lines() { # <indent>
+  local owner osrc
+  owner="$(lock_field claimant "$CLAIM")"
+  osrc="$(lock_field claimant-source "$CLAIM")"
+  printf '%syours: %s (%s)\n' "$1" "${CLAIMANT:-<none>}" "$CLAIMANT_SOURCE"
+  printf '%sclaim: %s (%s)\n' "$1" "${owner:-<none>}" "${osrc:-<unrecorded>}"
+}
+
 # The tick's claim, created the same way the lock is: `O_EXCL`, so two ticks racing for one
 # unclaimed lock cannot both win. A claim made by reading then writing would re-open, one
 # layer down, the exact race `acquire` exists to close.
@@ -380,35 +465,53 @@ claim_note() { # -> " — <agent> at <ts>", or empty when the file says neither
 # `claimant:` is the one field a LATER call judges anything by, and it is written only when
 # an identity was resolvable — an empty one is omitted rather than written blank, so a claim
 # that cannot say whose it is says nothing instead of saying "nobody's", which the matcher
-# below would otherwise have to special-case. `origin:` is not a judgement either; it is the
-# obligation this tick was given (`took:`/`adopted:`), stored so a re-entry can be told the
-# same thing rather than guessing.
+# below would otherwise have to special-case. `claimant-source:` travels with it because the
+# two tiers are judged differently and because a SILENT change of identity source would
+# otherwise have to be inferred from behaviour. `origin:` is not a judgement either; it is
+# the obligation this tick was given (`took:`/`adopted:`), stored so a re-entry can be told
+# the same thing rather than guessing.
+#
+# NO TRAILING `:`. The old `{ …; [ -n "$X" ] && printf …; :; }` swallowed a failed write:
+# out of disk, the claim would be truncated before `claimant:`, the group would still exit 0
+# and the next tick would be told the claim "was written by hand". An `if` returns the
+# `printf`'s own status, so a claim that could not be finished is a failed claim.
 claim_exclusive() { # <origin: took|adopted>
   ( set -o noclobber
     { printf '%s\n' \
         "# The TICK's claim on the .tick-lock beside it — written by the tick, never by the" \
-        "# launcher. It records WHOSE the claim is: a later acquire by the SAME claimant is" \
-        "# that tick re-entering and proceeds; anyone else reports and holds." \
+        "# launcher. It records WHOSE the claim is, and from WHICH source that identity came:" \
+        "# a later acquire that can PROVE it is the same tick re-enters and proceeds; anyone" \
+        "# else holds; an identity that merely matches is exit 2 and a human's call." \
         "# NOT a second lock and NOT a second clock: staleness is computed from .tick-lock" \
         "# alone. Removed with the lock by: scripts/tick-lock.sh release" \
         "timestamp: $NOW_ISO" \
         "epoch: $NOW" \
         "agent: $agent" \
         "origin: $1"
-      [ -n "$CLAIMANT" ] && printf 'claimant: %s\n' "$CLAIMANT"
-      :
+      if [ -n "$CLAIMANT" ]; then
+        printf 'claimant: %s\nclaimant-source: %s\n' "$CLAIMANT" "$CLAIMANT_SOURCE"
+      fi
     } > "$CLAIM"
   ) 2>/dev/null
 }
 
-# Is the claim on disk THIS tick's? Only ever true when both sides carry an identity: a
-# missing claimant on either side is "cannot tell", and cannot-tell resolves to "not mine".
-claim_is_mine() {
-  local owner
-  [ -n "$CLAIMANT" ] || return 1
+# WHOSE IS THE CLAIM ON DISK? One of four answers, and only the first is a licence to run:
+#
+#   mine       both sides DECLARED an identity and they match — proof, so proceed.
+#   maybe      the ids match but at least one side is DERIVED from the runtime, which names
+#              a session and not a tick. Cannot be resolved here; a human resolves it.
+#   theirs     the ids differ. Not yours as far as disk can show — hold.
+#   unknown    one side or the other has no id at all — hold, as before claimants existed.
+#
+# `maybe` is the one that must never collapse into `mine`; see the header's asymmetry rule.
+claim_attribution() {
+  local owner osrc
   owner="$(lock_field claimant "$CLAIM")"
-  [ -n "$owner" ] || return 1
-  [ "$owner" = "$CLAIMANT" ]
+  osrc="$(lock_field claimant-source "$CLAIM")"
+  if [ -z "$CLAIMANT" ] || [ -z "$owner" ]; then printf 'unknown'; return 0; fi
+  if [ "$owner" != "$CLAIMANT" ]; then printf 'theirs'; return 0; fi
+  if claimant_is_declared && claimant_is_declared "$osrc"; then printf 'mine'; return 0; fi
+  printf 'maybe'
 }
 
 # Re-print the obligation the FIRST acquire printed, read back from the claim rather than
@@ -513,6 +616,10 @@ judge_existing() {
   echo "HELD: a tick is in flight — $LOCK, taken $(human_age "$age") ago by $ag ($ts)." >&2
   if [ -e "$CLAIM" ]; then
     echo "      A tick has claimed it$(claim_note) — it is RUNNING, not merely dispatched." >&2
+    # WHO, not just when. `status` is the human's probe, and until it printed the claimant
+    # the only way to answer "is that claim mine?" was to cat the file and read the
+    # environment by hand — which is how the identity in it went wrong unnoticed.
+    identity_lines "      " >&2
   else
     echo "      No tick has claimed it yet: it was taken for a dispatch that is starting." >&2
   fi
@@ -563,6 +670,7 @@ case "$cmd" in
       echo "HELD BY ANOTHER TICK: $LOCK was free a moment ago and is already claimed$(claim_note)." >&2
       echo "                      Report and hold: dispatch nothing, adopt nothing, end the" >&2
       echo "                      tick, and release nothing — the lock is not yours." >&2
+      identity_lines "                      " >&2
       exit 1
     fi
 
@@ -595,32 +703,71 @@ case "$cmd" in
     fi
     unwritable_claim
 
-    # YOUR OWN CLAIM IS NOT AN INTRUDER'S. A tick acquires more than once — a retry, a
-    # `SendMessage` resume, a step re-run — and until the claim recorded a claimant every
-    # one of those read as a different tick, so the tick stood down on its own claim and
-    # dispatched nothing (measured 2026-08-30). Nothing on disk changes here: the claim is
-    # already this tick's and re-writing it would only move a timestamp nothing judges.
-    if claim_is_mine; then
-      claim_ts="$(lock_field timestamp "$CLAIM")"
-      echo "re-entered: $LOCK — this tick already claimed it${claim_ts:+ at $claim_ts}; nothing on disk changed."
-      reprint_obligation
-      exit 0
-    fi
+    # WHOSE CLAIM IS IT? Four answers, and each gets its own exit code — the point of the
+    # rewrite is that "the ids match" and "it is you" are different statements, and only the
+    # second clears a dispatch.
+    case "$(claim_attribution)" in
+      mine)
+        # PROVED, not guessed: both sides declared a per-tick identity and they matched.
+        # Nothing on disk changes — the claim is already this tick's and re-writing it would
+        # only move a timestamp nothing judges.
+        claim_ts="$(lock_field timestamp "$CLAIM")"
+        echo "re-entered: $LOCK — this tick already claimed it${claim_ts:+ at $claim_ts}; nothing on disk changed."
+        reprint_obligation
+        exit 0 ;;
 
+      maybe)
+        # THE ONE THIS FILE WILL NOT DECIDE. The ids are equal, but at least one came from
+        # the runtime, and the runtime's id is one per SESSION: every tick a `/pm-loop`
+        # session starts carries it, so equality is consistent with "you, re-entering" AND
+        # with "a sibling this session resumed". Guessing either way has a name — proceed is
+        # the 2026-08-29 double-dispatch, hold is the 2026-08-30 stand-down — so it is
+        # surfaced with both ids and left to a human, exactly as a stale lock is.
+        echo "CANNOT ATTRIBUTE THIS CLAIM: $LOCK is live and claimed$(claim_note)," >&2
+        echo "     and the identity on it EQUALS yours — which is not proof that it is you." >&2
+        identity_lines "     " >&2
+        echo "     A session-derived id names the SESSION, not the tick: every tick one" >&2
+        echo "     /pm-loop session starts shares it, so this reads the same whether you are" >&2
+        echo "     re-entering your own claim or meeting a sibling that session resumed." >&2
+        echo "     Do not dispatch and do not delete anything. A human decides:" >&2
+        echo "       - if no other tick is running:  scripts/tick-lock.sh release, then re-run" >&2
+        echo "       - if one is:                    let it finish; this tick ends here" >&2
+        echo "     To make this decidable, give each tick a per-tick id: --claimant <id>." >&2
+        exit 2 ;;
+
+      theirs)
+        echo "HELD BY ANOTHER TICK: $LOCK is live and a tick already claimed it$(claim_note)." >&2
+        echo "                      You are not that tick — a tick that began outside the" >&2
+        echo "                      launcher (a SendMessage resume) is exactly this case." >&2
+        echo "                      Report and hold: dispatch nothing, adopt nothing, end the" >&2
+        echo "                      tick, and release nothing — the lock is not yours." >&2
+        identity_lines "                      " >&2
+        # Two DIFFERENT ids are not quite proof of two ticks either: a session that forks or
+        # compacts gets a new id mid-run, so a long tick can meet its own claim as a stranger.
+        # That resolves to "hold", which is the safe half — but a human staring at two ids
+        # should be told which reading they are looking at rather than deducing it, and only
+        # where it applies: with two DECLARED ids, different means different, full stop.
+        if ! claimant_is_declared || ! claimant_is_declared "$(lock_field claimant-source "$CLAIM")"; then
+          echo "                      (Session-derived on at least one side. If you believe" >&2
+          echo "                       both are the same tick, your session id moved — a fork" >&2
+          echo "                       or a compaction does that. It is a hold either way.)" >&2
+        fi
+        exit 1 ;;
+    esac
+
+    # unknown: one side or the other has no identity at all. Exactly the pre-claimant
+    # behaviour — hold — with the missing side named, because a tick that keeps meeting this
+    # on a lock it believes is its own has an environment that cannot identify it, not a
+    # sibling, and that is a different thing to fix.
     echo "HELD BY ANOTHER TICK: $LOCK is live and a tick already claimed it$(claim_note)." >&2
-    echo "                      You are not that tick — a tick that began outside the" >&2
-    echo "                      launcher (a SendMessage resume) is exactly this case." >&2
     echo "                      Report and hold: dispatch nothing, adopt nothing, end the" >&2
     echo "                      tick, and release nothing — the lock is not yours." >&2
-    # Said out loud rather than left to look like a verdict: with no identity on one side or
-    # the other this is "I cannot tell", which is deliberately resolved as "not yours". A
-    # tick that keeps meeting this on a lock it believes is its own has an environment that
-    # cannot supply an identity, not a sibling — and that is a different thing to fix.
+    identity_lines "                      " >&2
     if [ -z "$CLAIMANT" ]; then
       echo "                      (No identity for THIS tick: neither --claimant nor" >&2
       echo "                       TICK_CLAIMANT nor CLAUDE_CODE_SESSION_ID gave one, so a" >&2
       echo "                       claim you made yourself would look exactly like this.)" >&2
-    elif [ -z "$(lock_field claimant "$CLAIM")" ]; then
+    else
       echo "                      (That claim records no claimant — it predates this check" >&2
       echo "                       or was written by hand, so it cannot be matched to you.)" >&2
     fi

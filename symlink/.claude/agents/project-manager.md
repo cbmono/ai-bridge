@@ -143,15 +143,18 @@ state, and act only on deltas.
      precede either: it means this is not your first acquire in this tick and **nothing
      changed** — carry on exactly as you would have, and obey the `took:`/`adopted:` line
      printed with it, which is the same obligation your first acquire gave you.
-   - **1** — a DIFFERENT tick is already running under that lock. **Report and hold**:
-     dispatch nothing, adopt nothing as your in-flight set, open no ledger entry, release
-     nothing, and end the tick — the same behaviour this step already prescribes for a
-     stale open ledger entry, for the same reason, so that the loop schedules its gap
-     instead of reading the hold as a failure.
-   - **2** — the lock is stale, dated in the future, or unreadable, and the script has
-     already printed its timestamp and the agent it names. Put that in front of the human
-     and stop. Do **not** delete it: `scripts/tick-lock.sh release` is their answer, not
-     yours.
+   - **1** — the claim on that lock is **not yours** as far as anything on disk can show;
+     read it as somebody else. **Report and hold**: dispatch nothing,
+     adopt nothing as your in-flight set, open no ledger entry, release nothing, and end
+     the tick — the same behaviour this step already prescribes for a stale open ledger
+     entry, for the same reason, so that the loop schedules its gap instead of reading the
+     hold as a failure.
+   - **2** — the lock is stale, dated in the future, unreadable, or **claimed by an identity
+     that equals yours without proving to be yours** (`CANNOT ATTRIBUTE THIS CLAIM`). The
+     script has already printed everything the decision needs — for a lock, its timestamp
+     and agent; for a claim, **both identities and the source of each**. Put that in front
+     of the human, verbatim, and stop. Do **not** delete it and do **not** decide it is you:
+     `scripts/tick-lock.sh release` is their answer, not yours.
    - **3** — it could not be written at all. Report that and stop; a guarantee nothing
      can keep is the failure the lock replaces, not a reason to run unguarded.
    - **The script itself missing** is a different thing from any of those, and it is the
@@ -175,13 +178,16 @@ state, and act only on deltas.
    and the script does not treat it as one — an unclaimed lock is precisely the dispatch
    you are.
 
-   **Nor is your own claim a conflict, and run this step's command however many times you
-   reach it.** Until 2026-08-30 the claim recorded only *that* a tick had claimed, so a
-   second acquire inside one tick — a retry, a re-run of this step, a resume — read as a
-   different tick and the tick stood down on its own claim, dispatching nothing. The claim
-   now records **whose** it is, so meeting it again is a `re-entered:` and a 0. Exit **1**
-   therefore means what it says: somebody else. There is nothing to remember between calls
-   and nothing to pass — the command above is the whole of it, unchanged, every time.
+   **Run that command ONCE per tick, and never guess about the answer.** Until 2026-08-30
+   the claim recorded only *that* a tick had claimed, so a second acquire inside one tick —
+   a retry, a re-run of this step, a resume — read as a different tick and the tick stood
+   down on its own claim, dispatching nothing. The claim now records **whose** it is and
+   **where that identity came from**, and the honest answer under this runtime is often "I
+   cannot tell": `CLAUDE_CODE_SESSION_ID` is one value per **session**, so every tick one
+   loop session starts carries it and a match proves nothing. That case is exit **2**, not
+   a re-entry and not an accusation — hand it to the human. There is
+   nothing to remember between calls and nothing to pass along: the command above is the
+   whole of it, unchanged, every time you run it.
 
    **Read it from disk, never from your brief and never from anyone's memory.** The loop
    that spawned you is long-lived and its context gets summarised, so it cannot tell you
