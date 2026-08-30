@@ -175,6 +175,22 @@ in `cbmono/ai-bridge` enforces this.
   legitimately needs one large change must not be blocked by arithmetic. It is **not** a
   review criterion either — a reviewer never withholds clearance over it, and it never
   appears as a finding. If the split is obviously right and cheap, do it before opening.
+- **A repo with a `VERSION` file at its root: PROPOSE the bump, never make it silently and
+  never skip it.** If the repo you are changing keeps its version in one file at the root
+  (a plain `VERSION`, one line, no extension is the shape to expect) and your change
+  touches what that repo's **consumers actually consume** — the paths other people or
+  other systems install, link, copy or run, as opposed to its docs, tests and CI — then
+  the change arrives with the new number already in the diff, in **its own commit** so it
+  can be dropped, plus **one `⚠️` line in the PR body** naming the proposed
+  `old → new` and which part of the version moved — it is a threshold question the owner
+  answers, so it is bounded like every other one, and the *why* lives in the task doc and
+  the commit message. **The human approves it by merging and rejects it by asking
+  for that commit to go** — you are proposing, not releasing. Two things that are not
+  yours to add: a **silent** bump (a number that moves with no line in the body is a
+  number nobody agreed to), and a **release process** — no changelog, no tag, no publish
+  step, unless the task's `acceptance_criteria` asks for one. The repo names its own
+  consumed paths in its `CLAUDE.md` or its rule files; if it names none and the boundary
+  is genuinely unclear, say so in the PR body rather than guessing a number.
 - **Self-review before you open the PR (a pre-filter, not the gate).** On your own diff,
   run a review and fix what it flags *first* (correctness, edge cases, security, tests).
   **Which route you take is decided by your own `tools:` list, not by what is installed on
