@@ -650,10 +650,31 @@ import sys
 vals = [v for v in open('$TMP/acts058.txt', encoding='utf-8').read().split(chr(10)) if v]
 sys.exit(0 if len(vals) == 4 and not [v for v in vals if '/q' in v] else 1)")"
 
-echo "== the verdict wording after the colon is unchanged =="
-for v in 'APPROVED — go ahead.' 'I want to discuss this before you proceed.' 'REJECTED — do not proceed.'; do
+echo "== the verdict wording after the colon says what the verdict does =="
+# APPROVE and DISCUSS are unchanged on this item (a merge). REJECT is not: it used to read
+# `REJECTED — do not proceed. Record why on the task and move on.`, which is the wording of
+# a CANCELLATION — "this one is over" — and an agent receiving it could reasonably close a
+# task the owner had only declined an action on. Nothing on this page changes a status; a
+# rejected draft stays `draft`; cancelling is `status: cancelled`, a different act with no
+# control here. So the payload now declines the action and names the status it leaves alone.
+for v in 'APPROVED — go ahead.' 'I want to discuss this before you proceed.' 'REJECTED — do not do this.'; do
   assert "…$v follows the handle"                    "$(fhas "data-copy=\"gdg/task-058: $v" "$HB")"
 done
+assert "…and Reject says to leave the status alone"  \
+  "$(fhas 'data-copy="gdg/task-058: REJECTED — do not do this. Record why on the task; leave its status as it is."' "$HB")"
+# BOTH HALVES OF THE OLD READING ARE GONE, named literally, because either one alone still
+# reads as a cancellation.
+assert "…so nothing tells the reader to move on"     "$(fhasnt 'and move on.' "$HB")"
+assert "…and nothing reads as do-not-proceed"        "$(fhasnt 'REJECTED — do not proceed' "$HB")"
+# AND NO CONTROL PROPOSES CANCELLING. This round deliberately added none: a cancel button
+# would be a fourth verdict with a state change behind it (`status: cancelled`), which is
+# not a wording change. Asserted over what is COPIED, since the word could legitimately
+# appear on the page as a task's own state.
+assert "…and no copied value proposes cancelling"    "$(yes_if python3 -c "
+import re, sys
+vals = re.findall(r'data-copy=\"([^\"]*)\"', open('$HB', encoding='utf-8').read())
+sys.exit(0 if vals and not [v for v in vals if 'cancel' in v.lower()] else 1)")"
+
 
 echo "== the handle resolves to exactly one document =="
 # THE POINT OF THE SHORT FORM IS THAT IT STILL RESOLVES. `gdg/task-044` is not a path;
@@ -703,7 +724,7 @@ assert "…and the page carries it nowhere else either" "$(fhasnt 'SECRET-HOME' 
 # NON-VACUITY: that project really is on the page, with a task and a waiting row, so
 # the absence above is the shape check firing rather than the project being skipped.
 assert "…though the project and its task do render"  "$(card "$HB" 'Slug is a path' | fhas_in 'Hostile slug with a task')"
-assert "…and its handle names the task alone"        "$(card "$HB" 'Slug is a path' | fhas_in 'data-copy="task-001: APPROVED')"
+assert "…and its handle names the task alone"        "$(card "$HB" 'Slug is a path' | fhas_in 'data-copy="task-001: promote to ready"')"
 
 echo "== the Role column appears only where it discriminates =="
 # One value in a column is not a column: on the 8-project board this was measured
@@ -726,9 +747,12 @@ sys.exit(0 if roles == ['', 'software-engineer'] else 1)")"
 assert "…and the unassigned row still renders"       "$(card "$HB" 'Two tasks one number' | fhas_in 'Nobody yet')"
 # THE COLUMN COUNT FOLLOWS THE HEADER. A <thead> that drops a column while <tbody> keeps
 # its cell shifts every value one column left, which renders as a table nobody can read.
+# Run over BOTH pages, because the predicate that drops the column now has two terms and
+# each is a way for the two halves to disagree.
+for pg in "$HB" "$OUT"; do
 assert "header and body agree on the column count"   "$(yes_if python3 -c "
 import re, sys
-page = open('$HB', encoding='utf-8').read()
+page = open('$pg', encoding='utf-8').read()
 seen = 0
 for tbl in re.findall(r'<table>.*?</table>', page, re.S):
     head = len(re.findall(r'<th[ >]', tbl[:tbl.index('</thead>')]))
@@ -738,6 +762,36 @@ for tbl in re.findall(r'<table>.*?</table>', page, re.S):
         sys.exit(1)
     seen += 1
 sys.exit(0 if seen >= 2 else 1)")"
+done
+
+echo "== a PHASED project never renders Role, whatever its tasks assign =="
+# ROLE COUNT ALONE WAS THE WHOLE PREDICATE, and on the board the owner read it that left
+# the column standing on exactly one project: a phased one whose tasks name two roles.
+# A phased card is the widest thing on the board and its rows are already grouped by
+# phase rather than by who does them, so that is where a low-information column costs the
+# task name most. The rule is stated as the owner's rule, not derived: nothing about
+# `phase_progress` says anything about assignees, and the correlation is accidental.
+assert "a phased project drops Role"                 "$(card "$OUT" 'Live work' | fhasnt_in '<th>Role</th>')"
+assert "…and drops the per-row cells with it"        "$(card "$OUT" 'Live work' | fhasnt_in '>qa-reviewer</td>')"
+# NON-VACUITY ON BOTH TERMS, or this passes on a project that was never a candidate: it
+# really is phased, AND its tasks really do name two roles — so it is precisely the case
+# the old predicate kept the column for.
+assert "…though the card really says it is phased"   "$(card "$OUT" 'Live work' | fhas_in 'phases</span>')"
+assert "…and its tasks really do name two roles"     "$(yes_if python3 -c "
+import json, sys
+s = json.load(open('$TMP/alpha/SNAPSHOT.json'))
+pr = [x for x in s['projects'] if x['slug'] == 'live-one'][0]
+sys.exit(0 if sorted({t['assignee'] for t in pr['tasks']} - {''})
+         == ['qa-reviewer', 'software-engineer'] else 1)")"
+# …AND THE COLUMN IS NOT SIMPLY GONE from the renderer: an UNPHASED two-role project on
+# another page still carries it, so this is a predicate with two terms and not a deletion
+# wearing one.
+assert "…while an unphased two-role project keeps it" "$(card "$HB" 'One handle' | fhas_in '<th>Role</th>')"
+assert "…and that project really has no phases"      "$(yes_if python3 -c "
+import json, sys
+s = json.load(open('$TMP/handle/SNAPSHOT.json'))
+pr = [x for x in s['projects'] if x['slug'] == 'gdg'][0]
+sys.exit(0 if not pr['phase_progress']['total'] else 1)")"
 
 echo "== the collapsed line carries ONE pill, and it is the awaiting one =="
 # TWO PILLS MEASURED OVERLAPPING THINGS: a filled `N awaiting you` at the front of the
@@ -860,6 +914,65 @@ assert "a finished project still proposes its close" "$(card "$TM" 'Finished and
 assert "…and is still marked as wanting you"         "$(fhas '<details class="proj fin wants">' "$TM")"
 
 # ---------------------------------------------------------------------------
+# APPROVE IS GENERIC OVER THE AWAITING KINDS, SO ITS PAYLOAD IS NOT.
+#
+# One button serves a promotion, a merge, a project close and a deliverable, and copied
+# one verdict sentence for all four. Only the FIRST is the same decision as the task
+# table's `promote → ready`, so only the first copies that payload — `promote to ready` on
+# a merge or a close names an act nobody asked for.
+#
+# ONE ASSERTION FOR THE WHOLE RULE, AS AN IFF, over every waiting row on every page this
+# harness renders. Two literals ("a promotion copies X", "a merge copies Y") both go green
+# on a renderer that copies the promote payload for every kind, as long as one promotion is
+# somewhere on the page — which is exactly the blanket edit of WORDING["approve"] this
+# criterion exists to forbid.
+echo "== Approve's payload follows the awaiting KIND =="
+assert "the promote payload appears exactly on promotion rows" "$(yes_if python3 -c "
+import html, re, sys
+rows = []
+for path in ['$OUT', '$BOUT', '$HB', '$TM']:
+    page = open(path, encoding='utf-8').read()
+    for li in re.findall(r'<li class=\"ask\">.*?</li>', page, re.S):
+        v = re.search(r'<span class=\"verb\">([^<]*)</span>', li)
+        b = re.search(r'<button class=\"go\" data-copy=\"([^\"]*)\"', li)
+        if v and b:
+            rows.append((v.group(1), html.unescape(b.group(1))))
+promo = [r for r in rows if r[1].endswith(': promote to ready')]
+other = [r for r in rows if not r[1].endswith(': promote to ready')]
+# NO SET LITERAL AND NO SET COMPREHENSION WITH A COMMA IN IT. bash brace-expands
+# a {a, b} inside a command substitution in an argument, runs the substitution
+# twice and hands assert the second answer — see the Finding
+# brace-expansion-mangles-a-regex-inside-a-command-substitution. Written with
+# set(...) so the python source survives the shell.
+kinds = set(v for v, _ in other)
+sys.exit(0 if (len(rows) >= 6 and len(promo) >= 2 and len(other) >= 2
+               and all(v == 'approve' for v, _ in promo)
+               and all(v != 'approve' for v, _ in other)
+               and all(': APPROVED — go ahead.' in m for _, m in other)
+               and 'merge' in kinds and 'close' in kinds) else 1)")"
+# The literals too, both directions, so a failure above says which side broke.
+assert "…a promotion item copies handle + promote to ready" \
+  "$(fhas 'data-copy="twins/task-007-first: promote to ready"' "$HB")"
+assert "…a merge item keeps the verdict sentence"     "$(fhas 'data-copy="gdg/task-058: APPROVED — go ahead."' "$HB")"
+assert "…and a close item keeps it WITH its run hint" "$(rail_of "$TM" 'Finished and proposing' | fhas_in ': APPROVED — go ahead. Run /close-project')"
+# THE TWO CONTROLS FOR THE SAME DECISION COPY THE SAME BYTES. `promote → ready` in the
+# task table and `Approve` on that task's promotion row are one act; two spellings of it
+# is the defect, and comparing the values is the only way to pin "the same", since each
+# is independently correct-looking.
+assert "…and the rail value equals the button's, byte for byte" "$(yes_if python3 -c "
+import html, re, sys
+page = open('$HB', encoding='utf-8').read()
+btn = set(html.unescape(v) for v in
+          re.findall(r'<button class=\"promote\" data-copy=\"([^\"]*)\"', page))
+rail = set()
+for li in re.findall(r'<li class=\"ask\">.*?</li>', page, re.S):
+    if '<span class=\"verb\">approve</span>' in li:
+        m = re.search(r'<button class=\"go\" data-copy=\"([^\"]*)\"', li)
+        if m:
+            rail.add(html.unescape(m.group(1)))
+sys.exit(0 if btn and rail and rail <= btn else 1)")"
+
+# ---------------------------------------------------------------------------
 # THE TASK ROW: THE JITTER IS THE DEFECT, NOT THE LINE COUNT.
 #
 # `014-banner-reaches-the-human Some title` and `001-local-board Some title` were two
@@ -900,11 +1013,18 @@ assert "…for every task row, not just the first"     \
 # which one row is one line and the next is two.
 assert "the base rule stacks filename over title"    "$(fhas '.trow{display:flex;flex-direction:column;' "$RW")"
 assert "…and .tmain stacks inside it"                "$(fhas '.tmain{display:flex;flex-direction:column;' "$RW")"
-# ≥1200px: a FIXED filename column, so every title starts at the same x. 41ch = the 39
-# characters of `017-write-for-a-human-who-will-not-read`, the longest filename actually
-# present in this bundle, plus a 2ch gutter — `.tid` is monospaced, so 1ch is one
-# character exactly. The fixture renders that very filename so the number is anchored to
-# something real rather than to a comment.
+# ONE ROW LAYOUT AT EVERY WIDTH, AND THE SECOND ONE IS DELETED RATHER THAN RE-TUNED.
+# There was a `@media (min-width:1200px)` block that turned `.trow` back into a row with
+# `.tfile` pinned to a fixed 56-character flex basis, so that every title started at the
+# same x. It bought that at a price the owner read off the rendered page: above 1200px a
+# title sat ~400px to the right of its own filename, with the gap growing on every
+# filename shorter than the longest one. So what used to be asserted ABOUT the breakpoint
+# is now asserted about its ABSENCE — the assertions are re-expressed, not dropped, since
+# a rule nobody pins is a rule that comes back.
+#
+# tidrule() IS KEPT ON PURPOSE. It existed to prove the row rules were INSIDE the
+# breakpoint; the same helper now proves there is no such block for anything to be inside,
+# so the claim is measured by the code that used to measure its opposite.
 tidrule() { python3 - "$1" <<'PYR'
 import re, sys
 src = open(sys.argv[1], encoding="utf-8").read()
@@ -912,24 +1032,29 @@ m = re.search(r"@media \(min-width:1200px\)\{(.*?)\n\}", src, re.S)
 sys.stdout.write(m.group(1) if m else "")
 PYR
 }
-assert "the switch is at 1200px"                     "$(fhas '@media (min-width:1200px){' "$RW")"
-assert "…where the row becomes a row"                "$(tidrule "$RW" | fhas_in '.trow{flex-direction:row')"
-assert "…the filename column is fixed at 56ch"       "$(tidrule "$RW" | fhas_in 'flex:0 0 56ch')"
-assert "…and the title column takes the rest"        "$(tidrule "$RW" | fhas_in '.tmain{flex:1 1 auto}')"
-# 56ch = 39 (the longest filename actually present) + 2ch of gutter + ~15ch for the
-# promote control that now shares this line. Both halves are anchored: the name is
-# measured here and rendered on the page below, and the control is what the extra width
-# is for — a draft row is one line at this width, not two.
-assert "…56ch really covers the longest name plus the control" "$(yes_if python3 -c "
-import sys
-sys.exit(0 if len('017-write-for-a-human-who-will-not-read') + 2 + 15 == 56 else 1)")"
-assert "…and that name really is on the page"        "$(fhas '>017-write-for-a-human-who-will-not-read</span>' "$RW")"
-# DEGRADATION when a longer name appears later: the column does not grow and the title
-# column is not pushed — the name wraps inside its own 41ch. Without both of these a
-# longer filename either overflows the cell or shoves every title to a new x, which is
-# the property the whole block exists to hold.
-assert "…a longer name wraps inside its own column"  "$(fhas '.tfile>.tid{margin-right:0;min-width:0;overflow-wrap:anywhere}' "$RW")"
-assert "…rather than widening it"                    "$(tidrule "$RW" | fhas_in 'min-width:0')"
+assert "there is no width-conditional block at all"  "$(eq "$(tidrule "$RW")" "")"
+assert "…no min-width media query in the sheet"      "$(fhasnt '@media (min-width' "$RW")"
+assert "…no fixed flex basis on the filename column" "$(fhasnt 'flex:0 0 56ch' "$RW")"
+assert "…nor any flex basis on .tfile at all"        "$(fhasnt '.trow>.tfile{flex:' "$RW")"
+assert "…and the title column takes no flex either"  "$(fhasnt '.tmain{flex:1 1 auto}' "$RW")"
+assert "…no row direction anywhere on the page"      "$(fhasnt 'flex-direction:row' "$RW")"
+# THE STALE DERIVATION WENT WITH IT. A comment measuring a 56-character column against
+# the longest filename in the bundle describes nothing once the column is gone, and a
+# derivation for a rule that no longer exists is worse than no comment: the next reader
+# takes it for a live constraint.
+assert "…and the 56ch derivation comment is gone"    "$(fhasnt 'WHERE 56ch COMES FROM' "$RW")"
+assert "…including its measured character count"     "$(fhasnt '56ch' "$RW")"
+# THE PROPERTY THE MEDIA QUERY EXISTED FOR IS STILL HELD, by the base rule alone: filename
+# line 1, title line 2, so every title starts at the cell's own left edge — the same x on
+# every row, at every width, with nothing to re-measure when a longer filename arrives.
+# The fixture renders the longest filename in the bundle, so that claim is anchored to a
+# real name rather than to a comment.
+assert "…the one rule still stacks filename over title" "$(fhas '.trow{display:flex;flex-direction:column;' "$RW")"
+assert "…and that longest name really is on the page" "$(fhas '>017-write-for-a-human-who-will-not-read</span>' "$RW")"
+# DEGRADATION for a name longer still: it wraps INSIDE the filename line rather than
+# overflowing the cell. This rule is what the deleted block relied on too, so it is the
+# half that had to survive the deletion.
+assert "…a longer name wraps rather than overflowing" "$(fhas '.tfile>.tid{margin-right:0;min-width:0;overflow-wrap:anywhere}' "$RW")"
 # VERTICALLY CENTRED. Against a two-line title the assignee, the state and the PR link
 # sat pinned to the first line and read as though they belonged to it.
 assert "cells are centred, not baselined"            "$(fhas 'td{padding:.4rem .45rem;vertical-align:middle;' "$RW")"
@@ -951,7 +1076,15 @@ import sys
 t = open('$RW').read()
 sys.exit(0 if t.index('class=\"promote\"') < t.index('Short name, long title') else 1)" && echo 0 || echo 1)"
 assert "…only on a draft row"                        "$(eq "$(grep -oF 'class="promote"' "$RW" | wc -l | tr -d ' ')" 1)"
-assert "…still only COPYING a prompt"                "$(fhas 'class="promote" data-copy="In the ai-bridge instance, promote' "$RW")"
+# THE PAYLOAD IS THE HANDLE AND THE VERB, and nothing else. It was three sentences —
+# `In the ai-bridge instance, promote <handle> from draft to ready: review its acceptance
+# criteria, tighten any that are not testable, then set status: ready.` — which told an
+# agent how to do a job it already knows, and was a SECOND spelling of the decision the
+# rail's Approve copies for the same task. Both halves are pinned: the short form is
+# there, and the prose form is absent from the page.
+assert "…still only COPYING, and now handle + verb"  "$(fhas 'class="promote" data-copy="jitter/task-001: promote to ready"' "$RW")"
+assert "…and the three-sentence prompt is gone"      "$(fhasnt 'In the ai-bridge instance, promote' "$RW")"
+assert "…from every rendered page"                   "$(fhasnt 'tighten any that are not testable' "$HB")"
 # THE STATES ARE INVERTED. The accent outline is the RESTING appearance — a control that
 # only looks like one under a pointer is invisible to a touch screen — and hover drops
 # the accent for a filled neutral, so hovering says "you are on this one" instead of
@@ -963,6 +1096,121 @@ assert "…so no greenish fill arrives on hover"       "$(yes_if python3 -c "
 import re, sys
 m = re.search(r'\.promote:hover[^{]*\{([^}]*)\}', open('$RW').read())
 sys.exit(0 if m and 'accent' not in m.group(1) and 'var(--ok)' not in m.group(1) else 1)")"
+
+# ---------------------------------------------------------------------------
+# THE PR AND DEPENDS-ON CELLS WRAP, AND BOTH WIDTHS ARE DERIVED RATHER THAN CHOSEN.
+#
+# `006-scaffold-configuration-studio-bff` carries nine PRs on one task, and the PR cell
+# rendered them as one 460px line: the widest thing in the table, in the narrowest column
+# anyone reads, taking the width from the task name. The Depends-on cell had the same
+# shape one step smaller — it reserved room for TWO refs and separated them with `", "`,
+# a character that costs width and carries no information beside pills that are already
+# discrete boxes.
+#
+# WHAT A HARNESS CAN AND CANNOT SAY HERE. There is no layout engine in this file, so it
+# asserts the three things a regression must break — the class that lets the cell wrap at
+# all, the rule that reserves the line, and the ARITHMETIC behind the number in that rule
+# — and nothing about pixels on a screen. The rendered check is the PR body's job. The
+# arithmetic is the half that would otherwise rot: `107px` and a `calc()` are both
+# unfalsifiable as literals, so each is re-derived here from the same terms the comment
+# beside it names, and the derivation is written so that it fails if the target changes.
+mkdir -p "$TMP/cells"
+mk "$TMP/cells" "cells" '[
+ {"slug":"006-scaffold-configuration-studio-bff","title":"Nine PRs on one task","kind":"build",
+  "status":"active","awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001-nine-prs","title":"Nine pull requests","status":"in-review",
+            "assignee":"software-engineer","awaiting":"","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,
+            "depends_on":["task-002","task-010","task-011","task-012"],"in_flight":false,
+            "prs":[{"repo":"o/r","number":2101,"url":"https://github.com/o/r/pull/2101"},
+                   {"repo":"o/r","number":2102,"url":"https://github.com/o/r/pull/2102"},
+                   {"repo":"o/r","number":2103,"url":"https://github.com/o/r/pull/2103"},
+                   {"repo":"o/r","number":2104,"url":"https://github.com/o/r/pull/2104"},
+                   {"repo":"o/r","number":2105,"url":"https://github.com/o/r/pull/2105"},
+                   {"repo":"o/r","number":2106,"url":"https://github.com/o/r/pull/2106"},
+                   {"repo":"o/r","number":2107,"url":"https://github.com/o/r/pull/2107"},
+                   {"repo":"o/r","number":2108,"url":"https://github.com/o/r/pull/2108"},
+                   {"repo":"o/r","number":2109,"url":"https://github.com/o/r/pull/2109"}]},
+           {"id":"task-002-three-deps","title":"Three dependencies","status":"ready",
+            "assignee":"software-engineer","awaiting":"","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,
+            "depends_on":["task-001","task-010","task-011"],"in_flight":false,
+            "prs":[{"repo":"o/r","number":2110,"url":"https://github.com/o/r/pull/2110"},
+                   {"repo":"o/r","number":2111,"url":"https://github.com/o/r/pull/2111"}]},
+           {"id":"task-010-one-of-each","title":"One of each","status":"ready",
+            "assignee":"software-engineer","awaiting":"","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,"depends_on":["task-001"],
+            "in_flight":false,
+            "prs":[{"repo":"o/r","number":2112,"url":"https://github.com/o/r/pull/2112"}]}]}]'
+CE="$TMP/cells.html"
+cerc=0; bash "$GEN" --out "$CE" "$TMP/cells" >/dev/null 2>&1 || cerc=$?
+
+echo "== the PR cell wraps at two refs, on a width read off its own font =="
+assert "the fixture renders and exits 0"             "$(eq "$cerc" 0)"
+# NON-VACUITY FIRST: nine refs really are in that one cell, or everything below is a
+# claim about an empty cell.
+assert "nine refs really render in one cell"         "$(yes_if python3 -c "
+import re, sys
+page = open('$CE', encoding='utf-8').read()
+cells = re.findall(r'<td class=\"prs\">(.*?)</td>', page, re.S)
+sys.exit(0 if cells and max(len(re.findall(r'<a href', c)) for c in cells) == 9 else 1)")"
+assert "the cell carries its own class"              "$(fhas '<td class="prs">' "$CE")"
+assert "…which overrides the table-wide nowrap"      "$(fhas 'td.prs{white-space:normal!important;' "$CE")"
+assert "…and gives the cell one monospace context"   "$(fhas 'td.prs{white-space:normal!important;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.8rem}' "$CE")"
+# REFS ARE SPACE-SEPARATED — no comma, the form the Depends-on cell now copies.
+assert "…refs are separated by a space"              "$(fhas '#2101</a> <a href' "$CE")"
+assert "…and never by a comma"                       "$(fhasnt '</a>, <a' "$CE")"
+# THE RESERVATION IS A FLOOR, IN PIXELS (the owner asked for px), AND IT IS CONDITIONAL:
+# `max-width` does nothing here — `td:not(:first-child)` asks for `width:1%`, so a cell
+# that may wrap collapses to ONE ref and a cap above that is never reached — and a row
+# with a single ref must not pay for a second.
+assert "…two refs are reserved, in pixels"           "$(fhas 'td.prs:has(a:nth-of-type(2)){min-width:107px}' "$CE")"
+assert "…and no cap is left behind pretending to work" "$(fhasnt 'td.prs{white-space:normal!important;max-width' "$CE")"
+assert "…the unconditional rule reserves nothing"    "$(yes_if python3 -c "
+import re, sys
+m = re.search(r'td\.prs\{([^}]*)\}', open('$CE', encoding='utf-8').read())
+sys.exit(0 if m and 'min-width' not in m.group(1) and 'max-width' not in m.group(1) else 1)")"
+# 107px = 12 characters of IBM Plex Mono at .8rem on a 16px root (advance 0.6em ⇒ 7.68px)
+# plus this td's own .9rem of horizontal padding, which box-sizing:border-box counts.
+# `#1234 #1234` is 11 of those 12; a third ref needs six more characters, 46px, so it
+# cannot nearly fit. Every term is a number the stylesheet states elsewhere, and the last
+# two clauses are what make this fail if the target moves to one ref or to three.
+assert "…and 107px is 12 characters plus that padding" "$(yes_if python3 -c "
+import math, sys
+ch = 0.8 * 16 * 0.6
+content = 107 - 0.9 * 16
+sys.exit(0 if math.ceil(12 * ch + 0.9 * 16) == 107
+             and 2 * 5 * ch + 1 * ch <= content
+             and 3 * 5 * ch + 2 * ch > content else 1)")"
+
+echo "== the Depends on cell allows three refs, space-separated =="
+assert "pills are separated by a space"              "$(fhas '</button> <button class="dep"' "$CE")"
+assert "…and the \", \" separator is gone"            "$(fhasnt '</button>, <button' "$CE")"
+# THE MIN-WIDTH IS RE-DERIVED FOR BOTH CHANGES AT ONCE — three refs instead of two, and
+# two one-character separators instead of one two-character one. The separator term stays
+# `2ch` and that is a coincidence worth naming rather than a number left unchanged.
+assert "…and three pills are reserved, not two"      "$(fhas 'min-width:calc(3*(3ch + .7rem + 2px) + 2ch + .9rem)' "$CE")"
+assert "…with no two-pill width left in the sheet"   "$(fhasnt 'min-width:calc(2*(3ch + .7rem + 2px)' "$CE")"
+# THE RE-DERIVATION HAD TO HAPPEN, and this says so in arithmetic: the width the rule used
+# to reserve is too small for three pills, the width it reserves now holds three, and it
+# does not stretch to four. Terms are read off button.dep's and the td's own CSS.
+assert "…and the numbers really move the target"     "$(yes_if python3 -c "
+import sys
+ch = 0.74 * 16 * 0.6                  # 1ch in the cell's own monospace context
+pill = 3 * ch + 0.7 * 16 + 2          # 3 digits + .35rem padding each side + 1px border each
+old = 2 * pill + 2 * ch               # two pills and one \", \"
+new = 3 * pill + 2 * ch               # three pills and the two spaces between them
+sys.exit(0 if old < 3 * pill + 2 * ch
+             and new >= 3 * pill + 2 * ch
+             and new < 4 * pill + 3 * ch else 1)")"
+# BOTH CELLS JOIN THE SAME WAY, which is the point of dropping the comma: one form for
+# two columns of the same kind of thing.
+assert "…so both cells use one separator form"       "$(yes_if python3 -c "
+import re, sys
+page = open('$CE', encoding='utf-8').read()
+sys.exit(0 if '</button> <button class=\"dep\"' in page and '#2101</a> <a href' in page
+             and ', <a' not in page and ', <button' not in page else 1)")"
 
 echo "== a waiting row carries the task filename, so the file can be found =="
 assert "the filename precedes the title"             \
