@@ -363,8 +363,19 @@ for claim in '**Security** — the mint token is logged in plaintext at `directo
   serve "$(reply_file "$claim" "$(pad 900)")"
   expect "a carve-out claim clears at 940 bytes: ${claim:0:26}…" 0 --comment 4242
   says   "  ...saying it was exempt, and quoting the claim" "claims a CARVE-OUT"
-  says   "  ...and that nothing was measured" "Nothing here was measured"
+  says   "  ...and that no size was measured" "No element size was measured"
 done
+# THE CARVE-OUT EXEMPTS THE CEILING AND NOTHING ELSE. A reply shaped as a list of findings
+# still owes a verdict on each of them, whatever it is reporting — the first cut of the
+# script read the claim BEFORE the shape and exempted both.
+serve "$(reply_file '**Security** — the mint token is logged in plaintext.' '' \
+                    '- `directory.ts:146` logs the token at info level.')"
+expect "a carve-out with a verdict-less entry -> still refuse" 1 --comment 4242
+says   "  ...on the shape, not the size" "carry no VERDICT"
+serve "$(reply_file '**Security** — the mint token is logged in plaintext.' '' \
+                    "- fixed: it is redacted now. $(pad 900)")"
+expect "…and with a verdict, the oversized entry is exempt" 0 --comment 4242
+
 # The control: strip the claim, keep the size, and the same reply is refused. Without this
 # the three cases above would pass for a gate that cleared everything.
 serve "$(reply_file "The mint token is logged in plaintext at \`directory.ts:146\`." "$(pad 900)")"

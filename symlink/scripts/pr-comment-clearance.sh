@@ -125,9 +125,12 @@
 # trimming the one thing the reader needed to act safely. Table 3 is that exemption, and it
 # is the only match in this file whose false positive WEAKENS the gate. Three things keep
 # it honest: it must LEAD a line's own content (a mid-sentence mention of "security" does
-# not claim it), the clearance message NAMES the pattern and quotes the line that claimed
-# it, so an abuse is visible in the log rather than silent, and the vocabulary is small and
-# written down here and in `CONVENTIONS.md` rather than inferred.
+# not claim it), the clearance message quotes the line that claimed it, so an abuse is
+# visible in the log rather than silent, and the vocabulary is small and written down here
+# and in `CONVENTIONS.md` rather than inferred. AND IT EXEMPTS THE CEILING ONLY: it is read
+# AFTER the verdict check, so a reply shaped as a list of findings still owes a verdict on
+# each of them whatever it is reporting — which is what the rule in `CONVENTIONS.md` says,
+# and the first cut of this file exempted both.
 #
 # GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
 # instance. It takes no org, repo or vendor identity: those come from the arguments.
@@ -460,18 +463,6 @@ decide() { # <rendered> <label> -> 0 clear, 1 shape missing, 2 unknown, 3 an ele
     return 1
   fi
 
-  # THE CARVE-OUT IS DECIDED FIRST, AND OUT LOUD. An error report, a security finding and a
-  # destructive-action confirmation are never trimmed; the line that claimed the exemption
-  # is quoted so the exemption is visible in the log rather than silent.
-  carve="$(printf '%s\n' "$scan" | awk -F'\t' '$1 == "carve" { print $2; exit }')"
-  [ -z "$carve" ] || {
-    echo "ok: $label claims a CARVE-OUT and is exempt from the element ceiling:" >&2
-    echo "      \"$carve\"" >&2
-    echo "    An error report, a security finding and a destructive-action confirmation" >&2
-    echo "    are never trimmed (CONVENTIONS.md). Nothing here was measured." >&2
-    return 0
-  }
-
   # STRUCTURE BEFORE SIZE, and that order is the point: exit 1 says a required part of the
   # shape is missing, exit 3 says it is all there and one element is too big. Telling an
   # author to shorten entries whose verdicts are missing would be advice about the wrong
@@ -493,6 +484,20 @@ EOF
     echo "        deferred — then the fix or the reason. See CONVENTIONS.md, 'A reply" >&2
     echo "        to review findings has a shape'." >&2
     return 1
+  }
+
+  # THE CARVE-OUT EXEMPTS THE CEILING, AND NOTHING ELSE — so it is read HERE, after the
+  # shape, not before it. An error report, a security finding and a destructive-action
+  # confirmation are never trimmed; a reply that is shaped as a list of findings still owes
+  # a verdict on each one, whatever it is reporting. The line that claimed the exemption is
+  # quoted, so the exemption is visible in the log rather than silent.
+  carve="$(printf '%s\n' "$scan" | awk -F'\t' '$1 == "carve" { print $2; exit }')"
+  [ -z "$carve" ] || {
+    echo "ok: $label claims a CARVE-OUT and is exempt from the element ceiling:" >&2
+    echo "      \"$carve\"" >&2
+    echo "    An error report, a security finding and a destructive-action confirmation" >&2
+    echo "    are never trimmed (CONVENTIONS.md). No element size was measured." >&2
+    return 0
   }
 
   local over
