@@ -436,14 +436,55 @@ in `cbmono/ai-bridge` enforces this.
   across ten PR pairs (#34 x #35), and it forced rebases on PRs that had nothing to do with
   each other. A threshold you check against **your own diff** cannot collide with anyone
   else's, which is the whole point.
-- **Kill everything you started before you report.** Any dev server, watcher, file-watch
-  probe or other background process you launch must be **stopped before you report back**,
-  and your report must say that you stopped it. Measured 2026-08-27: two `pnpm dev`
-  servers were found still running after **2 days 16 hours** and **2 days 13 hours**, from
-  worktrees whose tasks had merged long before. Nobody noticed until a machine was hot.
-  `scripts/prune-worktrees.sh` reports worktrees that still have a live process attached —
-  a scan catches what discipline misses — but it only ever reports, so the teardown is
-  yours.
+- **Anything you background must be reaped by something that outlives YOU.** A rule about
+  the whole CLASS — every child you put in the background, whatever it happens to be: a dev
+  server, a watcher, a file-watch probe, a long build, a load generator you wrote to
+  reproduce a flake. It is this repo's ONLY rule about backgrounded children, and it
+  subsumes the dev-server teardown rule that used to stand here: that one named servers, so
+  it had nothing to say about the 34 spinners below. **A rule that enumerates kinds of
+  process is a rule that misses the next kind**, which is why this one names none.
+  **It does not ban backgrounding.** Background the long build, the dev server, the
+  deliberate load generator — that is legitimate work and none of it is being taken away. A
+  "fix" that deletes the `&` satisfies nothing here: what is required is a REAPER, not
+  abstinence.
+  **The bound goes on the CHILD ITSELF, and that part is not optional.** Measured
+  2026-08-31: an agent generating CPU load to reproduce a flaky suite started ten
+  `(while :; do :; done) &` spinners, captured their pids, and put the `kill` at the end of
+  the script. Its shell died before that line ran — **34 orphans across three batches, every
+  one reparented to `ppid 1`**, at ~24% of a core each, running 3, 15 and 16 minutes with
+  nothing left on the machine that could ever reap them; load average 310, 0% idle. A
+  `trap … EXIT INT TERM` needs you alive to fire and a process-group kill needs someone left
+  to issue it, so **both were already defeated** by the time anyone looked. Add them if you
+  like; neither may ship as the whole answer. Same class with a slower fuse: two `pnpm dev`
+  servers found still running after **2 days 16 hours** and **2 days 13 hours**
+  (2026-08-27), from worktrees whose tasks had merged long before.
+
+  ```sh
+  # bg_bounded <seconds> <command…> — a bound that still holds when this shell is gone.
+  bg_bounded() {
+    local secs=$1; shift
+    if command -v timeout >/dev/null 2>&1; then
+      timeout "$secs" "$@" &          # coreutils. NOT on a stock macOS — hence this branch
+      return
+    fi
+    # No timeout: the child and its own watchdog share ONE subshell, itself already
+    # detached from us, so the bound survives our death — and `sleep` bounds the watchdog.
+    # The trailing kill is what stops a finished child's recycled pid being shot later.
+    ( "$@" & c=$!
+      ( sleep "$secs"; kill "$c" 2>/dev/null ) & w=$!
+      wait "$c" 2>/dev/null; kill "$w" 2>/dev/null ) &
+  }
+  ```
+
+  A loop you wrote yourself needs no watchdog at all — carry the deadline inside it:
+  `end=$(( $(date +%s) + 300 ))`, then `while [ "$(date +%s)" -lt "$end" ]; do …; done`.
+  **Two readers, because what stood here was prose and prose did not stop this:**
+  `tests/background-teardown.test.sh` fails the build on a background spawn in this repo's
+  own `scripts/` and `tests/` that carries no bound (an allowlist entry has to state its
+  reason), and `/ai-bridge check` carries a row naming every orphaned process whose cwd is
+  under `worktreeRoot` — the one line that would have printed all 34. `prune-worktrees.sh`
+  still reports a worktree with a live process attached. All three only ever REPORT, so the
+  teardown is yours, and your report still says what you stopped.
 - **A dispatch is not finished until its artifact exists — check, don't believe the
   report.** When an agent you dispatched reports back, run `scripts/check-dispatch.sh
   <task-doc>` before you act on what it said. It reads three things and judges nothing
