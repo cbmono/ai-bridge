@@ -675,7 +675,6 @@ import re, sys
 vals = re.findall(r'data-copy=\"([^\"]*)\"', open('$HB', encoding='utf-8').read())
 sys.exit(0 if vals and not [v for v in vals if 'cancel' in v.lower()] else 1)")"
 
-
 echo "== the handle resolves to exactly one document =="
 # THE POINT OF THE SHORT FORM IS THAT IT STILL RESOLVES. `gdg/task-044` is not a path;
 # it is resolved by one glob, `projects/<slug>/tasks/task-044*.md`, which is what a
@@ -736,9 +735,9 @@ echo "== there is NO Role column, on any project =="
 # WHAT WAS ASSERTED BEFORE IS RE-EXPRESSED, NOT DELETED. `a project with two roles keeps
 # Role` and its `shows both values` companion pinned the KEPT direction; they now pin that
 # a two-role project has no column either, which is the same claim inverted and is the one
-# a reintroduction would break. The header/body column-count check stays as it was — the
-# predicate it guarded is gone, so it can no longer fail that way, but a table whose thead
-# and tbody disagree is a defect independent of why.
+# a reintroduction would break. The header/body column-count check is kept and widened to
+# a second page: the predicate it guarded is gone, so it can no longer fail that way, but a
+# <thead> and <tbody> that disagree is a defect independent of what caused it.
 assert "no page renders a Role header"               "$(yes_if python3 -c "
 import sys
 bad = [f for f in ['$OUT', '$BOUT', '$HB'] if '<th>Role</th>' in open(f, encoding='utf-8').read()]
@@ -1107,8 +1106,8 @@ sys.exit(0 if m and 'accent' not in m.group(1) and 'var(--ok)' not in m.group(1)
 # THE PR AND DEPENDS-ON CELLS WRAP, AND BOTH WIDTHS ARE DERIVED RATHER THAN CHOSEN.
 #
 # `006-scaffold-configuration-studio-bff` carries nine PRs on one task, and the PR cell
-# rendered them as one 460px line: the widest thing in the table, in the narrowest column
-# anyone reads, taking the width from the task name. The Depends-on cell had the same
+# rendered them as ONE UNBROKEN LINE — 386px measured at 1400px: the widest thing in the
+# table, in one of the columns nobody reads first, taking the width from the task name. The Depends-on cell had the same
 # shape one step smaller — it reserved room for TWO refs and separated them with `", "`,
 # a character that costs width and carries no information beside pills that are already
 # discrete boxes.
@@ -1201,15 +1200,16 @@ assert "…with no two-pill width left in the sheet"   "$(fhasnt 'min-width:calc
 # THE RE-DERIVATION HAD TO HAPPEN, and this says so in arithmetic: the width the rule used
 # to reserve is too small for three pills, the width it reserves now holds three, and it
 # does not stretch to four. Terms are read off button.dep's and the td's own CSS.
+# The `new >= need3` half would be true by construction — `new` IS the calc — so it is
+# not asserted: the two clauses that can fail are that the OLD width could not have held
+# three, and that the new one does not stretch to four.
 assert "…and the numbers really move the target"     "$(yes_if python3 -c "
 import sys
 ch = 0.74 * 16 * 0.6                  # 1ch in the cell's own monospace context
 pill = 3 * ch + 0.7 * 16 + 2          # 3 digits + .35rem padding each side + 1px border each
-old = 2 * pill + 2 * ch               # two pills and one \", \"
-new = 3 * pill + 2 * ch               # three pills and the two spaces between them
-sys.exit(0 if old < 3 * pill + 2 * ch
-             and new >= 3 * pill + 2 * ch
-             and new < 4 * pill + 3 * ch else 1)")"
+old = 2 * pill + 2 * ch               # what the rule reserved: two pills and one \", \"
+new = 3 * pill + 2 * ch               # what it reserves now: three pills, two spaces
+sys.exit(0 if old < 3 * pill + 2 * ch and 4 * pill + 3 * ch > new else 1)")"
 # BOTH CELLS JOIN THE SAME WAY, which is the point of dropping the comma: one form for
 # two columns of the same kind of thing.
 assert "…so both cells use one separator form"       "$(yes_if python3 -c "

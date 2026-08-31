@@ -872,9 +872,9 @@ td:first-child{overflow-wrap:break-word}
    rules says what the other half bought and why it is deleted rather than re-tuned.
 
    `.tfile` IS THE FILENAME LINE, AND THE PROMOTE CONTROL IS ON IT. It used to sit in
-   `.tmain` above the title, which made a draft row THREE lines while every other row
-   was two. Here it rides beside the filename: one line either
-   way, so a draft row is exactly as tall as its neighbours. `flex-wrap:wrap` is the
+   `.tmain` above the title, which made a draft row THREE lines while every other row was
+   two. Here it rides beside the filename: one line either way, so a draft row is exactly
+   as tall as its neighbours. `flex-wrap:wrap` is the
    escape valve for a filename long enough to leave the control no room — the control
    drops to a line of its own rather than overflowing the column or pushing the title
    out of alignment, and only that one row grows.
@@ -946,9 +946,10 @@ button.ghost{font-size:.72rem;padding:.28rem .5rem;color:var(--muted)}
 .deps:has(button.dep:nth-of-type(2)){font-family:"IBM Plex Mono",ui-monospace,monospace;
   font-size:.74rem;min-width:calc(3*(3ch + .7rem + 2px) + 2ch + .9rem)}
 /* THE PR CELL WRAPS AT TWO REFS, AND ITS WIDTH IS IN PIXELS BECAUSE IT WAS MEASURED.
-   Nine PRs on one task rendered as one 460px line — the widest thing in the table, on
-   the narrowest column anyone reads — because `td:not(:first-child)` is `nowrap` and
-   nothing capped the column.
+   Nine PRs on one task rendered as ONE UNBROKEN LINE — 386px measured at 1400px, the
+   widest thing in the table and in one of the columns nobody reads first — because
+   `td:not(:first-child)` is `nowrap` and nothing capped the column. The board this was
+   reported from carries ten on a row.
    WHERE 107px COMES FROM. The cell sets its own font, exactly as `.deps` does above and
    for the same reason: with one font in the cell, every character in it — the refs and
    the spaces between them — is one advance wide, and the number below is a measurement
@@ -1847,12 +1848,12 @@ def render_table():
                      % e(short))
             if st == "draft":
                 # THE PROMOTE CONTROL SITS ON THE FILENAME'S OWN LINE, immediately after
-                # it — inside `.tfile`, which is the filename column. It was a sibling
-                # of the title, i.e. a THIRD line on the narrow layout (filename, then
-                # the control, then the title), so the one row on the board asking for
-                # an action was also the only row a third taller than its neighbours.
-                # Here it costs no line at all: `.tfile` is one line either way, and the
-                # width it needs is the width the ROLE column just gave back.
+                # it — inside `.tfile`, which is the filename line. It was a sibling of
+                # the title, i.e. a THIRD line (filename, then the control, then the
+                # title), so the one row on the board asking for an action was also the
+                # only row a third taller than its neighbours. Here it costs no line at
+                # all: `.tfile` is one line either way, and `flex-wrap:wrap` is what
+                # keeps that true when a filename leaves it no room.
                 # It still only COPIES a prompt: promoting is `status: ready` in the
                 # document, a human authority (SCHEMA.md), and nothing here does it.
                 # THE HANDLE, THEN THE VERB — the notation every other control on this
