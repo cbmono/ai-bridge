@@ -407,6 +407,91 @@ open_questions: []
 ---
 TSK
 
+# THE SHAPES A REAL BOARD'S QUESTIONS ACTUALLY HAVE, in one project, because the field
+# they feed is the whole point of this round. Reproduced from a live 8-project instance
+# whose 38 open questions are ALL `Q<n>`-prefixed and whose renderer still rendered a
+# generic `answer question` for every one of them — because the snapshot carried a COUNT
+# and the renderer had nothing to read.
+#
+# Each entry is a different way the number arrives, and the fourth is the honest absence:
+#   · `Q1 (HALF ANSWERED …` — NO COLON after the number. This is a real entry from that
+#     board, and the writer's old token count (`Q[0-9]+[.:]`) does not see it at all;
+#   · a STAMPED entry, `<iso> · Q2: …`, which is what the PM writes today;
+#   · an ESCALATED one, `advisor: Q3. …`, with a `.` and a comma in its prose;
+#   · one with no `Q<n>` at all, which must stay unnumbered and must still count.
+# The question TEXT carries $SECRET_QUESTION so the file-wide "text never reaches the
+# snapshot" assertion covers this new field too, rather than only the old fixture.
+mkdir -p "$ALPHA/projects/qshapes/tasks"
+cat > "$ALPHA/projects/qshapes/project.md" <<'PRJ'
+---
+type: Project
+title: Question shapes
+description: every way a question names its number
+kind: build
+status: active
+---
+PRJ
+cat > "$ALPHA/projects/qshapes/tasks/task-044-the-dwd-calendar-grant.md" <<TSK
+---
+type: Task
+title: Three questions, three shapes
+kind: build
+status: draft
+assignee: software-engineer
+open_questions: [ "Q1 (HALF ANSWERED 2026-08-29) $SECRET_QUESTION", "2026-08-30T16:01:52Z · Q2: $SECRET_QUESTION", "advisor: Q3. $SECRET_QUESTION, and a comma" ]
+acceptance_criteria: []
+pr: []
+---
+TSK
+# THE MARKER CAN COME BEFORE THE STAMP AS WELL AS AFTER IT, and the lead skip is
+# BOUNDED, so the two are not interchangeable: with `advisor: ` still in front, this
+# entry's `·` sits past the 41-character bound and the lead is not skipped at all, so
+# the number is never reached. Skipping the marker first brings the `·` back inside the
+# bound. Contrived-looking and deliberately so — it is the one band in which the first
+# of the two marker skips is the only thing doing any work, and without it that branch
+# is code no fixture reaches. build-board.sh's Q_LEAD has the same pair for the same
+# reason, and reads this entry identically.
+cat > "$ALPHA/projects/qshapes/tasks/task-047-marker-first.md" <<TSK
+---
+type: Task
+title: An escalation stamped after the marker
+kind: build
+status: draft
+assignee: software-engineer
+open_questions: [ "advisor: 2026-08-30T16:01:52Z (escalated) · Q5: $SECRET_QUESTION" ]
+acceptance_criteria: []
+pr: []
+---
+TSK
+# A NUMBER MUST END WHERE IT IS READ, on the writer's side too. `Q1234` read as `Q123`
+# is a label that is not in the document, on a control claiming to have read it — the
+# renderer's own guard against this is pinned in artifact-board.test.sh, and the writer
+# needs its own because the renderer now trusts the label it is handed.
+cat > "$ALPHA/projects/qshapes/tasks/task-046-runs-on.md" <<TSK
+---
+type: Task
+title: Numbers that do not end where they are read
+kind: build
+status: draft
+assignee: software-engineer
+open_questions: [ "Q1234: $SECRET_QUESTION four digits", "Q2x: $SECRET_QUESTION a letter straight after" ]
+acceptance_criteria: []
+pr: []
+---
+TSK
+cat > "$ALPHA/projects/qshapes/tasks/task-045-no-number.md" <<TSK
+---
+type: Task
+title: A question that names no number
+kind: build
+status: draft
+assignee: software-engineer
+open_questions: [ "$SECRET_QUESTION with no prefix at all" ]
+acceptance_criteria: []
+pr: []
+---
+TSK
+
 # A project with no tasks at all — must render empty rather than error.
 cat > "$ALPHA/projects/empty/project.md" <<'PRJ'
 ---
@@ -765,10 +850,10 @@ echo "== a real snapshot, once the switch is on =="
 touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
-assert "…with the project count"           "$(has '15 project(s)' "$RUN_OUT")"
-# 9, not 10: the done project's task is never counted, because it is never read.
-assert "…and the task count"                "$(has '9 task(s)' "$RUN_OUT")"
-assert "…and the awaiting count (7 verbs across 4 live projects)" "$(has '7 awaiting' "$RUN_OUT")"
+assert "…with the project count"           "$(has '16 project(s)' "$RUN_OUT")"
+# 13, not 14: the done project's task is never counted, because it is never read.
+assert "…and the task count"                "$(has '13 task(s)' "$RUN_OUT")"
+assert "…and the awaiting count (11 verbs across 5 live projects)" "$(has '11 awaiting' "$RUN_OUT")"
 # The run captures stderr too, and an awk that aborts mid-line says so THERE while still
 # exiting 0 and writing a file — a whole `deliverable_paths` key lost with the evidence
 # printed somewhere nobody reads. So the absence of that text is an assertion.
@@ -796,7 +881,7 @@ echo "== the field allowlist =="
 # `owner` is in this set DELIBERATELY and is the only identity field that is — see the
 # header. Removing it here is how the reversal would get silently undone, so the writer's
 # own header, this line, and per-owner-board.test.sh all have to move together.
-ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner deliverable_paths awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions advisor_notes depends_on prs repo number url '
+ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner deliverable_paths awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions open_question_ids advisor_notes depends_on prs repo number url '
 extra_keys() { # <json file> <allowed> -> the keys present but not allowed
   python3 - "$1" "$2" <<'PYK'
 import json, sys
@@ -837,6 +922,98 @@ d=json.load(open(sys.argv[1]))
 p=[p for p in d["projects"] if p["slug"]=="ci"][0]
 t=[t for t in p["tasks"] if t["id"]=="task-001"][0]
 sys.exit(0 if t["open_questions"]==2 else 1)' "$SNAP")"
+# …AND SO DOES A LABEL PER QUESTION, WHICH IS THE FIELD THIS ROUND ADDED. A total is
+# all the snapshot used to carry, so the board's `answer Q<n>` control — which reads a
+# number out of the question — had nothing to read and degraded to the unnumbered
+# control on every instance, and a task with three questions could only ever produce one
+# handle. Each entry's number comes from the entry itself: the first names Q1 with NO
+# COLON after it (a real shape, and one the old token count could not see at all), the
+# second is stamped, the third is escalated and carries a comma in its prose.
+assert "each open question gets its OWN label, in document order (task-044)" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"].startswith("task-044")][0]
+sys.exit(0 if t["open_question_ids"]==["Q1","Q2","Q3"] and t["open_questions"]==3 else 1)' "$SNAP")"
+# NON-VACUITY, and it is the whole reason this fixture exists: the first entry really
+# does carry no colon, so a reader that required one would report two labels, not three.
+assert "…and the first entry really has no colon after its Q1" \
+  "$(yes_if python3 -c '
+import sys
+src=open(sys.argv[1],encoding="utf-8").read()
+i=src.index("Q1 (HALF ANSWERED")
+sys.exit(0 if src[i:i+3]=="Q1 " else 1)' "$ALPHA/projects/qshapes/tasks/task-044-the-dwd-calendar-grant.md")"
+# THE HONEST NO-NUMBER PATH, AS ITS OWN CASE. A question with no `Q<n>` still counts as
+# a question and still gets an entry — an EMPTY one, because the writer read its text,
+# found no number, and says so. Inventing `Q1` for it is the defect; dropping it is a
+# question that disappears off the board.
+assert "a question that names no number gets an empty label, not a fabricated one" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"].startswith("task-045")][0]
+sys.exit(0 if t["open_question_ids"]==[""] and t["open_questions"]==1 else 1)' "$SNAP")"
+assert "a number that does not end where it is read yields no label" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"].startswith("task-046")][0]
+sys.exit(0 if t["open_question_ids"]==["",""] and t["open_questions"]==2 else 1)' "$SNAP")"
+# NON-VACUITY: a number that DOES end where it is read still reads, in the same run —
+# otherwise a writer that labelled nothing at all would satisfy the line above.
+assert "…while a bounded number in the same run still does" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"].startswith("task-044")][0]
+sys.exit(0 if t["open_question_ids"][0]=="Q1" else 1)' "$SNAP")"
+assert "a marker BEFORE the stamp still yields the number (task-047)" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"].startswith("task-047")][0]
+sys.exit(0 if t["open_question_ids"]==["Q5"] else 1)' "$SNAP")"
+# NON-VACUITY: the `·` really does sit past the bound while the marker is still there,
+# so this measures the first skip and not the second one doing the same job twice.
+assert "…and its lead really is past the bound without the marker skip" \
+  "$(yes_if python3 -c '
+import sys
+line=[l for l in open(sys.argv[1],encoding="utf-8") if "escalated" in l][0]
+i=line.index("advisor:")
+sys.exit(0 if line.index("\u00b7") - i > 41 and line.index("\u00b7") - i - len("advisor: ") <= 41 else 1)' \
+  "$ALPHA/projects/qshapes/tasks/task-047-marker-first.md")"
+# THE GOVERNANCE BOUNDARY THE NEW FIELD SITS ON. It is a per-question field, and the
+# rule that keeps it inside the allowlist is that it can carry NOTHING BUT a number:
+# `Q` + digits, or empty. This is checked over every label in the file, so a future
+# edit that widened it to "the first few words of the question" fails here — the
+# file-wide text sentinel above only catches THIS fixture's own question text.
+# SPELLED `[0-9][0-9]*` AND NOT `[0-9]{1,3}`, AND THIS IS NOT STYLE. Bash performs
+# BRACE EXPANSION on a command ARGUMENT before anything else, and it does not spare a
+# `{m,n}` sitting inside a `$( … )` in that argument: the whole word expands to TWO
+# words, the substitution runs twice — once with `{1}`, once with `{3}` — and `assert`
+# is handed the second run's answer. Measured here: the check passed standing alone,
+# failed as an argument, and `echo "[$(… {1,3} …)]"` prints its line twice. It does NOT
+# happen in an assignment (`V="$( … )"`), which is why the same shape elsewhere in this
+# suite is fine and why this one looked impossible. tests/review-route.test.sh:196 has
+# the live version of the bug. Recorded in
+# /knowledge/findings/brace-expansion-mangles-a-regex-inside-a-command-substitution.md.
+assert "no label carries anything but a Q and digits" "$(yes_if python3 -c '
+import json,re,sys
+d=json.load(open(sys.argv[1]))
+bad=[q for p in d["projects"] for t in p["tasks"]
+     for q in t["open_question_ids"] if not re.fullmatch(r"(Q[0-9][0-9]*)?", str(q))]
+sys.exit(0 if not bad else 1)' "$SNAP")"
+# THE COUNT AND THE LABELS COME FROM ONE PARSE, so they cannot disagree. They used to be
+# derived separately, and a task whose questions all read `Q1 (…` counted 1 while
+# carrying three questions — a count that cannot produce the handles beside it.
+assert "…and every task's count agrees with its labels" "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+bad=[t["id"] for p in d["projects"] for t in p["tasks"]
+     if not (len(t["open_question_ids"])==t["open_questions"]
+             or (not t["open_question_ids"] and t["open_questions"]<=1))]
+sys.exit(0 if not bad else 1)' "$SNAP")"
+
 # Regression for a shared list_region() that decides where a free-text list ENDS and
 # swallows a real second question whenever an entry's own text carries a `]` before the
 # list's closing one — a Markdown PR link (`[repo#N](url)`) in Q1, bare brackets in Q2,
@@ -1124,7 +1301,7 @@ sys.exit(0 if set(p["retained"]) == set(p["ci"]) and "owner" in p["retained"] el
 cp -R "$ALPHA/projects/retained" "$ALPHA/projects/notdone"
 sed -i.bak 's/^status: done$/status: active/' "$ALPHA/projects/notdone/project.md" && rm -f "$ALPHA/projects/notdone/project.md.bak"
 CTRL_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
-assert "control: the same task under a LIVE project IS read (10 tasks)" "$(has '10 task(s)' "$CTRL_OUT")"
+assert "control: the same task under a LIVE project IS read (14 tasks)" "$(has '14 task(s)' "$CTRL_OUT")"
 assert "…and its title does reach the snapshot"  "$(fhas 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
 # deliverable_paths comes off the SAME frontmatter parse every project already gets, not
 # off the done-project skip specifically — so a LIVE project carrying the key forwards it
@@ -1178,6 +1355,58 @@ assert "exits 0 with a malformed snapshot in the list" "$(eq "$B_RC" 0)"
 assert "the run counts the unreadable snapshot"    "$(has '1 unreadable snapshot(s)' "$B_ERR")"
 assert "…and says on stderr which instance is off the board" "$(has 'no SNAPSHOT.json (off the board)' "$B_ERR")"
 assert "a malformed snapshot becomes a visible note" "$(fhas 'Unreadable snapshot' "$HTML")"
+# THE WHOLE ROUND-TRIP, ON THE PAGE THIS INVOCATION WRITES: the writer read three
+# differently-shaped questions out of a task document, and the renderer put one
+# correctly-numbered control on each. Neither script's output is taken on faith — this
+# is the assertion that would have caught the defect, since the renderer's own harness
+# feeds it hand-written snapshots that carry what the writer never did.
+card_of() { # <html> <project title> — that project's card, cut at the NEXT card, never
+            # at the next </details>: cards nest them, one per rail item.
+  python3 - "$1" "$2" <<'PYC'
+import sys
+t = open(sys.argv[1], encoding="utf-8").read()
+i = t.index(sys.argv[2])
+j = t.find('<details class="proj', i)
+sys.stdout.write(t[i:] if j < 0 else t[i:j])
+PYC
+}
+for n in 1 2 3; do
+  assert "writer through renderer: question Q$n gets its own handle" \
+    "$(card_of "$HTML" 'Question shapes' | grep -qF "answer Q$n</button>" && echo 0 || echo 1)"
+done
+# SCOPED TO THAT TASK'S ROW, not to the card: the same project holds other tasks with
+# questions of their own, so a card-wide count measures the fixture rather than the task.
+item_of() { # <html> <task title> — one waiting row
+  python3 - "$1" "$2" <<'PYI'
+import re, sys
+t = open(sys.argv[1], encoding="utf-8").read()
+for li in re.findall(r'<li class="ask">.*?</li>', t, re.S):
+    if sys.argv[2] in li:
+        sys.stdout.write(li)
+        break
+PYI
+}
+assert "…three handles for three questions, not one for the task" \
+  "$(eq "$(item_of "$HTML" 'Three questions, three shapes' | grep -oF 'answer Q' | wc -l | tr -d ' ')" 3)"
+# NON-VACUITY: before the labels existed this card rendered exactly one unnumbered
+# control for that task, so the assertions above measure the new field and not a
+# renderer that was already numbering things.
+assert "…and the task really carries three questions" "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"].startswith("task-044")][0]
+sys.exit(0 if t["open_questions"]==3 else 1)' "$SNAP")"
+# THE HONEST PATH, END TO END TOO: the other task's question names no number, and the
+# page says so rather than calling it Q1.
+assert "…while the unnumbered question keeps the honest control" \
+  "$(card_of "$HTML" 'Question shapes' | grep -qF 'answer question</button>' && echo 0 || echo 1)"
+assert "…and no Q1 is invented for it" "$(yes_if python3 -c '
+import re,sys
+t=open(sys.argv[1],encoding="utf-8").read()
+i=t.index("A question that names no number")
+j=t.find("</li>", i)
+sys.exit(0 if not re.search(r"Q[0-9]", t[i:j if j>0 else len(t)]) else 1)' "$HTML")"
+
 assert "…naming the instance by directory NAME"     "$(fhas '_ai-bridge-beta/SNAPSHOT.json' "$HTML")"
 assert "…and not by its path"                      "$(fhasnt '/_ai-bridge-beta' "$HTML")"
 assert "…and telling the human how to fix it"       "$(fhas 'write-snapshot.sh' "$HTML")"
@@ -1204,7 +1433,7 @@ assert "…reusing the existing data-what convention"         "$(fhas 'data-what
 # depends_on line must still draw the real dependency button pointing at task-001, and
 # must draw no button (and copy no path) for the comment's own fabricated fragment.
 assert "task-008's real dependency renders as a dep button (writer through renderer)" \
-  "$(fhas 'data-copy="ci/tasks/task-001" data-what="Path" title="task-001">001</button>' "$HTML")"
+  "$(fhas 'data-copy="ci/task-001" data-what="Task handle" title="task-001">001</button>' "$HTML")"
 assert "…and the comment's fabricated fragment renders nothing"    "$(fhasnt 'notes[1]' "$HTML")"
 assert "…nor any fragment of the leaked path reaches the page"     "$(fhasnt "$SECRET_DEP_COMMENT_PATH" "$HTML")"
 # Criterion 4, end to end on the page a real invocation writes — not on a hand-written
@@ -1415,12 +1644,12 @@ assert "…with exactly one <body> element" "$(eq "$(grep -cF '<body>' "$SA")" 1
 # (collapsed by default, finished projects under a divider) where the markup lives.
 # Two, not four, is still the fact worth reading off the page: beta is malformed and
 # gamma has no snapshot, so neither is an instance on the board. Sixteen blocks: alpha's
-# fifteen projects — including the RETAINED done ones, which are on the board as
+# sixteen projects — including the RETAINED done ones, which are on the board as
 # reference cards even though their tasks were never read, and the five whose
 # deliverable_paths line is hostile, which are still projects and still render — plus
 # delta's one.
 assert "one project block per project of the 2 rendered instances" \
-  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 16)"
+  "$(eq "$(grep -cF '<details class="proj' "$HTML")" 17)"
 
 echo "== discovery is explicit, never a glob =="
 D1="$( cd "$ALPHA" && bash "$BOARD" --out "$TMP/d1.html" 2>&1 )"

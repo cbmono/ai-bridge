@@ -351,7 +351,18 @@ assert "…and a quote inside an attribute is escaped" "$(fhasnt 'data-copy="Ren
 echo "== references are short, and never a real path =="
 assert "a task ref drops projects/"                  "$(fhasnt 'data-copy="projects/' "$OUT")"
 assert "…and drops .md"                              "$(fhasnt '.md"' "$OUT")"
-assert "…and keeps <project>/tasks/<id>"             "$(fhas 'live-one/tasks/task-001' "$OUT")"
+# ONE NOTATION, AND `tasks/` IS NOT IN IT. The ref used to be the FILENAME minus
+# `projects/` and `.md` — `live-one/tasks/task-001-…` — which names a document and reads
+# as a path; five controls then each wrapped it in a different sentence. It is now
+# `<project>/task-<n>`, the same string every control on the page copies.
+assert "…and the handle is <project>/task-<n>"      "$(fhas 'data-copy="live-one/task-001' "$OUT")"
+# THE ABSENCE IS ASSERTED OVER WHAT IS COPIED, not over the page: the footer legend
+# spells out where the document lives (`projects/<p>/tasks/task-<n>*.md`), which is the
+# resolution rule and not a second notation. A COPIED value carrying `/tasks/` would be.
+assert "…and no copied value carries a tasks/ segment" "$(yes_if python3 -c "
+import re, sys
+vals = re.findall(r'data-copy=\"([^\"]*)\"', open('$OUT', encoding='utf-8').read())
+sys.exit(0 if vals and not [v for v in vals if '/tasks/' in v] else 1)")"
 
 echo "== depends_on shows the NUMBER only =="
 assert "a single dependency renders 001"             "$(fhas '>001</button>' "$OUT")"
@@ -428,7 +439,7 @@ assert "the fixture renders and exits 0"             "$(eq "$qnrc" 0)"
 assert "the rail button reads 'answer Q2'"           "$(card "$QN" 'The task-012 shape' | fhas_in 'answer Q2</button>')"
 assert "…and never 'answer Q1'"                      "$(card "$QN" 'The task-012 shape' | fhasnt_in 'answer Q1')"
 assert "…the table handle is Q2 too"                 "$(card "$QN" 'The task-012 shape' | fhas_in '>Q2</button>')"
-assert "…and the copied handle is the right one"     "$(card "$QN" 'The task-012 shape' | fhas_in 'claim-identity Q2: ')"
+assert "…and the copied handle is the right one"     "$(card "$QN" 'The task-012 shape' | fhas_in 'twelve/task-012/q2: ')"
 assert "…with no Q1 anywhere in that card"           "$(card "$QN" 'The task-012 shape' | fhasnt_in 'Q1')"
 # NON-VACUITY: the count really is 1, so a positional renderer really would say Q1 here.
 assert "…and the fixture's count really is 1"        "$(yes_if python3 -c "
@@ -471,7 +482,10 @@ t = open('$TMP/qnum.html').read()
 i = t.index('Count only'); j = t.find('<details class=\"proj', i)
 sys.exit(0 if not re.search(r'Q\d', t[i:j if j > 0 else len(t)]) else 1)")"
 assert "…and saying it is a count, not a name"       "$(card "$QN" 'Count only' | fhas_in 'carries a COUNT of open questions')"
-assert "…the copy value is the bare task ref"        "$(card "$QN" 'Count only' | fhas_in 'data-copy="notext/tasks/task-001 "')"
+assert "…the copy value is the bare task handle"    "$(card "$QN" 'Count only' | fhas_in 'data-copy="notext/task-001: "')"
+# …AND CARRIES NO `/q<n>`. The board cannot name this question, so a handle claiming to
+# scope one would be the same fabrication as a positional number, one segment along.
+assert "…and no /q segment is invented for it"      "$(card "$QN" 'Count only' | fhasnt_in 'task-001/q')"
 
 echo "== …reading the token, not a number mentioned in the prose =="
 assert "Q01 normalises to Q1"                        "$(card "$QN" 'Numbers in prose' | fhas_in '>Q1</button>')"
@@ -479,7 +493,7 @@ assert "Q01 normalises to Q1"                        "$(card "$QN" 'Numbers in p
 # that prose verbatim — so the assertion is about the LABEL, not about the byte `Q7`
 # being absent from the card. A question is named by the token it opens with; a number
 # it merely talks about names nothing. The prefix scan is bounded for exactly this.
-for form in '>Q7</button>' 'answer Q7' 'Q7 handle' 'task-001 Q7: '; do
+for form in '>Q7</button>' 'answer Q7' 'Q7 handle' 'task-001/q7'; do
   assert "…and a Q7 buried in a sentence yields no $form" \
     "$(card "$QN" 'Numbers in prose' | fhasnt_in "$form")"
 done
@@ -523,6 +537,242 @@ bad = re.findall(r'for\s+\w+\s+in\s+(?:range|enumerate)\([^)]*\)[^\n]*', src)
 sys.exit(0 if not any('q' in b.lower() and 'Q%' not in b for b in bad if 'question' in b.lower()) else 1)")"
 assert "…and the header records why it may not come back" \
   "$(fhas 'NEVER BY ITS POSITION' "$GEN")"
+
+# ---------------------------------------------------------------------------
+# ONE HANDLE SHAPE, AND IT IS ASSERTED ONCE.
+#
+# Every control that refers to a task used to spell the reference its own way: the ghost
+# button copied `<slug>/tasks/<full-filename>`, the Q buttons copied that plus ` Q2: `,
+# and Approve/Discuss/Reject copied a SENTENCE describing the item — `APPROVED — go
+# ahead. Re the "merge" item on <task title> in <project title>.` An agent receiving the
+# last one has to parse prose to find out which document is meant, which is the failure
+# class this page exists to delete.
+#
+# So there is one notation, `<slug>/task-<n>[/q<n>]: `, and this block asserts the
+# COMMON PREFIX ONCE over every control in a waiting row rather than five times in five
+# shapes. Five separate literal assertions would each go green on a change that split
+# the notation again, as long as each shape kept its own spelling.
+mkdir -p "$TMP/handle/projects/gdg/tasks"
+mk "$TMP/handle" "handle" '[
+ {"slug":"gdg","title":"One handle","kind":"build","status":"active","autonomy":"gated",
+  "awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-044-the-dwd-calendar-grant-lives-in-a-workspace","title":"DWD grant",
+            "status":"draft","assignee":"software-engineer","awaiting":"answer",
+            "open_questions":3,"open_question_ids":["Q1","Q2",""],"advisor_notes":0,
+            "depends_on":[],"in_flight":false,"prs":[]},
+           {"id":"task-058-ship-it","title":"Ship it","status":"in-review",
+            "assignee":"devops-engineer","awaiting":"merge","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,
+            "depends_on":["task-044-the-dwd-calendar-grant-lives-in-a-workspace"],
+            "in_flight":false,
+            "prs":[{"repo":"o/r","number":79,"url":"https://github.com/o/r/pull/79"}]}]},
+ {"slug":"twins","title":"Two tasks one number","kind":"build","status":"active",
+  "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-007-first","title":"First seven","status":"draft",
+            "assignee":"software-engineer","awaiting":"approve","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]},
+           {"id":"task-007-second","title":"Second seven","status":"ready",
+            "assignee":"software-engineer","awaiting":"","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]},
+           {"id":"task-008-only","title":"Eight","status":"ready",
+            "assignee":"software-engineer","awaiting":"","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]},
+           {"id":"task-009-unassigned","title":"Nobody yet","status":"ready",
+            "assignee":"","awaiting":"","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]},
+ {"slug":"/Users/SECRET-HOME/notes","title":"Slug is a path","kind":"build",
+  "status":"active","autonomy":"gated","awaiting_close":false,
+  "phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Hostile slug with a task","status":"draft",
+            "assignee":"software-engineer","awaiting":"approve","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]}]'
+# THE DOCUMENTS THE HANDLES MUST RESOLVE TO, on disk. The renderer never reads them —
+# it is the assertion below that does, standing in for the session a human pastes into.
+: > "$TMP/handle/projects/gdg/tasks/task-044-the-dwd-calendar-grant-lives-in-a-workspace.md"
+: > "$TMP/handle/projects/gdg/tasks/task-058-ship-it.md"
+HB="$TMP/handle.html"
+hrc=0; bash "$GEN" --out "$HB" "$TMP/handle" >/dev/null 2>&1 || hrc=$?
+# Every data-copy value inside ONE waiting row's action block, unescaped, one per line.
+# Scoped to the <li class="ask"> naming that task: a page-wide sweep would mix rows and
+# could not tell "all five agree" from "each row is internally consistent".
+acts_of() { # <file> <id fragment>
+  python3 - "$1" "$2" <<'PYA'
+import html, re, sys
+page = open(sys.argv[1], encoding="utf-8").read()
+for li in re.findall(r'<li class="ask">.*?</li>', page, re.S):
+    if sys.argv[2] in li and '<div class="acts">' in li:
+        acts = li[li.index('<div class="acts">'):]
+        for v in re.findall(r'data-copy="([^"]*)"', acts):
+            print(html.unescape(v))
+        break
+PYA
+}
+acts_of "$HB" '044-the-dwd' > "$TMP/acts044.txt"
+acts_of "$HB" '058-ship-it' > "$TMP/acts058.txt"
+
+echo "== all five controls emit ONE handle shape =="
+assert "the fixture renders and exits 0"             "$(eq "$hrc" 0)"
+# THE ONE ASSERTION. Seven controls in this row — copy task ref, three question handles,
+# and the three verdicts — and every one of them opens with the same handle. The count is
+# part of it: `all()` over an empty list is True, so a helper that returned nothing would
+# otherwise certify the property it failed to look at.
+assert "every control in the row opens with the same handle" "$(yes_if python3 -c "
+import sys
+vals = [v for v in open('$TMP/acts044.txt', encoding='utf-8').read().split(chr(10)) if v]
+sys.exit(0 if len(vals) == 7 and all(v.startswith('gdg/task-044') for v in vals) else 1)")"
+# …AND NO SECOND NOTATION SURVIVES. The prose form is named literally, because that is
+# the string being deleted and a renderer that kept it for one button would still pass
+# the prefix check above (the sentence used to FOLLOW the verdict, not precede it).
+assert "…and the prose form is gone from the page"   "$(fhasnt 'Re the "' "$HB")"
+assert "…from every other rendered page too"         "$(fhasnt 'Re the "' "$BOUT")"
+
+echo "== the /q<n> segment appears ONLY on a question =="
+# Two of the three questions carry a number; the third carries none. So exactly two
+# values are question-scoped, and every other control in the row — including all three
+# verdicts, which are given on the ITEM — stops at the task id. Inventing a `q1` for a
+# verdict is the fabrication #79 removed, one segment along.
+assert "exactly the numbered questions carry /q<n>"  "$(yes_if python3 -c "
+import re, sys
+vals = [v for v in open('$TMP/acts044.txt', encoding='utf-8').read().split(chr(10)) if v]
+scoped = [v for v in vals if re.match(r'gdg/task-044/q[0-9]+: $', v)]
+plain  = [v for v in vals if '/q' not in v]
+sys.exit(0 if len(scoped) == 2 and len(scoped) + len(plain) == len(vals) == 7 else 1)")"
+assert "…and they are q1 and q2, from the labels"    "$(fhas 'data-copy="gdg/task-044/q2: "' "$HB")"
+# A MERGE ITEM HAS NO QUESTION AT ALL, so none of its four controls may carry one. This
+# is the case a `q1` would be invented for out of nothing.
+assert "a merge item's controls carry no /q at all"  "$(yes_if python3 -c "
+import sys
+vals = [v for v in open('$TMP/acts058.txt', encoding='utf-8').read().split(chr(10)) if v]
+sys.exit(0 if len(vals) == 4 and not [v for v in vals if '/q' in v] else 1)")"
+
+echo "== the verdict wording after the colon is unchanged =="
+for v in 'APPROVED — go ahead.' 'I want to discuss this before you proceed.' 'REJECTED — do not proceed.'; do
+  assert "…$v follows the handle"                    "$(fhas "data-copy=\"gdg/task-058: $v" "$HB")"
+done
+
+echo "== the handle resolves to exactly one document =="
+# THE POINT OF THE SHORT FORM IS THAT IT STILL RESOLVES. `gdg/task-044` is not a path;
+# it is resolved by one glob, `projects/<slug>/tasks/task-044*.md`, which is what a
+# session pasting it does. Asserted against real files on disk rather than argued for.
+assert "each handle globs to one task document"      "$(yes_if python3 -c "
+import pathlib, re, sys
+root = pathlib.Path('$TMP/handle')
+vals = [v for v in (open('$TMP/acts044.txt', encoding='utf-8').read()
+                    + open('$TMP/acts058.txt', encoding='utf-8').read()).split(chr(10)) if v]
+hits = set()
+for v in vals:
+    m = re.match(r'([^/]+)/(task-[0-9]+)', v)
+    if not m:
+        sys.exit(1)
+    found = list((root / 'projects' / m.group(1) / 'tasks').glob(m.group(2) + '*.md'))
+    if len(found) != 1:
+        sys.exit(1)
+    hits.add(found[0].name)
+sys.exit(0 if len(hits) == 2 else 1)")"
+# NON-VACUITY: the documents really are there and really are two, so the check above is
+# measuring a glob rather than an empty directory.
+assert "…and both documents really exist"            "$(eq "$(ls "$TMP/handle/projects/gdg/tasks" | wc -l | tr -d ' ')" 2)"
+
+echo "== …and falls back to the full id when a number is not unique =="
+# Nothing enforces that two tasks in a project cannot share a number, so the short form
+# is used only where it resolves. Both colliding tasks fall back — not just the second —
+# because either one alone would still be ambiguous to a reader.
+assert "colliding ids keep their full form"          "$(card "$HB" 'Two tasks one number' | fhas_in 'data-copy="twins/task-007-first"')"
+assert "…both of them, not just the second"          "$(card "$HB" 'Two tasks one number' | fhas_in 'data-copy="twins/task-007-second"')"
+assert "…and no bare twins/task-007 is emitted"      "$(card "$HB" 'Two tasks one number' | fhasnt_in 'data-copy="twins/task-007"')"
+# NON-VACUITY: the same project's non-colliding task still gets the short form, so the
+# fallback is scoped to the collision and not a renderer that gave up on short handles.
+assert "…while an unambiguous number stays short"    "$(card "$HB" 'Two tasks one number' | fhas_in 'data-copy="twins/task-008"')"
+
+echo "== a slug that is a PATH never reaches a copied handle =="
+# The handle now travels on the VERDICT buttons and on a project-level close item, and
+# neither carried a slug before this round — so a `"slug": "/Users/…"` in a snapshot
+# this renderer reads back without knowing who wrote it would put an absolute path in a
+# data-copy value. Same shape check the ✕ applies, same reason: a slug that is not one
+# well-formed segment resolves to nothing anyway, so the handle names the task alone.
+assert "no copied value carries the hostile slug"    "$(yes_if python3 -c "
+import re, sys
+vals = re.findall(r'data-copy=\"([^\"]*)\"', open('$HB', encoding='utf-8').read())
+sys.exit(0 if vals and not [v for v in vals if 'SECRET-HOME' in v] else 1)")"
+assert "…and the page carries it nowhere else either" "$(fhasnt 'SECRET-HOME' "$HB")"
+# NON-VACUITY: that project really is on the page, with a task and a waiting row, so
+# the absence above is the shape check firing rather than the project being skipped.
+assert "…though the project and its task do render"  "$(card "$HB" 'Slug is a path' | fhas_in 'Hostile slug with a task')"
+assert "…and its handle names the task alone"        "$(card "$HB" 'Slug is a path' | fhas_in 'data-copy="task-001: APPROVED')"
+
+echo "== the Role column appears only where it discriminates =="
+# One value in a column is not a column: on the 8-project board this was measured
+# against, every row read `software-engineer`. Dropped where it says nothing, kept where
+# it does — so both directions are asserted, on two projects of the same page.
+assert "a project with two roles keeps Role"         "$(card "$HB" 'One handle' | fhas_in '<th>Role</th>')"
+assert "…and shows both values"                      "$(card "$HB" 'One handle' | fhas_in '>devops-engineer</td>')"
+assert "a project with one role drops it"            "$(card "$HB" 'Two tasks one number' | fhasnt_in '<th>Role</th>')"
+assert "…and drops the cells with it"                "$(card "$HB" 'Two tasks one number' | fhasnt_in '>software-engineer</td>')"
+# NON-VACUITY, AND THE BLANK IS PART OF IT: that project's tasks really do name a role,
+# and one of them names none. An unassigned task is a gap in the document, not a second
+# role — counting it would put the column back on a board where every named role is the
+# same one, which is the board this change was measured against.
+assert "…though its tasks really do name a role"     "$(yes_if python3 -c "
+import json, sys
+s = json.load(open('$TMP/handle/SNAPSHOT.json'))
+p = [p for p in s['projects'] if p['slug'] == 'twins'][0]
+roles = sorted({t['assignee'] for t in p['tasks']})
+sys.exit(0 if roles == ['', 'software-engineer'] else 1)")"
+assert "…and the unassigned row still renders"       "$(card "$HB" 'Two tasks one number' | fhas_in 'Nobody yet')"
+# THE COLUMN COUNT FOLLOWS THE HEADER. A <thead> that drops a column while <tbody> keeps
+# its cell shifts every value one column left, which renders as a table nobody can read.
+assert "header and body agree on the column count"   "$(yes_if python3 -c "
+import re, sys
+page = open('$HB', encoding='utf-8').read()
+seen = 0
+for tbl in re.findall(r'<table>.*?</table>', page, re.S):
+    head = len(re.findall(r'<th[ >]', tbl[:tbl.index('</thead>')]))
+    body = tbl[tbl.index('<tbody>'):]
+    rows = [len(re.findall(r'<td[ >]', r)) for r in re.split(r'<tr[^>]*>', body)[1:]]
+    if not rows or any(n != head for n in rows):
+        sys.exit(1)
+    seen += 1
+sys.exit(0 if seen >= 2 else 1)")"
+
+echo "== the collapsed line carries ONE pill, and it is the awaiting one =="
+# TWO PILLS MEASURED OVERLAPPING THINGS: a filled `N awaiting you` at the front of the
+# row and an outlined `N questions` at the end. The questions counter is gone and the
+# surviving pill took its slot and its treatment.
+assert "the awaiting pill is there, with the awaiting count" \
+  "$(card "$HB" 'One handle' | fhas_in '<span class="c you"><b>2</b> awaiting you</span>')"
+assert "…and no questions counter survives anywhere" "$(fhasnt 'question</span>' "$HB")"
+assert "…nor its plural"                             "$(fhasnt 'questions</span>' "$HB")"
+assert "…nor the class it was drawn with"            "$(fhasnt 'class="c q"' "$HB")"
+assert "…nor the CSS rule behind that class"         "$(fhasnt '.c.q{' "$HB")"
+# THE SLOT IS THE QUESTIONS PILL'S: last of the count chips, after `pending`, where the
+# questions counter used to sit — not first in the row, where it used to sit itself.
+assert "…and it sits where the questions pill sat"   "$(card "$HB" 'One handle' | before_in 'pending</span>' 'awaiting you</span>')"
+assert "…after the done chip too"                    "$(card "$HB" 'One handle' | before_in 'class="c ok"' 'class="c you"')"
+# THE TREATMENT IS THE QUESTIONS PILL'S TOO: outlined and signal-coloured, not the
+# filled ground-on-signal chip it used to be. Both directions, so a rule that only
+# added the outline would not pass.
+assert "…drawn outlined in the signal colour"        "$(fhas '.c.you{color:var(--signal);border-color:color-mix(in srgb,var(--signal) 40%,var(--line));' "$HB")"
+assert "…and no longer filled"                       "$(fhasnt '.c.you{background:var(--signal)' "$HB")"
+# #74'S QUESTION STILL HAS TO HOLD: from the collapsed view alone, which projects need
+# me? The pill lost its fill, so the two channels that never depended on it are what
+# carry it — and they are asserted here rather than assumed.
+assert "…the card itself is still marked"            "$(fhas '<details class="proj wants">' "$HB")"
+assert "…and a project with nothing waiting is not"  "$(card "$HB" 'Two tasks one number' | fhasnt_in 'proj wants')"
+
+echo "== open_question_ids is what the handles are built from =="
+# THE FIELD THIS ROUND EXISTS FOR. Before it the snapshot carried a COUNT, so #79's
+# `answer Q<n>` control had nothing to read and degraded to the unnumbered one on every
+# instance. Three questions, two of them numbered: three handles, named from the labels.
+assert "one handle per question, numbered from its label" \
+  "$(rail_of "$HB" 'One handle' | fhas_in 'answer Q1</button>')"
+assert "…including the second"                       "$(rail_of "$HB" 'One handle' | fhas_in 'answer Q2</button>')"
+assert "…three handles for three questions"          \
+  "$(eq "$(rail_of "$HB" 'One handle' | grep -oF 'class="qbtn' | wc -l | tr -d ' ')" 3)"
+# THE HONEST PATH SURVIVES, as its own case: the third label is empty, and an empty
+# label is a question that names no number — not a question to number by position.
+assert "…and the unlabelled one stays unnumbered"    "$(rail_of "$HB" 'One handle' | fhas_in 'answer question</button>')"
+assert "…never invented as Q3"                       "$(rail_of "$HB" 'One handle' | fhasnt_in 'answer Q3')"
+assert "…and its tooltip names the right absence"    "$(rail_of "$HB" 'One handle' | fhas_in 'carries no Qn prefix')"
 
 # ---------------------------------------------------------------------------
 # THE SECOND DEFECT IN THE SAME ROW, DECIDED SEPARATELY.
@@ -621,7 +871,7 @@ rwrc=0; bash "$GEN" --out "$RW" "$TMP/rows" >/dev/null 2>&1 || rwrc=$?
 echo "== a task row has a filename column, not two inline runs =="
 assert "the fixture renders and exits 0"             "$(eq "$rwrc" 0)"
 assert "the cell holds a flex wrapper, not the flex itself" \
-  "$(fhas '<td><div class="trow"><span class="tid">' "$RW")"
+  "$(fhas '<td><div class="trow"><span class="tfile"><span class="tid">' "$RW")"
 assert "…and the title lives in its own second column" "$(fhas '</span><div class="tmain">' "$RW")"
 assert "…for every task row, not just the first"     \
   "$(eq "$(grep -oF '<div class="trow">' "$RW" | wc -l | tr -d ' ')" 2)"
@@ -644,25 +894,38 @@ PYR
 }
 assert "the switch is at 1200px"                     "$(fhas '@media (min-width:1200px){' "$RW")"
 assert "…where the row becomes a row"                "$(tidrule "$RW" | fhas_in '.trow{flex-direction:row')"
-assert "…the filename column is fixed at 41ch"       "$(tidrule "$RW" | fhas_in 'flex:0 0 41ch')"
+assert "…the filename column is fixed at 56ch"       "$(tidrule "$RW" | fhas_in 'flex:0 0 56ch')"
 assert "…and the title column takes the rest"        "$(tidrule "$RW" | fhas_in '.tmain{flex:1 1 auto}')"
-assert "…41ch really covers the longest name present" "$(yes_if python3 -c "
+# 56ch = 39 (the longest filename actually present) + 2ch of gutter + ~15ch for the
+# promote control that now shares this line. Both halves are anchored: the name is
+# measured here and rendered on the page below, and the control is what the extra width
+# is for — a draft row is one line at this width, not two.
+assert "…56ch really covers the longest name plus the control" "$(yes_if python3 -c "
 import sys
-sys.exit(0 if len('017-write-for-a-human-who-will-not-read') == 39 else 1)")"
+sys.exit(0 if len('017-write-for-a-human-who-will-not-read') + 2 + 15 == 56 else 1)")"
 assert "…and that name really is on the page"        "$(fhas '>017-write-for-a-human-who-will-not-read</span>' "$RW")"
 # DEGRADATION when a longer name appears later: the column does not grow and the title
 # column is not pushed — the name wraps inside its own 41ch. Without both of these a
 # longer filename either overflows the cell or shoves every title to a new x, which is
 # the property the whole block exists to hold.
-assert "…a longer name wraps inside its own column"  "$(tidrule "$RW" | fhas_in 'overflow-wrap:anywhere')"
+assert "…a longer name wraps inside its own column"  "$(fhas '.tfile>.tid{margin-right:0;min-width:0;overflow-wrap:anywhere}' "$RW")"
 assert "…rather than widening it"                    "$(tidrule "$RW" | fhas_in 'min-width:0')"
 # VERTICALLY CENTRED. Against a two-line title the assignee, the state and the PR link
 # sat pinned to the first line and read as though they belonged to it.
 assert "cells are centred, not baselined"            "$(fhas 'td{padding:.4rem .45rem;vertical-align:middle;' "$RW")"
 assert "…and no baseline rule survives on td"        "$(fhasnt 'td{padding:.4rem .45rem;vertical-align:baseline' "$RW")"
 
-echo "== the promote control leads the row, and looks like one at rest =="
-assert "it sits after the filename, above the title" "$(flat < "$RW" | fhas_in '<div class="tmain"><button class="promote"')"
+echo "== the promote control shares the filename's line, and looks like a control at rest =="
+# ON THE FILENAME'S LINE, IMMEDIATELY AFTER IT — inside `.tfile`, which is that line.
+# It was a sibling of the title inside `.tmain`, i.e. a THIRD line on the narrow layout
+# (filename, control, title) while every other row was two: the one row asking for an
+# action was also the only row taller than its neighbours.
+assert "it sits on the filename's own line, right after it" \
+  "$(flat < "$RW" | fhas_in '</span><button class="promote"')"
+assert "…inside the filename column, not the title one" "$(flat < "$RW" | fhas_in '<span class="tfile"><span class="tid">001-local-board</span><button class="promote"')"
+# THE THIRD LINE IS GONE, stated as the absence that would bring it back: a promote
+# control opening `.tmain` is exactly the markup that stacked it above the title.
+assert "…and never opens the title column"           "$(flat < "$RW" | fhasnt_in '<div class="tmain"><button class="promote"')"
 assert "…before the title button, not after it"      "$(python3 -c "
 import sys
 t = open('$RW').read()

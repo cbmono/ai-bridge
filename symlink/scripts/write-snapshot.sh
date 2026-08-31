@@ -41,7 +41,22 @@
 #     phase:   file, order, title, status
 #     task:    id, title, kind, status, assignee (a ROLE slug, never a person),
 #              in_flight, awaiting (a verb, not a reason), open_questions (a COUNT),
-#              prs (repo, number, url)
+#              open_question_ids (one `Q<n>` LABEL per open question, never its text —
+#              read the widening note below before you touch it), prs (repo, number, url)
+#   THE LABELS ARE A DELIBERATE WIDENING OF THIS LIST (2026-08-31), and the shape is
+#   what keeps it narrow. Until then the snapshot carried a COUNT and nothing else, and
+#   the board's `answer Q<n>` control — which reads a question's number out of the
+#   question's own text — therefore had NOTHING TO READ: measured on a real 8-project
+#   instance, `answer Q<n>` × 0 and the unnumbered `answer question` × 18, on every
+#   instance, every render. A count cannot produce three handles for a task with three
+#   questions, so the fix had to be here rather than in the renderer.
+#   WHAT `open_question_ids` MAY CONTAIN, exactly: `Q` followed by decimal digits, or
+#   the empty string for a question that names no number. question_labels() below can
+#   emit nothing else — not one byte of question TEXT, which stays on the NEVER list
+#   directly below and is still asserted absent by tests/snapshot.test.sh. A label is a
+#   HANDLE INTO the document ("the second question in this task"), the same class of
+#   thing as `depends_on`'s task IDs; the question it names is still only in the task
+#   doc and in AWAITING.md.
 #   NEVER CARRIED:
 #     · task `description:` and every document BODY (`# Context`, `# Notes`,
 #       `# Result`) — free prose, the likeliest place a logged-in page or a customer
@@ -266,21 +281,67 @@ acceptance_criteria_filled() { # <frontmatter>
   [[ -n "$r" ]]
 }
 
-# How many open questions. SCHEMA.md requires every entry to be numbered (Q1, Q2, …),
-# so counting the numbered entries is exact for a conforming document and needs no
-# comma-inside-quotes parsing. An unnumbered but non-empty list counts as 1 — the
-# board only ever renders "this task needs an answer", so the fallback is honest
-# rather than a guess at a number.
+# ONE LINE PER OPEN QUESTION, IN DOCUMENT ORDER: its `Q<n>` label, or `-` when the
+# question names no number. This is the field the board's per-question control is built
+# from, and it replaces a total that could never produce more than one handle.
+#
+# THE ONLY BYTES IT CAN EMIT are `Q`, decimal digits, and `-`. That is what keeps a
+# per-question field inside the header's allowlist: the entry's own text is read here
+# and discarded here, and nothing derived from it beyond the number leaves. `-` rather
+# than an empty line because the caller reads this through `while read`, where an empty
+# line and "no line at all" are the same thing — and an unnumbered question must still
+# COUNT as a question and still get its own (unnumbered) handle.
+#
+# IT READS THE NUMBER THE QUESTION CARRIES, NEVER THE POSITION IN THE LIST. Answering
+# Q1 and leaving Q2 open is the ordinary case; a label taken from the index would then
+# name the wrong question, which is the defect build-board.sh's q_split() exists to
+# prevent. The two must agree, so this is q_split()'s rule transcribed:
+#   · skip an `advisor:` marker (the project-manager stamps escalations with one),
+#   · skip at most ONE `·`-delimited lead segment — a stamped entry reads
+#     `2026-08-30T16:01:52Z · Q2: …` — bounded at 41 so an unbounded skip cannot hunt
+#     for a `Q7` mentioned in the middle of a question's prose,
+#   · then read `Q` + 1-3 digits that END there. `Q1 (HALF ANSWERED …` — no colon —
+#     is a real shape on a real board and must yield Q1; `Q1234` yields nothing.
+# There is no other place in this file that reads a question, so there is one rule here
+# and one in the renderer, pinned against each other end-to-end by snapshot.test.sh
+# (write the snapshot, render it, read the buttons back).
+#
+# SPELLED WITHOUT `\s`/`\b`: banned file-wide, see the header of tests/snapshot.test.sh.
+# `tolower()` before matching is how the case-insensitive `q` is done without gawk's
+# IGNORECASE, and it is length-preserving for ASCII, so the offsets stay valid; the
+# `·` bound is counted in whatever units the local awk uses (bytes on a BSD awk,
+# characters on a gawk in a UTF-8 locale), which a heuristic bound can afford.
+question_labels() { # <frontmatter>
+  yaml_list_entries "$1" open_questions | awk '
+    {
+      s = tolower($0)
+      sub(/^[ \t\r]+/, "", s)
+      if (substr(s, 1, 8) == "advisor:") { s = substr(s, 9); sub(/^[ \t\r]+/, "", s) }
+      p = index(s, "·")
+      if (p > 0 && p <= 41) sub(/^[^·]*·[ \t\r]*/, "", s)
+      if (substr(s, 1, 8) == "advisor:") { s = substr(s, 9); sub(/^[ \t\r]+/, "", s) }
+      lab = "-"
+      if (match(s, /^q[0-9][0-9]?[0-9]?/)) {
+        nxt = substr(s, RLENGTH + 1, 1)
+        if (nxt == "" || index("0123456789abcdefghijklmnopqrstuvwxyz_", nxt) == 0)
+          lab = "Q" (substr(s, 2, RLENGTH - 1) + 0)
+      }
+      print lab
+    }'
+}
+
+# How many open questions — ONE PER PARSED ENTRY, so this and question_labels() can
+# never disagree about how many there are. They used to be derived separately: this
+# counted `Q<n>` TOKENS in the raw region, which reports 0 for a task whose three
+# questions are all spelled `Q1 (…` with no colon, and then falls back to 1. A count
+# that disagrees with the handles beside it is the same class of defect as a count that
+# cannot produce handles at all.
+# An unnumbered but non-empty list still counts as 1 when nothing parses at all: the
+# board only ever renders "this task needs an answer", so the fallback is honest rather
+# than a guess at a number, and the renderer degrades to one unnumbered control for it.
 count_questions() { # <frontmatter>
-  local r n
-  r="$(list_region "$1" open_questions)"
-  # `\b` is a GNU extension, NOT in POSIX ERE. It happens to work on this machine's
-  # BSD grep 2.6.0-FreeBSD, which advertises GNU compatibility — but this script ships
-  # into instances on machines we never see, and a grep without it silently degrades
-  # the count to the 1 fallback rather than erroring. The bracket form is POSIX and
-  # counts identically: the leading character it also consumes is irrelevant, because
-  # the result is piped to `grep -c .`, which counts LINES, not captures.
-  n="$(printf '%s\n' "$r" | grep -oE '(^|[^A-Za-z0-9_])Q[0-9]+[.:]' | grep -c . || true)"
+  local n
+  n="$(question_labels "$1" | awk 'END { print NR + 0 }')"
   if [[ "${n:-0}" -gt 0 ]]; then printf '%s' "$n"
   elif list_filled "$1" open_questions; then printf '1'
   else printf '0'; fi
@@ -601,6 +662,22 @@ EOF
     t_phase="$(fmfield "$tfm" phase)"; t_phase="$(basename "$t_phase" 2>/dev/null || true)"
     [[ "$t_phase" == "." ]] && t_phase=""
     oq="$(count_questions "$tfm")"
+    # The per-question labels the board builds one control per. A `-` line is a
+    # question that names no number, and it becomes `""` — present, so it is still a
+    # question with a handle of its own, and empty, so no number is fabricated for it.
+    # The array is emitted even when it is empty: a reader that finds the key absent is
+    # reading a snapshot older than 2026-08-31 and correctly falls back to the count.
+    ql_json=""
+    while IFS= read -r ql; do
+      [[ -n "$ql" ]] || continue
+      [[ -n "$ql_json" ]] && ql_json="$ql_json, "
+      case "$ql" in
+        -) ql_json="$ql_json\"\"" ;;
+        *) ql_json="$ql_json$(jstr "$ql")" ;;
+      esac
+    done <<EOF
+$(question_labels "$tfm")
+EOF
 
     # PR URLs only — never the surrounding `pr:` text, whatever else it holds.
     prs_json=""
@@ -652,7 +729,7 @@ EOF
     t_count=$((t_count+1)); tasks_total=$((tasks_total+1))
 
     tasks_json="$tasks_json${tasks_json:+,}
-      {\"id\": $(jstr "$t_id"), \"title\": $(jstr "$t_title"), \"kind\": $(jstr "$t_kind"), \"status\": $(jstr "$t_status"), \"assignee\": $(jstr "$t_assignee"), \"phase\": $(jstr "$t_phase"), \"in_flight\": $in_flight, \"awaiting\": $(jstr "$awaiting"), \"open_questions\": $oq, \"advisor_notes\": $an${qt_json:+, \"open_question_text\": [$qt_json]}, \"depends_on\": [$dep_json], \"prs\": [$prs_json]}"
+      {\"id\": $(jstr "$t_id"), \"title\": $(jstr "$t_title"), \"kind\": $(jstr "$t_kind"), \"status\": $(jstr "$t_status"), \"assignee\": $(jstr "$t_assignee"), \"phase\": $(jstr "$t_phase"), \"in_flight\": $in_flight, \"awaiting\": $(jstr "$awaiting"), \"open_questions\": $oq, \"open_question_ids\": [$ql_json], \"advisor_notes\": $an${qt_json:+, \"open_question_text\": [$qt_json]}, \"depends_on\": [$dep_json], \"prs\": [$prs_json]}"
   done <<EOF
 $(find "$pdir/tasks" -maxdepth 1 -name '*.md' 2>/dev/null | grep -vE '/(index|log)\.md$' | sort || true)
 EOF
@@ -681,7 +758,7 @@ cat > "$tmp" <<JSON
 {
   "_schema": "ai-bridge board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
+  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},

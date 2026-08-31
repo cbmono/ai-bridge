@@ -17,11 +17,13 @@
 # me?" is the question this design answers. THE WEIGHTING, in full — it is three
 # reinforcing channels for one number, not decoration:
 #   · the COUNT itself — `<b>N</b> awaiting you`, the number of that project's rail
-#     items, so the same N the pooled list would have shown for it;
-#   · that count rendered as a FILLED chip in the signal colour (`.c.you`, ground-on-
-#     signal, the page's only filled count pill) and placed FIRST in the count row, so
-#     it reads before "done"/"in progress"/"pending"; plus a signal border and inset
-#     bar on the whole card (`.proj.wants`), which is visible even where a chip is not;
+#     items, so the same N the pooled list would have shown for it. It is the ONLY
+#     count pill in the signal colour, and since 2026-08-31 the only pill on the line
+#     about attention at all: an outlined `N questions` counter used to sit beside it
+#     measuring an overlapping thing, and this one now holds that pill's slot and
+#     treatment (see `.c.you` in the CSS for what the merge gave up and why);
+#   · a signal border and inset bar on the WHOLE CARD (`.proj.wants`) — visible at any
+#     scroll position, and to a reader who never looks at a row of chips;
 #   · ORDER — a project with items sorts above one without, inside its own half of the
 #     board (live above, finished below), the snapshot's order preserved within each.
 # A project with nothing waiting gets none of the three. Colour alone would fail a
@@ -786,12 +788,18 @@ button.no{border-color:var(--stop);color:var(--stop)}
 .proj.wants .phead:hover{background:color-mix(in srgb,var(--signal) 13%,transparent)}
 .proj.wants .ptitle{color:var(--ink);font-weight:600}
 .proj.fin.wants .phead{opacity:1}
-/* The page's ONLY filled count pill, and first in the row. Ground-on-signal rather
-   than a hard-coded white: --signal is dark in light mode and light in dark mode, so
-   the contrast holds in both without a second rule. */
-.c.you{background:var(--signal);border-color:var(--signal);color:var(--ground);
+/* THE ONE PILL, IN THE SLOT AND THE TREATMENT THE `N questions` PILL HELD. There were
+   two: this one, filled and first in the row, plus an outlined `N questions` at the end
+   of it. Two chips for overlapping things is a chip nobody trusts, so the questions
+   counter went and this one moved into its place — last of the count chips, outlined,
+   signal-coloured, `.c.q`'s own rule kept and relabelled rather than a third styling
+   invented. It is still the only chip on the line in the signal colour.
+   The filled treatment is what this gives up. It was one of three channels (header,
+   WEIGHTING); the two that do not depend on noticing a chip — `.proj.wants` on the
+   whole card, and the sort — are unchanged and carry the collapsed view on their own. */
+.c.you{color:var(--signal);border-color:color-mix(in srgb,var(--signal) 40%,var(--line));
   font-weight:600}
-.c.you b{color:var(--ground);font-weight:700}
+.c.you b{color:var(--signal);font-weight:700}
 /* Creation date, read from project.md's `timestamp:`. Mono and tabular so a column of
    them lines up down the page. */
 .pdate{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.72rem;
@@ -802,8 +810,8 @@ button.pclose{font-size:.85rem;line-height:1;padding:.2rem .42rem;color:var(--di
 button.pclose:hover{color:var(--stop);border-color:var(--stop);background:var(--surface)}
 /* A project's own rail, inside its body and above its task table. */
 .body>.rail{margin:.85rem 0 .1rem}
-.c.q{color:var(--signal);border-color:color-mix(in srgb,var(--signal) 40%,var(--line))}
-.c.q b{color:var(--signal)}
+/* `.c.q` — the `N questions` pill — is deliberately absent. Its slot and its treatment
+   are `.c.you`'s above; there is no second counter for the same thing. */
 .c.note{color:var(--dim);border-style:dashed}
 .c.note b{color:var(--muted)}
 .c.done-tag{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line));
@@ -839,29 +847,43 @@ td:first-child{overflow-wrap:break-word}
    a flex COLUMN, so filename is line 1 and title is line 2 on EVERY row. Uniform by
    construction — there is no width at which one row can be one line and the next two.
 
-   `.tmain` stacks the promote control above the title; on a row that has no promote
-   control it holds the title alone and costs nothing. */
+   `.tfile` IS THE FILENAME LINE, AND THE PROMOTE CONTROL IS ON IT. It used to sit in
+   `.tmain` above the title, which made a draft row THREE lines on the narrow layout
+   while every other row was two. Here it rides beside the filename: one line either
+   way, so a draft row is exactly as tall as its neighbours. `flex-wrap:wrap` is the
+   escape valve for a filename long enough to leave the control no room — the control
+   drops to a line of its own rather than overflowing the column or pushing the title
+   out of alignment, and only that one row grows.
+   `.tmain` holds the title alone. */
 .trow{display:flex;flex-direction:column;align-items:flex-start;gap:.15rem;min-width:0}
+.tfile{display:flex;align-items:baseline;flex-wrap:wrap;gap:.3rem;min-width:0}
+.tfile>.tid{margin-right:0;min-width:0;overflow-wrap:anywhere}
 .tmain{display:flex;flex-direction:column;align-items:flex-start;gap:.22rem;min-width:0}
 
 /* ≥1200px: the filename gets a FIXED column and every title starts at the same x.
-   WHERE 41ch COMES FROM — measured, not rounded. The longest task filename actually
-   present across this bundle's projects is `017-write-for-a-human-who-will-not-read`,
-   39 characters (`task-` and `.md` are dropped before it is rendered). `.tid` is set in
-   IBM Plex Mono, so 1ch is one character exactly: 39ch for the longest name that exists
-   plus 2ch of gutter before the title = 41ch. Round numbers were avoided deliberately —
-   40ch would clip today's longest name by one character, and 48ch buys nothing but a
-   wider gap on every row.
+   WHERE 56ch COMES FROM — measured, not rounded, and it is 41ch plus the promote
+   control. The longest task filename actually present across this bundle's projects is
+   `017-write-for-a-human-who-will-not-read`, 39 characters (`task-` and `.md` are
+   dropped before it is rendered). `.tid` is set in IBM Plex Mono, so 1ch is one
+   character exactly: 39ch for the longest name that exists plus 2ch of gutter before
+   the title = 41ch, which is what this was until the promote control moved onto this
+   line. That control is ~102px wide — 15 characters of IBM Plex Sans at .68rem (~82px)
+   plus .8rem of padding, 2px of border and a .3rem gap — and 1ch here is .74rem × 0.6
+   = ~7.1px, so it costs ~14.4ch. 41 + 15 = 56ch, and a draft row is then exactly as
+   tall as every other row at this width rather than a line taller.
+   THE ROLE COLUMN PAID FOR IT. It was dropped from the uniform case above, which is
+   every project on the board this was measured on, so the table is no wider than it
+   was; on the rare project that keeps Role, `.scroll` still scrolls.
    HOW IT DEGRADES when a longer filename appears later: the column does NOT grow and
    the title column is NOT pushed. `min-width:0` plus `overflow-wrap:anywhere` wrap the
-   long name onto a second line INSIDE its own 41ch column; that one row grows a line
+   long name onto a second line INSIDE its own 56ch column; that one row grows a line
    and every title on the page still starts at the same x, which is the property this
    whole block exists to hold. No overflow, no reflowed neighbours, no horizontal
-   scrollbar. Re-measure and bump the 41 when that gets annoying — it is one number in
+   scrollbar. Re-measure and bump the 56 when that gets annoying — it is one number in
    one place, and the wrapping is what makes forgetting to survivable. */
 @media (min-width:1200px){
   .trow{flex-direction:row;align-items:baseline;gap:0}
-  .trow>.tid{flex:0 0 41ch;min-width:0;margin-right:0;overflow-wrap:anywhere}
+  .trow>.tfile{flex:0 0 56ch;min-width:0;margin-right:0;overflow-wrap:anywhere}
   .tmain{flex:1 1 auto}
 }
 .tbtn{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;
@@ -1158,17 +1180,56 @@ def project_created(d, slug):
     return m.group(0) if m else ""
 
 
-def short_ref(slug, tid):
-    """`ai-bridge-v3/tasks/task-005` — what a human pastes back.
+def task_core(p, tid):
+    """`task-044` — the part of a handle that names the DOCUMENT.
 
-    Drops `projects/` (constant, so it carries no information) and `.md` (the
-    document type is never in question). KEEPS `tasks/`: a project also holds
-    `phases/`, `sources/` and `deliverables/`, so this segment is the one that says
-    which kind of document is meant, and it costs six characters. The `task-` prefix
-    makes it technically redundant today — but only while tasks are the only thing
-    with a copy button.
+    THE WHOLE PAGE HAS ONE NOTATION FOR A TASK, and this is it. It used to be
+    `<slug>/tasks/task-044-the-dwd-calendar-grant-lives-in-…`: the filename, minus
+    `projects/` and `.md`. That names a document and reads as a path, and the five
+    controls in a waiting row each wrapped it in a different sentence, so an agent
+    receiving one had to parse prose to find out which document was meant.
+
+    SHORT ONLY WHILE SHORT RESOLVES. `task-044` is resolvable by exactly one glob —
+    `projects/<slug>/tasks/task-044*.md` — which is deterministic while no two tasks in
+    the project share the number. Nothing enforces that (validate-bundle.sh checks that
+    references RESOLVE, not that ids are distinct), so this checks it here, per project,
+    against the snapshot's own task list: where two ids do collide, BOTH fall back to
+    the full id, which is unique because it is the filename. A handle that cannot be
+    resolved is worse than a long one that can, and this way there is never one.
     """
-    return "%s/tasks/%s" % (slug, tid)
+    tid = str(tid or "")
+    if not tid.startswith("task-"):
+        return tid                      # not the convention: the id IS the handle
+    n = task_number(tid)
+    ids = [str(todict(x).get("id") or "") for x in tolist(p.get("tasks"))]
+    same = [i for i in ids if i.startswith("task-") and task_number(i) == n]
+    return "task-" + n if len(same) <= 1 else tid
+
+
+def task_handle(p, tid, qn=None):
+    """`<slug>/task-044`, or `<slug>/task-044/q1` for a question — the ONE handle shape.
+
+    `q<n>` IS APPENDED ONLY FOR SOMETHING THAT IS A QUESTION. A verdict on a merge or
+    on a promotion is not question-scoped, and inventing a `q1` for it would be the
+    same fabrication q_split() exists to prevent, one level up: a reader would go
+    looking for a question the item never had.
+
+    THE SLUG IS SHAPE-CHECKED BEFORE IT IS COPIED, by the same rule the ✕ applies to it
+    (SLUG_SEG) and for the same reason: this string comes from a SNAPSHOT.json read back
+    without knowing who wrote it, and `"slug": "/Users/me/secret"` would otherwise put an
+    absolute path inside a data-copy value — the one thing the no-filesystem-paths rule
+    exists to prevent. It matters more than it used to: the handle now travels on the
+    VERDICT buttons and on a project-level close item, and neither carried a slug before.
+    A slug that is not one well-formed segment names no project a session could resolve
+    either, so the handle drops it and names the task alone rather than copying a path —
+    the control still identifies a document, and no path reaches the page.
+    """
+    core = task_core(p, tid)
+    slug = str(p.get("slug") or "")
+    if not SLUG_SEG.fullmatch(slug):
+        slug = ""
+    base = "/".join(x for x in (slug, core) if x)
+    return "%s/q%d" % (base, qn) if (qn and base) else base
 
 
 def task_number(tid):
@@ -1242,23 +1303,46 @@ def q_split(q):
     return None, s.strip()
 
 
+Q_LABEL = re.compile(r"Q0*(\d{1,3})", re.I)
+
+
+def q_label_num(v):
+    """The number in an `open_question_ids` entry — None for anything else.
+
+    A LABEL IS PARSED, NEVER TRUSTED. write-snapshot.sh can emit only `Q` + digits or
+    an empty string, but this reads a SNAPSHOT.json back without knowing who wrote it —
+    the same rule href() applies to a PR URL's scheme. `""` (an honest "this question
+    names no number") and `"nonsense"` (a hand-edited file) both come out as None, and
+    None renders the unnumbered control rather than a fabricated number.
+    """
+    m = Q_LABEL.fullmatch(str(v or "").strip())
+    return int(m.group(1)) if m else None
+
+
 def q_handles(t):
     """One entry per open question — its number, or None when the board cannot know.
 
-    TWO SOURCES, AND THEY ANSWER DIFFERENT QUESTIONS. `open_question_text` is opt-in
-    (SNAPSHOT_QUESTION_TEXT=1, off by default — see write-snapshot.sh) and is the only
-    thing that can carry a number. `open_questions` is a plain COUNT and carries none.
-    So:
-      · text carried  → one handle per question, numbered from its own text where the
-                        text names a number and unnumbered where it does not;
-      · no text       → ONE unnumbered handle for the whole task, not N of them. N
-                        identical `?` buttons all copying the same string say nothing
-                        the `N questions` chip on the collapsed line does not already
-                        say, and each one implies a question it cannot name.
-    The cap applies to the text path, where a drifted `open_question_text` of a thousand
+    THREE SOURCES, IN THIS ORDER, AND THE FIRST IS WHY THIS FIX EXISTS.
+      · `open_question_ids` — one `Q<n>` label per question, carried by every snapshot
+        written since 2026-08-31. This is the ONLY source present by default, and its
+        absence was the whole defect: the two paths below are the pre-2026-08-31 pair,
+        and on a default instance neither could ever produce a numbered handle, because
+        the opt-in one was off and the other is a total. Measured on a real 8-project
+        board before the field existed: `answer Q<n>` × 0, `answer question` × 18.
+      · `open_question_text` — opt-in (SNAPSHOT_QUESTION_TEXT=1, off by default) and
+        read here only for a snapshot too old to carry labels. Numbers come from
+        q_split(), which reads the same rule the writer's question_labels() does.
+      · `open_questions`, a plain COUNT → ONE unnumbered handle for the whole task, not
+        N of them. N identical `?` buttons all copying the same string say nothing, and
+        each one implies a question it cannot name. This is the honest floor, and it
+        stays: a count is all an older or foreign snapshot has.
+    The cap applies to the two per-question paths, where a drifted list of a thousand
     entries would otherwise render a page nobody can open; the count path emits one
     control regardless of how absurd the count is, so it needs no cap at all.
     """
+    ids = tolist(t.get("open_question_ids"))
+    if ids:
+        return [q_label_num(x) for x in ids[:Q_BUTTON_CAP]]
     qs = [str(q) for q in tolist(t.get("open_question_text"))][:Q_BUTTON_CAP]
     if qs:
         return [q_split(q)[0] for q in qs]
@@ -1275,8 +1359,15 @@ Q_NO_NUM = ("This question's text carries no Qn prefix, so the board cannot name
 
 
 def q_title(t, ref):
-    """The tooltip for an unnumbered handle — which of the two absences this is."""
-    return (Q_NO_NUM if tolist(t.get("open_question_text")) else Q_NO_TEXT) % ref
+    """The tooltip for an unnumbered handle — which of the two absences this is.
+
+    `open_question_ids` counts as the question's own text having been read: the writer
+    read it, found no `Qn`, and said so with an empty label. That is Q_NO_NUM, not
+    Q_NO_TEXT — the board knows this question names no number, rather than not knowing
+    whether it does.
+    """
+    read_it = tolist(t.get("open_question_ids")) or tolist(t.get("open_question_text"))
+    return (Q_NO_NUM if read_it else Q_NO_TEXT) % ref
 
 
 def explain(verb, p, t, hint):
@@ -1490,7 +1581,6 @@ def render_table():
             # instance blanking the published board for every healthy one. Same class as
             # toint() above, and the reason nothing here concatenates snapshot data raw.
             tid_txt = str(t.get("id") or "")
-            what = (tid_txt + " (" + str(t.get("title") or "") + ")") if tid_txt else str(t.get("title") or "")
             where = g + " › " + str(p.get("title") or "")
             o.append('<li class="ask"><details class="why"><summary class="line">'
                      '<span class="verb">%s</span>' % e(t.get("awaiting")))
@@ -1506,27 +1596,47 @@ def render_table():
             o.append('<span class="where">%s%s</span></summary>'
                      % (e(where), " · <code>%s</code>" % e(hint) if hint else ""))
             o.append('<p>%s</p></details>' % e(explain(t.get("awaiting"), p, t, hint)))
+            # ONE HANDLE, AND EVERY BUTTON IN THIS ROW OPENS WITH IT. `<handle>: ` is
+            # the whole notation — the task's own for anything task-scoped, this
+            # question's for a question, and the project's alone for a close proposal,
+            # which names no task. What follows the colon is what the button MEANS;
+            # nothing after it has to be parsed to find out what it is about.
+            ref = task_handle(p, tid_txt)
             o.append('<div class="acts">')
             if tid_txt:
-                ref = short_ref(str(p.get("slug") or ""), tid_txt)
-                o.append('<button class="ghost" data-copy="%s" data-what="Task reference">'
-                         "copy task ref</button>" % e(ref))
+                o.append('<button class="ghost" data-copy="%s" data-what="Task handle">'
+                         "copy task ref</button>" % e(ref + ": "))
                 for qn in q_handles(t):
-                    # The number comes from the question's own text (q_split), never
-                    # from this loop's position. No number ⇒ no number is shown.
+                    # The number comes from the question itself (its `Q<n>` label, or
+                    # its text on an older snapshot), never from this loop's position.
+                    # No number ⇒ no number is shown, and no `/q<n>` segment is added:
+                    # a handle that named `q1` here would send a reader to a question
+                    # the board just admitted it cannot name.
                     if qn is None:
                         o.append('<button class="qbtn nonum" data-copy="%s" '
-                                 'data-what="Task reference" title="%s">'
+                                 'data-what="Task handle" title="%s">'
                                  "answer question</button>"
-                                 % (e(ref + " "), e(q_title(t, ref))))
+                                 % (e(ref + ": "), e(q_title(t, ref))))
                     else:
+                        qref = task_handle(p, tid_txt, qn)
                         o.append('<button class="qbtn" data-copy="%s" data-what="Q%d handle" '
-                                 'title="Copy &quot;%s Q%d:&quot; ready to type your answer after">'
+                                 'title="Copy &quot;%s: &quot; ready to type your answer after">'
                                  "answer Q%d</button>"
-                                 % (e("%s Q%d: " % (ref, qn)), qn, e(ref), qn, qn))
+                                 % (e(qref + ": "), qn, e(qref), qn))
             for verdict, (label, cls, lead) in ([] if t.get("awaiting") == "question"
                                                 else WORDING.items()):
-                msg = '%s Re the "%s" item on %s in %s.' % (lead, t.get("awaiting"), what, where)
+                # THE HANDLE, THEN THE VERDICT — not a sentence describing which item
+                # this was. It used to read `APPROVED — go ahead. Re the "merge" item
+                # on <task title> in <project title>.`, so the agent receiving it had
+                # to parse prose to work out which document was meant, which is the
+                # failure class this page exists to delete. The wording after the colon
+                # is unchanged: a human pastes it verbatim and it is unambiguous.
+                #
+                # NO `/q<n>` HERE, EVER. A verdict is given on the ITEM — a merge, a
+                # promotion, a close, or a task's questions as a whole — and no control
+                # on this page binds one to a single question. `<handle>/q1: REJECTED`
+                # would name a question nobody rejected.
+                msg = "%s: %s" % (ref, lead)
                 if verdict == "approve" and hint:
                     msg += " Run %s." % hint
                 elif verdict == "discuss":
@@ -1569,24 +1679,33 @@ def render_table():
             o.append('<span class="pdate" title="Project created %s">%s</span>'
                      % (e(created), e(created)))
         o.append('<span class="counts">')
-        if mine:
-            # THE SIGNAL, and the reason collapsing sixteen projects is not a
-            # regression. FIRST in the row, so it is read before "done"/"in progress",
-            # and the only FILLED pill on the page — see the header's WEIGHTING block
-            # for the other two channels (the card's own marking, and the sort). It is
-            # a count of this project's rail items, which is exactly what the pooled
-            # list above used to contribute for it.
-            o.append('<span class="c you"><b>%d</b> awaiting you</span>' % len(mine))
         if fin:
             o.append('<span class="c done-tag">✓ done</span>')
         o.append('<span class="c ok"><b>%d</b> done</span>' % nd)
         if not fin:
             o.append('<span class="c run"><b>%d</b> in progress</span>' % nr)
             o.append('<span class="c wait"><b>%d</b> pending</span>' % nw)
-        nq = sum(toint(t.get("open_questions")) for t in tasks)
-        if nq:
-            o.append('<span class="c q"><b>%d</b> question%s</span>'
-                     % (nq, "" if nq == 1 else "s"))
+        if mine:
+            # THE SIGNAL, and the reason collapsing sixteen projects is not a
+            # regression — see the header's WEIGHTING block for the other two channels
+            # (the card's own marking, and the sort). It is a count of this project's
+            # rail items, which is exactly what the pooled list above used to
+            # contribute for it.
+            #
+            # ONE PILL, WHERE THERE WERE TWO. A project header used to carry BOTH a
+            # filled `N awaiting you` at the front of the row and an outlined
+            # `N questions` at the end of it. They measure overlapping things — every
+            # open question on a draft is also an awaiting item — and the narrower one
+            # was last, so a reader had to work out which to trust. The questions
+            # counter is gone and this pill took its slot and its treatment: same
+            # place, same outlined signal styling, the AWAITING count.
+            # WHAT THAT COSTS AND WHY IT IS AFFORDABLE: the filled treatment was one of
+            # the three channels, and it is the one that went. The other two are
+            # untouched and are the ones that do not depend on noticing a chip — the
+            # whole card is bordered and inset-barred (`.proj.wants`), and a project
+            # that wants you sorts above one that does not. The pill is still the only
+            # one on the line in the signal colour.
+            o.append('<span class="c you"><b>%d</b> awaiting you</span>' % len(mine))
         na = sum(toint(t.get("advisor_notes")) for t in tasks)
         if na:
             # Deliberately NOT in the signal colour and deliberately not in the
@@ -1627,10 +1746,28 @@ def render_table():
         o.append('<div class="body">')
         # THIS project's queue, above its task table and holding only its own items.
         rail(mine)
+        # THE ROLE COLUMN APPEARS ONLY WHERE IT DISCRIMINATES. On the board this was
+        # measured against — 8 projects, 207 tasks — every row read `software-engineer`,
+        # and a column with one value is not a column; it is width taken from the task
+        # name for no information.
+        #
+        # DROPPING IT OUTRIGHT WAS THE OTHER OPTION AND IT LOSES SOMETHING REAL: a
+        # `devops-engineer` or `qa-reviewer` row is rare, and rare is exactly when the
+        # value carries information. So the column is conditional on the only question
+        # that matters — does this project's task list name more than one role? — which
+        # deletes it precisely where it says nothing and keeps it precisely where it
+        # says something. The condition is per project because the table is: each card
+        # has its own <table> with its own <thead>, so a column that is present on one
+        # card and absent on the next is still self-describing.
+        # Blank assignees do not count as a distinct role: an unassigned task is a gap
+        # in the document, and counting it would resurrect the column on a board where
+        # every named role is still the same one.
+        roles = sorted({str(t.get("assignee") or "") for t in tasks} - {""})
+        show_role = len(roles) > 1
         o.append('<div class="scroll"><table><thead><tr>'
-                 "<th>Task</th><th>State</th><th>Role</th><th>Depends on</th>"
+                 "<th>Task</th><th>State</th>%s<th>Depends on</th>"
                  "<th class=\"r\">Q</th><th>PR</th>"
-                 "</tr></thead><tbody>")
+                 "</tr></thead><tbody>" % ("<th>Role</th>" if show_role else ""))
         for t in tasks:
             tid = str(t.get("id") or "")
             short = tid[5:] if tid.startswith("task-") else tid
@@ -1642,32 +1779,38 @@ def render_table():
             # below 1200px (filename line 1, title line 2, EVERY row the same) and a row
             # with a fixed-width filename above it (every title at the same x). See the
             # `.trow` rules for why the width is what it is.
-            o.append('<td><div class="trow"><span class="tid">%s</span><div class="tmain">'
+            o.append('<td><div class="trow"><span class="tfile"><span class="tid">%s</span>'
                      % e(short))
             if st == "draft":
-                # THE PROMOTE CONTROL COMES FIRST — after the filename, above the title.
-                # It was inline AFTER the title, which is where the eye has already left
-                # the row; the one row on the board that wants an action now leads with
-                # it. It still only COPIES a prompt: promoting is `status: ready` in the
+                # THE PROMOTE CONTROL SITS ON THE FILENAME'S OWN LINE, immediately after
+                # it — inside `.tfile`, which is the filename column. It was a sibling
+                # of the title, i.e. a THIRD line on the narrow layout (filename, then
+                # the control, then the title), so the one row on the board asking for
+                # an action was also the only row a third taller than its neighbours.
+                # Here it costs no line at all: `.tfile` is one line either way, and the
+                # width it needs is the width the ROLE column just gave back.
+                # It still only COPIES a prompt: promoting is `status: ready` in the
                 # document, a human authority (SCHEMA.md), and nothing here does it.
                 promo = ("In the ai-bridge instance, promote %s from draft to ready: review its "
                          "acceptance criteria, tighten any that are not testable, then set "
-                         "status: ready." % short_ref(str(p.get("slug") or ""), tid))
+                         "status: ready." % task_handle(p, tid))
                 o.append('<button class="promote" data-copy="%s" data-what="Promotion prompt">'
                          "promote → ready</button>" % e(promo))
-            o.append('<button class="tbtn" data-copy="%s" data-what="Task reference">%s</button>'
-                     % (e(short_ref(str(p.get("slug") or ""), tid)), e(t.get("title"))))
+            o.append('</span><div class="tmain">')
+            o.append('<button class="tbtn" data-copy="%s" data-what="Task handle">%s</button>'
+                     % (e(task_handle(p, tid)), e(t.get("title"))))
             o.append("</div></div></td>")
             o.append('<td><span class="state %s">%s</span></td>' % (TONE.get(st, ""), e(st)))
-            o.append('<td class="dim">%s</td>' % e(t.get("assignee") or "—"))
+            if show_role:
+                o.append('<td class="dim">%s</td>' % e(t.get("assignee") or "—"))
             deps = [str(d) for d in tolist(t.get("depends_on"))]
             if deps:
                 # Show the short id, the same form the Task column shows, and copy the
-                # full bundle-relative path — a dependency is most useful as a thing to
-                # go read.
+                # same handle every other control on the page copies — a dependency is
+                # most useful as a thing to go read, and it is read by the same means.
                 o.append('<td class="deps">%s</td>' % ", ".join(
-                    '<button class="dep" data-copy="%s" data-what="Path" title="%s">%s</button>'
-                    % (e(short_ref(str(p.get("slug") or ""), d)), e(d),
+                    '<button class="dep" data-copy="%s" data-what="Task handle" title="%s">%s</button>'
+                    % (e(task_handle(p, d)), e(d),
                        e(task_number(d))) for d in deps))
             else:
                 o.append('<td class="dim">—</td>')
@@ -1680,14 +1823,15 @@ def render_table():
                 # and the count at 1, so the assumption broke on the first real task it
                 # met and put the wrong number on the button. A `?` that admits it does
                 # not know is worth more than a number that is confidently wrong.
-                ref = short_ref(str(p.get("slug") or ""), tid)
+                ref = task_handle(p, tid)
                 o.append('<td class="r"><span class="qs">%s</span></td>' % "".join(
-                    ('<button class="qbtn nonum" data-copy="%s" data-what="Task reference" '
-                     'title="%s">?</button>' % (e(ref + " "), e(q_title(t, ref))))
+                    ('<button class="qbtn nonum" data-copy="%s" data-what="Task handle" '
+                     'title="%s">?</button>' % (e(ref + ": "), e(q_title(t, ref))))
                     if qn is None else
                     ('<button class="qbtn" data-copy="%s" data-what="Q%d handle" '
-                     'title="Copy &quot;%s Q%d:&quot; ready to type your answer after">'
-                     'Q%d</button>' % (e("%s Q%d: " % (ref, qn)), qn, e(ref), qn, qn))
+                     'title="Copy &quot;%s: &quot; ready to type your answer after">'
+                     'Q%d</button>' % (e(task_handle(p, tid, qn) + ": "), qn,
+                                       e(task_handle(p, tid, qn)), qn))
                     for qn in handles))
             else:
                 o.append('<td class="r dim">—</td>')
@@ -1774,10 +1918,13 @@ def render_table():
              "from theirs — so the <strong>names of other owners are on this page whether "
              "their section is open or shut</strong>. Collapsing it is for reading comfort, "
              "not privacy.</p>"
-             "<p>A browser cannot open a local file, so a task copies its <em>bundle-relative</em> "
-             "path for you to paste — prefix it with your instance directory. Decision "
-             "buttons copy a prompt; the bundle, not this page, is where a decision is "
-             "recorded.</p></footer></div>")
+             "<p>A browser cannot open a local file, so every control here copies a "
+             "<em>handle</em> instead: <code>&lt;project&gt;/task-&lt;n&gt;</code>, plus "
+             "<code>/q&lt;n&gt;</code> when it names one question. Paste it into a session "
+             "on your instance — the document is "
+             "<code>projects/&lt;project&gt;/tasks/task-&lt;n&gt;*.md</code>. Decision "
+             "buttons copy that same handle and then what the button means; the bundle, "
+             "not this page, is where a decision is recorded.</p></footer></div>")
     o.append(TABLE_SCRIPT)
     return head, o, len(asks)
 
