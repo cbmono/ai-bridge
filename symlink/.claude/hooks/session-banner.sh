@@ -359,10 +359,17 @@ MODEL_MARK="$(printf '\001')"
 # runs.
 #
 # STX RATHER THAN SOH, so the two markers cannot be confused — and only a PREFIX is ever read.
-# The worst a forged one could do, and the only route in is a config value that BEGINS with
-# this byte and lands in the label column, is put `**` around one row of a table on a channel
-# that renders it. It can never move a line onto another channel, which is the property
-# MODEL_MARK needs and this one does not.
+# It can never move a line onto another channel, which is the property MODEL_MARK needs and
+# this one does not.
+#
+# A FORGED ONE IS NOT COSMETIC — THIS COMMENT USED TO SAY IT WAS, and was wrong. It read: the
+# worst a forged marker could do is put `**` around one row. The route in is unchanged — a
+# config value that BEGINS with this byte and lands in the label column — but the width was
+# never accounted for: `pad` has already counted the byte as a character, so `emit_md`
+# consuming it leaves that row one column short of every other. Emphasis the banner did not
+# choose, AND a broken column. `cell` below now replaces the byte, which is the only door it
+# can arrive through, so the reasoning that comment offered finally holds.
+EMPH_MARK_BYTE="$(printf '\002')"
 EMPH_MARK=""
 
 # model_only — stdin is a block of lines for the MODEL's copy alone. THREE MODES, one per
@@ -577,10 +584,10 @@ if [ "$FORMAT" = md ]; then
     *) [ -n "${NO_COLOR:-}" ] || use_emph=1 ;;
   esac
 fi
-# The marker itself, now that the question is settled. `$(printf '\002')` rather than a typed
-# literal, for the reason MODEL_MARK gives: a control byte in a string literal is invisible in
-# a diff and in a grep.
-[ "$use_emph" -eq 1 ] && EMPH_MARK="$(printf '\002')"
+# The marker itself, now that the question is settled — `$EMPH_MARK_BYTE` and never a second
+# `printf` of the same escape, so the byte `cell` filters and the byte `emit_md` reads cannot
+# drift apart.
+[ "$use_emph" -eq 1 ] && EMPH_MARK="$EMPH_MARK_BYTE"
 C_B=""; C_DIM=""; C_RED=""; C_YEL=""; C_OFF=""
 if [ "$use_color" -eq 1 ]; then
   esc="$(printf '\033')"
@@ -664,6 +671,19 @@ nchars() { local t="${1//$CONT_BYTES/}"; NCHARS="${#t}"; }
 #     *  _     emphasis. A pair anywhere in the banner is enough, and single newlines make
 #              the whole thing one paragraph, so the pair does not have to be in one cell.
 #     |        a table delimiter to some renderers.
+#     [  ]  (  )   an inline link. `aa[x](y)bb` reaches the reader as `aa` + a link reading
+#              `x` + `bb`: 5 characters gone, the same defect as the autolink and a worse
+#              one. THE PARENS ARE INERT ALONE — `(y)` with no `[x]` in front of it is
+#              literal text — and are replaced anyway, because the swap costs one character
+#              for one and a filter that admits half a construct is one more thing to reason
+#              about at every future reading.
+#     `        a code span. Both backticks eaten, the cell 2 characters short.
+#     \002     EMPH_MARK ITSELF, whose comment above says what a forged one can do. `emit_md`
+#              matches it as a PREFIX at line start; the label column of the roleTiers table
+#              IS column 0, so a key beginning with that byte bolds a row this file never
+#              marked AND — `pad` having counted the byte as width — leaves that row a column
+#              short once the marker is consumed. Filtered here, so no forged marker exists
+#              on the only route one could arrive by.
 #     a leading `#`   a heading — and the label column of the roleTiers table is at column 0,
 #              where a role name out of a config file lands.
 #
@@ -677,9 +697,16 @@ nchars() { local t="${1//$CONT_BYTES/}"; NCHARS="${#t}"; }
 # APPLIED AT ONE CHOKE POINT — `add`, which every row of both tables passes through — plus the
 # identity line, the one other place a config value reaches a reader. A per-key filter is how
 # the key added next month arrives unfiltered.
+#
+# `$EMPH_MARK_BYTE` AND NOT `$EMPH_MARK`: the latter is empty on every path but md, and
+# `${v//""/?}` inserts a `?` between every character of the value. The byte has to go on every
+# path anyway — the renderings differ in markers, and a control byte the config smuggled in is
+# not one of them.
 cell() {
   local v="$1"
   v="${v//</?}"; v="${v//>/?}"; v="${v//\*/?}"; v="${v//_/?}"; v="${v//\|/?}"
+  v="${v//\[/?}"; v="${v//\]/?}"; v="${v//\(/?}"; v="${v//\)/?}"; v="${v//\`/?}"
+  v="${v//"$EMPH_MARK_BYTE"/?}"
   case "$v" in '#'*) v="?${v#\#}" ;; esac
   printf '%s' "$v"
 }

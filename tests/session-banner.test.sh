@@ -694,8 +694,17 @@ echo "== 10. the columns survive what a MARKDOWN RENDERER does to the text =="
 # has, and every `TIER→MODEL` row came out two columns short of its own header there. Two
 # locales in one loop is what says the columns are a property of the banner and not of the
 # machine that happened to run the harness.
+#
+# render_md — the banner as a markdown renderer LEAVES it, which is the only form in which
+# the `/ai-bridge` reader ever sees these columns. Four transforms, each one a construct that
+# consumes characters the script counted as width: `<…>` an autolink, `**…**` emphasis (which
+# the md rendering itself adds on the header rows), `[…](…)` an inline link, and `` `…` `` a
+# code span. LINE BY LINE via `sed`, never across the buffer: a `[` on one row and a `](` on
+# the next are two rows' worth of text and not a link, and a whole-buffer regex would join
+# them.
 render_md() { # <banner> -> the same text, as a markdown renderer leaves it
-  printf '%s\n' "$1" | LC_ALL=C tr -d '<>' | LC_ALL=C sed 's/\*\*//g'
+  printf '%s\n' "$1" | LC_ALL=C tr -d '<>' \
+    | LC_ALL=C sed -e 's/\*\*//g' -e 's/\[\([^]]*\)\](\([^)]*\))/\1/g' -e 's/`\([^`]*\)`/\1/g'
 }
 # from_offsets — one line per distinct `FROM` offset found across both tables, so a failure
 # names the rows rather than only counting them. A table runs from its header to the blank
@@ -793,6 +802,60 @@ assert "…and no row begins with a heading marker" \
   "$(printf '%s\n' "$(tbl_rows "$OUT")" | grep -q '^#' && echo 1 || echo 0)"
 assert "…and the columns still line up after the renderer's transform" \
   "$(eq "$(render_md "$OUT" | from_offsets)" 1)"
+
+# THE ACTIVE SET IS WIDER THAN THOSE SIX, and the three below were each measured against a
+# `cell` that filtered only those six — hostile `roleTiers` keys, `--format md`, 2026-08-31:
+#
+#     aa[x](y)bb   an INLINE LINK. The reader gets `aa` + `x` + `bb`: 5 characters short, a
+#                  strictly worse version of the `<…>` autolink this section already covers.
+#     cc`z`dd      a CODE SPAN. Both backticks eaten: 2 characters short.
+#     \002sneaky   EMPH_MARK ITSELF, and this is the one to understand. `emit_md` reads the
+#                  marker as a PREFIX anchored at line start, the label column of the
+#                  roleTiers table IS column 0, so a key beginning with that byte both bolds
+#                  a row the banner never marked AND — `pad` having counted the byte as width
+#                  — leaves the row 1 character short once the marker is consumed.
+#
+# ASSERTED THROUGH THE RENDERER, not as an absence of characters. An absence check passes for
+# a hook that drops the rows, and the alignment is the property that actually matters; the
+# absence loop below is there so a failure says WHICH character got through.
+python3 - "$INST" <<'PY'
+import json, os, sys
+json.dump({
+  "org": "example-org",
+  "ownerGithubUser": "example-user-009",
+  "authorEmail": "you@example.com",
+  "maxAgentsInFlight": 9,
+  "maxPrLoc": 2000,
+  "models":    {"light": "haiku", "standard": "sonnet", "deep": "opus"},
+  "roleTiers": {"aa[x](y)bb": "deep", "cc`z`dd": "standard",
+                "\x02sneaky": "deep", "plain-role": "deep"},
+}, open(os.path.join(sys.argv[1], "instance.config.json"), "w"), indent=2)
+PY
+rm -f "$INST/instance.config.local.json"
+run
+MD_H="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"
+STX="$(printf '\002')"
+assert "a link/code-span/marker config: still exit 0"  "$(eq "$RC" 0)"
+assert "…and the banner still prints its tables"       "$(has 'ROLE ' "$OUT")"
+# THE HOSTILE ROWS REACHED THE BANNER — same reason as above: without this the absences are
+# satisfied by a hook that printed no rows at all.
+assert "…with the link key neutralised one character for one"       "$(has 'aa?x??y?bb' "$OUT")"
+assert "…and the code-span key"                                     "$(has 'cc?z?dd' "$OUT")"
+assert "…and the key that began with the emphasis marker"           "$(has '?sneaky' "$OUT")"
+for ch in '[' ']' '`' '(' ')'; do
+  assert "…no '$ch' anywhere in either table" \
+    "$(printf '%s\n' "$(tbl_rows "$OUT")" | grep -qF -- "$ch" && echo 1 || echo 0)"
+done
+assert "…nor the emphasis marker byte itself" \
+  "$(printf '%s\n' "$(tbl_rows "$OUT")" | LC_ALL=C grep -qF -- "$STX" && echo 1 || echo 0)"
+# THE MD RENDERING IS WHERE A LINK AND A CODE SPAN ACTUALLY FIRE, so the alignment claim is
+# made against the rendering `/ai-bridge` relays and not only against text mode.
+assert "…and the md rendering keeps ONE FROM offset once rendered" \
+  "$(eq "$(render_md "$MD_H" | from_offsets)" 1)"
+# EMPHASIS IS THE BANNER'S TO DECIDE, and the alignment check catches this only incidentally:
+# a forged marker that happened to be width-neutral would still bold a row nobody marked.
+assert "…and the forged marker no longer bolds a row of its own" \
+  "$(printf '%s\n' "$MD_H" | grep -qE '^\*\*[^[:space:]]*sneaky' && echo 1 || echo 0)"
 
 # VERSION IS THE THIRD FILE, and it reaches the identity line rather than a cell. The version
 # filter already rejects `<`, `>`, `*`, `|` and a leading `#` outright — `_` is the one it
