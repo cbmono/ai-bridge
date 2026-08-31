@@ -301,9 +301,9 @@ in `cbmono/ai-bridge` enforces this.
   run a review and fix what it flags *first* (correctness, edge cases, security, tests).
   **Which route you take is decided by your own `tools:` list, not by what is installed on
   the machine.** Hold `Agent`? — `qa-reviewer` does — dispatch `code-architect`. Don't hold
-  it? — `software-engineer`, `devops-engineer` and `failure-analyst` don't — then **a careful
-  pass over your own diff *is* the route**, not a fallback from one, because there is
-  nothing to fall back from. Check your allowlist if you are unsure: an installed
+  it? — `software-engineer`, `devops-engineer` and `failure-analyst` don't — then **a
+  careful pass over your own diff *is* the route**, not a fallback from one, because
+  there is nothing to fall back from. Check your allowlist if you are unsure: an installed
   `code-architect` changes nothing for an agent that cannot dispatch, which is why this
   reads on possession rather than on installation.
   **Don't spend a CodeRabbit session here if CodeRabbit reviews the PR
