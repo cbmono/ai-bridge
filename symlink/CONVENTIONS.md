@@ -2,7 +2,7 @@
 
 **This is the single source of truth for shared role-agent behaviour.** The
 symlinked role agents (`software-engineer`, `devops-engineer`, `qa-reviewer`,
-`oncall-guide`) reference this file instead of restating it — **keep them in
+`failure-analyst`) reference this file instead of restating it — **keep them in
 sync**: change a rule here, not in each agent.
 
 **Read this before your first write in a target repo.** It lives here rather
@@ -22,7 +22,7 @@ satisfied while still being unexecutable for an agent that lacks the tool, which
 how the `code-architect` clause below went unnoticed. `tests/agent-tool-allowlist.test.sh`
 in `cbmono/ai-bridge` enforces this.
 
-<!-- tool-mention: Workflow(2), Agent(2), EnterWorktree(1), mcp__claude-in-chrome__*(1), AskUserQuestion(1) — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent; EnterWorktree may be missing for a subagent; oncall-guide holds no browser tools; no role agent holds AskUserQuestion, which is why a tool request goes into open_questions instead of a live prompt. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
+<!-- tool-mention: Workflow(2), Agent(2), EnterWorktree(1), mcp__claude-in-chrome__*(1), AskUserQuestion(1) — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent; EnterWorktree may be missing for a subagent; failure-analyst holds no browser tools; no role agent holds AskUserQuestion, which is why a tool request goes into open_questions instead of a live prompt. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
 
 - **Exhaust your own tools before you hand work back — three rungs, in order.** The default
   when you cannot do something is **not** to report it back:
@@ -301,7 +301,7 @@ in `cbmono/ai-bridge` enforces this.
   run a review and fix what it flags *first* (correctness, edge cases, security, tests).
   **Which route you take is decided by your own `tools:` list, not by what is installed on
   the machine.** Hold `Agent`? — `qa-reviewer` does — dispatch `code-architect`. Don't hold
-  it? — `software-engineer`, `devops-engineer` and `oncall-guide` don't — then **a careful
+  it? — `software-engineer`, `devops-engineer` and `failure-analyst` don't — then **a careful
   pass over your own diff *is* the route**, not a fallback from one, because there is
   nothing to fall back from. Check your allowlist if you are unsure: an installed
   `code-architect` changes nothing for an agent that cannot dispatch, which is why this
@@ -472,7 +472,7 @@ in `cbmono/ai-bridge` enforces this.
   standalone decision with its own cost, not something a convenience clause settles. Only
   `qa-reviewer` holds `Agent`, so only `qa-reviewer` can fan out at all, and it does so by
   dispatching several agents in parallel. `software-engineer`, `devops-engineer` and
-  `oncall-guide` hold neither: **for you, wide work is sequential**, and that is the
+  `failure-analyst` hold neither: **for you, wide work is sequential**, and that is the
   intended behaviour rather than a gap to route around — say so in the PR body and lean on
   the PR-size heuristic above if the result is large. Whoever *does* fan out: **read-only**
   fan-out (review, audit, research, code-navigation) needs **no worktree isolation**

@@ -78,9 +78,9 @@ tools: Read, Write, Edit, Glob, Grep, Bash, ToolSearch, mcp__claude-in-chrome__*
 
 Fixture agent body.
 EOF
-cat > "$INST/.claude/agents/oncall-guide.md" <<'EOF'
+cat > "$INST/.claude/agents/failure-analyst.md" <<'EOF'
 ---
-name: oncall-guide
+name: failure-analyst
 description: fixture
 tools: Read, Glob, Grep, Bash
 ---
@@ -132,9 +132,9 @@ ok "a held tool merely NAMED               -> exit 0" "$(rc_of "$MENTION")" 0
 #    and so does every sentence with the word "read" in it.
 PROSE="$(mk prose software-engineer '# Result' '' 'Blocked: there is no bash on the runner and I could not read the file.')"
 ok "the same words unbackticked            -> exit 0" "$(rc_of "$PROSE")" 0
-# 4. A different agent, a narrower list. `oncall-guide` holds no browser tools, so the
+# 4. A different agent, a narrower list. `failure-analyst` holds no browser tools, so the
 #    fixture that contradicts software-engineer is an honest stop for this one.
-OTHER="$(mk other-agent oncall-guide '# Result' '' 'Blocked: the `mcp__claude-in-chrome__navigate` tool is missing, so the page never loaded.')"
+OTHER="$(mk other-agent failure-analyst '# Result' '' 'Blocked: the `mcp__claude-in-chrome__navigate` tool is missing, so the page never loaded.')"
 ok "an agent that really lacks it          -> exit 0" "$(rc_of "$OTHER")" 0
 
 echo
@@ -195,7 +195,7 @@ ok "…and agrees with the real script everywhere else" \
 
 echo
 echo "== the fixture has to keep testing what it claims — pin it to the shipped agents =="
-# If the real software-engineer stops granting `Bash`, or oncall-guide starts granting the
+# If the real software-engineer stops granting `Bash`, or failure-analyst starts granting the
 # browser tools, the fixtures above quietly stop reproducing the contradiction.
 real_tools() { # <agent>
   awk 'NR==1 && $0=="---" {fm=1; next} fm==1 && $0=="---" {exit}
@@ -205,8 +205,8 @@ ok "software-engineer really grants \`Bash\`" \
    "$(grep -qE '(^|[ ,])Bash([ ,]|$)' <<<"$(real_tools software-engineer)" && echo yes || echo no)" yes
 ok "software-engineer really holds the browser grant" \
    "$(grep -qF 'mcp__claude-in-chrome__*' <<<"$(real_tools software-engineer)" && echo yes || echo no)" yes
-ok "oncall-guide really holds no browser grant" \
-   "$(grep -qF 'mcp__claude-in-chrome__' <<<"$(real_tools oncall-guide)" && echo no || echo yes)" yes
+ok "failure-analyst really holds no browser grant" \
+   "$(grep -qF 'mcp__claude-in-chrome__' <<<"$(real_tools failure-analyst)" && echo no || echo yes)" yes
 
 echo
 echo "== the rule the detector guards must still be in CONVENTIONS.md =="

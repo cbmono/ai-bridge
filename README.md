@@ -193,7 +193,7 @@ Flags `/new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 | `qa-reviewer` | the **independent** verification gate — fresh context, real signals |
 | `cataloguer` | folds conclusions into `knowledge/` |
 | `auditor` | read-only drift check for `/audit` |
-| `oncall-guide` | diagnoses a failing check or a broken build |
+| `failure-analyst` | diagnoses a failing check or a broken build |
 
 Role dispatches are routed to a cost-appropriate model per tier
 ([docs/operations.md § model routing](docs/operations.md#model-routing)).

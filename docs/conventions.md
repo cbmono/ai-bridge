@@ -509,7 +509,7 @@ weaker.
   into every session whether an agent names it or not, so every restricted agent is a
   reader and deriving a smaller set would *widen* the intersection.
 - **(c) A waiver carries a budget AND has to state the absence — the count is not what
-  decides.** Naming an absent tool is often correct (`oncall-guide.md` names `Skill`
+  decides.** Naming an absent tool is often correct (`failure-analyst.md` names `Skill`
   precisely to record that the invocation must not come back), so a file may declare
   `<!-- tool-mention: Workflow(2), Agent(2) — why -->`. A **bare** declaration was measured
   too weak: re-introducing the original defect verbatim still passed, because a per-file
