@@ -247,7 +247,7 @@ echo "== symlink/scripts — install.sh chmods these on stamp, but the repo itse
 # drop out of the check. Quoting routes the pattern through git's own index-backed glob
 # matching instead — the one source this test's header already says to trust. See the
 # "guard D" reproduction below, and the anchored call-site pin that keeps it quoted.
-check_group "$TPL" "symlink/scripts/*.sh" 17 'symlink/scripts/*.sh'
+check_group "$TPL" "symlink/scripts/*.sh" 18 'symlink/scripts/*.sh'
 
 echo "== symlink/.claude/hooks — bare paths off settings.json, NO installer chmod at all =="
 # 5 -> 4: the three SessionStart hooks became one `session-banner.sh`
@@ -473,7 +473,9 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # 56 -> 57: symlink/scripts/check-template-version.sh (ai-bridge-v5/task-008), one more
 # executable machinery file in the per-file enumeration.
 # 57 -> 58: symlink/scripts/ai-bridge.sh (ai-bridge-v5/task-011), same reason.
-EXPECTED_ASSERTIONS=58
+# 58 -> 59: symlink/scripts/pr-comment-clearance.sh (ai-bridge-v5/task-026), one more
+# executable machinery file in the per-file enumeration.
+EXPECTED_ASSERTIONS=59
 TOTAL=$((pass + fail))
 # EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
 # it annotates, so a merge can plausibly keep the annotations and lose the assignment —
