@@ -391,7 +391,31 @@ else
   ok "MUTATION A: removing a watchdog turns the scan RED" \
     "$([ "$(count_lines "$(scan "$MUTANT")")" -ge 1 ] && echo yes || echo no)" yes
   EXTRA=$((EXTRA + 3))
+
+  # MUTATION A2, the other class on the same real line: keep the bound, drop the redirect.
+  # `index`-based replacement rather than `sub`, because the anchor is full of regex
+  # metacharacters and a half-applied pattern is a mutant that proves nothing.
+  LOUDER="$TMP/mutant-loud-watchdog.sh"
+  ANCHOR_LOUD='( sleep 120; kill -TERM "$p" 2>/dev/null ) &'
+  awk -v a="$ANCHOR" -v b="$ANCHOR_LOUD" \
+    '{ i = index($0, a); if (i > 0) { print substr($0, 1, i - 1) b substr($0, i + length(a)); next } print }' \
+    "$MUTSRC" > "$LOUDER"
+  ok "the loud mutant really lost its redirect"      "$(grep -cF -- "$ANCHOR" "$LOUDER" | tr -d ' ')" 0
+  ok "…while keeping the bound"                      "$(count_lines "$(scan "$LOUDER")")" 0
+  ok "MUTATION A2: a watchdog that keeps stdout turns the loud scan RED" \
+    "$([ "$(count_lines "$(scan_loud "$LOUDER")")" -ge 1 ] && echo yes || echo no)" yes
+  EXTRA=$((EXTRA + 3))
 fi
+
+# MUTATION G — the allowlist PIN, which is the whole reason an entry carries a count. A new
+# unbounded spawn in an already-allowlisted file must move the number the pin is compared
+# against, or an entry is a permanent exemption for the file rather than for what was audited.
+MUTALLOW="$TMP/mutant-allowlisted.sh"
+cp "$REPO/tests/tick-lock.test.sh" "$MUTALLOW"
+ok "CONTROL: the allowlisted file scans at its pin" "$(count_lines "$(scan "$MUTALLOW")")" 3
+printf './something-new %s\n' '&' >> "$MUTALLOW"
+ok "MUTATION G: one more unbounded spawn moves the count off the pin" \
+  "$(count_lines "$(scan "$MUTALLOW")")" 4
 
 # =======================================================================================
 echo
@@ -524,10 +548,13 @@ printf '{\n  "worktreeRoot": "%s",\n  "reposRoot": "%s"\n}\n' "$WTROOT" "$TMP/re
 # A child that records its own pid and does not end on any timescale in this file. Reading
 # the pid from a file rather than from `ps | grep` keeps the harness's own grep out of its own
 # process listing; `exec` makes the recorded pid the surviving process rather than a wrapper.
-# An hour rather than a `while :; do sleep 1; done` loop deliberately: that loop spawns a
-# fresh `sleep` every second, so killing it leaves a one-second orphan of its own behind and
-# the exact counts asserted below would be a race instead of a fact.
-CHILD_BODY='echo $$ > "$1"; exec sleep 3600'
+# A single `sleep` rather than a `while :; do sleep 1; done` loop deliberately: that loop
+# spawns a fresh `sleep` every second, so killing it leaves a one-second orphan of its own
+# behind and the exact counts asserted below would be a race instead of a fact. Four minutes
+# is unbounded relative to every timescale in this file and still obeys the rule being tested
+# — if this harness is itself killed mid-run, nothing it started outlives its own bound by
+# more than that.
+CHILD_BODY='echo $$ > "$1"; exec sleep 240'
 { printf '#!/usr/bin/env bash\n'
   printf 'cd "$1" || exit 1\n'
   printf 'sh -c %s _ "$1/child.pid" %s\n' "'$CHILD_BODY'" '&'
@@ -615,7 +642,7 @@ ok "the banner path carries it too"                 "$(saw "$BAN" 'run out of a 
 ok "…in at most 2 lines for this row"               \
   "$(printf '%s\n' "$BAN" | grep -cE '(orphan|not fix.s: ps)' | tr -d ' ')" 2
 # No command line, ever: this output lands in session context and an argv can carry a token.
-ok "…and never the child's own argv"                "$(saw "$CHK" '3600')" no
+ok "…and never the child's own argv"                "$(saw "$CHK" 'sleep 240')" no
 
 # NON-VACUITY: the same instance, the same live orphan, with the ROW deleted from the script.
 MUTAIB="$TMP/ai-bridge-no-row.sh"
@@ -770,7 +797,7 @@ ok "…and that check is not vacuous (a plant is seen)" \
 # every assertion before itself, minus the ones a CONDITIONAL block declared it added, so a
 # platform difference (a host with `timeout`) moves the arithmetic and not the pin. The
 # conditional blocks announce themselves through SKIP lines, which is the other half.
-EXPECTED_ASSERTIONS=96
+EXPECTED_ASSERTIONS=98
 TOTAL=$(( pass + fail - EXTRA ))
 : "${EXPECTED_ASSERTIONS:?EXPECTED_ASSERTIONS not set — a merge likely dropped it}"
 ok "exactly $EXPECTED_ASSERTIONS unconditional assertions ran (got $TOTAL)" \
