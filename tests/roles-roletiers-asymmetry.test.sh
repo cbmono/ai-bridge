@@ -8,7 +8,7 @@
 # is broader — a model tier for ANY agent this instance dispatches, including ones
 # no task is ever assigned to. `plan-architect` is the live example: it carries a
 # `roleTiers` entry (`apex`) and has no place in `roles`, because `/plan` and the
-# PM's optional critique dispatch it directly and no task is ever assigned to it.
+# PM's approach critique dispatch it directly and no task is ever assigned to it.
 # Undocumented, that reads as a bug to the next person, who "fixes" it by deleting
 # the `plan-architect` row or adding it to `roles` — either edit breaks something
 # real. See SCHEMA.md 'type: Agent' for the documented distinction this test pins.

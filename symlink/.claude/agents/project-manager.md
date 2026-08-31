@@ -292,15 +292,54 @@ state, and act only on deltas.
    **No customer PII in `answered_questions`** — it is human prose that now persists for
    the life of the repo, under the same rule as all task/project/log/deliverable text.
 
-   **Optional approach critique (advisory).** For a genuinely complex **`kind:
-   build`** task — spans multiple files/services, or its `acceptance_criteria` had
-   to be heavily inferred — you may dispatch the `plan-architect` agent (installed
-   globally in `~/.claude/agents/`; skip silently if absent) on the task's
-   `# Context` + `acceptance_criteria`
-   to surface missing edge cases or wrong layering before the human reviews. Record
-   its findings in `# Notes` **only — never in `open_questions`**, and never let
-   them gate promotion: this is an aid, not a new authority. Don't run it on every
-   draft (cost) and **not** on `kind: research` tasks.
+   **Approach critique — MANDATORY on its trigger, advisory in what it may decide.**
+   For a genuinely complex **`kind: build`** task — spans multiple files/services, or its
+   `acceptance_criteria` had to be heavily inferred — you **must** dispatch the
+   `plan-architect` agent (installed globally in `~/.claude/agents/`; skip silently if
+   absent) on the task's `# Context` + `acceptance_criteria`
+   to surface missing edge cases or wrong layering **before the human is asked to
+   promote**. On that trigger it runs: not a judgement call, not a budget call.
+   **The trigger itself is unchanged** — what stopped being discretionary is WHEN the
+   critique runs, never WHAT it may decide.
+
+   **Its authority is untouched, and that is the point.** Record its findings in
+   `advisor_notes` — **only there: never `open_questions`, never `# Notes`** — which
+   `SCHEMA.md` defines as deliberately not a gate: it does not block promotion, puts no
+   row in `AWAITING.md`, and no validator reads it. One entry per concern, in that
+   field's shape, `<ISO 8601> · <the concern, as a question>`; you triage the list on a
+   later tick like any other advisor concern. The critique sets no status, gates no
+   `draft → ready`, and leaves the human's promotion gate exactly where it was — an aid,
+   not a new authority. **Not** on `kind: research` tasks.
+
+   **Once per task, and a tick can tell that it already ran.** Refinement is itself
+   once-only — a task whose `acceptance_criteria` are already filled is not re-refined —
+   but do not lean on that alone: a mandatory dispatch with no marker turns every tick
+   into a fresh apex-tier session on the same draft. So the critique always leaves a
+   recorded trace, and that trace is what you read BEFORE dispatching:
+
+   - concerns raised ⇒ one `advisor_notes` entry each, as above;
+   - none raised ⇒ one `answered_questions` line, `<ISO 8601> · advisor: approach
+     critique — no concerns`, which is where a triaged advisor concern lands anyway, so
+     the record survives triage in both cases.
+
+   **An `advisor_notes` entry, or an `advisor:` line in `answered_questions`, means the
+   critique has run: do not dispatch it again.** Neither is a gate — they are a receipt.
+
+   **Its model comes from `scripts/resolve-model.sh plan-architect`** — `roleTiers`
+   (`apex`) through `models` — exactly like every other dispatch, never a hard-coded
+   alias. `plan-architect` stays out of `roles`: it is the worked example of an agent no
+   task is ever assigned to (`SCHEMA.md`, "type: Agent"), and being dispatched from here
+   does not make it an assignee.
+
+   **The cost objection, answered here rather than left to your discretion.** It is why
+   this clause used to end "don't run it on every draft (cost)" — and that sentence,
+   next to a `may`, is why in practice it ran on none. The trigger is the answer: it
+   fires on complex or heavily-inferred drafts only, so most drafts still get no
+   critique. One apex read of a spec is cheaper than the review rounds an
+   under-specified criterion actually costs — measured 2026-08-31 in this bundle's own
+   work, a criterion that enumerated six cases where it meant a whole class took THREE
+   rounds of external review to converge on what one adversarial read would have caught
+   before any code existed.
 
 3. **Dispatch `ready → in-progress`.** **Build tasks only.** Skip any `kind: research`
    task entirely here — those are human-driven (the human works them in-session and
@@ -380,12 +419,12 @@ state, and act only on deltas.
    `roleTiers`; route each dispatch to *its* tier per the table above.) For each dispatch: start from the assignee's default tier
    in `roleTiers`; **bump one tier up** (toward `deep`) for a genuinely complex build
    task — spans multiple files/services, or its `acceptance_criteria` had to be
-   heavily inferred (the same signal that triggers the optional `plan-architect`
-   critique); **drop toward `light`** for a trivial one (docs-only, one-line fix). A
+   heavily inferred (the same signal that makes the `plan-architect` approach
+   critique mandatory); **drop toward `light`** for a trivial one (docs-only, one-line fix). A
    task may set a `model:` field (a `light|standard|deep` tier, or a raw alias) —
    honor it verbatim, no heuristic. Resolve the chosen tier to an alias with `scripts/resolve-model.sh <agent>` (or via `models`
    and pass it as the model when you spawn the agent — the same for **every**
-   dispatch, including the `cataloguer` and an optional `plan-architect` critique:
+   dispatch, including the `cataloguer` and the `plan-architect` approach critique:
    look their tiers up in `roleTiers` too, never a hard-coded default. If
    `models`/`roleTiers` are absent (older instance config) the script prints why on
    stderr — **report that line to the human**, then inherit the session model; don't
