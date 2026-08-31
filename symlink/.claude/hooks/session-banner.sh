@@ -777,14 +777,16 @@ pad() { local s="$1" n
 # NOT THE RULE'S PROBLEM TO SOLVE. Padding or re-sizing the rule to line up under the label
 # is the wrong fix twice over: the label's width varies with the session source
 # (`startup` / `resume` / `clear` / `compact`), so an alignment computed against it is right
-# on one session and wrong on the next; and a rule that no longer matches `${#head_line}` has
-# stopped underlining the header it is derived from.
+# on one session and wrong on the next; and a rule whose width no longer comes from the
+# header itself (`nchars "$head_line"`, §2) has stopped underlining the line it is under.
 #
 # THE TRAILING COMMENT IS AN ANCHOR, and it is load-bearing. tests/session-banner.test.sh and
 # tests/banner-user-channel.test.sh each build a mutant of this file with this one line
-# deleted, to prove the assertions about the blank line are not vacuous; a bare `echo` is not
-# a thing a `grep` can find exactly once in a file with forty of them, and a mutant whose
-# anchor is ambiguous is reported SKIPPED rather than caught.
+# deleted, to prove the assertions about the blank line are not vacuous. A bare `echo` is not
+# something a grep can anchor on in a file that prints blank separators between its sections,
+# and a mutant whose anchor is ambiguous is reported SKIPPED rather than counted as caught —
+# so folding this line into the section below, or dropping the comment, turns two harnesses
+# red rather than silently retiring the check.
 echo   # <- the banner's leading blank line (mutation anchor: do not fold into the line above)
 
 # ---------------------------------------------------------------------------------------

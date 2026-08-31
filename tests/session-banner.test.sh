@@ -318,15 +318,28 @@ assert "…on the first NON-EMPTY line" \
 # rule under it is what carries the header across that degradation, and it is as wide as
 # the line it underlines rather than a fixed run of dashes.
 #
-# ANCHORED ON THE IDENTITY LINE, NOT ON LINES 1 AND 2, for the same reason as above — and
-# the rule's DERIVATION is untouched: it is still `${#head_line}` wide and still printed at
-# column 0, never padded or re-sized to line up under a label whose width is not ours.
+# ANCHORED ON THE IDENTITY LINE, NOT ON LINES 1 AND 2, for the same reason as above. The
+# rule's DERIVATION is untouched by that: `^─+$` says it is box-drawing from column 0 with
+# nothing in front of it, so it is neither padded nor indented to line up under a label whose
+# width is not ours.
 h1="$(nth "$OUT" "$(head_no "$OUT")")"
 h2="$(nth "$OUT" "$(( $(head_no "$OUT") + 1 ))")"
 assert "the line under it is a rule"         "$(printf '%s' "$h2" | grep -qE '^─+$' && echo 0 || echo 1)"
 assert "…exactly as wide as the header"      "$(eq "${#h2}" "${#h1}")"
-assert "…and starting at column 0, not indented to match the label" \
-  "$(printf '%s' "$h2" | grep -qE '^─' && echo 0 || echo 1)"
+# AND ITS WIDTH IS DERIVED FROM THE HEADER, which one run cannot show: a constant, or a width
+# measured against anything other than `head_line`, satisfies both assertions above on this
+# fixture alone. A second instance whose name is longer must move the header AND the rule
+# together — which is exactly what padding the rule to match the harness's label would break.
+LONGNAME="$TMP/_ai-bridge-fixture-with-a-considerably-longer-directory-name"
+mkdir -p "$LONGNAME/.claude/agents"
+printf 'stub\n' > "$LONGNAME/SCHEMA.md"
+cp "$INST/instance.config.json" "$LONGNAME/instance.config.json"
+L_OUT="$(CLAUDE_PROJECT_DIR="$LONGNAME" bash "$HOOK" 2>/dev/null)"
+l1="$(nth "$L_OUT" "$(head_no "$L_OUT")")"
+l2="$(nth "$L_OUT" "$(( $(head_no "$L_OUT") + 1 ))")"
+assert "a longer instance name widens the header…"       "$([ "${#l1}" -gt "${#h1}" ] && echo 0 || echo 1)"
+assert "…and the rule moves with it, still exactly as wide" "$(eq "${#l2}" "${#l1}")"
+rm -rf "$LONGNAME"
 
 # THE VERSION comes from `VERSION` at the template root — a real file this repo ships, read
 # through the hook's own resolved path, so a release that bumps it needs no edit here.
@@ -992,7 +1005,7 @@ mut_run() { CLAUDE_PROJECT_DIR="$INST" bash "$MUTTPL/symlink/.claude/hooks/$1" 2
 
 # The one line the banner prints for this, carrying the trailing comment that exists to make
 # it findable exactly once. A bare `echo` is not something a grep can anchor on in a file
-# with forty of them.
+# that prints blank separators between its sections.
 ANCHOR_RE="^echo +# <- the banner's leading blank line"
 MUT_PATH=""
 mutate() { # <name> <source-file> <awk-program> -> 0 and sets MUT_PATH, or 1 having reported SKIP

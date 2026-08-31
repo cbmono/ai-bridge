@@ -607,6 +607,7 @@ and none of which could say which instance the session was in — a question thi
 owner asked three times in one session, for three different instances.
 
 ```text
+
 AI-Bridge 0.13.1 · _ai-bridge-private · org: cbmono
 ───────────────────────────────────────────────────
 
@@ -619,6 +620,15 @@ ROLE                  TIER→MODEL                          FROM
 cataloguer            standard→sonnet                     tracked
 software-engineer     deep→opus                           local
 ```
+
+**The blank line above the header is deliberate, and it is the banner's.** Claude Code
+renders a `SessionStart` hook's `systemMessage` as `SessionStart:<source> says: <content>`,
+so without it the identity line arrives pushed right by a label — 26 characters on a
+resumed session — while the rule under it, sized from the header and printed at column 0,
+does not. One blank line ends the label's line and the header and its rule both start at
+column 0. It lives in the banner rather than in the `systemMessage` field so that all three
+renderings carry the same bytes; the rule is never padded to match the label, whose width
+changes with the source (`startup` / `resume` / `clear` / `compact`).
 
 **The header is the line the owner kept asking for.** The version comes from `VERSION` at
 the template root, so a release bump needs no edit in the hook; absent or unreadable, the
