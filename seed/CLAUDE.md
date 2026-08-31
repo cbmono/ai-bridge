@@ -249,7 +249,8 @@ dispatch no role agent at all.
 - **The criteria table sits under a heading carrying its tally** —
   `### Criteria (10 ✓ / 8 ✗ — every ✗ is a later slice)`. The gate counts the rows and
   refuses a tally that disagrees with them, and refuses `✗`s the heading never explains.
-  `## Notes` is optional; when you write one, every bullet leads with its claim in bold.
+  `## Notes` is optional (any depth — the reader matches the heading text, not the
+  `#` count); when you write one, every bullet leads with its claim in bold.
 - **Run the reader on your draft before you post it** —
   `scripts/pr-body-clearance.sh --body-file <file>` for a PR body,
   `scripts/pr-comment-clearance.sh --comment-file <file>` for a reply to review

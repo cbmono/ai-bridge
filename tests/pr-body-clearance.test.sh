@@ -704,6 +704,21 @@ serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes'
                      "$NOTE_BOLD" '  - the NUL byte makes grep call the file binary')"
 expect "a nested sub-bullet under a claim-first note -> clear" 0 42
 
+# THE HEADING DEPTH IS NOT SIGNIFICANT, and that is not a nicety: `CONVENTIONS.md` writes
+# `## Notes` in its prose while #3286 — the worked example the same document names — writes
+# `### Notes`. A reader pinned to either depth would silently stop checking one of them.
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '## Notes' '' "$NOTE_BARE")"
+expect "a bare bullet under '## Notes' -> refuse, same as under '### Notes'" 1 42
+says   "  ...naming the note"    "note 1:"
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '## Notes' '' "$NOTE_BOLD")"
+expect "…and a claim-first bullet under '## Notes' -> clear" 0 42
+
+# …while a heading that merely BEGINS with the word is a different section, which is the
+# narrow direction: wrong toward clearing a section that was optional anyway.
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' \
+                     '### Notes for the reviewer' '' "$NOTE_BARE")"
+expect "'### Notes for the reviewer' is not the Notes section -> clear" 0 42
+
 # …and a bullet OUTSIDE the section is not a note. The section ends at the next heading.
 serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes' '' \
                      "$NOTE_BOLD" '' '### Follow-ups' '' '- split the emails slice out')"

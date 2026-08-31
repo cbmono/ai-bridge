@@ -201,8 +201,12 @@
 #      markers excludes children exactly, rather than by a guess at how far they are
 #      indented — and refusing a correctly-nested sub-bullet would be a false refusal on
 #      correct work, which is the failure that gets a gate switched off. The section is
-#      recognised only where the heading text is exactly `Notes`, for the same reason:
+#      recognised only where the heading TEXT is exactly `Notes`, for the same reason:
 #      narrow, and wrong toward clearing an oddly-named section that was optional anyway.
+#      ITS DEPTH IS NOT SIGNIFICANT — `## Notes` and `### Notes` are the same section to
+#      this reader. `CONVENTIONS.md` writes `## Notes` in its prose and #3286 writes
+#      `### Notes`; pinning either depth would refuse one of the two documents this file
+#      exists to enforce.
 #
 # WHAT THIS DOES NOT DO, AND WHOSE JOB THAT IS. It answers "is the criteria table there
 # and well-formed", never "is every row `✓`". WHETHER EVERY ROW IS `✓` STAYS
@@ -489,7 +493,8 @@ notes_scan() { # <rendered-body>
         sub(/^[[:space:]]*#+[[:space:]]*/, "", h)
         sub(/[[:space:]]*#+[[:space:]]*$/, "", h)
         sub(/[[:space:]]+$/, "", h)
-        innotes = (tolower(h) ~ /^notes[^0-9a-z]*$/) ? 1 : 0
+        # The heading TEXT, at any depth: `## Notes` and `### Notes` are one section here.
+      innotes = (tolower(h) ~ /^notes[^0-9a-z]*$/) ? 1 : 0
         next
       }
       if (innotes == 0) next
@@ -929,7 +934,7 @@ decide() { # <rendered-body> <label> -> 0 clear, 1 refuse, 2 unknown, 3 a row is
       echo "        not this gate's; that it is there is this gate's." >&2 ;;
   esac
   if [ "$nstate" = bare ]; then
-    echo "        MISSING: the bold claim opening these ### Notes bullet(s):" >&2
+    echo "        MISSING: the bold claim opening these Notes bullet(s):" >&2
     while IFS="$tab" read -r _ _ bare_n bare_txt; do
       bare_n="${bare_n:-?}"; bare_txt="${bare_txt:-}"
       [ -n "$bare_txt" ] || continue

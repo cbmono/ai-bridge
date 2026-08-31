@@ -139,7 +139,8 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    at least one link**, **a well-formed criteria table** — a header row, a delimiter row
    with the same number of cells, at least one data row, and at least one `✓`/`✗` among
    them — **under a heading whose `N ✓ / M ✗` tally matches those rows** and, when `M >
-   0`, carries a reason after it, with any `## Notes` bullet **leading with bold**. All of
+   0`, carries a reason after it, with every bullet of a `## Notes` section — at whatever
+   heading depth — **leading with bold**. All of
    it is read from a rendering with fenced code blocks removed so a body that merely
    *quotes* the convention's example does not clear on the example. It refuses at **exit
    1** naming every element that is missing, incomplete or contradicted by the table, and

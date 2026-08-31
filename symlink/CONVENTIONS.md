@@ -188,7 +188,9 @@ in `cbmono/ai-bridge` enforces this.
   decide a merge.** A reader who wants the story has `git log` and the task document; a
   reader deciding a merge has thirty seconds. Add a `## Notes` section only for something a
   *reviewer* cannot see from the diff (a hint about where to look, a deliberate omission)
-  — **one line per note, bounded exactly as the `⚠️` lines are.** "Judgement calls for the
+  — **one line per note, bounded exactly as the `⚠️` lines are.** **Its depth is not
+  significant**: the reader matches the heading's *text* and not its `#` count, so
+  `## Notes` here and the `### Notes` of the worked example are one section to it. "Judgement calls for the
   reviewer" is the heading this section grows under once it is unbounded, and that is the
   same essay arriving by another name.
   **Every note leads with its claim, in bold.** The bolded opening sentence **is** the
