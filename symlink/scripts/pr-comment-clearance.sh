@@ -256,6 +256,20 @@ rows() { printf '%s\n' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' 
 # again in --self-test, so a caller refuses a copy carrying a broken table.
 validate_tables() {
   local bad="" r
+  # AND awk MUST HONOUR AN INTERVAL, NOT MERELY COMPILE ONE. Every pattern here and in
+  # `render_reply`/`is_listy` uses `{0,3}`, `{1,6}` or `{3,}`, and an awk without interval
+  # support treats those braces as LITERAL characters: nothing fails to compile, the
+  # carve-outs stop matching, fences stop being stripped and an ATX heading stops being an
+  # entry. So this probe asserts the semantics in both directions — an interval that must
+  # match and one that must not — and refuses at exit 2 if the engine disagrees, because a
+  # verdict from a regex engine that reads these patterns differently is unknown state.
+  LC_ALL=C awk 'BEGIN { if ("###" ~ /^#{1,6}$/ && "#" !~ /^#{2,3}$/) exit 0; exit 1 }' \
+    >/dev/null 2>&1 || {
+    echo "error: this awk does not honour POSIX interval expressions ({1,6}), so every" >&2
+    echo "       pattern in this script would read its braces as literal characters and" >&2
+    echo "       match nothing. That is unknown state, not a verdict. Refusing." >&2
+    return 2
+  }
   while IFS= read -r r; do
     [ -n "$r" ] || continue
     LC_ALL=C awk -v p="$r" 'BEGIN { if ("" ~ p) x = 1; exit 0 }' >/dev/null 2>&1 \

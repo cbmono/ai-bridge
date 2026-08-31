@@ -472,6 +472,24 @@ ok "no GNU-only escape in the tables" \
 ok "validate_tables compiles rows through awk -v, not grep" \
    "$(sed -n '/^validate_tables() {/,/^}/p' "$SCRIPT" | grep -c 'awk -v p=' || true)" 1
 
+# Every pattern in the script uses a brace interval, and an awk that reads `{1,6}` as
+# literal braces compiles them happily and matches nothing — so `validate_tables` probes the
+# SEMANTICS, in both directions, and refuses at exit 2 when the engine disagrees.
+ok "validate_tables probes interval semantics, not just compilation" \
+   "$(sed -n '/^validate_tables() {/,/^}/p' "$SCRIPT" | grep -c '"###" ~ /\^#{1,6}\$/' || true)" 1
+cat > "$TMP/bin/awk" <<'STUB'
+#!/usr/bin/env bash
+# An awk that cannot answer at all. The script must refuse, never clear.
+exit 1
+STUB
+chmod +x "$TMP/bin/awk"
+serve "$(entries_reply 120)"
+expect "an awk that cannot answer -> unknown, not clear" 2 --comment 4242
+says   "  ...naming the interval support it needs" "POSIX interval expressions"
+rm -f "$TMP/bin/awk"
+serve "$(entries_reply 120)"
+expect "…and with a working awk back, the same reply clears" 0 --comment 4242
+
 echo
 echo "== the rule is in CONVENTIONS.md, and it NAMES this reader =="
 # `pr-body-shape.test.sh` asserts the reply and comment rules are named. This asserts the
@@ -561,20 +579,44 @@ echo "== NON-VACUITY: a mutant that RAISES the ceiling, and one that LOWERS it =
 # AND A MUTANT WHOSE ANCHOR IS ABSENT IS *SKIPPED*, NOT COUNTED AS CAUGHT — the suite goes
 # red on a skip, because "the mutant did not apply" and "the mutant was caught" are
 # indistinguishable at the assertion and only one of them is evidence.
-mutate() { # <name> <sed-expression> -> path to the mutant, or empty on SKIP
-  local name="$1" expr="$2" anchors path
-  anchors="$(grep -cE "^REPLY_ELEMENT_CEILING=[0-9]+\$" "$SCRIPT" || true)"
+# IT RETURNS ITS PATH IN A VARIABLE, NOT ON STDOUT, AND THAT IS THE FIX FOR A REAL DEFECT
+# (ai-bridge#85 round 1). The first cut was called as `MUT="$(mutate …)"`, which runs the
+# whole function in a SUBSHELL: the SKIP line went into `$MUT` instead of the log, the
+# `skipped` increment was lost with the subshell, and the caller then tried to EXECUTE the
+# skip message. A driver whose skip cannot be counted is exactly the vacuity this group
+# exists to prevent, so the report and the counter now happen in the parent.
+MUT_PATH=""
+mutate() { # <name> <file> <sed-expression> -> 0 and sets MUT_PATH, or 1 having reported SKIP
+  local name="$1" file="$2" expr="$3" anchors
+  MUT_PATH=""
+  anchors="$(grep -cE "^REPLY_ELEMENT_CEILING=[0-9]+\$" "$file" || true)"
   if [ "$anchors" != 1 ]; then
     printf '  SKIP  %-62s (anchor matched %s times, not once)\n' "$name" "$anchors"
     skipped=$((skipped+1)); return 1
   fi
-  path="$TMP/mutant-$RANDOM.sh"
-  sed -e "$expr" "$SCRIPT" > "$path"; chmod +x "$path"
-  printf '%s' "$path"
+  MUT_PATH="$TMP/mutant-$RANDOM.sh"
+  sed -e "$expr" "$file" > "$MUT_PATH"; chmod +x "$MUT_PATH"
+  return 0
 }
 
-MUT_HIGH="$(mutate "mutant: the ceiling raised to 100000" \
-  's/^REPLY_ELEMENT_CEILING=[0-9]*$/REPLY_ELEMENT_CEILING=100000/')"
+# THE SKIP PATH IS ITSELF DRIVEN, because a skip branch nobody runs is untested code inside
+# the guard against untested code. It runs against a copy with the constant DELETED, in a
+# subshell so the real counters stay untouched — and the assertion reads the counter's value
+# out of that subshell, which is what the defect above made impossible.
+grep -v '^REPLY_ELEMENT_CEILING=' "$SCRIPT" > "$TMP/no-anchor.sh"
+probe="$( skipped=0
+          mutate "probe: an absent anchor" "$TMP/no-anchor.sh" 's/a/b/' >/dev/null 2>&1
+          printf 'rc=%s skipped=%s\n' "$?" "$skipped" )"
+ok "an absent anchor returns 1 AND counts a skip" "$probe" "rc=1 skipped=1"
+probe_out="$( skipped=0; mutate "probe: an absent anchor" "$TMP/no-anchor.sh" 's/a/b/' 2>&1 )"
+ok "…and the SKIP line goes to the log, not into a variable" \
+   "$(printf '%s' "$probe_out" | grep -c '^  SKIP  probe: an absent anchor')" 1
+ok "…and the intact script does have exactly one anchor" \
+   "$(grep -cE '^REPLY_ELEMENT_CEILING=[0-9]+$' "$SCRIPT" || true)" 1
+
+MUT_HIGH=""
+mutate "mutant: the ceiling raised to 100000" "$SCRIPT" \
+  's/^REPLY_ELEMENT_CEILING=[0-9]*$/REPLY_ELEMENT_CEILING=100000/' && MUT_HIGH="$MUT_PATH"
 if [ -n "$MUT_HIGH" ]; then
   ok "the raised mutant really changed the constant" \
      "$(grep -c '^REPLY_ELEMENT_CEILING=100000$' "$MUT_HIGH" || true)" 1
@@ -584,8 +626,9 @@ if [ -n "$MUT_HIGH" ]; then
   ok "RAISED: the 706-byte entry stops being refused too" "$rc" 0
 fi
 
-MUT_LOW="$(mutate "mutant: the ceiling lowered to 100" \
-  's/^REPLY_ELEMENT_CEILING=[0-9]*$/REPLY_ELEMENT_CEILING=100/')"
+MUT_LOW=""
+mutate "mutant: the ceiling lowered to 100" "$SCRIPT" \
+  's/^REPLY_ELEMENT_CEILING=[0-9]*$/REPLY_ELEMENT_CEILING=100/' && MUT_LOW="$MUT_PATH"
 if [ -n "$MUT_LOW" ]; then
   ok "the lowered mutant really changed the constant" \
      "$(grep -c '^REPLY_ELEMENT_CEILING=100$' "$MUT_LOW" || true)" 1
