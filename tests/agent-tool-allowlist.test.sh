@@ -31,7 +31,7 @@
 # including the four prose words above.
 #
 # WHO IS "THE ADDRESSED AGENT" FOR A SHARED DOC. `CONVENTIONS.md` is read by
-# `software-engineer`, `devops-engineer`, `qa-reviewer` and `oncall-guide` at once, and
+# `software-engineer`, `devops-engineer`, `qa-reviewer` and `failure-analyst` at once, and
 # their allowlists differ. This check takes the conservative reading: an instruction in a
 # shared doc must be executable by EVERY agent that reads it, so the doc's effective
 # allowlist is the INTERSECTION of its readers'. The reader set is derived mechanically
@@ -39,7 +39,7 @@
 # constraint automatically.
 #
 # THE ESCAPE HATCH, AND WHY THERE HAS TO BE ONE. Naming an absent tool is sometimes the
-# correct thing to write — `oncall-guide.md:28-30` names `Skill` precisely to record that
+# correct thing to write — `failure-analyst.md:28-30` names `Skill` precisely to record that
 # it must not be reinstated, and the fix for the defects above states the absence rather
 # than hiding it. So a file may declare a mention as deliberate:
 #

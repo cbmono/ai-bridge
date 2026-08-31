@@ -131,6 +131,28 @@ assert "…while the surviving renderer stays linked"  "$(yes_if test -e "$INST/
 # Generic on purpose: install.sh must not carry a list of retired machinery to sweep.
 assert "install.sh names no retired script"          "$(no_if grep -q 'build-artifact-board' "$TPL/install.sh")"
 
+# --- the agent rename: `oncall-guide` -> `failure-analyst`.
+# An agent lives at `.claude/agents/<name>.md`, so renaming one is a machinery DELETE plus
+# a machinery ADD, and only the delete half has an owner here. The generic cases above
+# cover `scripts/`, the instance root and `agents/` — but NOT `.claude/agents/`, which is
+# where every agent actually lives, and a dangling agent file is the same class of failure
+# as a dangling command: it stays registered and resolves to nothing. Stamped the way a
+# real instance got it (install.sh writes the link, never `ln -s`) for the reason given
+# above the build-artifact-board block.
+printf -- '---\nname: oncall-guide\ntools: Read\n---\nfixture\n' \
+  > "$TPL/symlink/.claude/agents/oncall-guide.md"
+bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
+assert "an instance stamped before the rename has the old agent" \
+  "$(yes_if test -e "$INST/.claude/agents/oncall-guide.md")"
+rm "$TPL/symlink/.claude/agents/oncall-guide.md"
+bash "$TPL/install.sh" "$INST" >"$TMP/out-agent" 2>&1
+assert "the renamed agent's stale link is swept" \
+  "$(no_if test -L "$INST/.claude/agents/oncall-guide.md")"
+assert "…and reported by name" \
+  "$(yes_if grep -qF 'retire .claude/agents/oncall-guide.md' "$TMP/out-agent")"
+assert "…while the new name is linked and resolves" \
+  "$(yes_if test -e "$INST/.claude/agents/failure-analyst.md")"
+
 # --- retired SEED content: reported with an rm, never removed.
 # The asymmetry with the machinery sweep above is the whole point. A symlink into this
 # template whose target is gone has one possible meaning; a seed file the human has owned

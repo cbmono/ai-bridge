@@ -15,7 +15,7 @@ in `.claude/agents/<role>.md`; this is the routing reference.
 **Orchestration & read-only roles** — **never** task assignees (the PM invokes them, but they aren't dispatched a `ready` task):
 * [project-manager](/.claude/agents/project-manager.md) - orchestrator: refines, assigns, reviews, curates.
 * [cataloguer](/.claude/agents/cataloguer.md) - librarian for the knowledge base (service catalog, findings, runbooks); read-only on product repos.
-* [oncall-guide](/.claude/agents/oncall-guide.md) - read-only diagnostician for a failing build / red CI / failed deploy (incl. from a pasted PR). Reports root cause + ranked next steps; never changes code. Dispatched ad-hoc (usually in the background).
+* [failure-analyst](/.claude/agents/failure-analyst.md) - read-only diagnostician for a failing build / red CI / failed deploy (incl. from a pasted PR). Reports root cause + ranked next steps; never changes code. Dispatched ad-hoc (usually in the background).
 * [auditor](/.claude/agents/auditor.md) - read-only audit loop (slow counter-metric): grounds objectives against reality and flags Goodhart drift / stale knowledge / green-but-not-progressing work / weakened anchors. Writes only an audit report; never acts. Run via `/audit`.
 
 ## Routing guide
@@ -25,10 +25,10 @@ in `.claude/agents/<role>.md`; this is the routing reference.
 | Application code, APIs, business logic, bug fixes | `software-engineer` |
 | Pipelines, workflows, infra, deploys, images, monitoring | `devops-engineer` |
 | Tests, verification against acceptance criteria, PR review, scaffold review | `qa-reviewer` |
-| Diagnosing a red CI / build / failed deploy **without changing code** (incl. from a pasted PR) | `oncall-guide` (read-only, reports back) |
+| Diagnosing a red CI / build / failed deploy **without changing code** (incl. from a pasted PR) | `failure-analyst` (read-only, reports back) |
 
 Notes:
-- `oncall-guide` **diagnoses only** — it reports root cause + next steps and never
+- `failure-analyst` **diagnoses only** — it reports root cause + next steps and never
   opens a PR. When the fix is known, dispatch `devops-engineer` (CI/infra) or
   `software-engineer` (product code) to actually make it. It's usually fired in
   the **background** so the main session isn't blocked; not a task assignee.
