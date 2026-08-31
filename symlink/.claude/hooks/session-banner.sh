@@ -166,10 +166,52 @@
 #     multi-space runs, leading indent, ─ · →, emoji  survive verbatim, so the tables below
 #                                                   keep their columns.
 #
-# The `/ai-bridge` path is the OPPOSITE and is handled in `scripts/ai-bridge.sh`, not here:
-# its output is relayed by the model into an assistant message, 0 of 4 ESC bytes survived
-# that relay, and the human is left reading a literal `[1m`. One answer does not fit both
-# channels, which is why each one is asked separately.
+# The `/ai-bridge` path is the OPPOSITE: its output is relayed by the model into an assistant
+# message, 0 of 4 ESC bytes survived that relay, and the human is left reading a literal
+# `[1m`. One answer does not fit both channels, which is why each one is asked separately.
+#
+# SO THERE ARE THREE RENDERINGS, NOT TWO, AND THE THIRD IS `--format md`. It is the path
+# `/ai-bridge` relays — `scripts/ai-bridge.sh` asks for it when its own stdout is a pipe —
+# and it exists because that channel renders MARKDOWN and destroys SGR, so the mechanism
+# every other line of this file reaches for is worth nothing there. Two things make it a
+# THIRD rendering rather than an edit to either existing one:
+#
+#   * `strip_sgr(systemMessage)` must stay equal to the text banner CHARACTER FOR CHARACTER
+#     (tests/banner-user-channel.test.sh), and that equality is the only thing stopping the
+#     two channels from drifting. A `**` added to text mode breaks it.
+#   * `**bold**` is measured NOT rendering on `systemMessage` — it arrives as two literal
+#     asterisks — so emphasis chosen for the relay must never leak onto that field.
+#
+# IT IS THE SAME ONE BUFFER, DERIVED BY A TRANSFORM, exactly like the JSON path's two
+# fields. `say_strong` marks the lines whose SIGNIFICANCE the reader should find first — the
+# identity line and the two table headers — with one control byte of its own, and
+# `emit_md` wraps those lines in `**…**` on the way out. In text and json mode that marker is
+# EMPTY, so both of those renderings are byte-for-byte what they were before it existed. The
+# md rendering therefore differs from the text one in EMPHASIS MARKERS ALONE: same lines,
+# same columns, same values, which is what tests/banner-user-channel.test.sh pins.
+#
+# AND ITS EMPHASIS IS ITS COLOUR, so `NO_COLOR` and `--color never` turn it off there too —
+# one opt-out a reader already knows, not a second one (`scripts/ai-bridge.sh` states the
+# same contract for `--style markdown`). `--color always` does NOT put SGR into it: 0 of 4
+# escape bytes survive that relay, so emitting them would be writing bytes for nobody.
+#
+# NO FIXED-WIDTH CELL MAY CONTAIN A CHARACTER MARKDOWN TREATS AS ACTIVE — the rule the md
+# path costs, stated once, here. Measured 2026-08-31 on a real instance: the owner row read
+# `<user> <name@example.com>`, `<…>` is markdown AUTOLINK syntax, the renderer ate both angle
+# brackets, and that row's `FROM` landed two columns left of every other row's while the
+# script's own output was perfectly aligned. So:
+#
+#   * the owner row is spelled `user · address`, RESPELLED rather than escaped — a `\<` is
+#     itself a character, and the SessionStart channel, which renders no markdown, would
+#     print the backslash;
+#   * every value this file did not author — anything out of instance.config.json,
+#     instance.config.local.json or VERSION that reaches a cell — goes through `cell`, at the
+#     ONE choke point every row passes (`add`). A config file must not be able to shift a
+#     column or open an autolink.
+#
+# COLUMNS ARE MEASURED IN CHARACTERS AND NOT AT THE LOCALE'S DISCRETION — see `nchars`. That
+# is the same defect one layer down: `${#s}` counts BYTES in a C locale, so with `LANG` unset
+# every `TIER→MODEL` row came out two columns short of its own header.
 #
 # SO THE MODEL'S COPY IS STRIPPED AND THE HUMAN'S IS NOT (see `emit_json`). One rendering
 # still, exactly as before — `additionalContext` is derived from the same bytes by deleting
@@ -223,16 +265,24 @@ while [ $# -gt 0 ]; do
 done
 # An unrecognised FORMAT is text, for the same reason an unrecognised argument is ignored:
 # this is a SessionStart hook, and printing the banner beats exiting 2 at every launch.
-case "$FORMAT" in json) ;; *) FORMAT=text ;; esac
+# THREE ARE RECOGNISED AND text IS STILL THE DEFAULT: `json` is what settings.json asks for,
+# `md` is what `scripts/ai-bridge.sh` asks for when its reader is a markdown renderer, and a
+# terminal gets neither.
+case "$FORMAT" in json|md) ;; *) FORMAT=text ;; esac
 
 # ---------------------------------------------------------------------------------------
 # THE USER CHANNEL — buffer the banner, then wrap it. Nothing below this block knows.
 # ---------------------------------------------------------------------------------------
-# The whole file writes plain text to stdout and that does not change: `--format json`
-# points stdout at a buffer and an EXIT trap wraps whatever landed there. Threading a
-# "which channel" flag through forty `echo`s would be forty chances to leak one line onto
-# the wrong one, and re-executing this script to capture its own output would double every
-# python3 and awk call in it at session start.
+# The whole file writes plain text to stdout and that does not change: `--format json` and
+# `--format md` point stdout at a buffer and an EXIT trap wraps whatever landed there.
+# Threading a "which channel" flag through forty `echo`s would be forty chances to leak one
+# line onto the wrong one, and re-executing this script to capture its own output would
+# double every python3 and awk call in it at session start.
+#
+# ONE BUFFER, TWO WRAPPERS, AND NEITHER RE-RENDERS ANYTHING: `emit_json` splits the bytes
+# into the two fields SessionStart wants, `emit_md` turns the emphasis markers into `**…**`
+# for the channel that renders markdown. Both are derived from the same bytes, which is what
+# stops three renderings from becoming three banners to keep in step.
 #
 # THE TRAP IS ON `EXIT` BECAUSE THE EARLY RETURNS ARE `exit 0`. "Not a bridge instance",
 # a missing config, a half-written projects/ tree — every one of them leaves through an
@@ -299,6 +349,29 @@ strip_sgr() { LC_ALL=C sed "s/$(printf '\033')\[[0-9;]*m//g" 2>/dev/null; }
 # diff and in a grep.
 MODEL_MARK="$(printf '\001')"
 
+# AND ONE BYTE NAMES THE LINES THE RELAYED RENDERING EMPHASISES: `\002`, by the same argument.
+# It is written by `say_strong` at the call sites that decide significance and consumed by
+# `emit_md`, so the md rendering is a transform of the one buffer rather than a second pass
+# over the sections. EMPTY ON EVERY OTHER PATH — that is what makes text and json
+# byte-for-byte what they were: it is assigned only once the colour block below has resolved,
+# because md emphasis IS md colour and `NO_COLOR` turns it off. Declared here so the EXIT trap
+# can never read it unset under `set -u`, on an early exit that leaves before the colour block
+# runs.
+#
+# STX RATHER THAN SOH, so the two markers cannot be confused — and only a PREFIX is ever read.
+# It can never move a line onto another channel, which is the property MODEL_MARK needs and
+# this one does not.
+#
+# A FORGED ONE IS NOT COSMETIC — THIS COMMENT USED TO SAY IT WAS, and was wrong. It read: the
+# worst a forged marker could do is put `**` around one row. The route in is unchanged — a
+# config value that BEGINS with this byte and lands in the label column — but the width was
+# never accounted for: `pad` has already counted the byte as a character, so `emit_md`
+# consuming it leaves that row one column short of every other. Emphasis the banner did not
+# choose, AND a broken column. `cell` below now replaces the byte, which is the only door it
+# can arrive through, so the reasoning that comment offered finally holds.
+EMPH_MARK_BYTE="$(printf '\002')"
+EMPH_MARK=""
+
 # model_only — stdin is a block of lines for the MODEL's copy alone. THREE MODES, one per
 # answer to "who reads this run's output", because there are three and not two:
 #
@@ -327,8 +400,8 @@ model_only() {
 emit_json() { # <exit-status>
   exec 1>&3 3>&-
   body=""
-  [ -n "$JSONBUF" ] && [ -f "$JSONBUF" ] && body="$(cat "$JSONBUF" 2>/dev/null || true)"
-  [ -z "$JSONBUF" ] || rm -f "$JSONBUF" 2>/dev/null || true
+  [ -n "$OUTBUF" ] && [ -f "$OUTBUF" ] && body="$(cat "$OUTBUF" 2>/dev/null || true)"
+  [ -z "$OUTBUF" ] || rm -f "$OUTBUF" 2>/dev/null || true
   [ -n "$body" ] || exit "$1"
   # ONE RENDERING, TWO FIELDS, AND EACH IS DERIVED FROM THE ONE BUFFER — never a second
   # pass over the sections, which is how two copies of a banner come to disagree. Two
@@ -382,24 +455,63 @@ emit_json() { # <exit-status>
   exit "$1"
 }
 
-JSONBUF=""
-# `drop` is the default because text is: one channel, and its reader is a human.
+emit_md() { # <exit-status>
+  # THE RELAYED RENDERING: THE ONE BUFFER, PLUS EMPHASIS. `**…**` around the lines
+  # `say_strong` marked and nothing else — no re-layout, no second reading of the sections —
+  # so this rendering can differ from the text one in MARKERS ALONE. That property is what
+  # tests/banner-user-channel.test.sh asserts, by stripping every `**` back out and comparing
+  # to text mode byte for byte.
+  #
+  # WHOLE LINES ONLY, exactly like every escape in this file: a `**` inside a padded field
+  # would be counted as width by `pad` and eaten by the renderer, which is the column drift
+  # this whole rendering exists to avoid.
+  exec 1>&3 3>&-
+  body=""
+  [ -n "$OUTBUF" ] && [ -f "$OUTBUF" ] && body="$(cat "$OUTBUF" 2>/dev/null || true)"
+  [ -z "$OUTBUF" ] || rm -f "$OUTBUF" 2>/dev/null || true
+  # EMPTY BUFFER ⇒ NO OUTPUT, the same contract emit_json keeps: a directory that is not an
+  # instance stays silent on every channel, and this is one of them.
+  [ -n "$body" ] || exit "$1"
+  # NO MARKER ⇒ NOTHING TO WRAP. `NO_COLOR` and `--color never` reach this rendering too,
+  # because emphasis is its colour, and the marker is empty then — so this is also the guard
+  # that stops the substitution below from bolding every line of the banner.
+  if [ -z "$EMPH_MARK" ]; then printf '%s\n' "$body"; exit "$1"; fi
+  # `LC_ALL=C` so sed walks BYTES and cannot mangle the `─ · → ⚠️` the banner is full of —
+  # the same reason strip_sgr sets it.
+  out="$(printf '%s\n' "$body" | LC_ALL=C sed "s/^${EMPH_MARK}\(.*\)$/**\1**/" 2>/dev/null || true)"
+  # A FAILED TRANSFORM LOSES THE EMPHASIS, NEVER THE BANNER — and never leaves a control byte
+  # in a human's page: no `sed` on the machine ⇒ `tr` deletes the markers and the reader gets
+  # the flat page this path had before the third rendering existed. Degrade towards the old
+  # behaviour, never past it.
+  [ -n "$out" ] || out="$(printf '%s\n' "$body" | tr -d "$EMPH_MARK" 2>/dev/null || printf '%s' "$body")"
+  printf '%s\n' "$out"
+  exit "$1"
+}
+
+OUTBUF=""
+# `drop` is the default because text is: one channel, and its reader is a human — and `md`
+# has the same one reader, a human reading a relayed assistant message.
 MODEL_BLOCK=drop
-if [ "$FORMAT" = json ]; then
-  JSONBUF="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-banner.XXXXXX" 2>/dev/null || true)"
-  if [ -n "$JSONBUF" ] && [ -f "$JSONBUF" ]; then
-    MODEL_BLOCK=mark
-    # fd 3 is the real stdout, held open for emit_json. Redirecting stdout to a file also
+if [ "$FORMAT" = json ] || [ "$FORMAT" = md ]; then
+  OUTBUF="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-banner.XXXXXX" 2>/dev/null || true)"
+  if [ -n "$OUTBUF" ] && [ -f "$OUTBUF" ]; then
+    # `mark` ONLY WHERE THERE ARE TWO FIELDS TO ROUTE BETWEEN. md has one channel and its
+    # reader is a human, so the model-only blocks stay dropped there, exactly as in text.
+    [ "$FORMAT" = json ] && MODEL_BLOCK=mark
+    # fd 3 is the real stdout, held open for the emitter. Redirecting stdout to a file also
     # makes `[ -t 1 ]` false below, which is the right answer twice over: this path is a
     # pipe into Claude Code, and an escape sequence inside a JSON string would be a
     # `\u001b` a human reads as text.
-    exec 3>&1 1>"$JSONBUF"
-    trap 'emit_json $?' EXIT
+    exec 3>&1 1>"$OUTBUF"
+    if [ "$FORMAT" = json ]; then trap 'emit_json $?' EXIT; else trap 'emit_md $?' EXIT; fi
   else
-    # No buffer ⇒ plain text at a stdout that settings.json aimed at the MODEL, so the
-    # model-only block prints unmarked rather than being dropped: the reader here is the
-    # one this run cannot address in a field, and it is not the human.
-    JSONBUF=""; FORMAT=text; MODEL_BLOCK=plain
+    # No buffer ⇒ plain text at the stdout this run was handed. On the JSON path that stdout
+    # is what settings.json aimed at the MODEL, so the model-only block prints unmarked
+    # rather than being dropped: the reader there is the one this run cannot address in a
+    # field, and it is not the human. On the md path the reader is a human either way, so
+    # `drop` stands and the only thing lost is the emphasis.
+    [ "$FORMAT" = json ] && MODEL_BLOCK=plain
+    OUTBUF=""; FORMAT=text
   fi
 fi
 
@@ -457,6 +569,25 @@ case "$COLOR" in
             if [ "$FORMAT" = json ] || [ -t 1 ]; then use_color=1; fi
           fi ;;
 esac
+# THE RELAYED RENDERING TAKES NEITHER ANSWER FROM THE LADDER ABOVE, AND BOTH HALVES ARE
+# MEASUREMENTS. No SGR, whatever `--color` says: 0 of 4 escape bytes survived that relay, so
+# `--color always --format md` would be writing bytes for nobody and leaving a literal `[1m`
+# in a human's page. And markdown emphasis instead, which that channel does render — but
+# gated on the SAME opt-out, because on a channel that draws `**bold**` as bold, bold IS the
+# colour, and a second switch for it is a switch nobody knows about. `scripts/ai-bridge.sh`
+# resolves `--style markdown` by the identical rule, deliberately.
+use_emph=0
+if [ "$FORMAT" = md ]; then
+  use_color=0
+  case "$COLOR" in
+    never) ;;
+    *) [ -n "${NO_COLOR:-}" ] || use_emph=1 ;;
+  esac
+fi
+# The marker itself, now that the question is settled — `$EMPH_MARK_BYTE` and never a second
+# `printf` of the same escape, so the byte `cell` filters and the byte `emit_md` reads cannot
+# drift apart.
+[ "$use_emph" -eq 1 ] && EMPH_MARK="$EMPH_MARK_BYTE"
 C_B=""; C_DIM=""; C_RED=""; C_YEL=""; C_OFF=""
 if [ "$use_color" -eq 1 ]; then
   esc="$(printf '\033')"
@@ -471,6 +602,18 @@ fi
 # PADDED FIELD: `printf '%-20s'` counts the escape bytes as width and the column silently
 # drifts, so every escape in this file wraps a line that is already laid out.
 say() { local c="$1"; shift; printf '%s%s%s\n' "$c" "$*" "$C_OFF"; }
+
+# say_strong <colour> <text…> — `say`, for a line whose SIGNIFICANCE the reader should find
+# first: the identity line and the two table headers, which is the whole list. On the md path
+# it also carries EMPH_MARK, and `emit_md` turns that into `**…**`.
+#
+# THE CALL SITE DECIDES, NOT A PATTERN AT THE END OF THE PIPE. Matching `^AI-Bridge` or
+# `^SETTING ` in the emitter would be a second reader of this file's own layout, and the two
+# would answer differently the day either changed — the divergence every other line here is
+# written to avoid. THE MARKER GOES BEFORE THE COLOUR because it must be at the start of the
+# line for the emitter to see it; when EMPH_MARK is empty, which is every path but md, this
+# is byte-for-byte `say`.
+say_strong() { local c="$1"; shift; printf '%s%s%s%s\n' "$EMPH_MARK" "$c" "$*" "$C_OFF"; }
 
 # emphasise — colour a block this file did NOT compose, by SIGNIFICANCE, one whole line at a
 # time. `check-template-version.sh` (§2b) and `ai-bridge.sh check` (§8) are printed verbatim
@@ -496,11 +639,106 @@ emphasise() { # stdin -> stdout
   done
 }
 
+# THE UTF-8 CONTINUATION-BYTE CLASS, named once. Every byte of a multibyte character except
+# its first falls in 0x80–0xbf, so deleting them counts CHARACTERS. Built with `printf`
+# rather than typed, like every other non-printable in this file.
+CONT_BYTES="$(printf '[\200-\277]')"
+
+# nchars <string> — its length in CHARACTERS, and it does not ask the locale. `${#s}` counts
+# characters in a UTF-8 locale and BYTES in the C one, and a SessionStart hook has no say over
+# which it runs in: measured 2026-08-31 with `LANG` unset — which is what a CI runner has —
+# every `TIER→MODEL` row came out two columns short of its own header, because `→` was counted
+# three times. Deleting the continuation bytes first answers the same in both: in a UTF-8
+# locale the pattern matches nothing and this is plain `${#s}`, and in the C one it leaves
+# exactly one byte per character.
+#
+# IT ANSWERS IN A GLOBAL RATHER THAN ON STDOUT, which is not a style choice: `pad` is called
+# twice per row of both tables, and `$(…)` there would be a fork per cell at every session
+# start. Callers read NCHARS immediately.
+#
+# `$CONT_BYTES` IS UNQUOTED ON PURPOSE — the expansion IS the pattern. Quoting it would match
+# the eight literal characters of a bracket expression, i.e. nothing, and this would silently
+# become `${#s}` again on exactly the platform it exists for.
+NCHARS=0
+nchars() { local t="${1//$CONT_BYTES/}"; NCHARS="${#t}"; }
+
+# cell <value> — a value this file did NOT author, made safe for a FIXED-WIDTH TABLE THAT IS
+# RELAYED AS MARKDOWN. Every character a renderer treats as active is replaced, one for one,
+# by `?`:
+#
+#     <  >     autolink. `<name@example.com>` is the measured defect: both brackets eaten,
+#              the cell two characters short, its FROM column two places left of every other.
+#     *  _     emphasis. A pair anywhere in the banner is enough, and single newlines make
+#              the whole thing one paragraph, so the pair does not have to be in one cell.
+#     |        a table delimiter to some renderers.
+#     [  ]  (  )   an inline link. `aa[x](y)bb` reaches the reader as `aa` + a link reading
+#              `x` + `bb`: 5 characters gone, the same defect as the autolink and a worse
+#              one. THE PARENS ARE INERT ALONE — `(y)` with no `[x]` in front of it is
+#              literal text — and are replaced anyway, because the swap costs one character
+#              for one and a filter that admits half a construct is one more thing to reason
+#              about at every future reading.
+#     `        a code span. Both backticks eaten, the cell 2 characters short.
+#     ~        strikethrough. `~~ops~~` reaches the reader as struck-out `ops`: 4 characters
+#              gone, and emphasis of a third kind this file never asked for. Replaced
+#              WHOLESALE, like `_` and `*` and for the same reason — matching only a well
+#              formed `~~…~~` is a filter that has to parse the construct correctly to be
+#              safe, and one that swaps a character for a character does not.
+#     &        A CHARACTER REFERENCE, and the widest of the lot: `ops&amp;api` renders as
+#              `ops&api`, five source characters for one rendered. Every `&` goes, not only
+#              the ones that open a well-formed entity — `&` is what a renderer LOOKS at,
+#              exactly as `<` is, and it is no more this file's job to decide which `&` the
+#              reader's renderer will complete than it was to decide which `<` opened an
+#              autolink.
+#     \002     EMPH_MARK ITSELF, whose comment above says what a forged one can do. `emit_md`
+#              matches it as a PREFIX at line start; the label column of the roleTiers table
+#              IS column 0, so a key beginning with that byte bolds a row this file never
+#              marked AND — `pad` having counted the byte as width — leaves that row a column
+#              short once the marker is consumed. Filtered here, so no forged marker exists
+#              on the only route one could arrive by.
+#     a leading `#`   a heading — and the label column of the roleTiers table is at column 0,
+#              where a role name out of a config file lands.
+#
+# THE RULE IS THE RENDERER'S ACTIVE SET, NOT THIS LIST. The list is where the rule has got to
+# — it has been wrong twice, and both times by being read as closed. It shipped as six
+# characters with an argument that no value would plausibly carry a backtick or a `[x](y)`;
+# measurement cost 5, 2 and 1 columns. It then shipped as twelve, and `~` and `&` cost 4 each.
+# So the standing instruction to whoever reads this next is NOT "these are the characters" but
+# "a construct the reader's renderer consumes characters for belongs here" — the values are
+# role names, model aliases and a VERSION string out of files this file does not own, and
+# nothing about them bounds which characters they contain. Add the construct to `render_md` in
+# tests/session-banner.test.sh first, watch the alignment go red, then add the character here.
+#
+# ONE CHARACTER FOR ONE CHARACTER, so no substitution can move a column; `?` because it is
+# inert in every markdown position INCLUDING the start of a line, which `-` and `.` are not
+# (a bullet, an ordered list), and because the banner already prints `?` for a value it cannot
+# resolve. RESPELLING BEATS ESCAPING, which is why this replaces rather than backslashes: an
+# escape is itself a character, and the SessionStart channel renders no markdown, so it would
+# print the backslash to the human.
+#
+# APPLIED AT ONE CHOKE POINT — `add`, which every row of both tables passes through — plus the
+# identity line, the one other place a config value reaches a reader. A per-key filter is how
+# the key added next month arrives unfiltered.
+#
+# `$EMPH_MARK_BYTE` AND NOT `$EMPH_MARK`: the latter is empty on every path but md, and
+# `${v//""/?}` inserts a `?` between every character of the value. The byte has to go on every
+# path anyway — the renderings differ in markers, and a control byte the config smuggled in is
+# not one of them.
+cell() {
+  local v="$1"
+  v="${v//</?}"; v="${v//>/?}"; v="${v//\*/?}"; v="${v//_/?}"; v="${v//\|/?}"
+  v="${v//\[/?}"; v="${v//\]/?}"; v="${v//\(/?}"; v="${v//\)/?}"; v="${v//\`/?}"
+  v="${v//\~/?}"; v="${v//&/?}"
+  v="${v//"$EMPH_MARK_BYTE"/?}"
+  case "$v" in '#'*) v="?${v#\#}" ;; esac
+  printf '%s' "$v"
+}
+
 # pad <string> <width> — `printf '%-*s'` pads by BYTES in bash 3.2 (macOS ships it), and
 # `→` is three bytes for one column, so a table containing one drifts two places right per
-# row and the FROM column stops being a column. `${#s}` is locale-aware, so measuring here
-# and appending the spaces by hand keeps the two tables aligned with each other.
-pad() { local s="$1" n=$(( $2 - ${#1} ))
+# row and the FROM column stops being a column. Measuring with `nchars` and appending the
+# spaces by hand keeps the two tables aligned with each other in any locale.
+pad() { local s="$1" n
+        nchars "$s"; n=$(( $2 - NCHARS ))
         printf '%s' "$s"
         while [ "$n" -gt 0 ]; do printf ' '; n=$((n-1)); done; }
 
@@ -600,11 +838,20 @@ if [ -n "$tmpl" ] && [ -r "$tmpl/VERSION" ]; then
   case "$ver" in [0-9]*) ;; *) ver="" ;; esac
   case "$ver" in *[!0-9A-Za-z.+_-]*) ver="" ;; esac
   [ "${#ver}" -le 24 ] || ver=""
+  # The filter above admits `_`, which is markdown emphasis on the relayed path — so a
+  # VERSION file is a file whose contents reach a markdown renderer, and it goes through the
+  # same `cell` every table value does.
+  ver="$(cell "$ver")"
 fi
 
-org="$(leaf_value "$(leaf org)")"
+# `org` IS A CONFIG VALUE AND IS FILTERED LIKE ONE. The instance's own directory name below
+# is NOT: it is the human's own path, it is in no fixed-width table, and printing
+# `?ai-bridge-group` for a folder they named would make the one line that answers "which
+# instance is this" lie about the answer. A markdown-active byte there costs at worst two
+# characters of a decorative rule; in a table cell it costs a column.
+org="$(cell "$(leaf_value "$(leaf org)")")"
 head_line="AI-Bridge${ver:+ $ver} · $(basename "$root")${org:+ · org: $org}"
-say "$C_B" "$head_line"
+say_strong "$C_B" "$head_line"
 # THE RULE UNDER IT IS WHAT MAKES THIS READ AS A HEADER WITH COLOUR OFF — which is the
 # normal case for this file, whose stdout is a pipe into Claude Code rather than a terminal.
 # Bold alone would be invisible in exactly the place the banner is actually read.
@@ -613,7 +860,10 @@ say "$C_B" "$head_line"
 # unset variable called `rule─` and, under `set -u`, kills the hook at its second line.
 # `bash -n` passes it. Substituting into a run of spaces keeps every `$` away from the
 # multibyte character; tests/session-banner.test.sh pins the whole file against the shape.
-rule="$(printf "%*s" "${#head_line}" "" | sed "s/ /─/g")"
+# MEASURED IN CHARACTERS, via `nchars`: `${#head_line}` counts BYTES in a C locale and the
+# line always carries at least one `·`, so the rule came out two places too long there.
+nchars "$head_line"
+rule="$(printf "%*s" "$NCHARS" "" | sed "s/ /─/g")"
 say "$C_DIM" "$rule"
 
 # ---------------------------------------------------------------------------------------
@@ -683,28 +933,48 @@ fi
 # add <s|t> <label> <value> <from> — one row into the settings table or the roleTiers table.
 # The VALUE column is measured across BOTH, so their FROM columns line up with each other:
 # two tables that disagree about where FROM starts do not read as one banner.
+#
+# AND IT IS THE ONE CHOKE POINT WHERE A VALUE THIS FILE DID NOT AUTHOR IS NEUTRALISED. Every
+# cell of both tables is written here and nowhere else, so `cell` is applied here and nowhere
+# else: a key added to the config next month, a role name, a tier, a model alias, all of them
+# arrive filtered without anybody remembering to filter them. See `cell` for what it removes
+# and why respelling beats escaping.
 rows=""; trows=""; vw=10
 add() {
   [ -n "$3" ] || return 0
-  [ "${#3}" -le "$vw" ] || vw="${#3}"
+  local k v s
+  k="$(cell "$2")"; v="$(cell "$3")"; s="$(cell "$4")"
+  # MEASURED IN CHARACTERS, LIKE `pad`: `${#v}` is bytes in a C locale, and a value with a
+  # `→` or a `·` in it would then set a width every other row is padded to in characters.
+  nchars "$v"; [ "$NCHARS" -le "$vw" ] || vw="$NCHARS"
   case "$1" in
-    s) rows="$rows$2$TAB$3$TAB$4
+    s) rows="$rows$k$TAB$v$TAB$s
 " ;;
-    t) trows="$trows$2$TAB$3$TAB$4
+    t) trows="$trows$k$TAB$v$TAB$s
 " ;;
   esac
 }
 
 # ONE `owner` ROW FOR TWO KEYS. `ownerGithubUser` and `authorEmail` are one fact about the
 # human — who this clone commits as — and two rows spent saying it is two rows the reader
-# has to re-join. `name <address>` is the shape git itself prints them in. THE `FROM` COLUMN
-# STAYS PER KEY: when the two disagree it reads `<owner>/<email>`, in the same order as the
-# values, rather than picking one and being wrong about the other half.
+# has to re-join. THE `FROM` COLUMN STAYS PER KEY: when the two disagree it reads
+# `<owner>/<email>`, in the same order as the values, rather than picking one and being wrong
+# about the other half.
+#
+# `user · address`, NOT `user <address>`, AND THAT IS THE DEFECT THIS SPELLING FIXES. Git's
+# own `name <address>` was the shape here until 2026-08-31, when the owner read the banner
+# through `/ai-bridge` and found this one row's `FROM` two columns left of every other's:
+# that path relays the banner AS MARKDOWN by design (ANSI does not survive it), `<address>`
+# is markdown AUTOLINK syntax, and the renderer ate both brackets. It was the only row
+# affected because it was the only value containing a `<`. `·` is the separator the identity
+# line already uses, it is exactly as wide as the brackets it replaces, and markdown leaves
+# it alone. NOT `\<address\>`: an escape is a character the SessionStart channel, which
+# renders no markdown, would print to the human as a backslash.
 oh="$(leaf ownerGithubUser)"; ah="$(leaf authorEmail)"
 gh="$(leaf_value "$oh")"; gs="$(leaf_source "$oh")"
 em="$(leaf_value "$ah")"; es="$(leaf_source "$ah")"
 if [ -n "$gh" ] && [ -n "$em" ]; then
-  ov="$gh <$em>"; os="$gs"; [ "$gs" = "$es" ] || os="$gs/$es"
+  ov="$gh · $em"; os="$gs"; [ "$gs" = "$es" ] || os="$gs/$es"
 elif [ -n "$gh" ]; then
   ov="$gh"; os="$gs"
 else
@@ -738,7 +1008,10 @@ fi
 # `pad`, not `%-*s`: see its definition — bash pads by bytes and `→` costs three of them.
 table() { # <header-label> <header-value> <rows>
   echo
-  say "$C_DIM" "$(pad "$1" 20)  $(pad "$2" "$vw")  FROM"
+  # `say_strong`: dim where SGR renders, `**…**` where markdown does, nothing where neither
+  # does. The header of a fixed-width table is one of the three lines a reader should land on
+  # first, and on the relayed path it was the only weight available.
+  say_strong "$C_DIM" "$(pad "$1" 20)  $(pad "$2" "$vw")  FROM"
   printf '%s' "$3" | while IFS="$TAB" read -r k v s; do
     printf '%s  %s  %s\n' "$(pad "$k" 20)" "$(pad "$v" "$vw")" "$s"
   done

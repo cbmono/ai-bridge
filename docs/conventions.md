@@ -721,6 +721,16 @@ banner out of view — and the moment the two print differently, the form is a l
 the session was told. `tests/ai-bridge-command.test.sh` asserts byte-identical output, so a
 header or a courtesy blank line fails the build.
 
+**What it may decide is the RENDERING, and nothing else.** The one thing this form knows
+that the hook cannot is who is about to read the output: a pipe here is the Bash tool, and
+what comes out of it is relayed into an assistant message that renders markdown and destroys
+ANSI. So with no arguments, no `NO_COLOR` and stdout not a terminal it asks for the hook's
+third rendering (`--format md`), whose only difference from the plain text one is `**…**` on
+the identity line and the two table headers; a terminal gets the bare form. The byte-identity
+assertion is then against the hook *in that same rendering* — the form still adds not one
+byte of its own, and any argument at all leaves the decision alone, because the flags belong
+to the banner. It is the same ladder `--style` resolves for `check`, `NO_COLOR` first.
+
 **`check` and `fix` read ONE list, and each row declares its own tier.** Two lists drift —
 the checker learns about seven things, the fixer about five, and the gap is silent — so
 `fix` does not know the name of a single check: it walks the same rows and dispatches on

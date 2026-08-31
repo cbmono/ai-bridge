@@ -13,10 +13,16 @@ it here — and there is no second copy of any of it in this file to drift from 
 
 **Relay it as markdown — never inside a code fence, and never re-wrapped.** The script
 already emitted the emphasis this channel renders: piped output is styled with `**bold**`
-on the `⚠` lines, because a relayed answer is rendered as markdown and ANSI does not
-survive the relay at all (measured — 0 of 4 escape bytes reached the reader). A fence turns
-that emphasis back into literal asterisks and hands the human the flat page the styling
-exists to replace.
+on the `⚠` lines of `check`, and on the banner's identity line and its two table headers,
+because a relayed answer is rendered as markdown and ANSI does not survive the relay at all
+(measured — 0 of 4 escape bytes reached the reader). A fence turns that emphasis back into
+literal asterisks and hands the human the flat page the styling exists to replace.
+
+**And relay every other byte unaltered, the spaces included.** The banner's two tables are
+fixed-width: their `FROM` column is a column only as long as nothing re-flows the lines and
+nothing adds or removes a character. The script's side of that bargain is that no cell
+contains a character markdown treats as active — an `<address>` in the owner row was eaten
+as an autolink once, and that row's `FROM` sat two columns left of every other's.
 
 ## The three forms
 

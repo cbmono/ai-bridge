@@ -211,7 +211,23 @@ fi
 # form exists for one reason: a long session scrolls it out of view. Any line printed here
 # — a header, a "reprinting…", a blank line — is a way for the two to differ, and the
 # moment they differ this form is wrong. `exec` rather than a call so even the exit status
-# is the hook's own. `tests/ai-bridge-command.test.sh` asserts the two are BYTE-IDENTICAL.
+# is the hook's own. `tests/ai-bridge-command.test.sh` asserts the output is BYTE-IDENTICAL
+# to the hook's own, in the rendering this run asked the hook for.
+#
+# IT ASKS FOR THE RENDERING ITS READER CAN SEE, AND THAT IS THE ONLY OPINION IT HAS. When
+# stdout is a pipe, this form IS the `/ai-bridge` path: the output is relayed by the model
+# into an assistant message, which renders markdown and destroys ANSI (measured — 0 of 4 ESC
+# bytes reached the reader). So it asks the hook for `--format md`, the hook's third
+# rendering, whose only difference from the plain text one is `**…**` on the identity line
+# and the two table headers. A terminal gets the bare form and its SGR, exactly as before.
+#
+# THE LADDER IS THE SAME ONE `--style` RESOLVES BELOW, and deliberately: `NO_COLOR` first,
+# because it is the READER's opt-out and emphasis on a channel that draws `**bold**` as bold
+# is that reader's colour. `--style` has no counterpart here — a caller that wants a specific
+# rendering passes the hook's own `--format`, which is why ANY argument leaves this decision
+# alone. That is the one form that must not grow a second opinion about its own options: the
+# flags belong to the banner, and `bash scripts/ai-bridge.sh --format json` must reach it
+# unedited.
 #
 # `CLAUDE_PROJECT_DIR` is exported because it is the only thing the hook reads to decide
 # which instance it is describing. This form takes none of our own flags — `--instance` is a
@@ -226,6 +242,9 @@ if [ "$FORM" = banner ]; then
     exit 2
   fi
   export CLAUDE_PROJECT_DIR="$ROOT"
+  if [ $# -eq 0 ] && [ -z "${NO_COLOR:-}" ] && [ ! -t 1 ]; then
+    exec bash "$hook" --format md
+  fi
   exec bash "$hook" "$@"
 fi
 
