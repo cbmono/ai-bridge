@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
 # pr-body-clearance.sh — assert that a pull request's BODY carries the required SHAPE:
-# a TL;DR line and a well-formed acceptance-criteria table whose rows stay inside the
-# two-sided bound `CONVENTIONS.md` puts on their evidence. This is precondition 3 of the
-# delegated merge gate (`AUTONOMY.md` → "Merge under `yolo`"). `required-checks.sh` is
+# a TL;DR line, a `Verified:` line that cites something, and a well-formed
+# acceptance-criteria table under a heading whose tally matches it, with every row inside
+# the two-sided bound `CONVENTIONS.md` puts on their evidence. This is precondition 3 of
+# the delegated merge gate (`AUTONOMY.md` → "Merge under `yolo`"). `required-checks.sh` is
 # precondition 1 and calls in here for every PR it is about to clear, exactly as it calls
 # `review-clearance.sh`.
 #
@@ -44,7 +45,7 @@
 # argument count, a table's cell count, a code fence's width, an exit status, and ONE
 # CELL of ONE ROW of ONE TABLE — never the prose around it, and never the sum.
 #
-# THE TWO TEXT-MATCHED ELEMENTS, AND WHICH DIRECTION EACH MATCH FAILS IN. Text matching
+# THE TEXT-MATCHED ELEMENTS, AND WHICH DIRECTION EACH MATCH FAILS IN. Text matching
 # is unavoidable
 # here — a PR body is prose — so it is arranged the way `review-clearance.sh` arranges its
 # refusal detection: EVERY MATCH FAILS CLOSED. A false "structure missing" sends a human
@@ -137,6 +138,72 @@
 #      row, its index, its measured length, the bound it broke and a bounded excerpt of
 #      its criterion text.
 #
+#   4. THE `Verified:` LINE, AND THE ONE THING REQUIRED OF WHAT IT SAYS: THAT IT CITES
+#      SOMETHING. The owner named alteos-gmbh/monorepo#3286 as the shape every PR body
+#      should have, and its lead is followed by exactly one line — "Verified: 277/0
+#      locally, 10/10 non-deploy checks green on [run 33430116558](...)". A reader learns
+#      from that one line whether to trust the eighteen rows below it. Elements 1-3 did
+#      not require it, so nothing carried it.
+#
+#      MATCHED THE WAY THE TL;DR MARKER IS MATCHED, and for the same reason: anchored at
+#      the start of a line and leading the line's own content, so a sentence that MENTIONS
+#      the Verified line does not satisfy it and the failure is toward refusal. Two
+#      spellings — a bare `Verified: …` and a leading `**Verified:**`.
+#
+#      A `### Verified` HEADING IS DELIBERATELY NOT ONE OF THEM. This element is ONE LINE
+#      carrying the counts and the link; a heading is the start of a SECTION, whose link
+#      would sit on some other line, and accepting it would mean deciding how far below a
+#      heading the citation may be. There is no honest answer to that, and the element it
+#      would be checking is not the element #3286 has. An author whose Verified line has
+#      grown into a section still writes the one line.
+#
+#      WHAT IT CLAIMS IS THE AUTHOR'S BUSINESS; THAT IT CITES SOMETHING IS THIS GATE'S.
+#      The line must carry at least one LINK — a markdown `[text](url)` or a bare
+#      `http(s)://` — because "all green" with nothing to open is the same assertion
+#      without evidence that the row FLOOR already refuses one column over. This file
+#      cannot and must not check whether 277/0 is true; it can check that a reader has
+#      somewhere to go and find out, and that is the whole of the requirement. A line
+#      present without a link is therefore a DIFFERENT refusal from a line absent, because
+#      the fix is different.
+#
+#   5. THE CRITERIA HEADING'S TALLY, AND — WHEN IT HAS ANY `✗` — THE REASON FOR THEM.
+#      This is the single most valuable element of #3286 and the one that costs a reader
+#      the most when it is missing. `### Criteria (10 ✓ / 8 ✗ — every ✗ is a later slice
+#      or task-001)`. `SCHEMA.md` clause 7 makes an unverified criterion BLOCK clearance,
+#      so a table carrying eight `✗` looks alarming until the heading explains that every
+#      one of them is deferred by design — and without the heading a reader has to
+#      reconstruct that from eighteen rows before they can decide anything.
+#
+#      THE TALLY IS CHECKED AGAINST THE TABLE, NOT MERELY REQUIRED TO EXIST. A heading
+#      claiming 10 `✓` over a table carrying 9 is a defect — the number is the first thing
+#      a reader takes and the last thing anyone re-derives — so the rows are counted here
+#      and the two are compared. That comparison is on COUNTS OF ROWS, which is not a
+#      length and is not the body: see the length paragraphs above, which this element
+#      does not touch.
+#
+#      THE REASON IS REQUIRED ONLY WHEN `M > 0`, and only that it is THERE. A tally with
+#      no `✗` needs no explanation and demanding one would be noise. When there are `✗`s,
+#      a bare `(10 ✓ / 8 ✗)` is exactly the alarming artifact this element exists to
+#      prevent, so the heading must carry text after the tally. Whether the reason is a
+#      GOOD one is the reviewer's judgement and is deliberately not decided here — the
+#      same division as element 4.
+#
+#   6. `### Notes` IS OPTIONAL, AND ITS BULLETS LEAD WITH THE CLAIM. A small PR needs no
+#      notes at all and a body without the section clears; NO NUMBER OF NOTES IS EVER
+#      REQUIRED. But #3286's notes are readable because each bullet opens with a bolded
+#      sentence that IS the finding — "**A grep-derived inventory would have been short by
+#      8 and looked complete.**" — with the explanation after it, so the section is
+#      skimmable in bold alone. That shape is checkable and the finding itself is not, so
+#      that shape is what is checked.
+#
+#      ONLY BULLETS AT COLUMN ZERO COUNT. A GFM sub-item under a bullet at column 0 is
+#      indented by at least two spaces, so restricting the check to unindented list
+#      markers excludes children exactly, rather than by a guess at how far they are
+#      indented — and refusing a correctly-nested sub-bullet would be a false refusal on
+#      correct work, which is the failure that gets a gate switched off. The section is
+#      recognised only where the heading text is exactly `Notes`, for the same reason:
+#      narrow, and wrong toward clearing an oddly-named section that was optional anyway.
+#
 # WHAT THIS DOES NOT DO, AND WHOSE JOB THAT IS. It answers "is the criteria table there
 # and well-formed", never "is every row `✓`". WHETHER EVERY ROW IS `✓` STAYS
 # `AUTONOMY.md` PRECONDITION 3 / `SCHEMA.md` CLAUSE 7 — an unverified criterion blocking
@@ -149,10 +216,15 @@
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:
 #
-#   0  the body carries a TL;DR marker AND a well-formed criteria table whose every row
-#      is inside the evidence bound, at whatever total length
-#   1  the body is readable and a required element is MISSING. stderr names which one —
-#      the TL;DR line, the table, or both
+#   0  the body carries a TL;DR marker, a `Verified:` line citing at least one link, and
+#      a well-formed criteria table under a heading whose tally matches its rows and
+#      explains any `✗`, whose every row is inside the evidence bound, with `### Notes`
+#      either absent or claim-first — at whatever total length
+#   1  the body is readable and a required element is MISSING, INCOMPLETE or CONTRADICTED
+#      BY THE TABLE. stderr names every one of them — the TL;DR line, the `Verified:`
+#      line (absent, or present and citing nothing), the criteria table, its heading's
+#      tally (absent, disagreeing with the rows, or leaving `✗`s unexplained), and any
+#      `### Notes` bullet that does not lead with its claim
 #   2  usage error, or the environment cannot answer (no `gh`/`jq`, an unreadable PR, an
 #      unreadable body file, a pattern table that will not compile, or a `--head` that no
 #      longer matches the PR) — UNKNOWN, and unknown is never clearance
@@ -211,8 +283,39 @@ TLDR_MARKERS='
 # `AUTONOMY.md` precondition 3 already read, and this file requires that same artifact
 # rather than inventing a second one. A data row carrying one of them is what tells the
 # criteria table apart from any other table in a body.
-CRITERIA_MARKS='✓
-✗'
+#
+# THEY ARE NAMED SEPARATELY AS WELL AS TABLED, because element 5 has to tell them APART:
+# `has_mark` only asks whether a row is a criteria row, while the tally asks how many rows
+# are verified and how many are not. Deriving "which glyph is which" from the table's row
+# ORDER would put a silent dependency on a list anyone may reorder, so each glyph is a
+# named constant and the table is built from the two.
+CRITERIA_MARK_VERIFIED='✓'
+CRITERIA_MARK_UNVERIFIED='✗'
+CRITERIA_MARKS="$CRITERIA_MARK_VERIFIED
+$CRITERIA_MARK_UNVERIFIED"
+
+# --- table 4: what a `Verified:` marker line looks like ------------------------
+# One POSIX ERE per line, read exactly as table 1 is read and anchored for exactly the
+# same reason: without the anchor, a body that DISCUSSES the Verified line would clear on
+# the discussion, and the fail-closed direction here is refusal. Row 1 is the bare
+# `Verified: …` form #3286 uses; row 2 is a leading `**Verified:**`. A heading spelling is
+# deliberately absent — see element 4 in the header. What the line CLAIMS is not matched
+# at all.
+VERIFIED_MARKERS='
+^[[:space:]]{0,3}verified[[:space:]]*[]):：.,;—–-]
+^[[:space:]]{0,3}(\*\*|__|\*|_)[[:space:]]*verified[[:space:]]*:?[[:space:]]*(\*\*|__|\*|_)
+'
+
+# --- table 5: what counts as the CITATION on that line -------------------------
+# One POSIX ERE per line, matched anywhere ON the marker line (not anchored — a link sits
+# mid-sentence). Row 1 is a markdown inline link, row 2 a bare URL. Kept deliberately
+# small: the requirement is that a reader has somewhere to go, so widening this table
+# means deciding that some new thing is somewhere to go, which is a decision and not a
+# convenience.
+VERIFIED_CITATIONS='
+\]\([^)[:space:]]+\)
+https?://[^[:space:]<>]+
+'
 
 # --- table 3: the two-sided bound on one criteria row's EVIDENCE cell ----------
 # Bytes, under `LC_ALL=C`. Both numbers are midpoints of a measured empty band, not round
@@ -248,9 +351,11 @@ validate_tables() {
 "
   done <<EOF
 $(rows "$TLDR_MARKERS")
+$(rows "$VERIFIED_MARKERS")
+$(rows "$VERIFIED_CITATIONS")
 EOF
   [ -z "$bad" ] || {
-    echo "error: these rows in this script's TL;DR table are not valid POSIX EREs, so" >&2
+    echo "error: these rows in this script's ERE tables are not valid POSIX EREs, so" >&2
     echo "       the table matches nothing and every PR would be refused for a reason" >&2
     echo "       that is not about its body. Refusing (fail closed):" >&2
     printf '%s' "$bad" >&2
@@ -320,7 +425,90 @@ EOF
   return 1
 }
 
-# --- elements 2 and 3: the table's shape, and each of its rows' evidence ------
+# --- element 4: is there a `Verified:` line, and does it cite anything? -------
+# Two questions, three answers, because the FIXES are different: a line that is not there
+# has to be written, a line that is there and cites nothing has to gain the link. Folding
+# them into one refusal would send an author who wrote the line looking for a line they
+# had already written.
+#
+#   0 a marker line carrying at least one citation
+#   1 no marker line at all
+#   2 a table will not compile (unknown; the caller refuses)
+#   3 a marker line is there, and no line matching one carries a citation
+#
+# EVERY MARKER LINE IN THE BODY IS OFFERED TO THE CITATION TABLE, not just the first. A
+# body whose lead mentions "Verified:" and whose real Verified line sits two paragraphs
+# down is a body that cites something, and refusing it would be a false refusal on correct
+# work. The refusal at 3 therefore means NO line matching any marker carried a link.
+has_verified() { # <rendered-body>
+  local pat lpat rc lines seen=0
+  while IFS= read -r pat; do
+    [ -n "$pat" ] || continue
+    lines="$(grep -Ei "$pat" "$1" 2>/dev/null)"; rc=$?
+    [ "$rc" -eq 0 ] || { [ "$rc" -eq 1 ] || return 2; continue; }
+    seen=1
+    while IFS= read -r lpat; do
+      [ -n "$lpat" ] || continue
+      printf '%s\n' "$lines" | grep -Eq "$lpat" 2>/dev/null; rc=$?
+      [ "$rc" -eq 0 ] && return 0
+      [ "$rc" -eq 1 ] || return 2
+    done <<EOF
+$(rows "$VERIFIED_CITATIONS")
+EOF
+  done <<EOF
+$(rows "$VERIFIED_MARKERS")
+EOF
+  [ "$seen" -eq 1 ] && return 3
+  return 1
+}
+
+# --- element 6: `### Notes`, when it is there, leads each bullet with its claim -
+# A SEPARATE PASS FROM THE TABLE, and deliberately so. Elements 2, 3 and 5 all ask about
+# ONE artifact — the criteria table — which is why they share one parser; the notes are a
+# different artifact, and giving them their own reader keeps "which table is the criteria
+# table" answered in exactly one place.
+#
+# Output is TAB-separated, one line:
+#   notes<TAB>absent   no `Notes` section, or one carrying no bullets — both CLEAR, since
+#                      the section is optional and no number of notes is ever required
+#   notes<TAB>ok       every column-zero bullet under it opens with bold
+#   notes<TAB>bare<TAB><n><TAB><excerpt>   one line per bullet that does not
+notes_scan() { # <rendered-body>
+  LC_ALL=C awk '
+    # Untrusted text leaves here, reduced and truncated exactly as the table scan does it.
+    function excerpt(s,   out) {
+      out = s
+      gsub(/[^[:print:]]/, ".", out)
+      if (length(out) > 60) out = substr(out, 1, 57) "..."
+      return out
+    }
+    {
+      line = $0
+      if (line ~ /^[[:space:]]{0,3}#{1,6}[[:space:]]+/) {
+        h = line
+        sub(/^[[:space:]]*#+[[:space:]]*/, "", h)
+        sub(/[[:space:]]*#+[[:space:]]*$/, "", h)
+        sub(/[[:space:]]+$/, "", h)
+        innotes = (tolower(h) ~ /^notes[^0-9a-z]*$/) ? 1 : 0
+        next
+      }
+      if (innotes == 0) next
+      # COLUMN ZERO ONLY. A GFM sub-item under a bullet at column 0 is indented by at
+      # least two spaces, so this excludes children exactly rather than by a guess.
+      if (line !~ /^[-*+][[:space:]]+/) next
+      nth++
+      if (line !~ /^[-*+][[:space:]]+(\*\*|__)/)
+        bare = bare sprintf("notes\tbare\t%d\t%s\n", nth, excerpt(line))
+    }
+    END {
+      if (nth == 0)        printf "notes\tabsent\n"
+      else if (bare == "") printf "notes\tok\n"
+      else                 printf "%s", bare
+    }
+  ' "$1"
+}
+
+# --- elements 2, 3 and 5: the table's shape, its rows' evidence, and its tally -
 # ONE PASS, ONE PARSER, ON PURPOSE. Elements 2 and 3 ask two questions of the same
 # artifact ("is the criteria table well-formed" and "is each of its rows inside the
 # bound"), and a second parser for the second question would give this repo two answers
@@ -337,6 +525,14 @@ EOF
 #                       one line per criteria row outside the bound. Emitted only for
 #                       rows that CARRY A MARK, so a continuation or spacer row inside
 #                       the table is never measured as if it were a criterion.
+#   tally<TAB>ok                                   the heading agrees with the rows
+#   tally<TAB>noheading                            no ATX heading above the table at all
+#   tally<TAB>nottallied<TAB><heading excerpt>     a heading, carrying no `N ✓ / M ✗`
+#   tally<TAB>mismatch<TAB><claimed ✓><TAB><claimed ✗><TAB><actual ✓><TAB><actual ✗><TAB><undecidable rows>
+#   tally<TAB>unexplained<TAB><claimed ✗><TAB><heading excerpt>
+#                       element 5. Emitted only alongside `state ok`, for the same reason
+#                       the row lines are: with no criteria table there is no tally to be
+#                       right or wrong about.
 #
 # GREP'S STATUS IS NOT CONSULTED HERE BECAUSE NOTHING IS GREPPED: the shape is decided
 # structurally, in one awk pass, which is the same move the sibling made when it took
@@ -351,6 +547,7 @@ table_scan() { # <rendered-body>
   # (0x1e) field and is split back below. A record separator cannot occur in a PR body
   # the host serves as JSON text, so nothing an author writes can add a row here.
   LC_ALL=C awk -v marks="$(rows "$CRITERIA_MARKS" | tr '\n' '\036')" \
+       -v mchk="$CRITERIA_MARK_VERIFIED" -v mcrs="$CRITERIA_MARK_UNVERIFIED" \
        -v ceiling="$CRITERIA_EVIDENCE_CEILING" -v floor="$CRITERIA_EVIDENCE_FLOOR" '
     function cellcount(s,   arr, n) {
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
@@ -399,6 +596,60 @@ table_scan() { # <rendered-body>
       # caller loses that pinning. `<= 3` covers both rather than depending on it.
       return has_mark(t) && length(t) <= 3
     }
+    # WHICH mark a cell is, for element 5. `mark_only` answers "is this the mark column";
+    # the tally has to count the two glyphs apart, and it reads them from the two named
+    # constants rather than from the marks table row order.
+    function mark_of(c,   t) {
+      t = c
+      gsub(/[*_` ~]/, "", t)
+      if (t == "") return ""
+      if (length(t) <= 3) {
+        if (index(t, mchk) > 0) return "chk"
+        if (index(t, mcrs) > 0) return "crs"
+      }
+      return ""
+    }
+    # One rows verdict: "chk", "crs", or "" when the row is undecidable. The mark COLUMN
+    # is read first, because that is the cell the merge gate reads; only if no cell is
+    # just a mark does this fall back to the row carrying exactly ONE KIND of glyph. A row
+    # carrying both, or neither in a countable position, answers "" and is counted as
+    # undecidable — which makes the tally disagree with the table and refuse, the safe
+    # direction for a row nobody can classify.
+    function row_mark(s,   arr, n, i, m, mm) {
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", s)
+      gsub(/\\\|/, "\002", s)
+      sub(/^\|/, "", s); sub(/\|$/, "", s)
+      n = split(s, arr, "|")
+      for (i = 1; i <= n; i++) {
+        m = mark_of(arr[i])
+        if (m != "") return m
+      }
+      mm = ""
+      if (index(s, mchk) > 0) mm = "chk"
+      if (index(s, mcrs) > 0) mm = (mm == "" ? "crs" : "both")
+      return (mm == "both") ? "" : mm
+    }
+    # The nearest ATX heading ABOVE the criteria table, with its markers stripped. Element
+    # 5 asks the heading for a tally, so a table with no heading anywhere above it has no
+    # tally by construction and says so.
+    function heading_above(idx,   k, h) {
+      for (k = idx; k >= 1; k--) {
+        if (lines[k] ~ /^[[:space:]]{0,3}#{1,6}[[:space:]]+/) {
+          h = lines[k]
+          sub(/^[[:space:]]*#+[[:space:]]*/, "", h)
+          sub(/[[:space:]]*#+[[:space:]]*$/, "", h)
+          return h
+        }
+      }
+      return ""
+    }
+    # Untrusted text leaves here too, reduced and truncated exactly as split_row does it.
+    function excerpt(s,   out) {
+      out = s
+      gsub(/[^[:print:]]/, ".", out)
+      if (length(out) > 60) out = substr(out, 1, 57) "..."
+      return out
+    }
     # Splits one row into R_EVI (the evidence cell), R_LABEL (a bounded, sanitised excerpt
     # of the cells before it) and R_MARKLAST (the row has no evidence column at all).
     #
@@ -444,6 +695,7 @@ table_scan() { # <rendered-body>
     { lines[NR] = $0 }
     END {
       found = 0; marked = 0; nth = 0; offenders = ""
+      actchk = 0; actcrs = 0; ambig = 0; crit_head = ""; crit_head_seen = 0
       for (i = 2; i <= NR; i++) {
         if (!is_delim(lines[i])) continue
         head = lines[i-1]
@@ -457,6 +709,12 @@ table_scan() { # <rendered-body>
           rowcount++
           if (!has_mark(lines[j])) continue
           rowmarked = 1
+          # ELEMENT 5, counted on the same rows element 3 measures — one walk of the
+          # table answers both, which is why there is still exactly one parser here.
+          rm = row_mark(lines[j])
+          if (rm == "chk") actchk++
+          else if (rm == "crs") actcrs++
+          else ambig++
           # ELEMENT 3, measured on this row and nothing else. A row with no evidence cell
           # at all reports length 0, which is a floor failure — the honest answer, since
           # a criterion whose evidence column is empty is exactly the assertion-without-
@@ -473,7 +731,13 @@ table_scan() { # <rendered-body>
         }
         if (rowcount < 1) continue
         found = 1
-        if (rowmarked) marked = 1
+        if (rowmarked) {
+          marked = 1
+          # The heading of the FIRST marked table is the criteria heading. Taking the last
+          # one would let a second marked table further down the body move the tally onto
+          # a heading the author did not write it under.
+          if (crit_head_seen == 0) { crit_head = heading_above(i - 2); crit_head_seen = 1 }
+        }
       }
       # The state line comes FIRST and always, so a reader can take the verdict without
       # having to know how many row lines follow it.
@@ -484,6 +748,33 @@ table_scan() { # <rendered-body>
       # `none` there is no criteria table, so a length measured inside some other table
       # would be a refusal about a row nobody wrote as a criterion.
       if (found && marked) printf "%s", offenders
+      # ELEMENT 5, for the same reason and under the same condition.
+      if (found && marked) {
+        if (crit_head == "") { printf "tally\tnoheading\n"; exit }
+        # Built from the two named glyphs rather than written out, so the marks table and
+        # the tally can never disagree about which glyph means verified.
+        tre = "([0-9]+)[ \t]*" mchk "[ \t]*/[ \t]*([0-9]+)[ \t]*" mcrs
+        if (!match(crit_head, tre)) {
+          printf "tally\tnottallied\t%s\n", excerpt(crit_head); exit
+        }
+        t = substr(crit_head, RSTART, RLENGTH)
+        rest = substr(crit_head, RSTART + RLENGTH)
+        split(t, dg, /[^0-9]+/)
+        clchk = dg[1] + 0; clcrs = dg[2] + 0
+        if (clchk != actchk || clcrs != actcrs) {
+          printf "tally\tmismatch\t%d\t%d\t%d\t%d\t%d\n",
+                 clchk, clcrs, actchk, actcrs, ambig
+          exit
+        }
+        # THE REASON IS ASKED TO BE THERE, NEVER TO BE GOOD. Everything that is not a
+        # letter or a digit goes — whitespace, brackets, dashes, the glyphs themselves —
+        # so a heading closing on `8 ✗)` or `8 ✗ —` is bare and one carrying words is not.
+        gsub(/[^0-9A-Za-z]/, "", rest)
+        if (clcrs > 0 && rest == "") {
+          printf "tally\tunexplained\t%d\t%s\n", clcrs, excerpt(crit_head); exit
+        }
+        printf "tally\tok\n"
+      }
     }
   ' "$1"
 }
@@ -504,7 +795,9 @@ report_rows() { # <scan> <label> -> 0 clear, 3 at least one row outside the boun
   tab="$(printf '\t')"
   offenders="$(printf '%s\n' "$scan" | awk -F'\t' '$1 == "row" { print }')"
   [ -n "$offenders" ] || {
-    echo "ok: $label carries a TL;DR line and a well-formed acceptance-criteria table." >&2
+    echo "ok: $label carries a TL;DR line and a well-formed acceptance-criteria" >&2
+    echo "    table, a Verified line that cites something, a heading tally that matches" >&2
+    echo "    the rows, and claim-first notes where it has any." >&2
     return 0
   }
   n="$(printf '%s\n' "$offenders" | grep -c '^')"
@@ -547,18 +840,35 @@ EOF
 # The ONE place a body becomes an exit code, so both call sites (a fetched PR and a local
 # draft) answer identically. <label> only names the subject in the messages.
 decide() { # <rendered-body> <label> -> 0 clear, 1 refuse, 2 unknown, 3 a row is unbounded
-  local rendered="$1" label="$2" tldr scan tstate rc
+  local rendered="$1" label="$2" tldr verified scan tstate tally tkind rc
+  local nscan nstate bare_n bare_txt
+  local tab; tab="$(printf '\t')"
   has_tldr "$rendered"; tldr=$?
   [ "$tldr" -eq 2 ] && return 2
+  has_verified "$rendered"; verified=$?
+  [ "$verified" -eq 2 ] && return 2
   scan="$(table_scan "$rendered")"
   tstate="$(printf '%s\n' "$scan" | awk -F'\t' '$1 == "state" { print $2; exit }')"
   case "$tstate" in ok|unmarked|none) : ;; *) return 2 ;; esac
+  tally="$(printf '%s\n' "$scan" | awk -F'\t' '$1 == "tally" { print; exit }')"
+  tkind="$(printf '%s\n' "$tally" | cut -f2)"
+  # A `state ok` with no tally line at all is a scan that did not finish, which is unknown
+  # rather than a verdict about the body.
+  if [ "$tstate" = ok ]; then
+    case "$tkind" in ok|noheading|nottallied|mismatch|unexplained) : ;; *) return 2 ;; esac
+  fi
+  nscan="$(notes_scan "$rendered")"
+  nstate="$(printf '%s\n' "$nscan" | awk -F'\t' '$1 == "notes" { print $2; exit }')"
+  case "$nstate" in ok|absent|bare) : ;; *) return 2 ;; esac
 
   # STRUCTURE IS DECIDED BEFORE THE ROW BOUND, AND THAT ORDER IS THE POINT. Exit 1 says a
   # required element is missing; exit 3 says every element is there and one row is out of
   # bounds. Reporting the second while the first is unresolved would tell an author to
   # trim rows of a table the gate has not agreed exists.
-  [ "$tldr" -eq 0 ] && [ "$tstate" = ok ] && { report_rows "$scan" "$label"; return $?; }
+  if [ "$tldr" -eq 0 ] && [ "$verified" -eq 0 ] && [ "$tstate" = ok ] \
+     && [ "$tkind" = ok ] && [ "$nstate" != bare ]; then
+    report_rows "$scan" "$label"; return $?
+  fi
 
   echo "refuse: $label does not carry the shape CONVENTIONS.md requires of a PR body." >&2
   rc=1
@@ -566,6 +876,17 @@ decide() { # <rendered-body> <label> -> 0 clear, 1 refuse, 2 unknown, 3 a row is
     echo "        MISSING: the TL;DR line. One sentence — what changes, and why it is" >&2
     echo "        safe to merge — as '## Description (TL;DR)' or a leading '**TL;DR**'." >&2
   }
+  if [ "$verified" -eq 1 ]; then
+    echo "        MISSING: the Verified line. One line under the lead carrying what you" >&2
+    echo "        ran and a link a reader can open — 'Verified: 277/0 locally, 10/10" >&2
+    echo "        checks green on [run 33430116558](https://.../runs/33430116558)'. It" >&2
+    echo "        is how a reader decides in one line whether to trust the rest." >&2
+  elif [ "$verified" -eq 3 ]; then
+    echo "        INCOMPLETE: the Verified line cites nothing. It carries no link, so a" >&2
+    echo "        reader has nowhere to go and check it — add the CI run, the workflow" >&2
+    echo "        URL or the page you loaded. What the line CLAIMS is your business;" >&2
+    echo "        that it cites something a reader can open is this gate's." >&2
+  fi
   case "$tstate" in
     none)
       echo "        MISSING: the acceptance-criteria table. One row per criterion, a" >&2
@@ -578,8 +899,51 @@ decide() { # <rendered-body> <label> -> 0 clear, 1 refuse, 2 unknown, 3 a row is
       echo "        state SCHEMA.md clause 7 and AUTONOMY.md read, so as written there is" >&2
       echo "        nothing for the merge gate to consult." >&2 ;;
   esac
+  case "$tkind" in
+    noheading)
+      echo "        MISSING: a heading over the criteria table, so it carries no tally." >&2
+      echo "        Head it '### Criteria (10 ✓ / 8 ✗ — every ✗ is a later slice)' — the" >&2
+      echo "        counts, and why the ✗s are there. A reader takes the shape of the" >&2
+      echo "        table from that line instead of from eighteen rows." >&2 ;;
+    nottallied)
+      echo "        MISSING: the tally on the criteria heading, which reads:" >&2
+      echo "          \"$(printf '%s\n' "$tally" | cut -f3)\"" >&2
+      echo "        Write the counts into it — '### Criteria (10 ✓ / 8 ✗ — every ✗ is a" >&2
+      echo "        later slice)'. SCHEMA.md clause 7 makes an unverified criterion block" >&2
+      echo "        clearance, so the counts are the first thing a reader needs." >&2 ;;
+    mismatch)
+      echo "        WRONG: the criteria heading claims $(printf '%s\n' "$tally" | cut -f3) ✓ / $(printf '%s\n' "$tally" | cut -f4) ✗, and the table" >&2
+      echo "        carries $(printf '%s\n' "$tally" | cut -f5) ✓ / $(printf '%s\n' "$tally" | cut -f6) ✗. A tally a reader cannot trust costs more than" >&2
+      echo "        no tally at all, because it is the one number nobody re-derives." >&2
+      [ "$(printf '%s\n' "$tally" | cut -f7)" = 0 ] || {
+        echo "        ($(printf '%s\n' "$tally" | cut -f7) row(s) carry both glyphs or neither in a countable cell, so" >&2
+        echo "        they counted as neither. Put one ✓ or one ✗ in its own cell.)" >&2
+      } ;;
+    unexplained)
+      echo "        MISSING: the reason for the $(printf '%s\n' "$tally" | cut -f3) ✗ on the criteria heading, which reads:" >&2
+      echo "          \"$(printf '%s\n' "$tally" | cut -f4)\"" >&2
+      echo "        SCHEMA.md clause 7 makes an unverified criterion block clearance, so a" >&2
+      echo "        table with ✗ in it looks alarming until the heading says why. Put the" >&2
+      echo "        reason after the tally — '(10 ✓ / 8 ✗ — every ✗ is a later slice or" >&2
+      echo "        task-001)'. Whether the reason is a good one is the reviewer's call," >&2
+      echo "        not this gate's; that it is there is this gate's." >&2 ;;
+  esac
+  if [ "$nstate" = bare ]; then
+    echo "        MISSING: the bold claim opening these ### Notes bullet(s):" >&2
+    while IFS="$tab" read -r _ _ bare_n bare_txt; do
+      bare_n="${bare_n:-?}"; bare_txt="${bare_txt:-}"
+      [ -n "$bare_txt" ] || continue
+      echo "          note $bare_n: \"$bare_txt\"" >&2
+    done <<EOF
+$(printf '%s\n' "$nscan" | awk -F'\t' '$2 == "bare" { print }')
+EOF
+    echo "        Each note opens with a bolded sentence that IS the finding — '**A grep-" >&2
+    echo "        derived inventory would have been short by 8 and looked complete.**' —" >&2
+    echo "        with the explanation after it, so the section is skimmable in bold" >&2
+    echo "        alone. The section is optional; a note that buries its claim is not." >&2
+  fi
   echo "        This refuses on missing STRUCTURE, never on length: a long body carrying" >&2
-  echo "        both elements clears. See CONVENTIONS.md, 'The PR body has a required" >&2
+  echo "        every element clears. See CONVENTIONS.md, 'The PR body has a required" >&2
   echo "        shape'." >&2
   return "$rc"
 }
@@ -633,31 +997,68 @@ if [ "${1:-}" = "--self-test" ]; then
   # boundary rather than near it.
   st_cell() { printf '%*s' "$1" '' | tr ' ' 'x'; }
 
+  # The lead every probe below shares, so each probe states only the thing it is about.
+  ST_VERIFIED='Verified: `a.test.sh` 40/0 on [run 1](https://example.invalid/runs/1).'
+  ST_HEAD1='### Criteria (1 ✓ / 0 ✗)'
+  ST_HEADX='### Criteria (0 ✓ / 1 ✗ — it needs a human)'
+
   st_probe 0 "a conforming body (heading form)" \
-    '## Description (TL;DR)' 'It does the thing.' '' \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 0 "a conforming body (bold form)" \
-    '**TL;DR** — it does the thing.' '' \
+    '**TL;DR** — it does the thing.' '' "$ST_VERIFIED" '' "$ST_HEADX" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✗ | needs a human |'
   st_probe 1 "a body with no TL;DR marker" \
-    'It does the thing.' '' \
+    'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 1 "a body with no criteria table" \
-    '## Description (TL;DR)' 'It does the thing.' '' 'Some prose and nothing else.'
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' \
+    'Some prose and nothing else.'
   st_probe 1 "a body whose only table is inside a code fence" \
-    '## Description (TL;DR)' 'It does the thing.' '' '```md' \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' '```md' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' '```'
   st_probe 0 "a row at the largest honest evidence cell measured (#67, 377)" \
-    '## Description (TL;DR)' 'It does the thing.' '' \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' \
     "| it works | ✓ | $(st_cell 377) |"
   st_probe 3 "a row at ai-bridge#71's worst evidence cell (487)" \
-    '## Description (TL;DR)' 'It does the thing.' '' \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' \
     "| it works | ✓ | $(st_cell 487) |"
   st_probe 3 "a row whose evidence is 'see above'" \
-    '## Description (TL;DR)' 'It does the thing.' '' \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | see above |'
+
+  # ELEMENTS 4, 5 AND 6, EACH DRIVEN IN BOTH DIRECTIONS. A copy whose Verified table no
+  # longer fires, whose tally is never compared, or whose notes reader was deleted answers
+  # 0 on every probe above — so each new check gets a probe that can only pass while the
+  # check is really there, and its control is the clearing body at the top of this block.
+  st_probe 1 "a body with no Verified line" \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
+  st_probe 1 "a Verified line citing nothing" \
+    '## Description (TL;DR)' 'It does the thing.' '' 'Verified: 40/0 locally, all green.' \
+    '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
+  st_probe 1 "a criteria heading carrying no tally" \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' '### Criteria' '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
+  st_probe 1 "a tally that contradicts the table" \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' \
+    '### Criteria (2 ✓ / 0 ✗)' '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
+  st_probe 1 "a tally whose ✗ is unexplained" \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' \
+    '### Criteria (0 ✓ / 1 ✗)' '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✗ | needs a human |'
+  st_probe 1 "a ### Notes bullet that buries its claim" \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
+    '' '### Notes' '' '- the parser is in awk because grep cannot count cells.'
+  st_probe 0 "…and the same note, claim first" \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
+    '' '### Notes' '' '- **The parser is in awk.** grep cannot count a table cell.'
 
   printf '%s\n' "$SELFTEST_OK"
   exit 0

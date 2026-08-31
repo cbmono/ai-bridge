@@ -169,6 +169,25 @@ TABLE_HEAD='| Criterion | ✓ | Verified by |'
 TABLE_RULE='|---|---|---|'
 TABLE_ROW='| the retry backs off on 429 | ✓ | `foo.test.sh` 40/0 |'
 
+# --- the three elements #3286 carries and elements 1-3 never asked for --------
+# Every fixture below that is meant to CLEAR carries all of them, so a case about the
+# table is not silently also a case about the Verified line. The ones that are about a
+# new element drop or corrupt exactly that element and nothing else.
+VERIFIED='Verified: `foo.test.sh` 40/0 on [run 1](https://example.invalid/actions/runs/1).'
+
+crit_head() { # <✓ rows> [<✗ rows>] -> a criteria heading whose tally matches them
+  if [ "${2:-0}" = 0 ]; then printf '### Criteria (%s ✓ / 0 ✗)' "$1"
+  else printf '### Criteria (%s ✓ / %s ✗ — every ✗ needs a human)' "$1" "$2"; fi
+}
+
+shaped_body() { # <✓ rows> <✗ rows> <table lines...> -> a body carrying every element
+  local c="$1" x="$2"; shift 2
+  body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+            "$(crit_head "$c" "$x")" '' "$@"
+}
+
+good_body() { shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW"; }
+
 echo "== the script runs, and proves it =="
 out="$("$SCRIPT" --self-test 2>&1)"; rc=$?
 ok "--self-test exits 0"                 "$rc" 0
@@ -207,24 +226,24 @@ ok "…while the intact file does vouch for itself" "$(selftest_contract "$SCRIP
 
 echo
 echo "== both elements present: it clears, at whatever length =="
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
-                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+serve "$(good_body)"
 expect "the heading form (task-007's shape) -> clear" 0 42
 says   "  ...and says both elements are there" "carries a TL;DR line and a well-formed"
 
-serve "$(body_file '**TL;DR** — adds the gate.' '' \
+serve "$(body_file '**TL;DR** — adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "the bold form (CONVENTIONS.md's shape today) -> clear" 0 42
 
-serve "$(body_file 'TL;DR: adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+serve "$(body_file 'TL;DR: adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "the bare-token form -> clear" 0 42
 
 # A `✗` row is the HONEST state of an unverified criterion, and SCHEMA.md clause 7 is what
 # refuses on it. This predicate must not double as that gate, or the repo has two answers
 # to one question — and the second one would refuse an honestly-marked PR before a human
 # ever saw why.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
-                   '| works with two host accounts | ✗ | needs two accounts |')"
+serve "$(shaped_body 0 1 "$TABLE_HEAD" "$TABLE_RULE" \
+                     '| works with two host accounts | ✗ | needs two accounts |')"
 expect "a table whose row is ✗ -> still CLEAR (that is clause 7's job)" 0 42
 
 echo
@@ -233,7 +252,7 @@ echo "== the anti-length-gate case, pinned to the incident's own number =="
 # limit introduced anywhere at or below the incident's length goes red here rather than
 # looking like success because the motivating PR would have been caught.
 LONG="$TMP/long.md"
-{ printf '%s\n' '## Description (TL;DR)' 'Adds the gate.' ''
+{ printf '%s\n' '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" ''
   printf '%s\n' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW"
   printf '\n'
 } > "$LONG"
@@ -258,7 +277,7 @@ ok "no line mentioning the count contains a test" "$marked" 0
 mags="$(grep -nE -- '-gt|-lt|-ge|-le' "$SCRIPT" | grep -vc '"\$#"' || true)"
 ok "the only magnitude comparison is on \$#"       "$mags" 0
 ok "the count is printed on the clearing path"     \
-   "$(serve "$(body_file '## Description (TL;DR)' 'x' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+   "$(serve "$(good_body)"
       "$SCRIPT" 42 2>&1 | grep -c 'characters (information only')" 1
 # The awk side of the same question, because the ONE length this script does compare is
 # computed there. Two comparisons read a measured length: the ceiling and the floor. A
@@ -286,7 +305,10 @@ cell() { printf '%*s' "$1" '' | tr ' ' 'x'; }   # an evidence cell of exactly <n
 
 row_body() { # <evidence-bytes>... -> a conforming body with one criteria row per argument
   local -a lines
-  lines=('## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE")
+  # The heading's tally is COMPUTED from the argument count, so a case that adds a row
+  # cannot accidentally become a case about a tally that no longer matches its table.
+  lines=('## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head "$#")" '' \
+         "$TABLE_HEAD" "$TABLE_RULE")
   local n i=0
   for n in "$@"; do
     i=$((i+1))
@@ -308,8 +330,8 @@ r2_evidence="$(cell "$PR70_WORST_CELL")"
 # The mark is 3 bytes in UTF-8 and `${#var}` counts characters, so the width is computed
 # from the parts rather than from a string length that would disagree with the gate.
 r2_pad=$(( PR70_R2_WORST_ROW - PR70_WORST_CELL - 23 ))
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
-                   "| criterion $(cell "$r2_pad") | ✓ | $r2_evidence |")"
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" \
+                     "| criterion $(cell "$r2_pad") | ✓ | $r2_evidence |")"
 r2_row="| criterion $(cell "$r2_pad") | ✓ | $r2_evidence |"
 ok "…and the fixture row really is that wide" \
    "$(printf '%s' "$r2_row" | LC_ALL=C wc -c | tr -d ' ')" "$PR70_R2_WORST_ROW"
@@ -348,44 +370,43 @@ echo "== the bound is on ONE CELL — not the row, and never the body =="
 # a correct PR for obeying a different rule. #67's worst whole ROW is 489 bytes with a
 # 377-byte cell, so this case is the corpus, not a hypothetical.
 LONGCRIT="$(cell 600)"
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
-                   "| $LONGCRIT | ✓ | \`foo.test.sh\` 40/0 |")"
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" \
+                     "| $LONGCRIT | ✓ | \`foo.test.sh\` 40/0 |")"
 expect "a 600-byte CRITERION with short evidence -> clear" 0 42
 # …and the same row with the lengths swapped is the case that must refuse, which is what
 # makes the one above a statement about the COLUMN rather than about leniency.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
-                   "| a short criterion | ✓ | $LONGCRIT |")"
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" \
+                     "| a short criterion | ✓ | $LONGCRIT |")"
 expect "…the same 600 bytes in the EVIDENCE cell -> refuse" 3 42
 
 echo
 echo "== the floor refuses what CONVENTIONS.md names as failing it =="
 for evidence in 'ok' 'done' 'see above' 'yes' 'verified'; do
-  serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
-                     "| the retry backs off on 429 | ✓ | $evidence |")"
+  serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" \
+                       "| the retry backs off on 429 | ✓ | $evidence |")"
   expect "evidence '$evidence' -> refuse" 3 42
 done
 says "  ...telling the author what to name instead" "Name the artifact a reader can re-run"
 # …and the shortest thing the document offers as REAL evidence clears, so the floor is a
 # bound and not a general demand for more words.
 for evidence in '`foo.test.sh` 40/0' 'CI run 1234 green' '`shellcheck -x run.sh` clean'; do
-  serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
-                     "| the retry backs off on 429 | ✓ | $evidence |")"
+  serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" \
+                       "| the retry backs off on 429 | ✓ | $evidence |")"
   expect "evidence '$evidence' -> clear" 0 42
 done
 
 # An EMPTY evidence cell is the one a "skip the mark column" reader would have missed
 # entirely: it would take the criterion text as the evidence and clear the single row in
 # the table that has no evidence at all.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
-                   '| the retry backs off on 429 | ✓ |  |')"
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" \
+                     '| the retry backs off on 429 | ✓ |  |')"
 expect "an EMPTY evidence cell -> refuse" 3 42
 says   "  ...at length zero, not at the criterion's length" "under the FLOOR at 0 bytes"
 
 # The mark in the last column means the evidence is somewhere this reader does not look,
 # and saying that is more useful than measuring a glyph.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
-                   '| Criterion | Verified by | ✓ |' "$TABLE_RULE" \
-                   '| the retry backs off on 429 | `foo.test.sh` 40/0 | ✓ |')"
+serve "$(shaped_body 1 0 '| Criterion | Verified by | ✓ |' "$TABLE_RULE" \
+                     '| the retry backs off on 429 | `foo.test.sh` 40/0 | ✓ |')"
 expect "the ✓ column LAST -> refuse" 3 42
 says   "  ...naming that, rather than measuring the mark" "has NO evidence column"
 
@@ -411,8 +432,7 @@ says   "  ...and it is a DIFFERENT code from the row bound" "MISSING:"
 # Untrusted text: the excerpt of a criterion is the one thing from the body this script
 # echoes, so an escape sequence in it must not reach the terminal.
 ESC="$(printf 'a\033[31mred\033[0m criterion')"
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" \
-                   "| $ESC | ✓ | ok |")"
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "| $ESC | ✓ | ok |")"
 expect "a criterion carrying an ANSI escape -> refuse" 3 42
 ok "…and the escape does not survive into the message" \
    "$(printf '%s' "$LAST_OUT" | grep -c "$(printf '\033')" || true)" 0
@@ -421,12 +441,14 @@ says "  ...while the readable part of it still names the row" "red"
 echo
 echo "== a missing element is a refusal, and it is named =="
 serve "$(body_file 'Adds the gate, and here is a lot of detail about it.' '' \
+                   "$VERIFIED" '' "$(crit_head 1)" '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "no TL;DR marker -> refuse" 1 42
 says   "  ...naming the TL;DR line as the missing element" "MISSING: the TL;DR line"
 says_not "  ...and not blaming the table, which is present" "MISSING: the acceptance-criteria table"
 
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' 'Some prose, and no table.')"
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+                   'Some prose, and no table.')"
 expect "no criteria table -> refuse" 1 42
 says   "  ...naming the table as the missing element" "MISSING: the acceptance-criteria table"
 says_not "  ...and not blaming the TL;DR, which is present" "MISSING: the TL;DR line"
@@ -441,26 +463,26 @@ expect "an EMPTY body -> refuse (readable, not unknown)" 1 42
 
 # A table of changed files is not the criteria table, and the `✓`/`✗` column is exactly
 # what tells them apart — the same column SCHEMA.md clause 7 and AUTONOMY.md read.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
                    '| File | Change |' '|---|---|' '| a.sh | new |')"
 expect "a table with no ✓/✗ in it -> refuse" 1 42
 says   "  ...saying there is nothing for the merge gate to consult" "nothing for the merge gate to consult"
 
 # GitHub renders NO TABLE when the delimiter row's cell count differs from the header's,
 # so a body like this shows the reader a wall of pipes. Refusing it is the safe direction.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
                    "$TABLE_HEAD" '|---|---|' "$TABLE_ROW")"
 expect "a table the host would not render -> refuse" 1 42
 
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE")"
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+                   "$TABLE_HEAD" "$TABLE_RULE")"
 expect "a table header with no data row -> refuse" 1 42
 
 # An escaped pipe is CONTENT in GFM, and counting it as a cell boundary would refuse a
 # table the host renders perfectly — a false "structure missing" on a correct PR, which
 # is the failure that gets a gate switched off.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
-                   '| Criterion | \| | Verified by |' "$TABLE_RULE" \
-                   '| a cell with a \| in it | ✓ | `foo.test.sh` 40/0 |')"
+serve "$(shaped_body 1 0 '| Criterion | \| | Verified by |' "$TABLE_RULE" \
+                     '| a cell with a \| in it | ✓ | `foo.test.sh` 40/0 |')"
 expect "a table whose cells escape a pipe -> clear" 0 42
 
 echo
@@ -469,29 +491,31 @@ echo "== every text match fails in the SAFE direction =="
 # clear a body nobody can read — so the TL;DR patterns are anchored at the start of a
 # line, and a sentence that merely MENTIONS the rule does not satisfy it.
 serve "$(body_file 'This change follows the TL;DR rule in CONVENTIONS.md closely.' '' \
+                   "$VERIFIED" '' "$(crit_head 1)" '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a mid-sentence mention of TL;DR does not count -> refuse" 1 42
 
 # THREE CASES FROM THE REVIEW OF THIS PR (ai-bridge#65), all in the dangerous direction —
 # each one is a body the first cut CLEARED and a human could not have read as shaped.
 serve "$(body_file '## Is the TL;DR rule required?' 'Some discussion of it.' '' \
+                   "$VERIFIED" '' "$(crit_head 1)" '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a heading that only MENTIONS TL;DR -> refuse" 1 42
 says   "  ...naming the TL;DR line as missing" "MISSING: the TL;DR line"
 # …while the heading forms that ARE the marker still clear, so the fix is a narrowing and
 # not a break. (`## Description (TL;DR)` and `**TL;DR** —` are covered above; this is the
 # bare heading.)
-serve "$(body_file '## TL;DR' 'Adds the gate.' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+serve "$(body_file '## TL;DR' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a bare '## TL;DR' heading -> still clear" 0 42
 
 # `|---|:|` is not a delimiter row: GitHub renders no table at all, so a marked row under
 # it is not the criteria table however much it looks like one.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
                    '| Criterion | ✓ |' '|---|:|' '| it works | ✓ |')"
 expect "a delimiter row with a non-delimiter cell -> refuse" 1 42
 # …and the alignment colons GFM does allow are still a delimiter row.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
-                   "$TABLE_HEAD" '|:---|:---:|---:|' "$TABLE_ROW")"
+serve "$(shaped_body 1 0 "$TABLE_HEAD" '|:---|:---:|---:|' "$TABLE_ROW")"
 expect "alignment colons in the delimiter row -> clear" 0 42
 
 echo
@@ -517,18 +541,233 @@ expect "a nested fence does not close its outer fence -> refuse" 1 42
 
 # The other half of that: real content OUTSIDE a fence still clears when the body also
 # happens to contain a fence. Stripping must not eat the body.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' '```sh' 'echo hi' '```' '' \
-                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+serve "$(shaped_body 1 0 '```sh' 'echo hi' '```' '' \
+                     "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a body with a fence AND real content -> clear" 0 42
 
 echo
+echo "== element 4: the Verified line, and the one thing asked of what it says =="
+# #3286's lead is followed by exactly one line — "Verified: 277/0 locally, 10/10
+# non-deploy checks green on [run 33430116558](...)" — and a reader decides from that one
+# line whether to trust the eighteen rows below it. Nothing required it, so nothing had it.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$(crit_head 1)" '' \
+                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "no Verified line -> refuse" 1 42
+says   "  ...naming the Verified line as the missing element" "MISSING: the Verified line"
+says_not "  ...and not blaming the TL;DR, which is present"   "MISSING: the TL;DR line"
+says_not "  ...nor the table, which is present"               "MISSING: the acceptance-criteria table"
+
+# PRESENT AND CITING NOTHING IS A DIFFERENT REFUSAL FROM ABSENT, because the fix is
+# different: one line has to be written, the other has to gain a link. Telling an author
+# who wrote the line that it is missing sends them looking for what they already did.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+                   'Verified: 40/0 locally, and every check is green.' '' "$(crit_head 1)" '' \
+                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "a Verified line citing nothing -> refuse" 1 42
+says   "  ...saying it cites nothing, not that it is absent" "INCOMPLETE: the Verified line cites nothing"
+says_not "  ...and not calling it missing"                   "MISSING: the Verified line"
+
+# WHAT IT CLAIMS IS NOT CHECKED AND MUST NOT BE. All three of these are unverifiable
+# assertions about test counts; all three clear, because each cites something a reader can
+# open, and that is the whole of the requirement.
+for cite in 'Verified: 40/0 on [run 1](https://example.invalid/runs/1).' \
+            'Verified: 40/0, CI green — https://example.invalid/actions/runs/1' \
+            '**Verified:** 40/0 on [run 1](https://example.invalid/runs/1).'; do
+  serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$cite" '' "$(crit_head 1)" '' \
+                     "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+  expect "a Verified line citing something -> clear" 0 42
+done
+# A `### Verified` HEADING IS NOT THIS ELEMENT, and that is the narrow direction on
+# purpose: the element is ONE LINE carrying the counts and the link, and accepting a
+# heading would mean deciding how many lines below it the citation may sit. The author
+# whose Verified line has grown into a section still writes the one line.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' '### Verified' \
+                   '40/0 on [run 1](https://example.invalid/runs/1).' '' "$(crit_head 1)" '' \
+                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "a '### Verified' SECTION is not the one line -> refuse" 1 42
+says   "  ...naming the Verified line as missing" "MISSING: the Verified line"
+
+# ANCHORED, exactly as the TL;DR markers are, and failing toward refusal for the same
+# reason: a body that DISCUSSES the Verified line must not clear on the discussion.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+                   'Everything here was verified: see https://example.invalid/runs/1.' '' \
+                   "$(crit_head 1)" '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "a mid-sentence 'verified:' does not count -> refuse" 1 42
+says   "  ...naming the Verified line as missing" "MISSING: the Verified line"
+
+echo
+echo "== element 5: the tally is CHECKED AGAINST the table, not merely required =="
+# The single most valuable element of #3286, and the one a reader pays most for when it is
+# absent: `### Criteria (10 ✓ / 8 ✗ — every ✗ is a later slice or task-001)`. SCHEMA.md
+# clause 7 makes an unverified criterion block clearance, so eight ✗ look alarming until
+# the heading says every one is deferred by design — otherwise a reader reconstructs that
+# from eighteen rows before they can decide anything.
+# NO HEADING ANYWHERE ABOVE THE TABLE — the bold TL;DR spelling, which leaves the body
+# without an ATX heading at all, so there is nowhere a tally could be.
+serve "$(body_file '**TL;DR** — adds the gate.' '' "$VERIFIED" '' \
+                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "no heading over the criteria table -> refuse" 1 42
+says   "  ...saying the table carries no tally" "MISSING: a heading over the criteria table"
+
+# …and with the house heading present but no `### Criteria` one, the nearest heading above
+# the table is `## Description (TL;DR)`, which is a heading carrying no tally. Same
+# refusal, different sentence, because the fix is different.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "the lead heading is the nearest one, and it has no tally -> refuse" 1 42
+says   "  ...asking for the tally on it" "MISSING: the tally on the criteria heading"
+
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+                   '### Criteria' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "a heading with no tally -> refuse" 1 42
+says   "  ...naming the tally as the missing part" "MISSING: the tally on the criteria heading"
+says   "  ...and quoting the heading it read"      "Criteria"
+
+# A TALLY NOBODY CHECKS IS WORSE THAN NO TALLY, because it is the one number a reader
+# takes on trust and never re-derives. Both directions, one row apart.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+                   '### Criteria (2 ✓ / 0 ✗)' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "a tally claiming one ✓ too many -> refuse" 1 42
+says   "  ...naming what it claims and what the table has" "claims 2 ✓ / 0 ✗"
+says   "  ...and the actual counts"                        "carries 1 ✓ / 0 ✗"
+
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+                   '### Criteria (1 ✓ / 1 ✗ — the ✗ needs a human)' '' \
+                   "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "a tally claiming a ✗ the table does not have -> refuse" 1 42
+says   "  ...naming both sides" "carries 1 ✓ / 0 ✗"
+
+# …and the tally that AGREES clears, in both mixes, so the check is a comparison and not a
+# demand for a particular number.
+serve "$(shaped_body 2 1 "$TABLE_HEAD" "$TABLE_RULE" \
+                     '| a | ✓ | `a.test.sh` 40/0 |' '| b | ✓ | `b.test.sh` 12/0 |' \
+                     '| c | ✗ | needs two host accounts |')"
+expect "a tally that matches a 2 ✓ / 1 ✗ table -> clear" 0 42
+
+# The mark column is read the way the merge gate reads it, so a decorated mark still
+# counts — a body that bolds or code-spans its glyphs is not a body with no tally.
+serve "$(shaped_body 1 1 "$TABLE_HEAD" "$TABLE_RULE" \
+                     '| a | **✓** | `a.test.sh` 40/0 |' '| b | `✗` | needs a human |')"
+expect "bolded and code-spanned marks still count -> clear" 0 42
+
+# THE REASON, AND ONLY WHEN THERE ARE ✗. A bare `(0 ✓ / 1 ✗)` is exactly the alarming
+# artifact this element exists to prevent.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+                   '### Criteria (0 ✓ / 1 ✗)' '' "$TABLE_HEAD" "$TABLE_RULE" \
+                   '| works with two host accounts | ✗ | needs two accounts |')"
+expect "a ✗ tally with no reason -> refuse" 1 42
+says   "  ...asking for the reason, not for the tally" "MISSING: the reason for the 1 ✗"
+says_not "  ...and not claiming the tally is wrong"    "WRONG: the criteria heading"
+
+# A heading that closes on punctuation is still bare — the reason has to be words.
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+                   '### Criteria (0 ✓ / 1 ✗ —)' '' "$TABLE_HEAD" "$TABLE_RULE" \
+                   '| works with two host accounts | ✗ | needs two accounts |')"
+expect "a dash where the reason should be -> refuse" 1 42
+says   "  ...still asking for the reason" "MISSING: the reason for the 1 ✗"
+
+# …while a tally with NO ✗ needs no reason, because there is nothing to explain. Demanding
+# one there would be noise on every fully-verified PR.
+serve "$(good_body)"
+expect "a 1 ✓ / 0 ✗ tally with no reason -> clear" 0 42
+
+echo
+echo "== element 6: ### Notes is OPTIONAL, and its bullets lead with the claim =="
+# A small PR needs no notes and NO NUMBER OF NOTES IS EVER REQUIRED — `good_body` above
+# has none and clears. What is checked is the shape of the ones that are there: each opens
+# with a bolded sentence that IS the finding, so the section is skimmable in bold alone.
+NOTE_BOLD='- **A grep-derived inventory would have been short by 8.** `emails.ts` has a NUL byte.'
+NOTE_BARE='- A grep-derived inventory would have been short by 8; `emails.ts` has a NUL byte.'
+
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes' '' "$NOTE_BOLD")"
+expect "one claim-first note -> clear" 0 42
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes' '' \
+                     "$NOTE_BOLD" '- **The environment axis is a deployment property.**' \
+                     '- **Deny-by-default lives at registration.** The server does not boot.')"
+expect "three claim-first notes -> clear (no number is required)" 0 42
+
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes' '' "$NOTE_BARE")"
+expect "a note that buries its claim -> refuse" 1 42
+says   "  ...naming the note by index"    "note 1:"
+says   "  ...and quoting enough to find it" "A grep-derived inventory"
+says_not "  ...while not calling the section missing" "MISSING: the acceptance-criteria table"
+
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes' '' \
+                     "$NOTE_BOLD" "$NOTE_BARE")"
+expect "one bold note and one bare -> refuse on the bare one" 1 42
+says   "  ...naming the second, not the first" "note 2:"
+
+# COLUMN ZERO ONLY. A correctly-nested sub-item is indented by at least two spaces, and
+# refusing one would be a false refusal on correct work — the failure that gets a gate
+# switched off.
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes' '' \
+                     "$NOTE_BOLD" '  - the NUL byte makes grep call the file binary')"
+expect "a nested sub-bullet under a claim-first note -> clear" 0 42
+
+# …and a bullet OUTSIDE the section is not a note. The section ends at the next heading.
+serve "$(shaped_body 1 0 "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes' '' \
+                     "$NOTE_BOLD" '' '### Follow-ups' '' '- split the emails slice out')"
+expect "a bullet under the NEXT heading is not a note -> clear" 0 42
+
+echo
+echo "== the exemplar the owner named: alteos-gmbh/monorepo#3286 =="
+# "This one looks perfect." It is captured VERBATIM as a fixture rather than re-fetched,
+# for the reason the row corpus is pinned: a live PR body is not a fixture, and a gate
+# calibrated against something anyone can edit has no baseline. Every new element above
+# was derived from this body, so this is the case that says the derivation was faithful.
+EXEMPLAR="$(cd "$(dirname "$0")" && pwd)/fixtures/pr-body/alteos-monorepo-3286.md"
+EXEMPLAR_CHARS=3554        # the body itself; the fixture adds the trailing newline
+EXEMPLAR_CHECK=10          # its tally, and its table:  10 ✓
+EXEMPLAR_CROSS=8           #                             8 ✗ over 18 rows
+ok "the fixture is there"  "$([ -r "$EXEMPLAR" ] && echo yes || echo no)" yes
+ok "…verbatim, to the character" "$(( $(chars "$EXEMPLAR") - 1 ))" "$EXEMPLAR_CHARS"
+ok "…and its table really is ${EXEMPLAR_CHECK} ✓ / ${EXEMPLAR_CROSS} ✗" \
+   "$(grep -c '| ✓ |' "$EXEMPLAR") $(grep -c '| ✗ |' "$EXEMPLAR")" \
+   "$EXEMPLAR_CHECK $EXEMPLAR_CROSS"
+ok "…under a heading claiming exactly that" \
+   "$(grep -c "^### Criteria ($EXEMPLAR_CHECK ✓ / $EXEMPLAR_CROSS ✗ — " "$EXEMPLAR")" 1
+
+# NOT ONE OF THE THREE NEW CHECKS FIRES ON IT. `decide` runs every structural check before
+# it prints, so these are statements that each check RAN and PASSED — not that an earlier
+# refusal hid them.
+expect "the exemplar, verbatim, through the whole reader" 1 --body-file "$EXEMPLAR"
+says_not "  element 4: its Verified line is accepted"   "MISSING: the Verified line"
+says_not "  …and accepted as citing something"          "INCOMPLETE: the Verified line"
+says_not "  element 5: its heading tally is accepted"   "MISSING: the tally on the criteria heading"
+says_not "  …and agrees with its own eighteen rows"     "WRONG: the criteria heading"
+says_not "  …and its eight ✗ are explained"             "MISSING: the reason for the"
+says_not "  element 6: its notes all lead with a claim"  "MISSING: the bold claim opening"
+says_not "  …and its criteria table is well-formed"     "MISSING: the acceptance-criteria table"
+
+# WHAT IT IS REFUSED FOR IS TWO RULES THAT ARE OLDER THAN THIS CHANGE AND ARE NOT ITS
+# SUBJECT, and #3286 is a pull request in ANOTHER repository with its own house style. Both
+# are pinned here so the day either moves, this goes red and somebody decides it on purpose
+# rather than discovering it:
+#   1. `CONVENTIONS.md` requires the literal heading `## Description (TL;DR)` opening every
+#      body — "that exact string, character for character". #3286 opens with its TL;DR
+#      SENTENCE and no heading, so element 1 refuses it.
+says "  what it is refused for: the ai-bridge TL;DR heading" "MISSING: the TL;DR line"
+
+#   2. Two of its evidence cells are under the measured 13-byte floor — `see Notes` (9)
+#      and `binary slice` (12). `see above` (9) is the longest thing CONVENTIONS.md names
+#      as a floor FAILURE, so this is the floor working, not the floor misfiring.
+EXEMPLAR_HOUSED="$TMP/exemplar-housed.md"
+{ printf '%s\n\n' '## Description (TL;DR)'; cat "$EXEMPLAR"; } > "$EXEMPLAR_HOUSED"
+expect "…the same body under the ai-bridge heading -> the ROW bound, and only it" \
+       3 --body-file "$EXEMPLAR_HOUSED"
+says   "  naming both cells under the floor"  "but 2 acceptance-criteria"
+says   "  row 11, 'binary slice'"             "row 11 under the FLOOR at 12 bytes"
+says   "  row 16, 'see Notes'"                "row 16 under the FLOOR at 9 bytes"
+says_not "  and nothing structural is wrong with it" "MISSING:"
+
+echo
 echo "== unreadable is never clearance =="
-serve "$(body_file '## Description (TL;DR)' 'x' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+serve "$(good_body)"
 : > "$FIX/gh_broken"
 expect "the PR cannot be fetched -> unknown, not clear" 2 42
 says   "  ...saying unknown is never clearance" "unknown is never clearance"
 
-serve "$(body_file '## Description (TL;DR)' 'x' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+serve "$(good_body)"
 rm -f "$FIX/pr_json"
 expect "no PR at all -> unknown, not clear" 2 42
 
@@ -539,22 +778,21 @@ expect "no PR at all -> unknown, not clear" 2 42
 expect "no body FIELD -> unknown, not an empty body" 2 42
 says   "  ...saying so in those words" "unknown rather than"
 
-serve "$(body_file '## Description (TL;DR)' 'x' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+serve "$(good_body)"
 : > "$FIX/jq_broken"
 expect "the JSON reader cannot answer -> unknown, not clear" 2 42
 rm -f "$FIX/jq_broken"
 
-serve "$(body_file '## Description (TL;DR)' 'x' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+serve "$(good_body)"
 expect "a head that moved under the caller -> unknown, not clear" 2 42 --head "$OTHER_SHA"
 says   "  ...saying the body read is not the one verified" "not the one that was verified"
 
-serve "$(body_file '## Description (TL;DR)' 'x' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+serve "$(good_body)"
 expect "the caller's head still matches -> clear" 0 42 --head "$HEAD_SHA"
 
 echo
 echo "== --body-file: the same verdict, before the PR is opened =="
-GOOD="$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
-                  "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+GOOD="$(good_body)"
 BAD="$(body_file 'No shape at all here.')"
 expect "a conforming draft -> clear" 0 --body-file "$GOOD"
 says   "  ...and reports its length too" "characters (information only"
