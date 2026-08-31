@@ -101,12 +101,33 @@ echo "== 1. the bare form INVOKES the banner — it does not reproduce it =="
 # the two ever print differently the form is wrong, so the assertion is BYTE-IDENTICAL
 # output, not "it prints a banner". A header, a blank line or a "reprinting…" notice would
 # each fail here, which is exactly what should happen.
+#
+# IN THE RENDERING THE FORM ASKED THE HOOK FOR, which is the one thing it is allowed to
+# decide. Both sides of this comparison run with stdout captured — a PIPE, which is what the
+# Bash tool gives it, and what comes out of that pipe is relayed by the model into an
+# assistant message: markdown renders there and ANSI does not survive at all. So the form
+# asks for `--format md` and the hook is asked for the same, and the assertion still says
+# exactly what it always said — the wrapper adds not one byte of its own.
 INST1="$TMP/inst1"; mkinstance "$INST1"
 a="$(CLAUDE_PROJECT_DIR="$INST1" bash "$SH" 2>&1)"; arc=$?
-b="$(CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" 2>&1)"; brc=$?
+b="$(CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" --format md 2>&1)"; brc=$?
 ok "bare /ai-bridge output is byte-identical to the hook's" "$([ "$a" = "$b" ] && echo yes || echo no)" yes
 ok "…and so is its exit status"                            "$arc" "$brc"
 ok "…and it is not empty (the comparison is not vacuous)"   "$([ -n "$a" ] && echo yes || echo no)" yes
+# THE RENDERING IS A CHOICE ABOUT THE READER, NOT A NEW BANNER: strip the emphasis markers
+# and it is the hook's plain text output, byte for byte. A second renderer here would fail
+# this on the first line either one changed.
+btxt="$(CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" 2>&1)"
+ok "…and minus its \`**\` markers it is the hook's plain banner" \
+  "$([ "$(printf '%s\n' "$a" | sed 's/\*\*//g')" = "$btxt" ] && echo yes || echo no)" yes
+ok "…which is a real difference, not an equality dressed up" \
+  "$([ "$a" != "$btxt" ] && echo yes || echo no)" yes
+# `NO_COLOR` IS THE READER'S OPT-OUT AND IT REACHES THIS FORM. On a channel that draws
+# `**bold**` as bold, emphasis is that reader's colour — so the opt-out hands back the plain
+# banner rather than holding on two channels out of three.
+nc="$(NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST1" bash "$SH" 2>&1)"
+ncb="$(NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" 2>&1)"
+ok "NO_COLOR=1: the bare form is the hook's plain banner"   "$([ "$nc" = "$ncb" ] && echo yes || echo no)" yes
 # `banner` spelled out, and an unknown flag, both reach the same hook rather than being
 # re-parsed here: the banner owns its own options.
 c="$(CLAUDE_PROJECT_DIR="$INST1" bash "$SH" banner 2>&1)"

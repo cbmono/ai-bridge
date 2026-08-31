@@ -175,7 +175,13 @@ assert "…and maxPrLoc is tracked too"                 "$(eq "$(from maxPrLoc)"
 # silently wrong about the other half — the exact failure the column exists to prevent.
 assert "…and the owner row is tracked"                "$(eq "$(from owner)" tracked)"
 assert "…carrying the github user"                    "$(has 'owner ' "$OUT")"
-assert "…and the address beside it, one row not two"  "$(has '<you@example.com>' "$OUT")"
+# `user · address`, NOT git's `user <address>`: the `/ai-bridge` path relays this table as
+# markdown, `<address>` is an AUTOLINK there, and the renderer ate both brackets — leaving
+# this one row's FROM two columns left of every other's. Section 10 pins the alignment
+# through the renderer's own transform; this pins the spelling, so a tidy-up back to angle
+# brackets fails here by name.
+assert "…and the address beside it, one row not two"  "$(has 'example-user-009 · you@example.com' "$OUT")"
+assert "…with no markdown-active character in the cell" "$(hasnt '<you@example.com>' "$OUT")"
 assert "…with authorEmail no longer a row of its own" "$(eq "$(row authorEmail)" '')"
 assert "reposRoot is not in the settings block"       "$(eq "$(row reposRoot)" '')"
 assert "…nor worktreeRoot"                            "$(eq "$(row worktreeRoot)" '')"
@@ -197,7 +203,7 @@ run
 assert "a split owner row reports BOTH sources, in value order" \
   "$(eq "$(from owner)" local/tracked)"
 assert "…and still shows the local user with the tracked address" \
-  "$(has 'example-user-007 <you@example.com>' "$OUT")"
+  "$(has 'example-user-007 · you@example.com' "$OUT")"
 printf '{ "maxAgentsInFlight": 2 }\n' > "$INST/instance.config.local.json"
 run
 
@@ -665,6 +671,147 @@ print(1 if bad else 0)
 PYSCAN2
 )" 1)"
 rm -rf "$TMP/trapdir"
+
+# =======================================================================================
+echo "== 10. the columns survive what a MARKDOWN RENDERER does to the text =="
+# =======================================================================================
+# THE DEFECT THIS SECTION EXISTS FOR WAS INVISIBLE TO EVERY ASSERTION ABOVE, and section 8's
+# `FROM` check is the reason: it reads the banner as the script WROTE it, where the tables
+# were always perfectly aligned. `/ai-bridge` relays the banner as MARKDOWN by design — ANSI
+# does not survive that relay at all — so the bytes a human reads are the bytes AFTER a
+# renderer has had them. Measured 2026-08-31 on a real instance: the owner cell read
+# `<user> <name@example.com>`, `<…>` is autolink syntax, both brackets were eaten, and that
+# one row's `FROM` landed at column 50 against 52 everywhere else.
+#
+# SO THE CHECK APPLIES THE RENDERER'S TRANSFORM FIRST, and that is the whole point of it:
+# every `<` and `>` deleted (an autolink), and every `**` deleted (emphasis, which the md
+# rendering adds on the header rows). Then `FROM` must start at the same offset on EVERY row
+# of BOTH tables. Before the fix this section fails on the owner row and nowhere else; after
+# it, there is nothing left to strip.
+#
+# MEASURED IN CHARACTERS, and run in the C locale as well as the ambient one. `${#s}` — what
+# `pad` used to measure with — counts BYTES where `LANG` is unset, which is what a CI runner
+# has, and every `TIER→MODEL` row came out two columns short of its own header there. Two
+# locales in one loop is what says the columns are a property of the banner and not of the
+# machine that happened to run the harness.
+render_md() { # <banner> -> the same text, as a markdown renderer leaves it
+  printf '%s\n' "$1" | LC_ALL=C tr -d '<>' | LC_ALL=C sed 's/\*\*//g'
+}
+# from_offsets — one line per distinct `FROM` offset found across both tables, so a failure
+# names the rows rather than only counting them. A table runs from its header to the blank
+# line after it; the `FROM` cell is the LAST token on a row (values may contain spaces —
+# the owner row does — while a source never does).
+from_offsets() { # stdin: rendered banner -> "<count>" on stdout, detail on stderr
+  python3 -c '
+import sys
+seen = {}
+cur = None
+for line in sys.stdin.read().splitlines():
+    if line.startswith("SETTING ") or line.startswith("ROLE "):
+        cur = line.split()[0]
+        seen.setdefault(line.index("FROM"), []).append(cur + " (header)")
+        continue
+    if cur is None:
+        continue
+    if not line.strip():
+        cur = None
+        continue
+    line = line.rstrip()
+    tok = line.split()[-1]
+    seen.setdefault(len(line) - len(tok), []).append(line.split()[0])
+if len(seen) != 1:
+    for off in sorted(seen):
+        sys.stderr.write("        FROM at %d: %s\n" % (off, ", ".join(seen[off])))
+print(len(seen))
+'
+}
+tracked_cfg
+printf '{ "maxAgentsInFlight": 2, "ownerGithubUser": "example-user-007" }\n' \
+  > "$INST/instance.config.local.json"
+for loc in en_US.UTF-8 C; do
+  TXT="$(LC_ALL="$loc" CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"
+  MD="$(LC_ALL="$loc" CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"
+  assert "LC_ALL=$loc: the banner still prints both tables" \
+    "$([ "$(has 'SETTING ' "$TXT")" = 0 ] && [ "$(has 'ROLE ' "$TXT")" = 0 ] && echo 0 || echo 1)"
+  assert "…and after the renderer's transform, ONE FROM offset across both tables (text)" \
+    "$(eq "$(render_md "$TXT" | from_offsets)" 1)"
+  assert "…and the same for the rendering /ai-bridge actually relays (md)" \
+    "$(eq "$(render_md "$MD" | from_offsets)" 1)"
+done
+# THE CHECK DISCRIMINATES, or it is one more green alignment test. This is the banner as it
+# was printed BEFORE the fix, verbatim from the measurement, and the transform above is what
+# makes it fail: unrendered it is aligned, rendered it is not.
+WAS="$(printf '%s\n' \
+  'SETTING               VALUE                        FROM' \
+  'owner                 cbmono <name@example.com>    local' \
+  'maxAgentsInFlight     8                            tracked')"
+assert "the pre-fix banner passes an UNRENDERED offset check…" \
+  "$(eq "$(printf '%s\n' "$WAS" | from_offsets)" 1)"
+assert "…and fails once the renderer has eaten its angle brackets" \
+  "$([ "$(render_md "$WAS" | from_offsets 2>/dev/null)" != 1 ] && echo 0 || echo 1)"
+
+# =======================================================================================
+echo "== 11. a config file cannot shift a column or open an autolink =="
+# =======================================================================================
+# THE VALUES IN THE TABLES ARE NOT THIS FILE'S TO TRUST. The owner row was the only offender
+# on a healthy instance, but every cell of both tables except the two header rows comes out of
+# instance.config.json, instance.config.local.json or VERSION — and a role name lands in the
+# LABEL column, at offset 0, where a leading `#` is a heading rather than a cell. So the same
+# rule is asserted against a config that carries one of each: `<`, `>`, `*`, `_`, `|` and a
+# leading `#`, in a value, in a key, and in a nested map.
+cat > "$INST/instance.config.json" <<'EOF'
+{
+  "org": "example-org",
+  "ownerGithubUser": "user_007",
+  "authorEmail": "first_last@example.com",
+  "maxAgentsInFlight": 9,
+  "maxPrLoc": 2000,
+  "models":    { "deep": "opus|x", "standard": "*son*net" },
+  "roleTiers": { "#software-engineer": "deep", "cata_loguer": "standard" }
+}
+EOF
+rm -f "$INST/instance.config.local.json"
+run
+assert "a hostile config: still exit 0"                "$(eq "$RC" 0)"
+assert "…and the banner still prints its tables"       "$(has 'SETTING ' "$OUT")"
+# THE VALUES DID REACH THE BANNER — without this the absences below are satisfied by a hook
+# that dropped the rows, which would pass every assertion here and report nothing.
+assert "…with the hostile row present, neutralised one character for one" \
+  "$(has 'user?007 · first?last@example.com' "$OUT")"
+assert "…and the role whose name began with a heading marker"  "$(has '?software-engineer' "$OUT")"
+assert "…and the tier row whose model alias carried a pipe"    "$(has 'deep→opus?x' "$OUT")"
+# NOT ONE MARKDOWN-ACTIVE CHARACTER IN A TABLE ROW. Scoped to the rows — a path elsewhere in
+# the banner may legitimately contain a `_`, and TMPDIR on a CI runner does.
+tbl_rows() { printf '%s\n' "$1" | awk '/^(SETTING|ROLE) /{f=1} f&&/^[[:space:]]*$/{f=0} f'; }
+for ch in '<' '>' '*' '_' '|'; do
+  assert "…no '$ch' anywhere in either table" \
+    "$(printf '%s\n' "$(tbl_rows "$OUT")" | grep -qF -- "$ch" && echo 1 || echo 0)"
+done
+assert "…and no row begins with a heading marker" \
+  "$(printf '%s\n' "$(tbl_rows "$OUT")" | grep -q '^#' && echo 1 || echo 0)"
+assert "…and the columns still line up after the renderer's transform" \
+  "$(eq "$(render_md "$OUT" | from_offsets)" 1)"
+
+# VERSION IS THE THIRD FILE, and it reaches the identity line rather than a cell. The version
+# filter already rejects `<`, `>`, `*`, `|` and a leading `#` outright — `_` is the one it
+# admits, and a pair of them anywhere in a banner relayed as one markdown paragraph is
+# emphasis. Run from a FAKE TEMPLATE, which is the only way to control the file the hook
+# reads: `tmpl` is derived from the hook's own resolved path, so the hook is COPIED (a
+# symlink would resolve straight back to the real template) and the sibling scripts are
+# linked in beside it.
+FAKETPL="$TMP/faketpl"
+mkdir -p "$FAKETPL/symlink/.claude/hooks"
+cp "$HOOK" "$FAKETPL/symlink/.claude/hooks/session-banner.sh"
+ln -s "$SCRIPTS" "$FAKETPL/symlink/scripts"
+printf '9.9.9_beta\n' > "$FAKETPL/VERSION"
+tracked_cfg
+FAKE_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/symlink/.claude/hooks/session-banner.sh" 2>/dev/null)"
+assert "a VERSION carrying an emphasis character still prints a version…" \
+  "$(has 'AI-Bridge 9.9.9' "$FAKE_OUT")"
+assert "…with the character neutralised on the way to the reader" \
+  "$(has 'AI-Bridge 9.9.9?beta' "$FAKE_OUT")"
+rm -rf "$FAKETPL"
+
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

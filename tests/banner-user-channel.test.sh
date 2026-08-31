@@ -425,14 +425,72 @@ echo "== 6. /ai-bridge INVOKES this hook, it does not reproduce it =="
 # forms SAY THE SAME THING. So the bare form is run and its output compared to the hook's,
 # byte for byte — a reimplementation fails that on the first line either one changes,
 # whatever it is spelled like.
+#
+# AGAINST THE HOOK'S `md` RENDERING, AND THAT IS THE RE-EXPRESSION OF THIS ASSERTION RATHER
+# THAN A RELAXATION OF IT. The bare form's stdout here is a PIPE, which is what `/ai-bridge`
+# gives it — the output is relayed by the model into an assistant message, a channel measured
+# rendering markdown and destroying every ANSI byte — so it asks the hook for `--format md`.
+# The equality is therefore against the hook in that same rendering, and it still says the
+# thing it always said: the wrapper contributes not one byte of its own. Comparing it to the
+# hook's BARE output would now be asserting that the wrapper ignores its reader.
 AB="$TPL/symlink/scripts/ai-bridge.sh"
 if [ -f "$AB" ]; then
   AB_OUT="$( cd "$INST" && CLAUDE_PROJECT_DIR="$INST" bash "$AB" 2>/dev/null )"
+  MD_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"
+  TXT_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"
   assert "the /ai-bridge bare form prints a banner" "$(has 'AI-Bridge' "$AB_OUT")"
-  assert "…byte for byte the one this hook prints" \
-    "$(eq "$AB_OUT" "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)")"
+  assert "…byte for byte the RELAYED rendering this hook prints" "$(eq "$AB_OUT" "$MD_OUT")"
   assert "…and carries no banner text of its own" \
     "$(grep -qF 'AI-Bridge' "$AB" && echo 1 || echo 0)"
+  # AND `NO_COLOR` REACHES IT THERE TOO. On a channel that draws `**bold**` as bold, the
+  # emphasis IS the colour, so the reader's opt-out has to switch it off — otherwise the
+  # opt-out holds on two channels out of three.
+  assert "…while NO_COLOR=1 hands back the plain banner instead" \
+    "$(eq "$( cd "$INST" && NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST" bash "$AB" 2>/dev/null )" "$TXT_OUT")"
+
+  # =====================================================================================
+  # THE THIRD RENDERING DIFFERS FROM THE TEXT ONE IN EMPHASIS MARKERS ALONE.
+  # =====================================================================================
+  # This is the assertion that keeps `md` a RENDERING and stops it becoming a second banner.
+  # Same lines, same columns, same values: delete every `**` and what is left must equal the
+  # text banner character for character. A re-laid-out table, a re-worded line or one extra
+  # blank fails here, and tests/session-banner.test.sh §10 measures the columns themselves
+  # through the renderer's own transform.
+  assert "the md rendering, minus every \`**\` marker, IS the text banner" \
+    "$(eq "$(printf '%s\n' "$MD_OUT" | sed 's/\*\*//g')" "$TXT_OUT")"
+  # NON-VACUITY: it really does carry emphasis, so the equality above is a statement about
+  # markers and not about two identical strings.
+  assert "…which is a real difference — the md rendering does carry markers" \
+    "$([ "$MD_OUT" != "$TXT_OUT" ] && echo 0 || echo 1)"
+  # AND EMPHASIS GOES ON THE THREE LINES SIGNIFICANCE JUSTIFIES, not on the page. A banner
+  # where every line is bold gives a reader nothing to find first — the same argument the
+  # colour channel is held to (tests/banner-colour-channel.test.sh §3).
+  emph_lines="$(printf '%s\n' "$MD_OUT" | grep -cF '**' || true)"
+  assert "…on exactly 3 lines (saw $emph_lines): the identity line and the two headers" \
+    "$(eq "$emph_lines" 3)"
+  for anchor in 'AI-Bridge' 'SETTING ' 'ROLE '; do
+    assert "…the line starting \`$anchor\` among them" \
+      "$(printf '%s\n' "$MD_OUT" | grep -F '**' | grep -qF -- "$anchor" && echo 0 || echo 1)"
+  done
+  # NO SGR ON THIS PATH AT ALL, not even when asked for: 0 of 4 escape bytes survive the
+  # relay, so an escape here is a literal `[1m` in a human's page.
+  assert "…and not one escape byte, even with --color always" \
+    "$(no_esc "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md --color always 2>/dev/null)")"
+
+  # =====================================================================================
+  # AND NOT ONE `**` MAY REACH THE SessionStart CHANNEL, WHICH IS THE OTHER HALF.
+  # =====================================================================================
+  # Measured 2026-08-30: `systemMessage` renders SGR and prints markdown LITERALLY, so the
+  # mechanism chosen for the relay would arrive there as two asterisks per marker. The
+  # human's field carries no bundle-authored text at all, so it is asserted whole; the
+  # model's is asserted OUTSIDE the fenced awaiting block, because the item in this fixture
+  # is `✅ **approve** — a thing` and that is quoted data the banner must keep verbatim.
+  hook_run
+  assert "no literal \`**\` in the field the human reads" \
+    "$(hasnt '**' "$(field "$OUT" systemMessage)")"
+  assert "…nor in the lines the banner composes for the model" \
+    "$(hasnt '**' "$(printf '%s\n' "$(field "$OUT" hookSpecificOutput.additionalContext)" \
+        | sed -n '/BEGIN AWAITING ITEMS/,/END AWAITING ITEMS/!p')")"
 else
   echo "  SKIP  ai-bridge.sh is not in this template yet (task-011 / ai-bridge#70 is open)"
 fi

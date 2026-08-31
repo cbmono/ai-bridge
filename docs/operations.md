@@ -611,7 +611,7 @@ AI-Bridge 0.13.1 · _ai-bridge-private · org: cbmono
 ───────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
-owner                 example-user-007 <you@example.com>  local/tracked
+owner                 example-user-007 · you@example.com  local/tracked
 maxAgentsInFlight     2                                   local
 maxPrLoc              2000                                tracked
 
@@ -642,6 +642,19 @@ false whenever the banner is doing its actual job, and everything below degrades
 text there. `NO_COLOR` turns colour off on a terminal too; `--color always|never` overrides
 both, for a human piping the banner somewhere that renders escapes.
 
+**Three renderings, one buffer, one artifact.** `--format json` is what `settings.json` asks
+for: the client draws `systemMessage`, and that field was measured rendering SGR and printing
+markdown *literally*. `--format md` is what `scripts/ai-bridge.sh` asks for when its stdout
+is a pipe — the `/ai-bridge` path, where the output is relayed into an assistant message and
+the measurement is the exact opposite: markdown renders and 0 of 4 ANSI escape bytes survive.
+Plain text is the default and what a terminal gets. The md rendering differs from the plain
+one in **emphasis markers alone** — `**…**` on the identity line and the two table headers,
+the three lines a reader should land on first — because it is that same one buffer with a
+transform applied on the way out, never a second banner to keep in step. `NO_COLOR` and
+`--color never` reach it too: on a channel that draws `**bold**` as bold, emphasis *is* the
+colour, and `--color always` puts no escape byte in it, since nothing there would survive to
+be read.
+
 **The `FROM` column is the point of both tables**, not decoration: it says which of the two
 config files won, per key — `tracked` (`instance.config.json`) or `local`
 (`instance.config.local.json`) — and that is invisible in either file alone. It resolves
@@ -653,8 +666,17 @@ lookup — and its provenance is per **entry**, because the merge is, so a one-l
 override moving one agent leaves every other row reading `tracked`.
 
 **`owner` is one row for two keys** — `ownerGithubUser` and `authorEmail` are one fact
-about the human, in the shape git prints it. The column still answers per key: when the two
-sources disagree it reads `local/tracked`, in the same order as the values. **`reposRoot`
+about the human. The column still answers per key: when the two
+sources disagree it reads `local/tracked`, in the same order as the values. It is spelled
+`user · address` and **not** git's `user <address>`, which is the fix for a real defect: the
+`/ai-bridge` path relays the banner as markdown, `<address>` is markdown **autolink** syntax
+there, and the renderer ate both brackets — leaving that one row's `FROM` two columns left of
+every other row's while the script's own output was perfectly aligned. The general rule it
+produced is that **a fixed-width table relayed as markdown may contain only characters
+markdown leaves alone**, so every value out of a config file or `VERSION` is neutralised for
+`<`, `>`, `*`, `_`, `|` and a leading `#` on its way into a cell — a config file must not be
+able to shift a column. Respelled rather than escaped, because a `\<` is itself a character
+and the `SessionStart` channel renders no markdown: it would print the backslash. **`reposRoot`
 and `worktreeRoot` are deliberately not shown**: the two longest values in the file and the
 two nobody asks about at session start.
 
