@@ -30,7 +30,13 @@
 #   · `board: false` means the section is absent — the TICK-TIME half of a switch that
 #     until ai-bridge#60 was only read at stamp time by `install.sh`. Absent or `true`
 #     renders, because on-by-default is the seeded value;
-#   · no rendered page yet is silence too, not an error — the off switch's other shape;
+#   · THREE STATES, THREE DISTINGUISHABLE OUTPUTS (task-023). `board: true` with nothing
+#     rendered used to print exactly what `board: false` printed — nothing — and on a real
+#     instance the owner read that absence as the Board line having been dropped in a
+#     merge. Neither he nor the agent looking at the same banner could tell the two apart
+#     without an `ls`. So the middle state now SPEAKS: enabled, never rendered, and what
+#     renders it. The disabled state stays silent, in BOTH of its sub-cases (page on disk
+#     or not), because the human turned it off and does not need telling every session;
 #   · a non-bridge project that inherits the hook (no `instance.config.json`, or one with
 #     no `.claude/agents` beside it) gets NO banner at all, not merely no board line;
 #   · the `board` read cannot be fooled by the neighbouring `"$board"` doc string in
@@ -99,7 +105,7 @@ run
 assert "config and page present, no .claude/agents: still silent" "$([ -z "$OUT" ] && echo 0 || echo 1)"
 mkdir -p "$INST/.claude/agents"
 
-echo "== the off switch: board:false, and nothing rendered yet =="
+echo "== the off switch: board:false, with a rendered page sitting right there =="
 # THE ONE ai-bridge#60 EXISTED FOR. `board` had exactly one reader — install.sh's
 # `cfg_bool board true`, at STAMP time, gating whether SNAPSHOT.json is seeded. Nothing
 # re-read it afterwards, so `board: false` could not stop a surface appearing once that
@@ -135,7 +141,68 @@ assert "key absent entirely: still prints (on by default)" "$(has "$PAGE" "$OUT"
 rm -rf "$INST/.board-live"
 run
 assert "nothing rendered yet: exit 0"  "$(eq "$RC" 0)"
-assert "…and no board section, not an error" "$(hasnt 'Board   file://' "$OUT")"
+assert "…and no link, because there is nothing to link to" "$(hasnt 'Board   file://' "$OUT")"
+
+echo "== the three states are three, and the middle one is no longer silence =="
+# THE BUG THIS BLOCK EXISTS FOR, measured on a real instance: `board: true` and no
+# `.board-live/board.html` printed the same nothing as `board: false`, so "this instance has
+# never rendered a board" and "the Board line was dropped in a merge" were the same banner.
+# `$INST` still has `{ "org": "example-org" }` and no page — the enabled-but-unrendered state.
+assert "board enabled, nothing rendered: it SAYS SO rather than saying nothing" \
+  "$(has 'Board   enabled, but never rendered' "$OUT")"
+# NAMING THE REPAIR IS HALF THE LINE. "Something is missing" without "here is what makes it"
+# leaves the reader exactly where the silence did — reaching for `ls`.
+assert "…and names a /pm-loop tick as what renders it"  "$(has '/pm-loop tick renders it' "$OUT")"
+assert "…and scripts/build-board.sh as the other route" "$(has 'scripts/build-board.sh' "$OUT")"
+# TEXTUALLY DISTINCT FROM THE RENDERED ROW, which is the whole property: two states that
+# print strings a human (or a grep) cannot tell apart are one state with extra steps.
+assert "…and it is not the rendered-board line wearing a different hat" \
+  "$(hasnt 'rendered at the last tick' "$OUT")"
+UNRENDERED="$OUT"
+# THE FIRST ROW IS UNCHANGED — asserted here as a whole-section comparison against the
+# fixture, not just "the link is present", so a regression in its wording fails rather than
+# passes. `section()` is the three lines the rendered row owes.
+render
+run
+RENDERED_SECTION="$(section)"
+assert "board enabled and rendered: the section is the three lines it always was" \
+  "$(eq "$RENDERED_SECTION" "$(printf 'Board   file://%s\n%s\n        rendered at the last tick — the masthead says when; scripts/watch-board.sh keeps a live one' "$PAGE" "$PAGE")")"
+assert "…and the two states really do print different text" \
+  "$([ "$OUT" != "$UNRENDERED" ] && echo 0 || echo 1)"
+assert "…with no never-rendered line once a page exists" \
+  "$(hasnt 'never rendered' "$OUT")"
+
+# THE THIRD ROW MUST NOT BE MADE TO SPEAK, and it has TWO sub-cases — a disabled instance
+# with a stale page still on disk, and one with none. The first is asserted in the off-switch
+# block above; this is the second, and without it "board: false is silent" would be resting
+# on a single `-f` test that a refactor could invert unnoticed.
+cat > "$INST/instance.config.json" <<'EOF'
+{
+  "board": false
+}
+EOF
+rm -rf "$INST/.board-live"
+run
+assert "board: false with NO page either: exit 0"        "$(eq "$RC" 0)"
+assert "…and still not one word about a board"           "$(hasnt 'Board   ' "$OUT")"
+assert "…in particular not the never-rendered line"      "$(hasnt 'never rendered' "$OUT")"
+assert "…nor the name of the script that would render one" "$(hasnt 'build-board.sh' "$OUT")"
+# …AND THE SAME INSTANCE, SAME EMPTY .board-live, WITH THE SWITCH FLIPPED, SPEAKS. Without
+# this pair the four absences above are satisfied by a hook that had stopped printing.
+cat > "$INST/instance.config.json" <<'EOF'
+{
+  "board": true
+}
+EOF
+run
+assert "…while board: true on that same page-less instance DOES speak" \
+  "$(has 'Board   enabled, but never rendered' "$OUT")"
+
+cat > "$INST/instance.config.json" <<'EOF'
+{
+  "org": "example-org"
+}
+EOF
 render
 
 echo "== the rendered board is printed as a link AND as a copyable bare path =="
