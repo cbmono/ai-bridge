@@ -397,8 +397,8 @@ in `cbmono/ai-bridge` enforces this.
   block are bounded separately, so **N findings buy N entries**: a reply addressing eleven
   findings clears at eleven times the budget of one addressing one. A total character cap is
   the opposite rule and the wrong one — it refuses the legitimately detailed reply and
-  clears the short self-defending one. The two best-shaped replies measured are **2,172 and
-  1,764 characters and both clear**.
+  clears the short self-defending one. The two best-shaped replies measured are **2,149 and
+  1,744 characters and both clear**.
   **618 is measured, not round.** Over every comment this repo's own agents wrote on pull
   requests 60–84 (16 replies, 65 elements, bytes under `LC_ALL=C`) plus the motivating
   comment: it is the midpoint of the empty band **531–705**, 88 clear of the largest element

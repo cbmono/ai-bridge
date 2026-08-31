@@ -95,9 +95,9 @@
 #   * BELOW IT, the largest element measured anywhere in the corpus is 530, and the two
 #     replies whose shape is exactly what `CONVENTIONS.md` asks for — one entry per
 #     finding, a verdict, the fix or the reason, nothing else — top out at 503 and 496.
-#     Those two are 2,172 and 1,764 bytes in TOTAL, both far past "roughly a tweet", and
-#     both clear here. That is the anti-total-cap property demonstrated on real data
-#     rather than asserted.
+#     Those two are 2,149 and 1,744 CHARACTERS in total — the count the host reports, and
+#     the one this script prints — both far past "roughly a tweet", and both clear here.
+#     That is the anti-total-cap property demonstrated on real data rather than asserted.
 #   * ABOVE IT, 706 is the smallest element the task's own design brief calls bloat: an
 #     entry that argues its own case (*"this PR in reverse, on the path nobody looks
 #     at"*), and above that 1,841 and 2,318 — the self-defending paragraphs.
