@@ -674,9 +674,11 @@ there, and the renderer ate both brackets — leaving that one row's `FROM` two 
 every other row's while the script's own output was perfectly aligned. The general rule it
 produced is that **a fixed-width table relayed as markdown may contain only characters
 markdown leaves alone**, so every value out of a config file or `VERSION` is neutralised on its
-way into a cell — `<`, `>`, `*`, `_`, `|`, `[`, `]`, `(`, `)`, a backtick, a leading `#`, and
-the emphasis marker byte the relayed rendering itself uses. `session-banner.sh`'s `cell` holds
-the list with the reason for each entry; what is durable here is the rule, not the enumeration.
+way into a cell. `session-banner.sh`'s `cell` holds the characters, with the reason for each
+one, and reading that list as closed has been wrong twice — it shipped at six, then at twelve,
+and each widening came from a measurement rather than from an argument. **What is durable is
+the rule, and the rule is the reader's renderer**: a construct that renderer consumes
+characters for belongs in `cell`, whether or not anyone expected a config file to carry it.
 A config file must not be able to shift a column. Respelled rather than escaped, because a `\<` is itself a character
 and the `SessionStart` channel renders no markdown: it would print the backslash. **`reposRoot`
 and `worktreeRoot` are deliberately not shown**: the two longest values in the file and the
