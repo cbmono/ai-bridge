@@ -366,6 +366,57 @@ in `cbmono/ai-bridge` enforces this.
   short form landed for PR bodies, review replies and progress reports while comments kept
   the old habit, because nothing named them as a surface. They are named here, and
   `tests/pr-body-shape.test.sh` keeps them named.
+- **A reply to review findings has a shape, and now it has a reader.** The list form above
+  is the rule; this is the part a gate can check. It exists because the reply style was
+  prose-only on the one surface nothing read — `pr-body-clearance.sh` reads a PR *body* and
+  never a comment — and on 2026-08-31 a reply whose whole content was *"both findings are
+  valid, neither is fixed in this PR, and here is why"* ran to **2,986 characters over 20
+  lines**: about 250 characters of decision in twelve times its own weight. The shape:
+
+  ```md
+  Round 1 addressed in `a1b2c3d` — one entry per finding, no re-review requested.
+
+  1. **`run.sh:42` unquoted `$dir`** — fixed: quoted it, `harness-temp-safety.test.sh` 12/0.
+  2. **`http.ts` timeout is per attempt** — already deferred: item 3 on the task's list.
+  3. **no test for a 200 with no token** — declined: unreachable until slice 4 registers it.
+
+  Evidence: `foo.test.sh` 41/0 · CI run 1234 green.
+  ```
+
+  **Each entry carries a VERDICT** — *valid / fixed / declined / already deferred* — and
+  then the fix or the reason, and nothing else. The verdict is to a reply what the `✓`/`✗`
+  column is to the criteria table: the one thing the reviewer on the other end must read,
+  and what tells a reply to findings from any other list.
+  **`scripts/pr-comment-clearance.sh --comment <id>` is the reader**, and
+  `--comment-file <draft>` decides before you post — the cheapest moment, because an edited
+  comment has already notified everyone who was watching. It refuses an entry with no
+  verdict at **exit 1** and any element over **618 bytes** at **exit 3**, naming the element
+  and its measured size; a comment it cannot fetch or read is **exit 2**, which is unknown
+  and never clearance.
+  **It bounds ONE ELEMENT, never the reply.** The lead, each entry and the closing evidence
+  block are bounded separately, so **N findings buy N entries**: a reply addressing eleven
+  findings clears at eleven times the budget of one addressing one. A total character cap is
+  the opposite rule and the wrong one — it refuses the legitimately detailed reply and
+  clears the short self-defending one. The two best-shaped replies measured are **2,149 and
+  1,744 characters and both clear**.
+  **618 is measured, not round.** Over every comment this repo's own agents wrote on pull
+  requests 60–84 (16 replies, 65 elements, bytes under `LC_ALL=C`) plus the motivating
+  comment: it is the midpoint of the empty band **531–705**, 88 clear of the largest element
+  measured (530) and 88 short of the smallest one the incident calls bloat (706). It refuses
+  13 of those 65 elements. **Moving it means re-measuring** —
+  `tests/pr-comment-clearance.test.sh` pins the boundary values and drives a mutant in each
+  direction.
+  **What gets cut is the self-defence, not the detail.** The excess in the measured reply
+  was *"this is the third time an independent reviewer has converged…"* and *"for the
+  record, the branch is not untested…"*; neither changes what the reader does next. **The
+  detail is relocated, never deleted** — it goes in the **task doc**, the **commit message**
+  or a **`Finding`**, and **the short entry links to it**, exactly as "reasoning belongs
+  where it is durable" says two rules up.
+  **Three things are NEVER trimmed, and the reader honours them:** an **error report**, a
+  **security finding**, and a **destructive-action confirmation**. A reply that leads a line
+  with one of those clears at any element size, and the clearance quotes the line that
+  claimed the exemption so the exemption is visible rather than silent. The failure mode of
+  a terseness gate is trimming the one thing the reader needed in order to act safely.
 - **TWO ROUNDS, THEN THE HUMAN DECIDES. This is a hard cap.**
   A reviewer's job is to evaluate the diff **against the task's `acceptance_criteria`**.
   It is *not* to re-litigate those criteria, argue the design, or look for a reason the
