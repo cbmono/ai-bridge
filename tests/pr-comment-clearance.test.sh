@@ -334,6 +334,14 @@ for v in fixed valid declined 'already deferred' confirmed 'not taking' 'out of 
   serve "$(reply_file 'Round 1 addressed.' '' "- \`run.sh:42\` — $v: the path is quoted now.")"
   expect "the verdict '$v' -> clear" 0 --comment 4242
 done
+# A SECTION HEADING above the list is read as an entry and refused for carrying no verdict.
+# That is a decision, not an accident: recognising a heading as an entry is what catches the
+# measured comment, whose findings WERE `###` headings. Pinned so a future edit that
+# "fixes" it has to argue with this assertion.
+serve "$(reply_file '### Round 1 replies' '' '- fixed: the path is quoted now.')"
+expect "a section heading above the list -> refuse, naming itself" 1 --comment 4242
+says   "  ...quoting the heading, so the fix is one line" '"### Round 1 replies"'
+
 # `already` on its own is an ordinary adverb — nine uses of it in the corpus are not
 # verdicts — so it must not buy a clearance.
 serve "$(reply_file 'Round 1 addressed.' '' '- `run.sh:42` — already covered by the harness.')"
@@ -371,7 +379,7 @@ done
 serve "$(reply_file '**Security** — the mint token is logged in plaintext.' '' \
                     '- `directory.ts:146` logs the token at info level.')"
 expect "a carve-out with a verdict-less entry -> still refuse" 1 --comment 4242
-says   "  ...on the shape, not the size" "carry no VERDICT"
+says   "  ...on the shape, not the size" "the VERDICT is missing on"
 serve "$(reply_file '**Security** — the mint token is logged in plaintext.' '' \
                     "- fixed: it is redacted now. $(pad 900)")"
 expect "…and with a verdict, the oversized entry is exempt" 0 --comment 4242

@@ -43,6 +43,14 @@
 #      a nested bullet as its own entry would divide one element's bytes among several and
 #      make the ceiling more lenient, which is the wrong direction for a mistake.
 #
+#      KNOWN LIMIT, STATED RATHER THAN IMPLIED: a SECTION heading above the list (`###
+#      Round 1 replies`) is read as an entry, and refused at exit 1 for carrying no
+#      verdict, naming itself in the message. The failure direction is a refusal and a
+#      glance, the fix is deleting one line, and the house style already puts what round
+#      it is in the LEAD. Recognising a heading is what catches the measured comment,
+#      whose findings were `###` headings, so this is the cost of that and not an
+#      oversight.
+#
 #   2. THE VERDICT ON EACH ENTRY — the identifying property, and the analogue of the
 #      `✓`/`✗` column the sibling requires of a criteria table. It is what tells a reply to
 #      review findings from any other list, and it is the one thing the reviewer on the
@@ -472,8 +480,9 @@ decide() { # <rendered> <label> -> 0 clear, 1 shape missing, 2 unknown, 3 an ele
     | awk -F'\t' '$1 == "elem" && $2 == "entry" && $5 == "no" { print }')"
   [ -z "$noverdict" ] || {
     n="$(printf '%s\n' "$noverdict" | grep -c '^')"
-    echo "refuse: $label is shaped as a list, but $n of its entries carry no VERDICT —" >&2
-    echo "        so the reviewer cannot tell what was fixed from what was declined:" >&2
+    echo "refuse: $label is shaped as a list, but the VERDICT is missing on $n of its" >&2
+    echo "        entries — so the reviewer cannot tell what was fixed from what was" >&2
+    echo "        declined:" >&2
     while IFS="$tab" read -r _ _ idx len _ text; do
       [ -n "${idx:-}" ] || continue
       echo "        entry $idx (${len:-?} bytes): \"${text:-}\"" >&2
