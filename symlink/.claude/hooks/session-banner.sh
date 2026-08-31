@@ -184,7 +184,7 @@
 #
 # IT IS THE SAME ONE BUFFER, DERIVED BY A TRANSFORM, exactly like the JSON path's two
 # fields. `say_strong` marks the lines whose SIGNIFICANCE the reader should find first — the
-# identity line and the two table headers — with one byte no banner text can contain, and
+# identity line and the two table headers — with one control byte of its own, and
 # `emit_md` wraps those lines in `**…**` on the way out. In text and json mode that marker is
 # EMPTY, so both of those renderings are byte-for-byte what they were before it existed. The
 # md rendering therefore differs from the text one in EMPHASIS MARKERS ALONE: same lines,
@@ -349,14 +349,20 @@ strip_sgr() { LC_ALL=C sed "s/$(printf '\033')\[[0-9;]*m//g" 2>/dev/null; }
 # diff and in a grep.
 MODEL_MARK="$(printf '\001')"
 
-# AND ONE BYTE NAMES THE LINES THE RELAYED RENDERING EMPHASISES: `\002`, by the same argument
-# and with the same guarantee. It is written by `say_strong` at the two call sites that decide
-# significance and consumed by `emit_md`, so the md rendering is a transform of the one buffer
-# rather than a second pass over the sections. EMPTY ON EVERY OTHER PATH — that is what makes
-# text and json byte-for-byte what they were: it is assigned only once the colour block below
-# has resolved, because md emphasis IS md colour and `NO_COLOR` turns it off. Declared here so
-# the EXIT trap can never read it unset under `set -u`, on the early exits that leave before
-# the colour block runs.
+# AND ONE BYTE NAMES THE LINES THE RELAYED RENDERING EMPHASISES: `\002`, by the same argument.
+# It is written by `say_strong` at the call sites that decide significance and consumed by
+# `emit_md`, so the md rendering is a transform of the one buffer rather than a second pass
+# over the sections. EMPTY ON EVERY OTHER PATH — that is what makes text and json
+# byte-for-byte what they were: it is assigned only once the colour block below has resolved,
+# because md emphasis IS md colour and `NO_COLOR` turns it off. Declared here so the EXIT trap
+# can never read it unset under `set -u`, on an early exit that leaves before the colour block
+# runs.
+#
+# STX RATHER THAN SOH, so the two markers cannot be confused — and only a PREFIX is ever read.
+# The worst a forged one could do, and the only route in is a config value that BEGINS with
+# this byte and lands in the label column, is put `**` around one row of a table on a channel
+# that renders it. It can never move a line onto another channel, which is the property
+# MODEL_MARK needs and this one does not.
 EMPH_MARK=""
 
 # model_only — stdin is a block of lines for the MODEL's copy alone. THREE MODES, one per
@@ -642,6 +648,10 @@ CONT_BYTES="$(printf '[\200-\277]')"
 # IT ANSWERS IN A GLOBAL RATHER THAN ON STDOUT, which is not a style choice: `pad` is called
 # twice per row of both tables, and `$(…)` there would be a fork per cell at every session
 # start. Callers read NCHARS immediately.
+#
+# `$CONT_BYTES` IS UNQUOTED ON PURPOSE — the expansion IS the pattern. Quoting it would match
+# the eight literal characters of a bracket expression, i.e. nothing, and this would silently
+# become `${#s}` again on exactly the platform it exists for.
 NCHARS=0
 nchars() { local t="${1//$CONT_BYTES/}"; NCHARS="${#t}"; }
 

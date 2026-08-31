@@ -738,13 +738,15 @@ for loc in en_US.UTF-8 C; do
   assert "…and the same for the rendering /ai-bridge actually relays (md)" \
     "$(eq "$(render_md "$MD" | from_offsets)" 1)"
 done
-# THE CHECK DISCRIMINATES, or it is one more green alignment test. This is the banner as it
-# was printed BEFORE the fix, verbatim from the measurement, and the transform above is what
-# makes it fail: unrendered it is aligned, rendered it is not.
-WAS="$(printf '%s\n' \
-  'SETTING               VALUE                        FROM' \
-  'owner                 cbmono <name@example.com>    local' \
-  'maxAgentsInFlight     8                            tracked')"
+# THE CHECK DISCRIMINATES, or it is one more green alignment test. This is the shape the
+# banner had BEFORE the fix — the measured owner row, with this repo's placeholder identity in
+# it — and the transform above is the whole difference: unrendered it is aligned, rendered it
+# is not. Laid out with `printf` rather than by counting spaces in a literal, so the fixture
+# cannot itself be the thing that is misaligned.
+WAS="$(printf '%-20s  %-35s  %s\n' \
+  SETTING           VALUE                                 FROM \
+  owner             'example-user-007 <you@example.com>'   local \
+  maxAgentsInFlight 8                                     tracked)"
 assert "the pre-fix banner passes an UNRENDERED offset check…" \
   "$(eq "$(printf '%s\n' "$WAS" | from_offsets)" 1)"
 assert "…and fails once the renderer has eaten its angle brackets" \
