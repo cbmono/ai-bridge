@@ -659,8 +659,8 @@ and `worktreeRoot` are deliberately not shown**: the two longest values in the f
 two nobody asks about at session start.
 
 **Everything else is absent unless it is true.** No dangling machinery, no `AWAITING.md`
-items, a board switched off: each of those means that line does not print — not a `0`, not
-an "all clear". A block that appears every session becomes wallpaper, and wallpaper is how
+items, a board switched off, nothing dispatchable: each of those means that line does not
+print — not a `0`, not an "all clear". A block that appears every session becomes wallpaper, and wallpaper is how
 an `AWAITING.md` row comes to be skipped. On a healthy instance with nothing outstanding
 the banner is the header, the settings table, the `roleTiers` table and the board line,
 and nothing else.
@@ -672,13 +672,17 @@ first-run instance read exactly like one whose Board line had been dropped in a 
 telling the two apart took an `ls`. So that state now speaks; see *"The `SessionStart`
 banner surfaces the path too"* below for the three states.
 
-**It does not read the task documents at all.** It used to, for two counts under the
-awaiting line — `Ready to dispatch   N` and `Drafts   N` — and both are gone: `/pm-loop`
-presents each of them with room and structure, and it is the thing the count line already
-points at. A banner orients; it does not tabulate. The `AWAITING.md` items are the one
-piece of bundle-authored text the banner carries, and they reach **the model's copy only**,
-fenced and labelled as untrusted data, because they carry human questions and tool output
-into session context.
+**The queue tail is gone from the human's banner, and one number of it survives on the
+model's.** Two counts used to sit under the awaiting line. `Drafts   N` is **deleted
+outright, from both channels**: `/pm-loop` presents it with room and structure, nothing
+keys off it, and a banner orients rather than tabulates. `Ready to dispatch   N` is deleted
+from **the human's** channel for the same reason — and kept on the model's, because
+`seed/CLAUDE.md`'s offer-the-loop rule keys off it and deleting its only input would have
+retired that rule in silence. So the human's banner ends at the `🔔 N items need you`
+count line, and the one number the banner still reads out of the task documents never
+reaches them. The `AWAITING.md` items are the other piece of bundle-authored text the
+banner carries, and they too reach **the model's copy only**, fenced and labelled as
+untrusted data, because they carry human questions and tool output into session context.
 
 **The awaiting section says two different things to its two readers.** The human's copy
 (`systemMessage`) is one line — `🔔 3 items need you — see the board above, or run
@@ -695,14 +699,20 @@ both written out and the count is in the line, because a nudge that reads the sa
 the number is not worth its tokens; zero prints nothing at all, like every other section.
 The line names the board only when a board actually rendered.
 
+**The two channels are a reduction, and there are two model-only blocks.** Delete the
+fenced awaiting transcript and the `Ready to dispatch` line from the model's copy and what
+remains equals the human's, byte for byte — so no line can ever reach the human that the
+model does not also get. `tests/banner-user-channel.test.sh` pins both the named blocks and
+the general property (`diff` of the two copies reports no deletions, only insertions).
+
 **The offer is not the hook's.** A hook cannot ask a question, so the rule that the
-session offers `/pm-loop` when something is waiting on the human lives in the instance's
+session offers `/pm-loop` when there is dispatchable work lives in the instance's
 `CLAUDE.md` (seeded from `seed/CLAUDE.md`, beside the ad-hoc-vs-tracked-work section). The
-hook owes it one line: `🔔 N items need you`. It used to key off a `Ready to dispatch`
-count instead — deleting that line without re-keying the rule would have left an offer
-that could never fire and a harness that stayed green while it could not, so the two
-moved together. The trigger is genuinely different now: *something waits on the human*,
-not *something waits on the loop*. **An instance stamped before this
+hook owes it one number: the `Ready to dispatch` count, which is `ready` **and** every
+`depends_on` terminal **and** owned by this clone — now delivered on the **model's channel
+only**, which is the channel that rule is addressed to. The trigger is unchanged:
+*something waits on the loop*, which is not the same event as `🔔 N items need you`
+(*something waits on the human*). **An instance stamped before this
 shipped does not have the rule** — `CLAUDE.md` is seed content, copied once and never
 overwritten, so merge the paragraph in by hand if you want the offer.
 
@@ -871,18 +881,20 @@ documents at your current git `HEAD`.
 
 **The `SessionStart` banner surfaces the path too.** `.claude/hooks/session-banner.sh`
 prints the rendered board when a session starts, so the human can open it instead of
-digging for it: a `file://` link **and** the bare path on its own line, because `file://`
-is a hyperlink in some terminals and inert text in others, and the bare line is the one
-you can copy. A non-bridge project that happens to inherit the hook gets no banner at all.
-The section prints the path and nothing more: not the page it points at, and nothing out of
-a task document.
+digging for it: **one line — the label and a `file://` link, and the path exactly once.**
+It was three lines until ai-bridge-v5/task-023 (the URL, the same path again bare, and a
+staleness note); the owner read the duplicated path as a bug on sight, and the note said
+nothing that was true of the session — the page's own masthead carries the render time and
+`watch-board.sh` is documentation. A non-bridge project that happens to inherit the hook
+gets no banner at all. The section prints the path and nothing more: not the page it points
+at, and nothing out of a task document.
 
 **Three states, three distinguishable outputs**, because two of them used to print the
 same nothing:
 
 | `board` | `.board-live/board.html` | the banner says |
 |---|---|---|
-| `true` (or absent) | present | the `file://` link, the bare path, and a staleness note |
+| `true` (or absent) | present | one line: the `file://` link |
 | `true` (or absent) | **absent** | enabled, but never rendered — and that a `/pm-loop` tick or `scripts/build-board.sh` renders one |
 | `false` | either | **nothing**, in silence |
 
@@ -893,8 +905,9 @@ last row stays silent on purpose — the human switched the board off and does n
 telling every session start. The count line agrees with whichever row printed: it says
 *"see the board above"* only for the first.
 
-The banner does not read the task documents at all. The `AWAITING.md` items are the one
-piece of task-derived text it carries, and they reach the **model's** copy alone and only
+The banner reads the task documents for exactly one number, the `Ready to dispatch` count,
+and that number reaches the **model's** copy alone. The `AWAITING.md` items are the one
+piece of task-derived *text* it carries, and they too reach the model's copy alone and only
 inside the untrusted-data fence — the single place a title, a question or a project path
 enters session context, and it enters labelled as data. **The human's copy carries one
-count and nothing else**: no title, no question text, no project slug.
+count and nothing else**: no title, no question text, no project slug, no queue tally.

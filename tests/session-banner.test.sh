@@ -132,6 +132,17 @@ INST="$TMP/_ai-bridge-fixture"
 mkdir -p "$INST/.claude/agents"
 printf 'stub\n' > "$INST/SCHEMA.md"          # task-owner.sh's instance-root test
 run() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)"; RC=$?; }
+# `run` IS THE HUMAN'S CHANNEL, and since task-023 that is a real restriction rather than a
+# detail of the harness. With no `--format json` the hook has ONE stream whose reader is a
+# human, so `model_only` blocks are dropped outright — every "no such line" assertion below
+# is therefore a statement about what the HUMAN gets and nothing more. `model_ctx` is the
+# other half, used where a section has to show that a line was moved rather than deleted;
+# tests/banner-user-channel.test.sh owns the channel contract itself.
+model_ctx() { CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format json 2>/dev/null \
+  | python3 -c 'import json,sys
+try: d = json.load(sys.stdin)
+except Exception: sys.exit(0)
+sys.stdout.write(d.get("hookSpecificOutput", {}).get("additionalContext", ""))'; }
 # The row for one setting, as printed. Anchored on the key at the start of the line so a
 # key merely MENTIONED in a comment or a value cannot answer for it.
 row() { printf '%s\n' "$OUT" | grep -E "^$1 " | head -1; }
@@ -334,10 +345,11 @@ run
 assert "no dangling machinery ⇒ no warning"   "$(hasnt 'DANGLING' "$OUT")"
 assert "board: false ⇒ no board section at all" "$(hasnt 'Board   ' "$OUT")"
 assert "no AWAITING.md ⇒ no awaiting block"   "$(hasnt '🔔' "$OUT")"
-# THE QUEUE TAIL IS GONE (task-023), AND IT IS GONE UNCONDITIONALLY — not "silent because
-# there is nothing to count". `projects/` is populated in section 5 below and these two
-# strings still never appear; here they are pinned on the empty instance as well, so the
-# pair reads as "removed" rather than "currently zero".
+# THE QUEUE TAIL IS GONE FROM THE HUMAN'S BANNER (task-023), AND IT IS GONE
+# UNCONDITIONALLY — not "silent because there is nothing to count". `projects/` is populated
+# in section 5 below and these two strings still never appear on this channel; here they are
+# pinned on the empty instance as well, so the pair reads as "removed" rather than
+# "currently zero".
 assert "no 'Ready to dispatch' line"          "$(hasnt 'Ready to dispatch' "$OUT")"
 assert "…and no 'Drafts' line"                "$(hasnt 'Drafts' "$OUT")"
 # SHORT: an orientation, not a report. The identity line, a header, six rows at most, the
@@ -386,18 +398,20 @@ assert "…and an AWAITING item DOES print"     "$(has '🔔 1 item needs you' "
 rm -f "$INST/AWAITING.md"
 
 # =======================================================================================
-echo "== 5. the task documents are not read AT ALL any more =="
+echo "== 5. nothing out of a task document reaches the HUMAN — not even a count =="
 # =======================================================================================
-# THE TAIL IS GONE AND THE READER WENT WITH IT (task-023). `Ready to dispatch   N` and
-# `Drafts   N` sat under the count line and are deleted from BOTH channels: `/pm-loop`
-# presents each of them with room and structure, and it is the thing the count line already
-# points at. A banner orients; it does not tabulate.
+# THE TAIL IS GONE FROM THIS CHANNEL (task-023). `Drafts   N` is deleted outright, from both
+# channels: `/pm-loop` presents it with room and structure, nothing keys off it, and a banner
+# orients rather than tabulates. `Ready to dispatch   N` is deleted from the HUMAN's channel
+# and kept on the MODEL's, because seed/CLAUDE.md's offer-the-loop rule keys off it (section
+# 7 below) and deleting its only input would have retired that rule silently.
 #
 # So this section is the field-discipline one, strengthened: it used to say "counts, and
-# nothing else, come out of the task documents", and now nothing does. The fixture is a
-# projects/ tree built to make every removed count non-zero — a draft, a dispatchable
-# `ready`, a `ready` blocked on a dependency, one owned by somebody else — plus a task whose
-# every field is directive-shaped text. None of it may appear anywhere in the banner.
+# nothing else, come out of the task documents"; now NO count does, on the channel a human
+# reads. The fixture is a projects/ tree built to make every removed count non-zero — a
+# draft, a dispatchable `ready`, a `ready` blocked on a dependency, one owned by somebody
+# else — plus a task whose every field is directive-shaped text. None of it may appear
+# anywhere in the human's banner.
 mkdir -p "$INST/projects/demo/tasks"
 printf -- '---\nstatus: draft\n---\n'  > "$INST/projects/demo/tasks/task-001.md"
 printf -- '---\nstatus: ready\n---\n'  > "$INST/projects/demo/tasks/task-002.md"
@@ -420,6 +434,14 @@ assert "one draft and four ready tasks: still exit 0"   "$(eq "$RC" 0)"
 assert "…and no 'Ready to dispatch' line, with four of them sitting there" \
   "$(hasnt 'Ready to dispatch' "$OUT")"
 assert "…and no 'Drafts' line, with one sitting there"  "$(hasnt 'Drafts' "$OUT")"
+# MOVED, NOT DELETED — and the difference is the whole of the change, so it is asserted here
+# rather than left to the channel harness alone. Without this line the absence above passes
+# equally well on a hook that stopped reading task documents entirely, which is a different
+# banner and a retired offer rule.
+assert "…while the MODEL's copy of the same run does carry the count" \
+  "$(has 'Ready to dispatch' "$(model_ctx)")"
+assert "…and still no 'Drafts' there — that one is deleted for both readers" \
+  "$(hasnt 'Drafts' "$(model_ctx)")"
 # NOT MERELY THE OLD WORDING GONE. A count printed under a new label would pass both
 # greps above, so the numbers themselves are pinned: nothing in the banner announces
 # how many tasks are in any state.
@@ -464,38 +486,41 @@ echo "== 7. the offer is prose, and it lives where a session will read it =="
 # CLAUDE.md. Asserted here because the two halves are one feature: a banner line is the
 # input that rule keys off, and either without the other is inert.
 #
-# THE INPUT CHANGED IN task-023 AND THIS PAIR IS WHY IT COULD NOT BE LEFT ALONE. The rule
-# used to key off `Ready to dispatch   N`, and task-023 deletes that line from BOTH
-# channels — leaving the rule pointed at a string the banner never emits, which is an offer
-# that can never fire and a harness that stays green while it cannot. It is re-keyed to the
-# line that survives, `🔔 N items need you`, which is on both channels and already names
-# `/pm-loop`. It is a different trigger (something waits on the human, rather than
-# something waits on the loop) and that is called out in the PR body, not smuggled in here.
-#
-# THE STRING IS ASSERTED IN BOTH DIRECTIONS: the seed must name the line the hook prints,
-# and it must NOT still name the deleted one — without the second half, re-keying half way
-# reads as a pass.
+# THE LINE MOVED CHANNEL IN task-023 AND THE RULE DID NOT CHANGE. `Ready to dispatch   N`
+# is gone from the human's banner and kept on the model's — and the model is the reader that
+# rule addresses, so the trigger is exactly what it always was: something waits on the LOOP.
+# Deleting the line from both channels instead would have left the rule pointed at a string
+# nothing emits: an offer that can never fire, under a harness that stays green because it
+# only checks the seed contains the phrase. That is the failure this pair exists to catch,
+# so the second half below reads the hook's OUTPUT and not its source.
 SEED="$TPL/seed/CLAUDE.md"
 assert "seed/CLAUDE.md tells the session to offer /pm-loop" \
   "$(grep -qi 'offer.*/pm-loop\|offer the loop' "$SEED" && echo 0 || echo 1)"
-assert "…keyed off the banner's awaiting count line" \
-  "$(grep -qF 'items need you' "$SEED" && echo 0 || echo 1)"
-assert "…and no longer off the deleted Ready-to-dispatch line" \
-  "$(grep -qF 'Ready to dispatch' "$SEED" && echo 1 || echo 0)"
+assert "…keyed off the banner's Ready-to-dispatch line" \
+  "$(grep -qF 'Ready to dispatch' "$SEED" && echo 0 || echo 1)"
 assert "…bounded to once per session" \
   "$(grep -qi 'once per session' "$SEED" && echo 0 || echo 1)"
 assert "…and placed beside the ad-hoc-vs-tracked-work section" \
   "$(awk '/^## Ad-hoc requests vs[.] the project loop/ { f=1; next } f && /^## / { f=0 } f' "$SEED" \
-      | grep -qF 'items need you' && echo 0 || echo 1)"
+      | grep -qF 'Ready to dispatch' && echo 0 || echo 1)"
 # THE TWO HALVES SAY THE SAME STRING, and the hook's half is asserted from what it PRINTS,
 # never from its source. A rule keyed off a wording the hook does not use is exactly the
-# inert state above, reached by a typo — and grepping the file for the phrase would pass on
-# the header comment three sections up, which is the vacuous version of this very check.
-printf '## 🔴 Awaiting you (2)\n* ✅ **approve** — a thing\n* ❓ **answer** — another\n' > "$INST/AWAITING.md"
-run
+# inert state above, reached by a typo — and grepping the hook for the phrase would pass on
+# the header comment at the top of the file, which is the vacuous version of this very check.
+# It is read off the MODEL's channel because that is the only channel the line is on, and
+# that is also the assertion which fails if a future cut deletes it from there too.
+# A CLEAN projects/ TREE, because section 5 left one behind and the count below is exact.
+# `2` rather than "non-empty" is what says the number is the queue's and not a constant.
+rm -rf "$INST/projects"
+mkdir -p "$INST/projects/demo/tasks"
+printf -- '---\nstatus: ready\n---\n' > "$INST/projects/demo/tasks/task-001.md"
+printf -- '---\nstatus: ready\n---\n' > "$INST/projects/demo/tasks/task-002.md"
+CTX="$(model_ctx)"
 assert "…and the hook really EMITS that line, rather than merely naming it in a comment" \
-  "$(has '2 items need you' "$OUT")"
-rm -f "$INST/AWAITING.md"
+  "$(has 'Ready to dispatch   2' "$CTX")"
+assert "…while the human's copy of the same instance does not" \
+  "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1 | grep -qF 'Ready to dispatch' && echo 1 || echo 0)"
+rm -rf "$INST/projects"
 # The hook must not attempt the offer itself. Scoped to what it PRINTS — an `echo` or
 # `printf` — rather than to every line in the file: `$?` ends a line with a question mark
 # and a header sentence may pose one, and neither is the hook asking the human anything.

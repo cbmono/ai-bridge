@@ -130,22 +130,22 @@ Two different modes — don't conflate them:
   "challenge this approach") are **not** project tasks and must **not** be funnelled
   through `/pm-loop` — that's slower, not faster.
 
-**Offer the loop when something is waiting on the human — once, and only then.** The
-SessionStart banner prints a `🔔 N items need you` line **only** when `AWAITING.md`
-actually holds items: a draft to promote, a question to answer, a PR to merge, a
-blocker to clear. When that line is present and the human has not already asked for
-a tick, **offer `/pm-loop` in your first reply** — one sentence, naming the count,
-and then get on with what they actually asked. The problem it solves is the owner's:
-*"every time I forget it, you start working on things on the main thread and then
-it's blocked instead of using the PM loop that is outsourcing tasks to
+**Offer the loop when there is work to dispatch — once, and only then.** The
+SessionStart banner prints a `Ready to dispatch   N` line **only** when at least one
+task is genuinely dispatchable: `status: ready`, every `depends_on` terminal, and
+owned by this clone. When that line is present and the human has not already asked
+for a tick, **offer `/pm-loop` in your first reply** — one sentence, naming the
+count, and then get on with what they actually asked. The problem it solves is the
+owner's: *"every time I forget it, you start working on things on the main thread
+and then it's blocked instead of using the PM loop that is outsourcing tasks to
 sub-agents."*
 
 It is **bounded, and the bounds are the point** — an offer that arrives every time
 is one the human learns to dismiss, which costs more than never offering:
 - **once per session.** Offered and declined, or offered and taken, it is settled;
   don't raise it again in that session.
-- **only off that line.** No line, no offer — an empty queue, or one that was
-  deleted to turn the nudge off for good. Don't count the task documents yourself
+- **only off that line.** No line, no offer — nothing ready, or only other people's
+  ready work, or dependencies still open. Don't count the task documents yourself
   to find a reason to ask.
 - **never instead of the answer.** It rides along with the reply to what they asked;
   it does not replace it, and it is not a question you wait on.

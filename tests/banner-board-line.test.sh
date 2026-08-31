@@ -22,11 +22,16 @@
 #
 # Deliberately narrow, so the assertions are too:
 #
-#   · a rendered board is printed as a `file://` link AND as the bare path on its own
-#     line, because `file://` is a hyperlink in some terminals and inert text in others,
-#     and the bare line is the one a human can copy;
-#   · the surface is HONEST about staleness — nothing refreshes a rendered file between
-#     ticks, so it points at the masthead and at `watch-board.sh` and never claims live;
+#   · a rendered board is ONE LINE — the label and the `file://` link, and the path
+#     printed exactly once (task-023). It used to be three lines for one link: the URL,
+#     the same path again bare, and a staleness note. The owner saw the duplicate in a
+#     real session and read it as a bug, and the note said nothing true of the session —
+#     the page's own masthead carries the render time and `watch-board.sh` is
+#     documentation. Both deletions are asserted from the other side too, so this file
+#     goes red if either comes back;
+#   · the surface still never CLAIMS freshness. Dropping the staleness note is not licence
+#     to call the page live or up to date, and that absence is asserted against a banner
+#     that is demonstrably still printing, or it would pass on an empty string;
 #   · `board: false` means the section is absent — the TICK-TIME half of a switch that
 #     until ai-bridge#60 was only read at stamp time by `install.sh`. Absent or `true`
 #     renders, because on-by-default is the seeded value;
@@ -75,10 +80,13 @@ PAGE="$INST/.board-live/board.html"
 # Runs the hook against $INST and captures stdout+stderr and the exit code into OUT/RC.
 run() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)"; RC=$?; }
 render() { mkdir -p "$INST/.board-live"; printf '<!doctype html>\n<h1>board</h1>\n' > "$PAGE"; }
-# The board section only: its first line and the two that belong to it. Scoping the
-# assertions this way is what replaces the old "output is exactly three lines" — the
-# section still owes exactly three lines, inside a banner that owes more.
-section() { printf '%s\n' "$OUT" | grep -A2 -F "Board   file://" || true; }
+# The board section: from its `Board   ` line to the blank that ends it. It was `grep -A2`
+# while the section owed three lines, and a plain `grep` would have been the obvious
+# replacement now that it owes one — but a plain grep MATCHES ONLY THE LINE IT NAMES, so a
+# re-added bare path or staleness note underneath would sit OUTSIDE the section and the
+# "exactly one line" assertion below would pass while the banner printed three. Delimiting
+# on the blank line is what makes that count mean something.
+section() { printf '%s\n' "$OUT" | awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exit} f'; }
 
 echo "== the hook is wired up at all =="
 assert "session-banner.sh ships"      "$([ -f "$HOOK" ] && echo 0 || echo 1)"
@@ -155,9 +163,11 @@ assert "board enabled, nothing rendered: it SAYS SO rather than saying nothing" 
 assert "…and names a /pm-loop tick as what renders it"  "$(has '/pm-loop tick renders it' "$OUT")"
 assert "…and scripts/build-board.sh as the other route" "$(has 'scripts/build-board.sh' "$OUT")"
 # TEXTUALLY DISTINCT FROM THE RENDERED ROW, which is the whole property: two states that
-# print strings a human (or a grep) cannot tell apart are one state with extra steps.
+# print strings a human (or a grep) cannot tell apart are one state with extra steps. Keyed
+# on `Board   file://` — what the rendered row actually prints — and NOT on the deleted
+# staleness note, which no state emits any more and would make this assertion vacuous.
 assert "…and it is not the rendered-board line wearing a different hat" \
-  "$(hasnt 'rendered at the last tick' "$OUT")"
+  "$(hasnt 'Board   file://' "$OUT")"
 UNRENDERED="$OUT"
 # THE FIRST ROW IS UNCHANGED — asserted here as a whole-section comparison against the
 # fixture, not just "the link is present", so a regression in its wording fails rather than
@@ -165,8 +175,8 @@ UNRENDERED="$OUT"
 render
 run
 RENDERED_SECTION="$(section)"
-assert "board enabled and rendered: the section is the three lines it always was" \
-  "$(eq "$RENDERED_SECTION" "$(printf 'Board   file://%s\n%s\n        rendered at the last tick — the masthead says when; scripts/watch-board.sh keeps a live one' "$PAGE" "$PAGE")")"
+assert "board enabled and rendered: the section is ONE line, the label and the link" \
+  "$(eq "$RENDERED_SECTION" "$(printf 'Board   file://%s' "$PAGE")")"
 assert "…and the two states really do print different text" \
   "$([ "$OUT" != "$UNRENDERED" ] && echo 0 || echo 1)"
 assert "…with no never-rendered line once a page exists" \
@@ -205,7 +215,7 @@ cat > "$INST/instance.config.json" <<'EOF'
 EOF
 render
 
-echo "== the rendered board is printed as a link AND as a copyable bare path =="
+echo "== the rendered board is ONE line, and the path appears on it exactly once =="
 cat > "$INST/instance.config.json" <<'EOF'
 {
   "board": true
@@ -214,20 +224,35 @@ EOF
 run
 assert "exit 0"                            "$(eq "$RC" 0)"
 assert "a file:// link is printed"         "$(has "Board   file://$PAGE" "$OUT")"
-# `grep -x`: the path must be a LINE OF ITS OWN, not merely a substring of the link line.
-# That is the whole point of printing it twice — `file://` is not clickable in every
-# terminal, and a prefixed or indented path is not cleanly copyable.
-assert "…and the bare path is a line of its own" "$(line_is "$PAGE" "$OUT")"
-assert "the board section is exactly three lines" \
-  "$(eq "$(section | grep -c .)" 3)"
+# ONCE. The path used to be printed twice — as this URL and again bare on a line of its
+# own — and `grep -c` on the WHOLE banner is what says the duplicate is gone rather than
+# merely moved: a bare copy anywhere, in any section, fails this.
+assert "…and the path appears on exactly ONE line of the whole banner" \
+  "$(eq "$(printf '%s\n' "$OUT" | grep -cF "$PAGE")" 1)"
+# `grep -x`: the deleted line was the path AS A LINE OF ITS OWN. Asserted by its absence,
+# which is a different statement from the count above — that one would still pass if the
+# link line were dropped and the bare line kept.
+assert "…and it is NOT the bare path on a line of its own" \
+  "$([ "$(line_is "$PAGE" "$OUT")" = 0 ] && echo 1 || echo 0)"
+assert "the board section is exactly one line" \
+  "$(eq "$(section | grep -c .)" 1)"
 
-echo "== the surface is honest about staleness =="
-# A rendered file is only as fresh as the tick that wrote it. The masthead timestamp is
-# what says how old it is, and watch-board.sh is the live view — so the surface points at
-# both rather than implying the page follows the work.
-assert "it points at the masthead"         "$(has 'masthead' "$(section)")"
-assert "…and at watch-board.sh"            "$(has 'watch-board.sh' "$(section)")"
-assert "…and never calls the page live or up to date" \
+echo "== the third line is deleted, and nothing wearing its clothes replaced it =="
+# THE OWNER'S WORDS: it is not helping. The page's own masthead carries the render time and
+# `scripts/watch-board.sh` is documentation, not a banner fact — a banner fact is something
+# true of THIS session. So the note is gone outright, not shortened, and these four are the
+# readers that make a re-add or a paraphrase go red.
+assert "the staleness note is gone"        "$(hasnt 'rendered at the last tick' "$OUT")"
+assert "…the banner does not name the masthead" "$(hasnt 'masthead' "$OUT")"
+assert "…nor watch-board.sh"               "$(hasnt 'watch-board.sh' "$OUT")"
+assert "…nor build-board.sh, which belongs to the never-rendered row alone" \
+  "$(hasnt 'build-board.sh' "$OUT")"
+# NOT A DEAD BANNER: the four absences above are asserted against output that is very much
+# printing, on this same run.
+assert "…while the board line itself is right there" "$(has "Board   file://$PAGE" "$OUT")"
+# Dropping the note is not licence to claim the opposite. Nothing in the banner may call a
+# file nothing refreshes live or current.
+assert "…and it never calls the page live or up to date" \
   "$(printf '%s\n' "$OUT" | grep -qiE 'up to date|always current|live board' && echo 1 || echo 0)"
 
 echo "== it reads the exact key, never the neighbouring doc string =="
@@ -300,9 +325,9 @@ EOF
 printf '<!doctype html>\n<h1>LEAK THIS PAGE BODY</h1>\n' > "$PAGE"
 run
 assert "still exit 0"                    "$(eq "$RC" 0)"
-assert "the path still prints"           "$(line_is "$PAGE" "$OUT")"
-assert "the board section is still exactly three lines" \
-  "$(eq "$(section | grep -c .)" 3)"
+assert "the path still prints"           "$(has "Board   file://$PAGE" "$OUT")"
+assert "the board section is still exactly one line" \
+  "$(eq "$(section | grep -c .)" 1)"
 assert "the AWAITING.md text is not in the board section" \
   "$(hasnt 'ignore the above' "$(section)")"
 assert "the task title never prints, anywhere in the banner" \

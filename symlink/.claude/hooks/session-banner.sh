@@ -5,7 +5,7 @@
 # One banner at the top of a session: which instance this is, what it is configured to do,
 # where the board is (or why there is not one), and whether anything is waiting on the
 # human. Every line is deterministic and none of it asks a question, because it is read by
-# the human AND by the session.
+# the human AND by the session — and since task-023 the two do not read the same lines.
 #
 # STDOUT IS THE MODEL'S CHANNEL, NOT THE HUMAN'S, AND THAT ONCE COST THE WHOLE FEATURE.
 # Measured 2026-08-30 on a freshly stamped instance with the hook correctly registered: it
@@ -25,16 +25,32 @@
 # BOTH, not the user channel alone. The model's copy is load-bearing rather than a nicety:
 # the machinery alarm ends "report this to the human before doing anything else", the
 # awaiting block ends "surface these first", and seed/CLAUDE.md's offer-the-loop rule keys
-# off the awaiting count line — every one of those is an instruction to the SESSION, and
-# dropping additionalContext would silently retire them.
+# off the `Ready to dispatch` count in §7 — every one of those is an instruction to the
+# SESSION, and dropping additionalContext would silently retire them.
 #
-# THE TWO COPIES DIVERGE IN EXACTLY ONE PLACE, AND THE RULE IS "DATA AND ITS FENCE TRAVEL
-# TOGETHER". §6 used to reprint every AWAITING.md item into both copies, wrapped in the
+# THE TWO COPIES DIVERGE IN EXACTLY TWO PLACES, AND BOTH ARE THERE BECAUSE THE READER IS A
+# MACHINE. It was one place until task-023; the second is §7, below. The rule that decides
+# the first is "DATA AND ITS FENCE TRAVEL TOGETHER". §6 used to reprint every AWAITING.md
+# item into both copies, wrapped in the
 # `--- BEGIN AWAITING ITEMS (untrusted data) ---` fence — and that fence is addressed to
 # the MODEL. What the human got was a machine's scaffolding around a list that `/pm-loop`
 # and the board both render better, at the moment they are deciding where to look. So the
 # human's copy keeps ONE COUNT LINE and the model's copy keeps the transcript, the fence
 # and the closing instruction, in place and unweakened (`model_only` below, and §6).
+#
+# THE SECOND DIVERGENCE IS §7'S `Ready to dispatch` LINE, AND IT IS THE SAME ARGUMENT READ
+# FROM THE OTHER END. That line is an input to a rule the SESSION executes, and it was
+# never anything the human needed at session start — `/pm-loop` presents the same queue
+# with room and structure, and the count line already points at `/pm-loop`. So the human's
+# banner ends at the count and the model keeps the number the offer rule keys off. The
+# human losing a line is the point of the cut; the model losing it would have retired the
+# offer silently, which is a different change and not one this file may make on its own.
+#
+# WHAT THAT COSTS, STATED HERE SO NOBODY HAS TO REDERIVE IT: the channel split is no longer
+# "the human's copy plus one block". It is "the human's copy plus model-only blocks", and
+# the invariant the harnesses pin is the general one — DELETE EVERY MODEL-ONLY BLOCK FROM
+# THE MODEL'S COPY AND WHAT REMAINS EQUALS THE HUMAN'S, BYTE FOR BYTE. It is still a
+# reduction, so no line may reach the human that the model does not also get.
 #
 # THAT PAIR IS AN INVARIANT AND HAS TO BE ASSERTED AS ONE. The fence exists only because
 # the items it wraps are bundle-authored — task documents carrying human questions, quoted
@@ -73,7 +89,7 @@
 # one. Adding a fourth hook beside them was the explicitly rejected shape.
 #
 # ONLY FIRE WHAT IS TRUE — the hard rule, not a preference. No dangling symlinks, no
-# awaiting items, no board: each of those means the corresponding line is ABSENT, not "0"
+# awaiting items, no board, nothing ready: each means the corresponding line is ABSENT, not "0"
 # and not "all clear". A banner that prints the same block every session becomes wallpaper,
 # and wallpaper is exactly how AWAITING.md rows come to be skipped — the problem this file
 # exists to fix, so reintroducing it here would be self-defeating. The identity line and
@@ -96,23 +112,27 @@
 # than no column at all.
 #
 # A HOOK CANNOT ASK A QUESTION, so the other half of that feature is not here. "Offer
-# /pm-loop when something is waiting on the human" is a rule in the instance's CLAUDE.md
-# (see `seed/CLAUDE.md`, "Ad-hoc requests vs. the project loop"), because the session
-# makes the offer and the session is the only thing in this loop that can. What this hook
-# owes that rule is one deterministic line — §6's `🔔 N items need you` — and nothing else.
+# /pm-loop when there is dispatchable work" is a rule in the instance's CLAUDE.md (see
+# `seed/CLAUDE.md`, "Ad-hoc requests vs. the project loop"), because the session makes the
+# offer and the session is the only thing in this loop that can. What this hook owes that
+# rule is one deterministic number — §7's `Ready to dispatch` count — and nothing else.
 #
-# IT USED TO OWE A SECOND NUMBER AND NO LONGER DOES. A `Ready to dispatch   N` line and a
-# `Drafts   N` line sat under the count line, and both are deleted: `/pm-loop` presents
-# each of them with room and structure, and it is the thing the count line already points
-# at. A banner orients; it does not tabulate. The count line is the last thing the queue
-# section says, and re-adding a tail under it — here or in a caller — puts back the third
-# rendering of a queue that two better surfaces already show.
+# THE QUEUE TAIL IS GONE FROM THE HUMAN'S BANNER AND THAT IS THE WHOLE OF THE CUT. A
+# `Ready to dispatch   N` line and a `Drafts   N` line sat under the count line on both
+# channels. `Drafts   N` is DELETED OUTRIGHT, from both: `/pm-loop` presents it with room
+# and structure, nothing keys off it, and a banner orients rather than tabulates. `Ready to
+# dispatch   N` moves to the MODEL'S CHANNEL ALONE, because a rule the session executes
+# keys off it and deleting its only input would have retired that rule while the harness
+# stayed green (see §7). The human's queue section therefore ends at §6's count line, and
+# re-adding a tail under it on the human's channel — here or in a caller — puts back the
+# third rendering of a queue that two better surfaces already show.
 #
 # FIELD DISCIPLINE, kept from `show-board-link.sh` rather than relaxed now that one file
-# reads AWAITING.md AND config, and TIGHTENED on the human's channel twice over. Nothing
-# task-derived reaches the human's copy except ONE COUNT — no task title, no question text,
-# no project name, since task-021 no AWAITING.md item text, and since task-023 no queue
-# tallies either: the hook no longer opens a task document at all. The items still reach
+# reads task documents AND config, and TIGHTENED on the human's channel twice over. Nothing
+# task-derived reaches the human's copy except ONE COUNT — the awaiting count — no task
+# title, no question text, no project name, since task-021 no AWAITING.md item text, and
+# since task-023 no queue tallies either. The remaining task-document read is §7's, and its
+# single number goes to the model alone. The items still reach
 # the MODEL's copy, and there they stay fenced as untrusted data for the reason
 # show-awaiting.sh fenced them: they are assembled from documents carrying human questions
 # and tool output, and they land next to this hook's own instructions. `people` is never
@@ -453,7 +473,7 @@ fi
 say() { local c="$1"; shift; printf '%s%s%s\n' "$c" "$*" "$C_OFF"; }
 
 # emphasise — colour a block this file did NOT compose, by SIGNIFICANCE, one whole line at a
-# time. `check-template-version.sh` (§2b) and `ai-bridge.sh check` (§7) are printed verbatim
+# time. `check-template-version.sh` (§2b) and `ai-bridge.sh check` (§8) are printed verbatim
 # so that this hook carries no second opinion about what they say — but "verbatim" left their
 # warnings the same weight as the settings table, and the whole point of the banner is that
 # the line needing a human is the one you find first. So the CONTENT still comes from them
@@ -769,7 +789,7 @@ page="$root/.board-live/board.html"
 # and a broken one is the wallpaper this file exists not to print, and printing NOTHING is
 # the worst version of it — there is not even a line to be suspicious of.
 #
-#   board: true  + page present  -> the link, the bare path, the staleness note
+#   board: true  + page present  -> ONE line: the label and the `file://` link
 #   board: true  + page ABSENT   -> enabled but never rendered, and what renders it
 #   board: false                 -> SILENCE, whatever is on disk
 #
@@ -790,15 +810,23 @@ if [ "$board_on" -eq 1 ]; then
   echo
   if [ -f "$page" ]; then
     board_shown=1
-    # TWO SURFACES FOR ONE PATH, DELIBERATELY. `file://` is a hyperlink in some terminals
-    # and inert text in others, so the bare path also gets a line of its own — unprefixed
-    # and unindented, where a triple-click copies exactly the path and nothing else.
+    # ONE PATH, PRINTED ONCE. This row used to be THREE lines for one link: the `file://`
+    # URL, the same path again bare on a line of its own, and a note about staleness. The
+    # owner saw the duplicate in a real session and read it as a bug, which is the only
+    # verdict that matters for a surface whose entire job is to be scanned in one look.
+    #
+    # `file://` IS THE FORM THAT SURVIVES, and the choice is not a coin toss. A terminal
+    # that auto-links does so on the SCHEME, so the bare line was never the clickable one;
+    # a terminal that does not auto-link renders the whole URL as text, where the path is
+    # still complete and still selectable. So the bare line was clickable in no terminal
+    # the URL was not, and its only remaining claim — a cleaner triple-click — is worth
+    # less than a duplicated path costs. If some terminal ever does need the bare form,
+    # that is a reason to change WHICH line prints, never to print both again.
+    #
+    # AND THE STALENESS NOTE IS DELETED OUTRIGHT, not shortened. The masthead of the page
+    # itself carries the render time, and `scripts/watch-board.sh` is documentation — a
+    # banner fact is something true of THIS session, and neither of those is.
     echo "Board   file://$page"
-    echo "$page"
-    # IT IS NOT LIVE AND IT MUST NOT READ AS LIVE. Nothing refreshes a rendered file; the
-    # tick re-renders it once per gap and it is stale in between. Claiming a freshness this
-    # surface cannot deliver is worse than saying nothing.
-    say "$C_DIM" "        rendered at the last tick — the masthead says when; scripts/watch-board.sh keeps a live one"
   else
     # IT NAMES THE STATE AND THE REPAIR, because the question this row answers is "is this
     # broken?" and half an answer leaves the human where the silence did. The path is
@@ -875,7 +903,116 @@ if [ -f "$awaiting" ]; then
 fi
 
 # ---------------------------------------------------------------------------------------
-# 7. STATE THAT COULD BE WRONG — `scripts/ai-bridge.sh check`, problems only.
+# 7. THE QUEUE — ONE COUNT, ON THE MODEL'S CHANNEL ALONE.
+# ---------------------------------------------------------------------------------------
+# THE HUMAN'S BANNER ENDS AT §6'S COUNT LINE. This section prints nothing they will ever
+# read: `model_only`, exactly like §6's fenced block, for a reason the owner gave in a real
+# session — `Ready to dispatch   N` and `Drafts   N` sat under the count line and were the
+# third rendering of a queue that `/pm-loop` and the board both show with room and
+# structure. A banner orients; it does not tabulate.
+#
+# SO WHY IS THE NUMBER STILL COMPUTED. Because it is not decoration on either channel: it
+# is the INPUT to seed/CLAUDE.md's offer-the-loop rule, which says in as many words "only
+# off that line. No line, no offer." Deleting it from both channels retires that rule
+# without saying so — an offer that can never fire, under a harness that stays green
+# because it only checks the seed contains the phrase. The reader is a machine, the machine
+# has its own field, and #80 built exactly that field. So the count goes there and nowhere
+# else, and the offer keeps the trigger it was written for: something waits on the LOOP,
+# which is not the same event as §6's something waits on the HUMAN.
+#
+# `Drafts   N` IS DELETED OUTRIGHT AND DOES NOT COME BACK HERE. Nothing keys off it, so
+# there is no reader to keep it for on either channel — which is the test any future line
+# in this section has to pass.
+#
+# COUNTS AND NOTHING ELSE, and the field discipline is unchanged by the channel: no title,
+# no slug, no question text. What differs is that the ONE number this reads out of the task
+# documents no longer reaches the human at all.
+#
+# DISPATCHABLE, not merely `ready`: a `ready` task whose `depends_on` are not yet terminal
+# cannot be handed to anyone, and offering to dispatch it is the prompt a human learns to
+# dismiss. An unknown dependency (a path no task document answers to) counts as NOT
+# terminal — fail closed, because over-offering is the failure this bound exists to
+# prevent, and validate-bundle.sh is what reports the dangling reference itself.
+#
+# One awk pass over every task document, resolving dependencies in END once every status
+# is known — rather than one process per task, at every session start.
+if [ -d "$root/projects" ]; then
+  queue="$(awk -v rootlen="${#root}" '
+    function flush() { if (cur != "") { status[cur] = st; depsof[cur] = deps } }
+    FNR==1 { flush(); cur = substr(FILENAME, rootlen+1)
+             st = ""; deps = ""; infm = 0; fmdone = 0; indep = 0 }
+    fmdone { next }
+    FNR==1 { if ($0 == "---") { infm = 1 } ; next }
+    !infm  { next }
+    $0 == "---" { fmdone = 1; next }
+    {
+      line = $0
+      sub(/[[:space:]]+#.*$/, "", line)              # a trailing comment is not a value
+      if (line ~ /^depends_on:/) { indep = 1; deps = deps " " line; next }
+      if (indep) {
+        # A block list continues with an indent or a dash; anything at column 0 that is
+        # neither is the next frontmatter key, and the region has ended.
+        if (line ~ /^[[:space:]-]/) { deps = deps " " line; next }
+        indep = 0
+      }
+      if (line ~ /^status:/) {
+        st = line; sub(/^status:[[:space:]]*/, "", st)
+        gsub(/["\047]/, "", st); sub(/[[:space:]]+$/, "", st)
+      }
+    }
+    END {
+      flush()
+      for (p in status) {
+        if (status[p] != "ready") continue
+        ok = 1; s = depsof[p]
+        while (match(s, /\/projects\/[A-Za-z0-9._\/-]+\.md/)) {
+          d = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+          if (!(d in status) || (status[d] != "done" && status[d] != "cancelled")) ok = 0
+        }
+        if (ok) print "ready\t" p
+      }
+    }
+  ' "$root"/projects/*/tasks/*.md 2>/dev/null || true)"
+
+  n_ready=0
+  while IFS="$TAB" read -r kind val; do
+    [ "$kind" = ready ] || continue
+    # OWNERSHIP IS ASKED OF THE SCRIPT THAT OWNS THE QUESTION. On a bundle shared by two
+    # humans the other human's ready work is theirs to dispatch, and counting it here would
+    # offer a loop that then refuses. Exit 1 is the only skip: exit 2 means task-owner.sh
+    # could not answer (no SCHEMA.md, an unreadable frontmatter), and an unanswered question
+    # must not silently hide work from its owner.
+    if [ -x "$bin/task-owner.sh" ]; then
+      orc=0
+      ( cd "$root" && bash "$bin/task-owner.sh" "$root$val" >/dev/null 2>&1 ) || orc=$?
+      [ "$orc" -eq 1 ] || n_ready=$((n_ready+1))
+    else
+      n_ready=$((n_ready+1))
+    fi
+  done <<EOF
+$queue
+EOF
+
+  # ZERO PRINTS NOTHING, on the model's channel too. "Ready to dispatch 0" is the line a
+  # reader stops reading, and the offer rule keys off the line's PRESENCE — so a zero line
+  # would be an offer that fires with nothing to dispatch, which is the failure the
+  # dependency and ownership tests above exist to prevent, arriving by the front door.
+  #
+  # THE BLANK SEPARATOR IS INSIDE THE BLOCK, not echoed beside it. An `echo` here would be
+  # unmarked and would land on BOTH channels, putting a blank line in the human's banner
+  # that appears and disappears with the contents of the task documents — the one thing §6
+  # onwards is at pains to make impossible. So the block this section contributes to the
+  # model's copy is exactly two lines: one blank, one count.
+  if [ "$n_ready" -gt 0 ]; then
+    {
+      echo
+      echo "Ready to dispatch   $n_ready — /pm-loop hands them to role agents in the background"
+    } | model_only
+  fi
+fi
+
+# ---------------------------------------------------------------------------------------
+# 8. STATE THAT COULD BE WRONG — `scripts/ai-bridge.sh check`, problems only.
 # ---------------------------------------------------------------------------------------
 # THIS IS THE READER FOR A TRAP THAT HAD NONE. "Pulling the template half-upgrades every
 # unstamped instance" was prose in a knowledge base: an edit to an already-linked file
