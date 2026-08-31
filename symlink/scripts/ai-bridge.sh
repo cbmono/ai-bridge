@@ -112,7 +112,8 @@ CHECKS='template-behind|idempotent|no
 unstamped-machinery|idempotent|yes
 config-uncommitted|ambiguous|yes
 config-layers|ambiguous|no
-tick-lock|human|yes'
+tick-lock|human|yes
+orphan-processes|human|yes'
 
 # =========================================================================================
 # ARGUMENTS
@@ -703,6 +704,193 @@ check_tick_lock() {
        hint "yours, not fix's: bash $sh release --instance $ROOT" ;;
   esac
   return "$_warned"
+}
+
+# =========================================================================================
+# CHECK 6 — orphan-processes (HUMAN — never repaired)
+# =========================================================================================
+# THE FACT: processes of YOURS whose parent is gone (`ppid 1`) are still running out of a
+# directory under `worktreeRoot`. Nothing on this machine will ever reap them.
+#
+# WHY THIS ROW EXISTS. Measured 2026-08-31: an agent generating CPU load to reproduce a
+# flaky suite left 34 orphans across three batches, every one with `ppid 1`, at ~24% of a
+# core each — load average 310, 0% idle. The owner found it in Activity Monitor. The
+# machinery that manages those very worktrees never noticed: `prune-worktrees.sh` does look
+# for live processes, but only when somebody prunes, and it does not ask whose they are.
+# This row is the line that would have printed all 34 at the next session start.
+#
+# `ppid 1` AND YOUR OWN UID ARE THE WHOLE FILTER, and together they are what make this
+# narrow enough to print at all. A live process under a worktree is ordinary — an editor, a
+# dev server someone is watching, this session. A live process under a worktree WHOSE PARENT
+# IS GONE is nobody's by construction: there is no shell left to press Ctrl-C in. Own-uid,
+# because another user's daemon is not this instance's business and its cwd is unreadable
+# anyway (measured on the machine that produced the incident: 449 `ppid 1` processes, 200 of
+# them other users' with no readable cwd; own-uid alone, 248 candidates and 248 cwds read).
+#
+# IT NEVER REPORTS ZERO ON A QUESTION IT COULD NOT ASK. Four ways it cannot answer, each
+# said out loud instead: no config reader, no worktree root to compare against, no `ps`, or
+# no readable cwd (neither `lsof` nor `/proc`, or a restricted one). "None found" is printed
+# ONLY after a scan that could have found one, and it carries the two counts that make it
+# checkable. Reporting zero on an unanswerable question is the failure this row is written
+# against — see `CONVENTIONS.md`, "Anything you background must be reaped".
+#
+# NO COMMAND LINE IS EVER PRINTED, only `comm`. `check` output lands in session context and
+# a full argv can carry a token or a path nobody chose to publish; the executable name is
+# enough to recognise a spinner, and the human's own `ps -p` is one hint line away.
+#
+# TIER `human`, AND THERE IS NO `fix_orphan_processes`. A bounded background job is
+# legitimate work and an orphan is not always a mistake — a deliberately detached build has
+# `ppid 1` too. Killing a process on this evidence is exactly the class of repair this
+# command does not perform.
+check_orphan_processes() {
+  _warned=0
+
+  # WHERE TO LOOK: `worktreeRoot`, then the legacy `<reposRoot>/_wt`. The same two roots
+  # `prune-worktrees.sh` scans and the same documented fallback, so the two readers cannot
+  # come to disagree about where worktrees live. Delegated to `resolve-config.sh` for the
+  # per-machine precedence rather than re-reading the files here.
+  if [ ! -f "$BIN/resolve-config.sh" ] || ! command -v python3 >/dev/null 2>&1; then
+    good "orphaned processes: the worktree roots are not resolvable here, so this is UNKNOWN"
+    note "resolve-config.sh or python3 is absent — that is not a zero, it is an unasked question"
+    return 0
+  fi
+  local wt repos d c roots=""
+  wt="$(bash "$BIN/resolve-config.sh" --instance "$ROOT" worktreeRoot 2>/dev/null)" || wt=""
+  repos="$(bash "$BIN/resolve-config.sh" --instance "$ROOT" reposRoot 2>/dev/null)" || repos=""
+  wt="${wt/#\~/$HOME}"; repos="${repos/#\~/$HOME}"
+  local configured=0 unreachable=""
+  for d in "$wt" "${repos:+$repos/_wt}"; do
+    [ -n "$d" ] || continue
+    configured=$((configured + 1))
+    # Canonicalised, because `lsof` reports a resolved cwd and macOS symlinks /tmp and
+    # /var — an unresolved prefix match misses every process and the scan becomes a
+    # silent no-op that looks exactly like a clean machine.
+    c="$(cd "$d" 2>/dev/null && pwd -P)" || c=""
+    if [ -z "$c" ]; then unreachable="${unreachable:+$unreachable, }$d"; continue; fi
+    case "$roots" in *"|$c|"*) continue ;; esac
+    roots="${roots}|$c|"
+  done
+  if [ -z "$roots" ]; then
+    if [ "$configured" -eq 0 ]; then
+      good "orphaned processes: this instance names no worktree root, so there is nowhere to scan"
+      note "neither worktreeRoot nor reposRoot resolves here — nothing was scanned, and nothing is claimed"
+    else
+      good "orphaned processes: every configured worktree root is unreadable, so this is UNKNOWN"
+      note "could not enter: $unreachable"
+    fi
+    return 0
+  fi
+
+  if ! command -v ps >/dev/null 2>&1; then
+    good "orphaned processes: no ps on PATH, so no process can be asked about its parent"
+    note "UNKNOWN, not zero — nothing was enumerated"
+    return 0
+  fi
+
+  # POSIX `ps`: `-u <uid>` selects by effective user, `-o <keyword>=` suppresses the header.
+  # `pid`, `ppid`, `etime` and `comm` are all in the POSIX keyword set and behave the same on
+  # the BSD `ps` macOS ships and the procps one Linux does. `comm` and NOT `args` — see the
+  # header. A uid rather than a name: `ps -o user=` truncates a long login name on macOS.
+  local uid pslist
+  uid="$(id -u 2>/dev/null)" || uid=""
+  if [ -z "$uid" ]; then
+    good "orphaned processes: cannot read your own uid, so 'whose process is it' is UNKNOWN"
+    return 0
+  fi
+  pslist="$(ps -u "$uid" -o pid=,ppid=,etime=,comm= 2>/dev/null)" || pslist=""
+  if [ -z "$pslist" ]; then
+    good "orphaned processes: ps returned nothing for uid $uid, so this is UNKNOWN"
+    note "an empty process table is not a result — nothing was scanned"
+    return 0
+  fi
+
+  # THE CANDIDATES: your processes whose parent is gone. `ppid 1` is what "reparented to
+  # launchd/init" looks like from outside, and it is the signature every one of the 34 had.
+  local cands pidlist n_cand
+  cands="$(printf '%s\n' "$pslist" | awk '$2 == 1 && $1 != 1 {print}')"
+  n_cand="$(printf '%s' "$cands" | grep -c . || true)"
+  if [ "$n_cand" -eq 0 ]; then
+    good "no process of yours has ppid 1 — no orphan exists to be in a worktree"
+    return 0
+  fi
+  pidlist="$(printf '%s\n' "$cands" | awk '{printf "%s%s", sep, $1; sep=","}')"
+
+  # CWD, FROM ONE SOURCE, CHOSEN IN A STATED ORDER. `lsof -d cwd` answers for every pid in
+  # a single call (0.19s for 449 pids, measured) and is what `prune-worktrees.sh` already
+  # uses; `/proc/<pid>/cwd` is the fallback where lsof is absent. Neither present is an
+  # UNANSWERABLE question, not a clean scan.
+  local cwds="" pid dir line readable=0
+  if command -v lsof >/dev/null 2>&1; then
+    pid=""
+    while IFS= read -r line; do
+      case "$line" in
+        p*) pid="${line#p}" ;;
+        n*) dir="${line#n}"
+            [ -n "$pid" ] || continue
+            cwds="${cwds}${pid} ${dir}
+"
+            readable=$((readable + 1)); pid="" ;;
+      esac
+    done <<EOF
+$(lsof -a -d cwd -n -P -Fpn -p "$pidlist" 2>/dev/null)
+EOF
+  elif [ -d /proc ]; then
+    for pid in $(printf '%s\n' "$cands" | awk '{print $1}'); do
+      dir="$(readlink "/proc/$pid/cwd" 2>/dev/null)" || dir=""
+      [ -n "$dir" ] || continue
+      cwds="${cwds}${pid} ${dir}
+"
+      readable=$((readable + 1))
+    done
+  else
+    good "orphaned processes: $n_cand of yours have ppid 1, and where they run is UNKNOWN"
+    note "no lsof and no /proc, so no process cwd is readable on this machine"
+    note "that is why this is not reported as none found"
+    return 0
+  fi
+  if [ "$readable" -eq 0 ]; then
+    good "orphaned processes: $n_cand of yours have ppid 1, and where they run is UNKNOWN"
+    note "not one cwd was readable (a restricted lsof, or every candidate exited mid-scan)"
+    return 0
+  fi
+
+  # THE MATCH. A prefix test against each canonical root, and the root itself counts: a
+  # process sitting in the root directory of a removed worktree is as unreapable as one
+  # inside a live worktree. Collected first and printed once, so the warn line carries the
+  # TOTAL — the number the reader acts on — rather than a running count.
+  local hits=0 pids_hit="" detail="" matched r
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    pid="${line%% *}"; dir="${line#* }"
+    matched=0
+    while IFS= read -r r; do
+      [ -n "$r" ] || continue
+      case "$dir" in "$r"|"$r"/*) matched=1; break ;; esac
+    done <<EOF
+$(printf '%s\n' "$roots" | tr '|' '\n')
+EOF
+    [ "$matched" -eq 1 ] || continue
+    hits=$((hits + 1))
+    pids_hit="${pids_hit:+$pids_hit }$pid"
+    # `etime` is field 3 and `comm` is everything after it — a path with a space in it is
+    # one field to `$4` and would print truncated.
+    [ "$hits" -le 12 ] && detail="${detail}    pid $pid  up $(printf '%s\n' "$cands" \
+      | awk -v want="$pid" '$1 == want {e=$3; $1=$2=$3=""; sub(/^ +/, ""); print e "  " $0; exit}')  in $dir
+"
+  done <<EOF
+$cwds
+EOF
+
+  if [ "$hits" -eq 0 ]; then
+    good "no orphan runs out of a worktree root ($n_cand of your processes have ppid 1, $readable cwds read)"
+    return 0
+  fi
+  warn "$hits orphaned process(es) of yours (ppid 1) run out of a worktree — nothing will reap them"
+  printf '%s' "$detail"
+  [ "$hits" -gt 12 ] && note "… and $((hits - 12)) more not listed"
+  note "a bound on the child is what stops this — CONVENTIONS.md, 'Anything you background'"
+  hint "yours, not fix's: ps -p ${pids_hit%% *} -o command= ; then kill $pids_hit"
+  return 1
 }
 
 # =========================================================================================
