@@ -216,15 +216,15 @@ $(cd "$REPO" && {
 SCOPE
 
 echo "== 1. the scope is real =="
-N_SCOPE="${#IN_SCOPE[@]}"
+N_SCOPE="$(printf '%s\n' ${IN_SCOPE+"${IN_SCOPE[@]}"} | grep -c . || true)"
 ok "the scan covers files at all"                        "$([ "$N_SCOPE" -ge 60 ] && echo yes || echo no)" yes
 n_mach=0; n_harness=0
-for f in "${IN_SCOPE[@]}"; do
+for f in ${IN_SCOPE+"${IN_SCOPE[@]}"}; do
   case "$f" in symlink/*) n_mach=$((n_mach+1)) ;; tests/*) n_harness=$((n_harness+1)) ;; esac
 done
 ok "…including this repo's machinery"                    "$([ "$n_mach" -ge 20 ] && echo yes || echo no)" yes
 ok "…and its harnesses"                                  "$([ "$n_harness" -ge 40 ] && echo yes || echo no)" yes
-ok "…and the harness under test is in scope (it spawns)" "$(yn grep -qx "tests/background-teardown.test.sh" <<<"$(printf '%s\n' "${IN_SCOPE[@]}")")" yes
+ok "…and the harness under test is in scope (it spawns)" "$(yn grep -qx "tests/background-teardown.test.sh" <<<"$(printf '%s\n' ${IN_SCOPE+"${IN_SCOPE[@]}"})")" yes
 
 # =======================================================================================
 echo
@@ -337,7 +337,7 @@ allow_count() { # <path> -> the pinned count, or empty
   done
   printf ''
 }
-REPO_HITS="$(cd "$REPO" && scan "${IN_SCOPE[@]}")"
+REPO_HITS="$(cd "$REPO" && scan ${IN_SCOPE+"${IN_SCOPE[@]}"})"
 N_HITS="$(count_lines "$REPO_HITS")"
 echo "  (the scan reports $N_HITS unbounded spawn(s) across $N_SCOPE files)"
 
@@ -371,7 +371,7 @@ ok "…and the allowlist is not empty (it would pass vacuously)" \
 
 # And no watchdog in this repo holds the stdout its caller reads through a command
 # substitution. There is no allowlist for this one: the redirect costs nothing.
-LOUD="$(cd "$REPO" && scan_loud "${IN_SCOPE[@]}")"
+LOUD="$(cd "$REPO" && scan_loud ${IN_SCOPE+"${IN_SCOPE[@]}"})"
 [ -n "$LOUD" ] && printf '%s\n' "$LOUD" | sed 's/^/      /'
 ok "no watchdog keeps its caller's stdout"           "$(count_lines "$LOUD")" 0
 
@@ -698,7 +698,7 @@ ok "the bounded fixture parent is valid shell"      "$(yn bash -n "$TMP/parent-b
 # reparented to pid 1 and then died on its own inside the bound.
 BOUND=4
 bounded_case() { # <label> <path>
-  local label="$1" runpath="$2" kid rc=0
+  local label="$1" runpath="$2" kid
   rm -f "$BWT/child.pid"
   PATH="$runpath" bash "$TMP/parent-bounded.sh" "$BWT" "$BOUND" >/dev/null 2>&1 &
   local bp=$!

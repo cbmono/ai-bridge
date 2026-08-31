@@ -338,7 +338,7 @@ echo "== 6. the non-action is STRUCTURAL — the script refuses to carry a rogue
 # function, because a refusal that is never seen to fire is indistinguishable from a
 # comment — and then the clean file is asserted NOT to refuse, so the check is not vacuous.
 ok "no fix_ function exists for a print-only tier" \
-  "$(for t in config_uncommitted tick_lock config_layers; do
+  "$(for t in config_uncommitted tick_lock config_layers orphan_processes; do
        grep -c "^fix_$t()" "$SH"; done | awk '{s+=$1} END {print s+0}')" 0
 ROGUE="$TMP/rogue.sh"
 # BEFORE the call, not after: a function defined after `assert_no_rogue_fixers` runs would

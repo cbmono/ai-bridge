@@ -757,7 +757,9 @@ check_orphan_processes() {
   local wt repos d c roots=""
   wt="$(bash "$BIN/resolve-config.sh" --instance "$ROOT" worktreeRoot 2>/dev/null)" || wt=""
   repos="$(bash "$BIN/resolve-config.sh" --instance "$ROOT" reposRoot 2>/dev/null)" || repos=""
-  wt="${wt/#\~/$HOME}"; repos="${repos/#\~/$HOME}"
+  # `${HOME:-}` and not `$HOME`: this file runs under `set -u`, and a session with HOME
+  # unset would abort the whole check on a tilde nobody wrote.
+  wt="${wt/#\~/${HOME:-}}"; repos="${repos/#\~/${HOME:-}}"
   local configured=0 unreachable=""
   for d in "$wt" "${repos:+$repos/_wt}"; do
     [ -n "$d" ] || continue
