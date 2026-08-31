@@ -606,12 +606,20 @@ for h in board-renderers snapshot moved-template; do
   LOG="$TMP/run-$h.log"; : > "$LOG"
   ( cd "$COPY" && TMPDIR="$COPY/no-such-tmpdir" bash "tests/$h.test.sh" >"$LOG" 2>&1 ) &
   pid=$!; waited=0
+  # THE BOUND GOES ON THE CHILD: the poll below is OURS, and an unfixed harness in there
+  # runs its whole suite for minutes — so if this harness is killed, that run continues
+  # reparented to pid 1 (`CONVENTIONS.md` → "Anything you background must be reaped by
+  # something that outlives YOU"). The watchdog is a sibling and `sleep` bounds it; 90s is
+  # past the 60s poll, so it only ever matters when we are no longer here.
+  ( sleep 90; kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  wd=$!
   while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 60 ]; do sleep 1; waited=$((waited+1)); done
   if kill -0 "$pid" 2>/dev/null; then
     pkill -P "$pid" 2>/dev/null; kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; rc=124
   else
     wait "$pid"; rc=$?
   fi
+  kill "$wd" 2>/dev/null || true
   out="$(cat "$LOG")"
   ok "$h: TMPDIR absent ⇒ exits 2, the refusal status"  "$rc" 2
   ok "$h: TMPDIR absent ⇒ the checkout survives"  "$([ -f "$COPY/tests/$h.test.sh" ] && echo yes || echo no)" yes
@@ -651,12 +659,20 @@ for h in banner-board-line; do
   LOG="$TMP/run-$h.log"; : > "$LOG"
   ( cd "$COPY" && TMPDIR="$COPY/no-such-tmpdir" bash "tests/$h.test.sh" >"$LOG" 2>&1 ) &
   pid=$!; waited=0
+  # THE BOUND GOES ON THE CHILD: the poll below is OURS, and an unfixed harness in there
+  # runs its whole suite for minutes — so if this harness is killed, that run continues
+  # reparented to pid 1 (`CONVENTIONS.md` → "Anything you background must be reaped by
+  # something that outlives YOU"). The watchdog is a sibling and `sleep` bounds it; 90s is
+  # past the 60s poll, so it only ever matters when we are no longer here.
+  ( sleep 90; kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  wd=$!
   while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt 60 ]; do sleep 1; waited=$((waited+1)); done
   if kill -0 "$pid" 2>/dev/null; then
     pkill -P "$pid" 2>/dev/null; kill -9 "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; rc=124
   else
     wait "$pid"; rc=$?
   fi
+  kill "$wd" 2>/dev/null || true
   out="$(cat "$LOG")"
   ok "$h: TMPDIR absent ⇒ exits 2, the refusal status"  "$rc" 2
   # The actual regression this criterion names: a killed-early run cannot have reached
