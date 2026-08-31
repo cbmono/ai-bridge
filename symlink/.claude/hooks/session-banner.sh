@@ -779,7 +779,13 @@ pad() { local s="$1" n
 # (`startup` / `resume` / `clear` / `compact`), so an alignment computed against it is right
 # on one session and wrong on the next; and a rule that no longer matches `${#head_line}` has
 # stopped underlining the header it is derived from.
-echo
+#
+# THE TRAILING COMMENT IS AN ANCHOR, and it is load-bearing. tests/session-banner.test.sh and
+# tests/banner-user-channel.test.sh each build a mutant of this file with this one line
+# deleted, to prove the assertions about the blank line are not vacuous; a bare `echo` is not
+# a thing a `grep` can find exactly once in a file with forty of them, and a mutant whose
+# anchor is ambiguous is reported SKIPPED rather than caught.
+echo   # <- the banner's leading blank line (mutation anchor: do not fold into the line above)
 
 # ---------------------------------------------------------------------------------------
 # 0. MACHINERY — was check-machinery.sh. FIRST, and above the identity line, because it is

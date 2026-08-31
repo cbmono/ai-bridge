@@ -46,12 +46,25 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/session-banner.XXXXXX")" || {
   echo "session-banner.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 
-pass=0; fail=0
+pass=0; fail=0; skipped=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
 has()    { printf '%s\n' "$2" | grep -qF -- "$1" && echo 0 || echo 1; }
 hasnt()  { printf '%s\n' "$2" | grep -qF -- "$1" && echo 1 || echo 0; }
 eq()     { [ "$1" = "$2" ] && echo 0 || echo 1; }
+
+# THE BANNER OPENS WITH A BLANK LINE BY DESIGN (task-027). Claude Code renders a SessionStart
+# hook's `systemMessage` as `SessionStart:<source> says: <content>`, and that blank is what
+# ends the label's line so the identity line and its rule both start at column 0. So every
+# claim this file makes about section ORDER is anchored on the first NON-EMPTY line rather
+# than on line 1 — the same claim, and still false the moment anything prints above the
+# header, which section 12 proves with two mutants.
+#
+# `0` WHEN THERE IS NO NON-EMPTY LINE AT ALL, never the empty string: a banner that printed
+# nothing must FAIL these assertions rather than satisfy them with an empty string on both
+# sides of an equality.
+head_no() { printf '%s\n' "$1" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+nth()     { printf '%s\n' "$1" | sed -n "$2p"; }
 
 # =======================================================================================
 echo "== 1. the three hooks were REPLACED, not joined =="
@@ -282,15 +295,38 @@ run
 assert "names the harness"            "$(has 'AI-Bridge' "$OUT")"
 assert "…and this instance directory" "$(has "$(basename "$INST")" "$OUT")"
 assert "…and the org"                 "$(has 'org: example-org' "$OUT")"
-assert "…on the first line"           "$(eq "$(printf '%s\n' "$OUT" | head -1 | cut -c1-9)" 'AI-Bridge')"
+# ONE LEADING BLANK LINE, AND IT IS THE BANNER'S (task-027). Without it the identity line
+# wears the harness's `SessionStart:<source> says: ` label — a width that changes with the
+# session source — while the rule under it stays at column 0, so the header and its underline
+# visibly disagree. The blank belongs to the BANNER rather than to `systemMessage`, which is
+# why it is asserted here on the PLAIN-TEXT rendering; tests/banner-user-channel.test.sh §9
+# asserts the other two human renderings carry the same one.
+assert "the banner opens with exactly ONE blank line" "$(eq "$(head_no "$OUT")" 2)"
+# AND NO TRAILING ONE. `$( … )` eats trailing newlines, so `$OUT` cannot answer this and the
+# raw bytes have to: awk's `$0` in END is the last record, and it is empty exactly when the
+# stream ended on a blank line.
+CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" > "$TMP/banner.raw" 2>/dev/null
+assert "…and introduces no trailing blank line" \
+  "$(eq "$(awk 'END { print ($0 == "" ? "blank" : "text") }' "$TMP/banner.raw")" text)"
+# WAS "on the first line" — NOW "on the first NON-EMPTY line", which is the same claim about
+# section order and not a weaker one. It is still false the moment §0's machinery alarm, or
+# any future section, prints above the header; section 12 drives that mutant, and the real §0.
+assert "…on the first NON-EMPTY line" \
+  "$(eq "$(nth "$OUT" "$(head_no "$OUT")" | cut -c1-9)" 'AI-Bridge')"
 # READS AS A HEADER WITH COLOUR OFF, which is the normal case: a SessionStart hook writes
 # to a pipe, never a terminal, so the bold is gone exactly where the banner is read. The
 # rule under it is what carries the header across that degradation, and it is as wide as
 # the line it underlines rather than a fixed run of dashes.
-h1="$(printf '%s\n' "$OUT" | sed -n 1p)"
-h2="$(printf '%s\n' "$OUT" | sed -n 2p)"
-assert "the second line is a rule under it"  "$(printf '%s' "$h2" | grep -qE '^─+$' && echo 0 || echo 1)"
+#
+# ANCHORED ON THE IDENTITY LINE, NOT ON LINES 1 AND 2, for the same reason as above — and
+# the rule's DERIVATION is untouched: it is still `${#head_line}` wide and still printed at
+# column 0, never padded or re-sized to line up under a label whose width is not ours.
+h1="$(nth "$OUT" "$(head_no "$OUT")")"
+h2="$(nth "$OUT" "$(( $(head_no "$OUT") + 1 ))")"
+assert "the line under it is a rule"         "$(printf '%s' "$h2" | grep -qE '^─+$' && echo 0 || echo 1)"
 assert "…exactly as wide as the header"      "$(eq "${#h2}" "${#h1}")"
+assert "…and starting at column 0, not indented to match the label" \
+  "$(printf '%s' "$h2" | grep -qE '^─' && echo 0 || echo 1)"
 
 # THE VERSION comes from `VERSION` at the template root — a real file this repo ships, read
 # through the hook's own resolved path, so a release that bumps it needs no edit here.
@@ -927,6 +963,133 @@ assert "…with the character neutralised on the way to the reader" \
   "$(has 'AI-Bridge v9.9.9?beta' "$FAKE_OUT")"
 rm -rf "$FAKETPL"
 
+# =======================================================================================
+echo "== 12. NON-VACUITY: the blank line, and the section order, each with its own mutant =="
+# =======================================================================================
+# TWO ASSERTIONS CHANGED IN SECTION 3 AND EACH GETS ITS OWN MUTANT, because they are not the
+# same claim: "exactly one leading blank line" is about the FIRST line, "the identity line is
+# the first NON-EMPTY one" is about ORDER. So each mutant must redden ITS assertion and leave
+# the other GREEN — that is what says re-expressing "first line" as "first non-empty line"
+# kept an invariant rather than traded one away for a check that can no longer fail.
+#
+# A MUTANT WHOSE ANCHOR IS ABSENT IS *SKIPPED*, NOT COUNTED AS CAUGHT, and a skip is as red
+# as a failure at the foot of this file: "the mutant did not apply" and "the mutant was
+# caught" are indistinguishable at the assertion, and only one of them is evidence. Same
+# driver shape as tests/pr-comment-clearance.test.sh — including returning the mutant's path
+# in a VARIABLE rather than on stdout, because a `$( … )` around it runs the whole function
+# in a subshell and loses the SKIP line and the counter along with it.
+#
+# THE MUTANTS LIVE IN A FAKE TEMPLATE BESIDE A CONTROL COPY of the intact hook. `tmpl` is
+# derived from the hook's own resolved path, so a copy elsewhere reads a different VERSION
+# and a different scripts/ dir; comparing a mutant's output to the REAL hook's would be
+# comparing two runs that differ in more than the mutation.
+MUTTPL="$TMP/muttpl"
+mkdir -p "$MUTTPL/symlink/.claude/hooks"
+ln -s "$SCRIPTS" "$MUTTPL/symlink/scripts"
+cp "$HOOK" "$MUTTPL/symlink/.claude/hooks/control.sh"
+tracked_cfg
+mut_run() { CLAUDE_PROJECT_DIR="$INST" bash "$MUTTPL/symlink/.claude/hooks/$1" 2>/dev/null; }
+
+# The one line the banner prints for this, carrying the trailing comment that exists to make
+# it findable exactly once. A bare `echo` is not something a grep can anchor on in a file
+# with forty of them.
+ANCHOR_RE="^echo +# <- the banner's leading blank line"
+MUT_PATH=""
+mutate() { # <name> <source-file> <awk-program> -> 0 and sets MUT_PATH, or 1 having reported SKIP
+  local name="$1" file="$2" prog="$3" anchors
+  MUT_PATH=""
+  anchors="$(grep -cE "$ANCHOR_RE" "$file" || true)"
+  if [ "$anchors" != 1 ]; then
+    printf '  SKIP  %-62s (anchor matched %s times, not once)\n' "$name" "$anchors"
+    skipped=$((skipped+1)); return 1
+  fi
+  MUT_PATH="mutant-$RANDOM.sh"
+  awk -v anchor="$ANCHOR_RE" "$prog" "$file" > "$MUTTPL/symlink/.claude/hooks/$MUT_PATH"
+  # EXECUTABLE LIKE THE HOOK IT MUTATES: `mut_run` uses `bash <path>` and does not need it,
+  # but settings.json runs the real file with no interpreter in front, and a mutant that
+  # cannot run produces no output — which reddens every "goes RED" assertion for the wrong
+  # reason. tests/banner-user-channel.test.sh §9 hit exactly that.
+  chmod +x "$MUTTPL/symlink/.claude/hooks/$MUT_PATH"
+  return 0
+}
+
+# THE SKIP PATH IS ITSELF DRIVEN, because a skip branch nobody runs is untested code inside
+# the guard against untested code. It runs against a copy of the hook with the anchor line
+# removed, in a SUBSHELL so the real counters stay untouched — and the assertion reads the
+# counter's value back out of that subshell.
+grep -vE "$ANCHOR_RE" "$HOOK" > "$TMP/no-anchor.sh"
+probe="$( skipped=0
+          mutate "probe: an absent anchor" "$TMP/no-anchor.sh" '{ print }' >/dev/null 2>&1
+          printf 'rc=%s skipped=%s\n' "$?" "$skipped" )"
+assert "an absent anchor returns 1 AND counts a skip" "$(eq "$probe" 'rc=1 skipped=1')"
+probe_out="$( skipped=0; mutate "probe: an absent anchor" "$TMP/no-anchor.sh" '{ print }' 2>&1 )"
+assert "…and the SKIP line goes to the log, not into a variable" \
+  "$(eq "$(printf '%s' "$probe_out" | grep -c '^  SKIP  probe: an absent anchor')" 1)"
+assert "…and the intact hook carries exactly ONE anchor" \
+  "$(eq "$(grep -cE "$ANCHOR_RE" "$HOOK")" 1)"
+
+# CONTROL: the intact hook, run from the same fake template as the mutants, answers both
+# claims the way section 3 says it does. Without this the four mutant assertions below would
+# be statements about a copy that never worked in this location.
+CTL="$(mut_run control.sh)"
+assert "CONTROL: intact, the banner opens with exactly ONE blank line" \
+  "$(eq "$(head_no "$CTL")" 2)"
+assert "CONTROL: intact, its first NON-EMPTY line is the identity line" \
+  "$(eq "$(nth "$CTL" "$(head_no "$CTL")" | cut -c1-9)" 'AI-Bridge')"
+
+# MUTANT 1 — the leading blank line deleted. Criterion 8: the assertion that says the banner
+# opens with one blank line must go RED, and the section-order assertion must NOT.
+if mutate "mutant: the leading blank line deleted" "$HOOK" '$0 ~ anchor { next } { print }'; then
+  M1="$MUT_PATH"; M1_OUT="$(mut_run "$M1")"
+  assert "the mutant really lost the line" \
+    "$(eq "$(grep -cE "$ANCHOR_RE" "$MUTTPL/symlink/.claude/hooks/$M1")" 0)"
+  # …AND IT RAN. A mutant that printed nothing reddens the assertions below for the wrong
+  # reason, which is the vacuity this section exists to refuse.
+  assert "…and still prints a banner"  "$(has 'AI-Bridge' "$M1_OUT")"
+  assert "BLANK DELETED: 'opens with exactly ONE blank line' goes RED" \
+    "$([ "$(head_no "$M1_OUT")" != 2 ] && echo 0 || echo 1)"
+  assert "…and the identity line is what the label would now prefix" \
+    "$(eq "$(nth "$M1_OUT" 1 | cut -c1-9)" 'AI-Bridge')"
+  assert "…while the section-order assertion stays GREEN, so the two claims do not overlap" \
+    "$(eq "$(nth "$M1_OUT" "$(head_no "$M1_OUT")" | cut -c1-9)" 'AI-Bridge')"
+fi
+
+# MUTANT 2 — a line printed above the identity line, which is what §0's alarm does for real.
+# Criterion 4: the RE-EXPRESSED assertion must go RED, or "first non-empty line" was a way of
+# dropping the invariant rather than restating it.
+if mutate "mutant: a line printed above the identity line" "$HOOK" \
+   '{ print } $0 ~ anchor { print "echo \"MUTANT: a section above the header\"" }'; then
+  M2="$MUT_PATH"; M2_OUT="$(mut_run "$M2")"
+  assert "the mutant really printed a line above the header" \
+    "$(has 'MUTANT: a section above the header' "$M2_OUT")"
+  assert "…and still prints the banner under it" "$(has 'AI-Bridge' "$M2_OUT")"
+  assert "ABOVE THE HEADER: 'on the first NON-EMPTY line' goes RED" \
+    "$([ "$(nth "$M2_OUT" "$(head_no "$M2_OUT")" | cut -c1-9)" != 'AI-Bridge' ] && echo 0 || echo 1)"
+  assert "…and the rule assertions go with it — the line under the first one is not a rule" \
+    "$(printf '%s' "$(nth "$M2_OUT" "$(( $(head_no "$M2_OUT") + 1 ))")" | grep -qE '^─+$' && echo 1 || echo 0)"
+  assert "…while the blank-line assertion stays GREEN, so the two claims do not overlap" \
+    "$(eq "$(head_no "$M2_OUT")" 2)"
+fi
+
+# AND THE REAL THING, NOT ONLY A MUTANT OF IT. §0's machinery alarm is the section that
+# already prints above the header, so a fixture with one dangling probe symlink puts a real
+# line there. The mutants prove the assertion discriminates; this proves the case it was
+# re-expressed to keep catching actually occurs in this hook as shipped.
+DANGLING="$TMP/_dangling"
+mkdir -p "$DANGLING/.claude/agents"
+printf 'stub\n' > "$DANGLING/SCHEMA.md"
+printf '{ "org": "example-org" }\n' > "$DANGLING/instance.config.json"
+ln -s "$TMP/never-existed/project-manager.md" "$DANGLING/.claude/agents/project-manager.md"
+DANG="$(CLAUDE_PROJECT_DIR="$DANGLING" bash "$HOOK" 2>/dev/null)"
+assert "a dangling probe really fires §0's alarm" "$(has 'machinery is DANGLING' "$DANG")"
+assert "§0 ABOVE THE HEADER: the first NON-EMPTY line stops being the identity line" \
+  "$([ "$(nth "$DANG" "$(head_no "$DANG")" | cut -c1-9)" != 'AI-Bridge' ] && echo 0 || echo 1)"
+assert "…and the alarm, not the header, is what the label now prefixes — still one blank line" \
+  "$(eq "$(head_no "$DANG")" 2)"
+rm -rf "$MUTTPL" "$DANGLING"
+
 echo
-printf 'pass=%d fail=%d\n' "$pass" "$fail"
-[[ $fail -eq 0 ]]
+printf 'pass=%d fail=%d skipped=%d\n' "$pass" "$fail" "$skipped"
+# A SKIP IS AS RED AS A FAILURE: it means a mutant never applied, and a mutant that never
+# applied proves nothing about the assertion it was written to protect.
+[[ $fail -eq 0 && $skipped -eq 0 ]]
