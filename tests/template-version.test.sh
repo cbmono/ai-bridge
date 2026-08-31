@@ -403,7 +403,7 @@ ok "…prints the drift line"                    "$(printf '%s\n' "$OUT" | grep 
 ok "…directly under the header rule (line 4)" \
   "$(printf '%s\n' "$OUT" | sed -n 4p | grep -qF 'UPDATE' && echo yes || echo no)" yes
 ok "…and the header still carries this template's own version" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'AI-Bridge 0.9.1' && echo yes || echo no)" yes
+  "$(printf '%s\n' "$OUT" | grep -qF 'AI-Bridge v0.9.1' && echo yes || echo no)" yes
 
 wire "$equal"
 banner "$equal"
