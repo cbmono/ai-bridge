@@ -585,7 +585,12 @@ mk "$TMP/handle" "handle" '[
   "phase_progress":{"done":0,"total":0},
   "tasks":[{"id":"task-001","title":"Hostile slug with a task","status":"draft",
             "assignee":"software-engineer","awaiting":"approve","open_questions":0,
-            "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]}]'
+            "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]},
+ {"slug":"quiet","title":"Nothing waiting here","kind":"build","status":"active",
+  "autonomy":"gated","awaiting_close":false,"phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Just working","status":"in-progress",
+            "assignee":"software-engineer","awaiting":"","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":true,"prs":[]}]}]'
 # THE DOCUMENTS THE HANDLES MUST RESOLVE TO, on disk. The renderer never reads them —
 # it is the assertion below that does, standing in for the session a human pastes into.
 : > "$TMP/handle/projects/gdg/tasks/task-044-the-dwd-calendar-grant-lives-in-a-workspace.md"
@@ -756,8 +761,23 @@ assert "…and no longer filled"                       "$(fhasnt '.c.you{backgro
 # #74'S QUESTION STILL HAS TO HOLD: from the collapsed view alone, which projects need
 # me? The pill lost its fill, so the two channels that never depended on it are what
 # carry it — and they are asserted here rather than assumed.
-assert "…the card itself is still marked"            "$(fhas '<details class="proj wants">' "$HB")"
-assert "…and a project with nothing waiting is not"  "$(card "$HB" 'Two tasks one number' | fhasnt_in 'proj wants')"
+# ASSERTED ON THE CARD'S OWN OPENING TAG, WHICH `card()` CANNOT SEE. That helper slices
+# from the project TITLE to the next card, and `<details class="proj …">` sits BEFORE the
+# title — so `card … | fhasnt_in 'proj wants'` is structurally incapable of failing, and
+# an earlier version of this pair said exactly that and read green on a fixture with no
+# quiet project in it at all (CodeRabbit, PR #83). This pairs each title with the class
+# on the tag that introduces it, and asserts both directions at once.
+# THE COMPARISON IS A LIST, NOT A SET OR DICT LITERAL: a `{a, b}` inside a `$( )` in a
+# command ARGUMENT is brace-expanded by bash, which runs the check twice and hands
+# `assert` the second answer (knowledge/findings/brace-expansion-mangles-a-regex-inside-
+# a-command-substitution.md). Brackets are not braces.
+assert "the marked cards are exactly the ones with items" "$(yes_if python3 -c "
+import re, sys
+page = open('$HB', encoding='utf-8').read().replace(chr(10), '')
+pairs = re.findall(r'<details class=.proj([^\"]*).><summary class=.phead.><span class=.ptitle.>([^<]*)', page)
+got = sorted('%s=%s' % (t, 'wants' in c) for c, t in pairs)
+sys.exit(0 if got == ['Nothing waiting here=False', 'One handle=True',
+                      'Slug is a path=True', 'Two tasks one number=True'] else 1)")"
 
 echo "== open_question_ids is what the handles are built from =="
 # THE FIELD THIS ROUND EXISTS FOR. Before it the snapshot carried a COUNT, so #79's
