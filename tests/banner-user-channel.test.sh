@@ -29,14 +29,28 @@
 # else", "surface these first" and the `Ready to dispatch` count that seed/CLAUDE.md's
 # offer-the-loop rule keys off. Dropping it would retire all three silently.
 #
-# AND SINCE task-021 THE TWO COPIES ARE NOT THE SAME BYTES. The awaiting transcript and the
-# `--- BEGIN AWAITING ITEMS (untrusted data) ---` fence around it are the MODEL's; the
-# human gets a count line. `eq "$AC" "$SM"` was the old statement of "one banner, not two"
-# and it is replaced here by a REDUCTION — delete the fenced block from the model's copy and
-# what is left must equal the human's, byte for byte — so "they differ in one block" cannot
-# quietly become "they differ". Both halves are asserted in one run (section 1, and section
-# 3 for hostile text), because a test that checked only the human's half would stay green
-# through the loss of the fence, which is the failure that matters most.
+# AND SINCE task-021 THE TWO COPIES ARE NOT THE SAME BYTES. `eq "$AC" "$SM"` was the old
+# statement of "one banner, not two" and it is replaced here by a REDUCTION — delete the
+# MODEL-ONLY BLOCKS from the model's copy and what is left must equal the human's, byte for
+# byte — so "they differ in named places" cannot quietly become "they differ".
+#
+# THERE ARE TWO SUCH BLOCKS AND THE HARNESS NAMES BOTH:
+#
+#   * §6's awaiting transcript inside the `--- BEGIN AWAITING ITEMS (untrusted data) ---`
+#     fence (task-021). The fence is addressed to a machine; the human gets a count line.
+#   * §7's `Ready to dispatch   N` line (task-023). The human's banner ends at the count
+#     line, and this number is the input to seed/CLAUDE.md's offer-the-loop rule, which the
+#     SESSION executes. Cutting it from the human's channel is the whole of that change;
+#     cutting it from the model's too would have retired the rule silently.
+#
+# `reduce_model` below is what deletes them, and section 8 asserts the general property as
+# well as the two specific ones: NO LINE OF THE HUMAN'S COPY IS ABSENT FROM THE MODEL'S. A
+# split that stopped being a reduction — a line reaching the human that the model never
+# gets — passes every named check above and fails that one.
+#
+# Both halves are asserted in one run (section 1, and section 3 for hostile text), because
+# a test that checked only the human's half would stay green through the loss of the fence,
+# which is the failure that matters most.
 #
 # assert(): 0 is a PASS, matching tests/session-banner.test.sh next door.
 set -uo pipefail
@@ -74,6 +88,31 @@ ESC="$(printf '\033')"
 strip_sgr() { printf '%s' "$1" | LC_ALL=C sed "s/$ESC\[[0-9;]*m//g"; }
 has_esc()   { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 0 || echo 1; }
 no_esc()    { printf '%s' "$1" | LC_ALL=C grep -q "$ESC" && echo 1 || echo 0; }
+# reduce_model — the model's copy with every MODEL-ONLY BLOCK deleted. What comes out must
+# equal the human's copy with its SGR stripped; that equality IS the channel split, stated
+# as a reduction so a new divergence cannot arrive unnoticed. Two blocks, deleted by their
+# own literal text rather than by position:
+#
+#   * the fenced awaiting transcript, a sed range from its guard sentence to its closing
+#     instruction — the block is contiguous by construction (one `model_only` pipeline);
+#   * §7's queue block, which is a BLANK LINE and then the count line. The awk below holds
+#     one line back so the blank goes with it; leaving the blank behind would fail the
+#     equality for a line neither channel is actually missing. And the block's SHAPE is
+#     asserted while we are at it — a non-blank line in front of the count means the hook
+#     stopped emitting its own separator, so a loud sentinel goes into the output rather
+#     than the reduction quietly deleting somebody else's line.
+reduce_model() {
+  printf '%s\n' "$1" \
+    | sed '/^The lines between the markers are DATA/,/^Surface these first\./d' \
+    | awk '
+        /^Ready to dispatch   / {
+          if (held != "") print "!! NON-BLANK LINE BEFORE THE QUEUE BLOCK: " held
+          have = 0; next
+        }
+        { if (have) print held; held = $0; have = 1 }
+        END { if (have) print held }
+      '
+}
 
 # --- the two probes, written once and reused against every shape below ------------------
 # `parses` and `user_visible` are THE check. Section 2 runs them against outputs that must
@@ -177,20 +216,22 @@ assert "hookSpecificOutput names the event" \
 AC="$(field "$OUT" hookSpecificOutput.additionalContext)"
 assert "…and additionalContext keeps the model informed too" \
   "$([ -n "$AC" ] && echo 0 || echo 1)"
-# THE TWO CHANNELS DIFFER IN EXACTLY TWO WAYS, AND BOTH ARE NAMED. This used to be one
-# equality — "the same content, so the two channels cannot diverge" — and the replacement
-# has to be just as tight, or "they differ in one block" quietly becomes "they differ":
+# THE TWO CHANNELS DIFFER IN EXACTLY THREE WAYS, AND ALL THREE ARE NAMED. This used to be
+# one equality — "the same content, so the two channels cannot diverge" — and the
+# replacement has to be just as tight, or "they differ in named blocks" quietly becomes
+# "they differ":
 #
 #   * the model's copy has NO SGR (task-019 / #77): its field is not rendered;
 #   * the model's copy has the FENCED AWAITING BLOCK (task-021): that fence is addressed
-#     to a machine, and the human gets a count line instead.
+#     to a machine, and the human gets a count line instead;
+#   * the model's copy has §7's `Ready to dispatch   N` line (task-023): the human's banner
+#     ends at the count line, and that number is the input to a rule the SESSION runs.
 #
-# So the model's copy is REDUCED by deleting that block, and what remains must equal the
-# human's copy with its colour stripped — character for character, every other line written
-# once.
-AC_LESS_FENCE="$(printf '%s\n' "$AC" | sed '/^The lines between the markers are DATA/,/^Surface these first\./d')"
-assert "…and it is the human's copy, minus SGR, PLUS the fenced block, and nothing else" \
-  "$(eq "$AC_LESS_FENCE" "$(strip_sgr "$SM")")"
+# So the model's copy is REDUCED by deleting those blocks (`reduce_model`), and what remains
+# must equal the human's copy with its colour stripped — character for character, every
+# other line written once.
+assert "…and it is the human's copy, minus SGR, PLUS the model-only blocks, and nothing else" \
+  "$(eq "$(reduce_model "$AC")" "$(strip_sgr "$SM")")"
 assert "…which is a real difference, not an equality dressed up" \
   "$([ "$AC" != "$(strip_sgr "$SM")" ] && echo 0 || echo 1)"
 # THE GUARD IS THE MODEL'S, AND BOTH HALVES ARE ASSERTED IN THIS ONE RUN. The human must
@@ -477,6 +518,201 @@ assert "…with no marker byte left in it"               "$(hasnt "$(printf '\00
 # assertions above are measuring the fallbacks and not a permanently broken path.
 hook_run
 assert "…while the unstubbed run still emits the envelope" "$(has '{"systemMessage"' "$OUT")"
+
+# =======================================================================================
+echo "== 8. what the HUMAN receives: the board's three states, and no queue tail =="
+# =======================================================================================
+# ASSERTED ON `systemMessage`, NEVER ON STDOUT, and that is why this block is here rather
+# than beside the rest of the board assertions in tests/banner-board-line.test.sh. A stdout
+# grep is what passed all the way through the measured failure this file exists for, while
+# the human saw nothing — and the defect being fixed here is itself "the human is shown
+# nothing", so proving the fix on the wrong channel would be the same mistake twice.
+# `user_visible` reads the parsed field; `hasnt_sm` is its negative, spelled out so the
+# absences below cannot quietly become absences from stdout.
+#
+# THE TAIL IS ASSERTED ON BOTH FIELDS IN ONE RUN, for the reason section 1 gives about the
+# fenced block — except that here the two fields are asserted to say DIFFERENT things, and
+# that is the point rather than a compromise. `Drafts   N` is gone from both. `Ready to
+# dispatch   N` is gone from the HUMAN's and kept on the MODEL's, because the human's banner
+# ending at the count line is the whole of the cut the owner asked for, while that number is
+# the input to seed/CLAUDE.md's offer-the-loop rule and deleting it from both channels would
+# have retired that rule with nothing going red.
+hasnt_sm() { # <stdout> <needle> -> 0 when the needle is NOT in the field a HUMAN reads
+  local sm; sm="$(field "$1" systemMessage)"
+  printf '%s\n' "$sm" | grep -qF -- "$2" && echo 1 || echo 0
+}
+BOARD_DIR="$INST/.board-live"
+printf '## 🔴 Awaiting you (2)\n* ✅ **approve** — a thing\n* ❓ **answer** — another\n' > "$INST/AWAITING.md"
+
+# --- state 1: enabled and rendered. UNCHANGED, pinned against a literal fixture ---------
+mkdir -p "$BOARD_DIR"; printf '<!doctype html>\n<h1>board</h1>\n' > "$BOARD_DIR/board.html"
+hook_run
+SM="$(field "$OUT" systemMessage)"
+assert "rendered board: the human's field carries the file:// link" \
+  "$(user_visible "$OUT" "Board   file://$BOARD_DIR/board.html")"
+# ONE LINE, ONE PATH (task-023). The row used to be three lines for one link — the URL, the
+# same path again bare, and a staleness note — and all three of these read the field the
+# HUMAN gets, which is where the duplicate was seen and where it has to be gone.
+assert "…and NOT the bare path again on a line of its own" \
+  "$(printf '%s\n' "$(strip_sgr "$SM")" | grep -qxF "$BOARD_DIR/board.html" && echo 1 || echo 0)"
+assert "…the path reaching the human exactly once, in the whole field" \
+  "$(eq "$(printf '%s\n' "$(strip_sgr "$SM")" | grep -cF "$BOARD_DIR/board.html")" 1)"
+assert "…and no staleness note"                         "$(hasnt_sm "$OUT" 'rendered at the last tick')"
+assert "…which took the masthead and watch-board.sh with it" \
+  "$([ "$(hasnt_sm "$OUT" 'masthead')" = 0 ] && [ "$(hasnt_sm "$OUT" 'watch-board.sh')" = 0 ] && echo 0 || echo 1)"
+# THE FIXTURE. Not "it contains the link" — the exact ONE line, so a re-added second surface
+# or a reworded note FAILS here rather than passing on a substring. The section is taken
+# from its `Board   ` line to the blank that ends it: `grep -A2` would drag the NEXT section
+# in, and a plain grep for the link line would leave a re-added line outside the comparison
+# entirely, which is the version of this assertion that cannot fail.
+BOARD_FIXTURE="$(printf 'Board   file://%s' "$BOARD_DIR/board.html")"
+BOARD_SECTION="$(printf '%s\n' "$(strip_sgr "$SM")" | awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exit} f')"
+assert "…and the section is byte for byte the one line it now owes" \
+  "$(eq "$BOARD_SECTION" "$BOARD_FIXTURE")"
+# THE COUNT LINE'S ADAPTIVE CLAUSE, first half: there IS a board above, so it may say so.
+assert "…so the count line may point at the board" \
+  "$(user_visible "$OUT" '🔔 2 items need you — see the board above, or run /pm-loop')"
+
+# --- state 2: enabled, NEVER RENDERED. The bug: this state used to be silence -----------
+rm -rf "$BOARD_DIR"
+hook_run
+SM_UNRENDERED="$(field "$OUT" systemMessage)"
+assert "board enabled with no page: the HUMAN is told, in systemMessage" \
+  "$(user_visible "$OUT" 'Board   enabled, but never rendered')"
+assert "…and told what renders it — a /pm-loop tick" \
+  "$(user_visible "$OUT" '/pm-loop tick renders it')"
+assert "…or scripts/build-board.sh"                     "$(user_visible "$OUT" 'scripts/build-board.sh')"
+# TEXTUALLY DISTINCT FROM THE RENDERED ROW, keyed on what that row actually prints. The old
+# key here was the staleness note, which task-023 deleted from every state — an assertion
+# that can no longer fail is worth nothing, and this file has already caught one of those.
+assert "…and it is not the rendered-board wording"      "$(hasnt_sm "$OUT" 'Board   file://')"
+assert "…nor a link to a file that is not there"        "$(hasnt_sm "$OUT" "$BOARD_DIR/board.html")"
+# THE COUNT LINE'S ADAPTIVE CLAUSE, second half — the two lines have to AGREE. A banner
+# saying "never rendered" three lines above and then "see the board above" is worse than
+# either line on its own.
+assert "…and the count line does NOT send the human to a board that is not there" \
+  "$(hasnt_sm "$OUT" 'see the board above')"
+assert "…it routes to /pm-loop alone"                   "$(user_visible "$OUT" '🔔 2 items need you — run /pm-loop')"
+# DIFFERENT TEXT, which is the property the whole change is about: two states that print
+# the same bytes are one state, and the bytes these two used to share were none at all.
+assert "…and states 1 and 2 are genuinely different text on the human's channel" \
+  "$([ "$SM_UNRENDERED" != "$SM" ] && echo 0 || echo 1)"
+
+# --- state 3: DISABLED. Silent, and it stays silent in BOTH sub-cases -------------------
+cp "$INST/instance.config.json" "$TMP/cfg8.bak"
+python3 - "$INST" <<'PYOFF'
+import json, os, sys
+p = os.path.join(sys.argv[1], "instance.config.json")
+cfg = json.load(open(p)); cfg["board"] = False
+json.dump(cfg, open(p, "w"), indent=2)
+PYOFF
+hook_run
+assert "board: false, no page: the human's field says nothing about a board" \
+  "$(hasnt_sm "$OUT" 'Board   ')"
+assert "…not even the never-rendered line"              "$(hasnt_sm "$OUT" 'never rendered')"
+mkdir -p "$BOARD_DIR"; printf '<!doctype html>\n' > "$BOARD_DIR/board.html"
+hook_run
+assert "board: false WITH a page on disk: still nothing" "$(hasnt_sm "$OUT" 'Board   ')"
+assert "…and the count line still routes to /pm-loop alone" \
+  "$(hasnt_sm "$OUT" 'see the board above')"
+cp "$TMP/cfg8.bak" "$INST/instance.config.json"
+rm -rf "$BOARD_DIR"
+
+# --- the queue tail is gone from BOTH fields, with a queue that would have filled it ----
+# THE STRONGEST STATEMENT OF "THE COUNT LINE IS THE LAST LINE OF THE QUEUE SECTION" IS AN
+# EQUALITY, not a grep for two deleted strings. `Ready to dispatch` and `Drafts` are pinned
+# by name below, but a tail re-added under any OTHER wording would sail past both — so the
+# banner is captured with NO task documents at all, then again with a projects/ tree built
+# to make every deleted count non-zero (a draft, a dispatchable `ready`, and a `ready`
+# behind an open dependency), and the two must be identical. Nothing the task documents say
+# may move a byte of either channel.
+rm -rf "$INST/projects"
+hook_run
+SM_NOQ="$(field "$OUT" systemMessage)"; AC_NOQ="$(field "$OUT" hookSpecificOutput.additionalContext)"
+mkdir -p "$INST/projects/demo/tasks"
+printf -- '---\nstatus: draft\n---\n' > "$INST/projects/demo/tasks/task-001.md"
+printf -- '---\nstatus: ready\n---\n' > "$INST/projects/demo/tasks/task-002.md"
+printf -- '---\nstatus: ready\ndepends_on: [ /projects/demo/tasks/task-001.md ]\n---\n' \
+  > "$INST/projects/demo/tasks/task-003.md"
+hook_run
+SM="$(field "$OUT" systemMessage)"
+AC="$(field "$OUT" hookSpecificOutput.additionalContext)"
+assert "a queue that would have filled the tail: still exit 0 and valid JSON" \
+  "$([ "$RC" = 0 ] && [ "$(parses "$OUT")" = 0 ] && echo 0 || echo 1)"
+assert "…and the human's copy is byte for byte what it was with NO projects/ at all" \
+  "$(eq "$SM" "$SM_NOQ")"
+assert "no 'Ready to dispatch' on the human's channel"  "$(hasnt 'Ready to dispatch' "$SM")"
+assert "no 'Drafts' line on the human's channel"        "$(hasnt 'Drafts' "$SM")"
+assert "…nor on the model's — nothing keys off it, so it is deleted outright" \
+  "$(hasnt 'Drafts' "$AC")"
+# THE MODEL'S COPY IS THE ONE THING THE TASK DOCUMENTS MAY MOVE, and it moves by EXACTLY
+# one line. `1` and not `2`: task-002 is dispatchable, task-003 is `ready` behind a draft
+# dependency and task-001 is that draft — so the number also says the dependency test
+# survived the move to this channel, rather than the section counting every `ready:` it
+# sees.
+assert "…while the model's copy gains the dispatchable count" \
+  "$(has 'Ready to dispatch   1 — /pm-loop hands them to role agents in the background' "$AC")"
+assert "…and the count is DISPATCHABLE, not merely ready (2 are ready, 1 can be dispatched)" \
+  "$(hasnt 'Ready to dispatch   2' "$AC")"
+# THE BLOCK IS EXACTLY TWO LINES — a blank and the count — and the blank is inside it. An
+# unmarked `echo` beside the block would put that blank on the HUMAN's channel, where it
+# would appear and disappear with the contents of the task documents; the equality above
+# would then fail, and this says which line to look at when it does.
+assert "…as a two-line block whose blank separator is model-only too" \
+  "$(printf '%s\n' "$AC" | awk '/^Ready to dispatch   /{ print (prev == "") ? 0 : 1; found=1 } { prev=$0 } END{ if(!found) print 1 }')"
+# NON-VACUITY FOR THE PAIR ABOVE: take the projects/ tree away again and the model's line
+# goes with it. Without this, "the model has the count" would pass on a hook that printed it
+# unconditionally, and "the human does not" would pass on a hook that printed it nowhere.
+rm -rf "$INST/projects"
+hook_run
+assert "…and with no projects/ the model's copy has no count line either" \
+  "$(hasnt 'Ready to dispatch' "$(field "$OUT" hookSpecificOutput.additionalContext)")"
+assert "…the model's copy being byte for byte what it was before the tree existed" \
+  "$(eq "$(field "$OUT" hookSpecificOutput.additionalContext)" "$AC_NOQ")"
+mkdir -p "$INST/projects/demo/tasks"
+printf -- '---\nstatus: draft\n---\n' > "$INST/projects/demo/tasks/task-001.md"
+printf -- '---\nstatus: ready\n---\n' > "$INST/projects/demo/tasks/task-002.md"
+printf -- '---\nstatus: ready\ndepends_on: [ /projects/demo/tasks/task-001.md ]\n---\n' \
+  > "$INST/projects/demo/tasks/task-003.md"
+hook_run
+SM="$(field "$OUT" systemMessage)"
+AC="$(field "$OUT" hookSpecificOutput.additionalContext)"
+# NON-VACUITY FOR THE EQUALITY ABOVE: the banner is not simply constant. AWAITING.md still
+# moves it, so "nothing changed" is a statement about task documents and not about a hook
+# that has stopped reading anything.
+printf '## 🔴 Awaiting you (3)\n* a\n* b\n* c\n' > "$INST/AWAITING.md"
+hook_run
+assert "…while AWAITING.md still moves the human's copy" \
+  "$([ "$(field "$OUT" systemMessage)" != "$SM" ] && echo 0 || echo 1)"
+printf '## 🔴 Awaiting you (2)\n* ✅ **approve** — a thing\n* ❓ **answer** — another\n' > "$INST/AWAITING.md"
+hook_run
+SM="$(field "$OUT" systemMessage)"
+AC="$(field "$OUT" hookSpecificOutput.additionalContext)"
+# AND THE COUNT LINE IS WHERE THE QUEUE SECTION ENDS: nothing follows it on the human's
+# channel except the machinery-state block, which is §7 and belongs to another contract.
+assert "the count line ends the queue section — nothing queue-shaped follows it" \
+  "$(printf '%s\n' "$(strip_sgr "$SM")" | awk '/🔔 2 items need you/ { f = 1; next } f' \
+     | grep -qiE '^(Ready|Drafts|Queue|Tasks|Projects)\b' && echo 1 || echo 0)"
+# AND #80'S REDUCTION STILL HOLDS IN THIS STATE — with the never-rendered board line
+# present, a queue behind the model's count line, and no tail on the human's channel.
+assert "the channel split is still a REDUCTION, unrendered board and queue and all" \
+  "$(eq "$(reduce_model "$AC")" "$(strip_sgr "$SM")")"
+# THE GENERAL PROPERTY, STATED ONCE AND INDEPENDENTLY OF WHICH BLOCKS EXIST. `diff` reporting
+# no `<` lines says every line of the human's copy is present, in order, in the model's — so
+# the split can only ever ADD for the model, never subtract. That is what "a reduction" means
+# and it is the half `reduce_model` cannot check, because `reduce_model` has to be told the
+# blocks by name and a THIRD divergence added without telling it would fail the equality
+# above without saying why. This one names the line.
+DIFF_HM="$(diff <(printf '%s\n' "$(strip_sgr "$SM")") <(printf '%s\n' "$AC") || true)"
+assert "…and no line of the human's copy is missing from the model's" \
+  "$(printf '%s\n' "$DIFF_HM" | grep -q '^< ' && echo 1 || echo 0)"
+# NON-VACUITY FOR THAT diff: it is comparing two real, different strings, so "no deletions"
+# is a property of the split and not of two identical inputs.
+assert "…which is a real comparison — the two copies genuinely differ" \
+  "$(printf '%s\n' "$DIFF_HM" | grep -q '^> ' && echo 0 || echo 1)"
+assert "…and the fence is still on the model's channel" "$(has '--- BEGIN AWAITING ITEMS (untrusted data) ---' "$AC")"
+assert "…and still absent from the human's"             "$(hasnt '--- BEGIN AWAITING ITEMS' "$SM")"
+rm -rf "$INST/projects" "$INST/AWAITING.md"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
