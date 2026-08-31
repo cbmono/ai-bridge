@@ -443,6 +443,42 @@ acceptance_criteria: []
 pr: []
 ---
 TSK
+# THE MARKER CAN COME BEFORE THE STAMP AS WELL AS AFTER IT, and the lead skip is
+# BOUNDED, so the two are not interchangeable: with `advisor: ` still in front, this
+# entry's `·` sits past the 41-character bound and the lead is not skipped at all, so
+# the number is never reached. Skipping the marker first brings the `·` back inside the
+# bound. Contrived-looking and deliberately so — it is the one band in which the first
+# of the two marker skips is the only thing doing any work, and without it that branch
+# is code no fixture reaches. build-board.sh's Q_LEAD has the same pair for the same
+# reason, and reads this entry identically.
+cat > "$ALPHA/projects/qshapes/tasks/task-047-marker-first.md" <<TSK
+---
+type: Task
+title: An escalation stamped after the marker
+kind: build
+status: draft
+assignee: software-engineer
+open_questions: [ "advisor: 2026-08-30T16:01:52Z (escalated) · Q5: $SECRET_QUESTION" ]
+acceptance_criteria: []
+pr: []
+---
+TSK
+# A NUMBER MUST END WHERE IT IS READ, on the writer's side too. `Q1234` read as `Q123`
+# is a label that is not in the document, on a control claiming to have read it — the
+# renderer's own guard against this is pinned in artifact-board.test.sh, and the writer
+# needs its own because the renderer now trusts the label it is handed.
+cat > "$ALPHA/projects/qshapes/tasks/task-046-runs-on.md" <<TSK
+---
+type: Task
+title: Numbers that do not end where they are read
+kind: build
+status: draft
+assignee: software-engineer
+open_questions: [ "Q1234: $SECRET_QUESTION four digits", "Q2x: $SECRET_QUESTION a letter straight after" ]
+acceptance_criteria: []
+pr: []
+---
+TSK
 cat > "$ALPHA/projects/qshapes/tasks/task-045-no-number.md" <<TSK
 ---
 type: Task
@@ -815,9 +851,9 @@ touch "$SNAP"
 RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
 assert "…with the project count"           "$(has '16 project(s)' "$RUN_OUT")"
-# 11, not 12: the done project's task is never counted, because it is never read.
-assert "…and the task count"                "$(has '11 task(s)' "$RUN_OUT")"
-assert "…and the awaiting count (9 verbs across 5 live projects)" "$(has '9 awaiting' "$RUN_OUT")"
+# 13, not 14: the done project's task is never counted, because it is never read.
+assert "…and the task count"                "$(has '13 task(s)' "$RUN_OUT")"
+assert "…and the awaiting count (11 verbs across 5 live projects)" "$(has '11 awaiting' "$RUN_OUT")"
 # The run captures stderr too, and an awk that aborts mid-line says so THERE while still
 # exiting 0 and writing a file — a whole `deliverable_paths` key lost with the evidence
 # printed somewhere nobody reads. So the absence of that text is an assertion.
@@ -917,6 +953,35 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 t=[t for p in d["projects"] for t in p["tasks"] if t["id"].startswith("task-045")][0]
 sys.exit(0 if t["open_question_ids"]==[""] and t["open_questions"]==1 else 1)' "$SNAP")"
+assert "a number that does not end where it is read yields no label" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"].startswith("task-046")][0]
+sys.exit(0 if t["open_question_ids"]==["",""] and t["open_questions"]==2 else 1)' "$SNAP")"
+# NON-VACUITY: a number that DOES end where it is read still reads, in the same run —
+# otherwise a writer that labelled nothing at all would satisfy the line above.
+assert "…while a bounded number in the same run still does" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"].startswith("task-044")][0]
+sys.exit(0 if t["open_question_ids"][0]=="Q1" else 1)' "$SNAP")"
+assert "a marker BEFORE the stamp still yields the number (task-047)" \
+  "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"].startswith("task-047")][0]
+sys.exit(0 if t["open_question_ids"]==["Q5"] else 1)' "$SNAP")"
+# NON-VACUITY: the `·` really does sit past the bound while the marker is still there,
+# so this measures the first skip and not the second one doing the same job twice.
+assert "…and its lead really is past the bound without the marker skip" \
+  "$(yes_if python3 -c '
+import sys
+line=[l for l in open(sys.argv[1],encoding="utf-8") if "escalated" in l][0]
+i=line.index("advisor:")
+sys.exit(0 if line.index("\u00b7") - i > 41 and line.index("\u00b7") - i - len("advisor: ") <= 41 else 1)' \
+  "$ALPHA/projects/qshapes/tasks/task-047-marker-first.md")"
 # THE GOVERNANCE BOUNDARY THE NEW FIELD SITS ON. It is a per-question field, and the
 # rule that keeps it inside the allowlist is that it can carry NOTHING BUT a number:
 # `Q` + digits, or empty. This is checked over every label in the file, so a future
@@ -1236,7 +1301,7 @@ sys.exit(0 if set(p["retained"]) == set(p["ci"]) and "owner" in p["retained"] el
 cp -R "$ALPHA/projects/retained" "$ALPHA/projects/notdone"
 sed -i.bak 's/^status: done$/status: active/' "$ALPHA/projects/notdone/project.md" && rm -f "$ALPHA/projects/notdone/project.md.bak"
 CTRL_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
-assert "control: the same task under a LIVE project IS read (12 tasks)" "$(has '12 task(s)' "$CTRL_OUT")"
+assert "control: the same task under a LIVE project IS read (14 tasks)" "$(has '14 task(s)' "$CTRL_OUT")"
 assert "…and its title does reach the snapshot"  "$(fhas 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
 # deliverable_paths comes off the SAME frontmatter parse every project already gets, not
 # off the done-project skip specifically — so a LIVE project carrying the key forwards it
@@ -1309,8 +1374,20 @@ for n in 1 2 3; do
   assert "writer through renderer: question Q$n gets its own handle" \
     "$(card_of "$HTML" 'Question shapes' | grep -qF "answer Q$n</button>" && echo 0 || echo 1)"
 done
+# SCOPED TO THAT TASK'S ROW, not to the card: the same project holds other tasks with
+# questions of their own, so a card-wide count measures the fixture rather than the task.
+item_of() { # <html> <task title> — one waiting row
+  python3 - "$1" "$2" <<'PYI'
+import re, sys
+t = open(sys.argv[1], encoding="utf-8").read()
+for li in re.findall(r'<li class="ask">.*?</li>', t, re.S):
+    if sys.argv[2] in li:
+        sys.stdout.write(li)
+        break
+PYI
+}
 assert "…three handles for three questions, not one for the task" \
-  "$(eq "$(card_of "$HTML" 'Question shapes' | grep -oF 'answer Q' | wc -l | tr -d ' ')" 3)"
+  "$(eq "$(item_of "$HTML" 'Three questions, three shapes' | grep -oF 'answer Q' | wc -l | tr -d ' ')" 3)"
 # NON-VACUITY: before the labels existed this card rendered exactly one unnumbered
 # control for that task, so the assertions above measure the new field and not a
 # renderer that was already numbering things.

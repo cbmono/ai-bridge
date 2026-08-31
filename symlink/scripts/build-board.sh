@@ -1213,11 +1213,23 @@ def task_handle(p, tid, qn=None):
     on a promotion is not question-scoped, and inventing a `q1` for it would be the
     same fabrication q_split() exists to prevent, one level up: a reader would go
     looking for a question the item never had.
+
+    THE SLUG IS SHAPE-CHECKED BEFORE IT IS COPIED, by the same rule the ✕ applies to it
+    (SLUG_SEG) and for the same reason: this string comes from a SNAPSHOT.json read back
+    without knowing who wrote it, and `"slug": "/Users/me/secret"` would otherwise put an
+    absolute path inside a data-copy value — the one thing the no-filesystem-paths rule
+    exists to prevent. It matters more than it used to: the handle now travels on the
+    VERDICT buttons and on a project-level close item, and neither carried a slug before.
+    A slug that is not one well-formed segment names no project a session could resolve
+    either, so the handle drops it and names the task alone rather than copying a path —
+    the control still identifies a document, and no path reaches the page.
     """
     core = task_core(p, tid)
     slug = str(p.get("slug") or "")
-    base = "%s/%s" % (slug, core) if core else slug
-    return "%s/q%d" % (base, qn) if qn else base
+    if not SLUG_SEG.fullmatch(slug):
+        slug = ""
+    base = "/".join(x for x in (slug, core) if x)
+    return "%s/q%d" % (base, qn) if (qn and base) else base
 
 
 def task_number(tid):

@@ -576,6 +576,15 @@ mk "$TMP/handle" "handle" '[
             "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]},
            {"id":"task-008-only","title":"Eight","status":"ready",
             "assignee":"software-engineer","awaiting":"","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]},
+           {"id":"task-009-unassigned","title":"Nobody yet","status":"ready",
+            "assignee":"","awaiting":"","open_questions":0,
+            "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]},
+ {"slug":"/Users/SECRET-HOME/notes","title":"Slug is a path","kind":"build",
+  "status":"active","autonomy":"gated","awaiting_close":false,
+  "phase_progress":{"done":0,"total":0},
+  "tasks":[{"id":"task-001","title":"Hostile slug with a task","status":"draft",
+            "assignee":"software-engineer","awaiting":"approve","open_questions":0,
             "open_question_ids":[],"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]}]'
 # THE DOCUMENTS THE HANDLES MUST RESOLVE TO, on disk. The renderer never reads them —
 # it is the assertion below that does, standing in for the session a human pastes into.
@@ -675,6 +684,22 @@ assert "…and no bare twins/task-007 is emitted"      "$(card "$HB" 'Two tasks 
 # fallback is scoped to the collision and not a renderer that gave up on short handles.
 assert "…while an unambiguous number stays short"    "$(card "$HB" 'Two tasks one number' | fhas_in 'data-copy="twins/task-008"')"
 
+echo "== a slug that is a PATH never reaches a copied handle =="
+# The handle now travels on the VERDICT buttons and on a project-level close item, and
+# neither carried a slug before this round — so a `"slug": "/Users/…"` in a snapshot
+# this renderer reads back without knowing who wrote it would put an absolute path in a
+# data-copy value. Same shape check the ✕ applies, same reason: a slug that is not one
+# well-formed segment resolves to nothing anyway, so the handle names the task alone.
+assert "no copied value carries the hostile slug"    "$(yes_if python3 -c "
+import re, sys
+vals = re.findall(r'data-copy=\"([^\"]*)\"', open('$HB', encoding='utf-8').read())
+sys.exit(0 if vals and not [v for v in vals if 'SECRET-HOME' in v] else 1)")"
+assert "…and the page carries it nowhere else either" "$(fhasnt 'SECRET-HOME' "$HB")"
+# NON-VACUITY: that project really is on the page, with a task and a waiting row, so
+# the absence above is the shape check firing rather than the project being skipped.
+assert "…though the project and its task do render"  "$(card "$HB" 'Slug is a path' | fhas_in 'Hostile slug with a task')"
+assert "…and its handle names the task alone"        "$(card "$HB" 'Slug is a path' | fhas_in 'data-copy="task-001: APPROVED')"
+
 echo "== the Role column appears only where it discriminates =="
 # One value in a column is not a column: on the 8-project board this was measured
 # against, every row read `software-engineer`. Dropped where it says nothing, kept where
@@ -683,14 +708,17 @@ assert "a project with two roles keeps Role"         "$(card "$HB" 'One handle' 
 assert "…and shows both values"                      "$(card "$HB" 'One handle' | fhas_in '>devops-engineer</td>')"
 assert "a project with one role drops it"            "$(card "$HB" 'Two tasks one number' | fhasnt_in '<th>Role</th>')"
 assert "…and drops the cells with it"                "$(card "$HB" 'Two tasks one number' | fhasnt_in '>software-engineer</td>')"
-# NON-VACUITY: that project's tasks really do all name the same role, so the absence
-# above is the condition firing and not an empty assignee everywhere.
+# NON-VACUITY, AND THE BLANK IS PART OF IT: that project's tasks really do name a role,
+# and one of them names none. An unassigned task is a gap in the document, not a second
+# role — counting it would put the column back on a board where every named role is the
+# same one, which is the board this change was measured against.
 assert "…though its tasks really do name a role"     "$(yes_if python3 -c "
 import json, sys
 s = json.load(open('$TMP/handle/SNAPSHOT.json'))
 p = [p for p in s['projects'] if p['slug'] == 'twins'][0]
-roles = {t['assignee'] for t in p['tasks']}
-sys.exit(0 if roles == {'software-engineer'} else 1)")"
+roles = sorted({t['assignee'] for t in p['tasks']})
+sys.exit(0 if roles == ['', 'software-engineer'] else 1)")"
+assert "…and the unassigned row still renders"       "$(card "$HB" 'Two tasks one number' | fhas_in 'Nobody yet')"
 # THE COLUMN COUNT FOLLOWS THE HEADER. A <thead> that drops a column while <tbody> keeps
 # its cell shifts every value one column left, which renders as a table nobody can read.
 assert "header and body agree on the column count"   "$(yes_if python3 -c "
