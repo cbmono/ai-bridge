@@ -796,7 +796,7 @@ echo "== the field allowlist =="
 # `owner` is in this set DELIBERATELY and is the only identity field that is — see the
 # header. Removing it here is how the reversal would get silently undone, so the writer's
 # own header, this line, and per-owner-board.test.sh all have to move together.
-ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner deliverable_paths awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions advisor_notes depends_on prs repo number url '
+ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner deliverable_paths awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions open_question_ids advisor_notes depends_on prs repo number url '
 extra_keys() { # <json file> <allowed> -> the keys present but not allowed
   python3 - "$1" "$2" <<'PYK'
 import json, sys
@@ -1204,7 +1204,7 @@ assert "…reusing the existing data-what convention"         "$(fhas 'data-what
 # depends_on line must still draw the real dependency button pointing at task-001, and
 # must draw no button (and copy no path) for the comment's own fabricated fragment.
 assert "task-008's real dependency renders as a dep button (writer through renderer)" \
-  "$(fhas 'data-copy="ci/tasks/task-001" data-what="Path" title="task-001">001</button>' "$HTML")"
+  "$(fhas 'data-copy="ci/task-001" data-what="Task handle" title="task-001">001</button>' "$HTML")"
 assert "…and the comment's fabricated fragment renders nothing"    "$(fhasnt 'notes[1]' "$HTML")"
 assert "…nor any fragment of the leaked path reaches the page"     "$(fhasnt "$SECRET_DEP_COMMENT_PATH" "$HTML")"
 # Criterion 4, end to end on the page a real invocation writes — not on a hand-written

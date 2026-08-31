@@ -351,7 +351,18 @@ assert "…and a quote inside an attribute is escaped" "$(fhasnt 'data-copy="Ren
 echo "== references are short, and never a real path =="
 assert "a task ref drops projects/"                  "$(fhasnt 'data-copy="projects/' "$OUT")"
 assert "…and drops .md"                              "$(fhasnt '.md"' "$OUT")"
-assert "…and keeps <project>/tasks/<id>"             "$(fhas 'live-one/tasks/task-001' "$OUT")"
+# ONE NOTATION, AND `tasks/` IS NOT IN IT. The ref used to be the FILENAME minus
+# `projects/` and `.md` — `live-one/tasks/task-001-…` — which names a document and reads
+# as a path; five controls then each wrapped it in a different sentence. It is now
+# `<project>/task-<n>`, the same string every control on the page copies.
+assert "…and the handle is <project>/task-<n>"      "$(fhas 'data-copy="live-one/task-001' "$OUT")"
+# THE ABSENCE IS ASSERTED OVER WHAT IS COPIED, not over the page: the footer legend
+# spells out where the document lives (`projects/<p>/tasks/task-<n>*.md`), which is the
+# resolution rule and not a second notation. A COPIED value carrying `/tasks/` would be.
+assert "…and no copied value carries a tasks/ segment" "$(yes_if python3 -c "
+import re, sys
+vals = re.findall(r'data-copy=\"([^\"]*)\"', open('$OUT', encoding='utf-8').read())
+sys.exit(0 if vals and not [v for v in vals if '/tasks/' in v] else 1)")"
 
 echo "== depends_on shows the NUMBER only =="
 assert "a single dependency renders 001"             "$(fhas '>001</button>' "$OUT")"
@@ -428,7 +439,7 @@ assert "the fixture renders and exits 0"             "$(eq "$qnrc" 0)"
 assert "the rail button reads 'answer Q2'"           "$(card "$QN" 'The task-012 shape' | fhas_in 'answer Q2</button>')"
 assert "…and never 'answer Q1'"                      "$(card "$QN" 'The task-012 shape' | fhasnt_in 'answer Q1')"
 assert "…the table handle is Q2 too"                 "$(card "$QN" 'The task-012 shape' | fhas_in '>Q2</button>')"
-assert "…and the copied handle is the right one"     "$(card "$QN" 'The task-012 shape' | fhas_in 'claim-identity Q2: ')"
+assert "…and the copied handle is the right one"     "$(card "$QN" 'The task-012 shape' | fhas_in 'twelve/task-012/q2: ')"
 assert "…with no Q1 anywhere in that card"           "$(card "$QN" 'The task-012 shape' | fhasnt_in 'Q1')"
 # NON-VACUITY: the count really is 1, so a positional renderer really would say Q1 here.
 assert "…and the fixture's count really is 1"        "$(yes_if python3 -c "
@@ -471,7 +482,10 @@ t = open('$TMP/qnum.html').read()
 i = t.index('Count only'); j = t.find('<details class=\"proj', i)
 sys.exit(0 if not re.search(r'Q\d', t[i:j if j > 0 else len(t)]) else 1)")"
 assert "…and saying it is a count, not a name"       "$(card "$QN" 'Count only' | fhas_in 'carries a COUNT of open questions')"
-assert "…the copy value is the bare task ref"        "$(card "$QN" 'Count only' | fhas_in 'data-copy="notext/tasks/task-001 "')"
+assert "…the copy value is the bare task handle"    "$(card "$QN" 'Count only' | fhas_in 'data-copy="notext/task-001: "')"
+# …AND CARRIES NO `/q<n>`. The board cannot name this question, so a handle claiming to
+# scope one would be the same fabrication as a positional number, one segment along.
+assert "…and no /q segment is invented for it"      "$(card "$QN" 'Count only' | fhasnt_in 'task-001/q')"
 
 echo "== …reading the token, not a number mentioned in the prose =="
 assert "Q01 normalises to Q1"                        "$(card "$QN" 'Numbers in prose' | fhas_in '>Q1</button>')"
@@ -479,7 +493,7 @@ assert "Q01 normalises to Q1"                        "$(card "$QN" 'Numbers in p
 # that prose verbatim — so the assertion is about the LABEL, not about the byte `Q7`
 # being absent from the card. A question is named by the token it opens with; a number
 # it merely talks about names nothing. The prefix scan is bounded for exactly this.
-for form in '>Q7</button>' 'answer Q7' 'Q7 handle' 'task-001 Q7: '; do
+for form in '>Q7</button>' 'answer Q7' 'Q7 handle' 'task-001/q7'; do
   assert "…and a Q7 buried in a sentence yields no $form" \
     "$(card "$QN" 'Numbers in prose' | fhasnt_in "$form")"
 done
@@ -621,7 +635,7 @@ rwrc=0; bash "$GEN" --out "$RW" "$TMP/rows" >/dev/null 2>&1 || rwrc=$?
 echo "== a task row has a filename column, not two inline runs =="
 assert "the fixture renders and exits 0"             "$(eq "$rwrc" 0)"
 assert "the cell holds a flex wrapper, not the flex itself" \
-  "$(fhas '<td><div class="trow"><span class="tid">' "$RW")"
+  "$(fhas '<td><div class="trow"><span class="tfile"><span class="tid">' "$RW")"
 assert "…and the title lives in its own second column" "$(fhas '</span><div class="tmain">' "$RW")"
 assert "…for every task row, not just the first"     \
   "$(eq "$(grep -oF '<div class="trow">' "$RW" | wc -l | tr -d ' ')" 2)"
@@ -644,25 +658,38 @@ PYR
 }
 assert "the switch is at 1200px"                     "$(fhas '@media (min-width:1200px){' "$RW")"
 assert "…where the row becomes a row"                "$(tidrule "$RW" | fhas_in '.trow{flex-direction:row')"
-assert "…the filename column is fixed at 41ch"       "$(tidrule "$RW" | fhas_in 'flex:0 0 41ch')"
+assert "…the filename column is fixed at 56ch"       "$(tidrule "$RW" | fhas_in 'flex:0 0 56ch')"
 assert "…and the title column takes the rest"        "$(tidrule "$RW" | fhas_in '.tmain{flex:1 1 auto}')"
-assert "…41ch really covers the longest name present" "$(yes_if python3 -c "
+# 56ch = 39 (the longest filename actually present) + 2ch of gutter + ~15ch for the
+# promote control that now shares this line. Both halves are anchored: the name is
+# measured here and rendered on the page below, and the control is what the extra width
+# is for — a draft row is one line at this width, not two.
+assert "…56ch really covers the longest name plus the control" "$(yes_if python3 -c "
 import sys
-sys.exit(0 if len('017-write-for-a-human-who-will-not-read') == 39 else 1)")"
+sys.exit(0 if len('017-write-for-a-human-who-will-not-read') + 2 + 15 == 56 else 1)")"
 assert "…and that name really is on the page"        "$(fhas '>017-write-for-a-human-who-will-not-read</span>' "$RW")"
 # DEGRADATION when a longer name appears later: the column does not grow and the title
 # column is not pushed — the name wraps inside its own 41ch. Without both of these a
 # longer filename either overflows the cell or shoves every title to a new x, which is
 # the property the whole block exists to hold.
-assert "…a longer name wraps inside its own column"  "$(tidrule "$RW" | fhas_in 'overflow-wrap:anywhere')"
+assert "…a longer name wraps inside its own column"  "$(fhas '.tfile>.tid{margin-right:0;min-width:0;overflow-wrap:anywhere}' "$RW")"
 assert "…rather than widening it"                    "$(tidrule "$RW" | fhas_in 'min-width:0')"
 # VERTICALLY CENTRED. Against a two-line title the assignee, the state and the PR link
 # sat pinned to the first line and read as though they belonged to it.
 assert "cells are centred, not baselined"            "$(fhas 'td{padding:.4rem .45rem;vertical-align:middle;' "$RW")"
 assert "…and no baseline rule survives on td"        "$(fhasnt 'td{padding:.4rem .45rem;vertical-align:baseline' "$RW")"
 
-echo "== the promote control leads the row, and looks like one at rest =="
-assert "it sits after the filename, above the title" "$(flat < "$RW" | fhas_in '<div class="tmain"><button class="promote"')"
+echo "== the promote control shares the filename's line, and looks like a control at rest =="
+# ON THE FILENAME'S LINE, IMMEDIATELY AFTER IT — inside `.tfile`, which is that line.
+# It was a sibling of the title inside `.tmain`, i.e. a THIRD line on the narrow layout
+# (filename, control, title) while every other row was two: the one row asking for an
+# action was also the only row taller than its neighbours.
+assert "it sits on the filename's own line, right after it" \
+  "$(flat < "$RW" | fhas_in '</span><button class="promote"')"
+assert "…inside the filename column, not the title one" "$(flat < "$RW" | fhas_in '<span class="tfile"><span class="tid">001-local-board</span><button class="promote"')"
+# THE THIRD LINE IS GONE, stated as the absence that would bring it back: a promote
+# control opening `.tmain` is exactly the markup that stacked it above the title.
+assert "…and never opens the title column"           "$(flat < "$RW" | fhasnt_in '<div class="tmain"><button class="promote"')"
 assert "…before the title button, not after it"      "$(python3 -c "
 import sys
 t = open('$RW').read()
