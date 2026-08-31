@@ -726,29 +726,57 @@ assert "…and the page carries it nowhere else either" "$(fhasnt 'SECRET-HOME' 
 assert "…though the project and its task do render"  "$(card "$HB" 'Slug is a path' | fhas_in 'Hostile slug with a task')"
 assert "…and its handle names the task alone"        "$(card "$HB" 'Slug is a path' | fhas_in 'data-copy="task-001: promote to ready"')"
 
-echo "== the Role column appears only where it discriminates =="
-# One value in a column is not a column: on the 8-project board this was measured
-# against, every row read `software-engineer`. Dropped where it says nothing, kept where
-# it does — so both directions are asserted, on two projects of the same page.
-assert "a project with two roles keeps Role"         "$(card "$HB" 'One handle' | fhas_in '<th>Role</th>')"
-assert "…and shows both values"                      "$(card "$HB" 'One handle' | fhas_in '>devops-engineer</td>')"
-assert "a project with one role drops it"            "$(card "$HB" 'Two tasks one number' | fhasnt_in '<th>Role</th>')"
-assert "…and drops the cells with it"                "$(card "$HB" 'Two tasks one number' | fhasnt_in '>software-engineer</td>')"
-# NON-VACUITY, AND THE BLANK IS PART OF IT: that project's tasks really do name a role,
-# and one of them names none. An unassigned task is a gap in the document, not a second
-# role — counting it would put the column back on a board where every named role is the
-# same one, which is the board this change was measured against.
-assert "…though its tasks really do name a role"     "$(yes_if python3 -c "
+echo "== there is NO Role column, on any project =="
+# IT WENT THROUGH BOTH WEAKER FORMS FIRST, and this block asserts the third: unconditional
+# absence. It was unconditional; then conditional on `len(roles) > 1` (a column with one
+# value is not a column, but a rare `devops-engineer` row is real information); then that
+# AND not phased. Every version cost the task name width on every project to serve one
+# project out of twelve, so the owner removed it outright on 2026-08-31.
+#
+# WHAT WAS ASSERTED BEFORE IS RE-EXPRESSED, NOT DELETED. `a project with two roles keeps
+# Role` and its `shows both values` companion pinned the KEPT direction; they now pin that
+# a two-role project has no column either, which is the same claim inverted and is the one
+# a reintroduction would break. The header/body column-count check stays as it was — the
+# predicate it guarded is gone, so it can no longer fail that way, but a table whose thead
+# and tbody disagree is a defect independent of why.
+assert "no page renders a Role header"               "$(yes_if python3 -c "
+import sys
+bad = [f for f in ['$OUT', '$BOUT', '$HB'] if '<th>Role</th>' in open(f, encoding='utf-8').read()]
+sys.exit(0 if not bad else 1)")"
+assert "…not even on a project naming two roles"     "$(card "$HB" 'One handle' | fhasnt_in '<th>Role</th>')"
+assert "…and no role value is rendered as a cell"    "$(card "$HB" 'One handle' | fhasnt_in '>devops-engineer</td>')"
+assert "…nor on a phased two-role project"           "$(card "$OUT" 'Live work' | fhasnt_in '<th>Role</th>')"
+assert "…and its roles reach no cell either"         "$(card "$OUT" 'Live work' | fhasnt_in '>qa-reviewer</td>')"
+# NON-VACUITY, AND IT IS THE WHOLE POINT HERE: an absence assertion over a page with no
+# multi-role project is satisfied by the fixture, not by the renderer. Both projects named
+# above really do name two roles — one phased, one not — so between them they cover every
+# case each earlier form of the predicate kept the column for.
+assert "…though 'One handle' really names two roles" "$(yes_if python3 -c "
 import json, sys
 s = json.load(open('$TMP/handle/SNAPSHOT.json'))
-p = [p for p in s['projects'] if p['slug'] == 'twins'][0]
-roles = sorted({t['assignee'] for t in p['tasks']})
-sys.exit(0 if roles == ['', 'software-engineer'] else 1)")"
-assert "…and the unassigned row still renders"       "$(card "$HB" 'Two tasks one number' | fhas_in 'Nobody yet')"
-# THE COLUMN COUNT FOLLOWS THE HEADER. A <thead> that drops a column while <tbody> keeps
-# its cell shifts every value one column left, which renders as a table nobody can read.
-# Run over BOTH pages, because the predicate that drops the column now has two terms and
-# each is a way for the two halves to disagree.
+pr = [x for x in s['projects'] if x['slug'] == 'gdg'][0]
+sys.exit(0 if sorted({t['assignee'] for t in pr['tasks']} - {''})
+         == ['devops-engineer', 'software-engineer'] else 1)")"
+assert "…and 'Live work' names two AND is phased"    "$(yes_if python3 -c "
+import json, sys
+s = json.load(open('$TMP/alpha/SNAPSHOT.json'))
+pr = [x for x in s['projects'] if x['slug'] == 'live-one'][0]
+sys.exit(0 if sorted({t['assignee'] for t in pr['tasks']} - {''})
+         == ['qa-reviewer', 'software-engineer'] and pr['phase_progress']['total'] else 1)")"
+# THE ASSIGNEE IS NOT LOST — it was never this page's only home. It stays in the task
+# document and in AWAITING.md; only the column is gone. Asserted as the rows still being
+# there, since "the column went" and "the rows went" are different bugs.
+assert "…and every task row still renders"           "$(card "$HB" 'One handle' | fhas_in 'DWD grant')"
+assert "…including an unassigned one"                "$(card "$HB" 'Two tasks one number' | fhas_in 'Nobody yet')"
+# NOTHING COMPUTES THE COLUMN ANY MORE. A predicate left in place with no consumer is the
+# state this deletion is one edit away from, and it is the state the next reader restores
+# the column from.
+assert "no role-count predicate survives"            "$(fhasnt 'show_role' "$GEN")"
+# …AND THE FIELD IS NOT READ AT ALL. write-snapshot.sh still carries `assignee` — this
+# deletion is the board's, not the contract's — so the renderer simply never asks for it.
+assert "…and the renderer never reads assignee"      "$(fhasnt 't.get(\"assignee\")' "$GEN")"
+# THE COLUMN COUNT FOLLOWS THE HEADER. A <thead> and <tbody> that disagree shift every
+# value one column left, which renders as a table nobody can read. Run over two pages.
 for pg in "$HB" "$OUT"; do
 assert "header and body agree on the column count"   "$(yes_if python3 -c "
 import re, sys
@@ -763,35 +791,12 @@ for tbl in re.findall(r'<table>.*?</table>', page, re.S):
     seen += 1
 sys.exit(0 if seen >= 2 else 1)")"
 done
-
-echo "== a PHASED project never renders Role, whatever its tasks assign =="
-# ROLE COUNT ALONE WAS THE WHOLE PREDICATE, and on the board the owner read it that left
-# the column standing on exactly one project: a phased one whose tasks name two roles.
-# A phased card is the widest thing on the board and its rows are already grouped by
-# phase rather than by who does them, so that is where a low-information column costs the
-# task name most. The rule is stated as the owner's rule, not derived: nothing about
-# `phase_progress` says anything about assignees, and the correlation is accidental.
-assert "a phased project drops Role"                 "$(card "$OUT" 'Live work' | fhasnt_in '<th>Role</th>')"
-assert "…and drops the per-row cells with it"        "$(card "$OUT" 'Live work' | fhasnt_in '>qa-reviewer</td>')"
-# NON-VACUITY ON BOTH TERMS, or this passes on a project that was never a candidate: it
-# really is phased, AND its tasks really do name two roles — so it is precisely the case
-# the old predicate kept the column for.
-assert "…though the card really says it is phased"   "$(card "$OUT" 'Live work' | fhas_in 'phases</span>')"
-assert "…and its tasks really do name two roles"     "$(yes_if python3 -c "
-import json, sys
-s = json.load(open('$TMP/alpha/SNAPSHOT.json'))
-pr = [x for x in s['projects'] if x['slug'] == 'live-one'][0]
-sys.exit(0 if sorted({t['assignee'] for t in pr['tasks']} - {''})
-         == ['qa-reviewer', 'software-engineer'] else 1)")"
-# …AND THE COLUMN IS NOT SIMPLY GONE from the renderer: an UNPHASED two-role project on
-# another page still carries it, so this is a predicate with two terms and not a deletion
-# wearing one.
-assert "…while an unphased two-role project keeps it" "$(card "$HB" 'One handle' | fhas_in '<th>Role</th>')"
-assert "…and that project really has no phases"      "$(yes_if python3 -c "
-import json, sys
-s = json.load(open('$TMP/handle/SNAPSHOT.json'))
-pr = [x for x in s['projects'] if x['slug'] == 'gdg'][0]
-sys.exit(0 if not pr['phase_progress']['total'] else 1)")"
+assert "…and that count is five, the columns that are left" "$(yes_if python3 -c "
+import re, sys
+page = open('$HB', encoding='utf-8').read()
+heads = [len(re.findall(r'<th[ >]', t[:t.index('</thead>')]))
+         for t in re.findall(r'<table>.*?</table>', page, re.S)]
+sys.exit(0 if heads and set(heads) == set([5]) else 1)")"
 
 echo "== the collapsed line carries ONE pill, and it is the awaiting one =="
 # TWO PILLS MEASURED OVERLAPPING THINGS: a filled `N awaiting you` at the front of the
@@ -1055,8 +1060,9 @@ assert "…and that longest name really is on the page" "$(fhas '>017-write-for-
 # overflowing the cell. This rule is what the deleted block relied on too, so it is the
 # half that had to survive the deletion.
 assert "…a longer name wraps rather than overflowing" "$(fhas '.tfile>.tid{margin-right:0;min-width:0;overflow-wrap:anywhere}' "$RW")"
-# VERTICALLY CENTRED. Against a two-line title the assignee, the state and the PR link
-# sat pinned to the first line and read as though they belonged to it.
+# VERTICALLY CENTRED. Against a two-line title every other cell in the row — the state,
+# the dependencies, the PR link — sat pinned to the first line and read as though it
+# belonged to that line rather than to the row.
 assert "cells are centred, not baselined"            "$(fhas 'td{padding:.4rem .45rem;vertical-align:middle;' "$RW")"
 assert "…and no baseline rule survives on td"        "$(fhasnt 'td{padding:.4rem .45rem;vertical-align:baseline' "$RW")"
 

@@ -845,8 +845,10 @@ th{text-align:left;font-size:.64rem;text-transform:uppercase;letter-spacing:.09e
 th.r,td.r{text-align:right}
 th:not(:first-child),td:not(:first-child){width:1%;white-space:nowrap}
 th:first-child,td:first-child{width:auto}
-/* MIDDLE, not baseline. Against a title that wraps to two lines the assignee, the state
-   and the PR link sat pinned to the first line and read as if they belonged to it. */
+/* MIDDLE, not baseline. Against a title that wraps to two lines every other cell in the
+   row — the state, the dependencies, the PR link — sat pinned to the first line and read
+   as if it belonged to that line rather than to the row. (An assignee cell used to be the
+   clearest case; the Role column is gone, the alignment defect is not.) */
 td{padding:.4rem .45rem;vertical-align:middle;
   border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
 tbody tr:last-child td{border-bottom:0}
@@ -1806,41 +1808,30 @@ def render_table():
         o.append('<div class="body">')
         # THIS project's queue, above its task table and holding only its own items.
         rail(mine)
-        # THE ROLE COLUMN APPEARS ONLY WHERE IT DISCRIMINATES. On the board this was
-        # measured against — 8 projects, 207 tasks — every row read `software-engineer`,
-        # and a column with one value is not a column; it is width taken from the task
-        # name for no information.
+        # THERE IS NO ROLE COLUMN, AND IT IS NOT CONDITIONAL — IT IS GONE.
         #
-        # DROPPING IT OUTRIGHT WAS THE OTHER OPTION AND IT LOSES SOMETHING REAL: a
-        # `devops-engineer` or `qa-reviewer` row is rare, and rare is exactly when the
-        # value carries information. So the column is conditional on the only question
-        # that matters — does this project's task list name more than one role? — which
-        # deletes it precisely where it says nothing and keeps it precisely where it
-        # says something. The condition is per project because the table is: each card
-        # has its own <table> with its own <thead>, so a column that is present on one
-        # card and absent on the next is still self-describing.
-        # Blank assignees do not count as a distinct role: an unassigned task is a gap
-        # in the document, and counting it would resurrect the column on a board where
-        # every named role is still the same one.
+        # It went through both weaker forms first, and both are recorded because both look
+        # reasonable enough to be proposed again. It was unconditional; then conditional on
+        # `len(roles) > 1`, on the reasoning that a column with one value is not a column
+        # but a rare `devops-engineer` row is real information; then, briefly, that AND not
+        # phased. Every version kept the same defect: on the boards this was measured
+        # against, the column either said nothing on every row or said something on one
+        # project out of twelve, and it cost the task name width on all of them. A reader
+        # who wants to know who is on a task opens the task — `assignee:` is in the
+        # document and in AWAITING.md, neither of which this deletion touches.
         #
-        # A PHASED PROJECT NEVER RENDERS IT, WHATEVER ITS TASKS ASSIGN — and that half of
-        # the predicate is the owner's call, not a measurement. Role count alone was the
-        # whole rule, and on the board the owner read it left the column standing on
-        # exactly one project: a phased one whose tasks name two roles. A phased project
-        # is the widest thing on the board (it carries a phase pill and the most rows),
-        # so it is where a column of low-value width costs the task name most, and its
-        # rows are already grouped by phase rather than by who does them. The correlation
-        # with phases is accidental in the code — nothing about `phase_progress` says
-        # anything about assignees — so it is stated here as the rule it is rather than
-        # dressed up as a derivation. The column now survives only on a multi-role,
-        # UNPHASED project; if nobody wants it there either, deleting it is one line, and
-        # that is the owner's decision to make, not this predicate's to anticipate.
-        roles = sorted({str(t.get("assignee") or "") for t in tasks} - {""})
-        show_role = len(roles) > 1 and not toint(ph.get("total"))
+        # WHAT THE CONDITION COST, since that is the part worth not repeating: a column
+        # present on one card and absent on the next is self-describing but not scannable,
+        # and the predicate had to be kept in step across a <thead> and a per-row <td> —
+        # two places, where a mismatch shifts every value one column left and renders a
+        # table nobody can read. Deleting the column deletes the predicate, so there is no
+        # longer anything for the header and the body to disagree about.
+        # Owner ruling, 2026-08-31. Do not reintroduce it, conditionally or otherwise,
+        # without deleting this paragraph.
         o.append('<div class="scroll"><table><thead><tr>'
-                 "<th>Task</th><th>State</th>%s<th>Depends on</th>"
+                 "<th>Task</th><th>State</th><th>Depends on</th>"
                  "<th class=\"r\">Q</th><th>PR</th>"
-                 "</tr></thead><tbody>" % ("<th>Role</th>" if show_role else ""))
+                 "</tr></thead><tbody>")
         for t in tasks:
             tid = str(t.get("id") or "")
             short = tid[5:] if tid.startswith("task-") else tid
@@ -1874,8 +1865,6 @@ def render_table():
                      % (e(task_handle(p, tid)), e(t.get("title"))))
             o.append("</div></div></td>")
             o.append('<td><span class="state %s">%s</span></td>' % (TONE.get(st, ""), e(st)))
-            if show_role:
-                o.append('<td class="dim">%s</td>' % e(t.get("assignee") or "—"))
             deps = [str(d) for d in tolist(t.get("depends_on"))]
             if deps:
                 # Show the short id, the same form the Task column shows, and copy the
