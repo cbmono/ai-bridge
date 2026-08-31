@@ -696,15 +696,21 @@ echo "== 10. the columns survive what a MARKDOWN RENDERER does to the text =="
 # machine that happened to run the harness.
 #
 # render_md — the banner as a markdown renderer LEAVES it, which is the only form in which
-# the `/ai-bridge` reader ever sees these columns. Four transforms, each one a construct that
+# the `/ai-bridge` reader ever sees these columns. SIX transforms, each one a construct that
 # consumes characters the script counted as width: `<…>` an autolink, `**…**` emphasis (which
-# the md rendering itself adds on the header rows), `[…](…)` an inline link, and `` `…` `` a
-# code span. LINE BY LINE via `sed`, never across the buffer: a `[` on one row and a `](` on
-# the next are two rows' worth of text and not a link, and a whole-buffer regex would join
-# them.
+# the md rendering itself adds on the header rows), `[…](…)` an inline link, `` `…` `` a
+# code span, `~~…~~` strikethrough (4 characters gone), and `&name;` a CHARACTER REFERENCE,
+# which is the widest of them all — `&amp;` is five source characters and one rendered one.
+# LINE BY LINE via `sed`, never across the buffer: a `[` on one row and a `](` on the next
+# are two rows' worth of text and not a link, and a whole-buffer regex would join them.
+#
+# THIS LIST TRACKS THE RENDERER, NOT `cell`. It is the transform the reader's renderer
+# applies; `cell` is the hook's answer to it. Adding a construct here and watching the
+# alignment go red is the order the two `~`/`&` cases below were found in.
 render_md() { # <banner> -> the same text, as a markdown renderer leaves it
   printf '%s\n' "$1" | LC_ALL=C tr -d '<>' \
-    | LC_ALL=C sed -e 's/\*\*//g' -e 's/\[\([^]]*\)\](\([^)]*\))/\1/g' -e 's/`\([^`]*\)`/\1/g'
+    | LC_ALL=C sed -e 's/\*\*//g' -e 's/\[\([^]]*\)\](\([^)]*\))/\1/g' -e 's/`\([^`]*\)`/\1/g' \
+                      -e 's/~~\([^~]*\)~~/\1/g' -e 's/&[A-Za-z][A-Za-z0-9]*;/\&/g'
 }
 # from_offsets — one line per distinct `FROM` offset found across both tables, so a failure
 # names the rows rather than only counting them. A table runs from its header to the blank
@@ -814,6 +820,12 @@ assert "…and the columns still line up after the renderer's transform" \
 #                  roleTiers table IS column 0, so a key beginning with that byte both bolds
 #                  a row the banner never marked AND — `pad` having counted the byte as width
 #                  — leaves the row 1 character short once the marker is consumed.
+#     ~~ops~~      STRIKETHROUGH. Four delimiters eaten, and the row reads as struck-out
+#                  text the banner never struck out: 4 characters short.
+#     ops&amp;api  A CHARACTER REFERENCE, and the widest single construct here — five source
+#                  characters render as one `&`, so this one row is 4 characters short. `&`
+#                  is the same family as the `<`/`>` above: the character that OPENS a
+#                  construct is the character to neutralise, not the well-formed spelling.
 #
 # ASSERTED THROUGH THE RENDERER, not as an absence of characters. An absence check passes for
 # a hook that drops the rows, and the alignment is the property that actually matters; the
@@ -826,9 +838,9 @@ json.dump({
   "authorEmail": "you@example.com",
   "maxAgentsInFlight": 9,
   "maxPrLoc": 2000,
-  "models":    {"light": "haiku", "standard": "sonnet", "deep": "opus"},
+  "models":    {"light": "haiku", "standard": "sonnet", "deep": "ops&amp;api"},
   "roleTiers": {"aa[x](y)bb": "deep", "cc`z`dd": "standard",
-                "\x02sneaky": "deep", "plain-role": "deep"},
+                "\x02sneaky": "deep", "~~ops~~": "deep", "plain-role": "deep"},
 }, open(os.path.join(sys.argv[1], "instance.config.json"), "w"), indent=2)
 PY
 rm -f "$INST/instance.config.local.json"
@@ -842,7 +854,9 @@ assert "…and the banner still prints its tables"       "$(has 'ROLE ' "$OUT")"
 assert "…with the link key neutralised one character for one"       "$(has 'aa?x??y?bb' "$OUT")"
 assert "…and the code-span key"                                     "$(has 'cc?z?dd' "$OUT")"
 assert "…and the key that began with the emphasis marker"           "$(has '?sneaky' "$OUT")"
-for ch in '[' ']' '`' '(' ')'; do
+assert "…and the strikethrough key"                                 "$(has '??ops??' "$OUT")"
+assert "…and the model alias carrying a character reference"        "$(has 'ops?amp;api' "$OUT")"
+for ch in '[' ']' '`' '(' ')' '~' '&'; do
   assert "…no '$ch' anywhere in either table" \
     "$(printf '%s\n' "$(tbl_rows "$OUT")" | grep -qF -- "$ch" && echo 1 || echo 0)"
 done
@@ -856,6 +870,32 @@ assert "…and the md rendering keeps ONE FROM offset once rendered" \
 # a forged marker that happened to be width-neutral would still bold a row nobody marked.
 assert "…and the forged marker no longer bolds a row of its own" \
   "$(printf '%s\n' "$MD_H" | grep -qE '^\*\*[^[:space:]]*sneaky' && echo 1 || echo 0)"
+# AND THE TWO NEWEST TRANSFORMS DISCRIMINATE, or the alignment assertion above is green for a
+# `render_md` that simply does not know the construct. Same shape as the pre-fix `WAS` fixture
+# in section 10: laid out with `printf` so the fixture cannot itself be the misaligned thing,
+# aligned before the renderer, misaligned after it. Without these, a typo in either `sed`
+# expression would make this whole section pass whatever `cell` does.
+#
+# ASCII IN THE VALUE COLUMN ON PURPOSE, unlike the banner's own `TIER→MODEL`: `printf '%-*s'`
+# pads by BYTES, so a fixture written with `→` in it is misaligned before the renderer ever
+# runs and would pass the "fails once rendered" half for the wrong reason. That is the very
+# defect `pad`/`nchars` exist for; a fixture is not the place to re-enact it.
+STRUCK="$(printf '%-20s  %-12s  %s\n' \
+  ROLE       'TIER:MODEL'  FROM \
+  '~~ops~~'  'deep:opus'   local \
+  plain-role 'deep:opus'   tracked)"
+assert "a struck-through row passes an UNRENDERED offset check…" \
+  "$(eq "$(printf '%s\n' "$STRUCK" | from_offsets)" 1)"
+assert "…and fails once the renderer has eaten its four tildes" \
+  "$([ "$(render_md "$STRUCK" | from_offsets 2>/dev/null)" != 1 ] && echo 0 || echo 1)"
+ENTITY="$(printf '%-20s  %-16s  %s\n' \
+  ROLE       'TIER:MODEL'        FROM \
+  plain-role 'deep:ops&amp;api'  local \
+  other-role 'deep:opus'         tracked)"
+assert "a character-reference row passes an UNRENDERED offset check…" \
+  "$(eq "$(printf '%s\n' "$ENTITY" | from_offsets)" 1)"
+assert "…and fails once the renderer has collapsed it to one character" \
+  "$([ "$(render_md "$ENTITY" | from_offsets 2>/dev/null)" != 1 ] && echo 0 || echo 1)"
 
 # VERSION IS THE THIRD FILE, and it reaches the identity line rather than a cell. The version
 # filter already rejects `<`, `>`, `*`, `|` and a leading `#` outright — `_` is the one it

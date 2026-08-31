@@ -678,6 +678,17 @@ nchars() { local t="${1//$CONT_BYTES/}"; NCHARS="${#t}"; }
 #              for one and a filter that admits half a construct is one more thing to reason
 #              about at every future reading.
 #     `        a code span. Both backticks eaten, the cell 2 characters short.
+#     ~        strikethrough. `~~ops~~` reaches the reader as struck-out `ops`: 4 characters
+#              gone, and emphasis of a third kind this file never asked for. Replaced
+#              WHOLESALE, like `_` and `*` and for the same reason — matching only a well
+#              formed `~~…~~` is a filter that has to parse the construct correctly to be
+#              safe, and one that swaps a character for a character does not.
+#     &        A CHARACTER REFERENCE, and the widest of the lot: `ops&amp;api` renders as
+#              `ops&api`, five source characters for one rendered. Every `&` goes, not only
+#              the ones that open a well-formed entity — `&` is what a renderer LOOKS at,
+#              exactly as `<` is, and it is no more this file's job to decide which `&` the
+#              reader's renderer will complete than it was to decide which `<` opened an
+#              autolink.
 #     \002     EMPH_MARK ITSELF, whose comment above says what a forged one can do. `emit_md`
 #              matches it as a PREFIX at line start; the label column of the roleTiers table
 #              IS column 0, so a key beginning with that byte bolds a row this file never
@@ -686,6 +697,16 @@ nchars() { local t="${1//$CONT_BYTES/}"; NCHARS="${#t}"; }
 #              on the only route one could arrive by.
 #     a leading `#`   a heading — and the label column of the roleTiers table is at column 0,
 #              where a role name out of a config file lands.
+#
+# THE RULE IS THE RENDERER'S ACTIVE SET, NOT THIS LIST. The list is where the rule has got to
+# — it has been wrong twice, and both times by being read as closed. It shipped as six
+# characters with an argument that no value would plausibly carry a backtick or a `[x](y)`;
+# measurement cost 5, 2 and 1 columns. It then shipped as twelve, and `~` and `&` cost 4 each.
+# So the standing instruction to whoever reads this next is NOT "these are the characters" but
+# "a construct the reader's renderer consumes characters for belongs here" — the values are
+# role names, model aliases and a VERSION string out of files this file does not own, and
+# nothing about them bounds which characters they contain. Add the construct to `render_md` in
+# tests/session-banner.test.sh first, watch the alignment go red, then add the character here.
 #
 # ONE CHARACTER FOR ONE CHARACTER, so no substitution can move a column; `?` because it is
 # inert in every markdown position INCLUDING the start of a line, which `-` and `.` are not
@@ -706,6 +727,7 @@ cell() {
   local v="$1"
   v="${v//</?}"; v="${v//>/?}"; v="${v//\*/?}"; v="${v//_/?}"; v="${v//\|/?}"
   v="${v//\[/?}"; v="${v//\]/?}"; v="${v//\(/?}"; v="${v//\)/?}"; v="${v//\`/?}"
+  v="${v//\~/?}"; v="${v//&/?}"
   v="${v//"$EMPH_MARK_BYTE"/?}"
   case "$v" in '#'*) v="?${v#\#}" ;; esac
   printf '%s' "$v"
