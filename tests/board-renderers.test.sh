@@ -504,6 +504,19 @@ briefly() { # <env-prefix...> -- run the watcher until it announces itself, then
   # is never read.
   ( cd "$ALPHA" && exec env "$@" bash "$WATCH" --interval 1 "$ALPHA" ) >"$log" 2>&1 &
   local p=$!
+  # THE BOUND GOES ON THE CHILD, because this child never exits on its own: it is a watch
+  # loop, and the `kill -TERM` below only runs if THIS harness survives to reach it. A CI
+  # timeout, a spend limit or a plain SIGKILL leaves the watcher reparented to pid 1,
+  # re-rendering a board every second forever — the failure `CONVENTIONS.md` → "Anything you
+  # background must be reaped by something that outlives YOU" is written from. The watchdog
+  # is a SIBLING, so it fires whether or not we are here, and `sleep` bounds the watchdog
+  # itself. 120s is ~20x the measured announce-and-stop time, so it never fires in a healthy
+  # run; the kill after `wait` retires it the moment the watcher is actually gone.
+  # `>/dev/null` on the watchdog is load-bearing: killing it leaves its own `sleep` behind,
+  # and a `sleep` holding this harness's stdout blocks the `out=$(bash …)` the CI loop reads
+  # it through — a finished harness that looks like a 2-minute hang.
+  ( sleep 120; kill -TERM "$p" 2>/dev/null ) >/dev/null 2>&1 &
+  local wd=$!
   # This used to be a fixed `sleep 2`, racing the initial render — a real subprocess
   # chain (write-snapshot.sh, then build-board.sh) whose duration is host- and
   # load-dependent, not a constant. Under load the message below hadn't been printed
@@ -514,6 +527,7 @@ briefly() { # <env-prefix...> -- run the watcher until it announces itself, then
   wait_for "$log" "in a browser and reload it" 200 || true
   kill -TERM "$p" 2>/dev/null || true
   wait "$p" 2>/dev/null || true
+  kill "$wd" 2>/dev/null || true
   cat "$log"
 }
 POLL_MSG="$(briefly WATCH_BOARD_WATCHER=poll)"
@@ -543,6 +557,11 @@ rm -rf "$ALPHA/.board-live"
 # subshell's status instead of the watcher's and the exit-0-on-TERM assertion is vacuous.
 ( cd "$ALPHA" && exec bash "$WATCH" --interval 1 "$ALPHA" ) >"$TMP/watch.log" 2>&1 &
 WPID=$!
+# Same bound as `briefly` above, and for the same reason: this section drives the watcher
+# through a change and a TERM, and every one of those steps is reached only if this harness
+# is still alive. See the comment there.
+( sleep 300; kill -TERM "$WPID" 2>/dev/null ) >/dev/null 2>&1 &
+WATCHDOG=$!
 # Same defect as `briefly` above, same fix: wait for the render to actually land in the
 # log instead of a fixed sleep racing it. A `sleep 2` here is exactly the assertion below
 # it — "has rendered once already" — turned into a guess about how long that takes.
@@ -565,6 +584,7 @@ assert "a task-document write triggers a re-render" "$(yes_if test "$AFTER" -gt 
 assert "…and the change is on the page"             "$(fhas 'WATCHED-CHANGE-appeared-while-watching' "$PAGE")"
 kill -TERM "$WPID" 2>/dev/null || true
 WRC=0; wait "$WPID" 2>/dev/null || WRC=$?
+kill "$WATCHDOG" 2>/dev/null || true
 assert "a TERM exits 0 — stopping a watcher is not a failure" "$(eq "$WRC" 0)"
 assert "…saying the page is still there"            "$(fhas 'stopped. The page is still at' "$TMP/watch.log")"
 assert "…removing its stamp file"                   "$(no_if test -e "$ALPHA/.board-live/.watch-stamp")"

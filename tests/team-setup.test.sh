@@ -223,6 +223,14 @@ set -m
 TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/int.out" 2>"$TMP/int.err" <"$TMP/fifo" &
 INT_PID=$!
 set +m
+# THE BOUND GOES ON THE CHILD. This installer is blocked reading a fifo nothing has written
+# to yet, so if THIS harness dies before `exec 9>` below it waits there forever, reparented
+# to pid 1 — `CONVENTIONS.md` → "Anything you background must be reaped by something that
+# outlives YOU". The watchdog is a sibling, so it fires whether or not we are here; `sleep`
+# bounds the watchdog itself; 60s is far past the measured sub-second answer, so it never
+# fires in a healthy run, and it is retired below the moment the installer is really gone.
+( sleep 60; kill -TERM "$INT_PID" 2>/dev/null ) >/dev/null 2>&1 &
+INT_WD=$!
 exec 9>"$TMP/fifo"
 printf 'example-user-007 example-user-007@example.com\n' >&9
 # Wait until the SECOND prompt is on screen — that is the proof the interrupt lands
@@ -237,6 +245,7 @@ ok "the installer reached the 2nd prompt" "$(grep -q '2> ' "$TMP/int.err" && ech
 kill -INT "$INT_PID" 2>/dev/null
 exec 9>&-
 wait "$INT_PID"; INT_RC=$?
+kill "$INT_WD" 2>/dev/null || true
 cat "$TMP/int.out" "$TMP/int.err" > "$TMP/out"
 ok "interrupted: exits 130 (SIGINT)"      "$INT_RC" 130
 ok "…it says nothing was written"         "$(said 'nothing written (interrupted)')" yes

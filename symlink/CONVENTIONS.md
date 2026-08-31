@@ -464,17 +464,26 @@ in `cbmono/ai-bridge` enforces this.
   bg_bounded() {
     local secs=$1; shift
     if command -v timeout >/dev/null 2>&1; then
-      timeout "$secs" "$@" &          # coreutils. NOT on a stock macOS — hence this branch
+      timeout "$secs" "$@" &                       # coreutils. NOT on a stock macOS
       return
     fi
-    # No timeout: the child and its own watchdog share ONE subshell, itself already
-    # detached from us, so the bound survives our death — and `sleep` bounds the watchdog.
-    # The trailing kill is what stops a finished child's recycled pid being shot later.
-    ( "$@" & c=$!
-      ( sleep "$secs"; kill "$c" 2>/dev/null ) & w=$!
-      wait "$c" 2>/dev/null; kill "$w" 2>/dev/null ) &
+    "$@" &                                        # no timeout: bound it with a watchdog
+    local child=$!
+    # A SIBLING, so it fires whether or not we live. `>/dev/null` is not tidiness — see below.
+    ( sleep "$secs"; kill "$child" 2>/dev/null ) >/dev/null 2>&1 &
   }
   ```
+
+  The watchdog is a sibling rather than something this shell does later, and that is the whole
+  trick: it is already detached when we are killed, and `sleep` bounds the watchdog itself, so
+  nothing is left running either way. It outlives a child that finishes early by up to `secs`
+  — so keep the bound in minutes, not hours — and `kill`ing it once you have reaped the child
+  is a fine ADDITION.
+  **Redirect the watchdog's stdio, and know why:** killing `( sleep N; … ) &` kills the
+  SUBSHELL and leaves the `sleep` behind, and a `sleep` that inherited your stdout holds the
+  pipe open — so a caller reading your output with `$( … )` (this repo's own CI loop does)
+  blocks for the rest of the bound on a job that finished. Measured while writing this rule:
+  a harness that took 15 seconds took 99.
 
   A loop you wrote yourself needs no watchdog at all — carry the deadline inside it:
   `end=$(( $(date +%s) + 300 ))`, then `while [ "$(date +%s)" -lt "$end" ]; do …; done`.
