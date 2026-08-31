@@ -620,10 +620,30 @@ def others_for(d, me, default_owner):
     return owners
 
 
+# ONE STRING, TWO CONTROLS. `promote → ready` in the task table and `Approve` on a
+# PROMOTION item in the waiting rail are the SAME decision — "this draft is ready" — so
+# they copy the same bytes, from here, instead of two spellings of one act. The button
+# used to copy a three-sentence prompt ("In the ai-bridge instance, promote … from draft
+# to ready: review its acceptance criteria, tighten any that are not testable, then set
+# status: ready.") while the rail copied a generic `APPROVED — go ahead.` Both were
+# wrong in the same way: the prompt told an agent how to do a job it already knows, and
+# neither could be pasted beside the other without the reader wondering whether two
+# different things had been asked for. The verb is the payload; the handle says which
+# document. Nothing here performs the promotion — `status: ready` in the document is a
+# human authority (SCHEMA.md), and this page only ever copies text.
+PROMOTE = "promote to ready"
+
 WORDING = {
     "approve": ("Approve", "go", "APPROVED — go ahead."),
     "discuss": ("Let’s discuss", "", "I want to discuss this before you proceed."),
-    "reject": ("Reject", "no", "REJECTED — do not proceed."),
+    # REJECT DECLINES THE ACTION. IT DOES NOT CANCEL THE TASK, and the wording used to
+    # imply that it did: `REJECTED — do not proceed. Record why on the task and move on.`
+    # reads as "this one is over", so an agent receiving it could reasonably close the
+    # task the owner had only said no to. Nothing on this page changes a status, a
+    # rejected draft stays `draft`, and cancelling is `status: cancelled` — a different
+    # act with no control here. So the payload says what it declines and what to leave
+    # alone (the suffix is added in the loop below).
+    "reject": ("Reject", "no", "REJECTED — do not do this."),
 }
 
 TABLE_HEAD = """<title>__TITLE__</title>
@@ -825,8 +845,10 @@ th{text-align:left;font-size:.64rem;text-transform:uppercase;letter-spacing:.09e
 th.r,td.r{text-align:right}
 th:not(:first-child),td:not(:first-child){width:1%;white-space:nowrap}
 th:first-child,td:first-child{width:auto}
-/* MIDDLE, not baseline. Against a title that wraps to two lines the assignee, the state
-   and the PR link sat pinned to the first line and read as if they belonged to it. */
+/* MIDDLE, not baseline. Against a title that wraps to two lines every other cell in the
+   row — the state, the dependencies, the PR link — sat pinned to the first line and read
+   as if it belonged to that line rather than to the row. (An assignee cell used to be the
+   clearest case; the Role column is gone, the alignment defect is not.) */
 td{padding:.4rem .45rem;vertical-align:middle;
   border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
 tbody tr:last-child td{border-bottom:0}
@@ -843,14 +865,16 @@ td:first-child{overflow-wrap:break-word}
    place in on every scroll. Both are the SAME defect — nothing about the row is fixed —
    and both are fixed by giving the filename a column of its own.
 
-   NARROW IS THE DEFAULT, because it is the shape that needs no measurement: `.trow` is
-   a flex COLUMN, so filename is line 1 and title is line 2 on EVERY row. Uniform by
-   construction — there is no width at which one row can be one line and the next two.
+   STACKED IS THE ONLY SHAPE, because it is the one that needs no measurement: `.trow` is
+   a flex COLUMN, so filename is line 1 and title is line 2 on EVERY row, at EVERY width.
+   Uniform by construction — there is no width at which one row can be one line and the
+   next two. It was the narrow half of two layouts until 2026-08-31; the block below the
+   rules says what the other half bought and why it is deleted rather than re-tuned.
 
    `.tfile` IS THE FILENAME LINE, AND THE PROMOTE CONTROL IS ON IT. It used to sit in
-   `.tmain` above the title, which made a draft row THREE lines on the narrow layout
-   while every other row was two. Here it rides beside the filename: one line either
-   way, so a draft row is exactly as tall as its neighbours. `flex-wrap:wrap` is the
+   `.tmain` above the title, which made a draft row THREE lines while every other row was
+   two. Here it rides beside the filename: one line either way, so a draft row is exactly
+   as tall as its neighbours. `flex-wrap:wrap` is the
    escape valve for a filename long enough to leave the control no room — the control
    drops to a line of its own rather than overflowing the column or pushing the title
    out of alignment, and only that one row grows.
@@ -860,32 +884,24 @@ td:first-child{overflow-wrap:break-word}
 .tfile>.tid{margin-right:0;min-width:0;overflow-wrap:anywhere}
 .tmain{display:flex;flex-direction:column;align-items:flex-start;gap:.22rem;min-width:0}
 
-/* ≥1200px: the filename gets a FIXED column and every title starts at the same x.
-   WHERE 56ch COMES FROM — measured, not rounded, and it is 41ch plus the promote
-   control. The longest task filename actually present across this bundle's projects is
-   `017-write-for-a-human-who-will-not-read`, 39 characters (`task-` and `.md` are
-   dropped before it is rendered). `.tid` is set in IBM Plex Mono, so 1ch is one
-   character exactly: 39ch for the longest name that exists plus 2ch of gutter before
-   the title = 41ch, which is what this was until the promote control moved onto this
-   line. That control is ~102px wide — 15 characters of IBM Plex Sans at .68rem (~82px)
-   plus .8rem of padding, 2px of border and a .3rem gap — and 1ch here is .74rem × 0.6
-   = ~7.1px, so it costs ~14.4ch. 41 + 15 = 56ch, and a draft row is then exactly as
-   tall as every other row at this width rather than a line taller.
-   THE ROLE COLUMN PAID FOR IT. It was dropped from the uniform case above, which is
-   every project on the board this was measured on, so the table is no wider than it
-   was; on the rare project that keeps Role, `.scroll` still scrolls.
-   HOW IT DEGRADES when a longer filename appears later: the column does NOT grow and
-   the title column is NOT pushed. `min-width:0` plus `overflow-wrap:anywhere` wrap the
-   long name onto a second line INSIDE its own 56ch column; that one row grows a line
-   and every title on the page still starts at the same x, which is the property this
-   whole block exists to hold. No overflow, no reflowed neighbours, no horizontal
-   scrollbar. Re-measure and bump the 56 when that gets annoying — it is one number in
-   one place, and the wrapping is what makes forgetting to survivable. */
-@media (min-width:1200px){
-  .trow{flex-direction:row;align-items:baseline;gap:0}
-  .trow>.tfile{flex:0 0 56ch;min-width:0;margin-right:0;overflow-wrap:anywhere}
-  .tmain{flex:1 1 auto}
-}
+/* ONE LAYOUT AT EVERY WIDTH, AND THE WIDE VARIANT IS DELETED RATHER THAN NARROWED.
+   A width-conditional block at 1200px used to turn `.trow` back into a row with `.tfile`
+   pinned to a fixed 56-character flex basis — 39 for the longest filename in the bundle,
+   2 of gutter, ~15 for the promote control — so every title started at the same x.
+   It bought that alignment at a price the owner read off the rendered page: a title
+   sitting ~400px to the right of its own filename, with the whitespace between them
+   growing on every filename shorter than the longest one, and the eye having to travel
+   the gap to pair the two halves of one row. The stacked pair reads as one thing; the
+   split pair reads as two columns that happen to be adjacent.
+   SO THE BREAKPOINT IS GONE, NOT RE-TUNED. A second layout is a second set of row
+   metrics to keep honest — that basis was already the third number measured for it — and
+   the defect it existed to fix (ragged title x-positions) is fixed by the base rule too:
+   `.trow` is a flex COLUMN, so the filename is line 1 and the title is line 2 on EVERY
+   row, at EVERY width, and every title starts at the same x because it starts at the
+   cell's own left edge. Uniform by construction, with no width at which one row is one
+   line and its neighbour two, and nothing left to re-measure when a longer filename
+   arrives — `min-width:0` plus `overflow-wrap:anywhere` on `.tfile>.tid` still wrap it.
+   Do not reintroduce a width-conditional row without deleting this paragraph. */
 .tbtn{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;
   border-bottom:1px dotted var(--dim);border-radius:0}
 .tbtn:hover{color:var(--accent);border-color:var(--accent)}
@@ -915,13 +931,48 @@ td:first-child{overflow-wrap:break-word}
 .qbtn.nonum:hover{color:var(--signal);border-color:var(--signal);background:transparent}
 button.ghost{font-size:.72rem;padding:.28rem .5rem;color:var(--muted)}
 .deps{white-space:normal!important}
-/* Two refs must not wrap: reserve button.dep's own box (3ch digits + .7rem pad +
-   2px border, each) times two, a ", " separator in that same monospace context,
-   and this td's own .9rem horizontal padding (box-sizing:border-box counts it) —
-   sized from the pill's and td's own CSS, not eyeballed. 3+ refs may still wrap
-   past that width, and a single ref never sees this min-width. */
+/* THREE refs must not wrap, and they are separated by a SPACE, not by ", ". A comma
+   between two pills costs a character and carries no information — the pills are
+   already discrete boxes — and it was what held the target at two refs per line. So
+   the width is re-derived for the pair of changes together: button.dep's own box
+   (3ch of digits + .7rem of padding + 2px of border, each) times THREE, plus the two
+   single-space separators between them, plus this td's own .9rem of horizontal padding
+   (box-sizing:border-box counts it). Every term is read off the pill's and the td's own
+   CSS, and the `ch` is well defined because this rule sets the font the cell measures
+   in. The separator term is still `2ch` and that is a coincidence worth naming: it used
+   to be ONE two-character `", "` between two pills, and it is now TWO one-character
+   spaces between three. 4+ refs may still wrap past this width, which is the intent,
+   and a single ref never sees this min-width at all. */
 .deps:has(button.dep:nth-of-type(2)){font-family:"IBM Plex Mono",ui-monospace,monospace;
-  font-size:.74rem;min-width:calc(2*(3ch + .7rem + 2px) + 2ch + .9rem)}
+  font-size:.74rem;min-width:calc(3*(3ch + .7rem + 2px) + 2ch + .9rem)}
+/* THE PR CELL WRAPS AT TWO REFS, AND ITS WIDTH IS IN PIXELS BECAUSE IT WAS MEASURED.
+   Nine PRs on one task rendered as ONE UNBROKEN LINE — 386px measured at 1400px, the
+   widest thing in the table and in one of the columns nobody reads first — because
+   `td:not(:first-child)` is `nowrap` and nothing capped the column. The board this was
+   reported from carries ten on a row.
+   WHERE 107px COMES FROM. The cell sets its own font, exactly as `.deps` does above and
+   for the same reason: with one font in the cell, every character in it — the refs and
+   the spaces between them — is one advance wide, and the number below is a measurement
+   rather than an estimate spanning two typefaces. Nothing sets `html`'s font-size, so
+   1rem is the root's 16px and .8rem is 12.8px; IBM Plex Mono's advance is 0.6em, so one
+   character is 7.68px — confirmed against the rendered page, where a `#1234` link
+   measures 38.41px across its five characters (7.682px each). Twelve characters is
+   92.16px, which is `#1234 #1234` (eleven) with one to spare, and this td's own .9rem of
+   horizontal padding is 14.4px (box-sizing:border-box counts it): 92.16 + 14.4 =
+   106.56, so 107px.
+   IT IS A FLOOR, AND THE FLOOR IS WHAT DOES THE WORK — `max-width` here does nothing,
+   measured: `td:not(:first-child)` asks for `width:1%`, so once the cell may wrap the
+   column collapses to its min-content (ONE ref, 52.78px) and a cap above that is never
+   reached. `min-width` is therefore the property, exactly as `.deps` uses it, and the
+   1% is what stops the column growing past it: 107 - 14.4 = 92.6px of content, which
+   holds two refs and their space (84.5px) and cannot hold three (130.6px).
+   ON A ROW WITH ONE REF the reservation would be width taken for nothing, so it is
+   conditional on a second ref being there — again `.deps`'s shape. A five-digit repo
+   (`#12345`, 46.08px) puts one ref per line rather than two: the cell wraps instead of
+   overflowing, which is the property, and nothing here assumes four digits. */
+td.prs{white-space:normal!important;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.8rem}
+td.prs:has(a:nth-of-type(2)){min-width:107px}
 button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.74rem;
   padding:.08rem .35rem;color:var(--muted);background:var(--sunk);border-color:transparent;
   font-variant-numeric:tabular-nums}
@@ -1636,13 +1687,25 @@ def render_table():
                 # promotion, a close, or a task's questions as a whole — and no control
                 # on this page binds one to a single question. `<handle>/q1: REJECTED`
                 # would name a question nobody rejected.
-                msg = "%s: %s" % (ref, lead)
-                if verdict == "approve" and hint:
-                    msg += " Run %s." % hint
-                elif verdict == "discuss":
-                    msg += " Tell me the trade-off you see and what you recommend."
-                elif verdict == "reject":
-                    msg += " Record why on the task and move on."
+                # APPROVE IS GENERIC OVER THE AWAITING KINDS, so its payload is not.
+                # One button serves a promotion, a merge, a project close and a
+                # deliverable, and only the FIRST of those is the same decision as the
+                # task table's `promote → ready`. So a promotion item copies PROMOTE —
+                # the same bytes that button copies — and every other kind keeps the
+                # verdict sentence, because `promote to ready` on a merge or a close
+                # names an act nobody asked for. Driven off the item's own awaiting
+                # verb, never off WORDING: editing the entry would have changed all
+                # four.
+                if verdict == "approve" and t.get("awaiting") == "approve":
+                    msg = "%s: %s" % (ref, PROMOTE)
+                else:
+                    msg = "%s: %s" % (ref, lead)
+                    if verdict == "approve" and hint:
+                        msg += " Run %s." % hint
+                    elif verdict == "discuss":
+                        msg += " Tell me the trade-off you see and what you recommend."
+                    elif verdict == "reject":
+                        msg += " Record why on the task; leave its status as it is."
                 o.append('<button class="%s" data-copy="%s" data-what="%s">%s</button>'
                          % (cls, e(msg), e(label + " prompt"), e(label)))
             o.append("</div></li>")
@@ -1746,28 +1809,30 @@ def render_table():
         o.append('<div class="body">')
         # THIS project's queue, above its task table and holding only its own items.
         rail(mine)
-        # THE ROLE COLUMN APPEARS ONLY WHERE IT DISCRIMINATES. On the board this was
-        # measured against — 8 projects, 207 tasks — every row read `software-engineer`,
-        # and a column with one value is not a column; it is width taken from the task
-        # name for no information.
+        # THERE IS NO ROLE COLUMN, AND IT IS NOT CONDITIONAL — IT IS GONE.
         #
-        # DROPPING IT OUTRIGHT WAS THE OTHER OPTION AND IT LOSES SOMETHING REAL: a
-        # `devops-engineer` or `qa-reviewer` row is rare, and rare is exactly when the
-        # value carries information. So the column is conditional on the only question
-        # that matters — does this project's task list name more than one role? — which
-        # deletes it precisely where it says nothing and keeps it precisely where it
-        # says something. The condition is per project because the table is: each card
-        # has its own <table> with its own <thead>, so a column that is present on one
-        # card and absent on the next is still self-describing.
-        # Blank assignees do not count as a distinct role: an unassigned task is a gap
-        # in the document, and counting it would resurrect the column on a board where
-        # every named role is still the same one.
-        roles = sorted({str(t.get("assignee") or "") for t in tasks} - {""})
-        show_role = len(roles) > 1
+        # It went through both weaker forms first, and both are recorded because both look
+        # reasonable enough to be proposed again. It was unconditional; then conditional on
+        # `len(roles) > 1`, on the reasoning that a column with one value is not a column
+        # but a rare `devops-engineer` row is real information; then, briefly, that AND not
+        # phased. Every version kept the same defect: on the boards this was measured
+        # against, the column either said nothing on every row or said something on one
+        # project out of twelve, and it cost the task name width on all of them. A reader
+        # who wants to know who is on a task opens the task — `assignee:` is in the
+        # document and in AWAITING.md, neither of which this deletion touches.
+        #
+        # WHAT THE CONDITION COST, since that is the part worth not repeating: a column
+        # present on one card and absent on the next is self-describing but not scannable,
+        # and the predicate had to be kept in step across a <thead> and a per-row <td> —
+        # two places, where a mismatch shifts every value one column left and renders a
+        # table nobody can read. Deleting the column deletes the predicate, so there is no
+        # longer anything for the header and the body to disagree about.
+        # Owner ruling, 2026-08-31. Do not reintroduce it, conditionally or otherwise,
+        # without deleting this paragraph.
         o.append('<div class="scroll"><table><thead><tr>'
-                 "<th>Task</th><th>State</th>%s<th>Depends on</th>"
+                 "<th>Task</th><th>State</th><th>Depends on</th>"
                  "<th class=\"r\">Q</th><th>PR</th>"
-                 "</tr></thead><tbody>" % ("<th>Role</th>" if show_role else ""))
+                 "</tr></thead><tbody>")
         for t in tasks:
             tid = str(t.get("id") or "")
             short = tid[5:] if tid.startswith("task-") else tid
@@ -1775,25 +1840,25 @@ def render_table():
             o.append('<tr%s>' % (' class="flight"' if t.get("in_flight") else ""))
             # TWO COLUMNS INSIDE ONE CELL, and the wrapper is what makes them possible:
             # `display:flex` ON a <td> takes it out of the table's own column sizing, so
-            # the filename column lives in a <div> the cell contains. `.trow` is a column
-            # below 1200px (filename line 1, title line 2, EVERY row the same) and a row
-            # with a fixed-width filename above it (every title at the same x). See the
-            # `.trow` rules for why the width is what it is.
+            # the filename column lives in a <div> the cell contains. `.trow` is a flex
+            # COLUMN at every width — filename line 1, title line 2, EVERY row the same.
+            # It used to become a row above 1200px, with the filename in a fixed column;
+            # see the `.trow` rules for why that second layout is gone rather than tuned.
             o.append('<td><div class="trow"><span class="tfile"><span class="tid">%s</span>'
                      % e(short))
             if st == "draft":
                 # THE PROMOTE CONTROL SITS ON THE FILENAME'S OWN LINE, immediately after
-                # it — inside `.tfile`, which is the filename column. It was a sibling
-                # of the title, i.e. a THIRD line on the narrow layout (filename, then
-                # the control, then the title), so the one row on the board asking for
-                # an action was also the only row a third taller than its neighbours.
-                # Here it costs no line at all: `.tfile` is one line either way, and the
-                # width it needs is the width the ROLE column just gave back.
+                # it — inside `.tfile`, which is the filename line. It was a sibling of
+                # the title, i.e. a THIRD line (filename, then the control, then the
+                # title), so the one row on the board asking for an action was also the
+                # only row a third taller than its neighbours. Here it costs no line at
+                # all: `.tfile` is one line either way, and `flex-wrap:wrap` is what
+                # keeps that true when a filename leaves it no room.
                 # It still only COPIES a prompt: promoting is `status: ready` in the
                 # document, a human authority (SCHEMA.md), and nothing here does it.
-                promo = ("In the ai-bridge instance, promote %s from draft to ready: review its "
-                         "acceptance criteria, tighten any that are not testable, then set "
-                         "status: ready." % task_handle(p, tid))
+                # THE HANDLE, THEN THE VERB — the notation every other control on this
+                # page uses, and the same string the rail's Approve copies (PROMOTE).
+                promo = "%s: %s" % (task_handle(p, tid), PROMOTE)
                 o.append('<button class="promote" data-copy="%s" data-what="Promotion prompt">'
                          "promote → ready</button>" % e(promo))
             o.append('</span><div class="tmain">')
@@ -1801,14 +1866,14 @@ def render_table():
                      % (e(task_handle(p, tid)), e(t.get("title"))))
             o.append("</div></div></td>")
             o.append('<td><span class="state %s">%s</span></td>' % (TONE.get(st, ""), e(st)))
-            if show_role:
-                o.append('<td class="dim">%s</td>' % e(t.get("assignee") or "—"))
             deps = [str(d) for d in tolist(t.get("depends_on"))]
             if deps:
                 # Show the short id, the same form the Task column shows, and copy the
                 # same handle every other control on the page copies — a dependency is
                 # most useful as a thing to go read, and it is read by the same means.
-                o.append('<td class="deps">%s</td>' % ", ".join(
+                # SPACE-SEPARATED, exactly as the PR cell joins its refs. A comma
+                # between two pills is one more character and no more information.
+                o.append('<td class="deps">%s</td>' % " ".join(
                     '<button class="dep" data-copy="%s" data-what="Task handle" title="%s">%s</button>'
                     % (e(task_handle(p, d)), e(d),
                        e(task_number(d))) for d in deps))
@@ -1848,8 +1913,8 @@ def render_table():
                 else:
                     cells.append('<span class="dim">#%s (link withheld: not http/https)</span>'
                                  % e(x.get("number")))
-            o.append('<td>%s</td></tr>' % (" ".join(cells) if cells
-                                           else '<span class="dim">—</span>'))
+            o.append('<td class="prs">%s</td></tr>' % (" ".join(cells) if cells
+                                                       else '<span class="dim">—</span>'))
         o.append("</tbody></table></div>")
         if dps:
             # Reuses the ONE clipboard helper the page already ships (TABLE_SCRIPT,
