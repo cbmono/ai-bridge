@@ -243,6 +243,19 @@ dispatch no role agent at all.
 - **The PR body opens with the literal heading `## Description (TL;DR)`**, then one
   sentence. That exact string — the clearance gate greps for it, so a body opening
   some other way is refused rather than merged.
+- **Then a `Verified:` line, and it must carry a link** — what you ran, what it said,
+  and a CI run or URL a reader can open. What it claims is your business; that it
+  cites something is the gate's, and a claim with nothing to open is refused.
+- **The criteria table sits under a heading carrying its tally** —
+  `### Criteria (10 ✓ / 8 ✗ — every ✗ is a later slice)`. The gate counts the rows and
+  refuses a tally that disagrees with them, and refuses `✗`s the heading never explains.
+  `## Notes` is optional; when you write one, every bullet leads with its claim in bold.
+- **Run the reader on your draft before you post it** —
+  `scripts/pr-body-clearance.sh --body-file <file>` for a PR body,
+  `scripts/pr-comment-clearance.sh --comment-file <file>` for a reply to review
+  findings. Both name the element and what to do. Before you post is the cheap moment.
+  The worked example is
+  [alteos-gmbh/monorepo#3286](https://github.com/alteos-gmbh/monorepo/pull/3286).
 - **The PR body carries the task's `acceptance_criteria` as a table, always** — one
   row per criterion, a `✓`/`✗`, and how you verified it. **Mark `✓` only for a
   criterion you actually verified**; mark the rest `✗` and say what verifying would
