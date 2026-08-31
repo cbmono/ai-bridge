@@ -147,7 +147,12 @@ sys.stdout.write(d.get("hookSpecificOutput", {}).get("additionalContext", ""))';
 # key merely MENTIONED in a comment or a value cannot answer for it.
 row() { printf '%s\n' "$OUT" | grep -E "^$1 " | head -1; }
 from() { printf '%s\n' "$(row "$1")" | awk '{print $NF}'; }
-value() { printf '%s\n' "$(row "$1")" | awk '{print $2}'; }
+# EVERYTHING BETWEEN THE KEY AND THE `FROM` CELL, not field 2. A value is not always one
+# token: the tier column renders `deep -> opus` with spaces around the arrow, and the
+# owner row carries a name and an address. Taking $2 answered `deep` for the first and
+# the name alone for the second.
+value() { printf '%s\n' "$(row "$1")" \
+           | awk '{o=""; for(i=2;i<NF;i++) o=o (o==""?"":" ") $i; print o}'; }
 
 tracked_cfg() {
   cat > "$INST/instance.config.json" <<'EOF'
@@ -241,14 +246,14 @@ echo "== 2b. roleTiers is a TABLE, resolved end to end, with per-entry provenanc
 rm -f "$INST/instance.config.local.json"
 run
 assert "an agent's tier AND the alias it maps to are printed" \
-  "$(eq "$(value software-engineer)" 'deep→opus')"
+  "$(eq "$(value software-engineer)" 'deep → opus')"
 assert "…for a second agent on a different tier too" \
-  "$(eq "$(value cataloguer)" 'standard→sonnet')"
-assert "…under a header matching the settings table's" "$(has 'ROLE ' "$OUT")"
-assert "…whose value column is TIER→MODEL"             "$(has 'TIER→MODEL' "$OUT")"
+  "$(eq "$(value cataloguer)" 'standard → sonnet')"
+assert "…under a header matching the settings table's" "$(has 'AGENT (role)' "$OUT")"
+assert "…whose value column is TIER → MODEL"           "$(has 'TIER → MODEL' "$OUT")"
 se_alias="$( cd "$INST" && bash "$SCRIPTS/resolve-model.sh" software-engineer 2>/dev/null )"
 assert "…and the alias is the one resolve-model.sh would dispatch on ($se_alias)" \
-  "$(eq "$(value software-engineer)" "deep→$se_alias")"
+  "$(eq "$(value software-engineer)" "deep → $se_alias")"
 assert "no local override ⇒ the entry reads tracked" "$(eq "$(from software-engineer)" tracked)"
 
 # A PARTIAL override: one agent moved, the rest must keep their tracked tier. That is the
@@ -256,9 +261,9 @@ assert "no local override ⇒ the entry reads tracked" "$(eq "$(from software-en
 printf '{ "roleTiers": { "cataloguer": "light" }, "models": { "light": "haiku" } }\n' \
   > "$INST/instance.config.local.json"
 run
-assert "the overridden entry moves…"                  "$(eq "$(value cataloguer)" 'light→haiku')"
+assert "the overridden entry moves…"                  "$(eq "$(value cataloguer)" 'light → haiku')"
 assert "…and its FROM column says local"              "$(eq "$(from cataloguer)" local)"
-assert "…the entries it does not name are untouched"  "$(eq "$(value software-engineer)" 'deep→opus')"
+assert "…the entries it does not name are untouched"  "$(eq "$(value software-engineer)" 'deep → opus')"
 assert "…and they still read tracked"                 "$(eq "$(from software-engineer)" tracked)"
 rm -f "$INST/instance.config.local.json"
 
@@ -267,7 +272,7 @@ rm -f "$INST/instance.config.local.json"
 printf '{ "roleTiers": { "cataloguer": "mystery" } }\n' > "$INST/instance.config.local.json"
 run
 assert "a tier that maps to no model renders →? rather than hiding" \
-  "$(eq "$(value cataloguer)" 'mystery→?')"
+  "$(eq "$(value cataloguer)" 'mystery → ?')"
 rm -f "$INST/instance.config.local.json"
 
 # =======================================================================================
@@ -291,7 +296,7 @@ assert "…exactly as wide as the header"      "$(eq "${#h2}" "${#h1}")"
 # through the hook's own resolved path, so a release that bumps it needs no edit here.
 tpl_ver="$(head -n 1 "$TPL/VERSION" 2>/dev/null | tr -d '[:space:]')"
 assert "the template ships a VERSION file"   "$([ -n "$tpl_ver" ] && echo 0 || echo 1)"
-assert "…and the header prints that version" "$(has "AI-Bridge $tpl_ver ·" "$OUT")"
+assert "…and the header prints that version" "$(has "AI-Bridge v$tpl_ver ·" "$OUT")"
 
 # ABSENT, UNREADABLE OR JUNK ⇒ THE REST OF THE BANNER, NEVER A CRASH AND NEVER A GUESS. A
 # copy of the hook outside the template cannot find a VERSION at all; the fixtures below
@@ -312,16 +317,21 @@ assert "…and the rest of the banner is intact"    "$(has 'FROM' "$OUT")"
 printf '' > "$TMP/faketpl/VERSION"
 vrun
 assert "an EMPTY VERSION is the same as none"     "$(has 'AI-Bridge · ' "$OUT")"
+# THE `v` IS APPLIED TO A SURVIVING VALUE, NEVER TO THE EMPTY STRING THE FILTERS LEAVE.
+# Prefixing before the emptiness check renders `AI-Bridge v ·` for a VERSION that is empty
+# or junk — the one case those filters exist to make identical to "no version at all".
+assert "…and no bare v is left behind"            "$(hasnt 'AI-Bridge v ' "$OUT")"
 # Not version-shaped is dropped rather than printed: this file's contents go straight into
 # session context, and an ESC sequence there would repaint the terminal from line one.
 printf 'not a version\n\033[31mred\n' > "$TMP/faketpl/VERSION"
 vrun
 assert "junk in VERSION is dropped, not printed"  "$(has 'AI-Bridge · ' "$OUT")"
+assert "…and junk leaves no bare v either"        "$(hasnt 'AI-Bridge v ' "$OUT")"
 assert "…and none of it reaches the banner"       "$(hasnt 'not a version' "$OUT")"
 assert "…still exit 0"                            "$(eq "$RC" 0)"
 printf '9.9.9-rc1\n' > "$TMP/faketpl/VERSION"
 vrun
-assert "a version-shaped value IS printed"        "$(has 'AI-Bridge 9.9.9-rc1 ·' "$OUT")"
+assert "a version-shaped value IS printed"        "$(has 'AI-Bridge v9.9.9-rc1 ·' "$OUT")"
 
 # An org-less config must not print a dangling `· org:`.
 printf '{ "maxPrLoc": 2000 }\n' > "$INST/instance.config.json"
@@ -381,7 +391,7 @@ lines7="$(printf '%s\n' "$OUT" | grep -c .)"
 assert "…and still short with all seven agents ($lines7 lines, budget 20)" \
   "$([ "$lines7" -le 20 ] && echo 0 || echo 1)"
 assert "…with a row per agent, not a wrapped list" \
-  "$(eq "$(printf '%s\n' "$OUT" | grep -cE '^[a-z-]+ +[a-z]+→')" 7)"
+  "$(eq "$(printf '%s\n' "$OUT" | grep -cE '^[a-z-]+ +[a-z]+ → ')" 7)"
 tracked_cfg
 
 # NON-VACUITY, one section at a time: a hook that had simply stopped printing would pass
@@ -610,7 +620,7 @@ assert "the coloured banner says exactly what the plain one says" \
 cols="$(printf '%s\n' "$OUT" | python3 -c '
 import sys
 cols = {line.index("FROM") for line in sys.stdin.read().splitlines()
-        if line.startswith("SETTING ") or line.startswith("ROLE ")}
+        if line.startswith("SETTING ") or line.startswith("AGENT ")}
 print(len(cols))
 ')"
 assert "SETTING and ROLE put FROM in the same column"  "$(eq "$cols" 1)"
@@ -722,7 +732,7 @@ import sys
 seen = {}
 cur = None
 for line in sys.stdin.read().splitlines():
-    if line.startswith("SETTING ") or line.startswith("ROLE "):
+    if line.startswith("SETTING ") or line.startswith("AGENT "):
         cur = line.split()[0]
         seen.setdefault(line.index("FROM"), []).append(cur + " (header)")
         continue
@@ -747,7 +757,7 @@ for loc in en_US.UTF-8 C; do
   TXT="$(LC_ALL="$loc" CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"
   MD="$(LC_ALL="$loc" CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"
   assert "LC_ALL=$loc: the banner still prints both tables" \
-    "$([ "$(has 'SETTING ' "$TXT")" = 0 ] && [ "$(has 'ROLE ' "$TXT")" = 0 ] && echo 0 || echo 1)"
+    "$([ "$(has 'SETTING ' "$TXT")" = 0 ] && [ "$(has 'AGENT ' "$TXT")" = 0 ] && echo 0 || echo 1)"
   assert "…and after the renderer's transform, ONE FROM offset across both tables (text)" \
     "$(eq "$(render_md "$TXT" | from_offsets)" 1)"
   assert "…and the same for the rendering /ai-bridge actually relays (md)" \
@@ -796,7 +806,7 @@ assert "…and the banner still prints its tables"       "$(has 'SETTING ' "$OUT
 assert "…with the hostile row present, neutralised one character for one" \
   "$(has 'user?007 · first?last@example.com' "$OUT")"
 assert "…and the role whose name began with a heading marker"  "$(has '?software-engineer' "$OUT")"
-assert "…and the tier row whose model alias carried a pipe"    "$(has 'deep→opus?x' "$OUT")"
+assert "…and the tier row whose model alias carried a pipe"    "$(has 'deep → opus?x' "$OUT")"
 # NOT ONE MARKDOWN-ACTIVE CHARACTER IN A TABLE ROW. Scoped to the rows — a path elsewhere in
 # the banner may legitimately contain a `_`, and TMPDIR on a CI runner does.
 tbl_rows() { printf '%s\n' "$1" | awk '/^(SETTING|ROLE) /{f=1} f&&/^[[:space:]]*$/{f=0} f'; }
@@ -848,7 +858,7 @@ run
 MD_H="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"
 STX="$(printf '\002')"
 assert "a link/code-span/marker config: still exit 0"  "$(eq "$RC" 0)"
-assert "…and the banner still prints its tables"       "$(has 'ROLE ' "$OUT")"
+assert "…and the banner still prints its tables"       "$(has 'AGENT (role)' "$OUT")"
 # THE HOSTILE ROWS REACHED THE BANNER — same reason as above: without this the absences are
 # satisfied by a hook that printed no rows at all.
 assert "…with the link key neutralised one character for one"       "$(has 'aa?x??y?bb' "$OUT")"
@@ -881,7 +891,7 @@ assert "…and the forged marker no longer bolds a row of its own" \
 # runs and would pass the "fails once rendered" half for the wrong reason. That is the very
 # defect `pad`/`nchars` exist for; a fixture is not the place to re-enact it.
 STRUCK="$(printf '%-20s  %-12s  %s\n' \
-  ROLE       'TIER:MODEL'  FROM \
+  AGENT      'TIER:MODEL'  FROM \
   '~~ops~~'  'deep:opus'   local \
   plain-role 'deep:opus'   tracked)"
 assert "a struck-through row passes an UNRENDERED offset check…" \
@@ -889,7 +899,7 @@ assert "a struck-through row passes an UNRENDERED offset check…" \
 assert "…and fails once the renderer has eaten its four tildes" \
   "$([ "$(render_md "$STRUCK" | from_offsets 2>/dev/null)" != 1 ] && echo 0 || echo 1)"
 ENTITY="$(printf '%-20s  %-16s  %s\n' \
-  ROLE       'TIER:MODEL'        FROM \
+  AGENT      'TIER:MODEL'        FROM \
   plain-role 'deep:ops&amp;api'  local \
   other-role 'deep:opus'         tracked)"
 assert "a character-reference row passes an UNRENDERED offset check…" \
@@ -912,9 +922,9 @@ printf '9.9.9_beta\n' > "$FAKETPL/VERSION"
 tracked_cfg
 FAKE_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/symlink/.claude/hooks/session-banner.sh" 2>/dev/null)"
 assert "a VERSION carrying an emphasis character still prints a version…" \
-  "$(has 'AI-Bridge 9.9.9' "$FAKE_OUT")"
+  "$(has 'AI-Bridge v9.9.9' "$FAKE_OUT")"
 assert "…with the character neutralised on the way to the reader" \
-  "$(has 'AI-Bridge 9.9.9?beta' "$FAKE_OUT")"
+  "$(has 'AI-Bridge v9.9.9?beta' "$FAKE_OUT")"
 rm -rf "$FAKETPL"
 
 echo
