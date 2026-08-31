@@ -194,9 +194,9 @@ set -uo pipefail
 # WIDER THAN THE THREE WORDS THE RULE USES, ON PURPOSE. `CONVENTIONS.md` writes *valid /
 # declined / already deferred*; the measured corpus also says `fixed` (24 times),
 # `confirmed`, `correct`, `addressed`, `agreed`, `not taking`, `not changed`, `out of
-# scope` and `duplicate`. Refusing those would refuse correct work. `already` is NOT a verdict on its
-# own — the corpus has nine uses of it as an ordinary adverb ("already landed", "already
-# rare") — so it only counts in the fixed phrases below.
+# scope` and `duplicate`. Refusing those would refuse correct work. `already` is NOT a
+# verdict on its own — the corpus has nine uses of it as an ordinary adverb ("already
+# landed", "already rare") — so it only counts in the fixed phrases below.
 VERDICTS='
 (^|[^[:alnum:]])(in)?valid([^[:alnum:]]|$)
 (^|[^[:alnum:]])fixed([^[:alnum:]]|$)
