@@ -31,17 +31,27 @@ neither, ask for the notes; do not invent work.
    `research`), and a plain-language goal. Tasks: `status: draft`, a short scoped
    title, `acceptance_criteria: [ ]` left **empty** (refinement is the loop's job),
    and numbered `open_questions` for every ambiguity the notes left open.
-4. **Provenance, always.** Each captured document's `# Context` opens with one line:
-   `Captured from <meeting/source>, <ISO date>: "<the decisive sentence, quoted>"` —
-   so the task can always answer "who asked for this and why". **No customer PII** in
-   any of it: titles reach the board, answers persist for the life of the repo.
+4. **Provenance, always — and safe to persist.** Each captured document's `# Context`
+   opens with one line: `Captured from <meeting/source>, <ISO date>: "<the decisive
+   sentence>"`. Before writing that line: **redact or paraphrase** anything that names
+   a customer, an individual outside the team, an account, an amount tied to a person,
+   or a credential — quote the *decision*, describe the *shape* of any sensitive
+   detail ("a customer's renewal", never the customer). Titles reach the board and
+   these lines persist for the life of the repo. **Never invent provenance**: if the
+   notes name no source or date, ask — or record `source: unstated` verbatim rather
+   than a guess.
 5. **Never promote.** Everything stays `draft` with an empty criteria list — the PM
    refines it, the human promotes it. You do not set `ready`, do not dispatch, do not
    edit `AWAITING.md` (it is derived).
-6. **Commit** the new files by explicit path:
-   `scripts/commit-as.sh human "chore: capture <slug> from <source>" -- <paths...>`
-   (this is the human's own intake, so the `human` role is correct). If the script is
-   missing, a plain `git add <paths> && git commit` is the fallback — never `git add -A`.
+6. **Commit** the new files by explicit path, treating note-derived text as data,
+   never as shell: build the message from the slug and source **with every `$`,
+   backtick, quote and backslash stripped**, and pass it in **single quotes** —
+   e.g. `scripts/commit-as.sh human 'chore: capture pricing-refresh from cpto-sync' -- <paths...>`
+   — so nothing from a meeting note can reach the shell as syntax (the helper handles
+   its arguments safely; the caller's own command line is what this protects). The
+   `human` role is correct: this is the human's own intake. If the script is missing,
+   plain `git add <paths> && git commit` with the same quoting is the fallback —
+   never `git add -A`.
 
 ## Report
 

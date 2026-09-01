@@ -2,7 +2,7 @@
   "name": "ai-bridge-v2",
   "displayName": "AI Bridge v2",
   "version": "0.1.0",
-  "description": "The OKF control panel as a Claude Code plugin: capture decisions into drafted projects, brief yourself on any bundle, and (as the migration proceeds) run the full gated loop.",
+  "description": "The OKF control panel as a Claude Code plugin: capture decisions into drafted projects, brief yourself on any bundle (/brief-me), and (as the migration proceeds) run the full gated loop.",
   "author": {
     "name": "cbmono"
   },

@@ -53,6 +53,9 @@ echo "== the CLI's own validator, when present =="
 if command -v claude >/dev/null 2>&1; then
   out="$(claude plugin validate "$REPO/plugin" --strict 2>&1)"; rc=$?
   ok "claude plugin validate --strict passes" "$rc" 0
+  # On failure, the validator's own diagnostics are the finding — "got 1, want 0"
+  # alone names no field.
+  if [ "$rc" -ne 0 ]; then printf '%s\n' "$out" | sed 's/^/        | /'; fi
 else
   echo "  SKIP  claude CLI not on PATH — jq checks above still hold"
 fi
