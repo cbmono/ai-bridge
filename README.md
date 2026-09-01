@@ -190,7 +190,7 @@ instance sets its own in `roleTiers`/`models`
 | 6 | **Dispatch** the `ready` task — its own worktree and branch, both recorded on the task before the agent spawns | `project-manager` → the assignee [→](symlink/.claude/agents/project-manager.md) |
 | 7 | **Build it**, then **self-review your own diff** — a pre-filter, never the gate | `software-engineer` / `devops-engineer` (`deep`) [→](symlink/CONVENTIONS.md) |
 | 8 | **Open the PR** carrying the task's `acceptance_criteria` as a ✓/✗ table — the artifact `pr-body-clearance.sh` reads. The agent never merges | the same agent |
-| 9 | **Independent review** at the PR's current head: the external reviewer where one is configured, else the `qa-reviewer` fallback. The PM reads the verdict with `review-clearance.sh` and stops at two rounds | external reviewer, else `qa-reviewer` (`deep`) [→](symlink/SCHEMA.md) |
+| 9 | **Independent review** at the PR's current head: the external reviewer where one is configured, else the `qa-reviewer` fallback. The PM reads that verdict with `review-clearance.sh`, and `review-rounds.sh` stops it at two rounds | external reviewer, else `qa-reviewer` (`deep`) [→](symlink/SCHEMA.md) |
 
 > ### HUMAN GATE 2 — you merge the PR
 >
