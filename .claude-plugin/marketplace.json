@@ -7,8 +7,8 @@
     {
       "name": "ai-bridge-v2",
       "source": "./plugin",
-      "description": "The OKF control panel as a Claude Code plugin \u2014 /brief-me and /capture today; the gated loop as the migration proceeds.",
-      "version": "0.1.0",
+      "description": "The OKF control panel as a Claude Code plugin \u2014 /brief-me, /capture, /work, /dispatch, /handoff and /welcome today; the loop machinery absorbs next.",
+      "version": "0.2.0",
       "author": {
         "name": "cbmono"
       },
