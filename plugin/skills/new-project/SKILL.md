@@ -1,4 +1,6 @@
 ---
+name: new-project
+disable-model-invocation: true
 description: Scaffold a new project under projects/<slug>/ — schema-valid files, registered in the bundle index/log and linked to its objective, with seed draft tasks. Supports build (code/PRs) and research (in-bundle deliverables) projects.
 argument-hint: <one-line project description>  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [--no-commit]
 allowed-tools: Bash(date:*), Bash(scripts/commit-as.sh:*), Bash(scripts/validate-bundle.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent

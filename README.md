@@ -219,13 +219,13 @@ Run these inside an instance.
 
 | Command | What it does |
 |---|---|
-| `/new-project <description>` | scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
+| `/ai-bridge-v2:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
 | `/pm-loop [interval]` | the serial background loop: dispatch, track, report. `/pm-loop 10m` ticks every ten minutes |
 | `/ai-bridge-v2:answer` | (plugin) answer the PM's open questions from inside the session |
 | `/ai-bridge-v2:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
 | `/ai-bridge-v2:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/ai-bridge-v2:fanout <task>` | (plugin) parallel work across several repos |
-| `/close-project <slug>` | close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. [→](docs/schema.md#closing-a-project) |
+| `/ai-bridge-v2:close-project <slug>` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. [→](docs/schema.md#closing-a-project) |
 | `/ai-bridge-v2:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
 
 Flags `/new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,

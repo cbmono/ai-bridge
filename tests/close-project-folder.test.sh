@@ -393,7 +393,7 @@ echo "== the closeout PROSE routes to this script, and invents no status value =
 # a harness — but WHICH MECHANISM the prose names can be, and that is the part that
 # rots. These assertions exist so a future edit cannot quietly put a hand-rolled
 # `git rm -r` back beside a tested script, or grow the status enum a value.
-CMD="$TPL/symlink/.claude/commands/close-project.md"
+CMD="$TPL/plugin/skills/close-project/SKILL.md"
 PM="$TPL/symlink/.claude/agents/project-manager.md"
 SCH="$TPL/symlink/SCHEMA.md"
 assert "/close-project's folder step calls the script" \

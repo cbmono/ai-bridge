@@ -390,7 +390,7 @@ assert "…and never people from the local one" \
 # `externalReviewer` has only PROSE readers today (new-project.md's review route). Same
 # rule, other path — and the sharpest of the three, because it decides where a diff is
 # sent, so a local override is a policy change nobody reviews.
-NEWPROJ="$TPL/symlink/.claude/commands/new-project.md"
+NEWPROJ="$TPL/plugin/skills/new-project/SKILL.md"
 assert "new-project.md reads externalReviewer from the tracked config" \
   "$(grep -q 'externalReviewer.*instance\.config\.json' "$NEWPROJ" && echo 0 || echo 1)"
 assert "…and never from the local one" \
