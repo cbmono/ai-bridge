@@ -417,7 +417,7 @@ ticks, regardless of how long a tick runs.
   `scripts/resolve-max-agents.sh`, which reads `instance.config.local.json` first and the
   tracked `instance.config.json` second because the cap is **this machine's** capacity
   (`SCHEMA.md`, "Per-machine config overrides"); it prints nothing and exits 1 when
-  neither file sets the key, and you fall back to 5 then. Each agent must use its own
+  neither file sets the key, and you fall back to 4 then — the seeded, measured default (SCHEMA.md). Each agent must use its own
   worktree under the instance's `worktreeRoot` (from `instance.config.json`, never
   inside the synced `reposRoot`; if the key is absent, `<reposRoot>/_wt`)
   + a **private package store** (e.g.

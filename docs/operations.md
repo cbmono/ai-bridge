@@ -61,11 +61,11 @@ to guess.
 3. If `instance.config.json` lacks the model-routing block, add it — otherwise model routing stays off and everything runs on the session model:
 
 ```json
-"maxAgentsInFlight": 10,
+"maxAgentsInFlight": 4,
 "models":    { "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" },
-"roleTiers": { "project-manager": "deep", "software-engineer": "standard",
-               "devops-engineer": "standard", "qa-reviewer": "deep",
-               "cataloguer": "light", "auditor": "deep", "plan-architect": "apex" }
+"roleTiers": { "project-manager": "deep", "software-engineer": "deep",
+               "devops-engineer": "deep", "qa-reviewer": "deep",
+               "cataloguer": "standard", "auditor": "deep", "plan-architect": "apex" }
 ```
 
 `maxPrLoc` is optional in the same file — absent, the PR-size heuristic uses **500** — so
@@ -344,7 +344,7 @@ Full reasoning, including why one drifted instance must not blank the board for 
 
 | Knob | File | Default when the key is absent |
 |---|---|---|
-| `maxAgentsInFlight` | `instance.config.json` | **10** — a throughput/cost throttle, not a safety lock |
+| `maxAgentsInFlight` | `instance.config.json` | **4** — a throughput/cost throttle, not a safety lock |
 | `maxPrLoc` | `instance.config.json` | **500** — the agent **proposes** a split and opens the PR anyway; never a gate, never a review criterion |
 | `PUSH_STATE_MAX` | env | **12** items per list in the per-turn state injection |
 | `PRUNE_ACTIVE_MINUTES` | env | the recursive mtime veto in the worktree report |
@@ -578,7 +578,7 @@ different limit, and a held lock never blocks the role agents that tick dispatch
 
 ### Concurrency
 
-`maxAgentsInFlight` (default **10**) caps how many role agents the PM runs at once. With
+`maxAgentsInFlight` (default **4**) caps how many role agents the PM runs at once. With
 worktree isolation + private package stores the old corruption risk is gone, so this is a
 **throughput/cost throttle**, not a safety lock — tune it to the machine and account:
 raise it on a well-resourced box with mostly-independent tasks, lower it (e.g. 5) on a
