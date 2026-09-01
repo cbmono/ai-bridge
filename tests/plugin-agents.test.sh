@@ -70,10 +70,18 @@ echo "== 3. the frontmatter facts the migration stands on =="
 for a in $AGENTS; do
   ok "$a carries an explicit name: (bare-name dispatch)"  "$(fm "$PA/$a.md" name)" "$a"
 done
+# By PRESENCE, not value: a key introducing a nested block (`hooks:` with indented
+# children) has an empty scalar value, and a value check would wave it through.
+fm_has() { # <file> <key> — yes/no
+  awk -v k="$2" 'NR==1 && $0=="---" {infm=1; next}
+                 infm && $0=="---" {exit}
+                 infm && index($0, k ":")==1 {found=1; exit}
+                 END {print (found ? "yes" : "no")}' "$1"
+}
 for a in $AGENTS; do
   bad=""
   for k in hooks mcpServers permissionMode; do
-    [ -n "$(fm "$PA/$a.md" "$k")" ] && bad="${bad:+$bad }$k"
+    [ "$(fm_has "$PA/$a.md" "$k")" = yes ] && bad="${bad:+$bad }$k"
   done
   ok "$a uses no field plugins cannot ship"               "$bad" ""
 done
