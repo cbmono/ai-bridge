@@ -210,8 +210,8 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    | Stage | What | When it is skipped |
    |---|---|---|
    | **1. `scripts/validate-bundle.sh`** | Deterministic. Dangling references, unknown enum values, missing required fields, a frontmatter/body mismatch. Free, no tokens, no false positives. | never, once the chain runs at all |
-   | **2. External reviewer** — `externalReviewer` from `instance.config.json`, else the CodeRabbit CLI | Judgement on the scaffold's substance. | no *usable* reviewer — absent, unauthenticated or erroring — ⇒ fall through to stage 3 |
-   | **3. `qa-reviewer` scaffold mode** | The **declared fallback**, not a skip. Schema-aware, so it does not raise the by-design findings an external reviewer does. | only when the human has said not to dispatch agents |
+   | **2. External reviewer** — `externalReviewer` from `instance.config.json`, else the CodeRabbit CLI | Judgement on the scaffold's substance. | **none configured** ⇒ stage 3 *is* the route. **Configured but refusing** ⇒ stage 3 is a **spend**, and step e asks first |
+   | **3. `qa-reviewer` scaffold mode** | The **declared fallback** where nothing is configured; a **spend the human authorises** where a reviewer is configured and refused. Never a skip, either way. | only when the human has said not to dispatch agents |
 
    **Stage 1 is not optional and runs first**, because the consistency class is exactly
    what a fresh scaffold gets wrong and a parser answers it for free. If it reports errors,
@@ -250,10 +250,19 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    2. **The CodeRabbit CLI**, which ships under two names: try `command -v cr`, then
       `command -v coderabbit`.
 
-   Keep whatever resolves as `<cli>`. Nothing resolving, not signed in, or `<cli> doctor`
-   erroring → **say so in one line and go to step e (the fallback)** — do not stop.
-   "No usable reviewer" is one condition: absent, unauthenticated and erroring all take
-   that same path.
+   Keep whatever resolves as `<cli>`. Anything short of a working reviewer → **say so in
+   one line and go to step e** — do not stop. But **carry WHICH of the two it was**, because
+   step e treats them differently and this is the one place the answer is knowable:
+
+   | What you found | Class | Because |
+   |---|---|---|
+   | nothing resolved — no `externalReviewer`, no `cr`, no `coderabbit` | **none configured** | there is no reviewer to be broken; stage 3 is simply this instance's reviewer |
+   | a `<cli>` resolved but is not signed in, `doctor` errors, or the run refuses | **configured but refusing** | a reviewer exists and is unusable — someone has to fix it or authorise a substitute |
+
+   **"No usable reviewer" is NOT one condition, and collapsing it back into one is the
+   regression this table exists to stop.** They differ by who decides: the first was
+   already decided when the instance was set up, and the second is a fresh decision about
+   spending a review session.
 
    One environment note that would otherwise waste a run: CodeRabbit resolves the base
    branch from `origin/HEAD`, so an instance with **no git remote** fails with *"Unable to
@@ -322,10 +331,43 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    unconnected-organization notice, or a truncated run can exit non-zero or still read as
    "clean" with nothing reviewed. Check the exit status and confirm a files-reviewed line
    before calling it green; if either is missing, treat the run as indeterminate and say so
-   rather than reporting a pass.
+   rather than reporting a pass. **An indeterminate run is `configured but refusing`** —
+   step a's table cannot see it, because a reviewer that resolves and signs in can still
+   refuse once it runs — so carry that class into step e and take its ask, not its
+   automatic branch.
 
-   **e. No usable external reviewer ⇒ dispatch `qa-reviewer` in scaffold mode.** Not a skip. Brief
-   it with the instance root, the project slug, and the pre-commit SHA from step 7, and ask
+   **e. No usable external reviewer ⇒ `qa-reviewer` in scaffold mode. Not a skip — but
+   whether it is automatic depends on WHICH class step a found, because the ask fires on
+   the SPEND, never on the hiccup.** Dispatching `qa-reviewer` costs a deep-tier session;
+   a reviewer that is merely rate-limited is back within the hour (measured 2026-08-31 on
+   four PRs), so spending one on it buys nothing.
+
+   * **None configured ⇒ dispatch it, no ask.** Stage 3 is this instance's reviewer, not a
+     substitute for one, and that was settled when the instance was set up. Nothing here
+     is a fresh decision.
+   * **Configured but refusing ⇒ ASK, in this session, in one line.** You are in the
+     **main thread and the human is right here** — that is the whole difference from the
+     PM tick, which is a subagent, cannot ask, and writes the same question into the
+     task's `open_questions` instead. Ask exactly this and act on the answer:
+
+     > `<the reviewer>` is unavailable (`<the one-line reason>`). Spend a `qa-reviewer`
+     > session on the scaffold review, or record that it did not run?
+
+   * **…unless a mode `AUTONOMY.md` defines as delegating this is in force ⇒ dispatch it
+     automatically** and say you did. That mode replaces the ask above and nothing else.
+     This is the existing autonomy switch on one more decision, never a new flag;
+     **`AUTONOMY.md` absent means `gated`**, so the ask stands.
+
+   **Whatever the answer, RECORD IT — this step is ONE-SHOT and nothing re-runs it.**
+   "Hold and ask again next tick" is the PM's move and it does not exist here: a scaffold
+   review that is deferred is a scaffold review that never happens, silently. So if the
+   review does not run — the human declines the spend, or is not there to answer — write a
+   dated bullet into the project's `log.md` per step f saying **the scaffold got no second
+   opinion, and why**, and say the same in your summary to the human. An unrun advisory
+   review is an acceptable outcome; an unrun advisory review nobody knows about is not.
+
+   When it does run, brief it with the instance root, the project slug, and the pre-commit
+   SHA from step 7, and ask
    for **mode C**. It reviews the committed bundle diff and writes its verdict into the
    project's `log.md` — there is no PR to comment on. Triage its findings exactly as in
    step c; its verdict is advisory, like the external one, and never gates creation.

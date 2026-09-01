@@ -361,9 +361,16 @@ while IFS= read -r sha; do
   OKF_ROUNDS_HEAD="$sha" PATH="$BIN:$PATH" \
     "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} >/dev/null 2>&1
   rc=$?
+  # 5 IS A REFUSAL, LISTED HERE BESIDE THE OTHERS BECAUSE OMITTING IT IS A LIVE BUG, NOT A
+  # CONSERVATIVE DEFAULT. The sibling splits its refusal into transient (1) and terminal
+  # (5); either way NO round happened at that commit, which is exactly what 1, 3 and 4
+  # already mean here. Left off this list, a reviewer that ran out of credits would land in
+  # the `*` arm, and "the reviewer is broken" would read as "the round count is unknown" —
+  # refusing the count on every PR until somebody fixes billing. This file never re-decides
+  # what a review is; it only says a refusal is not a round.
   case "$rc" in
     0) counted=yes ;;
-    1|3|4) ;;
+    1|3|4|5) ;;
     *) echo "error: review-clearance.sh exited $rc for PR $pr at $sha, which is neither" >&2
        echo "       a clearance nor one of its refusals. The reviewer state is unknown," >&2
        echo "       so the number of rounds is unknown. Refusing (fail closed)." >&2
@@ -378,7 +385,7 @@ while IFS= read -r sha; do
       rc=$?
       case "$rc" in
         0) counted=yes; break ;;
-        1|3|4) ;;
+        1|3|4|5) ;;
         # Fatal here for the same reason it is fatal above, and spelled out because the
         # temptation is to shrug it off as "that one account just did not answer": exit 2
         # is UNREADABLE reviewer state, and unreadable is indistinguishable from empty to

@@ -126,11 +126,14 @@ etiquette.
 **artifacts** — a submitted review object, a body carrying the reviewer's own evidence of
 having looked, or a parseable `okf-verdict` trailer — and never from a status check, which
 is green whether the reviewer read the diff or hit its quota. Exit 0 is the only
-clearance; 1 is a published refusal or a not-yet-reviewed placeholder (quoted, with the
-reopen time), 3 is no reviewer signal at all, 4 is an artifact that evidences no completed
+clearance; 1 is a **transient** refusal or a not-yet-reviewed placeholder (quoted, with the
+reopen time), 5 is a **terminal** one that no waiting reopens (out of credits, unpaid, an
+auth failure), 3 is no reviewer signal at all, 4 is an artifact that evidences no completed
 review or does not name the current head, and 2 is a reviewer state it could not read —
 unverified, never a pass. It answers only *whether* a review happened; the clauses above
-still decide whether that review **cleared**.
+still decide whether that review **cleared**. **1 and 5 refuse identically at this gate**
+and differ only in what the loop does next: 1 is waited out, 5 is a spend decision
+`AUTONOMY.md` routes to the human under `gated`.
 
 **Positive evidence is required, because "not a refusal" is not a review.** The reviewer
 posts a placeholder on nearly every PR the moment it opens — *"Currently processing new

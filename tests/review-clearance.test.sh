@@ -326,6 +326,72 @@ says   "  ...and saying plainly this is not clearance" "not clearance"
 says   "  ...and that nothing re-reviews it automatically" "NOT re-reviewed automatically"
 
 echo
+echo "== shape 2c: TRANSIENT (1) and TERMINAL (5) are different refusals =="
+# WHY THIS SPLIT IS DRIVEN AND NOT DESCRIBED. Both exits refuse, so no merge gate can tell
+# them apart and no assertion elsewhere would notice them collapsing. What differs is the
+# CALLER'S NEXT MOVE, and it differs by a whole deep-tier review session: exit 1 is waited
+# out (measured 2026-08-31: the reviewer was rate-limited on four PRs and reviewed all four
+# within the hour), exit 5 needs a human to buy credits or fix a token. Collapse the two
+# and either every rate limit spends a session, or an empty account is waited on forever.
+#
+# THE RECORDED FIXTURE IS THE CONTROL, and it is the one that matters most: it is a REAL
+# CodeRabbit rate-limit notice, it names a plan and carries a docs link, and it must stay
+# exit 1. A terminal table loose enough to match a vendor's sales copy would ask a human
+# every time the reviewer paused.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+expect "the recorded rate-limit notice stays TRANSIENT" 1
+
+TERMINAL="$(body_file \
+  'Review skipped.' \
+  '' \
+  'No credits remaining on this organization. Add credits to continue reviewing.')"
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$TERMINAL"
+expect "an out-of-credits refusal -> TERMINAL" 5
+says   "  ...saying only a human reopens it"      "until a HUMAN acts"
+says   "  ...and that waiting will not do it"     "WAITING WILL NOT CLEAR THIS"
+says   "  ...quoting the reviewer's own words"    "No credits remaining"
+
+AUTHFAIL="$(body_file \
+  'Review skipped.' \
+  '' \
+  'Authentication failed: the installation token is invalid.')"
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$AUTHFAIL"
+expect "an auth failure -> TERMINAL too" 5
+
+# THE REOPEN-TIME VETO, which is what keeps the promotional half of a real rate-limit
+# notice from reading as an empty account. The reviewer saying when it comes back is the
+# reviewer saying no human is needed, and it outranks its own sales copy.
+SALESY="$(body_file \
+  'Review limit reached.' \
+  '' \
+  'Next included review available in 44 minutes.' \
+  'Out of credits? Add credits or upgrade your plan for unlimited reviews.')"
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$SALESY"
+expect "a reopen time vetoes terminal language" 1
+says   "  ...and still reports the reopen time"   "44 minutes"
+
+# A PLACEHOLDER IS NEVER TERMINAL. "Currently processing" is table 2c's tier and means the
+# reviewer has not finished; promoting it to "a human must act" would ask for money over a
+# reviewer that is mid-run.
+NOTYET="$(body_file \
+  'Currently processing new changes in this PR.' \
+  'Add credits to your account for faster reviews.')"
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$NOTYET"
+expect "a not-yet-reviewed placeholder stays exit 1" 1
+
+# A TERMINAL REFUSAL ANYWHERE PROMOTES THE ANSWER, whichever artifact the host streamed
+# first. The first refusal recorded is first-wins; "the account is empty" is a fact about
+# the PR however many placeholders precede it, so it is NOT.
+setup "$REFUSAL_HEAD"
+add_comment coderabbitai "$NOTYET"
+add_comment coderabbitai "$TERMINAL"
+expect "a terminal refusal behind a placeholder still -> 5" 5
+
+# ...and the terminal table can never CLEAR anything, nor turn a review into a refusal.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+expect "a real review is untouched by the new tier" 0
+
+echo
 echo "== the trap: the refusal CONTAINS the PR's head, and must still refuse =="
 # Assert the property of the evidence first. If this ever stops holding, the test below
 # is no longer testing anything and should fail loudly rather than pass vacuously.

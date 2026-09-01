@@ -325,6 +325,16 @@ refuse_clearance() { # <the whole first clause> <exit code of the sibling>
   sed 's/^/        /' "$clearance_err" >&2
   [ -n "$reviewer_checks" ] && \
     printf '%s' "$reviewer_checks" | sed 's/^/          required, and reviewer-owned: /' >&2
+  # THE SIBLING'S EXIT 5 REFUSES EXACTLY AS ITS EXIT 1 DOES, and is said out loud rather
+  # than folded in silently. It is the one refusal that is not about this PR: the reviewer
+  # says its ACCOUNT is empty, unpaid or unauthenticated, so waiting clears nothing and
+  # every later PR gets the same answer. The merge gate is unmoved — 0 is still the only
+  # clearance — but a human reading this needs to know they are looking at a broken
+  # reviewer, not a busy one.
+  if [ "$2" -eq 5 ]; then
+    echo "        This refusal is TERMINAL: the reviewer needs fixing (credits, billing," >&2
+    echo "        the token or the app installation). Re-running this will not change it." >&2
+  fi
   # An unreadable reviewer state (exit 2) is a different refusal from a reviewer that
   # answered and declined — keep the caller's two codes distinguishable. Spelled as an
   # `if` rather than `[ … ] && exit 2`, whose fall-through under `set -e` is a subtlety

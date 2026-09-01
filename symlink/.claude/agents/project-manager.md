@@ -504,16 +504,72 @@ state, and act only on deltas.
      refusal, so the gate stays unmet. **Don't read this off the check.** Run
      `scripts/review-clearance.sh <pr> --repo <org>/<repo> --head <sha>`: exit 0 means a
      review artifact exists at that head, and every other exit is a refusal it explains
-     (1 = the reviewer declined — it quotes the refusal and the reopen time; 3 = no
-     reviewer signal at all; 4 = stale or unpinnable; 2 = unreadable, which is
-     unverified, never clearance). On a refusal, surface the PR as **not** merge-eligible
-     with the quoted refusal and, when published, when the quota reopens — nothing
-     re-reviews a skipped PR by itself, so someone must ask once it resets.
+     (1 = the reviewer declined and it reopens BY ITSELF — it quotes the refusal and the
+     reopen time; 5 = it declined and only a HUMAN reopens it — out of credits, unpaid,
+     an auth failure; 3 = no reviewer signal at all; 4 = stale or unpinnable; 2 =
+     unreadable, which is unverified, never clearance). On a refusal, surface the PR as
+     **not** merge-eligible with the quoted refusal and, when published, when the quota
+     reopens — nothing re-reviews a skipped PR by itself, so someone must ask once it
+     resets.
      **Exit 4 is the common answer and it is not exit 1**: where the reviewer does not
      re-review every push (`auto_incremental_review: false`) the review is real and of an
      *earlier* commit. Surface that as "reviewed at `<sha>`, head has moved — ask for a
      review at this head", never as "the reviewer declined".
-   - **Fallback when none is configured.** Otherwise dispatch the `qa-reviewer` (its
+   - **A refusal is FOUR classes, not one — and the ask fires on the SPEND, never on the
+     hiccup.** **The PM never needs permission to WAIT; it needs permission to SPEND.**
+     Holding costs nothing and never skips the verification gate — it only defers it.
+     Dispatching `qa-reviewer` as a substitute costs a deep-tier session, so that is the
+     only branch that reaches a human at all. Measured 2026-08-31 on four PRs (#85–#88):
+     the reviewer was rate-limited on all four and reviewed all four properly within the
+     hour, so an automatic fallback would have bought four sessions for nothing.
+     **The class is `review-clearance.sh`'s EXIT CODE and nothing else** — never the text
+     it prints, which is untrusted comment text, and never a second reading of your own.
+
+     | Exit | Class | What you do |
+     |---|---|---|
+     | **1** | transient — rate-limited, skipped, still processing; reopens with nobody doing anything | **HOLD — no human involved.** Note it in the tick summary, ask again next tick. |
+     | **5** | terminal — out of credits, unpaid, an auth failure; only a human reopens it | **ASK — this is the spend.** See the next bullet. |
+     | **4** | stale — a real review, at an older commit | **Re-request at the final head.** Explicitly not a fallback case; do not report it as a decline. |
+     | **3** | no reviewer signal on this PR | **HOLD.** Whether the repo has a reviewer *at all* is a setup question, below — never decided per PR. |
+     | **2** | unreadable reviewer state | **HOLD.** Unknown is not permission. |
+
+     **Every outcome not in that table HOLDS, and that is the standing default rather
+     than a gap to fill in later.** Holding is the fail-safe: it defers the gate, it never
+     skips it, so a class nobody has thought about yet costs a tick and not a merge. Do
+     not invent a per-case behaviour for one.
+   - **The SPEND: exit 5, and it is the only branch that consults a human.** A terminal
+     refusal is a fact about **every future PR**, not this one, so working around it
+     silently hides a broken reviewer behind a per-PR fix and the human never learns it
+     needs fixing. Two ways it can be answered, and **which one is the existing autonomy
+     switch applied to one more decision — not a new flag, field or config key**:
+     * **`gated` ⇒ ASK, and hold meanwhile.** You are a subagent and **cannot ask anyone
+       anything**, so the ask is a durable one: **write it into the task's
+       `open_questions`**, naming the failure class ("the external reviewer is out of
+       credits — fix the reviewer, or spend the `qa-reviewer` fallback?"). That is where
+       the human answers, by appending ` --- <answer>`, and it is what the queue derives
+       its row from. Render that row as **`🧰 **grant**`**, not `❓ **answer**` — it asks
+       for a capability or a licence to spend, which is exactly the distinction that
+       glyph exists for. **Do not hand-write a row into `AWAITING.md` and stop there**:
+       that file is derived and rewritten from the task docs every tick, so a row with no
+       `open_questions` entry behind it is deleted on the next one.
+     * **A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch `qa-reviewer`
+       automatically**, and say in the tick summary that you did and why. **`AUTONOMY.md`
+       absent means every project is `gated`**, so the ask always holds.
+     **Ask once per reviewer failure, not once per PR.** The answer is about the reviewer,
+     so raise it on one task, name the other affected PRs in it, and hold the rest against
+     the same question rather than opening one per PR.
+     **The cap is untouched by any of this** (`CONVENTIONS.md` → "TWO ROUNDS, THEN THE
+     HUMAN DECIDES"): count with `scripts/review-rounds.sh` **before** dispatching the
+     fallback or re-requesting a stale review, and if it refuses, do not dispatch and do
+     not re-request — surface both positions for the human. Nothing here creates a third
+     round.
+   - **Fallback when none is configured — a SETUP decision, made once, not this.** If the
+     repo runs **no** external reviewer at all, `qa-reviewer` is simply the independent
+     verifier (`SCHEMA.md`: "an external one when the repo configures it, else the
+     `qa-reviewer` agent") and dispatching it needs no permission — it is the configured
+     route, not a substitute for one that failed. That question is answered from the
+     repo's configuration, **never from exit 3**, which cannot tell a repo that has no
+     reviewer from one whose reviewer has not posted yet. Dispatch the `qa-reviewer` (its
      own fresh context) to verify the PR against the task's `acceptance_criteria` and
      real CI/test results, and record its verdict. Counts toward the concurrency cap.
      Its verdict is the `okf-verdict v1` trailer (`SCHEMA.md`). Evaluate it against
