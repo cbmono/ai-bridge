@@ -410,7 +410,7 @@ ok "…the banner opens with exactly ONE blank line"  "$HEAD_NO" 2
 ok "…and the drift line is directly under the header rule (line $((HEAD_NO + 3)))" \
   "$(printf '%s\n' "$OUT" | sed -n "$((HEAD_NO + 3))p" | grep -qF 'UPDATE' && echo yes || echo no)" yes
 ok "…and the header still carries this template's own version" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'AI-Bridge 0.9.1' && echo yes || echo no)" yes
+  "$(printf '%s\n' "$OUT" | grep -qF 'AI-Bridge v0.9.1' && echo yes || echo no)" yes
 
 wire "$equal"
 banner "$equal"
