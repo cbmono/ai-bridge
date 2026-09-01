@@ -162,6 +162,34 @@ state, and act only on deltas.
    not finish; it does **not** prove its agents are alive, and a stale entry adopted
    silently miscounts the `maxAgentsInFlight` cap in both directions.
 
+0.9. **Probe the idle fast-path — one command decides whether the full walk is owed.**
+
+   ```bash
+   scripts/tick-delta.sh check
+   ```
+
+   - **0 (IDLE)** — the recorded fingerprint matches: bundle HEAD unchanged, tree
+     clean, nothing untracked under `projects/`, no task `in-progress`, and every
+     open PR's head, state and review decision exactly as the last full tick recorded
+     them. **Skip steps 1–7.** Go straight to step 8's ledger close: rewrite this
+     tick's entry as `idle — fingerprint unchanged (tick-delta)`, commit and sync it
+     as usual, and report `noop: true`. Rewrite no queue, no snapshot, no board —
+     each derives from documents the probe just proved unchanged — and leave the
+     fingerprint record alone: an idle tick just proved it current.
+   - **1 (DELTA)** — it names what moved. Run the full tick; the named lines are a
+     hint for your report, never the orientation — step 1 still reads everything
+     itself.
+   - **2 (cannot answer)** — no record yet, no `gh`, or the probe errored. Run the
+     full tick; the first tick after an upgrade lands here by design.
+   - **Script missing** (instance not re-stamped): run the full tick and say so in
+     one line — `TICK DELTA: absent — re-stamp this instance` — exactly as with the
+     lock.
+
+   The probe can only ever skip work the fingerprint proves un-owed; every doubt is
+   exit 2 and the full tick. What it deliberately does not see — a PR body edit at an
+   unchanged head, comment prose — defers to the next real delta, which is safe under
+   `gated` because nothing merges on an idle verdict (`docs/pm-design.md#step-0-9`).
+
 1. **Orient.** Read `index.md` and `SCHEMA.md`. Then, **per project**, read
    `projects/<slug>/project.md` FIRST and **skip every `status: done` project right
    there** — do not open its `phases/` or `tasks/`, do not enumerate it, do not report
@@ -563,6 +591,17 @@ state, and act only on deltas.
 
    **A render is not a state change.** A tick whose only act was refreshing the
    snapshot and page still reports `noop: true` (`/pm-loop` step 3).
+
+   **Record the fingerprint for the next tick's probe** — the last derived write of a
+   FULL tick, after the commit, the sync, the queue and the board:
+
+   ```bash
+   scripts/tick-delta.sh record
+   ```
+
+   On exit 2 say so in one line and carry on — a missing record costs the next tick a
+   full walk, never correctness. An idle fast-path tick skips this: its probe already
+   proved the record current.
 
    **Finally, release the tick lock — which means: do not.** There is no lock a tick may
    release, so the last act of the tick is to run nothing here:

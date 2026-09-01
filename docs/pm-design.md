@@ -294,6 +294,41 @@ wrong. A stale open entry adopted silently miscounts the `maxAgentsInFlight` cap
 both directions. `status: in-progress` on a task is task-scoped and answers a different
 question — whether that task was handed out — not whether a tick is done.
 
+<a id="step-0-9"></a>
+### Step 0.9 — why an idle tick may skip, and why the probe can never lie it idle
+
+Measured on a live instance (2026-08-27): three CONSECUTIVE zero-delta ticks each did
+the full walk — every task file read, every open PR re-fetched and re-verified at head,
+the worktree report, the queue rewrite — on the dearest model tier, to conclude
+"nothing changed", and each wrote a ~2.5 KB ledger close saying so. The comparison that
+proves "nothing changed" needs no model: it is a fingerprint a shell can take and diff,
+which is what `scripts/tick-delta.sh` does. The model ingests one verdict line instead
+of a world that did not move.
+
+The safety argument has one load-bearing direction: a false DELTA costs one full tick
+(the price that was always paid); a false IDLE would skip owed work. So every doubt —
+no record, no `gh`, a probe error, any `in-progress` task, any dirty tracked file, any
+untracked file under `projects/` — resolves to the full tick, and the fingerprint holds
+exactly the facts whose movement creates tick work: bundle HEAD, per-task status, each
+open PR's head SHA, state and review decision, and the presence of the two opt-in
+artifacts (a `touch AWAITING.md` re-enable needs one full tick to populate the queue).
+
+What the probe deliberately does not see, stated rather than discovered: a PR body edit
+at an unchanged head (an unticked criteria box, an edited description) and anything
+visible only in comment prose. Those defer to the next real delta. That is the same
+trade the yolo merge gate refuses — it re-reads everything at the moment of merging —
+but a `gated` surface-only tick can afford it, because nothing is merged, promoted or
+dispatched on the strength of an idle verdict; the verdict only ends a tick that would
+have ended with the same report at higher cost. The lock and the ledger are untouched:
+steps 0 and 0.5 run before the probe is consulted, every tick.
+
+The record is written by a FULL tick as its last derived act (after the commit, the
+sync, the queue and the board), through a temp-file rename so a crash cannot leave a
+torn record for the next check to "match" — and `record` refuses to write at all when
+it cannot compute the complete fingerprint, because a partial record would turn the
+next "match" into a lie. An idle tick leaves the record alone: it just proved it
+current, and rewriting it would only move a timestamp nothing judges.
+
 <a id="step-1"></a>
 ### Step 1 — why the done-project skip is at the frontmatter
 

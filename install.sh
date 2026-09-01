@@ -1247,6 +1247,21 @@ if ! grep -qE '^/?\.tick-lock\.claim$' "$gi"; then
 GI
 fi
 
+# The idle-tick fingerprint (scripts/tick-delta.sh) — its OWN guard, the .tick-lock.claim
+# lesson applied again: every instance stamped since the lock shipped satisfies the guards
+# above, so a line added to their heredocs reaches nobody. Per clone and derived: a full
+# tick records it, the next tick's probe compares against it, and deleting it costs one
+# full tick, never correctness.
+if ! grep -qE '^/?\.tick-state$' "$gi"; then
+  cat >> "$gi" <<'GI'
+
+# The idle-tick fingerprint (scripts/tick-delta.sh) — written at the end of a FULL tick,
+# compared by the next tick's fast-path probe. PER CLONE and never committed; delete
+# freely (absence = the next tick runs in full).
+/.tick-state
+GI
+fi
+
 # 3b. Two more ignores, appended once each if missing — OUTSIDE the managed block,
 # for the same reason as /repos/ above.
 #
