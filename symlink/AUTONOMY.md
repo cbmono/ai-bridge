@@ -31,8 +31,9 @@ Most ticks never need it.
 
 # Mode: `yolo`
 
-One mode, deliberately. `yolo` runs a project **all-out** — it delegates *both* gates
-plus browser writes at once. There is no partial variant, and adding ask-first carve-outs
+One mode, deliberately. `yolo` runs a project **all-out** — it delegates *both* gates,
+browser writes, and the one spend decision that would otherwise stop the loop to ask.
+There is no partial variant, and adding ask-first carve-outs
 on top of it is a mistake we already made and reverted: a loop that self-promotes and
 self-merges but stops to ask about a form submit is inconsistent without being safer.
 
@@ -43,9 +44,16 @@ What it delegates, and to what anchor:
 | Promote `draft → ready` | Human only | The loop may promote | The draft is fully refined (`acceptance_criteria` filled) with an **empty** `open_questions` |
 | Merge the PR | Human only | The loop may merge | Independent clearance + required checks green at the exact verified SHA (below) |
 | Browser writes | Ask first | Permitted without asking | The task itself — a write nobody asked for is still out of scope |
+| Spend the `qa-reviewer` fallback on a reviewer that failed **terminally** | Ask first | The loop may dispatch it without asking | `scripts/review-clearance.sh` exit **5** — the reviewer's own words, machine-classified (below) |
 
 The anchor is always a **machine** signal, never a self-report. `yolo` removes the
 human, not the evidence.
+
+**The fourth row is a SPEND, not a gate, and it is in this table because this file is the
+only place a mode is defined.** Asserting "yolo delegates this too" in the instruction
+files that read it would define autonomy outside the switch, which is the drift this file
+exists to prevent — so a caller asks THIS table whether the decision is delegated, and the
+answer for every mode but `yolo` is no.
 
 ## Promotion under `yolo`
 
@@ -108,10 +116,15 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    reviewer's "currently processing" placeholder does on nearly every PR; and *not* a body
    that happens to mention the head SHA, which the refusal also does. Text matching there
    has exactly one job, spotting a refusal, where a false positive fails closed. It refuses
-   on a refusal or a placeholder (exit 1, quoting it and the reopen time), on no reviewer
+   on a **transient** refusal or a placeholder (exit 1, quoting it and the reopen time), on
+   a **terminal** one — an account out of credits, unpaid or unauthenticated, which no
+   waiting reopens (exit 5), on no reviewer
    signal (exit 3), on an artifact that evidences no review or is not of the current head
    (exit 4), and on an unreadable reviewer state (exit 2). Exit 0 is only the *first* half of this precondition: the
    clauses above still decide whether that review **cleared**.
+   **1 and 5 refuse identically here** — this precondition asks whether a review cleared,
+   and neither did. The split decides what the loop does *next*, which is the section
+   below, and never whether this gate passes.
 
    **Exit 4 will be the answer most of the time, and it is not exit 1.** Wherever the
    reviewer does not re-review every push — CodeRabbit's `auto_incremental_review:
@@ -210,6 +223,36 @@ manufacture an approval — that defeats the two-party control this whole gate e
 provide. The fix is the human's: configure an external reviewer (e.g. CodeRabbit); set up
 branch protection, or commit a `.github/required-checks.txt` where the host can't enforce
 one; or accept that this project's merges are manual.
+
+## Spending the fallback reviewer under `yolo`
+
+**What is delegated is WHO reviews, never WHETHER anybody does.** A verdict is still
+required and still has to be clean — see "What `yolo` never delegates", item 4. This row
+delegates one purchase decision and nothing else.
+
+The decision arises exactly once: the configured external reviewer answered, and its
+answer was **`scripts/review-clearance.sh` exit 5** — a *terminal* refusal, meaning the
+reviewer says its own account is out of credits, unpaid, expired or unauthenticated, and
+no amount of waiting reopens it. Then:
+
+- **Under `gated`** (and under every project when this file is absent): **ask**. A
+  `/new-project` run asks in-session; a `/pm-loop` tick is a subagent that cannot ask, so
+  it writes the question into the task's `open_questions` — where the human answers by
+  appending ` --- <answer>` — and holds the PR meanwhile.
+- **Under `yolo`**: dispatch `qa-reviewer` and record that you did, without asking.
+
+**Exit 1 is NOT this decision, in either mode.** A transient refusal — rate-limited,
+skipped, still processing — reopens by itself, so the loop **holds and asks again next
+tick**, spends nothing, and involves no human. Measured 2026-08-31 across four pull
+requests, the reviewer was rate-limited on all four and reviewed all four properly within
+the hour: an automatic fallback there would have bought four deep-tier sessions for
+nothing. **Waiting needs no permission, because waiting is free and defers the gate rather
+than skipping it.** Everything this file does not map — including exits 2, 3 and 4 —
+holds too.
+
+**The two-round cap is untouched.** `scripts/review-rounds.sh` is asked before the
+fallback is dispatched, in either mode, and its refusal is final: nothing here creates a
+third round.
 
 ## Browser writes under `yolo`
 
