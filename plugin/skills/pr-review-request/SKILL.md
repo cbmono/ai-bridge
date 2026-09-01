@@ -1,4 +1,6 @@
 ---
+name: pr-review-request
+disable-model-invocation: true
 description: Find a set of related open, green PRs and draft a grouped review-request message; optionally post it to Slack if a Slack MCP is configured
 argument-hint: <pr-filter>  e.g. "unit-test-split"  |  "title:apollo"  |  "1722 1723 1724"  [repo=<name|owner/name>]
 allowed-tools: Bash(gh pr list:*), Bash(gh pr view:*)

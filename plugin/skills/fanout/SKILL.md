@@ -1,4 +1,6 @@
 ---
+name: fanout
+disable-model-invocation: true
 description: Fan a batch of independent ad-hoc requests out to parallel background agents — the main session coordinates and reports results as they land
 argument-hint: "<task; task; task>  |  (empty) = fan out the independent asks already in this turn"
 allowed-tools: Agent, Read, Glob, Grep, Bash(ls:*)

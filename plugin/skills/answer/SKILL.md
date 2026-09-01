@@ -1,4 +1,6 @@
 ---
+name: answer
+disable-model-invocation: true
 description: Answer the PM's pending open_questions interactively — gather every task's unanswered questions and ask them in one batch, then fold the answers back into the tasks (clearing them). In-session convenience instead of editing each task file by hand.
 allowed-tools: Bash(pwd), Bash(ls:*), Read, Edit, Glob, Grep, AskUserQuestion
 ---
