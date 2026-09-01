@@ -111,8 +111,9 @@
 #
 #   0  a review artifact from the reviewer EVIDENCES a completed review of the current
 #      head, by route A, B or C above
-#   1  the reviewer REFUSED to review (rate limit, quota, skip), or published only a
-#      not-yet-reviewed placeholder. Quoted on stderr, with the reopen time when the
+#   1  the reviewer REFUSED to review and the refusal is TRANSIENT — a rate limit, an
+#      exhausted included-review allowance, a skip, or a not-yet-reviewed placeholder. It
+#      reopens with NOBODY doing anything. Quoted on stderr, with the reopen time when the
 #      reviewer published one
 #   2  usage error, or the environment cannot answer (no `gh`/`jq`, unreadable PR or
 #      review list, NO AUTHOR LOGIN on the PR — which would switch off the rule that an
@@ -125,10 +126,43 @@
 #      the head (the host mints one for any inline comment or thread reply, so an empty
 #      one claims nothing), an artifact carrying no evidence a review happened at all, or
 #      a `--head` that no longer matches the PR
+#   5  the reviewer REFUSED to review and the refusal is TERMINAL — it says the ACCOUNT is
+#      out of credits, unpaid, expired or unauthenticated, so no amount of waiting reopens
+#      it. Quoted on stderr, exactly as exit 1 is
+#
+# WHY 1 AND 5 ARE TWO CODES, WHICH IS THE ONLY REASON THIS SPLIT EXISTS. The caller's next
+# action differs, and it differs by a whole review session. A transient refusal is answered
+# by WAITING: measured 2026-08-31 on four pull requests (#85-#88), the reviewer was rate
+# limited and returned within the hour and reviewed all four properly, so a caller that had
+# spent its fallback reviewer on them would have bought four deep-tier sessions for nothing.
+# A terminal refusal is answered by a HUMAN — buy credits, fix the token, or authorise the
+# spend — and it is a fact about EVERY future pull request, not this one, so a caller that
+# quietly works around it per PR hides a systemic failure. One authoritative reader draws
+# that line, here, because a caller drawing it would be a second and weaker reader of the
+# same signals.
+#
+# NEITHER 1 NOR 5 IS EVER CLEARANCE, and the split does not move one byte of the merge
+# gate: 0 remains the only clearance, both codes refuse, and a caller that lumps them back
+# together is no less safe — only more expensive. The split is about SPEND, never about the
+# gate.
+#
+# WHERE THE LINE IS DRAWN. "Terminal" is not "serious": it is *does this reopen without a
+# human*. A monthly quota that resets on its own is transient however long the wait; a
+# five-minute auth failure is terminal because nothing but a human clears it. And a refusal
+# that publishes a REOPEN TIME is transient whatever else it says (`reopen_line`), which is
+# the reviewer's own claim that it will come back — it is what keeps a promotional "upgrade
+# your plan" line inside an ordinary rate-limit notice from reading as an empty account.
+# Unmatched refusal language stays exit 1, the cheaper wrong answer: a transient refusal
+# misread as terminal spends a human, and this file does not get to spend one on a guess.
 #
 # WHAT IT PRINTS IS UNTRUSTED TEXT. The quoted refusal comes from a PR comment, which
 # anyone able to comment can write. It is quoted for a human to read and is never an
 # input to the decision — the decision is the exit code. Do not parse the quote.
+# THAT RULE IS UNCHANGED BY THE 1/5 SPLIT, and the split is arranged so it stays that way:
+# this script reads its own captured text against its own tables, in here, and publishes
+# the answer as an EXIT CODE. What a caller must never do is what it never could — read the
+# quote. A caller that grepped the stderr for "credits" would be exactly the second, weaker
+# reader that adding a code avoids.
 #
 # FAILS CLOSED. Unknown, unreadable, unpinnable and unrecognised all refuse. A fetch that
 # ERRORS refuses at exit 2 rather than reading as "nothing here"; a fetch that silently
@@ -246,6 +280,49 @@ reviews? (was |were |is |are |has been |have been )?(skipped|not performed|not r
 skipping (this |the )?review
 review (skipped|declined|deferred|postponed)
 unable to (complete|perform|run) (the |this )?review
+'
+
+# --- table 2d: which refusals NOTHING BUT A HUMAN reopens ---------------------
+# A SUB-CLASSIFIER, not a fifth refusal tier. It is consulted only for a body the tables
+# above have ALREADY called a refusal, and its whole effect is exit 5 instead of exit 1 —
+# it can never turn a review into a refusal, and it can never clear anything. So a row here
+# is read against a body somebody already lost the merge on; the only thing it decides is
+# whether the caller waits or asks a human.
+#
+# NARROW ON PURPOSE, AND IN THE OPPOSITE DIRECTION FROM TABLE 2b. There, a false positive
+# costs a human one glance, so breadth is cheap. Here a false positive costs a human an
+# INTERRUPTION and a decision about spending a review session, on a reviewer that was going
+# to come back by itself in forty minutes — which is the exact failure the split exists to
+# prevent. So every row names the ACCOUNT'S OWN STATE ("no credits remaining", "payment
+# failed", "invalid API key"), never a rate window and never a promotional invitation. An
+# unmatched refusal is exit 1, and exit 1 is the answer that costs nothing.
+#
+# WHAT IS DELIBERATELY ABSENT, because each was drafted and cut:
+#   * bare `unauthorized` / `forbidden` — a REVIEW of authorisation code says both, and a
+#     review body reaches here whenever its prose trips table 2b without a review marker.
+#   * `upgrade` / `subscribe` / `pro plan` — the recorded rate-limit fixture in
+#     tests/fixtures/reviewer/ carries a plan name and a docs link inside an ordinary
+#     40-minute wait. Vendors sell inside their refusals; the sales pitch is not the state.
+#   * `(daily|monthly) limit` — it reopens on a clock. Long is not terminal.
+REFUSALS_TERMINAL='
+# the account has no balance left to spend, and only a purchase changes that
+(out of|no) (review )?credits( (left|remaining))?
+(zero|insufficient|not enough) (review )?credits
+credits? (have |has )?(been )?(exhausted|depleted|run out)
+(add|purchase|buy|top ?up) (more )?credits
+# billing stopped, which is a person with a card, not a clock
+payment (has )?(failed|declined|(is )?required|(is )?overdue)
+billing (issue|problem|failure|error)
+(subscription|licen[cs]e|trial|free trial) (has |was )?(expired|lapsed|ended|cancell?ed)
+(account|organi[sz]ation) (is )?(suspended|disabled|deactivated)
+# the credential is wrong, missing or dead — waiting never fixes a token
+authenticat(e|ion) (has )?(failed|error)
+authori[sz]ation (has )?(failed|error)
+not authenticated
+(invalid|expired|missing|revoked) (api |access |auth )?(key|token|credentials?)
+(re-?install|re-?connect|re-?authori[sz]e) the (app|integration|github app)
+(app|integration) is not installed
+(repository|organi[sz]ation) is not (connected|authori[sz]ed|enabled)
 '
 
 # --- table 3: the reviewer's own MACHINE-EMITTED review marker ----------------
@@ -387,6 +464,7 @@ all_patterns() {
   rows "$REVIEWERS" | awk '{print $1; print $2}'
   rows "$REFUSALS_SENTINEL"; rows "$NOT_YET"
   rows "$REFUSALS";          rows "$REVIEW_SENTINEL"
+  rows "$REFUSALS_TERMINAL"
 }
 
 # Compile every row before anything is classified with it. A table that will not compile
@@ -496,6 +574,17 @@ if [ "${1:-}" = "--self-test" ]; then
   printf '<!-- walkthrough_start -->\n' > "$TMPD/probe"
   [ -n "$(hits "$REVIEW_SENTINEL" "$TMPD/probe")" ] || {
     echo "self-test: the review-marker table does not match a review" >&2; exit 2; }
+  # The 1-vs-5 sub-classifier, in both directions, because a terminal table that matched
+  # everything would ask a human on every rate limit and one that matched nothing would
+  # hide an empty account forever — and both read as "it runs".
+  printf 'No credits remaining on this account.\n' > "$TMPD/probe"
+  [ -n "$(hits "$REFUSALS_TERMINAL" "$TMPD/probe")" ] || {
+    echo "self-test: the terminal-refusal table does not match an empty account" >&2; exit 2; }
+  printf 'Review limit reached. Next included review available in 44 minutes.\n' > "$TMPD/probe"
+  if [ -n "$(hits "$REFUSALS_TERMINAL" "$TMPD/probe")" ]; then
+    echo "self-test: the terminal-refusal table matches an ordinary rate limit, which" >&2
+    echo "           would ask a human every time the reviewer pauses" >&2; exit 2
+  fi
   [ -s "$TMPD/grep-fatal" ] && exit 2
   printf '%s\n' "$SELFTEST_OK"
   exit 0
@@ -1088,7 +1177,8 @@ refusal_concerns_head() {
 # `hits` and `fatal_grep` are defined up with the tables, because --self-test drives them.
 
 refusal_hits() { # <stripped-body-file> — the refusal lines, from any refusal tier
-  { hits "$REFUSALS_SENTINEL" "$1"; hits "$NOT_YET" "$1"; hits "$REFUSALS" "$1"; } | head -3
+  { hits "$REFUSALS_TERMINAL" "$1"; hits "$REFUSALS_SENTINEL" "$1"
+    hits "$NOT_YET" "$1";           hits "$REFUSALS" "$1"; } | head -3
 }
 
 # --- tier 4, parsed: is there a well-formed okf-verdict block for THIS head? ---
@@ -1149,6 +1239,7 @@ reopen_line() { # <stripped-body-file> — when the reviewer published a reopen 
 # and review objects are streamed before comments, so it also made "a refusal is weighed
 # before any clearance" true only of the cases that reached the bottom.
 n=0; considered=0; refusal_body=""; refusal_from=""; refusal_kind=""
+terminal_body=""; terminal_from=""
 stale_from=""; stale_at=""; unproven_from=""
 refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
 cleared_msg=""
@@ -1223,6 +1314,23 @@ while IFS=$'\t' read -r kind login state commit; do
     [ -n "$refusal_body" ] || { refusal_body="$TMPD/refusal"; refusal_from="$login"
                                 refusal_kind="$kind_of_refusal"
                                 cp "$TMPD/stripped" "$TMPD/refusal"; }
+    # IS THIS ONE TERMINAL? (table 2d — exit 5 rather than exit 1.) Recorded SEPARATELY
+    # from the first refusal above and NOT first-wins, because the two answers rank
+    # differently: the first refusal is whichever the host streamed first, while "the
+    # account is empty" is true of the PR however many placeholders precede it. So any
+    # terminal artifact promotes the answer, and its own body is the one quoted.
+    #
+    # A PUBLISHED REOPEN TIME VETOES IT. The reviewer saying when it comes back is the
+    # reviewer saying a human is not needed, and it outranks its own sales copy — which is
+    # what stops "upgrade your plan" inside a 40-minute rate-limit notice from spending a
+    # human. Read off the same stripped body as everything else here.
+    if [ -z "$terminal_from" ] && [ "$kind_of_refusal" != unfinished ] \
+       && [ -n "$(hits "$REFUSALS_TERMINAL" "$TMPD/stripped")" ] \
+       && [ -z "$(reopen_line "$TMPD/stripped")" ]; then
+      terminal_from="$login"; terminal_body="$TMPD/terminal"
+      cp "$TMPD/stripped" "$TMPD/terminal"
+    fi
+    fatal_grep
     continue
   fi
 
@@ -1339,6 +1447,25 @@ fi
 # The quoted lines are UNTRUSTED TEXT from a PR comment (see the header). They are stripped
 # of control characters before they reach a terminal, so a body cannot repaint the
 # operator's screen or hide the rest of this message behind an escape sequence.
+#
+# THE TERMINAL REFUSAL IS REPORTED FIRST AND SEPARATELY, because it is the one refusal that
+# is not about this pull request. Waiting cannot fix it and no other PR will fare better,
+# so the message says so out loud rather than leaving a reader to infer it from a quote.
+if [ -n "$terminal_from" ]; then
+  echo "refuse: $terminal_from CANNOT review PR $pr until a HUMAN acts — this refusal is" >&2
+  echo "        TERMINAL, not a rate limit: it names the account's own state, publishes no" >&2
+  echo "        reopen time, and reads the same on every other PR. It said:" >&2
+  refusal_hits "$terminal_body" | tr -d '\000-\010\013-\037' \
+                                | sed -e 's/^[[:space:]]*\(>[[:space:]]*\)*//' \
+                                      -e 's/^[*#[:space:]]*//' -e 's/[*[:space:]]*$//' \
+                                      -e 's/^/          | /' >&2
+  echo "        WAITING WILL NOT CLEAR THIS. Fix the reviewer (credits, billing, the token" >&2
+  echo "        or the app installation), or decide once — not per PR — to spend the" >&2
+  echo "        fallback reviewer instead. Either way it is a decision, and it is not this" >&2
+  echo "        script's and not the caller's." >&2
+  exit 5
+fi
+
 if [ -n "$refusal_body" ]; then
   if [ "$refusal_kind" = "unfinished" ]; then
     echo "refuse: $refusal_from has NOT FINISHED reviewing PR $pr — a placeholder is not a" >&2
