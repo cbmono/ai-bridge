@@ -723,9 +723,17 @@ check_config_unknown_keys() {
   known="$known
 ownerGithubUser"
 
-  unknown=""
+  # A file jq cannot parse yields NO keys, and no keys reads exactly like no unknown keys —
+  # a false healthy about a corrupt config, the false-zero class this file's own header
+  # names as the one to guard. So the parse status is captured per file and an unparseable
+  # file gets a non-answer, never a clean bill.
+  unknown=""; unparsed=""; fkeys=""
   for f in instance.config.json instance.config.local.json; do
     [ -f "$ROOT/$f" ] || continue
+    if ! fkeys="$(jq -r 'keys[]' "$ROOT/$f" 2>/dev/null)"; then
+      unparsed="${unparsed:+$unparsed }$f"
+      continue
+    fi
     while IFS= read -r k; do
       [ -n "$k" ] || continue
       case "$k" in \$*) continue ;; esac
@@ -733,15 +741,22 @@ ownerGithubUser"
         unknown="${unknown:+$unknown }$f:$k"
       fi
     done <<EOF
-$(jq -r 'keys[]' "$ROOT/$f" 2>/dev/null)
+$fkeys
 EOF
   done
 
   if [ -z "$unknown" ]; then
-    good "config keys: every top-level key is one the machinery knows"
+    # Exactly ONE headline either way — the banner's row count depends on it. A corrupt
+    # file is a non-answer about ITS keys, not a clean bill for the instance.
+    if [ -n "$unparsed" ]; then
+      good "config keys: no answer for $unparsed — not parseable as JSON, so its keys cannot be judged"
+    else
+      good "config keys: every top-level key is one the machinery knows"
+    fi
     return 0
   fi
   warn "config carries key(s) nothing reads: $unknown"
+  [ -n "$unparsed" ] && note "(and no answer for $unparsed — not parseable as JSON)"
   note "a retired or typo'd key looks authoritative and configures nothing; the known set"
   note "is the template seed's key list (plus the per-machine ownerGithubUser)"
   note "THIS IS A QUESTION, NOT A DEFECT — the key may be a decision; fix will not touch it"

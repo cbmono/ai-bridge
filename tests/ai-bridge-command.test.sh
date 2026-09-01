@@ -495,6 +495,24 @@ OUT6c="$(bash "$SH" check --instance "$INST6" --template "$NOSEED" 2>&1)"; rc6c=
 ok "no template seed -> reported as not resolvable, exit 0" \
   "$(printf '%s\n' "$OUT6c" | grep -c 'config keys: not resolvable here' | tr -d ' '):$rc6c" "1:0"
 
+# A file jq cannot parse yields no keys, and no keys reads exactly like no UNKNOWN keys —
+# the false-healthy CodeRabbit caught on #99. A corrupt config must get a per-file
+# non-answer, never a clean bill; and a corrupt file must not mute a real unknown key in
+# the other file.
+printf '{\n' > "$INST6/instance.config.json"
+OUT6d="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"
+ok "an unparseable config gets a non-answer, not a clean bill" \
+  "$(printf '%s\n' "$OUT6d" | grep -c 'config keys: no answer for instance\.config\.json' | tr -d ' ')" 1
+ok "…and never the healthy line" \
+  "$(printf '%s\n' "$OUT6d" | grep -c 'every top-level key is one the machinery knows' | tr -d ' ')" 0
+printf '{\n  "boardArtifactUrl": null\n}\n' > "$INST6/instance.config.json"
+printf '{\n' > "$INST6/instance.config.local.json"
+OUT6e="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"
+ok "a corrupt sibling file does not mute a real unknown key" \
+  "$(printf '%s\n' "$OUT6e" | grep -c 'config carries key(s) nothing reads:.*instance\.config\.json:boardArtifactUrl' | tr -d ' ')" 1
+ok "…and the unparseable sibling is named beside it" \
+  "$(printf '%s\n' "$OUT6e" | grep -c 'no answer for instance\.config\.local\.json' | tr -d ' ')" 1
+
 # =======================================================================================
 echo "== 10. it ships like every other script here =="
 # =======================================================================================

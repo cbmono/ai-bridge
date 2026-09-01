@@ -91,8 +91,8 @@ echo "== 2. one source, MIRRORED not duplicated: a doc that shows the number agr
 # on empty input, and a `grep` with no file operands reads STDIN — so an empty file list
 # would hang this harness rather than fail it.
 displays="$(cd "$TPL" && git ls-files '*.md' | grep -v '^tests/' \
-            | xargs grep -hoE 'AI-Bridge [0-9]+\.[0-9]+\.[0-9]+' /dev/null 2>/dev/null \
-            | sed 's/^AI-Bridge //' | sort -u)"
+            | xargs grep -hoE 'AI-Bridge v?[0-9]+\.[0-9]+\.[0-9]+' /dev/null 2>/dev/null \
+            | sed 's/^AI-Bridge v\{0,1\}//' | sort -u)"
 n_displays="$(printf '%s' "$displays" | grep -c . || true)"
 ok "at least one doc displays the version (the scan is not vacuous)" \
   "$([ "$n_displays" -ge 1 ] && echo yes || echo no)" yes
@@ -101,7 +101,7 @@ mismatched="$(printf '%s\n' "$displays" | grep -v "^${ver}$" | grep -c . || true
 ok "every displayed version equals VERSION" "$mismatched" 0
 # The extractor must be able to fail: a planted disagreement has to come out non-zero, or
 # the assertion above would pass on a scan that matches nothing.
-planted="$(printf 'AI-Bridge 0.0.1 · x\n' | grep -oE 'AI-Bridge [0-9]+\.[0-9]+\.[0-9]+' | sed 's/^AI-Bridge //' | grep -vc "^${ver}$")"
+planted="$(printf 'AI-Bridge 0.0.1 · x\n' | grep -oE 'AI-Bridge v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^AI-Bridge v\{0,1\}//' | grep -vc "^${ver}$")"
 ok "…and that comparison catches a planted mismatch" "$planted" 1
 
 # A DISPLAY IS A SAMPLE OF REAL OUTPUT, so it has to stay one. The banner underlines its
@@ -119,7 +119,7 @@ ok "…and that comparison catches a planted mismatch" "$planted" 1
 rule_drift() { # reads file names on stdin, prints how many headers are mis-underlined
   python3 -c '
 import io, re, sys
-hdr = re.compile(r"^AI-Bridge [0-9]+\.[0-9]+\.[0-9]+ ")
+hdr = re.compile(r"^AI-Bridge v?[0-9]+\.[0-9]+\.[0-9]+ ")
 drifted = 0
 for name in sys.stdin.read().split():
     lines = io.open(name, encoding="utf-8").read().splitlines()
