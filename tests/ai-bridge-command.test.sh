@@ -460,7 +460,43 @@ ok "…and the hook carries the name of no individual check" \
   "$(for id in $ids; do grep -c -- "$id" "$BANNER"; done | awk '{s+=$1} END {print s+0}')" 0
 
 # =======================================================================================
-echo "== 9. it ships like every other script here =="
+echo "== 9. config-unknown-keys — a key nothing reads is NAMED, and the known set is the seed's =="
+# =======================================================================================
+# Both directions: the retired key that motivated the check (boardArtifactUrl, found live
+# in two instances) warns by file:key; the per-machine ownerGithubUser (never seeded, read
+# by task-owner.sh) and a `$`-comment key stay quiet; and with no seed to compare against
+# the check reports a non-answer rather than guessing either way.
+INST6="$TMP/inst6"; mkinstance "$INST6"
+printf '{\n  "$note": "comment key",\n  "org": "example-org",\n  "boardArtifactUrl": null\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "ownerGithubUser": "example-user-007",\n  "reposRoot": "/tmp/x"\n}\n' > "$INST6/instance.config.local.json"
+OUT6="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"; rc6=$?
+ok "an unknown tracked key warns, named as file:key" \
+  "$(printf '%s\n' "$OUT6" | grep -c 'config carries key(s) nothing reads:.*instance\.config\.json:boardArtifactUrl' | tr -d ' ')" 1
+ok "…and check still exits 0 (a warning is a report, not a failure)" "$rc6" 0
+# Scoped to THIS check's warn line: other rows (config-layers' key roster,
+# config-uncommitted's diff keys) legitimately print these names elsewhere in the output.
+WARN6="$(printf '%s\n' "$OUT6" | grep 'config carries key(s) nothing reads:')"
+ok "ownerGithubUser in the local file is KNOWN (never seeded, but read)" \
+  "$(printf '%s\n' "$WARN6" | grep -c 'ownerGithubUser' | tr -d ' ')" 0
+ok "a \$-prefixed comment key is not a key" \
+  "$(printf '%s\n' "$WARN6" | grep -c 'note' | tr -d ' ')" 0
+ok "…and fix will not touch it: the row's tier is ambiguous" \
+  "$(bash "$SH" check --list | awk -F'\t' '$1=="config-unknown-keys"{print $2}')" "ambiguous"
+
+# The clean direction, on the same instance with the stray key removed.
+printf '{\n  "org": "example-org"\n}\n' > "$INST6/instance.config.json"
+OUT6b="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"
+ok "with only known keys, the row reports the healthy fact" \
+  "$(printf '%s\n' "$OUT6b" | grep -c 'config keys: every top-level key is one the machinery knows' | tr -d ' ')" 1
+
+# No seed to compare against: a hand-copied deployment must get a non-answer, not a guess.
+NOSEED="$TMP/noseed"; mkdir -p "$NOSEED"
+OUT6c="$(bash "$SH" check --instance "$INST6" --template "$NOSEED" 2>&1)"; rc6c=$?
+ok "no template seed -> reported as not resolvable, exit 0" \
+  "$(printf '%s\n' "$OUT6c" | grep -c 'config keys: not resolvable here' | tr -d ' '):$rc6c" "1:0"
+
+# =======================================================================================
+echo "== 10. it ships like every other script here =="
 # =======================================================================================
 ok "ai-bridge.sh parses"                                   "$(yn bash -n "$SH")" yes
 ok "…and is 100755 in the index"                           "$(cd "$TPL" && git ls-files -s symlink/scripts/ai-bridge.sh | awk '{print $1}')" 100755
