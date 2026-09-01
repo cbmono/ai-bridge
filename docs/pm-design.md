@@ -330,7 +330,22 @@ next "match" into a lie. An idle tick leaves the record alone: it just proved it
 current, and rewriting it would only move a timestamp nothing judges.
 
 <a id="step-1"></a>
-### Step 1 — why the done-project skip is at the frontmatter
+### Step 1 — why one digest replaces the walk, and why the done-project skip is at the frontmatter
+
+The orientation used to be N separate reads — every `project.md`, every task's
+frontmatter, one `gh pr view` per open PR — each a model round-trip carrying the tick's
+whole context. The facts those reads produce are mechanical, so `tick-delta.sh digest`
+(the probe's own walk, enriched) produces them in one command: the model ingests one
+block instead of paying a round-trip per file. Two properties keep it honest. The
+digest is the **enumeration, never the judgement** — a count of open questions routes
+attention; only the document's own text is acted on, and the tick still opens every
+document it acts on. And it **fails toward the full walk**: any exit but 0 sends the
+tick down the original per-file enumeration, so the digest can only ever collapse reads
+that were owed, never narrow what a tick sees — the same direction as the idle probe. A
+`tasks/` directory whose `project.md` is missing or unreadable poisons the walk (exit
+2) rather than letting its tasks silently vanish, which would be the false-IDLE hole in
+another coat. `SCHEMA.md` moved from "read every tick" to consult-on-demand in the same
+change: a 56 KB re-read per tick bought nothing a section-level consult does not.
 
 A closed project used to be deleted, so there was nothing to skip; `retain: true`
 (SCHEMA.md) keeps a finished research project's folder as a reference surface, and the
