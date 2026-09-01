@@ -95,7 +95,7 @@ jobs:
               if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(plugin/|\.claude-plugin/)'; then
                 echo "plugin-only diff — running the plugin harnesses only:"
                 printf '%s\n' "$changed" | sed 's/^/  /'
-                files=(tests/plugin-manifest.test.sh tests/plugin-skills.test.sh)
+                files=(tests/plugin-manifest.test.sh tests/plugin-skills.test.sh tests/plugin-agents.test.sh)
               fi
             fi
           fi
