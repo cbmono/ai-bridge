@@ -167,6 +167,10 @@ reviewed_pr() {
 CONFORMING_BODY='## Description (TL;DR)
 Adds the thing, and the harness covers it.
 
+Verified: `a.test.sh` 3/0 on [run 1](https://example.invalid/actions/runs/1).
+
+### Criteria (1 ✓ / 0 ✗)
+
 | Criterion | ✓ | Verified by |
 |---|---|---|
 | it works | ✓ | `a.test.sh` 3/0 |'

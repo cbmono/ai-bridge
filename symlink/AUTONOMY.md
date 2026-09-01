@@ -135,12 +135,19 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    <verified-sha>` exiting 0**, and `scripts/required-checks.sh` asks it for every PR it
    is about to clear, exactly as it asks precondition 2. It reads the **actual body from
    the host** and requires a **TL;DR line** (the heading `## Description (TL;DR)`, a
-   leading `**TL;DR**`, or the bare token opening a line) **and a well-formed criteria
-   table** — a header row, a delimiter row with the same number of cells, at least one
-   data row, and at least one `✓`/`✗` among them, read from a rendering with fenced code
-   blocks removed so a body that merely *quotes* the convention's example does not clear
-   on the example. It refuses at **exit 1** naming which element is missing, and at
-   **exit 2** when the body cannot be fetched or read — unreadable is never clearance.
+   leading `**TL;DR**`, or the bare token opening a line), a **`Verified:` line carrying
+   at least one link**, **a well-formed criteria table** — a header row, a delimiter row
+   with the same number of cells, at least one data row, and at least one `✓`/`✗` among
+   them — **under a heading whose `N ✓ / M ✗` tally matches those rows** and, when `M >
+   0`, carries a reason after it, with every bullet of a `## Notes` section — at whatever
+   heading depth — **leading with bold**. All of
+   it is read from a rendering with fenced code blocks removed so a body that merely
+   *quotes* the convention's example does not clear on the example. It refuses at **exit
+   1** naming every element that is missing, incomplete or contradicted by the table, and
+   at **exit 2** when the body cannot be fetched or read — unreadable is never clearance.
+   **What the `Verified:` line claims, and whether a `✗`'s reason is a good one, are not
+   decided here** — the gate asks that the citation and the reason EXIST, which is
+   checkable; whether they are true is the reviewer's and the owner's, which is not.
    It exists because the short-form rule's only reader used to be a test asserting the
    rule **is named in `CONVENTIONS.md`**, and five hours after that rule merged an agent
    that had it opened a 14,673-character description.

@@ -117,7 +117,7 @@ in `cbmono/ai-bridge` enforces this.
   every rule below that says "short" is telling you where to put it, not to delete it.
 - **The PR body has a required shape, and it is short.** Its reader is a **human deciding
   whether to merge** — not an agent reconstructing how you worked. **It opens with the
-  literal heading `## Description (TL;DR)`.** Three required parts, in this order, plus an
+  literal heading `## Description (TL;DR)`.** Four required parts, in this order, plus an
   optional `## Notes` section (below) and nothing else:
 
   ```md
@@ -125,22 +125,57 @@ in `cbmono/ai-bridge` enforces this.
 
   One sentence: what changes, and why it is safe to merge.
 
+  Verified: `foo.test.sh` 40/0 locally, 10/10 checks green on [run 1234](https://…/runs/1234).
+
+  ### Criteria (1 ✓ / 1 ✗ — the ✗ needs two host accounts nobody has yet)
+
   | Criterion | ✓ | Verified by |
   |---|---|---|
   | the retry backs off on 429     | ✓ | `foo.test.sh` 40/0 |
   | works with two host accounts   | ✗ | needs two accounts — see task doc |
 
+  ### Notes
+
+  - **A grep-derived inventory would have been short by 8 and looked complete.** `emails.ts`
+    holds a literal NUL byte, so `grep` calls it binary and exits 0.
+
   ⚠️ Needs your call: harness growth 414 lines.
   ```
+
+  **The worked example is [alteos-gmbh/monorepo#3286](https://github.com/alteos-gmbh/monorepo/pull/3286)** —
+  3,554 characters for a +1,657-line change, read in under a minute, and the shape every
+  body here is measured against. Open it before you write your first one. A rule with an
+  exemplar is followed; a rule described in the abstract is the one that produced a
+  14,673-character body five hours after it shipped.
 
   1. **The heading `## Description (TL;DR)`, first**, then **a one-sentence TL;DR** under
      it. **That exact string, character for character** — it is the shape's only greppable
      anchor, which is why the rule names a fixed heading rather than "open with a
      sentence". `symlink/scripts/pr-body-clearance.sh` looks for it at the clearance gate,
      so a body that opens some other way is refused there rather than merged.
-  2. **The task's `acceptance_criteria` as a table** — one row per criterion, its text
+  2. **A `Verified:` line, immediately under the lead, and it must cite something.** One
+     line: what you ran, what it said, and a **link** a reader can open — *"Verified:
+     277/0 locally, 10/10 non-deploy checks green on [run 33430116558](…)"*. A reader
+     learns in one line whether to trust the rest, which is the whole job. **What it
+     claims is your business; that it cites something is the gate's** — the reader cannot
+     check whether 277/0 is true, and it can check that you left somewhere to go and find
+     out. A line asserting "all green" with nothing to open is the same
+     evidence-free claim the criteria floor already refuses one column over, and it is
+     refused here for its own reason, separately from the line being absent.
+  3. **The task's `acceptance_criteria` as a table** — one row per criterion, its text
      verbatim, a `✓`/`✗`, and the evidence. **Required, always** (next bullet).
-  3. **A short flagged line per threshold question** the owner must answer — harness
+     **Under a heading that carries the tally AND the reason for the `✗`s** —
+     `### Criteria (10 ✓ / 8 ✗ — every ✗ is a later slice or task-001)`. This is the single
+     most valuable line in the body. `SCHEMA.md` makes an unverified criterion block
+     clearance, so a PR carrying eight `✗` looks alarming until the heading says that
+     every one of them is deferred by design — and without it a reader reconstructs that
+     from eighteen rows before they can decide anything. **The tally must match the
+     table**: a heading claiming 10 `✓` over a table carrying 9 is a defect, the gate
+     counts the rows and compares, and a tally nobody can trust costs more than no tally,
+     because it is the one number a reader never re-derives. **When there are no `✗`, no
+     reason is needed**; when there are any, the reason is required and *that it is there*
+     is what is checked — whether it is a good one stays the reviewer's call.
+  4. **A short flagged line per threshold question** the owner must answer — harness
      growth, PR size, a wide change you could not split. One line each, `⚠️`-prefixed,
      last. Not a section, not an essay. **Each `⚠️` stays one line — the figure, and the
      call you need from the owner.** A `⚠️` that runs to a paragraph has stopped being a
@@ -153,9 +188,18 @@ in `cbmono/ai-bridge` enforces this.
   decide a merge.** A reader who wants the story has `git log` and the task document; a
   reader deciding a merge has thirty seconds. Add a `## Notes` section only for something a
   *reviewer* cannot see from the diff (a hint about where to look, a deliberate omission)
-  — **one line per note, bounded exactly as the `⚠️` lines are.** "Judgement calls for the
+  — **one line per note, bounded exactly as the `⚠️` lines are.** **Its depth is not
+  significant**: the reader matches the heading's *text* and not its `#` count, so
+  `## Notes` here and the `### Notes` of the worked example are one section to it. "Judgement calls for the
   reviewer" is the heading this section grows under once it is unbounded, and that is the
   same essay arriving by another name.
+  **Every note leads with its claim, in bold.** The bolded opening sentence **is** the
+  finding — *"**A grep-derived inventory would have been short by 8 and looked
+  complete.**"* — with the explanation after it, so the section is skimmable in bold alone
+  and a reader who stops there has still got every finding. A note that opens with its
+  background and arrives at the point three clauses later is refused by
+  `pr-body-clearance.sh`. **The section stays optional and no number of notes is ever
+  required** — a small PR needs none, and the gate never asks for one.
 - **The criteria table is the merge gate — so it is required, and terseness never costs
   evidence.** It is what the independent reviewer — an external one (e.g. CodeRabbit) or
   the `qa-reviewer` fallback — evaluates the change against, so it must travel with the
@@ -171,11 +215,13 @@ in `cbmono/ai-bridge` enforces this.
   ride the deterministic checks. Never mark `✓` because everything else passed.
   **This rule has a reader, and it reads the body — not this document.**
   `scripts/pr-body-clearance.sh <pr>` fetches the actual PR body from the host and
-  refuses one that is missing the TL;DR line or the criteria table;
+  refuses one that is missing the TL;DR line, the `Verified:` line or a link on it, the
+  criteria table, its heading's tally, a tally that matches the rows, the reason for any
+  `✗` in that tally, or the bold claim opening a `## Notes` bullet;
   `scripts/required-checks.sh` asks it for every PR it is about to clear, and
   `AUTONOMY.md` precondition 3 names it. **It refuses on missing STRUCTURE, never on
   length**: this bullet bounds the body's SHAPE and never its size, so a long body
-  carrying both elements clears and the character count is reported as information only.
+  carrying every element clears and the character count is reported as information only.
   A change that honestly needs more words is exactly the one that most needs explaining. Run it on your draft before you open the PR
   (`scripts/pr-body-clearance.sh --body-file <file>`); it is the cheapest check you have.
   **Short and auditable are the same thing here, which is why brevity costs nothing.**
@@ -297,6 +343,25 @@ in `cbmono/ai-bridge` enforces this.
   step, unless the task's `acceptance_criteria` asks for one. The repo names its own
   consumed paths in its `CLAUDE.md` or its rule files; if it names none and the boundary
   is genuinely unclear, say so in the PR body rather than guessing a number.
+- **Run the shape reader on your draft, fix what it refuses, then post — every role
+  agent, both surfaces, every time.** This is a step, not a suggestion, and it is the
+  cheapest check any of you has: it needs no network, no reviewer session and no PR.
+
+  | You are about to post | Write the draft to a file, then run | It answers |
+  |---|---|---|
+  | a **PR body** | `scripts/pr-body-clearance.sh --body-file <file>` | 0 clear · 1 an element missing or contradicted · 2 unknown · 3 a criteria row outside the evidence bound |
+  | a **reply to review findings** | `scripts/pr-comment-clearance.sh --comment-file <file>` | 0 clear · 1 an entry with no verdict · 2 unknown · 3 an element over its bound |
+
+  **Both refusals name the element and what to do about it**, so fixing one is a minute.
+  **Before you post is the only cheap moment:** a body you have to force-push a correction
+  into is a body a reviewer has already half-read, and an edited comment has already
+  notified everyone watching. **This does not replace either gate** —
+  `scripts/required-checks.sh` runs the body reader against what the host actually serves,
+  which is the artifact that decides — it just means you never learn about the shape from
+  the gate. **It exists because the rule was already there and nobody read it**: the short
+  form was documented from 14:59 UTC on 2026-08-29 and five hours later an agent that had
+  the rule opened a 14,673-character body. A rule with no reader at the moment of writing
+  is a rule that gets discovered at the moment of merging.
 - **Self-review before you open the PR (a pre-filter, not the gate).** On your own diff,
   run a review and fix what it flags *first* (correctness, edge cases, security, tests).
   **Which route you take is decided by your own `tools:` list, not by what is installed on
