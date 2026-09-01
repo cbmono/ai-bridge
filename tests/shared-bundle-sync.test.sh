@@ -195,8 +195,19 @@ ok "…and FAILS when the push command is dropped" \
 # its own new sync step) and the launcher (which must cite 0.5 for the property
 # that moved there, never a bare "step 0").
 # =================================================================================
+# A plugin/agents/ copy that is BYTE-IDENTICAL to its symlink twin is the same copy,
+# not a third one — tests/plugin-agents.test.sh is what pins that parity during the
+# absorption's phase 1. The moment it drifts, it counts here and this pin fires.
 step0_mentioning_files() {
-  grep -rl "step 0" --include="*.md" "$REPO" 2>/dev/null | grep -v "/\.git/" | sed "s#^$REPO/##" | sort
+  grep -rl "step 0" --include="*.md" "$REPO" 2>/dev/null | grep -v "/\.git/" | sed "s#^$REPO/##" | sort \
+  | while IFS= read -r f; do
+      case "$f" in
+        plugin/agents/*.md)
+          twin="$REPO/symlink/.claude/agents/$(basename "$f")"
+          [ -f "$twin" ] && cmp -s "$REPO/$f" "$twin" && continue ;;
+      esac
+      printf '%s\n' "$f"
+    done
 }
 S0FILES="$(step0_mentioning_files)"
 ok "'step 0' is named in exactly two files" "$(printf '%s\n' "$S0FILES" | grep -c .)" 2
