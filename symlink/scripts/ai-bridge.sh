@@ -112,6 +112,7 @@ CHECKS='template-behind|idempotent|no
 unstamped-machinery|idempotent|yes
 config-uncommitted|ambiguous|yes
 config-layers|ambiguous|no
+config-unknown-keys|ambiguous|yes
 tick-lock|human|yes
 orphan-processes|human|yes'
 
@@ -682,7 +683,91 @@ check_config_layers() {
 }
 
 # =========================================================================================
-# CHECK 5 — tick-lock (HUMAN — SHIP-BLOCKER: never repaired)
+# CHECK 5 — config-unknown-keys (ambiguous — a key nothing reads may still be somebody's intent)
+# =========================================================================================
+# THE FACT: whether either config file carries a top-level key the machinery does not know.
+# Nothing else validates config keys, so a retired key sits in the file looking
+# authoritative long after its reader was deleted — the published board's URL key
+# outlived that feature's deletion in two of three live instances (audit 2026-08-31;
+# its literal is banished from this tree by tests/banner-board-line.test.sh, which is
+# why it is described rather than named here) — and a
+# typo'd key silently configures nothing, the "a config switch is inert until something
+# reads it" class the KB records.
+#
+# THE KNOWN SET IS THE SEED'S OWN KEY LIST — `seed/instance.config.json` in the template
+# this script already resolves itself from — because the seed ships every key the machinery
+# reads, and a name list here would be a second copy that drifts. Keys beginning `$` are
+# comments by convention, on both sides. ONE addition, justified by its reader the way the
+# tool vocabulary's hand-list entries are: `ownerGithubUser` is never seeded — it is
+# per-machine by design (docs/sharing.md) — but `task-owner.sh` reads it, so it is known.
+#
+# AMBIGUOUS TIER, NO FIXER, for the `maxPrLoc` reason: deleting a key could delete a
+# decision. `fix` prints it and does nothing. No template seed to compare against — a
+# hand-copied deployment, a moved checkout — degrades to a reported non-answer, never a
+# guess in either direction.
+check_config_unknown_keys() {
+  _warned=0
+  if ! command -v jq >/dev/null 2>&1; then
+    good "config keys: not resolvable here (jq absent)"
+    return 0
+  fi
+  local seedcfg known f k unknown
+  seedcfg="$TEMPLATE/seed/instance.config.json"
+  if [ -z "$TEMPLATE" ] || [ ! -f "$seedcfg" ]; then
+    good "config keys: not resolvable here (no template seed to compare against)"
+    return 0
+  fi
+  known="$(jq -r 'keys[]' "$seedcfg" 2>/dev/null | grep -v '^\$')" || known=""
+  if [ -z "$known" ]; then
+    good "config keys: not resolvable here (the template seed did not parse)"
+    return 0
+  fi
+  known="$known
+ownerGithubUser"
+
+  # A file jq cannot parse yields NO keys, and no keys reads exactly like no unknown keys —
+  # a false healthy about a corrupt config, the false-zero class this file's own header
+  # names as the one to guard. So the parse status is captured per file and an unparseable
+  # file gets a non-answer, never a clean bill.
+  unknown=""; unparsed=""; fkeys=""
+  for f in instance.config.json instance.config.local.json; do
+    [ -f "$ROOT/$f" ] || continue
+    if ! fkeys="$(jq -r 'keys[]' "$ROOT/$f" 2>/dev/null)"; then
+      unparsed="${unparsed:+$unparsed }$f"
+      continue
+    fi
+    while IFS= read -r k; do
+      [ -n "$k" ] || continue
+      case "$k" in \$*) continue ;; esac
+      if ! printf '%s\n' "$known" | grep -qFx -- "$k"; then
+        unknown="${unknown:+$unknown }$f:$k"
+      fi
+    done <<EOF
+$fkeys
+EOF
+  done
+
+  if [ -z "$unknown" ]; then
+    # Exactly ONE headline either way — the banner's row count depends on it. A corrupt
+    # file is a non-answer about ITS keys, not a clean bill for the instance.
+    if [ -n "$unparsed" ]; then
+      good "config keys: no answer for $unparsed — not parseable as JSON, so its keys cannot be judged"
+    else
+      good "config keys: every top-level key is one the machinery knows"
+    fi
+    return 0
+  fi
+  warn "config carries key(s) nothing reads: $unknown"
+  [ -n "$unparsed" ] && note "(and no answer for $unparsed — not parseable as JSON)"
+  note "a retired or typo'd key looks authoritative and configures nothing; the known set"
+  note "is the template seed's key list (plus the per-machine ownerGithubUser)"
+  note "THIS IS A QUESTION, NOT A DEFECT — the key may be a decision; fix will not touch it"
+  hint "yours, not fix's: edit the file, or compare: jq -r 'keys[]' $ROOT/instance.config.json"
+  return "$_warned"
+}
+
+# =========================================================================================
+# CHECK 6 — tick-lock (HUMAN — SHIP-BLOCKER: never repaired)
 # =========================================================================================
 # THE FACT: whether a `/pm-loop` tick lock is held, claimed, or past its staleness
 # threshold. The verdict is `tick-lock.sh status`'s, replayed here — this file has no
@@ -726,7 +811,7 @@ check_tick_lock() {
 }
 
 # =========================================================================================
-# CHECK 6 — orphan-processes (HUMAN — never repaired)
+# CHECK 7 — orphan-processes (HUMAN — never repaired)
 # =========================================================================================
 # THE FACT: processes of YOURS whose parent is gone (`ppid 1`) are still running out of a
 # directory under `worktreeRoot`. Nothing on this machine will ever reap them.
