@@ -62,12 +62,12 @@
 # rots.
 #
 # EVERY OTHER LINE IS STILL ONE RENDERING, NOT TWO, because two banners to keep in step is
-# the divergence `/ai-bridge` is written to avoid (it `exec`s this file rather than
+# the divergence `/welcome` is written to avoid (it `exec`s this file rather than
 # reproducing it). The divergence is one block, written by one helper, out of one buffer.
 #
 # `--format json` IS PASSED BY settings.json, AND text REMAINS THE DEFAULT. Two reasons the
 # default did not simply flip. A human running `bash .claude/hooks/session-banner.sh` in a
-# terminal wants the banner, not a JSON envelope — and so does `/ai-bridge`, which `exec`s
+# terminal wants the banner, not a JSON envelope — and so does `/welcome`, which `exec`s
 # this file with no arguments and relays what comes back verbatim. And an instance whose
 # settings.json somehow does not carry the flag still gets a banner rather than nothing,
 # because an unrecognised argument here is ignored and never fatal. Both files are symlinks
@@ -75,7 +75,7 @@
 # a version apart in a stamped instance.
 #
 # TEXT IS THE HUMAN'S COPY, because every reader of it is a human: a terminal, and
-# `/ai-bridge` relaying it back. There is one channel there and no way to address two
+# `/welcome` relaying it back. There is one channel there and no way to address two
 # readers on it, so it carries the copy that is safe on ANY channel — the one with no
 # bundle-authored text in it at all, and therefore nothing to fence. The model's extra
 # block exists only where there is a field to put it in.
@@ -166,12 +166,12 @@
 #     multi-space runs, leading indent, ─ · →, emoji  survive verbatim, so the tables below
 #                                                   keep their columns.
 #
-# The `/ai-bridge` path is the OPPOSITE: its output is relayed by the model into an assistant
+# The `/welcome` path is the OPPOSITE: its output is relayed by the model into an assistant
 # message, 0 of 4 ESC bytes survived that relay, and the human is left reading a literal
 # `[1m`. One answer does not fit both channels, which is why each one is asked separately.
 #
 # SO THERE ARE THREE RENDERINGS, NOT TWO, AND THE THIRD IS `--format md`. It is the path
-# `/ai-bridge` relays — `scripts/ai-bridge.sh` asks for it when its own stdout is a pipe —
+# `/welcome` relays — `scripts/ai-bridge.sh` asks for it when its own stdout is a pipe —
 # and it exists because that channel renders MARKDOWN and destroys SGR, so the mechanism
 # every other line of this file reaches for is worth nothing there. Two things make it a
 # THIRD rendering rather than an edit to either existing one:
@@ -378,7 +378,7 @@ EMPH_MARK=""
 #   mark   two channels: JSON asked for and a buffer to build it in. Prefix the lines and
 #          let emit_json route them.
 #   drop   ONE channel and its reader is a HUMAN — plain `--format text`, which is what a
-#          terminal and `/ai-bridge` (it `exec`s this file with no arguments and relays the
+#          terminal and `/welcome` (it `exec`s this file with no arguments and relays the
 #          output) get. There is no field to put the block in and no reader who wants it.
 #          Nothing is lost from a human-facing surface: the items are in AWAITING.md, on
 #          the board, and in the next /pm-loop tick, each of which renders them better.
@@ -762,7 +762,7 @@ pad() { local s="$1" n
 # text-mode banner CHARACTER FOR CHARACTER (tests/banner-user-channel.test.sh), so a
 # newline added to that field alone IS the two channels drifting, by exactly one byte. It
 # goes into the buffer instead, so every human rendering carries it — text, `--format md`
-# for the `/ai-bridge` relay, and `systemMessage` — and the model's `additionalContext`,
+# for the `/welcome` relay, and `systemMessage` — and the model's `additionalContext`,
 # derived from the same bytes, takes it too. That copy does not need it and is not harmed
 # by it: one byte, and no second rendering.
 #
@@ -1015,7 +1015,7 @@ add() {
 #
 # `user · address`, NOT `user <address>`, AND THAT IS THE DEFECT THIS SPELLING FIXES. Git's
 # own `name <address>` was the shape here until 2026-08-31, when the owner read the banner
-# through `/ai-bridge` and found this one row's `FROM` two columns left of every other's:
+# through `/welcome` and found this one row's `FROM` two columns left of every other's:
 # that path relays the banner AS MARKDOWN by design (ANSI does not survive it), `<address>`
 # is markdown AUTOLINK syntax, and the renderer ate both brackets. It was the only row
 # affected because it was the only value containing a `<`. `·` is the separator the identity
@@ -1354,7 +1354,7 @@ fi
 #
 # WHICH CHECKS SPEAK HERE IS THE SCRIPT'S DECISION, NOT THIS FILE'S. `--banner` filters on a
 # column each check declares for itself, so this hook does not carry the name of a single
-# check and cannot come to disagree with `/ai-bridge check` about what exists. Two of them
+# check and cannot come to disagree with `/welcome check` about what exists. Two of them
 # stay out for the banner's no-line-twice rule: the template VERSION drift already has §2b
 # above, and the config FROM column already has the settings table.
 #

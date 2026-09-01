@@ -40,7 +40,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 SH="$TPL/symlink/scripts/ai-bridge.sh"
 BANNER="$TPL/symlink/.claude/hooks/session-banner.sh"
-CMD="$TPL/symlink/.claude/commands/ai-bridge.md"
+CMD="$TPL/plugin/skills/welcome/SKILL.md"
 [ -f "$SH" ] || { echo "ai-bridge-command.test: missing $SH" >&2; exit 2; }
 
 # An explicit template, because a bare `mktemp -d` silently ignores a bogus TMPDIR on macOS
@@ -152,7 +152,7 @@ OUT="$(bash "$SH" check --instance "$INST1" --template "$TPL" 2>&1)"; crc=$?
 ok "check exits 0 on a healthy read"                       "$crc" 0
 for phrase in "always use the pm-loop" "always defer to subagents"; do
   ok "no '$phrase' line in the script"  "$(grep -ci "$phrase" "$SH" | tr -d ' ')" 0
-  ok "…nor in the command file"         "$(grep -ci "$phrase" "$CMD" | tr -d ' ')" 0
+  ok "…nor in the welcome skill"         "$(grep -ci "$phrase" "$CMD" | tr -d ' ')" 0
 done
 # Every row in the list produced a line, including the ones with nothing wrong. "Empty
 # output is a valid, reported answer" is the criterion; silence is the failure.
@@ -520,7 +520,7 @@ echo "== 10. it ships like every other script here =="
 ok "ai-bridge.sh parses"                                   "$(yn bash -n "$SH")" yes
 ok "…and is 100755 in the index"                           "$(cd "$TPL" && git ls-files -s symlink/scripts/ai-bridge.sh | awk '{print $1}')" 100755
 ok "…and in HEAD"                                          "$(cd "$TPL" && git ls-tree HEAD symlink/scripts/ai-bridge.sh | awk '{print $1}')" 100755
-ok "the command file ships"                                "$(yn test -f "$CMD")" yes
+ok "the welcome skill ships"                                "$(yn test -f "$CMD")" yes
 # `symlink/**` must carry no org, repo, path or channel literal — it is linked into every
 # instance, whoever owns it.
 ok "…and neither file hardcodes an org or a clone path" \

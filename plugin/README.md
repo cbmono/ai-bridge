@@ -32,8 +32,9 @@ Run them from a bundle root (where `SCHEMA.md` and `instance.config.json` live).
 
 A plugin skill **shadows** a same-named project command, so the battle-tested
 instance commands are deliberately *not* duplicated here yet: `/new-project`,
-`/close-project`, `/pm-loop`, `/ai-bridge`, `/answer`, `/audit`, `/fanout`,
-`/pr-review-request` keep running from the bundle's machinery. Each migrates in a
+`/close-project`, `/pm-loop`, `/answer`, `/audit`, `/fanout`,
+`/pr-review-request` keep running from the bundle's machinery. (`/ai-bridge` was the
+first to migrate — its whole contract now lives in this plugin's `/welcome`.) Each migrates in a
 slice that moves the contract and retires the instance copy **in one change** — the
 loop and the enforcement hooks are next, with the template's test suite as the spec.
 The final slice swaps `ai-bridge-v2` to the bare name.

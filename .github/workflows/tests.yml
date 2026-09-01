@@ -6,7 +6,7 @@ name: Tests
 #
 # ONE deliberate scope cut: a PR whose every changed path lives under plugin/ or
 # .claude-plugin/ cannot touch the machinery the other 59 harnesses test, so it runs
-# ONLY tests/plugin-manifest.test.sh — same job, same required-check name, same
+# ONLY the two plugin harnesses — same job, same required-check name, same
 # per-harness verification — instead of paying the full ~15-minute suite. The rule is
 # strict on purpose: ONE path outside those two directories (a README line, a test
 # edit, anything) and the full suite runs. Pushes to main always run everything.
@@ -91,9 +91,9 @@ jobs:
             if git fetch --quiet origin "$GITHUB_BASE_REF"; then
               changed="$(git diff --name-only "origin/$GITHUB_BASE_REF"...HEAD)"
               if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(plugin/|\.claude-plugin/)'; then
-                echo "plugin-only diff — running tests/plugin-manifest.test.sh only:"
+                echo "plugin-only diff — running the plugin harnesses only:"
                 printf '%s\n' "$changed" | sed 's/^/  /'
-                files=(tests/plugin-manifest.test.sh)
+                files=(tests/plugin-manifest.test.sh tests/plugin-skills.test.sh)
               fi
             fi
           fi
