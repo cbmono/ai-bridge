@@ -163,7 +163,11 @@ echo "== 4. the new exit code has readers, and they were all updated =="
 ok "review-clearance.sh documents exit 5"  "$(hasf "$CLEAR" 'the refusal is TERMINAL')" yes
 ok "…and exit 1 as the transient half"     "$(hasf "$CLEAR" 'the refusal is TRANSIENT')" yes
 ok "…and keeps the do-not-parse rule"      "$(hasf "$CLEAR" 'Do not parse the quote.')" yes
-ok "…stating callers read only the code"   "$(hasf "$CLEAR" 'publishes')" yes
+# Matched on one line rather than flattened: `flat_of` keeps the `#` that opens each
+# comment line, so a needle spanning two lines of a SHELL file carries a stray `#` and
+# never matches. (The instruction files above have no such prefix, which is why they are
+# flattened and this is not.)
+ok "…stating callers read only the code"   "$(hasf "$CLEAR" 'THAT RULE IS UNCHANGED BY THE 1/5 SPLIT')" yes
 # review-rounds.sh is the caller a missing code would BREAK rather than merely confuse: its
 # `*` arm is fatal, so an unlisted 5 turns a broken reviewer into "the round count is
 # unknown" on every PR. Both of its case lists, not one.
