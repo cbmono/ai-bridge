@@ -165,6 +165,40 @@ Both gates can be delegated — see [docs/autonomy.md](docs/autonomy.md). That c
 **off unless installed**: it lives entirely in [`symlink/AUTONOMY.md`](symlink/AUTONOMY.md),
 and deleting that one file makes every project `gated` again with no other edits.
 
+### Who runs what, end to end
+
+One `kind: build` project, from `/new-project` to merge. Every step links to the document
+that **owns** its rule; nothing here restates one. Tiers are the **seed defaults** — each
+instance sets its own in `roleTiers`/`models`
+([model routing](docs/operations.md#model-routing)).
+
+| # | Step | Who runs it |
+|---|---|---|
+| 1 | **Scaffold** — slug, objective, phases, seed `draft` tasks | you and the main session, interactively [→](symlink/.claude/commands/new-project.md) |
+| 2 | **Commit** the scaffold and its registration as one change | main session, via `commit-as.sh` |
+| 3 | **Scaffold review**, three stages: `validate-bundle.sh`, then an external reviewer, then the `qa-reviewer` fallback. Stage 1 gates the rest; stages 2 and 3 are advisory, and stage 2 is *dispatched* rather than waited on | main session; `qa-reviewer` (`deep`) on the fallback [→ step 8](symlink/.claude/commands/new-project.md) |
+| 4 | **Refine** each `draft` — fill `acceptance_criteria`, raise `open_questions` | `project-manager` (`deep`) [→](symlink/.claude/agents/project-manager.md) |
+| 5 | **Approach critique** — **mandatory on its trigger** (a complex or heavily-inferred `kind: build` draft), advisory in what it may decide; its concerns land in `advisor_notes` and gate nothing | `plan-architect` (`apex`), dispatched by the PM [→](symlink/.claude/agents/project-manager.md) |
+
+> ### HUMAN GATE 1 — you promote the task `draft → ready`
+>
+> **Nothing is dispatched until you do.** The PM refines and critiques a draft but never
+> sets `ready` ([two human authorities](symlink/SCHEMA.md)).
+
+| # | Step | Who runs it |
+|---|---|---|
+| 6 | **Dispatch** the `ready` task — its own worktree and branch, both recorded on the task before the agent spawns | `project-manager` → the assignee [→](symlink/.claude/agents/project-manager.md) |
+| 7 | **Build it**, then **self-review your own diff** — a pre-filter, never the gate | `software-engineer` / `devops-engineer` (`deep`) [→](symlink/CONVENTIONS.md) |
+| 8 | **Open the PR** carrying the task's `acceptance_criteria` as a ✓/✗ table — the artifact `pr-body-clearance.sh` reads. The agent never merges | the same agent |
+| 9 | **Independent review** at the PR's current head: the external reviewer where one is configured, else the `qa-reviewer` fallback. The PM reads that verdict with `review-clearance.sh`, and `review-rounds.sh` stops it at two rounds | external reviewer, else `qa-reviewer` (`deep`) [→](symlink/SCHEMA.md) |
+
+> ### HUMAN GATE 2 — you merge the PR
+>
+> **One `✗` in that criteria table blocks it, however green CI is**
+> ([SCHEMA.md](symlink/SCHEMA.md)).
+
+The next tick reflects the merge — `status: done`, and the task's worktree is reclaimed.
+
 ## Commands
 
 Run these inside an instance.
@@ -407,11 +441,15 @@ Run from an instance root unless noted.
 | `validate-bundle.sh` | schema errors + dangling frontmatter references | no |
 | `migrate-bundle.sh` | mechanical schema repairs | only with `--apply` |
 | `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
+| `reclaim-worktree.sh` | removes **one** task's worktree, named by the task itself; refuses unless every guard passes | yes, that one path |
 | `commit-as.sh` | commits as the right agent identity | yes |
 | `required-checks.sh` | resolves a PR's required checks | no |
 | `review-clearance.sh` | asserts an artifact **evidencing a completed review** exists on a PR (never a green check) | no |
 | `review-rounds.sh` | counts a PR's completed verification **rounds**; exit non-zero at or past **two** | no |
+| `pr-body-clearance.sh` | asserts a PR **body** carries the required shape — the TL;DR heading, a `Verified:` line that cites something, and a criteria table whose heading tally matches its rows. `--body-file` decides on a draft before you open it | no |
+| `pr-comment-clearance.sh` | asserts a **reply to review findings** carries a verdict per finding, and that no element exceeds the measured ceiling. `--comment-file` decides before you post | no |
 | `check-dispatch.sh` | `<task-doc>` — did the dispatch actually produce the PR it promised | **never** |
+| `control.sh` | the live kill switch for one dispatched agent — `agents`, then `halt`, `gate` or `steer` it | yes, `.claude/control/` |
 | `resolve-model.sh` | `<agent>` — prints the model alias it should run on, from `roleTiers`/`models` (local file first; `install.sh` seeds both there). No entry ⇒ nothing on stdout, exit 1, and **a line on stderr** saying the caller would otherwise inherit the session model | no |
 | `tick-lock.sh` | `acquire [--as launcher\|tick]`/`release`/`status` — the per-clone PM dispatch lock; exit 0 is the only clearance to dispatch or to run a tick | `acquire`/`release` only, `.tick-lock` + `.tick-lock.claim` (gitignored) |
 | `task-owner.sh` | resolves and compares a task's owner | no |
@@ -423,6 +461,16 @@ Run from an instance root unless noted.
 | `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos | yes |
+
+**Internal helpers** — the machinery calls these; you normally don't. They are listed so
+the table above accounts for **every** script in `symlink/scripts/`, which
+`tests/readme-scripts-table.test.sh` asserts.
+
+| Script | Does | Writes? |
+|---|---|---|
+| `ai-bridge.sh` | backs `/ai-bridge`: reprints the SessionStart banner, `check` reports state that could be wrong, `fix` repairs only the idempotent tier | only under `fix` |
+| `resolve-config.sh` | the one implementation of the two-file config precedence — `instance.config.local.json` first, `instance.config.json` second, dicts merged entry by entry | no |
+| `resolve-max-agents.sh` | prints the concurrency cap **this machine** should honour, from the same two files | no |
 
 ## Troubleshooting
 
