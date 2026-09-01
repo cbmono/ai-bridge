@@ -39,6 +39,20 @@ Normative contracts live in the machinery itself: [`symlink/SCHEMA.md`](symlink/
 
 ---
 
+## Install as a plugin (preview)
+
+The AI&nbsp;Bridge 2.0 migration is underway: the tool is becoming a Claude Code
+**plugin** (this repo is its own marketplace), starting with two skills — `/brief-me`
+and `/capture` — that work against existing bundles today:
+
+```
+/plugin marketplace add cbmono/ai-bridge
+/plugin install ai-bridge-v2@ai-bridge
+```
+
+See [`plugin/README.md`](plugin/README.md). The installer below remains the full,
+current setup while the migration proceeds.
+
 ## Install
 
 ### 1. Clone this repo

@@ -1,0 +1,17 @@
+{
+  "name": "ai-bridge-v2",
+  "displayName": "AI Bridge v2",
+  "version": "0.1.0",
+  "description": "The OKF control panel as a Claude Code plugin: capture decisions into drafted projects, brief yourself on any bundle (/brief-me), and (as the migration proceeds) run the full gated loop.",
+  "author": {
+    "name": "cbmono"
+  },
+  "repository": "https://github.com/cbmono/ai-bridge",
+  "license": "MIT",
+  "keywords": [
+    "project-management",
+    "okf",
+    "agents",
+    "orchestration"
+  ]
+}
