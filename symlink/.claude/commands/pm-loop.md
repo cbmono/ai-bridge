@@ -47,9 +47,10 @@ Three standing facts the steps below rest on:
 ### The launcher reads nothing else
 
 Do **not** read task documents, `log.md`, the tick ledger, `AWAITING.md`,
-`SNAPSHOT.json`, a worktree listing, `git status`, `git log`, `gh repo view`,
-`gh pr list`, or `instance.config.json` here — not the whole thing, not a summary, not
-"just to orient". **The tick does every one of them** (`project-manager.md` step 0
+`SNAPSHOT.json`, a worktree listing, `git status`, `git log`, `gh repo view` or
+`gh pr list` here — before a tick, or instead of one; step 2b's advisor adjudication,
+which runs after a tick reports, is that step's own contract — not the whole thing,
+not a summary, not "just to orient". **The tick does every one of them** (`project-manager.md` step 0
 and step 1). Every byte read here lands in the main session's context — the one
 context this loop must survive on for hours — while the tick's context is disposable;
 the full argument is `docs/pm-design.md#launcher-reads-nothing`.
@@ -169,8 +170,9 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 3. **On completion**, schedule the next tick after the gap: `ScheduleWakeup` with
    `delaySeconds` = the gap and `prompt` = `/pm-loop <gap>`. (Gap `0m` ⇒ dispatch the
    next tick immediately instead.)
-   **Always pass `noop` and `reason`.** `noop: true` when the tick changed nothing (no
-   dispatch, no status change, no `AWAITING.md` edit); `noop: false` when it did.
+   **Always pass `noop` and `reason`.** `noop: true` when the tick changed nothing —
+   no dispatch, no status change, no task-document edit (a refined draft or a folded
+   answer is real work, not idle), no `AWAITING.md` edit; `noop: false` when it did.
    **A board refresh or a render is not a change** — every tick refreshes the board, so
    counting it would pin `noop` to `false` forever and hand the human back the
    scrolling idle loop the streak collapse exists to prevent. `reason` is one specific
