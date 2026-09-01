@@ -263,9 +263,20 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    writes to the human's repo config for a one-off review. A remote-less repo also falls
    back to the free CLI allowance whatever you pass.
 
-   **b. Run it scoped to the new project and wait for it** (a review takes ~1–2 min; run it
-   synchronously and capture stdout — the triage in step c reads that output). Use the `<cli>`
-   resolved in step a in place of `cr` below:
+   **b. Dispatch it scoped to the new project — don't wait for it.** A review takes ~1–2
+   min, and it was the one place in this flow where the main session sat idle. The bundle
+   already has the pattern for exactly this shape — long-running and read-only, with nothing
+   else here depending on its result to proceed — and `CLAUDE.md` names it for failure
+   diagnosis: dispatch with `run_in_background: true` and report when it lands, instead of
+   blocking on it. Run the CLI the same way: start it with `run_in_background: true`,
+   capturing stdout for the triage in step c, and continue immediately, rather than waiting
+   on the process to exit.
+   This backgrounds only the **review** — the scaffolding in steps 1–7 stays exactly as it
+   was, synchronous and in the main thread, because that's the interactive pass where the
+   slug, the objective, the seed tasks and the phases get decided, and it is also the
+   "someone in this conversation has read the project" this gate relies on before the human
+   is ever asked to promote it. Only the *fresh second opinion* moves to the background. Use
+   the `<cli>` resolved in step a in place of `cr` below:
 
    ```bash
    cr review --agent --committed --base-commit <sha-from-step-7> \
@@ -277,6 +288,15 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    and the instance `CLAUDE.md` instead of generic style; `--agent` returns structured
    findings. Confirm the flags with `cr review --help` before running — don't assume this
    surface, the CLI moves.
+
+   Tell the user the review is dispatched, then go straight to step 7's reminder — the human
+   sees the scaffold and may promote `draft → ready` right away. This review was already
+   advisory and gated nothing (this step's own preamble: "they gate nothing"), so promoting
+   before it lands is no less safe than promoting after. **The verdict is not lost either
+   way**: when the run finishes, triage its captured stdout per steps c, d and f exactly as
+   before — step f's `log.md` bullet is where it lands, the same file and shape whether the
+   review finished before or after the human promoted. If it lands after, the human still
+   reads it there; nothing about a late verdict is silent.
 
    **c. Triage before applying. On a fresh scaffold most findings are the reviewer not
    knowing the OKF lifecycle.** These are **by design — do not "fix" them**:
