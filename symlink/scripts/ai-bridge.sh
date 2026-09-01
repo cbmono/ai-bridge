@@ -687,8 +687,10 @@ check_config_layers() {
 # =========================================================================================
 # THE FACT: whether either config file carries a top-level key the machinery does not know.
 # Nothing else validates config keys, so a retired key sits in the file looking
-# authoritative long after its reader was deleted — `boardArtifactUrl` outlived the
-# published board's deletion in two of three live instances (audit 2026-08-31) — and a
+# authoritative long after its reader was deleted — the published board's URL key
+# outlived that feature's deletion in two of three live instances (audit 2026-08-31;
+# its literal is banished from this tree by tests/banner-board-line.test.sh, which is
+# why it is described rather than named here) — and a
 # typo'd key silently configures nothing, the "a config switch is inert until something
 # reads it" class the KB records.
 #

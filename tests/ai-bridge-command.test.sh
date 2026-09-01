@@ -462,16 +462,17 @@ ok "…and the hook carries the name of no individual check" \
 # =======================================================================================
 echo "== 9. config-unknown-keys — a key nothing reads is NAMED, and the known set is the seed's =="
 # =======================================================================================
-# Both directions: the retired key that motivated the check (boardArtifactUrl, found live
-# in two instances) warns by file:key; the per-machine ownerGithubUser (never seeded, read
+# Both directions: an unknown key of the retired-publish-key shape (the motivating literal
+# is banished from this tree by banner-board-line.test.sh, so a stand-in probes the same
+# path) warns by file:key; the per-machine ownerGithubUser (never seeded, read
 # by task-owner.sh) and a `$`-comment key stay quiet; and with no seed to compare against
 # the check reports a non-answer rather than guessing either way.
 INST6="$TMP/inst6"; mkinstance "$INST6"
-printf '{\n  "$note": "comment key",\n  "org": "example-org",\n  "boardArtifactUrl": null\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "$note": "comment key",\n  "org": "example-org",\n  "unknownKeyProbe": null\n}\n' > "$INST6/instance.config.json"
 printf '{\n  "ownerGithubUser": "example-user-007",\n  "reposRoot": "/tmp/x"\n}\n' > "$INST6/instance.config.local.json"
 OUT6="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"; rc6=$?
 ok "an unknown tracked key warns, named as file:key" \
-  "$(printf '%s\n' "$OUT6" | grep -c 'config carries key(s) nothing reads:.*instance\.config\.json:boardArtifactUrl' | tr -d ' ')" 1
+  "$(printf '%s\n' "$OUT6" | grep -c 'config carries key(s) nothing reads:.*instance\.config\.json:unknownKeyProbe' | tr -d ' ')" 1
 ok "…and check still exits 0 (a warning is a report, not a failure)" "$rc6" 0
 # Scoped to THIS check's warn line: other rows (config-layers' key roster,
 # config-uncommitted's diff keys) legitimately print these names elsewhere in the output.
@@ -505,11 +506,11 @@ ok "an unparseable config gets a non-answer, not a clean bill" \
   "$(printf '%s\n' "$OUT6d" | grep -c 'config keys: no answer for instance\.config\.json' | tr -d ' ')" 1
 ok "…and never the healthy line" \
   "$(printf '%s\n' "$OUT6d" | grep -c 'every top-level key is one the machinery knows' | tr -d ' ')" 0
-printf '{\n  "boardArtifactUrl": null\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "unknownKeyProbe": null\n}\n' > "$INST6/instance.config.json"
 printf '{\n' > "$INST6/instance.config.local.json"
 OUT6e="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"
 ok "a corrupt sibling file does not mute a real unknown key" \
-  "$(printf '%s\n' "$OUT6e" | grep -c 'config carries key(s) nothing reads:.*instance\.config\.json:boardArtifactUrl' | tr -d ' ')" 1
+  "$(printf '%s\n' "$OUT6e" | grep -c 'config carries key(s) nothing reads:.*instance\.config\.json:unknownKeyProbe' | tr -d ' ')" 1
 ok "…and the unparseable sibling is named beside it" \
   "$(printf '%s\n' "$OUT6e" | grep -c 'no answer for instance\.config\.local\.json' | tr -d ' ')" 1
 
