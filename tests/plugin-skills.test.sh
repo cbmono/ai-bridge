@@ -87,8 +87,8 @@ echo "== 4. welcome — the absorbed /ai-bridge contract, property by property =
 W="$SK/welcome/SKILL.md"
 ok "welcome relays scripts/ai-bridge.sh verbatim"       "$(grep -c 'relay its output' "$W" | tr -d ' ')" 1
 ok "…all three forms are named"                          "$(grep -cE '^\| `/welcome( check| fix)?`' "$W" | tr -d ' ')" 3
-ok "…its tools are confined to the one script (and pwd)" \
-  "$(fm welcome allowed-tools)" "Bash(scripts/ai-bridge.sh:*), Bash(bash scripts/ai-bridge.sh:*), Bash(pwd)"
+ok "…its tools are the one script plus read-only inspection" \
+  "$(fm welcome allowed-tools)" "Bash(scripts/ai-bridge.sh:*), Bash(bash scripts/ai-bridge.sh:*), Bash(pwd), Bash(ls:*), Read, Glob"
 # The two non-actions are the reason the contract exists (tests/ai-bridge-command.test.sh
 # proves the SCRIPT never acts; this pins that the skill never invites the model to).
 ok "…never rewrite config files"                         "$(grep -c 'never revert, stage or rewrite `instance.config.json`' "$W" | tr -d ' ')" 1

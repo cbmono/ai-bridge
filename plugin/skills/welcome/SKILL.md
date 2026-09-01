@@ -2,7 +2,7 @@
 name: welcome
 description: The AI Bridge welcome screen — banner, `check` (state that could be wrong), or `fix` (repairs the idempotent tier only). Reports facts, never rules; `fix` never writes config files and never clears a tick lock.
 argument-hint: "[check|fix]  omit for the banner"
-allowed-tools: Bash(scripts/ai-bridge.sh:*), Bash(bash scripts/ai-bridge.sh:*), Bash(pwd)
+allowed-tools: Bash(scripts/ai-bridge.sh:*), Bash(bash scripts/ai-bridge.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
 
 Run `scripts/ai-bridge.sh $ARGUMENTS` from the instance root and **relay its output

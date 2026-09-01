@@ -37,6 +37,8 @@ jobs:
     # Investigating and fixing each Linux-specific gap is real work belonging to its
     # own task, not silently absorbed into "wire up CI" — see the PR body.
     runs-on: macos-latest
+    permissions:
+      contents: read
     # One harness alone measures ~7 minutes and the full suite several more on top of
     # that; this is a generous ceiling, not the measured number (see the PR body for
     # the measured wall-clock).

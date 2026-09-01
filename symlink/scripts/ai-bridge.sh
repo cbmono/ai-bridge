@@ -66,7 +66,7 @@
 # read three ways and two of them render different things — Claude Code 2.1.251, probed
 # 2026-08-30 by emitting candidates and reading the bytes the terminal received:
 #
-#   relayed by the model (`/welcome check` in a session)   markdown renders; ANSI DOES NOT.
+#   relayed by the model (`/ai-bridge-v2:welcome check` in a session)   markdown renders; ANSI DOES NOT.
 #       0 of 4 ESC bytes survived the relay and the human was left reading a literal `[1m`.
 #       Single newlines and leading indent survive, so the block keeps its shape.
 #   a human's terminal (`bash scripts/ai-bridge.sh check`)   ANSI renders; markdown does not.
