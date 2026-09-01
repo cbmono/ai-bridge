@@ -382,7 +382,7 @@ state, and act only on deltas.
    because the cap is **this machine's** capacity — three instances on one laptop each
    honouring a tracked number is how 20 agents land on 11 cores (`SCHEMA.md`,
    "Per-machine config overrides"). It prints nothing and exits 1 when neither file sets
-   the key; fall back to 5 then. That many agents in
+   the key; fall back to 4 then — the seeded, measured default (SCHEMA.md). That many agents in
    flight at once; leave the rest `ready` for the next tick. Send independent dispatches in one
    message so they run concurrently.
 

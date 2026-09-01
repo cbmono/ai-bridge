@@ -385,7 +385,7 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `people` (login → commit email) | fall through to `authorEmail` | **no** — both clones must agree |
 | `defaultOwner` | unowned work is dispatched by **every** clone | **no** |
 | `ownerGithubUser` | this clone has no configured human | **local file only** |
-| `maxAgentsInFlight` | **10** | yes |
+| `maxAgentsInFlight` | **4** | yes |
 | `maxPrLoc` | **500** | yes |
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
