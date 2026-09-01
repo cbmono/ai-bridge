@@ -19,7 +19,9 @@ setup() {
   # The capability file: without it every autonomy value is inert (see commit-as.sh).
   printf -- '---\ntype: Reference\n---\n# Delegated authority\n' > AUTONOMY.md
   mkdir -p projects/delegated-proj/tasks projects/gated-proj/tasks projects/noauto-proj/tasks projects/other-proj/tasks
-  printf 'type: Project\nautonomy: delegatedmode\nstatus: active\n' > projects/delegated-proj/project.md
+  # `yolo` is the ONE mode AUTONOMY.md defines; other-proj carries an invented token
+  # to pin the closed set — the guard must fail closed on a word nothing defines.
+  printf 'type: Project\nautonomy: yolo\nstatus: active\n' > projects/delegated-proj/project.md
   printf 'type: Project\nautonomy: somefuturemode\nstatus: active\n' > projects/other-proj/project.md
   printf 'type: Project\nautonomy: gated\nstatus: active\n' > projects/gated-proj/project.md
   printf 'type: Project\nstatus: active\n' > projects/noauto-proj/project.md
@@ -88,7 +90,7 @@ sed -i.bak '/^kind:/d' projects/delegated-proj/tasks/t1.md; rm -f projects/deleg
 check "delegated but kind missing -> blocked (fail closed)" block project-manager projects/delegated-proj/tasks/t1.md
 
 setup
-sed -i.bak 's/^autonomy: delegatedmode$/autonomy: delegatedmode unexpected/' projects/delegated-proj/project.md; rm -f projects/delegated-proj/project.md.bak
+sed -i.bak 's/^autonomy: yolo$/autonomy: yolo unexpected/' projects/delegated-proj/project.md; rm -f projects/delegated-proj/project.md.bak
 git add projects/delegated-proj/project.md >/dev/null; git commit -qm "malformed autonomy" >/dev/null
 task projects/delegated-proj/tasks/t1.md build ready
 check "malformed autonomy value -> blocked (fail closed)" block project-manager projects/delegated-proj/tasks/t1.md
@@ -100,13 +102,48 @@ check "no AUTONOMY.md -> delegated project still blocked" block project-manager 
 setup; rm -f AUTONOMY.md; task projects/gated-proj/tasks/t1.md build draft
 check "no AUTONOMY.md, no promotion staged -> untouched" allow project-manager projects/gated-proj/tasks/t1.md
 
-# Guard checks that delegation is POSSIBLE, not which mode delegates what — that
-# distinction is AUTONOMY.md's, so any non-gated mode passes the script's check.
+# The mode set is CLOSED: AUTONOMY.md defines exactly one mode ('yolo'), so a token
+# nothing defines must fail closed — an earlier version cleared any non-gated value,
+# which delegated the human's gate to a typo (audit 2026-08-31, S2).
 setup; task projects/other-proj/tasks/t1.md build ready
-check "AUTONOMY.md + non-gated mode + build -> allowed" allow project-manager projects/other-proj/tasks/t1.md
+check "AUTONOMY.md + undefined mode -> blocked (closed set)" block project-manager projects/other-proj/tasks/t1.md
 
 setup; rm -f AUTONOMY.md; task projects/other-proj/tasks/t1.md build ready
-check "non-gated mode but no AUTONOMY.md -> blocked" block project-manager projects/other-proj/tasks/t1.md
+check "undefined mode and no AUTONOMY.md -> blocked" block project-manager projects/other-proj/tasks/t1.md
+
+echo
+echo "== the delegation must PRE-DATE the commit that uses it =="
+
+# The self-escalation shape: one commit flips autonomy AND promotes on the strength
+# of the flip. AUTONOMY.md's "no agent raises autonomy" gets its reader here.
+setup
+printf 'type: Project\nautonomy: yolo\nstatus: active\n' > projects/gated-proj/project.md
+task projects/gated-proj/tasks/t1.md build ready
+check "same-commit autonomy flip + promotion -> blocked" block project-manager \
+  projects/gated-proj/project.md projects/gated-proj/tasks/t1.md
+
+# A project BORN in the promoting commit is the same shape: its autonomy line is new.
+setup
+mkdir -p projects/new-proj/tasks
+printf 'type: Project\nautonomy: yolo\nstatus: active\n' > projects/new-proj/project.md
+task projects/new-proj/tasks/t1.md build ready
+check "new project.md + promotion in one commit -> blocked" block project-manager \
+  projects/new-proj/project.md projects/new-proj/tasks/t1.md
+
+# The allow half (load-bearing): a project.md edit that does NOT touch autonomy must
+# not poison the promotion — the refusal is about the autonomy line, not the file.
+setup
+printf 'type: Project\nautonomy: yolo\nstatus: paused\n' > projects/delegated-proj/project.md
+task projects/delegated-proj/tasks/t1.md build ready
+check "project.md edited (not autonomy) + promotion -> allowed" allow project-manager \
+  projects/delegated-proj/project.md projects/delegated-proj/tasks/t1.md
+
+# And the sanctioned two-step: the autonomy change lands FIRST (the human's edit),
+# the promotion rides the next commit — the first check() above already proves the
+# second half; this proves the first half commits cleanly as human.
+setup
+printf 'type: Project\nautonomy: yolo\nstatus: active\n' > projects/gated-proj/project.md
+check "the autonomy flip alone, as human -> allowed" allow human projects/gated-proj/project.md
 
 echo
 echo "== shared-index guard: an agent must name what it commits =="

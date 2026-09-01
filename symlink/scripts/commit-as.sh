@@ -344,8 +344,24 @@ gitx() {
 #
 # Fails CLOSED: anything not clearly (capability present AND autonomy delegated
 # AND kind build) is refused; an absent or unparseable field reads as `gated` /
-# `unset`. It gates on delegation being POSSIBLE, not on which mode delegates
-# what — that distinction lives in AUTONOMY.md, which is authoritative.
+# `unset`.
+#
+# THE MODE SET IS CLOSED, AND THIS GUARD MIRRORS IT. An earlier version cleared on
+# any value that was not `gated`, reasoning that which mode delegates what is
+# AUTONOMY.md's distinction — but AUTONOMY.md defines exactly ONE mode ("One mode,
+# deliberately": `yolo`), so every other token is a typo or an invention, and
+# clearing on it meant `autonomy: delegatedmode` delegated the human's gate to a
+# word nothing defines (audit 2026-08-31, finding S2). Only `yolo` clears; adding a
+# mode to AUTONOMY.md means adding it here in the same commit, the way a
+# deny-baseline rule and its tests move together.
+#
+# AND THE DELEGATION MUST PRE-DATE THE COMMIT THAT USES IT. AUTONOMY.md: "No agent
+# raises `autonomy`" — a rule that had no reader, so a commit could stage the
+# `autonomy:` flip on project.md AND the `status: ready` on a task and clear the
+# guard on the strength of its own escalation. So any staged change to the owning
+# project.md's `autonomy:` line — a project.md born in this commit included —
+# refuses the promotion: land the autonomy change first (that edit is the human's),
+# promote in the next commit.
 if [ "$role" != "human" ]; then
   delegation_possible=0
   [ -f "$repo_root/AUTONOMY.md" ] && delegation_possible=1
@@ -391,11 +407,21 @@ if [ "$role" != "human" ]; then
             | sed -n 's/^kind:[[:space:]]*\([A-Za-z][A-Za-z-]*\)[[:space:]]*$/\1/p' | head -n1)"
     [ -n "$kind" ] || kind="unset"
 
-    if [ "$delegation_possible" -eq 1 ] && [ "$autonomy" != "gated" ] && [ "$kind" = "build" ]; then
+    # Does THIS commit move the owning project's `autonomy:` line? Diff header lines
+    # start `---`/`+++`, never `[+-]autonomy:`, so the grep cannot match them; a
+    # brand-new project.md is all `+` lines and correctly reads as a move.
+    autonomy_flip=0
+    if [ -n "$slug" ] && gitx diff --cached -U0 -- "projects/$slug/project.md" 2>/dev/null \
+         | grep -qiE '^[+-]autonomy:'; then
+      autonomy_flip=1
+    fi
+
+    if [ "$delegation_possible" -eq 1 ] && [ "$autonomy" = "yolo" ] \
+       && [ "$kind" = "build" ] && [ "$autonomy_flip" -eq 0 ]; then
       continue
     fi
 
-    violations="${violations}  - ${staged_file} (project '${slug:-?}': autonomy=${autonomy}, kind=${kind}$([ "$delegation_possible" -eq 1 ] || printf ', no AUTONOMY.md'))
+    violations="${violations}  - ${staged_file} (project '${slug:-?}': autonomy=${autonomy}, kind=${kind}$([ "$delegation_possible" -eq 1 ] || printf ', no AUTONOMY.md')$([ "$autonomy_flip" -eq 0 ] || printf ', autonomy edited in this same commit'))
 "
   done <<EOF
 $staged_list
@@ -406,8 +432,12 @@ EOF
     printf '%s' "$violations" >&2
     echo "       draft→ready is the human's authority (SCHEMA.md). The loop may promote a task" >&2
     echo "       only where AUTONOMY.md exists (no file = no delegated modes), the owning" >&2
-    echo "       project's 'autonomy' is not 'gated', AND the task is 'kind: build'" >&2
-    echo "       (research stays human-driven). If the human approved it, commit as 'human'." >&2
+    echo "       project's 'autonomy' is exactly 'yolo' — the one mode AUTONOMY.md defines;" >&2
+    echo "       any other value fails closed — the task is 'kind: build' (research stays" >&2
+    echo "       human-driven), AND this commit does not itself edit that 'autonomy:' line:" >&2
+    echo "       a promotion may not ride on an escalation it carries. Land the autonomy" >&2
+    echo "       change first, promote in the next commit. If the human approved it," >&2
+    echo "       commit as 'human'." >&2
     exit 3
   fi
 fi
