@@ -1,8 +1,15 @@
 name: Tests
 
-# Runs the FULL tests/*.test.sh suite so a head can be verified without a human or an
+# Runs the tests/*.test.sh suite so a head can be verified without a human or an
 # agent session — ai-bridge-v4/task-001. Fires on every PR against the default branch
 # and on every push that lands on it, so main itself always carries its own signal.
+#
+# ONE deliberate scope cut: a PR whose every changed path lives under plugin/ or
+# .claude-plugin/ cannot touch the machinery the other 59 harnesses test, so it runs
+# ONLY tests/plugin-manifest.test.sh — same job, same required-check name, same
+# per-harness verification — instead of paying the full ~15-minute suite. The rule is
+# strict on purpose: ONE path outside those two directories (a README line, a test
+# edit, anything) and the full suite runs. Pushes to main always run everything.
 on:
   pull_request:
     branches: [main]
@@ -37,6 +44,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The plugin-only scope check diffs against the PR base; 0 keeps it able to.
+          fetch-depth: 0
 
       - name: Run tests/*.test.sh
         shell: bash
@@ -70,6 +80,24 @@ jobs:
           shopt -s nullglob
           files=(tests/*.test.sh)
           shopt -u nullglob
+
+          # ---- the plugin-only fast path (see the header comment) -------------------
+          # PRs only; a push to main always runs the full suite. The diff is against
+          # the PR base, and the verdict FAILS TOWARD THE FULL SUITE: an empty diff,
+          # a failed fetch, or any path outside plugin/ and .claude-plugin/ keeps
+          # every harness. The one harness the fast path runs goes through exactly
+          # the same loop, checkout verification and pass/fail parsing below.
+          if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then
+            if git fetch --quiet origin "$GITHUB_BASE_REF"; then
+              changed="$(git diff --name-only "origin/$GITHUB_BASE_REF"...HEAD)"
+              if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(plugin/|\.claude-plugin/)'; then
+                echo "plugin-only diff — running tests/plugin-manifest.test.sh only:"
+                printf '%s\n' "$changed" | sed 's/^/  /'
+                files=(tests/plugin-manifest.test.sh)
+              fi
+            fi
+          fi
+          # ---------------------------------------------------------------------------
 
           if [ "${#files[@]}" -eq 0 ]; then
             echo "::error::no tests/*.test.sh files found — refusing to report a vacuous pass"
