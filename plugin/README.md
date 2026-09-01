@@ -38,3 +38,8 @@ first to migrate — its whole contract now lives in this plugin's `/welcome`.) 
 slice that moves the contract and retires the instance copy **in one change** — the
 loop and the enforcement hooks are next, with the template's test suite as the spec.
 The final slice swaps `ai-bridge-v2` to the bare name.
+
+**Agents are the one surface with the REVERSE precedence:** a same-named project agent
+shadows the plugin copy (plugins are the lowest agent scope), so the eight role agents
+ship here in byte-parity with the instance copies — instances win until their links are
+retired, and `tests/plugin-agents.test.sh` is what keeps the two copies one.
