@@ -87,6 +87,14 @@ tool="$(printf '%s' "$payload" | jq -r '.tool_name // ""' 2>/dev/null || true)"
 CMD="$(printf '%s' "$payload" | jq -r '.tool_input.command // ""' 2>/dev/null || true)"
 [ -n "$CMD" ] || exit 0
 
+# `agent_id` is present on a DISPATCHED subagent's PreToolUse event and ABSENT on the
+# parent session's own tool call (measured 2026-08-23; see agent-control.sh's WHY agent_id).
+# All the rules below are command-shape rules that apply to every session; the ONE
+# exception is `subagent_merge`, whose whole point is that it fires for a dispatched agent
+# and not for the human — the human merging in their own session IS the escape hatch. So
+# this is read once here and consulted only by that rule.
+AGENT_ID="$(printf '%s' "$payload" | jq -r '.agent_id // ""' 2>/dev/null || true)"
+
 CWD="$(printf '%s' "$payload" | jq -r '.cwd // ""' 2>/dev/null || true)"
 [ -n "$CWD" ] && [ -d "$CWD" ] || CWD="$PWD"
 # PHYSICAL, IMMEDIATELY. `git rev-parse --show-toplevel` always answers with symlinks
@@ -314,7 +322,7 @@ covers() { # <p> <x>
 # the tools falls through in microseconds. Narrowing one of these silently disables part of
 # a rule, so derive it from the rule body, and note that the deny half of that rule's tests
 # is what proves the filter still lets the real shapes through.
-RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration"
+RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration subagent_merge"
 
 # --- terraform_destroy --------------------------------------------------------------- #
 # JUSTIFIED BY: `destroy` deletes real infrastructure and there is no legitimate agent
@@ -705,6 +713,62 @@ EOT
     return 0
   done <<EOF
 $(segments "$1")
+EOF
+  return 1
+}
+
+# --- subagent_merge ------------------------------------------------------------------ #
+# JUSTIFIED BY: under `gated` — the default, fail-closed mode — the human owns the merge and
+# the approval, and this is the one place a prose rule ("never merge") was the only thing
+# stopping a dispatched agent from running `gh pr merge` itself. It is AGENT-SCOPED, the sole
+# rule here that reads `agent_id`: it fires only for a dispatched subagent, so the human's OWN
+# session (no `agent_id`) merges and approves freely — that human, in their own session, IS
+# the escape hatch this baseline always relies on. NARROW ENOUGH TO KEEP: only the three
+# shapes that CONSUMMATE a merge or MANUFACTURE an approval are refused — `gh pr merge`, the
+# REST merge endpoints via `gh api` (`.../pulls/N/merge`, `.../merges`), and
+# `gh pr review --approve`. Everything else an agent does with `gh` is untouched: opening a
+# PR, pushing a branch, `gh pr view`, `gh pr comment`, and `gh pr review --request-changes`
+# (the review verbs `qa-reviewer.md` actually tells it to use). Pushing to a product repo's
+# default branch is a NEIGHBOURING gap left for a follow-up, because the `project-manager`
+# tick legitimately pushes the BUNDLE's default branch and telling the two apart needs the
+# instance-root comparison this rule deliberately does not yet make.
+#
+# WHERE yolo FITS: under `yolo` the merge is performed by the `project-manager` TICK, which is
+# itself a dispatched subagent, so this rule would refuse it too. That is acceptable while
+# yolo is set aside; re-enabling it means giving the tick a carve-out here (e.g. gated on
+# `AUTONOMY.md`), never widening the rule to all subagents.
+rule_subagent_merge() {
+  [ -n "$AGENT_ID" ] || return 1          # the human's own session is never gated here
+  case "$1" in *gh*) ;; *) return 1 ;; esac
+  local stage c sub next
+  while IFS= read -r stage; do
+    [ -n "$stage" ] || continue
+    c="$(first_word "$stage")" || continue
+    [ "$c" = gh ] || continue
+    sub="$(word_after "$stage" gh || true)"
+    case "$sub" in
+      pr)
+        next="$(word_after "$stage" pr || true)"
+        if [ "$next" = merge ]; then
+          printf 'A dispatched agent may not merge a pull request — under `gated` the merge is the human'"'"'s. Open the PR and leave it; the human merges it (or, where yolo is enabled, the tick does). Running `gh pr merge` yourself in your own terminal is unaffected.'
+          return 0
+        fi
+        if [ "$next" = review ] && has_token "$stage" --approve; then
+          printf '`gh pr review --approve` from a dispatched agent manufactures the approval the merge gate is meant to get from a human or an external reviewer. Post a comment or `--request-changes` instead — an approval is the human'"'"'s to give.'
+          return 0
+        fi
+        ;;
+      api)
+        # PUT /repos/O/R/pulls/N/merge and POST /repos/O/R/merges both land a merge.
+        case "$stage" in
+          *pulls/*/merge*|*/merges*)
+            printf 'A dispatched agent may not merge via `gh api` — the `/pulls/N/merge` and `/merges` endpoints consummate a merge the human owns under `gated`. Open the PR instead.'
+            return 0 ;;
+        esac
+        ;;
+    esac
+  done <<EOF
+$(stages "$1")
 EOF
   return 1
 }
