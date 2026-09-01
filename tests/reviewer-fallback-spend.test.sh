@@ -133,7 +133,7 @@ ok "…and says so is not one condition"    "$(saw "$NP_FLAT" '"No usable review
 ok "none configured ⇒ dispatch, no ask"   "$(saw "$NP_FLAT" '**None configured ⇒ dispatch it, no ask.**')" yes
 ok "configured but refusing ⇒ ASK"        "$(saw "$NP_FLAT" '**Configured but refusing ⇒ ASK, in this session')" yes
 ok "…in the MAIN THREAD, unlike the tick" "$(saw "$NP_FLAT" 'main thread and the human is right here')" yes
-ok "…and yolo dispatches automatically"   "$(saw "$NP_FLAT" 'A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch it automatically')" yes
+ok "…and yolo dispatches automatically"   "$(saw "$NP_FLAT" 'defines as delegating this is in force ⇒ dispatch it')" yes
 
 # THE HALF THAT IS ONLY TRUE HERE. A PM tick may hold because a later tick re-asks; step 8
 # is one-shot, so "hold" means the advisory review silently never happens. The fix is not
@@ -226,12 +226,13 @@ fi
 # The mutant criterion 9 exists for. A mutation set on the PM alone would pass this file
 # while step 8 quietly went back to dispatching the fallback on any hiccup.
 ANCHOR_B='**None configured ⇒ dispatch it, no ask.**'
-if [ "$(grep -cF -- "$ANCHOR_B" "$NP")" -ne 1 ]; then
+ANCHOR_B_END='   When it does run, brief it with'
+if [ "$(grep -cF -- "$ANCHOR_B" "$NP")" -ne 1 ] || [ "$(grep -cF -- "$ANCHOR_B_END" "$NP")" -ne 1 ]; then
   skipped "MUTATION B: the scaffold class split has moved — its deletion is not asserted"
 else
   MUT_B="$TMP/np-collapsed.md"
   awk '/^   \* \*\*None configured ⇒ dispatch it, no ask\.\*\*/ { drop = 1 }
-       drop && /^   When it does run:/ { drop = 0 }
+       drop && /^   When it does run, brief it with/ { drop = 0 }
        !drop { print }' "$NP" > "$MUT_B"
   B_FLAT="$(flat_of "$MUT_B")"
   ok "MUTATION B removed something" \
@@ -284,6 +285,10 @@ ok "a non-matching range removes nothing" \
 ok "a moved anchor counts zero (⇒ SKIP)"  "$(grep -cF -- "$ANCHOR_A" "$TMP/no-anchor.md")" 0
 ok "…and the shipped PM counts exactly one" "$(grep -cF -- "$ANCHOR_A" "$PM")" 1
 ok "…and the shipped NP counts exactly one" "$(grep -cF -- "$ANCHOR_B" "$NP")" 1
+# The END anchor is guarded too: an unmatched one makes the awk range run to EOF, which
+# eats the rest of step 8 and turns every `no` in MUTATION B into a vacuous pass. It was a
+# live failure once — the control below is what caught it.
+ok "…and NP's mutation END anchor is unique" "$(grep -cF -- "$ANCHOR_B_END" "$NP")" 1
 
 # NOT PAIRED, stated rather than implied: the plain `hasf` presence greps in section 4 have
 # no fixture — they fail on absent text by construction, so a fixture would only re-test

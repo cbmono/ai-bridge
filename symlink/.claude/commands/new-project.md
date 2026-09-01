@@ -331,7 +331,10 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    unconnected-organization notice, or a truncated run can exit non-zero or still read as
    "clean" with nothing reviewed. Check the exit status and confirm a files-reviewed line
    before calling it green; if either is missing, treat the run as indeterminate and say so
-   rather than reporting a pass.
+   rather than reporting a pass. **An indeterminate run is `configured but refusing`** —
+   step a's table cannot see it, because a reviewer that resolves and signs in can still
+   refuse once it runs — so carry that class into step e and take its ask, not its
+   automatic branch.
 
    **e. No usable external reviewer ⇒ `qa-reviewer` in scaffold mode. Not a skip — but
    whether it is automatic depends on WHICH class step a found, because the ask fires on
@@ -347,12 +350,13 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
      PM tick, which is a subagent, cannot ask, and writes the same question into the
      task's `open_questions` instead. Ask exactly this and act on the answer:
 
-     > CodeRabbit is unavailable (`<the one-line reason>`). Spend a `qa-reviewer` session
-     > on the scaffold review, or record that it did not run?
+     > `<the reviewer>` is unavailable (`<the one-line reason>`). Spend a `qa-reviewer`
+     > session on the scaffold review, or record that it did not run?
 
-   * **A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch it automatically** and
-     say you did. This is the existing autonomy switch on one more decision, never a new
-     flag; **`AUTONOMY.md` absent means `gated`**, so the ask stands.
+   * **…unless a mode `AUTONOMY.md` defines as delegating this is in force ⇒ dispatch it
+     automatically** and say you did. That mode replaces the ask above and nothing else.
+     This is the existing autonomy switch on one more decision, never a new flag;
+     **`AUTONOMY.md` absent means `gated`**, so the ask stands.
 
    **Whatever the answer, RECORD IT — this step is ONE-SHOT and nothing re-runs it.**
    "Hold and ask again next tick" is the PM's move and it does not exist here: a scaffold
@@ -362,8 +366,8 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    opinion, and why**, and say the same in your summary to the human. An unrun advisory
    review is an acceptable outcome; an unrun advisory review nobody knows about is not.
 
-   When it does run: brief
-   it with the instance root, the project slug, and the pre-commit SHA from step 7, and ask
+   When it does run, brief it with the instance root, the project slug, and the pre-commit
+   SHA from step 7, and ask
    for **mode C**. It reviews the committed bundle diff and writes its verdict into the
    project's `log.md` — there is no PR to comment on. Triage its findings exactly as in
    step c; its verdict is advisory, like the external one, and never gates creation.
