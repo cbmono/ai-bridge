@@ -349,6 +349,62 @@ ok "…a path-qualified git is still git" \
 ok "…and a path-qualified psql is still psql" \
    "$(verdict "$GITREPO" "/usr/bin/psql -h db.example.com -c 'DROP TABLE users'")" "deny:sql_destructive_remote"
 
+echo "== rule 8: subagent_merge — a dispatched agent may not merge/approve; the human still can"
+# The payload of a DISPATCHED subagent carries `agent_id`; the human's own session does not.
+# This is the whole discriminator, so both helpers exist: `verdict_agent` sends the agent
+# payload, plain `verdict` sends the parent's. The load-bearing half here is the LAST pair —
+# the same `gh pr merge` the agent is refused, the human runs untouched.
+payload_agent() { # <cwd> <command>
+  jq -n --arg d "$1" --arg c "$2" '{
+    session_id: "sess-1", transcript_path: "/tmp/t.jsonl", cwd: $d,
+    agent_id: "agent-xyz", agent_type: "software-engineer",
+    permission_mode: "bypassPermissions", hook_event_name: "PreToolUse",
+    tool_name: "Bash", tool_use_id: "tu-1", tool_input: { command: $c }
+  }'
+}
+verdict_agent() { # <cwd> <command> -> "allow" | "deny:<rule>" | "bad:<decision>"
+  local out dec rule
+  out="$(payload_agent "$1" "$2" | HOME="$FIXHOME" bash "$HOOK" 2>/dev/null)"
+  [ -n "$out" ] || { printf 'allow'; return 0; }
+  dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
+  [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
+  rule="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
+          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)"
+  printf 'deny:%s' "${rule:-UNNAMED}"
+}
+
+# --- the deny half: a subagent's merge/approve shapes ---
+ok "subagent gh pr merge is refused" \
+   "$(verdict_agent "$GITREPO" 'gh pr merge 5')" "deny:subagent_merge"
+ok "…with the flags a real merge carries" \
+   "$(verdict_agent "$GITREPO" 'gh pr merge --squash --match-head-commit abc123 42')" "deny:subagent_merge"
+ok "…even hidden behind an earlier stage" \
+   "$(verdict_agent "$GITREPO" 'gh pr view 5 && gh pr merge 5')" "deny:subagent_merge"
+ok "subagent gh pr review --approve is refused" \
+   "$(verdict_agent "$GITREPO" 'gh pr review --approve 5')" "deny:subagent_merge"
+ok "subagent gh api PUT pulls/N/merge is refused" \
+   "$(verdict_agent "$GITREPO" 'gh api --method PUT /repos/o/r/pulls/5/merge')" "deny:subagent_merge"
+ok "subagent gh api /merges is refused" \
+   "$(verdict_agent "$GITREPO" 'gh api /repos/o/r/merges -f base=main -f head=feat')" "deny:subagent_merge"
+
+# --- the allow half (load-bearing): the review verbs an agent MUST keep ---
+ok "subagent gh pr create is allowed" \
+   "$(verdict_agent "$GITREPO" 'gh pr create --fill')" "allow"
+ok "subagent gh pr review --request-changes is allowed" \
+   "$(verdict_agent "$GITREPO" 'gh pr review --request-changes -b "needs work" 5')" "allow"
+ok "subagent gh pr comment is allowed" \
+   "$(verdict_agent "$GITREPO" 'gh pr comment 5 -b "a note"')" "allow"
+ok "subagent gh pr view is allowed" \
+   "$(verdict_agent "$GITREPO" 'gh pr view 5')" "allow"
+ok "subagent pushing a feature branch is allowed" \
+   "$(verdict_agent "$GITREPO" 'git push origin feature-x')" "allow"
+
+# --- the allow half that matters most: the HUMAN's own session merges freely ---
+ok "the human (no agent_id) may still gh pr merge" \
+   "$(verdict "$GITREPO" 'gh pr merge 5')" "allow"
+ok "the human may still gh pr review --approve" \
+   "$(verdict "$GITREPO" 'gh pr review --approve 5')" "allow"
+
 echo "== the rule list itself: a rule cannot be added without being tested"
 # THE LIST IS MEANT TO GROW, so the two ways a growing list rots are pinned here rather
 # than left to whoever adds the next rule. A name in `RULES` with no function is a silent
