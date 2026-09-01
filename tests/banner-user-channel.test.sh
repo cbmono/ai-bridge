@@ -468,7 +468,7 @@ if [ -f "$AB" ]; then
   emph_lines="$(printf '%s\n' "$MD_OUT" | grep -cF '**' || true)"
   assert "…on exactly 3 lines (saw $emph_lines): the identity line and the two headers" \
     "$(eq "$emph_lines" 3)"
-  for anchor in 'AI-Bridge' 'SETTING ' 'ROLE '; do
+  for anchor in 'AI-Bridge' 'SETTING ' 'AGENT '; do
     assert "…the line starting \`$anchor\` among them" \
       "$(printf '%s\n' "$MD_OUT" | grep -F '**' | grep -qF -- "$anchor" && echo 0 || echo 1)"
   done

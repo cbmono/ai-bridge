@@ -633,7 +633,7 @@ say_strong() { local c="$1"; shift; printf '%s%s%s%s\n' "$EMPH_MARK" "$c" "$*" "
 emphasise() { # stdin -> stdout
   while IFS= read -r ln; do
     case "$ln" in
-      ⚠*|⬆*) printf '%s%s%s\n' "$C_YEL" "$ln" "$C_OFF" ;;
+      ⚠*|⬆*) printf '%s  %s%s\n' "$C_YEL" "$ln" "$C_OFF" ;;
       *)      printf '%s\n' "$ln" ;;
     esac
   done
@@ -842,6 +842,11 @@ if [ -n "$tmpl" ] && [ -r "$tmpl/VERSION" ]; then
   # VERSION file is a file whose contents reach a markdown renderer, and it goes through the
   # same `cell` every table value does.
   ver="$(cell "$ver")"
+  # The `v` is DISPLAY ONLY and is applied last, to a value that survived the filters
+  # above — never to the empty string they leave behind. Prefixing before that check
+  # renders `AI-Bridge v ·` for a VERSION that is missing, empty or junk, which is the
+  # one case those filters exist to make indistinguishable from "no version at all".
+  [ -n "$ver" ] && ver="v$ver"
 fi
 
 # `org` IS A CONFIG VALUE AND IS FILTERED LIKE ONE. The instance's own directory name below
@@ -997,7 +1002,7 @@ if [ -n "$dump" ]; then
     # `${tier}` braced, not bare: `→` is not ASCII, and bash reads the following bytes as
     # part of the identifier — `$tier→` expands as an unset variable named `tier→` and,
     # under `set -u`, kills the hook.
-    add t "$role" "${tier}→${al}" "$s"
+    add t "$role" "${tier} → ${al}" "$s"
   done <<EOF
 $tiers
 EOF
@@ -1017,7 +1022,7 @@ table() { # <header-label> <header-value> <rows>
   done
 }
 [ -n "$rows" ]  && table SETTING VALUE "$rows"
-[ -n "$trows" ] && table ROLE 'TIER→MODEL' "$trows"
+[ -n "$trows" ] && table 'AGENT (role)' 'TIER → MODEL' "$trows"
 
 # ---------------------------------------------------------------------------------------
 # 5. BOARD — was show-board-link.sh. A LOCAL FILE, NEVER A PUBLISHED URL.

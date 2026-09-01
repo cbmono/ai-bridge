@@ -162,7 +162,7 @@ ok "…and for a tier"                       "$(FROM "$I" models deep)" local
 BANNER="$TPL/symlink/.claude/hooks/session-banner.sh"
 BOUT="$(CLAUDE_PROJECT_DIR="$I" bash "$BANNER" 2>&1)"
 brow() { printf '%s\n' "$BOUT" | awk -v r="$1" '$1==r { print $NF }' | head -n1; }
-ok "the banner prints a row for the role"   "$(printf '%s\n' "$BOUT" | awk '$1=="software-engineer"' | grep -c 'deep→opus' | tr -d ' ')" 1
+ok "the banner prints a row for the role"   "$(printf '%s\n' "$BOUT" | awk '$1=="software-engineer"' | grep -c 'deep → opus' | tr -d ' ')" 1
 ok "…and its FROM column reads local"       "$(brow software-engineer)" local
 ok "…for a second role on another tier too" "$(brow cataloguer)" local
 
