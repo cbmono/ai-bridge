@@ -608,7 +608,7 @@ owner asked three times in one session, for three different instances.
 
 ```text
 
-AI-Bridge v0.21.0 · _ai-bridge-private · org: cbmono
+AI-Bridge v0.22.0 · _ai-bridge-private · org: cbmono
 ────────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
@@ -655,7 +655,7 @@ both, for a human piping the banner somewhere that renders escapes.
 **Three renderings, one buffer, one artifact.** `--format json` is what `settings.json` asks
 for: the client draws `systemMessage`, and that field was measured rendering SGR and printing
 markdown *literally*. `--format md` is what `scripts/ai-bridge.sh` asks for when its stdout
-is a pipe — the `/ai-bridge` path, where the output is relayed into an assistant message and
+is a pipe — the welcome-skill relay path (`/ai-bridge-v2:welcome`), where the output is relayed into an assistant message and
 the measurement is the exact opposite: markdown renders and 0 of 4 ANSI escape bytes survive.
 Plain text is the default and what a terminal gets. The md rendering differs from the plain
 one in **emphasis markers alone** — `**…**` on the identity line and the two table headers,
@@ -679,7 +679,7 @@ override moving one agent leaves every other row reading `tracked`.
 about the human. The column still answers per key: when the two
 sources disagree it reads `local/tracked`, in the same order as the values. It is spelled
 `user · address` and **not** git's `user <address>`, which is the fix for a real defect: the
-`/ai-bridge` path relays the banner as markdown, `<address>` is markdown **autolink** syntax
+welcome-skill relay path carries the banner as markdown, `<address>` is markdown **autolink** syntax
 there, and the renderer ate both brackets — leaving that one row's `FROM` two columns left of
 every other row's while the script's own output was perfectly aligned. The general rule it
 produced is that **a fixed-width table relayed as markdown may contain only characters

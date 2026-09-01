@@ -226,7 +226,7 @@ Run these inside an instance.
 | `/audit` | the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/fanout <task>` | parallel work across several repos |
 | `/close-project <slug>` | close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. [→](docs/schema.md#closing-a-project) |
-| `/ai-bridge [check\|fix]` | reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
+| `/ai-bridge-v2:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
 
 Flags `/new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 `browser=claude-for-chrome`, `/yolo`, `/cli …`, `/claudeforchrome`, `--no-commit`.
@@ -483,7 +483,7 @@ the table above accounts for **every** script in `symlink/scripts/`, which
 
 | Script | Does | Writes? |
 |---|---|---|
-| `ai-bridge.sh` | backs `/ai-bridge`: reprints the SessionStart banner, `check` reports state that could be wrong, `fix` repairs only the idempotent tier | only under `fix` |
+| `ai-bridge.sh` | backs the plugin's `/welcome`: reprints the SessionStart banner, `check` reports state that could be wrong, `fix` repairs only the idempotent tier | only under `fix` |
 | `resolve-config.sh` | the one implementation of the two-file config precedence — `instance.config.local.json` first, `instance.config.json` second, dicts merged entry by entry | no |
 | `resolve-max-agents.sh` | prints the concurrency cap **this machine** should honour, from the same two files | no |
 

@@ -698,6 +698,10 @@ which is why the convention and the check are one invariant and not two.
 
 ## 21. `/ai-bridge` reports facts that can be false, and `fix` is tiered in code
 
+> Since the plugin replatform, this contract ships as the `ai-bridge-v2` plugin's
+> `/welcome` skill (`/ai-bridge-v2:welcome [check|fix]`); the instance command file it
+> describes is retired. Everything below still governs the script and the relay.
+
 **The rejected shape first, because it is the one that keeps getting proposed.** The
 original ask was a command that *loads the rules* at session start — conventions,
 guardrails, "always defer to subagents", "always use the pm-loop". It was rejected on

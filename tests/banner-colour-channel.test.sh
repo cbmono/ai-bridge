@@ -44,7 +44,7 @@ TPL="$(cd "$HERE/.." && pwd)"
 HOOK="$TPL/symlink/.claude/hooks/session-banner.sh"
 AB="$TPL/symlink/scripts/ai-bridge.sh"
 SETTINGS="$TPL/symlink/.claude/settings.json"
-CMDDOC="$TPL/symlink/.claude/commands/ai-bridge.md"
+CMDDOC="$TPL/plugin/skills/welcome/SKILL.md"
 for f in "$HOOK" "$AB" "$SETTINGS" "$CMDDOC"; do
   [ -f "$f" ] || { echo "banner-colour-channel.test: missing $f" >&2; exit 2; }
 done
@@ -373,7 +373,7 @@ echo "== 6. the relay instruction travels with the command that needs it =="
 # A code fence turns `**⚠ …**` back into asterisks, which is the flat page the styling
 # exists to replace — so the command document says so, and this is the reader for that.
 DOC="$(cat "$CMDDOC")"
-assert "the /ai-bridge command tells the session not to fence the output" \
+assert "the welcome skill tells the session not to fence the output" \
   "$(matches '[Cc]ode [Ff]ence' "$DOC")"
 
 echo

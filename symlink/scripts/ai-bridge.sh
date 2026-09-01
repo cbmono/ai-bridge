@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# ai-bridge.sh — the `/ai-bridge` command, in three forms.
+# ai-bridge.sh — the welcome command (plugin skill `/welcome`), in three forms.
 #
 #   ai-bridge.sh                      reprint the SessionStart banner
 #   ai-bridge.sh check  [flags]       report the state of this instance
@@ -66,7 +66,7 @@
 # read three ways and two of them render different things — Claude Code 2.1.251, probed
 # 2026-08-30 by emitting candidates and reading the bytes the terminal received:
 #
-#   relayed by the model (`/ai-bridge check` in a session)   markdown renders; ANSI DOES NOT.
+#   relayed by the model (`/ai-bridge-v2:welcome check` in a session)   markdown renders; ANSI DOES NOT.
 #       0 of 4 ESC bytes survived the relay and the human was left reading a literal `[1m`.
 #       Single newlines and leading indent survive, so the block keeps its shape.
 #   a human's terminal (`bash scripts/ai-bridge.sh check`)   ANSI renders; markdown does not.
@@ -216,7 +216,7 @@ fi
 # to the hook's own, in the rendering this run asked the hook for.
 #
 # IT ASKS FOR THE RENDERING ITS READER CAN SEE, AND THAT IS THE ONLY OPINION IT HAS. When
-# stdout is a pipe, this form IS the `/ai-bridge` path: the output is relayed by the model
+# stdout is a pipe, this form IS the `/welcome` relay path: the output is relayed by the model
 # into an assistant message, which renders markdown and destroys ANSI (measured — 0 of 4 ESC
 # bytes reached the reader). So it asks the hook for `--format md`, the hook's third
 # rendering, whose only difference from the plain text one is `**…**` on the identity line
