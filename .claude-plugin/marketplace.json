@@ -1,0 +1,24 @@
+{
+  "name": "ai-bridge",
+  "owner": {
+    "name": "cbmono"
+  },
+  "plugins": [
+    {
+      "name": "ai-bridge-v2",
+      "source": "./plugin",
+      "description": "The OKF control panel as a Claude Code plugin \u2014 /brief and /capture today; the gated loop as the migration proceeds.",
+      "version": "0.1.0",
+      "author": {
+        "name": "cbmono"
+      },
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "project-management",
+        "okf",
+        "agents"
+      ]
+    }
+  ]
+}
