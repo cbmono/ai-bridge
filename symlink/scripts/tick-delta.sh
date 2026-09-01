@@ -4,6 +4,7 @@
 #
 #   Usage: scripts/tick-delta.sh check  [--instance DIR]
 #          scripts/tick-delta.sh record [--instance DIR]
+#          scripts/tick-delta.sh digest [--instance DIR]
 #
 # WHY THIS EXISTS. A tick re-derives everything every time — full task walk, a live
 # read of every open PR — which is correct and stays the default. But measured on a
@@ -45,6 +46,16 @@
 # gate refuses (it re-reads at the moment of merging) but a GATED surface-only tick can
 # afford, because nothing is merged on the strength of an idle verdict.
 #
+# `digest` IS THE SAME WALK, ENRICHED, FOR THE TICK THAT MUST NOW ORIENT. One command
+# prints every live project (slug, status, autonomy, owner), every task under them
+# (path, status, kind, assignee, dependency/open-question counts, criteria filled or
+# not, worktree recorded or not) and every open PR's host facts — so step 1's N
+# frontmatter reads and per-PR `gh` round-trips become one read. It changes NOTHING
+# about what the tick may act on: the digest is the enumeration, never the judgement,
+# and the tick still opens every document it acts on. A `status: done` project is
+# skipped at its frontmatter in BOTH walks, exactly as the tick and write-snapshot.sh
+# already skip it — nothing in a done project can need a tick.
+#
 # Exit codes — only 0 permits the fast path, and it is never the default:
 #   0  IDLE — the fingerprint matches the record; prints one `IDLE:` line.
 #   1  DELTA — something moved; prints `DELTA:` lines naming what. Full tick.
@@ -62,12 +73,12 @@ set -uo pipefail
 STATE_NAME=".tick-state"
 
 usage() {
-  echo "Usage: $(basename "$0") check|record [--instance DIR]" >&2
+  echo "Usage: $(basename "$0") check|record|digest [--instance DIR]" >&2
   exit 3
 }
 
 cmd="${1:-}"; [ "$#" -gt 0 ] && shift
-case "$cmd" in check|record) ;; *) usage ;; esac
+case "$cmd" in check|record|digest) ;; *) usage ;; esac
 
 inst="."
 while [ $# -gt 0 ]; do
@@ -105,29 +116,64 @@ if [ "$cmd" = check ]; then
   fi
 fi
 
-# --- the fingerprint --------------------------------------------------------------------
-# One line per fact, deterministic order. Comparison is line-for-line, so a mismatch can
-# NAME what moved instead of only that something did.
-fingerprint() {
+# --- the walk ---------------------------------------------------------------------------
+# One line per fact, deterministic order. The PROBE lines are the fingerprint —
+# comparison is line-for-line, so a mismatch can NAME what moved. The DIGEST is the same
+# walk with the enrichment the orienting tick needs; the two share one traversal so they
+# cannot drift about which documents exist.
+
+fmfirst() { # <file> <key> — the first `key:`'s scalar value
+  sed -n "s/^$2:[[:space:]]*\([^[:space:]].*\)/\1/p" "$1" | head -n1
+}
+# Entries in a `key: [ ... ]` block (inline or multi-line): lines that carry content
+# once brackets and blanks are stripped. A count, because that is all a digest needs.
+fmcount() { # <file> <key>
+  sed -n "/^$2:/,/\]/p" "$1" | sed -e "s/^$2:[[:space:]]*//" -e 's/[][]//g'     | grep -c '[^[:space:]]' || true
+}
+
+fingerprint() { # <probe|digest>
+  local mode="$1"
   printf 'head %s\n' "$(git -C "$inst" rev-parse HEAD)"
 
   [ -f "$inst/AWAITING.md" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/SNAPSHOT.json" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local f st prs url inflight=0 urls=""
-  for f in "$inst"/projects/*/tasks/*.md; do
-    [ -f "$f" ] || continue
-    # An UNREADABLE task file poisons the whole fingerprint rather than degrading to a
-    # fake `unset` fact — a record built on a hole would let the next check "match" it.
-    [ -r "$f" ] || return 1
-    st="$(sed -n 's/^status:[[:space:]]*\([A-Za-z-]*\).*/\1/p' "$f" | head -n1)"
-    printf 'task %s %s\n' "${f#"$inst"/}" "${st:-unset}"
-    [ "$st" = "in-progress" ] && inflight=1
-    if [ "$st" = "in-review" ]; then
-      prs="$(grep -m1 '^pr:' "$f" 2>/dev/null | grep -oE 'https://[^"[:space:]]+/pull/[0-9]+' || true)"
-      [ -n "$prs" ] && urls="$urls
-$prs"
+  local p d pst f st prs url inflight=0 urls=""
+  for d in "$inst"/projects/*/; do
+    [ -d "$d" ] || continue
+    p="$d/project.md"
+    # A project directory whose project.md is missing or unreadable poisons the walk —
+    # its tasks would otherwise silently vanish from the fingerprint, which is the
+    # false-IDLE hole this script must never open. (validate-bundle owns the schema
+    # error; this probe just refuses to guess around it.)
+    [ -f "$p" ] && [ -r "$p" ] || return 1
+    pst="$(fmfirst "$p" status)"; pst="${pst:-unset}"
+    if [ "$mode" = digest ]; then
+      printf 'project %s status=%s autonomy=%s owner=%s\n'         "$(basename "$(dirname "$p")")" "$pst"         "$(fmfirst "$p" autonomy | grep -oE '^[A-Za-z-]+' || printf -- -)"         "$(fmfirst "$p" owner    | grep -oE '^[A-Za-z0-9._-]+' || printf -- -)"
     fi
+    # A done project is skipped at its FRONTMATTER, in both walks — the same rule the
+    # tick and write-snapshot.sh already apply: nothing in a done project can need a
+    # tick, and the point is the read that never happens.
+    [ "$pst" = done ] && continue
+
+    for f in "$d"tasks/*.md; do
+      [ -f "$f" ] || continue
+      # An UNREADABLE task file poisons the whole walk rather than degrading to a fake
+      # `unset` fact — a record built on a hole would let the next check "match" it.
+      [ -r "$f" ] || return 1
+      st="$(sed -n 's/^status:[[:space:]]*\([A-Za-z-]*\).*/\1/p' "$f" | head -n1)"
+      if [ "$mode" = digest ]; then
+        printf 'task %s status=%s kind=%s assignee=%s deps=%s q=%s crit=%s wt=%s\n'           "${f#"$inst"/}" "${st:-unset}"           "$(fmfirst "$f" kind | grep -oE '^[A-Za-z-]+' || printf -- -)"           "$(fmfirst "$f" assignee | grep -oE '^[A-Za-z0-9._-]+' || printf -- -)"           "$(fmcount "$f" depends_on)" "$(fmcount "$f" open_questions)"           "$([ "$(fmcount "$f" acceptance_criteria)" -gt 0 ] && echo yes || echo no)"           "$([ -n "$(fmfirst "$f" worktree)" ] && echo yes || echo no)"
+      else
+        printf 'task %s %s\n' "${f#"$inst"/}" "${st:-unset}"
+      fi
+      [ "$st" = "in-progress" ] && inflight=1
+      if [ "$st" = "in-review" ]; then
+        prs="$(grep -m1 '^pr:' "$f" 2>/dev/null | grep -oE 'https://[^"[:space:]]+/pull/[0-9]+' || true)"
+        [ -n "$prs" ] && urls="$urls
+$prs"
+      fi
+    done
   done
 
   # A live dispatch is owed its monitoring whatever the record says. Signalled as a
@@ -150,9 +196,16 @@ $prs"
   return 0
 }
 
-FP="$(fingerprint)" || fail2 "could not complete the fingerprint (an unreadable task file, gh missing or offline, or a bad PR URL)"
+mode=probe; [ "$cmd" = digest ] && mode=digest
+FP="$(fingerprint "$mode")" || fail2 "could not complete the fingerprint (an unreadable task file, gh missing or offline, or a bad PR URL)"
 
 case "$cmd" in
+  digest)
+    # The enumeration for an orienting tick, nothing more: no record is read or written,
+    # and printing it grants nothing — the tick still opens every document it acts on.
+    printf '%s\n' "$FP"
+    exit 0
+    ;;
   record)
     # Through a temp file BESIDE the target: a crash mid-write must not leave a torn
     # record for the next check to "match".

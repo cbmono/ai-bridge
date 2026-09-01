@@ -190,13 +190,34 @@ state, and act only on deltas.
    unchanged head, comment prose — defers to the next real delta, which is safe under
    `gated` because nothing merges on an idle verdict (`docs/pm-design.md#step-0-9`).
 
-1. **Orient.** Read `index.md` and `SCHEMA.md`. Then, **per project**, read
-   `projects/<slug>/project.md` FIRST and **skip every `status: done` project right
-   there** — do not open its `phases/` or `tasks/`, do not enumerate it, do not report
-   it (why the skip is at the frontmatter: `docs/pm-design.md#step-1`). For the rest,
-   enumerate `projects/*/tasks/*.md` with their frontmatter; for any task with a `pr`,
-   read its state via `gh pr view`. **All of it, every tick** — nothing upstream
-   oriented for you, and this context is yours alone.
+1. **Orient — one digest, then open only what you act on.** Read `index.md`, then run
+
+   ```bash
+   scripts/tick-delta.sh digest
+   ```
+
+   Its output IS the enumeration — **all of it, every tick**, nothing upstream oriented
+   for you: every live project (slug, status, autonomy, owner), every task under them
+   (path, status, kind, assignee, dependency and open-question counts, criteria filled
+   or not, worktree recorded or not), and every open PR's state, head and review
+   decision, fetched from the host once. A `status: done` project is skipped inside the
+   digest at its frontmatter, exactly as before (`docs/pm-design.md#step-1`).
+
+   **The digest is the enumeration, never the judgement.** Open a document the moment
+   you are about to act on it — the draft you refine, the task you dispatch, advance or
+   reflect, the answer you fold in — and act only on what the document itself says; the
+   digest's counts route your attention, they decide nothing. `SCHEMA.md` is the
+   normative contract you already operate under: **consult the section a judgement
+   depends on** (verification predicate, ownership, completion) rather than re-reading
+   the whole file each tick.
+
+   **Any digest exit but 0 means enumerate yourself**, the long way: per project, read
+   `projects/<slug>/project.md` FIRST and skip every `status: done` project right
+   there; for the rest, enumerate `projects/*/tasks/*.md` with their frontmatter, and
+   for any task with a `pr`, read its state via `gh pr view`. The digest can only ever
+   collapse reads you were owed — it never narrows what a tick sees. **Script missing**
+   (instance not re-stamped): same fallback, plus the one-line
+   `TICK DELTA: absent — re-stamp this instance` you already owe from step 0.9.
 
 2. **Refine drafts.** For each `draft` whose `acceptance_criteria` are empty/thin
    (not yet refined): enrich it, add concrete `acceptance_criteria`, and record

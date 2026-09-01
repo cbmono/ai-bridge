@@ -41,6 +41,7 @@ task() { # <file> <status> [pr-url]
     [ $# -ge 3 ] && printf 'pr: ["%s"]\n' "$3" || printf 'pr: []\n'
   } > "$1"
 }
+printf 'type: Project\nstatus: active\nautonomy: gated\n' > "$INST/projects/proj-a/project.md"
 task "$INST/projects/proj-a/tasks/t1.md" ready
 task "$INST/projects/proj-a/tasks/t2.md" in-review "https://github.com/example-org/example-repo/pull/7"
 # The real instance gitignores the fingerprint (install.sh's guard block); without this,
@@ -142,6 +143,28 @@ ok "record over an unreadable task file refuses (exit 2)"       "$rc2" 2
 ok "…leaving the record untouched"              "$([ "$(cat "$INST/.tick-state")" = "$before2" ] && echo yes || echo no)" yes
 chmod 644 "$INST/projects/proj-a/tasks/t1.md"
 ok "…and readable again restores IDLE"          "$(run check)" "rc:0 IDLE: finger"
+
+echo "== the digest: the same walk, enriched, for the tick that must orient =="
+D="$(WITH digest)"; drc=$?
+ok "digest exits 0 and prints the enumeration"   "$drc" 0
+ok "…a project line with status and autonomy"   "$(printf '%s\n' "$D" | grep -c 'project proj-a status=active autonomy=gated')" 1
+ok "…a task line with the orienting fields"     "$(printf '%s\n' "$D" | grep -c 'tasks/t2.md status=in-review kind=build assignee=- deps=0 q=0 crit=no wt=no')" 1
+ok "…and the PR facts fetched once"             "$(printf '%s\n' "$D" | grep -c 'pr https://github.com/example-org/example-repo/pull/7 OPEN abc1234 NONE')" 1
+
+mkdir -p "$INST/projects/done-proj/tasks"
+printf 'type: Project\nstatus: done\n' > "$INST/projects/done-proj/project.md"
+task "$INST/projects/done-proj/tasks/old.md" done
+GIT -C "$INST" add -A && GIT -C "$INST" commit -qm done-proj
+ok "a done project is skipped at its frontmatter in the digest" \
+   "$(WITH digest | grep -c 'done-proj/tasks')" 0
+ok "…and in the probe walk too"                 "$(WITH record; grep -c 'done-proj/tasks' "$INST/.tick-state")" 0
+ok "…while its project line still shows in the digest" "$(WITH digest | grep -c 'project done-proj status=done')" 1
+
+mkdir -p "$INST/projects/broken/tasks"
+task "$INST/projects/broken/tasks/orphan.md" ready
+ok "a tasks/ dir with no project.md poisons the walk (exit 2, not a silent hole)" \
+   "$(WITH digest >/dev/null 2>&1; echo $?)" 2
+rm -rf "$INST/projects/broken"; GIT -C "$INST" checkout -q -- . 2>/dev/null
 
 echo "== plumbing =="
 ok "not a git repo is exit 2"    "$(mkdir -p "$TMP/plain"; "$SH" check --instance "$TMP/plain" >/dev/null 2>&1; echo $?)" 2
