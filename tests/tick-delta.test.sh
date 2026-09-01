@@ -123,7 +123,25 @@ ok "…and record refuses (exit 2)"               "$rc" 2
 ok "…leaving the previous record untouched"     "$([ "$(cat "$INST/.tick-state")" = "$before" ] && echo yes || echo no)" yes
 rm -f "$GHDIR/7.fail"
 
-ok "no gh on PATH is exit 2, never IDLE"         "$(GHDIR="$GHDIR" PATH="/usr/bin:/bin" "$SH" check --instance "$INST" >/dev/null 2>&1; echo "rc:$? ")" "rc:2 "
+# HERMETIC: a bin dir holding every tool the script needs and NOTHING else — a bare
+# system PATH could still carry a real gh (and would let this test touch the network).
+NOGH="$TMP/nogh"; mkdir -p "$NOGH"
+for t in bash sh git sed grep sort date mv rm diff head cut env; do
+  tp="$(command -v "$t" 2>/dev/null)" && ln -s "$tp" "$NOGH/$t"
+done
+ok "no gh on PATH is exit 2, never IDLE"         "$(PATH="$NOGH" "$SH" check --instance "$INST" >/dev/null 2>&1; echo "rc:$? ")" "rc:2 "
+
+# In `check`, an unreadable tracked file trips the dirty branch first (git reports it
+# modified) — fail-closed either way. The load-bearing path is RECORD, which has no dirty
+# pre-check: a record built over the unreadable file would be the hole a later check
+# "matches".
+chmod 000 "$INST/projects/proj-a/tasks/t1.md"
+before2="$(cat "$INST/.tick-state")"
+WITH record 2>/dev/null; rc2=$?
+ok "record over an unreadable task file refuses (exit 2)"       "$rc2" 2
+ok "…leaving the record untouched"              "$([ "$(cat "$INST/.tick-state")" = "$before2" ] && echo yes || echo no)" yes
+chmod 644 "$INST/projects/proj-a/tasks/t1.md"
+ok "…and readable again restores IDLE"          "$(run check)" "rc:0 IDLE: finger"
 
 echo "== plumbing =="
 ok "not a git repo is exit 2"    "$(mkdir -p "$TMP/plain"; "$SH" check --instance "$TMP/plain" >/dev/null 2>&1; echo $?)" 2

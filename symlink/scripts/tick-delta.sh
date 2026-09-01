@@ -90,12 +90,15 @@ git -C "$inst" rev-parse --verify -q HEAD >/dev/null 2>&1 || fail2 "not a git re
 # These are checked before any fingerprint, because they are deltas the RECORD can never
 # legitimately contain: a full tick ends with its own work committed.
 if [ "$cmd" = check ]; then
-  dirty="$(git -C "$inst" status --porcelain --untracked-files=no 2>/dev/null || true)"
+  # The status reads FAIL CLOSED: a `git status` that errors must not read as "clean" —
+  # an empty answer and no answer point in opposite directions here.
+  dirty="$(git -C "$inst" status --porcelain --untracked-files=no 2>/dev/null)"     || fail2 "git status failed — the tree cannot be judged"
   if [ -n "$dirty" ]; then
     echo "DELTA: tracked files are dirty — someone is mid-edit (an appended answer looks exactly like this)."
     exit 1
   fi
-  untracked="$(git -C "$inst" status --porcelain -- projects 2>/dev/null | grep '^??' || true)"
+  untracked="$(git -C "$inst" status --porcelain -- projects 2>/dev/null)"     || fail2 "git status failed — the tree cannot be judged"
+  untracked="$(printf '%s\n' "$untracked" | grep '^??' || true)"
   if [ -n "$untracked" ]; then
     echo "DELTA: untracked file(s) under projects/ — a draft in the making."
     exit 1
@@ -114,6 +117,9 @@ fingerprint() {
   local f st prs url inflight=0 urls=""
   for f in "$inst"/projects/*/tasks/*.md; do
     [ -f "$f" ] || continue
+    # An UNREADABLE task file poisons the whole fingerprint rather than degrading to a
+    # fake `unset` fact — a record built on a hole would let the next check "match" it.
+    [ -r "$f" ] || return 1
     st="$(sed -n 's/^status:[[:space:]]*\([A-Za-z-]*\).*/\1/p' "$f" | head -n1)"
     printf 'task %s %s\n' "${f#"$inst"/}" "${st:-unset}"
     [ "$st" = "in-progress" ] && inflight=1
@@ -144,7 +150,7 @@ $prs"
   return 0
 }
 
-FP="$(fingerprint)" || fail2 "could not read a PR from the host (gh missing, offline, or a bad URL)"
+FP="$(fingerprint)" || fail2 "could not complete the fingerprint (an unreadable task file, gh missing or offline, or a bad PR URL)"
 
 case "$cmd" in
   record)
