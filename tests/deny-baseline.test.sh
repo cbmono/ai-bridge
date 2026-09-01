@@ -74,7 +74,9 @@ payload() { # <cwd> <command> [tool_name]
 }
 
 raw() { # <cwd> <command> [tool] -> stdout of the hook
-  payload "$1" "$2" "${3:-Bash}" | HOME="$FIXHOME" bash "$HOOK" 2>/dev/null
+  # CLAUDE_PROJECT_DIR pinned EMPTY: the subagent_push_default rule reads it, and a real
+  # session's value leaking in would flip cases that never meant to exercise that rule.
+  payload "$1" "$2" "${3:-Bash}" | HOME="$FIXHOME" CLAUDE_PROJECT_DIR= bash "$HOOK" 2>/dev/null
 }
 
 # "allow", or "deny:<rule-id>". Anything else is a defect and shows as "bad:…", never as a
@@ -364,7 +366,7 @@ payload_agent() { # <cwd> <command>
 }
 verdict_agent() { # <cwd> <command> -> "allow" | "deny:<rule>" | "bad:<decision>"
   local out dec rule
-  out="$(payload_agent "$1" "$2" | HOME="$FIXHOME" bash "$HOOK" 2>/dev/null)"
+  out="$(payload_agent "$1" "$2" | HOME="$FIXHOME" CLAUDE_PROJECT_DIR= bash "$HOOK" 2>/dev/null)"
   [ -n "$out" ] || { printf 'allow'; return 0; }
   dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
   [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
@@ -404,6 +406,59 @@ ok "the human (no agent_id) may still gh pr merge" \
    "$(verdict "$GITREPO" 'gh pr merge 5')" "allow"
 ok "the human may still gh pr review --approve" \
    "$(verdict "$GITREPO" 'gh pr review --approve 5')" "allow"
+
+echo "== rule 9: subagent_push_default — a product repo's protected branch takes PRs, not agent pushes"
+# The discriminators, each with its own case below: agent_id (the human is exempt),
+# CLAUDE_PROJECT_DIR (the bundle is exempt — the tick pushes it by design; unset is
+# plumbing and fails open), and the branch (feature pushes are how PRs get opened).
+BUNDLE="$WORK/bundle"; mkdir -p "$BUNDLE"
+git -C "$BUNDLE" init -q >/dev/null 2>&1
+git -C "$BUNDLE" symbolic-ref HEAD refs/heads/main
+git -C "$BUNDLE" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m init
+BUNDLE="$(res "$BUNDLE")"
+
+verdict_agent_in() { # <project-dir> <cwd> <command> -> "allow" | "deny:<rule>" | "bad:…"
+  local out dec rule
+  out="$(payload_agent "$2" "$3" | HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$1" bash "$HOOK" 2>/dev/null)"
+  [ -n "$out" ] || { printf 'allow'; return 0; }
+  dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
+  [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
+  rule="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null \
+          | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)"
+  printf 'deny:%s' "${rule:-UNNAMED}"
+}
+
+# --- the deny half: an agent, in a product repo, pushing at a protected branch ---
+ok "agent push to main of a product repo is refused" \
+   "$(verdict_agent_in "$BUNDLE" "$GITREPO" 'git push origin main')" "deny:subagent_push_default"
+ok "…and the refspec form HEAD:main is the same push" \
+   "$(verdict_agent_in "$BUNDLE" "$GITREPO" 'git push origin HEAD:main')" "deny:subagent_push_default"
+ok "…and 'develop', from the conventional name set" \
+   "$(verdict_agent_in "$BUNDLE" "$GITREPO" 'git push origin develop')" "deny:subagent_push_default"
+
+# A repo whose default branch has an unconventional name proves the RESOLVED default is
+# consulted, not just the static list — and that an equally unconventional non-default
+# branch still passes.
+ODDREPO="$WORK/oddrepo"; mkdir -p "$ODDREPO"
+git -C "$ODDREPO" init -q >/dev/null 2>&1
+git -C "$ODDREPO" symbolic-ref HEAD refs/heads/release
+git -C "$ODDREPO" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m init
+git -C "$ODDREPO" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/release
+ODDREPO="$(res "$ODDREPO")"
+ok "the RESOLVED default branch counts ('release', in no name list)" \
+   "$(verdict_agent_in "$BUNDLE" "$ODDREPO" 'git push origin release')" "deny:subagent_push_default"
+ok "…while an unconventional non-default branch still passes" \
+   "$(verdict_agent_in "$BUNDLE" "$ODDREPO" 'git push origin release-notes-page')" "allow"
+
+# --- the allow halves (load-bearing): the three exemptions ---
+ok "agent pushing a feature branch of the same repo is allowed" \
+   "$(verdict_agent_in "$BUNDLE" "$GITREPO" 'git push origin feat/x')" "allow"
+ok "the BUNDLE's own main is exempt — the tick pushes it by design" \
+   "$(verdict_agent_in "$BUNDLE" "$BUNDLE" 'git push origin main')" "allow"
+ok "no CLAUDE_PROJECT_DIR -> plumbing, fails open" \
+   "$(verdict_agent "$GITREPO" 'git push origin main')" "allow"
+ok "the human (no agent_id) pushes main untouched" \
+   "$(verdict "$GITREPO" 'git push origin main')" "allow"
 
 echo "== the rule list itself: a rule cannot be added without being tested"
 # THE LIST IS MEANT TO GROW, so the two ways a growing list rots are pinned here rather
