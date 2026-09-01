@@ -48,8 +48,13 @@ trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
-has()    { printf '%s\n' "$2" | grep -q -- "$1" && echo 0 || echo 1; }
-hasnt()  { printf '%s\n' "$2" | grep -q -- "$1" && echo 1 || echo 0; }
+# NOT `grep -q`: under `set -o pipefail`, -q exits at the first match and a LARGE $2 (a
+# rendered board page) then SIGPIPEs the printf — pipeline status 141, read as FAIL on
+# content that matched. Measured as this suite's recurring CI flake (2026-09-01: three
+# reds on unchanged trees, "line 51: printf: write error: Broken pipe" in the one hot
+# log). Plain grep reads ALL input, so the writer always finishes; stdout is discarded.
+has()    { printf '%s\n' "$2" | grep -- "$1" >/dev/null && echo 0 || echo 1; }
+hasnt()  { printf '%s\n' "$2" | grep -- "$1" >/dev/null && echo 1 || echo 0; }
 
 # Two candidate roots, so "which one did the script use" is answerable from output.
 TRACKED_ROOT="$TMP/tracked-repos"; mkdir -p "$TRACKED_ROOT/repo-t/.git"
