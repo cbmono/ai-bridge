@@ -322,7 +322,7 @@ covers() { # <p> <x>
 # the tools falls through in microseconds. Narrowing one of these silently disables part of
 # a rule, so derive it from the rule body, and note that the deny half of that rule's tests
 # is what proves the filter still lets the real shapes through.
-RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration subagent_merge"
+RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration subagent_merge subagent_push_default"
 
 # --- terraform_destroy --------------------------------------------------------------- #
 # JUSTIFIED BY: `destroy` deletes real infrastructure and there is no legitimate agent
@@ -767,6 +767,99 @@ rule_subagent_merge() {
         esac
         ;;
     esac
+  done <<EOF
+$(stages "$1")
+EOF
+  return 1
+}
+
+# --- subagent_push_default ----------------------------------------------------------- #
+# JUSTIFIED BY: a role agent's work lands on a product repo through a PULL REQUEST — that
+# is the whole review gate — and a direct (non-force) push to a protected branch bypasses
+# it while `force_push_protected` stays silent, because a plain push to `main` is routine
+# FOR THE HUMAN and for the bundle. Agent-scoped like `subagent_merge`: fires only when
+# `agent_id` is present. NARROW ENOUGH TO KEEP, in three exemptions the tests pin:
+#   · the BUNDLE — the repo whose root IS `$CLAUDE_PROJECT_DIR` — is exempt: the
+#     project-manager tick commits and pushes the instance's own default branch by design
+#     (pm-loop step 8). The env var, not the payload `cwd`, because a dispatched agent's
+#     cwd is the WORKTREE — the same reasoning agent-control.sh records for its root;
+#   · a FEATURE branch push is untouched — it is how every PR gets opened;
+#   · `$CLAUDE_PROJECT_DIR` unset or gone is PLUMBING and fails open, like no `jq` —
+#     a rule that guessed the bundle's location would refuse the tick's own push.
+# The branch set is `force_push_protected`'s: the conventional names plus the repo's
+# resolved default. `git -C <elsewhere>` shares that rule's documented limitation.
+rule_subagent_push_default() {
+  [ -n "$AGENT_ID" ] || return 1          # the human's own session is never gated here
+  case "$1" in *push*) ;; *) return 1 ;; esac
+  local inst root
+  inst="${CLAUDE_PROJECT_DIR:-}"
+  [ -n "$inst" ] && [ -d "$inst" ] || return 1
+  inst="$(cd "$inst" 2>/dev/null && pwd -P || printf '%s' "$inst")"
+  root="$(repo_root)"
+  [ -n "$root" ] || return 1
+  [ "$root" = "$inst" ] && return 1       # the bundle: the tick pushes it by design
+
+  local stage c w seen sub skipnext args remote r d dst p protected oldopts
+  while IFS= read -r stage; do
+    [ -n "$stage" ] || continue
+    c="$(first_word "$stage")" || continue
+    [ "$c" = "git" ] || continue
+
+    # The same walk force_push_protected uses, minus the force/delete tracking: ANY push
+    # shape reaching a protected branch of a product repo is refused for an agent.
+    seen=0; sub=""; skipnext=0; args=""
+    while IFS= read -r w; do
+      if [ "$skipnext" = 1 ]; then skipnext=0; continue; fi
+      if [ "$seen" = 0 ]; then [ "${w##*/}" = "git" ] && seen=1; continue; fi
+      if [ -z "$sub" ]; then
+        case "$w" in
+          -C|-c|--git-dir|--work-tree|--namespace|--exec-path) skipnext=1; continue ;;
+          -*) continue ;;
+          *) sub="$w"; continue ;;
+        esac
+      fi
+      case "$w" in
+        --*) ;;
+        -*) ;;
+        *) args="$args $w" ;;
+      esac
+    done <<EOT
+$(tokens_of "$stage")
+EOT
+    [ "$sub" = "push" ] || continue
+
+    oldopts="$(set +o | grep noglob)"; set -f
+    # shellcheck disable=SC2086  # deliberate split; globbing is off for the duration
+    set -- $args
+    eval "$oldopts"
+    remote="${1:-}"; [ "$#" -gt 0 ] && shift
+
+    dst=""
+    if [ "$#" -eq 0 ]; then
+      d="$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+      [ "$d" = "HEAD" ] && d=""
+      dst="$d"
+    else
+      for r in "$@"; do
+        case "$r" in +*) r="${r#+}" ;; esac
+        case "$r" in *:*) r="${r##*:}" ;; esac
+        r="${r#refs/heads/}"
+        dst="$dst $r"
+      done
+    fi
+    [ -n "${dst// /}" ] || continue
+
+    protected="main master develop trunk production"
+    d="$(default_branch)"
+    [ -n "$d" ] && protected="$protected $d"
+    for r in $dst; do
+      for p in $protected; do
+        if [ "$r" = "$p" ]; then
+          printf 'A dispatched agent may not push to the protected branch `%s` of a product repo (`%s`) — work lands there through a pull request, which is the review gate this would bypass. Pushing a FEATURE branch is normal and allowed, and the control-panel bundle itself is exempt (the tick pushes that by design).' "$p" "$root"
+          return 0
+        fi
+      done
+    done
   done <<EOF
 $(stages "$1")
 EOF
