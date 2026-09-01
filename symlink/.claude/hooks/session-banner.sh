@@ -743,6 +743,53 @@ pad() { local s="$1" n
         while [ "$n" -gt 0 ]; do printf ' '; n=$((n-1)); done; }
 
 # ---------------------------------------------------------------------------------------
+# THE BANNER OPENS WITH ONE BLANK LINE, AND IT IS THE BANNER'S — not `systemMessage`'s.
+# ---------------------------------------------------------------------------------------
+# THE HARNESS PREFIXES A LABEL NO PAYLOAD CAN REMOVE. Claude Code renders a SessionStart
+# hook's `systemMessage` as `${hookName} says: ${content}`, and for this event the name is
+# built as `SessionStart:${source}` — so the owner's first line reads
+# `SessionStart:resume says: AI-Bridge 0.13.0 · …`. Measured 2026-08-31 on 2.1.251: the
+# identity line starts 26 characters in while the rule below it — sized from the header and
+# printed at column 0 — does not, and §2's "the rule is what makes this read as a header"
+# does the opposite under the label.
+#
+# ONE BLANK LINE ENDS THE LABEL'S LINE, and every line the banner prints then starts at
+# column 0. EXACTLY ONE, AND NONE AT THE END: two would open a gap inside the notification
+# the label sits in, and there is no line of ours at the bottom for a blank to close.
+#
+# WHY HERE AND NOT IN `emit_json`. That is the tempting place and the one that breaks the
+# thing the two-channel split exists to enforce: `strip_sgr(systemMessage)` equals the
+# text-mode banner CHARACTER FOR CHARACTER (tests/banner-user-channel.test.sh), so a
+# newline added to that field alone IS the two channels drifting, by exactly one byte. It
+# goes into the buffer instead, so every human rendering carries it — text, `--format md`
+# for the `/ai-bridge` relay, and `systemMessage` — and the model's `additionalContext`,
+# derived from the same bytes, takes it too. That copy does not need it and is not harmed
+# by it: one byte, and no second rendering.
+#
+# ABOVE §0, NOT BETWEEN §0 AND §2. The machinery alarm is the banner's first line whenever
+# it fires, so a blank line under it would leave the ALARM wearing the label. The label
+# ends whatever line it is on; it is not the identity line's problem specifically.
+#
+# AND IT IS THE FIRST THING PRINTED, so it can never be a banner on its own: every early
+# exit is above this point (the "is this an instance" gate), and §2 always prints. A
+# directory that is not an instance still emits zero bytes on every channel.
+#
+# NOT THE RULE'S PROBLEM TO SOLVE. Padding or re-sizing the rule to line up under the label
+# is the wrong fix twice over: the label's width varies with the session source
+# (`startup` / `resume` / `clear` / `compact`), so an alignment computed against it is right
+# on one session and wrong on the next; and a rule whose width no longer comes from the
+# header itself (`nchars "$head_line"`, §2) has stopped underlining the line it is under.
+#
+# THE TRAILING COMMENT IS AN ANCHOR, and it is load-bearing. tests/session-banner.test.sh and
+# tests/banner-user-channel.test.sh each build a mutant of this file with this one line
+# deleted, to prove the assertions about the blank line are not vacuous. A bare `echo` is not
+# something a grep can anchor on in a file that prints blank separators between its sections,
+# and a mutant whose anchor is ambiguous is reported SKIPPED rather than counted as caught —
+# so folding this line into the section below, or dropping the comment, turns two harnesses
+# red rather than silently retiring the check.
+echo   # <- the banner's leading blank line (mutation anchor: do not fold into the line above)
+
+# ---------------------------------------------------------------------------------------
 # 0. MACHINERY — was check-machinery.sh. FIRST, and above the identity line, because it is
 #    an alarm: a /pm-loop tick started now fails mid-dispatch with agents already briefed.
 # ---------------------------------------------------------------------------------------

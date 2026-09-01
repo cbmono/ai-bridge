@@ -68,12 +68,21 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/banner-user-channel.XXXXXX")" || {
   echo "banner-user-channel.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 
-pass=0; fail=0
+pass=0; fail=0; skipped=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
 has()   { printf '%s\n' "$2" | grep -qF -- "$1" && echo 0 || echo 1; }
 hasnt() { printf '%s\n' "$2" | grep -qF -- "$1" && echo 1 || echo 0; }
 eq()    { [ "$1" = "$2" ] && echo 0 || echo 1; }
+
+# THE BANNER OPENS WITH A BLANK LINE BY DESIGN (task-027), because Claude Code renders this
+# hook's `systemMessage` as `SessionStart:<source> says: <content>` and that blank is what
+# ends the label's line. So a claim about section ORDER is anchored on the first NON-EMPTY
+# line rather than on line 1 — the same claim, and §9 proves it still fails when anything
+# prints above the header. `0` when there is no non-empty line at all, never the empty
+# string, so a channel that carried nothing FAILS rather than matching an empty string.
+head_no() { printf '%s\n' "$1" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+nth()     { printf '%s\n' "$1" | sed -n "$2p"; }
 
 # Named once rather than typed inline: a literal tab, a bell and an ESC are invisible in a
 # diff, and all three are load-bearing bytes in this file.
@@ -374,8 +383,12 @@ echo "== 5. text is still the default, so /ai-bridge and a terminal are unchange
 # the JSON is what settings.json ASKS for — it is not the default, and this pins that.
 OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"; RC=$?
 assert "no arguments ⇒ the plain banner, exit 0"       "$(eq "$RC" 0)"
+# WAS "the first line" — NOW "the first NON-EMPTY line", the same claim about section order
+# and not a weaker one: the banner opens with one blank line so the harness's label ends the
+# line it owns, and this still goes red the moment §0's machinery alarm or any future section
+# prints above the header. §9 drives both mutants that prove it.
 assert "…starting at the identity line, not at a brace" \
-  "$(eq "$(printf '%s\n' "$OUT" | head -1 | cut -c1-9)" 'AI-Bridge')"
+  "$(eq "$(nth "$OUT" "$(head_no "$OUT")" | cut -c1-9)" 'AI-Bridge')"
 assert "…and it is not JSON"                           "$(eq "$(parses "$OUT")" 1)"
 assert "--format text says the same thing" \
   "$(eq "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format text 2>/dev/null)" "$OUT")"
@@ -772,6 +785,131 @@ assert "…and the fence is still on the model's channel" "$(has '--- BEGIN AWAI
 assert "…and still absent from the human's"             "$(hasnt '--- BEGIN AWAITING ITEMS' "$SM")"
 rm -rf "$INST/projects" "$INST/AWAITING.md"
 
+# =======================================================================================
+echo "== 9. ONE leading blank line, and it belongs to the BANNER — not to systemMessage =="
+# =======================================================================================
+# Claude Code renders a SessionStart hook's `systemMessage` as
+# `SessionStart:<source> says: <content>`, so the identity line arrives shifted right by a
+# label whose width changes with the source (`startup`/`resume`/`clear`/`compact`) while the
+# rule under it — sized from the header and printed at column 0 — does not. One blank line
+# ends the label's line, and every line of the banner then starts at column 0.
+#
+# WHY THIS IS A SECTION HERE AND NOT ONE ASSERTION. `emit_json` is the tempting place to add
+# that newline and the one place that breaks what this file exists for: section 1's
+# `strip_sgr(systemMessage)` == text-banner equality, CHARACTER FOR CHARACTER. A newline
+# added to that field alone IS the two channels drifting, by exactly one byte. So the blank
+# is asserted on ALL THREE human renderings, and the equality is RE-RUN here — never trimmed,
+# never normalised, because a relaxed comparison would have accepted the very fix this
+# section refuses.
+TXT9="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"
+MD9="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"
+hook_run
+SM9="$(field "$OUT" systemMessage)"
+AC9="$(field "$OUT" hookSpecificOutput.additionalContext)"
+assert "text mode opens with exactly ONE blank line"          "$(eq "$(head_no "$TXT9")" 2)"
+assert "…the md rendering /ai-bridge relays does too"         "$(eq "$(head_no "$MD9")" 2)"
+assert "…and so does systemMessage, the field the label prefixes" "$(eq "$(head_no "$SM9")" 2)"
+# THE MODEL'S CHANNEL NEEDS NONE OF THIS AND CARRIES IT ANYWAY, which is correct and costs
+# one byte: `additionalContext` is derived from the same buffer. One rendering, two fields,
+# unchanged — a separate rendering path for the model is what this assertion refuses.
+assert "…and additionalContext takes it too, from the same bytes" "$(eq "$(head_no "$AC9")" 2)"
+assert "…with strip_sgr(systemMessage) STILL the text banner, character for character" \
+  "$(eq "$(strip_sgr "$SM9")" "$TXT9")"
+# EXACTLY ONE, NOT TWO: `head_no` = 2 already says that, and this says the same of the OTHER
+# end. `$( … )` eats trailing newlines, so `$TXT9` cannot answer it and the raw bytes have
+# to — awk's `$0` in END is the last record, empty exactly when the stream ended on a blank.
+CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" > "$TMP/banner.raw" 2>/dev/null
+assert "…and no trailing blank line is introduced" \
+  "$(eq "$(awk 'END { print ($0 == "" ? "blank" : "text") }' "$TMP/banner.raw")" text)"
+
+# --- NON-VACUITY: one mutant per claim, and a skip is as red as a failure ----------------
+# The two claims this file now makes are DIFFERENT claims — "one leading blank line" is about
+# the first line, "the identity line is the first non-empty one" is about order — so each
+# mutant must redden its own and leave the other green. A single mutant reddening both would
+# prove neither separately, and re-expressing "first line" as "first NON-EMPTY line" would
+# then be indistinguishable from dropping the invariant.
+#
+# THE MUTANT IS SWAPPED IN AT THE INSTANCE'S OWN SYMLINK, so `hook_run` still runs the
+# command settings.json registers rather than a flag this file chose — the whole point of
+# section 1, and not something a mutation check gets to give up.
+MUTDIR="$TMP/mutants"; mkdir -p "$MUTDIR"
+ANCHOR_RE="^echo +# <- the banner's leading blank line"
+use_hook() { rm -f "$INST/.claude/hooks/session-banner.sh"
+             ln -s "$1" "$INST/.claude/hooks/session-banner.sh"; }
+MUT_PATH=""
+mutate() { # <name> <source-file> <awk-program> -> 0 and sets MUT_PATH, or 1 having reported SKIP
+  local name="$1" file="$2" prog="$3" anchors
+  MUT_PATH=""
+  anchors="$(grep -cE "$ANCHOR_RE" "$file" || true)"
+  if [ "$anchors" != 1 ]; then
+    printf '  SKIP  %-62s (anchor matched %s times, not once)\n' "$name" "$anchors"
+    skipped=$((skipped+1)); return 1
+  fi
+  MUT_PATH="$MUTDIR/mutant-$RANDOM.sh"
+  awk -v anchor="$ANCHOR_RE" "$prog" "$file" > "$MUT_PATH"
+  # EXECUTABLE, BECAUSE THE REGISTERED COMMAND RUNS THE FILE ITSELF — settings.json spells it
+  # `"$CLAUDE_PROJECT_DIR"/.claude/hooks/session-banner.sh --format json`, with no interpreter
+  # in front. A mutant without the bit produces NO output, every `head_no` reads 0, and the
+  # "goes RED" assertions all pass for the wrong reason. Caught by exactly that, while writing
+  # this section; the `parses` assertion below is what stops it coming back silently.
+  chmod +x "$MUT_PATH"
+  return 0
+}
+# The SKIP branch is driven rather than trusted — untested code inside the guard against
+# untested code — in a subshell, so the real counters survive and the assertion can read the
+# subshell's own value back.
+grep -vE "$ANCHOR_RE" "$HOOK" > "$TMP/no-anchor.sh"
+probe="$( skipped=0
+          mutate "probe: an absent anchor" "$TMP/no-anchor.sh" '{ print }' >/dev/null 2>&1
+          printf 'rc=%s skipped=%s\n' "$?" "$skipped" )"
+assert "an absent anchor returns 1 AND counts a skip" "$(eq "$probe" 'rc=1 skipped=1')"
+assert "…and the intact hook carries exactly ONE anchor" \
+  "$(eq "$(grep -cE "$ANCHOR_RE" "$HOOK")" 1)"
+
+# MUTANT 1 — the blank line deleted from the BANNER. The three renderings lose it together,
+# which is the criterion stated as a test: it is one line in one place, not three.
+if mutate "mutant: the leading blank line deleted" "$HOOK" '$0 ~ anchor { next } { print }'; then
+  M1="$MUT_PATH"; use_hook "$M1"; hook_run
+  M1_SM="$(field "$OUT" systemMessage)"
+  M1_TXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$M1" 2>/dev/null)"
+  M1_MD="$(CLAUDE_PROJECT_DIR="$INST" bash "$M1" --format md 2>/dev/null)"
+  assert "the mutant really lost the line" "$(eq "$(grep -cE "$ANCHOR_RE" "$M1")" 0)"
+  # …AND IT RAN. A mutant that produced nothing reddens every assertion below for the wrong
+  # reason, which is the vacuity this whole section exists to refuse.
+  assert "…and the mutant still answers the registered command with hook JSON" "$(parses "$OUT")"
+  assert "…and still prints a banner in text mode"  "$(has 'AI-Bridge' "$M1_TXT")"
+  assert "BLANK DELETED: systemMessage stops opening with one blank line" \
+    "$([ "$(head_no "$M1_SM")" != 2 ] && echo 0 || echo 1)"
+  assert "…text mode stops too"  "$([ "$(head_no "$M1_TXT")" != 2 ] && echo 0 || echo 1)"
+  assert "…and so does the md rendering" "$([ "$(head_no "$M1_MD")" != 2 ] && echo 0 || echo 1)"
+  # AND THE EQUALITY SURVIVES THE MUTANT, which is criterion 2 stated the other way round:
+  # taking the blank out of the BANNER leaves the two channels equal, because the banner is
+  # where it lives. Putting it in the FIELD is what would pull them apart — so this assertion
+  # is the one that would have caught the rejected fix.
+  assert "…while strip_sgr(systemMessage) still equals the mutant's own text banner" \
+    "$(eq "$(strip_sgr "$M1_SM")" "$M1_TXT")"
+  assert "…and the identity line is still the first NON-EMPTY one, so the claims differ" \
+    "$(eq "$(nth "$M1_TXT" "$(head_no "$M1_TXT")" | cut -c1-9)" 'AI-Bridge')"
+  use_hook "$HOOK"
+fi
+
+# MUTANT 2 — a line printed above the identity line, which is what §0's alarm does for real.
+# This is what says the re-expressed assertion in section 5 still catches section order.
+if mutate "mutant: a line printed above the identity line" "$HOOK" \
+   '{ print } $0 ~ anchor { print "echo \"MUTANT: a section above the header\"" }'; then
+  M2="$MUT_PATH"; M2_TXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$M2" 2>/dev/null)"
+  assert "the mutant really printed a line above the header" \
+    "$(has 'MUTANT: a section above the header' "$M2_TXT")"
+  assert "…and still prints the banner under it" "$(has 'AI-Bridge' "$M2_TXT")"
+  assert "ABOVE THE HEADER: 'starting at the identity line' goes RED" \
+    "$([ "$(nth "$M2_TXT" "$(head_no "$M2_TXT")" | cut -c1-9)" != 'AI-Bridge' ] && echo 0 || echo 1)"
+  assert "…while the leading blank line is still exactly one, so the claims differ" \
+    "$(eq "$(head_no "$M2_TXT")" 2)"
+fi
+use_hook "$HOOK"
+
 echo
-printf 'pass=%d fail=%d\n' "$pass" "$fail"
-[[ $fail -eq 0 ]]
+printf 'pass=%d fail=%d skipped=%d\n' "$pass" "$fail" "$skipped"
+# A SKIP IS AS RED AS A FAILURE: it means a mutant never applied, and a mutant that never
+# applied proves nothing about the assertion it was written to protect.
+[[ $fail -eq 0 && $skipped -eq 0 ]]
