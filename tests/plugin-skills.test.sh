@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
-# plugin-skills.test.sh — the six plugin skills: shape, safety split, and the pins that
+# plugin-skills.test.sh — the plugin skills: shape, safety split, and the pins that
 # keep each skill's contract from drifting away from the machinery it fronts.
 #
-# THE ONE DESIGN DECISION THIS FILE GUARDS: the model-invocation split. The four skills
-# that CHANGE STATE (`capture`, `work`, `dispatch`, `handoff`) carry
+# THE ONE DESIGN DECISION THIS FILE GUARDS: the model-invocation split. The skills that
+# CHANGE STATE or act on the world (`capture`, `work`, `dispatch`, `handoff`, `audit`,
+# `answer`, `fanout`, `pr-review-request`) carry
 # `disable-model-invocation: true` — a human types them; the model never reaches for them
 # on its own. The two read-only skills (`brief-me`, `welcome`) stay model-invocable. Both
 # directions are asserted, because a `true` added to `brief-me` silently deletes a
@@ -42,12 +43,12 @@ body() { # <skill> — everything after the closing `---`
     "$SK/$1/SKILL.md"
 }
 
-STATE_CHANGING="capture work dispatch handoff"
+STATE_CHANGING="capture work dispatch handoff audit answer fanout pr-review-request"
 READ_ONLY="brief-me welcome"
 ALL="$STATE_CHANGING $READ_ONLY"
 
 # =======================================================================================
-echo "== 1. every skill ships, well-formed, and no seventh skill appears unasserted =="
+echo "== 1. every skill ships, well-formed, and no eleventh skill appears unasserted =="
 # =======================================================================================
 for s in $ALL; do
   ok "$s/SKILL.md ships"                    "$(yn test -f "$SK/$s/SKILL.md")" yes
@@ -57,7 +58,7 @@ for s in $ALL; do
 done
 # A skill added to the directory without being added to this harness is invisible to every
 # assertion here — the silence failure mode this repo's checks are written against.
-ok "the skill set is exactly the six this file asserts" \
+ok "the skill set is exactly the ten this file asserts" \
   "$(ls "$SK" | sort | tr '\n' ' ' | sed 's/ $//')" \
   "$(printf '%s\n' $ALL | sort | tr '\n' ' ' | sed 's/ $//')"
 
@@ -112,6 +113,14 @@ ok "dispatch defers to the pinned loop contract, not a paraphrase" \
   "$(ge1 "$(grep -c 'pm-loop' "$SK/dispatch/SKILL.md")")" yes
 ok "handoff asks for the new owner's github login" \
   "$(ge1 "$(grep -ci 'github-login\|github login' "$SK/handoff/SKILL.md")")" yes
+ok "audit never promotes, merges, or dispatches" \
+  "$(ge1 "$(grep -c 'never promotes, merges, or dispatches' "$SK/audit/SKILL.md")")" yes
+ok "answer works the tasks' open_questions, nothing else" \
+  "$(ge1 "$(grep -c 'open_questions' "$SK/answer/SKILL.md")")" yes
+ok "fanout is for INDEPENDENT asks" \
+  "$(ge1 "$(grep -ci 'independent' "$SK/fanout/SKILL.md")")" yes
+ok "pr-review-request treats Slack as optional" \
+  "$(ge1 "$(grep -ci 'optional' "$SK/pr-review-request/SKILL.md")")" yes
 
 # =======================================================================================
 echo "== 6. manifest validation, where the CLI exists =="

@@ -1,4 +1,6 @@
 ---
+name: audit
+disable-model-invocation: true
 description: Run the slow-cadence audit loop — the counter-metric that grounds objectives against reality and flags Goodhart drift, stale knowledge, and green-but-not-progressing work. The audit agent is read-only; the command's only write is prepending its report to log.md; never promotes, merges, or dispatches.
 allowed-tools: Bash(pwd), Bash(ls:*), Bash(date:*), Read, Edit, Agent
 ---
