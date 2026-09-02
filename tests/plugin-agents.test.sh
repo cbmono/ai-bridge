@@ -92,11 +92,15 @@ echo "== 3. every dispatch string is NAMESPACED =="
 # not swept up. Each is checked from both directions: the namespaced form is present, and
 # the old transition namespace is gone.
 DISPATCHERS="plugin/skills/dispatch/SKILL.md plugin/skills/audit/SKILL.md plugin/agents/project-manager.md"
+OLDSUF="-v$((1 + 1))"   # "-v2" — assembled, never spelled; see the comment below
 for d in $DISPATCHERS; do
   ok "$(basename "$(dirname "$d")")/$(basename "$d") names ai-bridge:" \
     "$(grep -cF 'ai-bridge:' "$TPL/$d" | awk '{print ($1 > 0 ? "yes" : "no")}')" yes
-  ok "…and carries no ai-bridge: dispatch string" \
-    "$(grep -cF 'ai-bridge:' "$TPL/$d" | awk '{print ($1 > 0 ? "no" : "yes")}')" yes
+  # The TRANSITION namespace, spelled out of two halves so this repo's own rename sweeps
+  # cannot silently rewrite the needle into the haystack — which is exactly what happened
+  # while this branch was being written.
+  ok "…and carries no transition-era dispatch string" \
+    "$(grep -cF "ai-bridge${OLDSUF}:" "$TPL/$d" | awk '{print ($1 > 0 ? "no" : "yes")}')" yes
 done
 # The plugin's own name is what the namespace is derived from, so a rename of one without
 # the other leaves twelve dispatch strings pointing at nothing.

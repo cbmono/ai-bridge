@@ -106,7 +106,10 @@ ok "…and carries the session defaults inline" \
 # Every agent the machinery probes for by absolute path must be in the REQUIRED tier.
 # Derived from the probes rather than hard-coded, so a new probe added to a role agent
 # without a matching agent file fails here instead of failing silently in a session.
-probed="$(grep -rhoE '~/\.claude/agents/[a-z0-9-]+\.md' "$REPO/symlink" 2>/dev/null \
+# BOTH trees. The probes are written by the ROLE AGENTS, which the name swap moved into
+# `plugin/agents/`; scanning `symlink/` alone finds none of them and this whole section
+# goes vacuous rather than red — the failure it exists to prevent.
+probed="$(grep -rhoE '~/\.claude/agents/[a-z0-9-]+\.md' "$REPO/symlink" "$REPO/plugin" 2>/dev/null \
           | sed 's#.*/##' | sort -u)"
 ok "the machinery probes for at least one agent" "$([ -n "$probed" ] && echo yes || echo no)" yes
 missing=0

@@ -264,7 +264,11 @@ unclassified_names() { # <file> — backticked capitalised names no rule classif
 # `symlink/`, `.claude/` and `CLAUDE.md` — not `docs/` — to match the measurement this guard
 # is pinned to; scoped to `*.md` because that is where a backticked identifier means
 # anything here.
-NOT_A_TOOL_TREE=("$REPO/symlink" "$REPO/.claude" "$REPO/CLAUDE.md")
+# `$REPO/plugin` is in this list because the eight role agents live there: the name swap
+# retired `symlink/.claude/agents/`, and a tree that stops at `symlink/` stops seeing every
+# backticked mention the agents themselves make — Guard C then declares an entry dead that
+# is named ten lines into `software-engineer.md`.
+NOT_A_TOOL_TREE=("$REPO/symlink" "$REPO/plugin" "$REPO/.claude" "$REPO/CLAUDE.md")
 not_a_tool_uses() { # <name> — count of backticked exact mentions across NOT_A_TOOL_TREE
   # $REPO-anchored, not cwd-relative: this runs the same regardless of where the harness
   # is invoked from, unlike a bare `symlink .claude CLAUDE.md` which resolves against

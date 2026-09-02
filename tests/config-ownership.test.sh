@@ -113,8 +113,12 @@ config_tiers_of() { # <template root> → install.sh's CONFIG_TIERS, one per lin
 # The expected set, derived from what the machinery actually probes for.
 # `project-manager.md` names plan-architect in prose, not in a `test -f`, so the regex
 # cannot see it; it is added by name and that is the whole exception list.
+# BOTH trees are scanned: the role agents that write these probes moved to
+# `plugin/agents/` at the name swap, and a `symlink/`-only scan yields an empty expected
+# set — which reads as "this repo ships two agents nothing probes for" rather than as a
+# broken derivation.
 probed_agents() {
-  { grep -rhoE '~/\.claude/agents/[a-z0-9-]+\.md' "$REPO/symlink" 2>/dev/null | sed 's#.*/##'
+  { grep -rhoE '~/\.claude/agents/[a-z0-9-]+\.md' "$REPO/symlink" "$REPO/plugin" 2>/dev/null | sed 's#.*/##'
     printf 'plan-architect.md\n'; } | sort -u | sed 's#^#agents/#'
 }
 

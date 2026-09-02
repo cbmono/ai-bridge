@@ -121,10 +121,14 @@ PLAIN="$TMP/plain-repo"; mkdir -p "$PLAIN/.claude/agents"
 RC=0; OUT="$(CLAUDE_PROJECT_DIR="$PLAIN" bash "$HOOK_SRC" 2>&1)" || RC=$?
 assert "exit 0"                          "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "…and prints NOTHING"             "$([ -z "$OUT" ] && echo 0 || echo 1)"
-# Neither half of the guard on its own is enough to stay quiet.
+# The guard is ONE marker now. `.claude/agents` was its second half until the name swap
+# retired that directory — the eight role agents ship in the `ai-bridge` plugin — so a
+# config file with no agents directory beside it is an ORDINARY instance, and the banner
+# is required to print in it. Requiring silence here would be requiring silence
+# everywhere, one re-stamp from now.
 BARE="$TMP/bare-repo"; mkdir -p "$BARE"; printf '{}\n' > "$BARE/instance.config.json"
 OUT="$(CLAUDE_PROJECT_DIR="$BARE" bash "$HOOK_SRC" 2>&1)"
-assert "config file but no .claude/agents: silent" "$([ -z "$OUT" ] && echo 0 || echo 1)"
+assert "config file, no .claude/agents: prints" "$([ -n "$OUT" ] && echo 0 || echo 1)"
 
 echo "== an absent, or real, probe path is not a broken one =="
 # Absent means the instance never had it. A real file is never ours to complain about.

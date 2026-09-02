@@ -42,8 +42,8 @@
 #     without an `ls`. So the middle state now SPEAKS: enabled, never rendered, and what
 #     renders it. The disabled state stays silent, in BOTH of its sub-cases (page on disk
 #     or not), because the human turned it off and does not need telling every session;
-#   · a non-bridge project that inherits the hook (no `instance.config.json`, or one with
-#     no `.claude/agents` beside it) gets NO banner at all, not merely no board line;
+#   · a non-bridge project that inherits the hook (no `instance.config.json`) gets NO
+#     banner at all, not merely no board line;
 #   · the `board` read cannot be fooled by the neighbouring `"$board"` doc string in
 #     seed/instance.config.json, by `"boardInstances"`, or by a one-line config — a
 #     line-anchored pattern would read a one-liner as "absent" and fail OPEN, which is
@@ -101,17 +101,21 @@ run
 assert "no instance.config.json at all: exit 0"  "$(eq "$RC" 0)"
 assert "…and prints NOTHING, not even an identity line" "$([ -z "$OUT" ] && echo 0 || echo 1)"
 
-mkdir -p "$INST/.claude/agents"
 render
 cat > "$INST/instance.config.json" <<'EOF'
 {
   "board": true
 }
 EOF
+# `.claude/agents` was the second half of the instance marker until the name swap retired
+# that directory — the eight role agents ship in the `ai-bridge` plugin now, so a hook
+# that still required it would print nothing in every real instance. The marker is
+# `instance.config.json` alone, which is what the two plugin enforcement hooks already
+# key on, so the case below is the POSITIVE one: no agents directory, and the banner
+# still prints.
 rm -rf "$INST/.claude/agents"
 run
-assert "config and page present, no .claude/agents: still silent" "$([ -z "$OUT" ] && echo 0 || echo 1)"
-mkdir -p "$INST/.claude/agents"
+assert "config and page present, no .claude/agents: still prints" "$([ -n "$OUT" ] && echo 0 || echo 1)"
 
 echo "== the off switch: board:false, with a rendered page sitting right there =="
 # THE ONE ai-bridge#60 EXISTED FOR. `board` had exactly one reader — install.sh's

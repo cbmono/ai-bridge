@@ -1088,11 +1088,15 @@ fi
 # already prints above the header, so a fixture with one dangling probe symlink puts a real
 # line there. The mutants prove the assertion discriminates; this proves the case it was
 # re-expressed to keep catching actually occurs in this hook as shipped.
+# The probe planted here has to be one the hook's own PROBES list names. It used to be
+# `.claude/agents/project-manager.md`; the name swap retired that path, so the list names
+# `agents/index.md` instead and a fixture aimed at the old one plants a dangling link the
+# hook is right to ignore.
 DANGLING="$TMP/_dangling"
-mkdir -p "$DANGLING/.claude/agents"
+mkdir -p "$DANGLING/agents"
 printf 'stub\n' > "$DANGLING/SCHEMA.md"
 printf '{ "org": "example-org" }\n' > "$DANGLING/instance.config.json"
-ln -s "$TMP/never-existed/project-manager.md" "$DANGLING/.claude/agents/project-manager.md"
+ln -s "$TMP/never-existed/index.md" "$DANGLING/agents/index.md"
 DANG="$(CLAUDE_PROJECT_DIR="$DANGLING" bash "$HOOK" 2>/dev/null)"
 assert "a dangling probe really fires §0's alarm" "$(has 'machinery is DANGLING' "$DANG")"
 assert "§0 ABOVE THE HEADER: the first NON-EMPTY line stops being the identity line" \

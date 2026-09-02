@@ -114,7 +114,7 @@ ok "…explicitly not the answer glyph"     "$(saw "$PM_FLAT" 'not `❓ **answer
 # AUTONOMY IS THE EXISTING SWITCH, APPLIED — not a new flag. The criterion says this in as
 # many words, and the tempting implementation is a config key nobody else reads.
 ok "gated asks; a delegating mode dispatches" \
-   "$(saw "$PM_FLAT" 'A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch `qa-reviewer`')" yes
+   "$(saw "$PM_FLAT" 'A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch `ai-bridge:qa-reviewer`')" yes
 ok "…and no new flag is introduced"       "$(saw "$PM_FLAT" 'not a new flag, field or config key')" yes
 ok "…absent AUTONOMY.md means gated"      "$(saw "$PM_FLAT" '**`AUTONOMY.md` absent means every project is `gated`**')" yes
 
