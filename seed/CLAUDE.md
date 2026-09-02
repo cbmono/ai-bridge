@@ -17,7 +17,7 @@ You steer; background agents do the work. **The core loop — memorise this:**
 **The commands are the `ai-bridge-v2` plugin — per machine, not per instance.**
 None of them resolving means it is not installed here. Install once, then restart:
 
-```
+```text
 /plugin marketplace add cbmono/ai-bridge
 /plugin install ai-bridge-v2@ai-bridge
 ```

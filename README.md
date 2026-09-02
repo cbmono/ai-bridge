@@ -53,7 +53,7 @@ command*. Do the plugin first — it is one line, and it is what step 7 needs.
 
 This repo is its own marketplace. In any Claude Code session:
 
-```
+```text
 /plugin marketplace add cbmono/ai-bridge
 /plugin install ai-bridge-v2@ai-bridge
 ```
@@ -143,27 +143,27 @@ claude
 
 Then, inside the session:
 
-```
+```text
 /ai-bridge-v2:new-project add rate limiting to the public API
 ```
 
 Answer its questions. Review the draft tasks. Promote the ones you want (`draft → ready`).
 Then:
 
-```
+```text
 /ai-bridge-v2:dispatch 10m
 ```
 
-**Always launch Claude from inside the instance directory.** The role agents, the
-`SessionStart` banner and this panel's `CLAUDE.md` load from the instance's `.claude/`,
-and that is chosen by the working directory — not by what your editor has open. (The
-plugin's commands are per machine and resolve anywhere; everything else does not.)
+**Always launch Claude from inside the instance directory.** The bundle's linked role
+agents, its `SessionStart` banner and this panel's `CLAUDE.md` load from the instance's
+`.claude/`, and that is chosen by the working directory — not by what your editor has
+open. Everything the plugin carries is per machine and resolves anywhere.
 
 ---
 
 ## The core loop
 
-```
+```text
 /ai-bridge-v2:new-project  →  you promote draft → ready  →  /ai-bridge-v2:dispatch  →  you merge the PR
 ```
 
@@ -234,6 +234,10 @@ Run these inside an instance.
 | `/ai-bridge-v2:fanout <task>` | (plugin) parallel work across several repos |
 | `/ai-bridge-v2:close-project <slug>` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. [→](docs/schema.md#closing-a-project) |
 | `/ai-bridge-v2:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
+| `/ai-bridge-v2:brief-me [project]` | (plugin) a since-you-last-looked digest, or a meeting-ready brief for one project. Read-only |
+| `/ai-bridge-v2:capture <notes>` | (plugin) turn a decision or meeting notes into drafted projects and tasks, with provenance — never promoted |
+| `/ai-bridge-v2:work <task>` | (plugin) work one task in **this** session, ledger kept for you — the solo alternative to dispatching an agent |
+| `/ai-bridge-v2:handoff <path> <login>` | (plugin) transfer a task or project to another human, with the context that makes the transfer real |
 
 Flags `/ai-bridge-v2:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 `browser=claude-for-chrome`, `/yolo`, `/cli …`, `/claudeforchrome`, `--no-commit`.

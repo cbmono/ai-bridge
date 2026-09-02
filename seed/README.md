@@ -132,9 +132,11 @@ From a fresh session **in this instance directory** (so the role agents, the
 clones, and `gh` are available), with the `ai-bridge-v2` plugin installed on this
 machine (`/plugin marketplace add cbmono/ai-bridge`, then `/plugin install
 ai-bridge-v2@ai-bridge`):
-```
+
+```text
 /ai-bridge-v2:dispatch 10m
 ```
+
 A SERIAL, completion-gated loop — exactly one tick at a time. Preview safely with
 a **DRY RUN**: *"run the project-manager in DRY RUN — refine and report the
 dispatch you would do, without spawning agents."*
