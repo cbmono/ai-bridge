@@ -19,7 +19,8 @@ and stop.
    routes dispatches: run `scripts/resolve-model.sh auditor` — it looks `auditor` up in `roleTiers` (default `deep`) and maps it to an
    alias via `models`; if those maps are absent it prints why on stderr — report that line,
    then inherit the session model rather than dispatching on a guess.
-2. Dispatch the **`auditor`** agent (`subagent_type: auditor`) for one pass, passing the
+2. Dispatch the **`auditor`** agent (`subagent_type: ai-bridge:auditor` — the plugin
+   namespace, because a BARE agent name does not resolve) for one pass, passing the
    resolved model. It's read-only — it grounds each objective's `success_criteria`
    against live `gh`/`git` reality, flags the four drift modes (Goodhart · measurement
    decay · green-but-not-progressing · weakened anchors), and **returns** a dated audit

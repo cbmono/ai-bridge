@@ -108,8 +108,11 @@ assert "SCHEMA.md alone -> silent (partial match)" "$( [ -z "$OUT" ] && [ "$RC" 
 rm -rf "$INST"; mkdir -p "$INST/.claude/agents"; : > "$INST/instance.config.json"; run
 assert "no SCHEMA.md -> silent (partial match)" "$( [ -z "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"
 
+# `.claude/agents` was a third condition until the name swap retired it: the role agents
+# ship in the `ai-bridge` plugin now, so requiring that directory would silence this hook
+# in every instance rather than in none. SCHEMA.md + instance.config.json is the pair.
 rm -rf "$INST"; mkdir -p "$INST"; : > "$INST/SCHEMA.md"; : > "$INST/instance.config.json"; run
-assert "no .claude/agents -> silent (partial match)" "$( [ -z "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"
+assert "no .claude/agents -> still prints" "$( [ -n "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"
 
 # The hook falls back to $PWD when CLAUDE_PROJECT_DIR is unset. A non-instance cwd
 # must be just as silent — a hook that only behaves with the env var set is a hook

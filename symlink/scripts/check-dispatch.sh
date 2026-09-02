@@ -172,8 +172,11 @@ strip_trailing_comment() { # <text, one or more lines>
 # unless `status:` is `blocked`, so an ordinary check pays none of it.
 
 # The bundle root, by walking UP from the task document until a directory carrying the
-# two-part instance signature appears — the same `instance.config.json` + `.claude/agents`
-# pair session-banner.sh and push-state.sh use to decide "is this an instance at all".
+# instance signature appears — `instance.config.json`, the same one marker
+# session-banner.sh, push-state.sh and the two plugin enforcement hooks use to decide "is
+# this an instance at all". It was a PAIR with `.claude/agents` until the name swap
+# retired that directory: the eight role agents ship in the `ai-bridge` plugin now, so the
+# pair would have stopped matching in every instance at its next re-stamp.
 # Deliberately not $CLAUDE_PROJECT_DIR and not a path literal: this script is symlinked
 # into every instance and is run from anywhere, and a task document already knows where it
 # lives. No signature ⇒ no answer, which is how a fixture outside an instance stays quiet.
@@ -181,11 +184,57 @@ bundle_root() { # <task-doc>
   local d
   d="$(cd -- "$(dirname -- "$1")" 2>/dev/null && pwd -P)" || return 1
   while [ -n "$d" ] && [ "$d" != "/" ]; do
-    if [ -d "$d/.claude/agents" ] && [ -f "$d/instance.config.json" ]; then
+    if [ -f "$d/instance.config.json" ]; then
       printf '%s\n' "$d"; return 0
     fi
     d="$(dirname -- "$d")"
   done
+  return 1
+}
+
+# The shipped agent document for one role. It used to be one path literal inside the
+# bundle; the name swap moved the eight role agents into the `ai-bridge` PLUGIN, which is
+# installed per MACHINE and not per instance, so this now has to look outside the bundle.
+# Three sources, cheapest first, and EVERY failure is silent — an unresolvable agent file
+# leaves the contradiction check saying nothing, exactly as a missing one always did.
+#
+#   1. the bundle, for an instance stamped before the swap and not yet re-stamped;
+#   2. the plugin the CLI records as INSTALLED — `installed_plugins.json` names the exact
+#      `installPath`, which is the only source that knows WHICH cached version is live;
+#   3. the newest cached version, for a machine whose install record cannot be parsed.
+#
+# `CLAUDE_CONFIG_DIR` is honoured because install.sh honours it: a machine that moved its
+# config dir has its plugins there too.
+agent_file() { # <bundle-root> <agent-name>
+  local root="$1" agent="$2" cfgdir p
+  [ -f "$root/.claude/agents/$agent.md" ] && { printf '%s\n' "$root/.claude/agents/$agent.md"; return 0; }
+
+  cfgdir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+  [ -d "$cfgdir/plugins" ] || return 1
+
+  # Source 2. A one-line sed rather than jq: this script has no other dependency, and the
+  # value wanted is one string under one known key. A parse that finds nothing falls
+  # through to source 3 rather than failing.
+  if [ -f "$cfgdir/plugins/installed_plugins.json" ]; then
+    p="$(tr -d ' \n' < "$cfgdir/plugins/installed_plugins.json" \
+         | sed -n 's/.*"ai-bridge@ai-bridge":\[{[^}]*"installPath":"\([^"]*\)".*/\1/p' | head -1)"
+    [ -n "$p" ] && [ -f "$p/agents/$agent.md" ] && { printf '%s\n' "$p/agents/$agent.md"; return 0; }
+  fi
+
+  # Source 3. Newest by version-sort of the directory name, which is what the CLI names
+  # the cache entry. A GLOB, not `ls`: the glob's own order is lexical, and lexical order
+  # puts 0.2.0 after 0.10.0 — so the version is compared numerically, field by field,
+  # rather than taken from the last match.
+  local best="" bestv="" cache="$cfgdir/plugins/cache/ai-bridge/ai-bridge" v
+  for p in "$cache"/*/agents/"$agent".md; do
+    [ -f "$p" ] || continue
+    v="${p#"$cache"/}"; v="${v%%/*}"
+    if [ -z "$bestv" ] || \
+       [ "$(printf '%s\n%s\n' "$bestv" "$v" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "$v" ]; then
+      bestv="$v"; best="$p"
+    fi
+  done
+  [ -n "$best" ] && { printf '%s\n' "$best"; return 0; }
   return 1
 }
 
@@ -223,7 +272,7 @@ blocked_contradiction() { # <task-doc>
   # A path literal out of the document, so it is confined to one directory and cannot
   # escape it: a slash or a `..` in `assignee:` would otherwise read an arbitrary file.
   case "$agent" in */*|*..*|"") return 1 ;; esac
-  afile="$root/.claude/agents/$agent.md"
+  afile="$(agent_file "$root" "$agent")" || return 1
   [ -f "$afile" ] || return 1
   held="$(granted_tools "$afile")"
   [ -n "$held" ] || return 1

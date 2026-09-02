@@ -518,15 +518,18 @@ fi
 root="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 # THE "IS THIS AN INSTANCE" TEST MUST NOT ITSELF BE A SYMLINK. SCHEMA.md is machinery, and
-# `[ -f ]` on a dangling symlink is false, so a triple including it would silence this hook
-# in precisely the case the machinery section exists for. These two are the parts a moved
-# template cannot touch: instance.config.json is COPIED seed content and .claude/agents is
-# a real directory install.sh mkdir -p's. A non-bridge project has neither and sees
-# nothing — including no awaiting queue, which is a deliberate narrowing of the old
-# show-awaiting.sh: AWAITING.md is an ai-bridge artifact, and a stray file of that name in
-# an unrelated project was never meant to print.
+# `[ -f ]` on a dangling symlink is false, so a test including it would silence this hook
+# in precisely the case the machinery section exists for. That leaves ONE marker, and it is
+# `instance.config.json` — COPIED seed content, the one part a moved template cannot touch.
+# The second half of the old pair was `.claude/agents/`, and the name swap retired it: the
+# eight role agents ship in the `ai-bridge` plugin now, so keying on that directory would
+# silence the banner in every instance the moment it re-stamps. Same marker, same
+# reasoning, as the two plugin enforcement hooks. A non-bridge project has no
+# instance.config.json and sees nothing — including no awaiting queue, which is a
+# deliberate narrowing of the old show-awaiting.sh: AWAITING.md is an ai-bridge artifact,
+# and a stray file of that name in an unrelated project was never meant to print.
 cfg="$root/instance.config.json"
-[ -f "$cfg" ] && [ -d "$root/.claude/agents" ] || exit 0
+[ -f "$cfg" ] || exit 0
 
 # Where this template lives NOW, read from this script's own path — the one machinery path
 # known to resolve, because it is executing. It names the repair command, and it locates
@@ -795,12 +798,12 @@ echo   # <- the banner's leading blank line (mutation anchor: do not fold into t
 # ---------------------------------------------------------------------------------------
 # A handful of probes, not a walk. Resolving every link in the bundle on every session
 # start costs more and says the same thing: these four are one per class of machinery
-# (root document, script, role agent, hook), and anything that breaks the template's path
+# (root document, script, nested document, hook), and anything that breaks the template's path
 # breaks all four at once. The list FAILS CLOSED — a path this template stops shipping
 # simply stops being a symlink in the instance, so a stale entry can cost a missed report
 # but can never raise a false alarm. tests/moved-template.test.sh asserts every entry is
 # still a real file under symlink/, which is what notices the staleness.
-PROBES="SCHEMA.md scripts/commit-as.sh .claude/agents/project-manager.md .claude/hooks/push-state.sh"
+PROBES="SCHEMA.md scripts/commit-as.sh agents/index.md .claude/hooks/push-state.sh"
 
 dead=""; n_dead=0; gone=""
 for rel in $PROBES; do

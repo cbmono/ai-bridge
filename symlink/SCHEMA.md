@@ -167,8 +167,10 @@ pointer to the finished deliverable(s) on completion).
 
 ## type: Agent  (`agents/index.md` lists the roster)
 
-Executable definitions live in `.claude/agents/<role>.md`. The roster doc is a
-human-readable routing reference.
+Executable definitions ship in the **`ai-bridge` plugin** (`/plugin install
+ai-bridge@ai-bridge`), one per machine — not in the bundle. Dispatch them by their
+**namespaced** name, `ai-bridge:<role>`: a bare agent name does NOT resolve (measured
+2026-09-02). The roster doc is a human-readable routing reference.
 
 **`roles` vs `roleTiers` in `instance.config.json`.** The two lists look like they
 should share membership and deliberately do not. `roles` is the roster the PM may

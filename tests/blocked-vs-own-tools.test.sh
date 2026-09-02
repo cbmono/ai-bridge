@@ -29,7 +29,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$REPO/symlink/scripts/check-dispatch.sh"
 CONV="$REPO/symlink/CONVENTIONS.md"
-PM="$REPO/symlink/.claude/agents/project-manager.md"
+PM="$REPO/plugin/agents/project-manager.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/blocked-vs-own-tools.XXXXXX")" || {
   echo "blocked-vs-own-tools.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}." >&2; exit 2; }
@@ -199,7 +199,7 @@ echo "== the fixture has to keep testing what it claims — pin it to the shippe
 # browser tools, the fixtures above quietly stop reproducing the contradiction.
 real_tools() { # <agent>
   awk 'NR==1 && $0=="---" {fm=1; next} fm==1 && $0=="---" {exit}
-       fm==1 && /^tools:/ {print}' "$REPO/symlink/.claude/agents/$1.md"
+       fm==1 && /^tools:/ {print}' "$REPO/plugin/agents/$1.md"
 }
 ok "software-engineer really grants \`Bash\`" \
    "$(grep -qE '(^|[ ,])Bash([ ,]|$)' <<<"$(real_tools software-engineer)" && echo yes || echo no)" yes
@@ -296,6 +296,45 @@ ok "…and that the reply mechanism is unchanged" "$(saw "$PM" '**reply mechanis
 ok "the grant row keeps the '* ' marker"   "$(grep -qE '^   \* 🧰 \*\*grant\*\*' "$PM" && echo yes || echo no)" yes
 ok "…and the heading contract is restated" "$(saw "$PM" 'Keep the `## 🔴 Awaiting you` heading and the `*` marker followed by one space')" yes
 ok "…and the marker/verb split is stated"  "$(saw "$PM" '**A new verb is free; a new marker is not**')" yes
+
+echo
+echo "== the agent file is resolved from the PLUGIN, not only from the bundle =="
+# The name swap moved the eight role agents out of every instance and into the
+# `ai-bridge` plugin, which is installed per MACHINE. So the one path literal this check
+# used to read is gone, and the resolution has three sources — the ORDER is the contract,
+# because a bundle stamped before the swap still has an exact local copy and reading a
+# machine-wide one instead would answer for the wrong template.
+#
+# Driven through a real `CLAUDE_CONFIG_DIR`, never by inspecting the source: the failure
+# this guards against is a resolver that finds nothing and stays silent, which reads
+# exactly like a task with no contradiction in it.
+AF="$TMP/agentfile"; mkdir -p "$AF/cfg/plugins" "$AF/inst"
+CACHE="$AF/cfg/plugins/cache/ai-bridge/ai-bridge"
+mkdir -p "$CACHE/0.9.0/agents" "$CACHE/0.11.0/agents"
+printf 'v0.9.0\n'  > "$CACHE/0.9.0/agents/software-engineer.md"
+printf 'v0.11.0\n' > "$CACHE/0.11.0/agents/software-engineer.md"
+printf '{}\n' > "$AF/inst/instance.config.json"
+
+# CUT from the shipped script, not copied into this file: a local copy would keep passing
+# after the real one broke, which is the whole failure this section is written against.
+awk '/^agent_file\(\) \{/{f=1} f{print} f && /^\}/{exit}' "$SCRIPT" > "$AF/fn.sh"
+ok "the resolver was extractable (or the rest is vacuous)" \
+   "$(bash -n "$AF/fn.sh" 2>/dev/null && grep -c '^agent_file() {' "$AF/fn.sh")" 1
+
+resolve() { # — run the script's own agent_file() against the fixture config dir
+  CLAUDE_CONFIG_DIR="$AF/cfg" bash -c '. "$1"; agent_file "$2" software-engineer' \
+    _ "$AF/fn.sh" "$AF/inst"
+}
+
+# Newest, not last: the glob is lexical, and lexically 0.9.0 sorts after 0.11.0.
+ok "no install record -> newest cached version" "$(resolve)" "$CACHE/0.11.0/agents/software-engineer.md"
+printf '{"version":2,"plugins":{"ai-bridge@ai-bridge":[{"scope":"user","installPath":"%s/0.9.0","version":"0.9.0"}]}}\n' \
+  "$CACHE" > "$AF/cfg/plugins/installed_plugins.json"
+ok "…the install record wins over the newest" "$(resolve)" "$CACHE/0.9.0/agents/software-engineer.md"
+mkdir -p "$AF/inst/.claude/agents"; printf 'bundle\n' > "$AF/inst/.claude/agents/software-engineer.md"
+ok "…and a pre-swap bundle copy wins over both" "$(resolve)" "$AF/inst/.claude/agents/software-engineer.md"
+rm -rf "$AF/inst/.claude" "$AF/cfg/plugins/installed_plugins.json" "$CACHE"
+ok "nothing resolvable anywhere -> silence, not an error" "$(resolve)" ""
 
 echo
 echo "pass=$pass fail=$fail"

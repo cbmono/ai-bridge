@@ -106,7 +106,10 @@ ok "…and carries the session defaults inline" \
 # Every agent the machinery probes for by absolute path must be in the REQUIRED tier.
 # Derived from the probes rather than hard-coded, so a new probe added to a role agent
 # without a matching agent file fails here instead of failing silently in a session.
-probed="$(grep -rhoE '~/\.claude/agents/[a-z0-9-]+\.md' "$REPO/symlink" 2>/dev/null \
+# BOTH trees. The probes are written by the ROLE AGENTS, which the name swap moved into
+# `plugin/agents/`; scanning `symlink/` alone finds none of them and this whole section
+# goes vacuous rather than red — the failure it exists to prevent.
+probed="$(grep -rhoE '~/\.claude/agents/[a-z0-9-]+\.md' "$REPO/symlink" "$REPO/plugin" 2>/dev/null \
           | sed 's#.*/##' | sort -u)"
 ok "the machinery probes for at least one agent" "$([ -n "$probed" ] && echo yes || echo no)" yes
 missing=0
@@ -123,7 +126,7 @@ ok "plan-architect ships in config/required" \
    "$(yn test -f "$REPO/config/required/agents/plan-architect.md")" yes
 # And the probes themselves must SURVIVE — they are what makes a config-less machine work.
 ok "qa-reviewer still probes rather than assuming" \
-   "$(grep -q 'test -f ~/.claude/agents/code-architect.md' "$REPO/symlink/.claude/agents/qa-reviewer.md" && echo yes || echo no)" yes
+   "$(grep -q 'test -f ~/.claude/agents/code-architect.md' "$REPO/plugin/agents/qa-reviewer.md" && echo yes || echo no)" yes
 
 # =========================================================================== #
 echo "-- a fresh config install"
@@ -809,7 +812,7 @@ echo "-- …and 'provided' means a FILE, which is what the consumer probes for"
 # `[ -f ]`, not `[ -e ]`: `-e` is true for a DIRECTORY, so a directory named
 # `code-architect.md` in the provider's tree would be reported as provided — this run writes
 # nothing, exits 0, and `test -f ~/.claude/agents/code-architect.md` in
-# `symlink/.claude/agents/qa-reviewer.md` still fails, silently, in a session. That line is
+# `plugin/agents/qa-reviewer.md` still fails, silently, in a session. That line is
 # the entire content of its own commit and nothing covered it.
 D26="$(newdest 26)"; mkdir -p "$TMP/asetup3/agents/code-architect.md"
 for a in deep-bug-scan.md plan-architect.md; do printf 'ai-setup copy\n' > "$TMP/asetup3/agents/$a"; done

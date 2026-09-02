@@ -702,7 +702,7 @@ config_install() {
     # `-f`, NOT `-e`. `-e` is true for a DIRECTORY, so a directory named `code-architect.md`
     # inside the provider's tree would count as "provided": this run would write nothing,
     # exit 0, and the `test -f ~/.claude/agents/code-architect.md` probe in
-    # `symlink/.claude/agents/qa-reviewer.md` would still fail — silently, in a session. The
+    # `plugin/agents/qa-reviewer.md` would still fail — silently, in a session. The
     # contract is "a FILE exists at this path", so the test has to be the same one the
     # consumer makes. This line is the whole content of its own commit; the fixture that
     # pins it is in `tests/config-layer.test.sh` (a directory in the provider's slot).
@@ -1022,7 +1022,7 @@ if [ "$FIRST_STAMP" = yes ] && [ ! -e "$TARGET/AWAITING.md" ]; then
   cat > "$TARGET/AWAITING.md" <<'AWAITING'
 # Awaiting you
 
-Derived and gitignored — **do not hand-edit**. Rewritten each `/ai-bridge-v2:dispatch` tick
+Derived and gitignored — **do not hand-edit**. Rewritten each `/ai-bridge:dispatch` tick
 from `projects/*/tasks/*.md`. Delete this file to turn the queue off for good;
 the loop never recreates it. Last refreshed: never (no tick has run yet).
 
@@ -1090,7 +1090,7 @@ elif [ ! -e "$TARGET/SNAPSHOT.json" ]; then
   cat > "$TARGET/SNAPSHOT.json" <<'SNAPSHOT'
 {
   "_schema": "ai-bridge board snapshot v1",
-  "_sensitivity": "Derived and gitignored. Rewritten by scripts/write-snapshot.sh each /ai-bridge-v2:dispatch tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
+  "_sensitivity": "Derived and gitignored. Rewritten by scripts/write-snapshot.sh each /ai-bridge:dispatch tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
   "group": "",
   "generated_at": "",
   "counts": {"projects": 0, "tasks": 0, "awaiting": 0},
@@ -1220,7 +1220,7 @@ fi
 if ! grep -qE '^/?\.tick-lock$' "$gi"; then
   cat >> "$gi" <<'GI'
 
-# The PM dispatch lock (scripts/tick-lock.sh) — written by /ai-bridge-v2:dispatch
+# The PM dispatch lock (scripts/tick-lock.sh) — written by /ai-bridge:dispatch
 # immediately before it dispatches a tick and released when that tick reports, so the
 # one-tick-at-a-time guarantee survives a compaction instead of resting on a session's
 # memory. PER CLONE and never committed: two humans sharing one bundle work from two
@@ -1309,7 +1309,7 @@ IDX_END_MARK="# <<< ai-bridge index ignore <<<"
 idxbody="$(mktemp)"
 cat > "$idxbody" <<'GI'
 # Derived navigation indexes — the root one and each project's, rewritten by every
-# /ai-bridge-v2:dispatch tick from the documents they summarise. A view, not source: on
+# /ai-bridge:dispatch tick from the documents they summarise. A view, not source: on
 # a bundle shared by more than one human it would otherwise conflict on every push.
 # `knowledge/index.md` is deliberately NOT ignored: it is the KB's curated lookup
 # surface, changes only when the KB changes, and a fresh clone needs it present.
@@ -2108,17 +2108,17 @@ EOF
 fi
 
 echo "Done. Machinery symlinked & gitignored; seed content in place."
-echo "Next: edit instance.config.json, then run /ai-bridge-v2:dispatch from this directory."
+echo "Next: edit instance.config.json, then run /ai-bridge:dispatch from this directory."
 echo "      (Set reposRoot first, then 'scripts/link-repos.sh' fills in repos/.)"
 # THE OTHER HALF, and it is not this script's to install. Every slash command ships in the
-# ai-bridge-v2 PLUGIN now, per machine rather than per instance, so a perfect stamp still
+# ai-bridge PLUGIN now, per machine rather than per instance, so a perfect stamp still
 # leaves a bundle nobody can drive if the plugin is missing — and the only symptom is
 # "unknown command", which accuses nothing. Printed unconditionally: this script cannot see
 # what Claude Code has installed, and a nudge that fires only when it is sure would never
 # fire at all. See docs/operations.md § 1.
-echo "      (The commands are the ai-bridge-v2 PLUGIN, installed once per machine:"
+echo "      (The commands are the ai-bridge PLUGIN, installed once per machine:"
 echo "       /plugin marketplace add cbmono/ai-bridge, then"
-echo "       /plugin install ai-bridge-v2@ai-bridge — then restart Claude Code.)"
+echo "       /plugin install ai-bridge@ai-bridge — then restart Claude Code.)"
 
 # 5. One nudge, and only a nudge. A pull can bring a stricter SCHEMA.md, whose validator
 # reaches the instance instantly through its symlink and starts reporting errors against

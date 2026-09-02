@@ -397,7 +397,7 @@ assert "…and never from the local one" \
   "$(grep -q 'externalReviewer.*instance\.config\.local\.json' "$NEWPROJ" && echo 1 || echo 0)"
 # A resolver nothing calls does not make an override real: the cap's only consumers are
 # the PM's prose, so they must name the script rather than the tracked file alone.
-for f in "$TPL/plugin/skills/dispatch/SKILL.md" "$TPL/symlink/.claude/agents/project-manager.md"; do
+for f in "$TPL/plugin/skills/dispatch/SKILL.md" "$TPL/plugin/agents/project-manager.md"; do
   assert "$(basename "$f") resolves the cap with resolve-max-agents.sh" \
     "$(grep -q 'resolve-max-agents\.sh' "$f" && echo 0 || echo 1)"
 done

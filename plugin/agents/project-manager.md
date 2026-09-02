@@ -324,8 +324,16 @@ state, and act only on deltas.
    `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the
    task — both, or neither** (`reclaim-worktree.sh` refuses a path with no branch).
    Write them BEFORE spawning, so a tick that dies mid-dispatch still leaves the
-   record. Then spawn the role with the Agent tool (`subagent_type: <assignee>`),
-   passing the absolute task path and its `target_repo`. Respect the concurrency cap
+   record. Then spawn the role with the Agent tool, **namespaced**:
+   `subagent_type: ai-bridge:<assignee>`, passing the absolute task path and its
+   `target_repo`. **The namespace is not optional** — the role agents ship in the
+   `ai-bridge` plugin and a bare agent name does NOT resolve (measured 2026-09-02); a
+   bare `subagent_type` fails with "no such agent", never with "you forgot the
+   namespace". **It applies to every one of the eight** — `ai-bridge:cataloguer`,
+   `ai-bridge:advisor`, `ai-bridge:qa-reviewer` and the rest, wherever this document
+   tells you to dispatch one. The three USER-level agents `install.sh` puts in
+   `~/.claude/agents/` — `code-architect`, `deep-bug-scan`, `plan-architect` — are not
+   plugin agents and stay BARE. Respect the concurrency cap
    **`maxAgentsInFlight`**, resolved with `scripts/resolve-max-agents.sh` rather than
    read from memory (local file first, tracked second — the cap is **this machine's**
    capacity, `SCHEMA.md` → "Per-machine config overrides"); it prints nothing and
@@ -466,7 +474,7 @@ state, and act only on deltas.
        not `❓ **answer**`. **Do not hand-write a row into `AWAITING.md` and stop there** —
        that file is derived and rewritten from the task docs every tick, so a row with
        no `open_questions` entry behind it is deleted on the next one.
-     * **A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch `qa-reviewer`
+     * **A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch `ai-bridge:qa-reviewer`
        automatically**, and say in the tick summary that you did and why.
        **`AUTONOMY.md` absent means every project is `gated`**, so the ask always holds.
      **Ask once per reviewer failure, not once per PR** — raise it on one task, name
@@ -522,7 +530,7 @@ state, and act only on deltas.
    tasks are **all** terminal (`done`/`cancelled`), do **not** close it yourself —
    surface it as a 🔴 *Awaiting you* item. Only on the human's OK (in-session or via
    `/close-project <slug>`) run closeout, in order (`SCHEMA.md` "Project & objective
-   completion"): (a) dispatch the `cataloguer` for a final consolidation pass (counts
+   completion"): (a) dispatch the `ai-bridge:cataloguer` for a final consolidation pass (counts
    toward the cap) — and it is THE cataloguer for this tick: step 7's throttle is
    tick-wide, not step-7-local, so brief this one to cover the closeout consolidation
    AND anything this tick's merges produced; for a research project, graduate the
@@ -547,7 +555,8 @@ state, and act only on deltas.
 7. **Refresh the knowledge base.** If this tick reflected one or more merges (or a
    task reached `done`) whose work produced durable, reusable knowledge, dispatch the
    `cataloguer` (subagent) to capture `Finding`s / update the `Service` catalog / add
-   or update a `Runbook`, and link the `Finding`s from the relevant task doc. **Skip**
+   or update a `Runbook` (`ai-bridge:cataloguer`), and link the `Finding`s from the
+   relevant task doc. **Skip**
    if neither a merge nor a `done` task happened this tick, or the work is trivial.
    **Throttle: at most one `cataloguer` dispatch per TICK, across every step that can
    dispatch one** — step 6(a)'s closeout pass and this refresh are the two, and a tick

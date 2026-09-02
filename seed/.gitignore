@@ -6,13 +6,13 @@ node_modules/
 .claude/*.lock
 .claude/settings.local.json
 
-# Derived awaiting-you queue — rewritten by each /ai-bridge-v2:dispatch tick from
+# Derived awaiting-you queue — rewritten by each /ai-bridge:dispatch tick from
 # projects/*/tasks/*.md. A view, not source; never commit it. Delete the file
 # itself to turn the queue off (the loop never recreates it).
 AWAITING.md
 
 # Derived board snapshot — rewritten by scripts/write-snapshot.sh at the end of each
-# /ai-bridge-v2:dispatch tick, and read by scripts/build-board.sh (possibly from another instance).
+# /ai-bridge:dispatch tick, and read by scripts/build-board.sh (possibly from another instance).
 # A view, not source. Delete the file itself to take this instance off the board (the
 # writer never recreates it), and note the board HTML is derived output too.
 SNAPSHOT.json
@@ -31,7 +31,7 @@ board.html
 # instances stamped before the directory existed.
 /.board-live/
 
-# The PM dispatch lock (scripts/tick-lock.sh) — written by /ai-bridge-v2:dispatch immediately before it
+# The PM dispatch lock (scripts/tick-lock.sh) — written by /ai-bridge:dispatch immediately before it
 # dispatches a tick and released when that tick reports, so the one-tick-at-a-time
 # guarantee survives a compaction instead of resting on a session's memory. PER CLONE and
 # never committed: two humans sharing one bundle work from two clones and each dispatches

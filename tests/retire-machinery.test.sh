@@ -177,8 +177,11 @@ assert "install.sh names neither hook" \
 # as a dangling command: it stays registered and resolves to nothing. Stamped the way a
 # real instance got it (install.sh writes the link, never `ln -s`) for the reason given
 # above the build-artifact-board block.
+mkdir -p "$TPL/symlink/.claude/agents"
 printf -- '---\nname: oncall-guide\ntools: Read\n---\nfixture\n' \
   > "$TPL/symlink/.claude/agents/oncall-guide.md"
+printf -- '---\nname: keeper\ntools: Read\n---\nfixture\n' \
+  > "$TPL/symlink/.claude/agents/keeper.md"
 bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
 assert "an instance stamped before the rename has the old agent" \
   "$(yes_if test -e "$INST/.claude/agents/oncall-guide.md")"
@@ -188,8 +191,14 @@ assert "the renamed agent's stale link is swept" \
   "$(no_if test -L "$INST/.claude/agents/oncall-guide.md")"
 assert "…and reported by name" \
   "$(yes_if grep -qF 'retire .claude/agents/oncall-guide.md' "$TMP/out-agent")"
-assert "…while the new name is linked and resolves" \
-  "$(yes_if test -e "$INST/.claude/agents/failure-analyst.md")"
+# The surviving sibling, not a real role agent: the name swap retired every
+# `symlink/.claude/agents/*.md` file this repo ships, so naming one here would assert
+# the retirement had not happened. What this half is for is that the sweep removes the
+# GONE name and leaves the one still shipped — a fixture answers that exactly.
+assert "…while a sibling the template still ships stays linked" \
+  "$(yes_if test -e "$INST/.claude/agents/keeper.md")"
+rm "$TPL/symlink/.claude/agents/keeper.md"
+rmdir "$TPL/symlink/.claude/agents" 2>/dev/null || true
 
 # --- the eight commands the plugin absorbed (AI Bridge 2.0).
 # The whole command layer left `symlink/` between #107 and #112, one command per slice, as
@@ -224,6 +233,40 @@ assert "…with the line docs/operations.md quotes" \
 # commands it retired, or the next retirement needs an installer edit nobody will make.
 assert "install.sh names none of the 8 commands" \
   "$(no_if grep -qE 'pm-loop|pr-review-request|close-project' "$TPL/install.sh")"
+
+# --- the eight role agents the plugin absorbed (the name swap).
+# The second-largest retirement, and the one with the nastiest failure mode: a project
+# agent SHADOWS the plugin copy, so a single surviving link does not dangle harmlessly —
+# it silently keeps a stale agent winning over the shipped one, in the one instance that
+# missed the re-stamp. Asserted as a SET for the same reason as the commands above:
+# seven swept and one left is indistinguishable from a clean run in any single-name check.
+V2_AGENTS="advisor auditor cataloguer devops-engineer failure-analyst project-manager qa-reviewer software-engineer"
+mkdir -p "$TPL/symlink/.claude/agents"
+for a in $V2_AGENTS; do printf -- '---\nname: %s\ntools: Read\n---\nfixture\n' "$a" \
+  > "$TPL/symlink/.claude/agents/$a.md"; done
+bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
+linked=0; for a in $V2_AGENTS; do [ -e "$INST/.claude/agents/$a.md" ] && linked=$((linked+1)); done
+assert "an instance stamped before the swap has all 8 agents" "$([ "$linked" -eq 8 ] && echo 0 || echo 1)"
+rm -f "$TPL"/symlink/.claude/agents/*.md
+rmdir "$TPL/symlink/.claude/agents" 2>/dev/null || true
+bash "$TPL/install.sh" "$INST" >"$TMP/out-agents8" 2>&1
+left=0; unreported=0
+for a in $V2_AGENTS; do
+  [ -L "$INST/.claude/agents/$a.md" ] && left=$((left+1))
+  grep -qF "retire .claude/agents/$a.md" "$TMP/out-agents8" || unreported=$((unreported+1))
+done
+assert "…and one re-stamp leaves none of them"     "$([ "$left" -eq 0 ] && echo 0 || echo 1)"
+assert "…each reported by name, all 8"             "$([ "$unreported" -eq 0 ] && echo 0 || echo 1)"
+# NOT asserted here, deliberately, though the commands block above asserts its twin:
+# install.sh legitimately NAMES several roles — `roleTiers` seeds `software-engineer`,
+# `qa-reviewer` and `cataloguer` by name — so "the installer mentions no retired agent"
+# would fail on the seeding block rather than on a retirement list. The generic property
+# is already pinned one block up, by the commands; what is specific to the agents is
+# below.
+# The template really does ship none of them any more — the assertions above would pass
+# just as well against a repo that still had them, because they plant their own fixtures.
+assert "the template ships no symlink/.claude/agents at all" \
+  "$(no_if test -e "$TPL/symlink/.claude/agents")"
 
 # --- retired SEED content: reported with an rm, never removed.
 # The asymmetry with the machinery sweep above is the whole point. A symlink into this

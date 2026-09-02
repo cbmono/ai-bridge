@@ -26,12 +26,14 @@
 # that gets pruned stops answering for exactly those instances.
 #
 # AN EMPTY ANSWER IS STILL AN ANSWER, so the audit is recorded rather than left to
-# be re-derived. The AI Bridge 2.0 plugin migration retired EIGHT paths — every
-# `symlink/.claude/commands/*.md` file, as each command became a plugin skill — and
-# not one of them is seed content. All eight are MACHINERY, so all eight are swept
-# by install.sh step 2b and none of them belongs below. Verified end to end in
-# tests/retire-machinery.test.sh ("the eight commands the plugin absorbed"), and
-# `git log --diff-filter=D -- seed/` over the same range is empty. The next person
+# be re-derived. The AI Bridge 2.0 plugin migration retired SIXTEEN paths — every
+# `symlink/.claude/commands/*.md` file, as each command became a plugin skill, and
+# then every `symlink/.claude/agents/*.md` file at the name swap, as the eight role
+# agents became the plugin's only copies — and not one of them is seed content. All
+# sixteen are MACHINERY, so all sixteen are swept by install.sh step 2b and none of
+# them belongs below. Verified end to end in tests/retire-machinery.test.sh ("the
+# eight commands the plugin absorbed" and "the eight role agents the plugin absorbed"),
+# and `git log --diff-filter=D -- seed/` over the same range is empty. The next person
 # to retire something reads this and asks which of the two classes it is in.
 
 todos.md	the /todo feature was removed; this file is your own notes, so it is yours to keep

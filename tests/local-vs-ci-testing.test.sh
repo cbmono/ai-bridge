@@ -63,7 +63,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CONV="$REPO/symlink/CONVENTIONS.md"
 CLAUDEMD="$REPO/CLAUDE.md"
 TESTRULE="$REPO/.claude/rules/tests.md"
-AGENTS="$REPO/symlink/.claude/agents"
+AGENTS="$REPO/plugin/agents"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/local-vs-ci-testing.XXXXXX")" || {
   echo "local-vs-ci-testing.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }

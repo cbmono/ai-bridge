@@ -15,9 +15,11 @@
 # supersedes whatever came before.
 #
 # SELF-DETECTING. It prints nothing at all unless the root looks like a
-# control-panel instance — `SCHEMA.md` + `instance.config.json` + `.claude/agents`,
-# the same triple `/pm-loop`'s preconditions use. So it is safe to inherit in any
-# non-bridge project, and safe to run from anywhere.
+# control-panel instance — `SCHEMA.md` + `instance.config.json`, the same marker
+# every other reader uses. (`.claude/agents` was the third of a triple until the
+# name swap retired it; the role agents ship in the `ai-bridge` plugin now, so a
+# check on that directory would silence this in every instance.) So it is safe to
+# inherit in any non-bridge project, and safe to run from anywhere.
 #
 # INSIDE an instance it always prints, zeros included. "in-flight 0" is precisely
 # the correction a conversation that still remembers three live dispatches needs;
@@ -44,7 +46,7 @@ root="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 # Not an instance ⇒ silent, zero. Absence of the bundle is the off switch here,
 # the same way an absent AWAITING.md silences session-banner.sh.
-[ -f "$root/SCHEMA.md" ] && [ -f "$root/instance.config.json" ] && [ -d "$root/.claude/agents" ] || exit 0
+[ -f "$root/SCHEMA.md" ] && [ -f "$root/instance.config.json" ] || exit 0
 
 # NORMALISED TO BASE 10 BEFORE ANY ARITHMETIC. The digit check below accepts a
 # leading zero, and bash then reads `08` as OCTAL — where 8 is not a legal digit.

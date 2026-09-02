@@ -49,7 +49,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)" || { echo "check-dispatch.test: cannot loc
 REPO="$(cd "$HERE/.." && pwd)" || { echo "check-dispatch.test: cannot locate repo root" >&2; exit 2; }
 SCRIPT="$REPO/symlink/scripts/check-dispatch.sh"
 CONVENTIONS="$REPO/symlink/CONVENTIONS.md"
-PM="$REPO/symlink/.claude/agents/project-manager.md"
+PM="$REPO/plugin/agents/project-manager.md"
 
 FIXDIR="$HERE/fixtures/dispatch"
 SUCCESS="$FIXDIR/success.task.md"

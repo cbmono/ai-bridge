@@ -264,7 +264,11 @@ unclassified_names() { # <file> — backticked capitalised names no rule classif
 # `symlink/`, `.claude/` and `CLAUDE.md` — not `docs/` — to match the measurement this guard
 # is pinned to; scoped to `*.md` because that is where a backticked identifier means
 # anything here.
-NOT_A_TOOL_TREE=("$REPO/symlink" "$REPO/.claude" "$REPO/CLAUDE.md")
+# `$REPO/plugin` is in this list because the eight role agents live there: the name swap
+# retired `symlink/.claude/agents/`, and a tree that stops at `symlink/` stops seeing every
+# backticked mention the agents themselves make — Guard C then declares an entry dead that
+# is named ten lines into `software-engineer.md`.
+NOT_A_TOOL_TREE=("$REPO/symlink" "$REPO/plugin" "$REPO/.claude" "$REPO/CLAUDE.md")
 not_a_tool_uses() { # <name> — count of backticked exact mentions across NOT_A_TOOL_TREE
   # $REPO-anchored, not cwd-relative: this runs the same regardless of where the harness
   # is invoked from, unlike a bare `symlink .claude CLAUDE.md` which resolves against
@@ -526,7 +530,7 @@ trap 'rm -rf "$TMP"' EXIT
 FINDINGS="$TMP/findings"; : > "$FINDINGS"
 
 # ============================================================ 1. the shipped agents
-AGENTS="$(find "$REPO/symlink/.claude/agents" -maxdepth 1 -type f -name '*.md' | sort)"
+AGENTS="$(find "$REPO/plugin/agents" -maxdepth 1 -type f -name '*.md' | sort)"
 ok "shipped agent files found" "$([ -n "$AGENTS" ] && echo yes || echo no)" yes
 
 # GUARD A. The `tools:` lists are the single maintained source the lexicon is pinned to:
@@ -605,7 +609,7 @@ resolve_doc() { # <reference> — repo-relative path of the shipped doc, or noth
     # An agent file is audited against its OWN allowlist in §1, never as a shared doc, and
     # a slash command is run by the main session, which holds every tool and so cannot
     # have this defect. Both are skipped by path rather than by name.
-    case "$cand" in symlink/.claude/agents/*|symlink/.claude/commands/*) continue ;; esac
+    case "$cand" in plugin/agents/*|symlink/.claude/agents/*|symlink/.claude/commands/*) continue ;; esac
     [ -f "$REPO/$cand" ] && { printf '%s\n' "$cand"; return 0; }
   done
   return 1
@@ -1020,7 +1024,7 @@ ok "a slash command is never a shared doc"   "$(resolve_doc .claude/commands/pm-
 # Agent bodies write `../../CONVENTIONS.md`, so the reference normaliser is load-bearing:
 # without it the file this whole check was built for leaves the derived set silently.
 ok "the ../.. reference an agent writes normalises" \
-  "$(doc_refs_of "$REPO/symlink/.claude/agents/software-engineer.md" | grep -cx 'CONVENTIONS.md')" 1
+  "$(doc_refs_of "$REPO/plugin/agents/software-engineer.md" | grep -cx 'CONVENTIONS.md')" 1
 
 printf '\n%s passed, %s failed  (%s agent file(s) + %s shared doc(s); %s declared mention(s))\n' \
   "$pass" "$fail" "$SCANNED" "$SHARED_SCANNED" "$D"

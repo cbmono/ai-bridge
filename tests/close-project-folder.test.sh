@@ -394,7 +394,7 @@ echo "== the closeout PROSE routes to this script, and invents no status value =
 # rots. These assertions exist so a future edit cannot quietly put a hand-rolled
 # `git rm -r` back beside a tested script, or grow the status enum a value.
 CMD="$TPL/plugin/skills/close-project/SKILL.md"
-PM="$TPL/symlink/.claude/agents/project-manager.md"
+PM="$TPL/plugin/agents/project-manager.md"
 SCH="$TPL/symlink/SCHEMA.md"
 assert "/close-project's folder step calls the script" \
   "$(yes_if grep -q 'close-project-folder.sh <slug> --apply' "$CMD")"

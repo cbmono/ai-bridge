@@ -114,7 +114,7 @@ unset CLAUDE_CODE_SESSION_ID TICK_CLAIMANT
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
 LOCKSH="$TPL/symlink/scripts/tick-lock.sh"
 LAUNCHER="$TPL/plugin/skills/dispatch/SKILL.md"
-TICK="$TPL/symlink/.claude/agents/project-manager.md"
+TICK="$TPL/plugin/agents/project-manager.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tick-lock.XXXXXX")" || {
   echo "tick-lock.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -801,7 +801,7 @@ echo "== it bounds TICKS, not role agents =="
 # and "no agent" would have had to be deleted to let it, which is how a guard quietly becomes
 # "some agents". Naming the one file that may read it keeps the other half enforced — add a
 # second agent to this list and you are back to a held lock blocking role agents.
-agent_readers="$(grep -rlF 'tick-lock' "$TPL/symlink/.claude/agents" 2>/dev/null \
+agent_readers="$(grep -rlF 'tick-lock' "$TPL/plugin/agents" 2>/dev/null \
   | sed 's|.*/||' | sort | tr '\n' ' ' | sed 's/ *$//')"
 ok "exactly one agent may name the lock — the tick" "$agent_readers" "project-manager.md"
 ok "the launcher does"                   "$(has "$LAUNCHER" 'scripts/tick-lock.sh')" yes
