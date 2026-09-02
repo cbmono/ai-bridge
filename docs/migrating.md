@@ -61,10 +61,11 @@ git's own two answers are the backup.
 ```bash
 cd ~/workspace/<group>/_ai-bridge-<group>
 git status --short                                  # nothing outstanding before you start
-git add -A && git commit -m "chore: pre-migration checkpoint"
+git add -A && git commit -m "chore: pre-migration checkpoint" || echo "nothing to commit"
 git push                                            # a remote is already a backup
 
 # a second copy that survives the original being deleted — either form is complete
+mkdir -p ~/backups                                  # git bundle will not create it
 git clone --no-hardlinks . ~/backups/_ai-bridge-<group>-backup
 git bundle create ~/backups/_ai-bridge-<group>.bundle --all
 ```
@@ -119,16 +120,22 @@ new=~/workspace/<group>/<new-folder>
 git -C "$old" archive HEAD projects knowledge objectives log.md instance.config.json \
   | tar -x -C "$new"
 
-# your own edits to the seeded documents, IF you made any — otherwise leave them:
-# the freshly stamped copies are newer
-git -C "$old" archive HEAD CLAUDE.md README.md | tar -x -C "$new"
+# everything tracked, so you can see what you are choosing to leave behind
+git -C "$old" ls-files | cut -d/ -f1 | sort -u
 ```
 
 Drop any path that does not exist in `HEAD` — `git archive` fails on an unknown one. A
 `cp -R` works too, but it copies the derived files as well, and then the
 [checklist](#what-you-must-not-lose-and-what-must-not-travel) is yours to run by hand.
 
+**Not on that list: `CLAUDE.md` and `README.md`.** They are seed content and yours to
+edit, but the old copies still say `/pm-loop`. Port *your* edits onto the freshly stamped
+ones — don't copy the files whole and re-import the dead command names you are migrating
+away from.
+
 ### 5. Re-stamp, then re-home the git repo
+
+Same shell as step 4 — `$old` and `$new` are still set.
 
 ```bash
 # a) the SECOND stamp: reposRoot is real now, so repos/ is linked, and the managed
@@ -184,8 +191,8 @@ Only once this passes do you delete anything — see
 | `objectives/` | the `Objective` documents projects hang off |
 | `log.md` | the instance ledger |
 | `instance.config.json` | `org`, `reposRoot`, `worktreeRoot`, `people`, `defaultOwner`, `maxPrLoc` — tracked, and therefore shared, and therefore it travels |
-| `CLAUDE.md`, `README.md` | seed content, **yours since the day it was copied**. Copy them only if you edited them |
-| `AUTONOMY.md` | carry the **decision**, not the file — see below |
+| `CLAUDE.md`, `README.md` | seed content, **yours since the day it was copied** — but port your edits onto the fresh copies rather than copying the old files, which still name `/pm-loop` |
+| `AUTONOMY.md` | the **decision** it encodes, never the file itself — it is a symlink, see below |
 
 ### Do not copy — every one of these regenerates
 
