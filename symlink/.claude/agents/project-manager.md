@@ -80,7 +80,7 @@ state, and act only on deltas.
    is not an ordinary dirty tree.** A tick can start on a tree someone else left
    mid-conflict (`UU`, `AA`, any `U` line) or mid-rebase (a `rebase-merge`/`rebase-apply`
    directory under `.git`). Deferring that as dirt carries an unmerged index into step
-   0.5's ledger append and step 2's task edits — the one thing the conflict rule below
+   0.9's ledger append and step 2's task edits — the one thing the conflict rule below
    already forbids, and that rule fires only after a pull this branch never reaches. So:
    **any `U` line, or a rebase in progress, on entry ⇒ take the stop path immediately** —
    change nothing, dispatch nothing, take no lock, open no ledger entry, report the
@@ -324,13 +324,7 @@ state, and act only on deltas.
    `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the
    task — both, or neither** (`reclaim-worktree.sh` refuses a path with no branch).
    Write them BEFORE spawning, so a tick that dies mid-dispatch still leaves the
-   record. **And close the other half of that window: a spawn that FAILS is a
-   rollback, not a report.** If the `Agent` call errors or returns no agent, put the
-   task back to `status: ready`, clear `assignee`, and leave `worktree:`/`branch:`
-   standing — a re-dispatch reuses that worktree, and `reclaim-worktree.sh` refuses a
-   path with no branch. Say so in the tick report. Left alone, that task claims a
-   `maxAgentsInFlight` slot forever with nothing behind it.
-   Then spawn the role with the Agent tool (`subagent_type: <assignee>`),
+   record. Then spawn the role with the Agent tool (`subagent_type: <assignee>`),
    passing the absolute task path and its `target_repo`. Respect the concurrency cap
    **`maxAgentsInFlight`**, resolved with `scripts/resolve-max-agents.sh` rather than
    read from memory (local file first, tracked second — the cap is **this machine's**
@@ -338,6 +332,14 @@ state, and act only on deltas.
    exits 1 when neither file sets the key — fall back to 4 then, the seeded, measured
    default (SCHEMA.md). Leave the rest `ready` for the next tick. Send independent
    dispatches in one message so they run concurrently.
+
+   **A spawn that FAILS is a rollback, not a report — the other half of the window the
+   pre-spawn write opens.** If the `Agent` call errors or returns no agent, put that
+   task back to `status: ready`, clear `assignee`, and leave `worktree:`/`branch:`
+   standing — a re-dispatch reuses that worktree, and `reclaim-worktree.sh` refuses a
+   path with no branch. Say so in the tick report. Left alone, the task claims a
+   `maxAgentsInFlight` slot forever with nothing behind it, and step 4's sweep can only
+   name it, never decide it.
 
    **A dispatch you send is not finished when the agent says so.** Whatever you
    dispatch here, you check when it reports — `scripts/check-dispatch.sh <task-path>`,
@@ -523,8 +525,8 @@ state, and act only on deltas.
    completion"): (a) dispatch the `cataloguer` for a final consolidation pass (counts
    toward the cap) — and it is THE cataloguer for this tick: step 7's throttle is
    tick-wide, not step-7-local, so brief this one to cover the closeout consolidation
-   AND anything this tick's merges produced; for a research project, graduate the chosen `deliverables` into
-   `knowledge/`; (b) prepend a dated **Project closed** entry to the root `log.md`
+   AND anything this tick's merges produced; for a research project, graduate the
+   chosen `deliverables` into `knowledge/`; (b) prepend a dated **Project closed** entry to the root `log.md`
    naming the project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s)
    produced, and the removing commit SHA; (c) set `project.md` `status: done`, drop it
    from the active `## Projects` list in the ROOT `index.md`, refresh

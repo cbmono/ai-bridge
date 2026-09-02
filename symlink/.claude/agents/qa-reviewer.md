@@ -100,8 +100,8 @@ no PII/secrets. The role-specific procedure is below.
      what the reviewer actually said: any "rate limit reached", "review skipped", plan- or
      quota-exhausted message means **no review happened**. `scripts/review-clearance.sh
      <pr> --repo <org>/<repo>` decides this for you — **exit 1 and exit 5 are both
-     refusals** and it quotes the words; don't re-derive the judgement by eye. And note the refusal comment names
-     the PR's own head in a `between <base> and <head>` line, so "it mentions the head
+     refusals** and it quotes the words; don't re-derive the judgement by eye. And note
+     the refusal comment names the PR's own head in a `between <base> and <head>` line, so "it mentions the head
      SHA" is **not** evidence that anything was reviewed. Treat it exactly like (b) —
      pending, an unmet gate — and say so in your verdict's `caveats`. A green check next
      to a refusal is the most convincing false pass available here; never launder it into
