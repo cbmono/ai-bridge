@@ -1,0 +1,18 @@
+fix(check-dispatch): version-sort the plugin cache with a glob, and pin all three sources
+
+Two defects in the resolver the previous commit added, both found by running it rather
+than by reading it.
+
+`ls -1 … | sort` (shellcheck SC2012) is replaced by a glob whose version component is
+compared numerically field by field. The glob's own order is LEXICAL, and lexically
+0.9.0 sorts after 0.11.0 -- so "take the last match" would have picked a two-releases-old
+agent file on any machine that had ever updated the plugin.
+
+And the resolution had no test. It is the kind of code whose failure mode is SILENCE: a
+resolver that finds nothing makes the exit-4 contradiction check say nothing, which is
+indistinguishable from a task that has no contradiction in it. Four assertions in
+tests/blocked-vs-own-tools.test.sh drive it through a real CLAUDE_CONFIG_DIR fixture and
+pin the ORDER, which is the actual contract -- a bundle stamped before the swap still has
+an exact local copy, and reading a machine-wide one instead would answer for the wrong
+template. The function is CUT out of the shipped script with awk rather than copied into
+the harness, so a local copy cannot keep passing after the real one breaks.

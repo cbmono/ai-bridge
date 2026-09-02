@@ -222,11 +222,19 @@ agent_file() { # <bundle-root> <agent-name>
   fi
 
   # Source 3. Newest by version-sort of the directory name, which is what the CLI names
-  # the cache entry. `ls` is fine here: these are plugin version strings, never user input.
-  for p in $(ls -1 "$cfgdir/plugins/cache/ai-bridge/ai-bridge" 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n -r); do
-    [ -f "$cfgdir/plugins/cache/ai-bridge/ai-bridge/$p/agents/$agent.md" ] || continue
-    printf '%s\n' "$cfgdir/plugins/cache/ai-bridge/ai-bridge/$p/agents/$agent.md"; return 0
+  # the cache entry. A GLOB, not `ls`: the glob's own order is lexical, and lexical order
+  # puts 0.2.0 after 0.10.0 — so the version is compared numerically, field by field,
+  # rather than taken from the last match.
+  local best="" bestv="" cache="$cfgdir/plugins/cache/ai-bridge/ai-bridge" v
+  for p in "$cache"/*/agents/"$agent".md; do
+    [ -f "$p" ] || continue
+    v="${p#"$cache"/}"; v="${v%%/*}"
+    if [ -z "$bestv" ] || \
+       [ "$(printf '%s\n%s\n' "$bestv" "$v" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" = "$v" ]; then
+      bestv="$v"; best="$p"
+    fi
   done
+  [ -n "$best" ] && { printf '%s\n' "$best"; return 0; }
   return 1
 }
 
