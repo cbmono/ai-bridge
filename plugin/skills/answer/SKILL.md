@@ -1,7 +1,8 @@
 ---
 name: answer
 disable-model-invocation: true
-description: Answer the PM's pending open_questions interactively — gather every task's unanswered questions and ask them in one batch, then fold the answers back into the tasks (clearing them). In-session convenience instead of editing each task file by hand.
+description: Answer the PM's pending open_questions interactively — gather the unanswered questions (all projects, one project, or one task), ask them in one batch, then fold the answers back into the tasks (clearing them). In-session convenience instead of editing each task file by hand.
+argument-hint: "[<project-slug> | projects/<slug> | <task path>]  omit for every project"
 allowed-tools: Bash(pwd), Bash(ls:*), Read, Edit, Glob, Grep, AskUserQuestion
 ---
 
@@ -13,13 +14,24 @@ Run from a control-panel instance root — confirm `SCHEMA.md`, `instance.config
 and `.claude/agents` exist in the cwd; if not, tell the user to `cd` into the instance
 and stop.
 
+## Scope — `$ARGUMENTS`
+- **Empty** ⇒ every project: glob `projects/*/tasks/*.md`.
+- **A project** — a slug (`ai-bridge-v2`), a `projects/<slug>` path, or a full path to
+  a project directory ⇒ only that project's `tasks/*.md`.
+- **A task** — any path ending in a task `.md` ⇒ exactly that one file.
+- Anything that resolves to no project directory and no task file: say what didn't
+  match, list the project slugs that exist, and stop — never fall back to all
+  projects on a typo, silently widening what gets edited.
+
 ## Steps
-1. **Gather.** Glob `projects/*/tasks/*.md` and collect every task with a non-empty
+1. **Gather.** Within the scope above, collect every task with a non-empty
    `open_questions` list. For each entry (numbered `Q1:`, `Q2:`, …) record the task path
    + question text.
 2. **Ask.** Present them with `AskUserQuestion`, batched (max 4 per call — loop if there
    are more), grouped by task so the context is clear. Where you can propose plausible
-   answers, offer them as options; otherwise take free-form.
+   answers, offer them as options; otherwise take free-form. When several options could
+   jointly apply, mark that question `multiSelect` so more than one can be picked —
+   selections then fold back as ONE combined answer on the question's line.
 3. **Fold back.** For each answered question, bake the answer into the task itself
    (`# Context`, a tightened `acceptance_criteria`, or `# Notes` as fits) and **move
    that entry** out of `open_questions` into `answered_questions` — the same effect as
