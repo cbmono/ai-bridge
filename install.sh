@@ -1262,6 +1262,31 @@ if ! grep -qE '^/?\.tick-state$' "$gi"; then
 GI
 fi
 
+# The tracked board page (/board.html) — the ONE un-ignore in this file, and it needs its
+# own guard for the .tick-lock.claim reason plus a second one: every instance in existence
+# was seeded from a seed/.gitignore that IGNORED board.html, and that line stops the tick
+# from committing the page the bundle now publishes by tracking. Purely additive, like
+# every other migration here: the old `board.html` line is never removed from a live
+# instance's .gitignore — a later `!/board.html` re-includes it, which is git's own
+# last-match-wins rule and leaves a hand-edited file intact.
+#
+# Both greps run in `if` CONDITION position, where `set -e` does not apply, so a
+# no-match exit 1 is a branch and not an abort.
+#
+# A freshly seeded instance has no `board.html` line at all, so the first grep fails and
+# nothing is appended — the un-ignore exists only to undo a line older instances carry.
+if grep -qE '^/?board\.html$' "$gi" && ! grep -qE '^!/?board\.html$' "$gi"; then
+  cat >> "$gi" <<'GI'
+
+# The bundle's board page (scripts/build-board.sh) — TRACKED on purpose, re-rendered and
+# committed by each /ai-bridge:dispatch tick that changed something. Committing it IS how
+# the board is published: who may read it is this repo's permission list, by construction.
+# This line un-ignores it for instances stamped while board.html was ignored; git takes the
+# LAST matching pattern, so it wins over the older line above without editing it.
+!/board.html
+GI
+fi
+
 # 3b. Two more ignores, appended once each if missing — OUTSIDE the managed block,
 # for the same reason as /repos/ above.
 #

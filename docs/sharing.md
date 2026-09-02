@@ -5,7 +5,8 @@ own `/pm-loop`. Both see one set of projects and one knowledge base, and either 
 a project or a single task across.
 
 **The board is not shared either — each clone renders its own, and that costs nothing.**
-There is no published page to share: every `/pm-loop` tick renders `.board-live/board.html`
+There is no published page to share: every `/pm-loop` tick renders `.board-live/board.html`,
+and a tick that changed something commits `/board.html` into the clone it ran in
 on the machine it runs on. Each human's own projects come from their own snapshot, and
 every *other* owner's is a named, collapsed section read from the tracked task documents at
 their current git `HEAD`. **Git is what two clones genuinely share**, which is why this
@@ -56,7 +57,7 @@ gitignored file on their machine.
 | `reposRoot` | either | required for dispatch | Yes |
 | `worktreeRoot` | either | `<reposRoot>/_wt` | Yes |
 | `boardInstances` | either | the board is just this instance | Yes |
-| `board` | tracked `instance.config.json` | on: the snapshot is seeded and each tick renders the local page | **No** — one instance, one answer |
+| `board` | tracked `instance.config.json` | on: the snapshot is seeded, each tick renders the local page, and a changing tick commits `/board.html` | **No** — one instance, one answer |
 
 The **one** place the overridable set is listed — with what each key means when absent —
 is [`SCHEMA.md` → "Per-machine config overrides"](../symlink/SCHEMA.md). Every reader

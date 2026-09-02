@@ -330,7 +330,7 @@ against the old flag fails loudly rather than rendering a different page.
 scripts/write-snapshot.sh                                    # in an instance: refresh its SNAPSHOT.json
 scripts/print-board.sh                                       # the terminal board
 scripts/build-board.sh                                       # the same page as a BODY, no <html> wrapper
-scripts/build-board.sh --standalone --out /tmp/board.html    # ...the same page, to open in a browser
+scripts/build-board.sh --standalone --out /tmp/board.html .  # ...the same page, THIS instance only, to open in a browser
 scripts/watch-board.sh                                       # a local page, re-rendered on every change
 ```
 
@@ -473,7 +473,7 @@ Full reasoning, including why one drifted instance must not blank the board for 
 | `PRUNE_ACTIVE_MINUTES` | env | the recursive mtime veto in the worktree report |
 | `worktreeRoot` | `instance.config.json` | **`<reposRoot>/_wt`** |
 | `boardInstances` | `instance.config.json` | just this instance |
-| `board` | `instance.config.json` (tracked; read by `install.sh` **and** by each tick) | **on** — `SNAPSHOT.json` is seeded, and each tick renders `.board-live/board.html` |
+| `board` | `instance.config.json` (tracked; read by `install.sh` **and** by each tick) | **on** — `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something commits the tracked `/board.html` |
 | `codegraphSkip` | `instance.config.json` | index every product repo |
 
 One hard rule holds regardless of `maxAgentsInFlight`: never two package installs against
@@ -1008,7 +1008,15 @@ re-renders it as its last act, right after `write-snapshot.sh` refreshes the dat
 scripts/build-board.sh --standalone --out .board-live/board.html
 ```
 
-Four properties, and the first is the one to remember:
+…and, **on a tick that actually changed something**, a second render to a **tracked**
+path, committed with the tick's own curation commit:
+
+```sh
+scripts/build-board.sh --standalone --out board.html .
+scripts/commit-as.sh project-manager "chore: refresh board.html" -- board.html
+```
+
+Six properties, and the first is the one to remember:
 
 1. **`board` is the switch, and it is the same key the installer reads.** `board: false`
    in the tracked `instance.config.json` ⇒ the tick renders nothing and says nothing;
@@ -1032,6 +1040,25 @@ Four properties, and the first is the one to remember:
 4. **A render is not a change.** The tick still reports `noop: true` when the documents
    did not move — a board refresh alone must not wake anybody, or an idle loop starts
    scrolling and gets switched off.
+5. **`/board.html` is TRACKED, and committing it IS the publishing step.** There is no
+   second access-control system to get wrong: a file in a private repo is readable by
+   that repo's permission list and by nobody else. **GitHub Pages is not the route, and
+   not a "later" either** — access-controlled Pages is an Enterprise Cloud feature, so a
+   Pages site on a private bundle would serve the page to the WORLD at an unlisted URL,
+   which is not what the snapshot's field allowlist was ever scoped for. Measured
+   2026-09-02 on the three private bundles: `has_pages: false`, and
+   `GET /repos/<owner>/<repo>/pages` → 404 on each. `seed/.gitignore` therefore does
+   **not** ignore `board.html`, and `install.sh` appends a `!/board.html` un-ignore to
+   instances stamped while it did.
+6. **The trailing `.` is load-bearing, and the tracked copy is why.** Given no instance
+   directory `build-board.sh` discovers instances from `boardInstances`, which on a real
+   machine names **sibling bundles** — so a bare render would commit another bundle's
+   project titles into a repo with a different permission list. That is a governance
+   breach, not a cosmetic bug. `.` renders this instance's `SNAPSHOT.json` and nothing
+   else. **And the commit is gated on `noop: false`**: the masthead timestamp moves on
+   every render, so an unconditional commit would be one content-free blob per gap — 144
+   a day at the default `10m` — and would leave the tracked tree dirty, which makes the
+   next tick defer its `git pull --rebase`.
 
 **There was a publish path here until 2026-08-29, and deleting it is the headline, not a
 footnote.** A recorded artifact URL made each tick republish the page to claude.ai. It
@@ -1079,3 +1106,34 @@ piece of task-derived *text* it carries, and they too reach the model's copy alo
 inside the untrusted-data fence — the single place a title, a question or a project path
 enters session context, and it enters labelled as data. **The human's copy carries one
 count and nothing else**: no title, no question text, no project slug, no queue tally.
+
+### Opening the board (laptop, phone, live)
+
+The board is a **file**, in three places at once, and which one you want depends on where
+you are standing. `/board.html` at the bundle root is the tracked one — the tick commits
+it, so `git pull` is how it reaches another machine.
+
+| Where you are | Do this | Freshness |
+|---|---|---|
+| **Laptop** (the canonical route) | `git pull`, then open `board.html` — `open board.html` on macOS | the last tick that changed something |
+| **Phone** | open `board.html` on github.com → **Download raw file** → open it from Files/Downloads | same |
+| **Phone, one step** | a git client that previews HTML (e.g. Working Copy on iOS) — pull, tap the file | same |
+| **Between ticks** | `scripts/watch-board.sh` → `.board-live/board.html`, on this machine | live, while the watcher runs |
+
+**github.com does not render an `.html` blob as a page — it shows you the source**, in
+the web UI and in the mobile app alike. There is no "view rendered" button to look for and
+nothing here is misconfigured; the raw file has to reach the device before a browser will
+draw it. That is the whole reason the phone row has a download step in it. (`htmlpreview`
+and friends fetch through a third party, so they are **not** a route for a private
+bundle — the page would leave the repo's permission list to be rendered.)
+
+**Nothing is served, so there is nothing to switch off.** No Pages site is enabled on any
+bundle repo, nothing is published to an account, and the only access-control system in
+play is the repo's own permission list. If you can clone the bundle you can read the
+board; if you cannot, there is no URL that would help you.
+
+**If `board.html` is missing or stale after a pull:** the tick commits it only when it
+changed something, so a quiet day leaves the file where the last real tick left it — its
+masthead timestamp says which. An instance stamped before the file was tracked also needs
+one `install.sh` run to pick up the `!/board.html` un-ignore; until then the tick renders
+the page and stages nothing. `board: false` means it is never rendered at all.
