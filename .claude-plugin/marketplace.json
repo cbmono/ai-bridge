@@ -8,7 +8,7 @@
       "name": "ai-bridge-v2",
       "source": "./plugin",
       "description": "The OKF control panel as a Claude Code plugin \u2014 /brief-me, /capture, /work, /dispatch, /handoff and /welcome today; the loop machinery absorbs next.",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "author": {
         "name": "cbmono"
       },
