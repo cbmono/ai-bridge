@@ -14,9 +14,8 @@ You steer; background agents do the work. **The core loop — memorise this:**
 > second gate. Everything else is support. **Steer, don't watch** — `AWAITING.md`
 > tells you what needs *you*.
 
-**The commands come from the `ai-bridge-v2` plugin, not from this repo.** They are
-namespaced, so every one of them starts `/ai-bridge-v2:`. If none of them resolve,
-the plugin is not installed on this machine — install it once and restart:
+**The commands are the `ai-bridge-v2` plugin — per machine, not per instance.**
+None of them resolving means it is not installed here. Install once, then restart:
 
 ```
 /plugin marketplace add cbmono/ai-bridge

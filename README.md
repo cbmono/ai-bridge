@@ -39,23 +39,29 @@ Normative contracts live in the machinery itself: [`symlink/SCHEMA.md`](symlink/
 
 ---
 
-## Install as a plugin (preview)
+## Install
 
-The AI&nbsp;Bridge 2.0 migration is underway: the tool is becoming a Claude Code
-**plugin** (this repo is its own marketplace), starting with two skills — `/brief-me`
-and `/capture` — that work against existing bundles today:
+**Two halves, on two clocks.** The **plugin** carries every slash command and is
+installed once **per machine**; the **bundle** carries the scripts, the `SessionStart`
+hook, the role agents and the root documents, and is stamped once **per instance**. A
+machine with only the plugin has commands and nothing to read; a bundle with only the
+stamp has the data and no way to drive it, and every `/ai-bridge-v2:…` reports *unknown
+command*. Do the plugin first — it is one line, and it is what step 7 needs.
+([docs/operations.md § 1](docs/operations.md#1-installing-and-upgrading-two-halves-and-neither-updates-the-other))
+
+### 1. Install the plugin — once per machine
+
+This repo is its own marketplace. In any Claude Code session:
 
 ```
 /plugin marketplace add cbmono/ai-bridge
 /plugin install ai-bridge-v2@ai-bridge
 ```
 
-See [`plugin/README.md`](plugin/README.md). The installer below remains the full,
-current setup while the migration proceeds.
+Every command is namespaced: `/ai-bridge-v2:dispatch`, `/ai-bridge-v2:new-project`, and
+the rest of the table [below](#commands). See [`plugin/README.md`](plugin/README.md).
 
-## Install
-
-### 1. Clone this repo
+### 2. Clone this repo
 
 ```bash
 git clone git@github.com:cbmono/ai-bridge.git ~/workspace/ai-bridge
@@ -67,7 +73,7 @@ Keep it somewhere permanent. Instances symlink into it by absolute path.
 > into the worktree, and removing that worktree breaks all of them — silently, later. The
 > installer refuses and exits 2.
 
-### 2. Make the instance directory
+### 3. Make the instance directory
 
 Name it **`_ai-bridge-<group>`**, inside the group folder, beside that group's repos.
 
@@ -79,7 +85,7 @@ mkdir -p ~/workspace/<group>/_ai-bridge-<group>
 - The `-<group>` suffix distinguishes it from this template dir and from other groups' instances.
 - The group folder itself is **not** a repo — just a plain directory holding this instance plus the group's repos, side by side, each its own repo.
 
-### 3. Stamp it
+### 4. Stamp it
 
 ```bash
 ~/workspace/ai-bridge/install.sh ~/workspace/<group>/_ai-bridge-<group>
@@ -111,14 +117,14 @@ three values a shared bundle needs, which used to be hand-edited afterwards. See
 - **It never overwrites a value that is already there.**
 - Skipping costs nothing: fill the same three values in by hand whenever you like.
 
-### 4. Configure it
+### 5. Configure it
 
 ```bash
 cd ~/workspace/<group>/_ai-bridge-<group>
 $EDITOR instance.config.json      # org, reposRoot, worktreeRoot, authorEmail
 ```
 
-### 5. Give it a remote
+### 6. Give it a remote
 
 ```bash
 git init && git add -A && git commit -m "chore: bootstrap control panel"
@@ -128,7 +134,7 @@ gh repo create <user>/_ai-bridge-<group> --private --source=. --push
 Keep the leading underscore in the repo name, so a fresh `git clone` lands a
 `_ai-bridge-<group>/` directory that matches the convention.
 
-### 6. Run your first loop
+### 7. Run your first loop
 
 ```bash
 cd ~/workspace/<group>/_ai-bridge-<group>   # this matters — see below
@@ -138,29 +144,30 @@ claude
 Then, inside the session:
 
 ```
-/new-project add rate limiting to the public API
+/ai-bridge-v2:new-project add rate limiting to the public API
 ```
 
 Answer its questions. Review the draft tasks. Promote the ones you want (`draft → ready`).
 Then:
 
 ```
-/pm-loop 10m
+/ai-bridge-v2:dispatch 10m
 ```
 
-**Always launch Claude from inside the instance directory.** The role agents and commands
-load from the instance's `.claude/`, and that is chosen by the working directory — not by
-what your editor has open.
+**Always launch Claude from inside the instance directory.** The role agents, the
+`SessionStart` banner and this panel's `CLAUDE.md` load from the instance's `.claude/`,
+and that is chosen by the working directory — not by what your editor has open. (The
+plugin's commands are per machine and resolve anywhere; everything else does not.)
 
 ---
 
 ## The core loop
 
 ```
-/new-project  →  you promote draft → ready  →  /pm-loop  →  you merge the PR
+/ai-bridge-v2:new-project  →  you promote draft → ready  →  /ai-bridge-v2:dispatch  →  you merge the PR
 ```
 
-`/pm-loop` is serial and completion-gated — one tick at a time. Run **one `/pm-loop` per
+`/ai-bridge-v2:dispatch` is serial and completion-gated — one tick at a time. Run **one per
 instance**. The launcher takes a per-clone lock (`.tick-lock`) immediately before each
 dispatch, and the tick runs the same check on entry — a resumed tick never passes through
 the launcher, so one that finds no lock is refused rather than allowed to run. That
@@ -181,16 +188,16 @@ and deleting that one file makes every project `gated` again with no other edits
 
 ### Who runs what, end to end
 
-One `kind: build` project, from `/new-project` to merge. Every step links to the document
+One `kind: build` project, from `/ai-bridge-v2:new-project` to merge. Every step links to the document
 that **owns** its rule; nothing here restates one. Tiers are the **seed defaults** — each
 instance sets its own in `roleTiers`/`models`
 ([model routing](docs/operations.md#model-routing)).
 
 | # | Step | Who runs it |
 |---|---|---|
-| 1 | **Scaffold** — slug, objective, phases, seed `draft` tasks | you and the main session, interactively [→](symlink/.claude/commands/new-project.md) |
+| 1 | **Scaffold** — slug, objective, phases, seed `draft` tasks | you and the main session, interactively [→](plugin/skills/new-project/SKILL.md) |
 | 2 | **Commit** the scaffold and its registration as one change | main session, via `commit-as.sh` |
-| 3 | **Scaffold review**, three stages: `validate-bundle.sh`, then an external reviewer, then the `qa-reviewer` fallback. Stage 1 gates the rest; stages 2 and 3 are advisory, and stage 2 is *dispatched* rather than waited on | main session; `qa-reviewer` (`deep`) on the fallback [→ step 8](symlink/.claude/commands/new-project.md) |
+| 3 | **Scaffold review**, three stages: `validate-bundle.sh`, then an external reviewer, then the `qa-reviewer` fallback. Stage 1 gates the rest; stages 2 and 3 are advisory, and stage 2 is *dispatched* rather than waited on | main session; `qa-reviewer` (`deep`) on the fallback [→ step 8](plugin/skills/new-project/SKILL.md) |
 | 4 | **Refine** each `draft` — fill `acceptance_criteria`, raise `open_questions` | `project-manager` (`deep`) [→](symlink/.claude/agents/project-manager.md) |
 | 5 | **Approach critique** — **mandatory on its trigger** (a complex or heavily-inferred `kind: build` draft), advisory in what it may decide; its concerns land in `advisor_notes` and gate nothing | `plan-architect` (`apex`), dispatched by the PM [→](symlink/.claude/agents/project-manager.md) |
 
@@ -220,7 +227,7 @@ Run these inside an instance.
 | Command | What it does |
 |---|---|
 | `/ai-bridge-v2:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
-| `/pm-loop [interval]` | the serial background loop: dispatch, track, report. `/pm-loop 10m` ticks every ten minutes |
+| `/ai-bridge-v2:dispatch [gap]` | (plugin) the serial background loop: dispatch, track, report. `/ai-bridge-v2:dispatch 10m` ticks every ten minutes |
 | `/ai-bridge-v2:answer` | (plugin) answer the PM's open questions from inside the session |
 | `/ai-bridge-v2:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
 | `/ai-bridge-v2:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
@@ -228,7 +235,7 @@ Run these inside an instance.
 | `/ai-bridge-v2:close-project <slug>` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. [→](docs/schema.md#closing-a-project) |
 | `/ai-bridge-v2:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
 
-Flags `/new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
+Flags `/ai-bridge-v2:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 `browser=claude-for-chrome`, `/yolo`, `/cli …`, `/claudeforchrome`, `--no-commit`.
 
 ## The team
@@ -240,7 +247,7 @@ Flags `/new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 | `devops-engineer` | infrastructure, CI, deploys |
 | `qa-reviewer` | the **independent** verification gate — fresh context, real signals |
 | `cataloguer` | folds conclusions into `knowledge/` |
-| `auditor` | read-only drift check for `/audit` |
+| `auditor` | read-only drift check for `/ai-bridge-v2:audit` |
 | `failure-analyst` | diagnoses a failing check or a broken build |
 
 Role dispatches are routed to a cost-appropriate model per tier
@@ -295,7 +302,7 @@ When a `draft` is blocked it lists numbered `open_questions` (`Q1:`, `Q2:`, …)
    task, and clears the question.
 4. The `draft` becomes promotable once the list empties.
 
-Answering in chat during a session works too (`/answer`).
+Answering in chat during a session works too (`/ai-bridge-v2:answer`).
 
 The cleared entry is **moved, not deleted** — it lands in `answered_questions` as one flat
 line, `<ISO 8601> · <the entry verbatim>`. It is a human audit record: nothing reads it and
@@ -315,7 +322,7 @@ decision unblocks.
 | ⛔ | unblock |
 | 🏁 | close |
 
-Each item carries a real link. Every `/pm-loop` tick rewrites the file, and a `SessionStart`
+Each item carries a real link. Every `/ai-bridge-v2:dispatch` tick rewrites the file, and a `SessionStart`
 hook injects its items at launch.
 
 In-flight and upcoming work is deliberately **excluded** — it needs no decision, and a
@@ -355,7 +362,7 @@ scripts/build-board.sh                      # the same page as a BODY — no <ht
 scripts/watch-board.sh                      # ./.board-live/board.html, re-rendered on every change
 ```
 
-**The page keeps itself current, locally.** Every `/pm-loop` tick re-renders it to
+**The page keeps itself current, locally.** Every `/ai-bridge-v2:dispatch` tick re-renders it to
 `.board-live/board.html` — gitignored, on this machine — and reports the path; a
 `SessionStart` hook prints the same path when a session starts. `board: false` in
 `instance.config.json` turns that off; absent or `true` leaves it on, which is the seeded
@@ -416,7 +423,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Board data** | the board's field list is a data-governance boundary — no question text, no document bodies, no author identity, no out-of-bundle paths. Nothing publishes it now, and a rendered file is still copyable. [→](docs/operations.md#before-it-leaves-the-machine-know-what-it-carries) |
 | **Untrusted text** | `AWAITING.md` items and the per-turn state injection are fenced as data before they enter session context. Keep the boundary. [→](docs/conventions.md#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) |
 | **No customer PII** | not in a task title, not in an answer, not in a `Finding`. Titles reach the board; answers persist for the life of the repo. |
-| **Drift check** | `/audit` is read-only and advisory. It catches an autonomous loop gaming itself; it is not a merge-blocking guarantee. [→](docs/autonomy.md#the-audit-counter-metric) |
+| **Drift check** | `/ai-bridge-v2:audit` is read-only and advisory. It catches an autonomous loop gaming itself; it is not a merge-blocking guarantee. [→](docs/autonomy.md#the-audit-counter-metric) |
 
 ## Configuration reference
 
@@ -491,7 +498,7 @@ the table above accounts for **every** script in `symlink/scripts/`, which
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `/pm-loop` reports "Unknown command" | Claude was launched outside the instance dir, or new machinery isn't linked | `cd` into the instance and relaunch; then `install.sh <instance>` |
+| `/ai-bridge-v2:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine (or Claude Code has not restarted since) — never the stamp, which delivers no commands at all now | `/plugin marketplace add cbmono/ai-bridge`, `/plugin install ai-bridge-v2@ai-bridge`, then `/exit` and relaunch |
 | A command or agent is missing after a pull | it is a **new** `symlink/` file, so no symlink exists yet | `install.sh <instance>` |
 | A seed change from a pull never arrived | seed is copied only when absent, by design | `./upgrade.sh <instance>` and port what it reports |
 | Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `install.sh` from the main working tree |
