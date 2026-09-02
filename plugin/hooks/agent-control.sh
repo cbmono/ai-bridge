@@ -46,7 +46,9 @@
 # one tiny read per tool call and gates nothing.
 #
 # --------------------------------------------------------------- FAIL OPEN, LOUD
-# This sits in front of EVERY tool call in EVERY session of the instance. A hook
+# This sits in front of EVERY tool call in EVERY session on the machine — a plugin
+# hook is installed per user, so the guard below is the only thing that narrows it
+# to instances, and everything past that guard runs everywhere a bundle does. A hook
 # that blocks work because its own state file is corrupt is worse than no hook at
 # all, so every failure path — no `jq`, unparseable payload, unreadable control
 # file, a malformed record, a verb it does not recognise — LOGS and lets the call
