@@ -27,7 +27,7 @@ number.
 ### After you pull this repo
 
 A `git pull` here updates the template. What that means for an existing instance depends
-on *what* changed — and only three of the five cases need you to do anything.
+on *what* changed — and exactly one of the five needs nothing from you.
 
 | What changed in the pull | Reaches an instance how | You must |
 |---|---|---|
