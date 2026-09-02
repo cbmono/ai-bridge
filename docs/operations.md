@@ -11,8 +11,8 @@ board. Procedures here; the reasoning behind each one is linked.
 
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
-| the **plugin** (`ai-bridge-v2`) | every slash command — `/ai-bridge-v2:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/ai-bridge`, then `/plugin install ai-bridge-v2@ai-bridge`; `/plugin` to update it later |
-| the **bundle** machinery (`symlink/`) | `scripts/`, the `SessionStart` hook, `SCHEMA.md`, `CONVENTIONS.md`, `AUTONOMY.md`, `agents/index.md`, `.claude/settings.json`, the role-agent copies the bundle still links | **per instance** | `install.sh <instance>` |
+| the **plugin** (`ai-bridge-v2`) | every slash command — `/ai-bridge-v2:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/ai-bridge`, then `/plugin install ai-bridge-v2@ai-bridge`; `/plugin` to update it later |
+| the **bundle** machinery (`symlink/`) | `scripts/`, the `SessionStart` and `UserPromptSubmit` hooks, `SCHEMA.md`, `CONVENTIONS.md`, `AUTONOMY.md`, `agents/index.md`, `.claude/settings.json`, the role-agent copies the bundle still links | **per instance** | `install.sh <instance>` |
 
 **Install is therefore the plugin first, the stamp second.** A machine with the plugin and
 no bundle has commands and nothing for them to read; a bundle with no plugin has the data
@@ -120,7 +120,7 @@ errors. The commands simply are not there.
 | Step | What it fixes | What you should see |
 |---|---|---|
 | 1 | the commands do not exist on this machine | `/ai-bridge-v2:welcome` resolves |
-| 2 | the dangling `.claude/commands/*` links, via `install.sh` step 2b | one `retire .claude/commands/<name>.md (no longer shipped by the template)` line per migrated command |
+| 2 | the dangling `.claude/commands/*` and `.claude/hooks/*` links, via `install.sh` step 2b | one `retire <path> (no longer shipped by the template)` line per migrated command, plus one each for `.claude/hooks/deny-destructive.sh` and `.claude/hooks/agent-control.sh` |
 | 3 | the seed documents that still name the old commands | the `seed/` verdicts above — `CLAUDE.md` and `README.md` 3-way merged onto your edits, or `CONFLICT`, which writes nothing |
 | 4 | Claude Code is still holding the old registration | the `SessionStart` banner, and `/ai-bridge-v2:dispatch` in the command list |
 
@@ -129,6 +129,15 @@ so without the re-stamp the instance offers `/pm-loop` and fails when you run it
 sweep is `install.sh`'s, it removes only links that point into this template's `symlink/`
 *and* whose target is gone, and it never touches instance content — [§2
 below](#2-retiring-content-swept-vs-reported).
+
+**The enforcement hooks are the one case where step 1 comes first for a REASON, not just
+by convention.** `.claude/settings.json` is itself a symlink into the template, so its
+`PreToolUse` registration disappears the instant you pull the template clone — before any
+stamp, and whether or not you meant to upgrade yet. From that moment until the plugin is
+installed or updated, **the destructive-action deny baseline and the kill switch are off**.
+Nothing reports it: the hook files are still linked (dangling, until step 2) and the
+absence of a hook looks exactly like a session where nothing was denied. Do step 1 on the
+machine before you pull, or accept the gap knowingly.
 
 **Step 3 is the one that can decline.** Seed content has been yours to edit since the day
 it was copied, so a `CONFLICT` verdict writes nothing and names both paths: port the
@@ -717,7 +726,7 @@ owner asked three times in one session, for three different instances.
 
 ```text
 
-AI-Bridge v0.26.0 · _ai-bridge-private · org: cbmono
+AI-Bridge v0.27.0 · _ai-bridge-private · org: cbmono
 ────────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM

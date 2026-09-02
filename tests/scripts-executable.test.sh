@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# scripts-executable.test.sh — every symlink/scripts/*.sh AND every symlink/.claude/hooks/*.sh
-# must be committed executable, because both are invoked as bare paths and nothing else
+# scripts-executable.test.sh — every symlink/scripts/*.sh, every symlink/.claude/hooks/*.sh
+# AND every plugin/hooks/*.sh
+# must be committed executable, because all are invoked as bare paths and nothing else
 # grants +x: install.sh symlinks scripts/ straight into an instance and chmods only those,
 # and settings.json invokes each hook as "$CLAUDE_PROJECT_DIR"/.claude/hooks/<name>.sh with
 # no installer chmod in between — so a committed-644 hook is MORE exposed than a script,
@@ -254,7 +255,21 @@ echo "== symlink/.claude/hooks — bare paths off settings.json, NO installer ch
 # (ai-bridge-v5/task-002), so this directory holds four files, not six. The floor is a
 # vacuity guard — "the glob matched something" — not a ceiling, so it moves DOWN with the
 # real count rather than being left high enough to pass by luck.
-check_group "$TPL" "symlink/.claude/hooks/*.sh" 4 'symlink/.claude/hooks/*.sh'
+# 4 -> 2: `deny-destructive.sh` and `agent-control.sh` became PLUGIN hooks
+# (ai-bridge-v2/task-003) and are checked by the group below; `session-banner.sh` and
+# `push-state.sh` are what is left here.
+check_group "$TPL" "symlink/.claude/hooks/*.sh" 2 'symlink/.claude/hooks/*.sh'
+
+echo "== plugin/hooks — invoked straight off hooks.json, and NOTHING chmods these ever =="
+# THE EXPOSURE IS STRICTLY WORSE HERE THAN IN EITHER GROUP ABOVE, which is why the two
+# hooks that moved needed their own group rather than being dropped from the check. A
+# `symlink/scripts` file at least passes through install.sh's `chmod +x` on every stamp; a
+# `symlink/.claude/hooks` file does not, but at least an installer runs against it. A
+# plugin hook is fetched by the plugin loader and invoked by absolute path straight out of
+# `hooks.json` — there is no installer in that path at all, so a committed-644 file here is
+# a 126 on every single tool call in every session on the machine, with nothing to launder
+# it on any developer's disk.
+check_group "$TPL" "plugin/hooks/*.sh" 2 'plugin/hooks/*.sh'
 
 if [[ $IS_CHILD -eq 0 ]]; then
   echo "== guard C: a failed 'mktemp -d' must ABORT with its own refusal line, not run the fixture in place =="
@@ -413,7 +428,7 @@ assert "…but 'git ls-files' against the quoted pattern finds both, straight fr
 
 check_group "$FIX" "fixture d-*.sh (quoted call site, the fixed shape)" 2 'd-*.sh'
 
-echo "== guard G: the two real call sites above must stay quoted — and stay CALLS, not comments =="
+echo "== guard G: the three real call sites above must stay quoted — and stay CALLS, not comments =="
 # The fixture above proves quoting matters in principle; this proves it is actually applied
 # where it counts. Today's real repo has no worktree-deleted-but-tracked script, so an
 # unquoted call site would not fail the checks above by itself — this static pin is what
@@ -434,6 +449,9 @@ assert "the symlink/scripts/*.sh check_group call is a real, quoted call at colu
 # shellcheck disable=SC2016
 assert "the symlink/.claude/hooks/*.sh check_group call is a real, quoted call at column 0 (exactly one)" \
   "$([ "$(pin_count '^check_group "\$TPL" "symlink/\.claude/hooks/\*\.sh" [0-9]+ .symlink/\.claude/hooks/\*\.sh.$')" == 1 ] && echo 0 || echo 1)"
+# shellcheck disable=SC2016
+assert "the plugin/hooks/*.sh check_group call is a real, quoted call at column 0 (exactly one)" \
+  "$([ "$(pin_count '^check_group "\$TPL" "plugin/hooks/\*\.sh" [0-9]+ .plugin/hooks/\*\.sh.$')" == 1 ] && echo 0 || echo 1)"
 # The two pins above cover the CALL sites, not check_group's own USE of $spec at its one
 # call to `ls-files`. That gap is real, not theoretical: unquoting `$spec` there (`--
 # $spec` instead of `-- "$spec"`) still leaves this whole file at 49/49 today, because
@@ -475,7 +493,12 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # 57 -> 58: symlink/scripts/ai-bridge.sh (ai-bridge-v5/task-011), same reason.
 # 58 -> 59: symlink/scripts/pr-comment-clearance.sh (ai-bridge-v5/task-026), one more
 # executable machinery file in the per-file enumeration.
-EXPECTED_ASSERTIONS=60
+# 60 -> 63: ai-bridge-v2/task-003 moves `deny-destructive.sh` and `agent-control.sh` from
+# `symlink/.claude/hooks/` to `plugin/hooks/`. Net +3, and it is worth spelling out because
+# a move is the one shape where the arithmetic is not obvious: -2 files leave the old
+# group's per-file enumeration, +4 arrive with the new group (its vacuity guard, its two
+# files, its min-count), and +1 is the new group's anchored call-site pin.
+EXPECTED_ASSERTIONS=63
 TOTAL=$((pass + fail))
 # EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
 # it annotates, so a merge can plausibly keep the annotations and lose the assignment —

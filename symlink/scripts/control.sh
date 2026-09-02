@@ -12,10 +12,16 @@
 #   scripts/control.sh arm | disarm                   # turn the surface on / off
 #   scripts/control.sh log [n]                        # the action log
 #
-# Enforcement happens in `.claude/hooks/agent-control.sh`, a PreToolUse hook that
-# reads the files this script writes. Read that file's header for the design; this
-# one is the human interface, and everything below is about being usable under
-# pressure, because a kill switch nobody can find is not a kill switch.
+# Enforcement happens in the `agent-control.sh` PreToolUse hook, which reads the
+# files this script writes. Read that file's header for the design; this one is the
+# human interface, and everything below is about being usable under pressure,
+# because a kill switch nobody can find is not a kill switch.
+#
+# THE TWO HALVES ARE INSTALLED SEPARATELY, and an operator needs to know it here:
+# this script is instance machinery, stamped by the installer, while the hook now
+# ships with the plugin. Arming an instance whose plugin is not installed writes
+# directives nothing reads — `status` still lists them, and nothing fires. The
+# install steps are in the operations guide, deliberately not repeated here.
 #
 # ---------------------------------------------------------------- WHERE STATE LIVES
 # `<instance>/.claude/control/`, created on demand:

@@ -38,10 +38,10 @@ move it here intact instead.
 | 13 | [A shared instance is three no-ops and one gate](sharing.md) | `task-owner.sh`, config split, derived indexes |
 | 14 | [`knowledge/references/` is the fifth knowledge kind](#14-knowledgereferences-is-the-fifth-knowledge-kind) | `validate-bundle.sh`, `SCHEMA.md` |
 | 15 | [The config layer is one tier, and the arrow stays one-way](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way) | `install.sh --config`, `config/` |
-| 16 | [The kill switch is one hook, and it fails open](#16-the-kill-switch-is-one-hook-and-it-fails-open) | `agent-control.sh`, `control.sh` |
+| 16 | [The kill switch is one hook, and it fails open](#16-the-kill-switch-is-one-hook-and-it-fails-open) | `plugin/hooks/agent-control.sh`, `control.sh` |
 | 17 | [An instruction is executable only if the agent *holds* the tool](#17-an-instruction-addressed-to-an-agent-is-executable-only-if-that-agent-holds-the-tool) | every agent body, `symlink/CONVENTIONS.md`, `seed/CLAUDE.md` |
 | 18 | [The allowlist check is pinned from both sides](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure) | `agent-tool-allowlist.test.sh` |
-| 19 | [The destructive-action baseline is a hook, and it is narrow on purpose](#19-the-destructive-action-baseline-is-a-hook-and-it-is-narrow-on-purpose) | `deny-destructive.sh`, `permissions.deny` |
+| 19 | [The destructive-action baseline is a hook, and it is narrow on purpose](#19-the-destructive-action-baseline-is-a-hook-and-it-is-narrow-on-purpose) | `plugin/hooks/deny-destructive.sh`, `permissions.deny` |
 | 20 | [The version is a number a change PROPOSES](#20-the-version-is-a-number-a-change-proposes-and-the-drift-check-speaks-only-when-behind) | `VERSION`, `check-template-version.sh`, `core` paths |
 | 21 | [`/ai-bridge` reports facts that can be false, and `fix` is tiered in code](#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) | `ai-bridge.sh`, `/ai-bridge`, `session-banner.sh` |
 
@@ -304,9 +304,11 @@ its index in whatever state the agent had reached — which nothing then cleans 
 `prune-worktrees.sh` is report-only ([7](#7-prune-worktreessh-is-report-only-and-that-is-load-bearing)).
 With `AUTONOMY.md` present an agent commits, pushes and merges without asking, and the
 only counter-metric is `/audit`, which is retrospective and slow-cadence. So the missing
-piece was a **live** one: `.claude/hooks/agent-control.sh` (a `PreToolUse` hook) plus
+piece was a **live** one: `plugin/hooks/agent-control.sh` (a `PreToolUse` hook) plus
 `scripts/control.sh` (the operator side), supporting `gate`, `steer` and `halt` against
-one agent.
+one agent. The two halves install separately — the operator script is instance machinery
+`install.sh` stamps, the hook ships with the `ai-bridge-v2` plugin — so arming an instance
+whose plugin is not installed writes directives nothing reads.
 
 **It is keyed on `agent_id`, and that was measured rather than assumed.** A spike proved
 two things: `PreToolUse` *does* fire for a dispatched subagent's own tool calls, and the
@@ -422,7 +424,7 @@ its id recorded nowhere — which is why arming is a separate act worth doing be
 need it. **No circuit breaker was built**: the cost-velocity / no-progress escalation
 ladder needs a resident process to run its beat, and ai-bridge has none.
 
-Covered by `tests/agent-control.test.sh` (133 assertions, most of them refusals).
+Covered by `tests/agent-control.test.sh` (148 assertions, most of them refusals).
 
 ## 17. An instruction addressed to an agent is executable only if that agent *holds* the tool
 
@@ -567,7 +569,7 @@ Covered by `tests/agent-tool-allowlist.test.sh` (86 assertions).
 `permissions.deny` was **empty in all three live instances** while one of them ran 13
 projects on `yolo` autonomy holding live production credentials. The gap was never that
 nobody had written the rule down — it was that the rule was written as prose, and prose is
-a request an agent may decline. `symlink/.claude/hooks/deny-destructive.sh` refuses the
+a request an agent may decline. `plugin/hooks/deny-destructive.sh` refuses the
 tool call at the `PreToolUse` boundary, before it runs: the same category as branch
 protection, and categorically unlike a `CONVENTIONS.md` line.
 
@@ -619,15 +621,42 @@ raises the floor; it is not a proof. (ii) **Credentials are the real boundary.**
 that cannot reach production cannot harm it whatever it decides, and that audit is
 separate, stronger, and not replaced by this list.
 
-**It is machinery, so it is not deletable per instance** ([4](#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) is the *opposite* case) — `install.sh`
-re-links it unconditionally. That is the point: a safety floor an instance can `rm` is not
-a floor. The cost is that a **new** file under `symlink/` is *absent* rather than dangling
-in an already-stamped instance, which `session-banner.sh` deliberately cannot see, so the
-guard only starts enforcing after `install.sh <instance>` runs once. `settings.json`
-registers it behind an `[ -x ]` test so the interval is a quiet no-op rather than a 127 on
-every tool call.
+**It is not deletable per instance** ([4](#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) is the *opposite* case). It was instance
+machinery `install.sh` re-linked unconditionally; since AI Bridge 2.0 it is a **plugin
+hook**, which is stronger for the same reason: one install arms every instance on the
+machine, including ones stamped before the guard existed. A safety floor an instance can
+`rm` is not a floor.
 
-Covered by `tests/deny-baseline.test.sh` (102 assertions), and mutation-checked in both
+**Because it fires user-wide, it no-ops SILENTLY outside an instance root.** A plugin hook
+runs in every session on the machine, so both enforcement hooks open with the same guard:
+resolve `CLAUDE_PROJECT_DIR` — never the payload's `cwd`, since a dispatched agent's cwd is
+a worktree of a target repo — and exit 0 with no stdout, no stderr and no state written
+unless `instance.config.json` is there. One marker, deliberately: keying on `.claude/agents/`
+as well would make the guard fail exactly when the plugin finishes replacing the symlink
+farm. Silence is the requirement, not merely the behaviour — a skip line per tool call would
+be noise in every unrelated project on the machine, and `tests/deny-baseline.test.sh` asserts
+stdout **and** stderr empty rather than only the verdict.
+
+**The plugin/instance double-fire window is ACCEPTED, and no upgrade-lockstep machinery is
+added.** During a migration both registrations can be live at once. Measured before
+accepting it: `agent-control.sh`'s roster append is dedup-guarded by agent id, so the second
+fire finds the id and skips and a roster row cannot be duplicated; only the best-effort
+action log gains duplicate lines, which is cosmetic observation. Deny rules double-fire to
+identical verdicts at double cost. **A version gate would cost more than the window it
+closes** — it is machinery to build, test and later delete, for a condition that resolves
+itself the moment the instance re-stamps. Its absence is the design, so a reviewer looking
+for one should find nothing.
+
+**The one interval that is NOT covered, and it is the merge decision.** `settings.json` is
+itself a symlink into the template, so its registration goes live the moment the template
+clone is pulled, while the plugin arrives only when the human installs or updates it. The
+instance-side enforcement is therefore removed in the same change that adds the plugin-side,
+and between those two clocks there is no baseline from either. (The old `[ -x "$h" ]` wrapper
+on the instance registration existed for the mirror image of that skew and did **not** travel:
+`hooks.json` and the scripts ship in one package and cannot skew, so the wrapper would only
+hide a real packaging error.)
+
+Covered by `tests/deny-baseline.test.sh` (135 assertions), and mutation-checked in both
 directions: neutering one rule fails 7 assertions, making one unconditional fails 6, and
 adding a rule to `RULES` with no test here fails by name.
 

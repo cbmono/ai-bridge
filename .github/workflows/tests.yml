@@ -95,7 +95,11 @@ jobs:
               if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(plugin/|\.claude-plugin/)'; then
                 echo "plugin-only diff — running the plugin harnesses only:"
                 printf '%s\n' "$changed" | sed 's/^/  /'
-                files=(tests/plugin-manifest.test.sh tests/plugin-skills.test.sh tests/plugin-agents.test.sh)
+                # deny-baseline and agent-control are on this list because the two
+                # enforcement HOOKS now live under plugin/ (ai-bridge-v2/task-003).
+                # Without them a plugin-only PR editing a hook would skip the 283
+                # assertions that are the only proof either one still fires.
+                files=(tests/plugin-manifest.test.sh tests/plugin-skills.test.sh tests/plugin-agents.test.sh tests/deny-baseline.test.sh tests/agent-control.test.sh)
               fi
             fi
           fi

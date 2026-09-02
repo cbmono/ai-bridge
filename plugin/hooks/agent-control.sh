@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# agent-control.sh — PreToolUse hook (ai-bridge machinery). The live kill switch.
+# agent-control.sh — PreToolUse hook (ai-bridge PLUGIN). The live kill switch.
 #
 # ai-bridge can dispatch a role agent but, until this hook, could not REDIRECT or
 # cleanly STOP one. A bad dispatch ran to completion or was killed, and a kill
@@ -46,7 +46,9 @@
 # one tiny read per tool call and gates nothing.
 #
 # --------------------------------------------------------------- FAIL OPEN, LOUD
-# This sits in front of EVERY tool call in EVERY session of the instance. A hook
+# This sits in front of EVERY tool call in EVERY session on the machine — a plugin
+# hook is installed per user, so the guard below is the only thing that narrows it
+# to instances, and everything past that guard runs everywhere a bundle does. A hook
 # that blocks work because its own state file is corrupt is worse than no hook at
 # all, so every failure path — no `jq`, unparseable payload, unreadable control
 # file, a malformed record, a verb it does not recognise — LOGS and lets the call
@@ -128,13 +130,26 @@
 
 set -u
 
-# --------------------------------------------------------------- self-detection
-# Same triple `push-state.sh` and `/pm-loop` use. Silent outside an instance, so
-# this is safe to inherit in any non-bridge project that happens to pick it up.
-# CLAUDE_PROJECT_DIR (not the payload's `cwd`) is deliberate: a dispatched agent
-# works inside a worktree of a TARGET repo, so `cwd` is not the instance root.
+# --------------------------------------------------- the instance-root guard
+# THIS BLOCK IS IDENTICAL IN deny-destructive.sh — keep them the same. It ships as
+# a PLUGIN hook now, so it fires in EVERY session on the machine, not only in a
+# bundle. Three things it must hold, each one load-bearing:
+#
+#   1. CLAUDE_PROJECT_DIR, NEVER the payload's `cwd`. A dispatched agent works
+#      inside a worktree of a TARGET repo, so `cwd` is not the instance root.
+#      This hook has carried that reasoning since it was an instance hook; it is
+#      now load-bearing for the deny baseline too.
+#   2. ONE MARKER, and it is `instance.config.json`. The old triple also tested
+#      `SCHEMA.md` and `.claude/agents/` — the third is dropped deliberately,
+#      because `.claude/agents/` is a machinery path this very migration retires,
+#      so keying on it would make the guard fail exactly when the plugin finishes
+#      replacing the symlink farm.
+#   3. SILENCE IS THE REQUIREMENT, not merely the behaviour. No stdout, no
+#      stderr, no state, exit 0. A line per skipped call would be noise in every
+#      unrelated project on this machine.
 root="${CLAUDE_PROJECT_DIR:-$PWD}"
-[ -f "$root/SCHEMA.md" ] && [ -f "$root/instance.config.json" ] && [ -d "$root/.claude/agents" ] || exit 0
+root="$(cd "$root" 2>/dev/null && pwd -P || printf '%s' "$root")"
+[ -f "$root/instance.config.json" ] || exit 0
 
 CTL="$root/.claude/control"
 [ -d "$CTL" ] || exit 0                      # not armed ⇒ strict no-op
