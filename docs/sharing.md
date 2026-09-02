@@ -56,7 +56,19 @@ gitignored file on their machine.
 | `reposRoot` | either | required for dispatch | Yes |
 | `worktreeRoot` | either | `<reposRoot>/_wt` | Yes |
 | `boardInstances` | either | the board is just this instance | Yes |
-| `board` | tracked `instance.config.json` | on: the snapshot is seeded and each tick renders the local page | **No** — one instance, one answer |
+| `board` | tracked `instance.config.json` | on: the snapshot is seeded, each tick renders the local page, and a changing tick commits `/board.html` | **No** — one instance, one answer |
+
+**The tracked `/board.html` is the one board artifact two clones DO contend for.** A tick
+that changed something commits it, so on a shared bundle the file shows whichever clone
+ticked last — that clone's own projects from its snapshot, plus everybody's from the
+tracked documents at `HEAD`, which is the same second half both clones already render. The
+contention is real and it is cheap: the page is derived, so a pull whose only conflicting
+path is `board.html` is resolved by **re-rendering**, never by merging text (the tick's own
+step 8 says so). **There is no per-clone opt-out, and do not go looking for one** — the
+bundle's `.gitignore` is a tracked file both clones read, and neither it nor
+`.git/info/exclude` has any effect on a path that is already tracked. The instance-wide
+switches are the only ones: `board: false`, or a `board.html` line placed after the
+`!/board.html` un-ignore in the bundle's own `.gitignore`.
 
 The **one** place the overridable set is listed — with what each key means when absent —
 is [`SCHEMA.md` → "Per-machine config overrides"](../symlink/SCHEMA.md). Every reader

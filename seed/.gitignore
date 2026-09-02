@@ -14,9 +14,25 @@ AWAITING.md
 # Derived board snapshot — rewritten by scripts/write-snapshot.sh at the end of each
 # /ai-bridge:dispatch tick, and read by scripts/build-board.sh (possibly from another instance).
 # A view, not source. Delete the file itself to take this instance off the board (the
-# writer never recreates it), and note the board HTML is derived output too.
+# writer never recreates it).
 SNAPSHOT.json
-board.html
+
+# `/board.html` IS TRACKED, ON PURPOSE — which is why no line here ignores it.
+#
+# It is the bundle's board, and committing it IS how the board is published: a file
+# inside a private repo is readable by exactly the repo's permission list, with no
+# second access-control system to get wrong. GitHub Pages is NOT the route and is not
+# a "later" either — access-controlled Pages is an Enterprise Cloud feature, so a Pages
+# site on a private bundle would serve this page to the WORLD at an unlisted URL, which
+# is not what the snapshot's field allowlist was scoped for.
+#
+# Each /ai-bridge:dispatch tick that actually changed something re-renders it with
+# `scripts/build-board.sh --standalone --out board.html .` — the trailing `.` is
+# load-bearing — and commits it alongside the tick's own curation commit. An idle tick
+# renders and commits nothing here.
+#
+# `/.board-live/board.html` is a DIFFERENT file and is still ignored (its own block
+# below): same markup, written continuously by scripts/watch-board.sh, per-machine.
 
 # The other-owners cache (scripts/build-board.sh) — the board's second half, read from
 # the tracked documents at HEAD and stored against the SHA it was computed for, because

@@ -369,12 +369,13 @@ are doing, not by which is newest.
 | You want | Run | Costs |
 |---|---|---|
 | a look right now, in the terminal you are in | `scripts/print-board.sh` | nothing |
-| a page to open locally — the one each tick renders | `scripts/build-board.sh --standalone` | a re-run, or a looping instance |
+| a page to open locally — the one each tick renders and commits | `scripts/build-board.sh --standalone .` | a re-run, or a looping instance |
 | a page that updates itself as you work | `scripts/watch-board.sh` | **a process you keep running** |
 
 ```bash
 scripts/print-board.sh                      # columns: instance, project, phases, tasks, awaiting
-scripts/build-board.sh --standalone         # ./board.html, openable in a browser
+scripts/build-board.sh --standalone .       # ./board.html — THIS instance only, openable in a browser
+scripts/build-board.sh --standalone         # the same, but every instance in boardInstances (see below)
 scripts/build-board.sh                      # the same page as a BODY — no <html> wrapper, for embedding
 scripts/watch-board.sh                      # ./.board-live/board.html, re-rendered on every change
 ```
@@ -384,9 +385,17 @@ scripts/watch-board.sh                      # ./.board-live/board.html, re-rende
 `SessionStart` hook prints the same path when a session starts. `board: false` in
 `instance.config.json` turns that off; absent or `true` leaves it on, which is the seeded
 default ([docs/operations.md § rendering it from each
-tick](docs/operations.md#rendering-it-from-each-tick)). Nothing is published anywhere. It
+tick](docs/operations.md#rendering-it-from-each-tick)). It
 is only as fresh as the last tick — the page's masthead says when that was, and
 `watch-board.sh` is the view that follows your work in between.
+
+**And a tick that changed something commits a second copy, `/board.html`, into the bundle
+repo.** That commit is the whole of "publishing" here: the page is readable by the repo's
+permission list and by nothing else, no Pages site is enabled anywhere, and an idle tick
+commits nothing. It is why the render above passes an explicit `.` — without it the
+renderer reads `boardInstances`, and a bundle must not commit another bundle's project
+titles. Opening it, including from a phone: [docs/operations.md §
+opening-the-board](docs/operations.md#opening-the-board-laptop-phone-live).
 
 **The board is per installation, and it still shows everybody.** Your own projects come
 from your `SNAPSHOT.json`; every other owner's is a collapsed, **named** section below
@@ -462,7 +471,7 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
 | `boardInstances` | the board is just this instance | yes |
-| `board` | **on** — `SNAPSHOT.json` is seeded, and each tick renders `.board-live/board.html` | **no** — one instance, one answer |
+| `board` | **on** — `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something also commits `/board.html` | **no** — one instance, one answer |
 | `codegraphSkip` | index every product repo | yes |
 
 Environment knobs: `PUSH_STATE_MAX` (default **12**), `PRUNE_ACTIVE_MINUTES`,
@@ -495,7 +504,7 @@ Run from an instance root unless noted.
 | `check-template-version.sh` | is the template this instance links older than the remote's default branch — prints a line **only when behind**, silence on every failure | not the instance — `--fetch` (opt-in) updates the template checkout's remote-tracking refs, nothing else |
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
-| `build-board.sh` | renders the HTML board (anywhere; needs `python3`) | yes, the output file |
+| `build-board.sh` | renders the HTML board (anywhere; needs `python3`) — pass `.` to render THIS instance only | yes, the output file |
 | `print-board.sh` | prints the board in the terminal | no |
 | `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |
