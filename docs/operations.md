@@ -732,7 +732,7 @@ owner asked three times in one session, for three different instances.
 
 ```text
 
-AI-Bridge v0.29.0 · _ai-bridge-private · org: cbmono
+AI-Bridge v0.30.0 · _ai-bridge-private · org: cbmono
 ────────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
@@ -971,8 +971,10 @@ The old `/status` command and `DASHBOARD.md` are gone. In each existing instance
 ## Which renderer, and the one question that decides it
 
 **How fresh does it have to be?** That is the whole decision now. It used to be *where
-may this board go* — and that question is **gone**, because nothing publishes any more:
-every renderer below writes to the machine it runs on and stays there.
+may this board go*, and that question has one fixed answer: **every renderer below writes
+to the machine it runs on**, and nothing is served or published to an account. The one
+copy that travels is `/board.html`, which the tick *commits* — so its audience is this
+repo's permission list, decided when you granted access and not by any renderer here.
 
 | | Reach | Process | Use it when |
 |---|---|---|---|

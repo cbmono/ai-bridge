@@ -698,6 +698,21 @@ state, and act only on deltas.
       everywhere else in this step. An instance whose `.gitignore` still ignores
       `board.html` stages nothing and that is fine — `install.sh` appends the
       `!/board.html` un-ignore on its next stamp.
+
+      **On a SHARED bundle two clones write this file, and the conflict has one right
+      answer: re-render.** `board.html` is derived output, so a `git pull --rebase`
+      whose ONLY conflicting path is `board.html` is not the conflict step 0's rule is
+      about — resolve it by regenerating rather than by merging text:
+
+      ```bash
+      scripts/build-board.sh --standalone --out board.html .
+      git add board.html && git rebase --continue
+      ```
+
+      **Any other path in the conflict ⇒ stop and report, exactly as step 0 says**, and
+      do not re-render your way past it. The tracked page always shows whichever clone
+      ticked last; each human's live view is their own `.board-live/board.html`, which
+      no other clone can touch.
    5. End your report with exactly one line — `BOARD: rendered <path>` — giving the
       **absolute** path of the tracked `board.html` when you wrote one, else the live
       path from item 2.
