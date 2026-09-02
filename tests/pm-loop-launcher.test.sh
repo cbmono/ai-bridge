@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 #
-# pm-loop-launcher.test.sh — the `/pm-loop` launcher does its three preconditions and
+# pm-loop-launcher.test.sh — the loop launcher does its three preconditions and
 # nothing else, and the crash-recovery property it used to carry lives in the tick.
+# The launcher is the plugin's `/dispatch` skill: the contract moved there verbatim and
+# `symlink/.claude/commands/pm-loop.md` retired in the same change, so this harness
+# follows the CONTRACT rather than the path it used to live at.
 #
 # WHY THIS IS A TEST AND NOT ONLY A CONVENTION. Measured on a real first tick,
 # 2026-08-23: `pm-loop.md` documented three cheap preconditions, and what actually ran
@@ -47,7 +50,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-LAUNCHER="$REPO/symlink/.claude/commands/pm-loop.md"
+LAUNCHER="$REPO/plugin/skills/dispatch/SKILL.md"
 TICK="$REPO/symlink/.claude/agents/project-manager.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")" || {
   echo "pm-loop-launcher.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }

@@ -44,7 +44,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CONV="$REPO/symlink/CONVENTIONS.md"
 PM="$REPO/symlink/.claude/agents/project-manager.md"
-LOOP="$REPO/symlink/.claude/commands/pm-loop.md"
+LOOP="$REPO/plugin/skills/dispatch/SKILL.md"
 SEED="$REPO/seed/CLAUDE.md"
 OPS="$REPO/docs/operations.md"
 LOCKSH="$REPO/symlink/scripts/tick-lock.sh"
