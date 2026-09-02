@@ -1,4 +1,6 @@
 ---
+name: close-project
+disable-model-invocation: true
 description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. Human-gated; run once a project's tasks are all done/cancelled.
 argument-hint: <project-slug>  [--dry-run] [--force]
 allowed-tools: Bash(date:*), Bash(scripts/commit-as.sh:*), Bash(scripts/close-project-folder.sh:*), Bash(scripts/prune-worktrees.sh:*), Bash(scripts/validate-bundle.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent

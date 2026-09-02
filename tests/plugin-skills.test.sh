@@ -43,12 +43,12 @@ body() { # <skill> — everything after the closing `---`
     "$SK/$1/SKILL.md"
 }
 
-STATE_CHANGING="capture work dispatch handoff audit answer fanout pr-review-request"
+STATE_CHANGING="capture work dispatch handoff audit answer fanout pr-review-request new-project close-project"
 READ_ONLY="brief-me welcome"
 ALL="$STATE_CHANGING $READ_ONLY"
 
 # =======================================================================================
-echo "== 1. every skill ships, well-formed, and no eleventh skill appears unasserted =="
+echo "== 1. every skill ships, well-formed, and no thirteenth skill appears unasserted =="
 # =======================================================================================
 for s in $ALL; do
   ok "$s/SKILL.md ships"                    "$(yn test -f "$SK/$s/SKILL.md")" yes
@@ -58,7 +58,7 @@ for s in $ALL; do
 done
 # A skill added to the directory without being added to this harness is invisible to every
 # assertion here — the silence failure mode this repo's checks are written against.
-ok "the skill set is exactly the ten this file asserts" \
+ok "the skill set is exactly the twelve this file asserts" \
   "$(ls "$SK" | sort | tr '\n' ' ' | sed 's/ $//')" \
   "$(printf '%s\n' $ALL | sort | tr '\n' ' ' | sed 's/ $//')"
 
@@ -121,6 +121,14 @@ ok "fanout is for INDEPENDENT asks" \
   "$(ge1 "$(grep -ci 'independent' "$SK/fanout/SKILL.md")")" yes
 ok "pr-review-request treats Slack as optional" \
   "$(ge1 "$(grep -ci 'optional' "$SK/pr-review-request/SKILL.md")")" yes
+ok "new-project keeps the scaffold review's declared fallback" \
+  "$(ge1 "$(grep -ci 'fallback' "$SK/new-project/SKILL.md")")" yes
+ok "…and the build/research asymmetry (clis from a flag or empty)" \
+  "$(ge1 "$(grep -c 'clis' "$SK/new-project/SKILL.md")")" yes
+ok "close-project keeps the retain: true freeze route" \
+  "$(ge1 "$(grep -c 'retain: true' "$SK/close-project/SKILL.md")")" yes
+ok "…and stays human-gated" \
+  "$(ge1 "$(grep -ci 'human-gated' "$SK/close-project/SKILL.md")")" yes
 
 # =======================================================================================
 echo "== 6. manifest validation, where the CLI exists =="

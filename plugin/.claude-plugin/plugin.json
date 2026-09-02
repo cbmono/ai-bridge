@@ -1,7 +1,7 @@
 {
   "name": "ai-bridge-v2",
   "displayName": "AI Bridge v2",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "The OKF control panel as a Claude Code plugin: brief yourself (/brief-me), capture decisions (/capture), work a task in-session (/work), run the gated loop (/dispatch), hand projects over (/handoff).",
   "author": {
     "name": "cbmono"

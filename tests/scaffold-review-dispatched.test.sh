@@ -22,7 +22,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CMD="$REPO/symlink/.claude/commands/new-project.md"
+CMD="$REPO/plugin/skills/new-project/SKILL.md"
 [ -f "$CMD" ] || { echo "scaffold-review-dispatched.test: missing $CMD" >&2; exit 2; }
 
 pass=0; fail=0
