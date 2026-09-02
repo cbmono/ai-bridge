@@ -131,6 +131,44 @@ assert "…while the surviving renderer stays linked"  "$(yes_if test -e "$INST/
 # Generic on purpose: install.sh must not carry a list of retired machinery to sweep.
 assert "install.sh names no retired script"          "$(no_if grep -q 'build-artifact-board' "$TPL/install.sh")"
 
+# --- the two enforcement hooks the plugin absorbed (AI Bridge 2.0, task-003).
+# `deny-destructive.sh` and `agent-control.sh` left `symlink/.claude/hooks/` in one change,
+# and this is the retirement an instance FEELS most: `settings.json` is itself a link into
+# the template, so its `PreToolUse` block goes live the moment the template is pulled,
+# while the hook FILES stay linked-and-dangling until a stamp. Between those two clocks the
+# instance has no enforcement from either side, which is exactly the ⚠️ the PR carries.
+#
+# Asserted as a PAIR, not two singles: the failure that matters is partial. One swept and
+# one left is indistinguishable from a clean run in any assertion that looks at a single
+# name, and the surviving link is a `PreToolUse` command that exits 127 on every tool call.
+# Stamped through install.sh, for the reason given above the build-artifact-board block.
+V2_HOOKS="deny-destructive agent-control"
+mkdir -p "$TPL/symlink/.claude/hooks"
+for h in $V2_HOOKS; do printf '#!/usr/bin/env bash\nexit 0\n' \
+  > "$TPL/symlink/.claude/hooks/$h.sh"; done
+bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
+hooked=0; for h in $V2_HOOKS; do [ -e "$INST/.claude/hooks/$h.sh" ] && hooked=$((hooked+1)); done
+assert "an instance stamped before the plugin move has both hooks" \
+  "$([ "$hooked" -eq 2 ] && echo 0 || echo 1)"
+rm -f "$TPL"/symlink/.claude/hooks/deny-destructive.sh "$TPL"/symlink/.claude/hooks/agent-control.sh
+bash "$TPL/install.sh" "$INST" >"$TMP/out-hooks" 2>&1
+hleft=0; hunreported=0
+for h in $V2_HOOKS; do
+  [ -L "$INST/.claude/hooks/$h.sh" ] && hleft=$((hleft+1))
+  grep -qF "retire .claude/hooks/$h.sh" "$TMP/out-hooks" || hunreported=$((hunreported+1))
+done
+assert "…and one re-stamp leaves neither"          "$([ "$hleft" -eq 0 ] && echo 0 || echo 1)"
+assert "…each reported by name, both of them"      "$([ "$hunreported" -eq 0 ] && echo 0 || echo 1)"
+# The hooks that did NOT move must still be linked — a sweep that took the whole directory
+# would satisfy both assertions above and break every session's banner.
+assert "…while session-banner.sh and push-state.sh stay linked" \
+  "$([ -e "$INST/.claude/hooks/session-banner.sh" ] && [ -e "$INST/.claude/hooks/push-state.sh" ] && echo 0 || echo 1)"
+# Generic, exactly as with build-artifact-board.sh and the eight commands: the sweep must
+# not carry a list of what it retired, or the next retirement needs an installer edit
+# nobody will make. THIS IS CRITERION 3's "no install.sh edit" stated as a test.
+assert "install.sh names neither hook" \
+  "$(no_if grep -qE 'deny-destructive|agent-control' "$TPL/install.sh")"
+
 # --- the agent rename: `oncall-guide` -> `failure-analyst`.
 # An agent lives at `.claude/agents/<name>.md`, so renaming one is a machinery DELETE plus
 # a machinery ADD, and only the delete half has an owner here. The generic cases above

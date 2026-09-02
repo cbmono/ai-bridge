@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 #
-# agent-control.test.sh — the live kill switch: `.claude/hooks/agent-control.sh`
-# (PreToolUse enforcement) and `scripts/control.sh` (the operator side).
+# agent-control.test.sh — the live kill switch: `plugin/hooks/agent-control.sh`
+# (PreToolUse enforcement), the `plugin/hooks/hooks.json` manifest that registers it, and
+# `symlink/scripts/control.sh` (the operator side).
 #
 # WHY THIS FILE IS MOSTLY REFUSALS. The hook sits in front of EVERY tool call in
 # EVERY session of an instance, so its failure modes are far more expensive than
 # its feature. The assertions that matter are:
 #
 #   · no control directory  ⇒ strict no-op, silent, exit 0, nothing written;
-#   · outside an instance   ⇒ silent exit 0 (it ships in symlink/.claude/settings.json,
-#                             so it fires in any project that inherits the file);
+#   · outside an instance   ⇒ silent exit 0, and this is now the LOAD-BEARING one: it
+#                             ships as a PLUGIN hook, so it fires in every session on the
+#                             machine and not merely in a project that inherited a file;
 #   · a malformed control file ⇒ the tool call is STILL ALLOWED. A hook that blocks
 #                             work because its own state is corrupt is worse than no
 #                             hook, and this is the one it would happen to;
@@ -29,7 +31,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-HOOK_SRC="$REPO/symlink/.claude/hooks/agent-control.sh"
+HOOK_SRC="$REPO/plugin/hooks/agent-control.sh"
+HOOKSJSON="$REPO/plugin/hooks/hooks.json"
 CTL_SRC="$REPO/symlink/scripts/control.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/agentctl.XXXXXX")" || {
   echo "agent-control.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -41,21 +44,31 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$(
 command -v jq >/dev/null 2>&1 || { echo "SKIP: jq not installed (the hook requires it)"; exit 0; }
 
 # ---------------------------------------------------------------- the fixture
-# A throwaway instance: the same triple the hook self-detects on, plus copies of
-# the two scripts under test. Copies, not symlinks, so nothing can reach the real
-# machinery.
+# A throwaway instance, plus copies of the two scripts under test. Copies, not symlinks,
+# so nothing can reach the real machinery.
+#
+# THE HOOK COPY LIVES OUTSIDE THE INSTANCE, under a fixture PLUGIN root, because that is
+# where it now really is: a plugin is installed once per user and is not part of any
+# bundle it guards. Running it from inside the instance would have made "the instance root
+# is $CLAUDE_PROJECT_DIR" true by accident of the script's own location.
+#
+# `SCHEMA.md` and `.claude/agents/index.md` are still seeded here even though the guard no
+# longer reads them — they are what an instance really contains, and the guard section at
+# the end of this file asserts that neither of them is what arms the hook.
 INST="$TMP/inst"
-mkdir -p "$INST/.claude/agents" "$INST/.claude/hooks" "$INST/scripts"
+mkdir -p "$INST/.claude/agents" "$INST/scripts"
 printf 'x\n' > "$INST/SCHEMA.md"
 printf '{}\n' > "$INST/instance.config.json"
 printf 'x\n' > "$INST/.claude/agents/index.md"
-cp "$HOOK_SRC" "$INST/.claude/hooks/agent-control.sh"
+PLUGROOT="$TMP/plugin"; mkdir -p "$PLUGROOT/hooks"
+cp "$HOOK_SRC" "$PLUGROOT/hooks/agent-control.sh"
 cp "$CTL_SRC"  "$INST/scripts/control.sh"
-chmod +x "$INST/.claude/hooks/agent-control.sh" "$INST/scripts/control.sh"
-HOOK="$INST/.claude/hooks/agent-control.sh"
+chmod +x "$PLUGROOT/hooks/agent-control.sh" "$INST/scripts/control.sh"
+HOOK="$PLUGROOT/hooks/agent-control.sh"
 CTL="$INST/.claude/control"
 
-# A NON-instance directory, for the self-detection half.
+# A NON-instance directory, for the self-detection half. It carries `.claude/control/` on
+# purpose: an armed control directory must not be enough to make a folder ours.
 BARE="$TMP/bare"; mkdir -p "$BARE/.claude/control"
 
 ctl() { ( cd "$INST" && bash scripts/control.sh "$@" ) 2>&1; }
@@ -118,6 +131,31 @@ ok "non-instance root: exit 0"                         "$RC" 0
 ok "non-instance root: silent even though .claude/control exists" \
    "$([ -z "$OUT" ] && [ -z "$ERR" ] && echo yes || echo no)" yes
 ok "control.sh outside an instance exits 1 (LOUD, unlike the hook)" "$(ctl_rc_bare() { ( cd "$BARE" && bash "$CTL_SRC" status >/dev/null 2>&1 ); printf '%s' "$?"; }; ctl_rc_bare)" 1
+
+echo
+echo "--- the marker is instance.config.json, and ONLY that -------------------"
+# WHY THIS PAIR EXISTS AT ALL. The guard used to test three things — `SCHEMA.md` AND
+# `instance.config.json` AND `.claude/agents/` — and the third is now dropped, because
+# `.claude/agents/` is a machinery path this very migration retires: keying on it would
+# make the guard fail exactly when the plugin finishes replacing the symlink farm. That is
+# a behaviour change, so it gets a test, in both directions off ONE directory.
+#
+# The fixture is ARMED, so the positive half has something observable. Without arming,
+# "guard exited" and "armed directory absent" both look like silence and the pair proves
+# nothing.
+HALF="$TMP/half"; mkdir -p "$HALF/.claude/agents" "$HALF/.claude/control"
+printf 'x\n' > "$HALF/SCHEMA.md"
+printf 'x\n' > "$HALF/.claude/agents/index.md"
+payload H1 software-engineer Bash > "$TMP/payload"
+H_OUT="$(CLAUDE_PROJECT_DIR="$HALF" bash "$HOOK" <"$TMP/payload" 2>"$TMP/err")"; H_RC=$?
+H_ERR="$(cat "$TMP/err")"
+ok "SCHEMA.md + .claude/agents/ + armed, no config: exit 0" "$H_RC" 0
+ok "…silent on both channels"                          "$([ -z "$H_OUT" ] && [ -z "$H_ERR" ] && echo yes || echo no)" yes
+ok "…and writes NO roster — the guard exited first"    "$([ -e "$HALF/.claude/control/agents" ] && echo yes || echo no)" no
+# The non-vacuity partner: same directory, one file added, and now it is ours.
+printf '{}\n' > "$HALF/instance.config.json"
+CLAUDE_PROJECT_DIR="$HALF" bash "$HOOK" <"$TMP/payload" >/dev/null 2>&1
+ok "…adding instance.config.json alone arms it"        "$(awk -F'\t' '$1=="H1"' "$HALF/.claude/control/agents" 2>/dev/null | wc -l | tr -d ' ')" 1
 
 echo
 echo "--- armed but empty: observation only -----------------------------------"
@@ -399,17 +437,26 @@ ok "a second disarm is quiet and still exits 0"        "$(ctl_rc disarm)" 0
 echo
 echo "--- registration: the hook is wired up and shippable --------------------"
 SETTINGS="$REPO/symlink/.claude/settings.json"
-ok "settings.json is valid JSON"                       "$(jq -e . "$SETTINGS" >/dev/null 2>&1 && echo yes || echo no)" yes
+ok "hooks.json is valid JSON"                          "$(jq -e . "$HOOKSJSON" >/dev/null 2>&1 && echo yes || echo no)" yes
 # SELECTED BY NAME, NOT COUNTED AND NOT BY INDEX. What this asserts is that THIS hook is
 # registered. `PreToolUse | length` said so only for as long as this was the only entry,
 # and broke the moment a second, unrelated PreToolUse hook was added — reporting a failure
 # against the kill switch that had nothing to do with it.
-ok "…registers a PreToolUse hook"                      "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(test("agent-control[.]sh"))] | length' "$SETTINGS")" 1
+ok "…registers a PreToolUse hook"                      "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(test("agent-control[.]sh"))] | length' "$HOOKSJSON")" 1
+# UNMATCHED, deliberately: the kill switch gates EVERY tool call, not just Bash.
+ok "…unmatched, so every tool call passes through it"  "$(jq -r '[.hooks.PreToolUse[] | select(.hooks[].command | test("agent-control[.]sh")) | (.matcher // "none")] | join(",")' "$HOOKSJSON")" none
 # A bare relative hook path resolves against the SESSION CWD, so it exits 127 on
 # every matching tool call in any project that does not itself ship the script.
-ok "…via the \$CLAUDE_PROJECT_DIR idiom, never a bare relative path" \
-   "$(jq -r '.hooks.PreToolUse[].hooks[].command | select(test("agent-control[.]sh"))' "$SETTINGS" | grep -c '^"\$CLAUDE_PROJECT_DIR"/\.claude/hooks/agent-control\.sh$')" 1
-ok "the hook file the settings name actually exists"   "$([ -f "$HOOK_SRC" ] && echo yes || echo no)" yes
+# `${CLAUDE_PLUGIN_ROOT}` is the plugin-era spelling of the `$CLAUDE_PROJECT_DIR` idiom
+# settings.json used, and it is the only correct one here.
+ok "…via the \${CLAUDE_PLUGIN_ROOT} idiom, never a bare relative path" \
+   "$(jq -r '.hooks.PreToolUse[].hooks[].command | select(test("agent-control[.]sh"))' "$HOOKSJSON" | grep -cF '${CLAUDE_PLUGIN_ROOT}/hooks/agent-control.sh')" 1
+# THE INSTANCE MUST NOT ALSO REGISTER IT. A plugin entry and a surviving instance entry are
+# the double registration this migration ends; the retirement is only checkable here.
+ok "…and settings.json registers no PreToolUse hook at all" \
+   "$(jq -r 'if (.hooks | has("PreToolUse")) then "present" else "absent" end' "$SETTINGS")" absent
+ok "…and does not name this hook anywhere"             "$(grep -c 'agent-control' "$SETTINGS")" 0
+ok "the hook file hooks.json names actually exists"    "$([ -f "$HOOK_SRC" ] && echo yes || echo no)" yes
 ok "the operator script is executable-shaped"          "$(head -1 "$CTL_SRC" | grep -c '^#!/usr/bin/env bash$')" 1
 ok "both files pass bash -n"                           "$(bash -n "$HOOK_SRC" && bash -n "$CTL_SRC" && echo yes || echo no)" yes
 # Machinery must stay generic: no org, repo, path, team or channel literals.

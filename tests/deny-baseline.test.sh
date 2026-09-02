@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 #
 # deny-baseline.test.sh — the destructive-action deny baseline:
-# `symlink/.claude/hooks/deny-destructive.sh` (PreToolUse enforcement) and the
-# `permissions.deny` block that backs it in `symlink/.claude/settings.json`.
+# `plugin/hooks/deny-destructive.sh` (PreToolUse enforcement), the `plugin/hooks/hooks.json`
+# manifest that registers it, and the `permissions.deny` block that backs it in
+# `symlink/.claude/settings.json` — which a plugin manifest has no field to carry, so that
+# second layer stays where it is.
 #
 # WHY EVERY RULE IS ASSERTED IN BOTH DIRECTIONS, WITHOUT EXCEPTION. A deny list has two
 # failure modes and they point opposite ways:
@@ -31,7 +33,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-HOOK="$REPO/symlink/.claude/hooks/deny-destructive.sh"
+HOOK="$REPO/plugin/hooks/deny-destructive.sh"
+HOOKSJSON="$REPO/plugin/hooks/hooks.json"
 SETTINGS="$REPO/symlink/.claude/settings.json"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/denybase.XXXXXX")" || {
   echo "deny-baseline.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -62,6 +65,18 @@ git -C "$GITREPO" branch -q feat/x
 SUB="$GITREPO/src"
 OUTSIDE="$WORK/notarepo"; mkdir -p "$OUTSIDE"
 
+# THE INSTANCE ROOT, and it is now load-bearing for every probe below. The hook ships as a
+# PLUGIN hook, so it fires in every session on the machine and no-ops SILENTLY wherever
+# `$CLAUDE_PROJECT_DIR/instance.config.json` is absent. Every probe in this file used to
+# pin `CLAUDE_PROJECT_DIR` EMPTY — which now means "not an instance", so leaving it that
+# way would turn every deny case in the file green-to-allow and collapse the harness into
+# a vacuous pass. Deliberately NOT a git repo: `subagent_push_default` exempts the repo
+# whose root IS the instance root, and a fixture where that comparison could fire by
+# accident would silently disarm the one rule that reads this value.
+INSTROOT="$WORK/instroot"; mkdir -p "$INSTROOT"
+printf '{}\n' > "$INSTROOT/instance.config.json"
+INSTROOT="$(res "$INSTROOT")"
+
 # ------------------------------------------------------------------------------- the probe
 # A realistic PreToolUse payload for the Bash tool, run against the hook with $HOME pointed
 # at the fixture.
@@ -74,9 +89,10 @@ payload() { # <cwd> <command> [tool_name]
 }
 
 raw() { # <cwd> <command> [tool] -> stdout of the hook
-  # CLAUDE_PROJECT_DIR pinned EMPTY: the subagent_push_default rule reads it, and a real
-  # session's value leaking in would flip cases that never meant to exercise that rule.
-  payload "$1" "$2" "${3:-Bash}" | HOME="$FIXHOME" CLAUDE_PROJECT_DIR= bash "$HOOK" 2>/dev/null
+  # CLAUDE_PROJECT_DIR pinned at the FIXTURE instance root, never left empty and never a
+  # real session's value: empty now means "not an instance" and the hook no-ops, while a
+  # real value would flip cases that never meant to exercise `subagent_push_default`.
+  payload "$1" "$2" "${3:-Bash}" | HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$INSTROOT" bash "$HOOK" 2>/dev/null
 }
 
 # "allow", or "deny:<rule-id>". Anything else is a defect and shows as "bad:…", never as a
@@ -261,13 +277,17 @@ ok "…and a localhost target is not exfiltration" \
 echo "== the guard's own edges — every one of these must let the call through"
 ok "an ordinary command is untouched"  "$(verdict "$GITREPO" 'ls -la && npm test')" "allow"
 ok "a non-Bash tool is untouched"      "$(raw "$GITREPO" 'rm -rf /' Read; echo -n allow)" "allow"
-ok "an empty payload exits quietly"    "$(printf '' | HOME="$FIXHOME" bash "$HOOK" 2>/dev/null; echo -n allow)" "allow"
-ok "…as does malformed JSON"           "$(printf 'not json' | HOME="$FIXHOME" bash "$HOOK" 2>/dev/null; echo -n allow)" "allow"
-ok "…and a payload with no command"    "$(printf '{"tool_name":"Bash","tool_input":{}}' | HOME="$FIXHOME" bash "$HOOK" 2>/dev/null; echo -n allow)" "allow"
+# CLAUDE_PROJECT_DIR is pinned at the fixture instance root on each of these too. Left
+# unset they would still print "allow" — but because the instance-root guard exited before
+# reading stdin at all, which is a DIFFERENT assertion from the one written here. A probe
+# that passes without reaching the code it names is the vacuity this file exists to refuse.
+ok "an empty payload exits quietly"    "$(printf '' | HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$INSTROOT" bash "$HOOK" 2>/dev/null; echo -n allow)" "allow"
+ok "…as does malformed JSON"           "$(printf 'not json' | HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$INSTROOT" bash "$HOOK" 2>/dev/null; echo -n allow)" "allow"
+ok "…and a payload with no command"    "$(printf '{"tool_name":"Bash","tool_input":{}}' | HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$INSTROOT" bash "$HOOK" 2>/dev/null; echo -n allow)" "allow"
 # THE EXIT CODE IS NEVER THE SIGNAL. A refusal is JSON on stdout and the script exits 0;
 # exit 2 would block too, but it routes the reason through stderr where it is mixed with
 # noise, and any other non-zero would surface as a "non-blocking error" on every call.
-payload "$GITREPO" 'rm -rf /' | HOME="$FIXHOME" bash "$HOOK" >/dev/null 2>&1
+payload "$GITREPO" 'rm -rf /' | HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$INSTROOT" bash "$HOOK" >/dev/null 2>&1
 ok "a refusal still exits 0"           "$?" "0"
 # THE REFUSAL HAS TO CLOSE THE LOOP, or the agent simply rewrites the command and retries.
 REASON="$(raw "$GITREPO" 'terraform destroy' | jq -r '.hookSpecificOutput.permissionDecisionReason')"
@@ -277,23 +297,53 @@ says() { printf '%s' "$REASON" | grep -qF -- "$1" && echo yes || echo no; }
 ok "…and tells the agent not to evade it"   "$(says 'Do NOT re-issue a variant')" "yes"
 ok "…and names the human's terminal as the way out" "$(says 'their own terminal')" "yes"
 
-echo "== wiring: settings.json registers it, and does not disturb what was already there"
+echo "== wiring: plugin/hooks/hooks.json registers it, and the instance no longer does"
 ok "the hook file ships"               "$([ -f "$HOOK" ] && echo yes || echo no)" "yes"
 ok "…and is executable"                "$([ -x "$HOOK" ] && echo yes || echo no)" "yes"
-ok "settings.json is valid JSON"       "$(jq -e . "$SETTINGS" >/dev/null 2>&1 && echo yes || echo no)" "yes"
+ok "hooks.json is valid JSON"          "$(jq -e . "$HOOKSJSON" >/dev/null 2>&1 && echo yes || echo no)" "yes"
 ok "…registers the guard on PreToolUse" \
-   "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(test("deny-destructive.sh"))] | length' "$SETTINGS")" "1"
+   "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(test("deny-destructive.sh"))] | length' "$HOOKSJSON")" "1"
 ok "…scoped to the Bash tool" \
-   "$(jq -r '[.hooks.PreToolUse[] | select(.hooks[].command | test("deny-destructive.sh")) | .matcher] | join(",")' "$SETTINGS")" "Bash"
-# THE KILL SWITCH MUST SURVIVE THIS CHANGE. agent-control.sh is a separate, unmatched
-# PreToolUse entry and adding a second one must not have moved or narrowed it.
-ok "…agent-control.sh is still registered, unmatched" \
-   "$(jq -r '[.hooks.PreToolUse[] | select(.hooks[].command | test("agent-control.sh")) | (.matcher // "none")] | join(",")' "$SETTINGS")" "none"
+   "$(jq -r '[.hooks.PreToolUse[] | select(.hooks[].command | test("deny-destructive.sh")) | .matcher] | join(",")' "$HOOKSJSON")" "Bash"
+# THE KILL SWITCH MOVED WITH IT. agent-control.sh is a separate, unmatched PreToolUse
+# entry and this migration must not have moved or narrowed it.
+ok "…agent-control.sh is registered too, unmatched" \
+   "$(jq -r '[.hooks.PreToolUse[] | select(.hooks[].command | test("agent-control.sh")) | (.matcher // "none")] | join(",")' "$HOOKSJSON")" "none"
+# A bare relative path resolves against the SESSION CWD and exits 127 on every matching
+# tool call. `${CLAUDE_PLUGIN_ROOT}` is the plugin's equivalent of the `$CLAUDE_PROJECT_DIR`
+# idiom settings.json used, and it is the only correct spelling here.
+ok "…both via the \${CLAUDE_PLUGIN_ROOT} idiom, never a bare relative path" \
+   "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(startswith("${CLAUDE_PLUGIN_ROOT}/hooks/"))] | length' "$HOOKSJSON")" "2"
+# RUN THE COMMAND hooks.json ACTUALLY REGISTERS, rather than grepping the artifact for a
+# name that looks right. The lesson is the bundle Finding
+# "a-hooks-stdout-is-the-models-channel-not-the-humans": five harnesses and 214 assertions
+# stayed green over a banner nobody ever saw, because every one of them checked the text
+# and none of them ran the registered command. So: read the string out of the manifest,
+# expand it with CLAUDE_PLUGIN_ROOT set the way the loader sets it, and require the real
+# verdict off the real payload.
+REGCMD="$(jq -r '.hooks.PreToolUse[] | select(.hooks[].command | test("deny-destructive.sh")) | .hooks[].command' "$HOOKSJSON")"
+REGOUT="$(payload "$GITREPO" 'terraform destroy -auto-approve' \
+  | CLAUDE_PLUGIN_ROOT="$REPO/plugin" HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$INSTROOT" \
+    bash -c "exec ${REGCMD}" 2>/dev/null)"
+ok "…and the REGISTERED command string, executed, denies" \
+   "$(printf '%s' "$REGOUT" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)" "deny"
+ok "…naming this rule"                 \
+   "$(printf '%s' "$REGOUT" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null | sed -n 's/.*rule `\([a-z0-9_]*\)`.*/\1/p' | head -1)" "terraform_destroy"
+
+echo "== retirement: the instance settings.json no longer registers any PreToolUse hook"
+# CRITERION 3 STATED AS A TEST. The plugin adding the hook and the instance keeping it are
+# the double-registration this migration exists to end, and "we deleted the block" is only
+# checkable here. `.hooks.PreToolUse` must be ABSENT — not empty, not present-with-zero.
+ok "settings.json is valid JSON"       "$(jq -e . "$SETTINGS" >/dev/null 2>&1 && echo yes || echo no)" "yes"
+ok "…and has no PreToolUse key at all" \
+   "$(jq -r 'if (.hooks | has("PreToolUse")) then "present" else "absent" end' "$SETTINGS")" "absent"
+ok "…so neither hook name appears in it" \
+   "$(grep -cE 'deny-destructive|agent-control' "$SETTINGS")" "0"
 # 4 -> 2: ai-bridge-v5/task-002 consolidated the three SessionStart hooks into one
 # `session-banner.sh`, so this event carries one command where it carried three, and
 # UserPromptSubmit's one is untouched. The pin moves with the real shape rather than being
-# loosened to `>= 1` — its job is to notice that adding a PreToolUse entry did not disturb
-# the other events, and a floor would stop noticing exactly that.
+# loosened to `>= 1` — its job is to notice that REMOVING the PreToolUse entries did not
+# disturb the other events, and a floor would stop noticing exactly that.
 ok "…and the other hook events are unchanged" \
    "$(jq -r '[.hooks.UserPromptSubmit[].hooks[].command, .hooks.SessionStart[].hooks[].command] | length' "$SETTINGS")" "2"
 
@@ -366,7 +416,7 @@ payload_agent() { # <cwd> <command>
 }
 verdict_agent() { # <cwd> <command> -> "allow" | "deny:<rule>" | "bad:<decision>"
   local out dec rule
-  out="$(payload_agent "$1" "$2" | HOME="$FIXHOME" CLAUDE_PROJECT_DIR= bash "$HOOK" 2>/dev/null)"
+  out="$(payload_agent "$1" "$2" | HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$INSTROOT" bash "$HOOK" 2>/dev/null)"
   [ -n "$out" ] || { printf 'allow'; return 0; }
   dec="$(printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)"
   [ "$dec" = deny ] || { printf 'bad:%s' "$dec"; return 0; }
@@ -409,12 +459,21 @@ ok "the human may still gh pr review --approve" \
 
 echo "== rule 9: subagent_push_default — a product repo's protected branch takes PRs, not agent pushes"
 # The discriminators, each with its own case below: agent_id (the human is exempt),
-# CLAUDE_PROJECT_DIR (the bundle is exempt — the tick pushes it by design; unset is
-# plumbing and fails open), and the branch (feature pushes are how PRs get opened).
+# CLAUDE_PROJECT_DIR (the bundle is exempt — the tick pushes it by design), and the branch
+# (feature pushes are how PRs get opened). The old third discriminator — "unset is plumbing
+# and fails open" — is GONE, and its replacement is the guard section at the end of this
+# file: unset now means "not an instance" and the whole hook no-ops before the payload is
+# read, which is asserted there in both directions rather than as an allow here.
+#
+# The bundle fixture carries an `instance.config.json`, because as the value of
+# `$CLAUDE_PROJECT_DIR` it IS the instance root the guard tests for. Without it the guard
+# exits first and every deny case below reads "allow" for a reason that has nothing to do
+# with this rule.
 BUNDLE="$WORK/bundle"; mkdir -p "$BUNDLE"
 git -C "$BUNDLE" init -q >/dev/null 2>&1
 git -C "$BUNDLE" symbolic-ref HEAD refs/heads/main
 git -C "$BUNDLE" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m init
+printf '{}\n' > "$BUNDLE/instance.config.json"
 BUNDLE="$(res "$BUNDLE")"
 
 verdict_agent_in() { # <project-dir> <cwd> <command> -> "allow" | "deny:<rule>" | "bad:…"
@@ -455,10 +514,49 @@ ok "agent pushing a feature branch of the same repo is allowed" \
    "$(verdict_agent_in "$BUNDLE" "$GITREPO" 'git push origin feat/x')" "allow"
 ok "the BUNDLE's own main is exempt — the tick pushes it by design" \
    "$(verdict_agent_in "$BUNDLE" "$BUNDLE" 'git push origin main')" "allow"
-ok "no CLAUDE_PROJECT_DIR -> plumbing, fails open" \
-   "$(verdict_agent "$GITREPO" 'git push origin main')" "allow"
 ok "the human (no agent_id) pushes main untouched" \
    "$(verdict "$GITREPO" 'git push origin main')" "allow"
+
+echo "== the instance-root guard: this ships as a PLUGIN hook, so it fires everywhere"
+# THE REPLACEMENT FOR "no CLAUDE_PROJECT_DIR -> plumbing, fails open". As an instance hook
+# this file could not run outside a bundle, so an absent instance root meant plumbing had
+# broken and failing open was right. As a plugin hook it fires in EVERY session on the
+# machine, so an absent `instance.config.json` means "not our session" — a normal, constant
+# condition, not a fault. The requirement is banner-and-guards inside instances and ZERO
+# NOISE in any other folder.
+#
+# SILENCE IS ASSERTED, NOT JUST THE VERDICT. A version that printed one skip line per call
+# would satisfy "allow" and be exactly the noise the requirement forbids, in every unrelated
+# project on the machine — so stdout AND stderr are both required empty. Both directions off
+# ONE command, which is what makes the pair a discriminator rather than two facts.
+NOTINST="$WORK/notaninstance"; mkdir -p "$NOTINST"          # no instance.config.json
+NOTINST="$(res "$NOTINST")"
+GUARDCMD='terraform destroy -auto-approve'
+payload "$GITREPO" "$GUARDCMD" > "$TMP/guard-payload"
+G_OUT="$(HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$NOTINST" bash "$HOOK" <"$TMP/guard-payload" 2>"$TMP/guard-err")"; G_RC=$?
+G_ERR="$(cat "$TMP/guard-err")"
+ok "outside an instance root: nothing on stdout" "$([ -z "$G_OUT" ] && echo yes || echo no)" "yes"
+ok "…nothing on stderr either"                   "$([ -z "$G_ERR" ] && echo yes || echo no)" "yes"
+ok "…and exit 0"                                 "$G_RC" "0"
+# The other half, and it is what stops the guard from being a global off switch: the SAME
+# command, one condition different, still denies.
+ok "…while the identical command IN an instance denies" \
+   "$(verdict "$GITREPO" "$GUARDCMD")" "deny:terraform_destroy"
+# The marker is `instance.config.json` and nothing else. A directory carrying the OTHER two
+# files agent-control.sh's old guard tested must still be a no-op, or the guard would break
+# exactly when this migration finishes retiring `.claude/agents/`.
+HALFINST="$WORK/halfinstance"; mkdir -p "$HALFINST/.claude/agents"
+printf 'x\n' > "$HALFINST/SCHEMA.md"
+HALFINST="$(res "$HALFINST")"
+G2_OUT="$(HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$HALFINST" bash "$HOOK" <"$TMP/guard-payload" 2>/dev/null)"
+ok "SCHEMA.md + .claude/agents/ without the config is NOT an instance" \
+   "$([ -z "$G2_OUT" ] && echo yes || echo no)" "yes"
+# …and adding the one marker to that same directory arms it. Same directory, one file
+# different — the non-vacuity partner for the assertion above.
+printf '{}\n' > "$HALFINST/instance.config.json"
+G3_OUT="$(HOME="$FIXHOME" CLAUDE_PROJECT_DIR="$HALFINST" bash "$HOOK" <"$TMP/guard-payload" 2>/dev/null)"
+ok "…and instance.config.json alone is what arms it" \
+   "$(printf '%s' "$G3_OUT" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null)" "deny"
 
 echo "== the rule list itself: a rule cannot be added without being tested"
 # THE LIST IS MEANT TO GROW, so the two ways a growing list rots are pinned here rather
