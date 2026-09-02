@@ -928,8 +928,23 @@ ok "the README summary carries the asymmetry too" \
   "$(has "$TPL/README.md" 'may refuse a claim but never clears one')" yes
 
 echo
-echo "== the tick's own ledger is untouched: this ADDS a gate, it does not move one =="
-ok "step 0.5 still opens a ledger entry" "$(has "$TICK" '* TICK <ISO-8601 timestamp> open:')" yes
+echo "== the tick's own ledger still exists — it moved to step 0.9, it was not deleted =="
+# Moved 2026-09-02 (task-011 finding 9): the append dirties tracked log.md, and
+# tick-delta.sh calls ANY tracked dirt an immediate DELTA before it fingerprints — so an
+# entry opened in 0.5 forces the answer the 0.9 probe exists to give, and the idle
+# fast-path never runs. The entry is unchanged; only the step that writes it moved, so
+# these pin the LOCATION in both directions rather than the file-wide presence they used to.
+# step05only stops at 0.9; the step05() defined below deliberately runs on to step 1, so it
+# would report 0.9's line as 0.5's and this pair would not be able to fail.
+step05only() { awk '/^0\.5\. \*\*Take the tick lock/{p=1;next} p&&/^0\.9\. /{p=0} p' "$TICK"; }
+step09() { awk '/^0\.9\. \*\*Probe the idle fast-path/{p=1;next} p&&/^1\. \*\*Orient/{p=0} p' "$TICK"; }
+ok "the tick still opens a ledger entry" "$(has "$TICK" '* TICK <ISO-8601 timestamp> open:')" yes
+ok "…and step 0.9 is what opens it" \
+  "$(step09 | grep -qF '* TICK <ISO-8601 timestamp> open:' && echo yes || echo no)" yes
+ok "…step 0.5 no longer does" \
+  "$(step05only | grep -qF '* TICK <ISO-8601 timestamp> open:' && echo yes || echo no)" no
+ok "…and the probe's reason for the move is stated" \
+  "$(step09 | grep -qF 'the probe reads a tree that append would have dirtied' && echo yes || echo no)" yes
 ok "…still re-deriving from disk first"  "$(has "$TICK" 're-derive the in-flight set from disk')" yes
 
 echo

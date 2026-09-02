@@ -66,10 +66,26 @@ no PII/secrets. The role-specific procedure is below.
      "coderabbitai[bot]"` for the REST comments endpoint), with `submittedAt` present and
      `state` **not** `DISMISSED`. If such a review exists, **fold its findings in and do not
      run the CLI.**
+     **Match the HEAD too, not identity alone — a review is of a COMMIT, never of a PR.**
+     CodeRabbit runs here with `auto_incremental_review: false` on purpose, so a review
+     submitted before the last push is still sitting on the PR looking exactly like a fresh
+     one, and route (a) taken on it leaves every commit since unreviewed. Compare the
+     review's commit against `gh pr view <pr> --json headRefOid`, or let
+     `scripts/review-clearance.sh <pr> --repo <org>/<repo>` classify it — **exit 4 is stale,
+     and stale is not route (a)**. Treat a stale review exactly like (b): report the gate as
+     unmet at the current head and let the loop pick it up. Fold its findings in as context
+     by all means; do not count it as the independent signal. (`SCHEMA.md` → the external
+     reviewer's clause set: "an identity-matched review at the current head".)
      **Reconcile the count before you conclude anything:** CodeRabbit's summary states
      "Actionable comments posted: N" — compare N against the number of inline comments you
      actually read, and paginate until they agree. A truncated fetch looks exactly like a
      clean review.
+     **Reconcile the THREADS as well as the count.** `SCHEMA.md` clause 9 applies to an
+     external review as much as to yours: a reviewer-authored thread still unresolved refuses
+     clearance. Read `reviewThreads { isResolved }` (GraphQL) or the Files-changed view — the
+     inline-comment count says nothing about it — and a thread the PR author resolved
+     themselves does not count unless the reviewer re-acknowledged it by re-reviewing the
+     current head without re-raising.
    - **b. No review — is the repo nevertheless configured?** A configured repo can simply
      not have been reviewed *yet* (rate-limited, queued, or the PR is a draft). Check for a
      `.coderabbit.yaml`, and — since CodeRabbit is often configured through its **org UI**,
@@ -83,22 +99,32 @@ no PII/secrets. The role-specific procedure is below.
      **still publishes a green check** while its comment says it skipped the review. Read
      what the reviewer actually said: any "rate limit reached", "review skipped", plan- or
      quota-exhausted message means **no review happened**. `scripts/review-clearance.sh
-     <pr> --repo <org>/<repo>` decides this for you — exit 1 is a refusal and it quotes
-     the words; don't re-derive the judgement by eye. And note the refusal comment names
-     the PR's own head in a `between <base> and <head>` line, so "it mentions the head
+     <pr> --repo <org>/<repo>` decides this for you — **exit 1 and exit 5 are both
+     refusals** and it quotes the words; don't re-derive the judgement by eye. And note
+     the refusal comment names the PR's own head in a `between <base> and <head>` line, so "it mentions the head
      SHA" is **not** evidence that anything was reviewed. Treat it exactly like (b) —
      pending, an unmet gate — and say so in your verdict's `caveats`. A green check next
      to a refusal is the most convincing false pass available here; never launder it into
      one, and never spend the CLI to paper over an exhausted quota (that's the same budget
      from the other side — flag it for the human instead).
 
-     **Two readings of that script's output that are easy to get wrong.** Exit **4** is
+     **Three readings of that script's output that are easy to get wrong.** Exit **4** is
      not a refusal — it means a real review exists and it is of an **earlier commit**,
      which is the ordinary state wherever the reviewer does not re-review every push
      (CodeRabbit's `auto_incremental_review: false`, which this repo sets on purpose).
      Report that as *stale*, and ask for a review at the current head; do not quote it as
      "the reviewer declined". And exit 1 answers for **one** account — read whose
      clearance you were told about before repeating it.
+
+     **And exit 5 is a refusal you must not wait out.** It means the refusal is **terminal**
+     — the account is out of credits, unpaid, expired or unauthenticated — so no amount of
+     waiting reopens it, and unlike exit 1 it is a fact about **every future PR**, not this
+     one. Handle it separately from exit 1 and **stop before route (d)**: never spend the CLI
+     to paper over an exhausted account, because that is the same budget from the other side.
+     Surface it for the human — buy credits, fix the token, authorise the spend — and carry
+     the script's quoted reason into your verdict's `caveats`, so a systemic failure is
+     visible rather than merely absent. Exit 1 waits; exit 5 escalates. Treating 5 as 1 waits
+     forever.
 
      **Your own verdict quotes refusal language, so end it with the `okf-verdict`
      trailer.** Writing "CodeRabbit answered *Review limit reached*" makes your comment
@@ -247,6 +273,16 @@ no PII/secrets. The role-specific procedure is below.
    caveat you mention in prose but not in the trailer is a caveat you have hidden. If
    you can't assess the work, `verdict: inconclusive` is the correct answer — never
    `pass` with an explanation.
+
+   **`pass` is only ever `pass`: a non-empty `unverified_criteria` or `caveats` forces
+   `changes-requested` or `inconclusive`, whichever fits.** `SCHEMA.md`'s clearance
+   predicate refuses both fields non-empty — clauses 5 and 6, "a self-declared caveat is
+   disqualifying, not context" — so a `pass` carrying either is a verdict the gate rejects
+   on arrival: the round is spent and nothing moved. Fill the fields honestly, then pick
+   the verdict they imply. Filling them honestly and leaving `pass` standing for the
+   consumer to discover is the failure this line exists to stop. **And no `pass` while a
+   reviewer-authored thread is unresolved** (clause 9), which is the same check case (a)
+   already owes an external review.
 
    Post via `gh pr review` as a **comment** (or `--request-changes`), **never `gh pr
    merge`**. Don't plan on `--approve`: when the PR was opened by the same `gh` identity
