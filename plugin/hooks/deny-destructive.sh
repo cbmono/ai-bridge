@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# deny-destructive.sh — PreToolUse hook (ai-bridge machinery). The destructive-action
+# deny-destructive.sh — PreToolUse hook (ai-bridge PLUGIN). The destructive-action
 # deny baseline: the layer an agent cannot talk past.
 #
 # WHY THIS EXISTS. `permissions.deny` was empty in every live instance while agents ran
@@ -68,6 +68,27 @@
 # that cannot reach production cannot harm it whatever it decides. This is not a
 # substitute for that audit.
 set -uo pipefail
+
+# --------------------------------------------------------------- the instance-root guard
+# THIS BLOCK IS IDENTICAL IN agent-control.sh — keep them the same. It ships as a PLUGIN
+# hook now, so it fires in EVERY session on the machine, not only in a bundle. Three
+# things it must hold, each one load-bearing:
+#
+#   1. CLAUDE_PROJECT_DIR, NEVER the payload's `cwd`. A dispatched agent works inside a
+#      worktree of a TARGET repo, so `cwd` is not the instance root. `agent-control.sh`
+#      has carried that reasoning since it was an instance hook; it is now load-bearing
+#      for this baseline too, and it is what `subagent_push_default` reads below.
+#   2. ONE MARKER, and it is `instance.config.json`. `agent-control.sh`'s old guard also
+#      tested `SCHEMA.md` and `.claude/agents/`; the third is dropped deliberately,
+#      because `.claude/agents/` is a machinery path this very migration retires, so
+#      keying on it would make the guard fail exactly when the plugin finishes replacing
+#      the symlink farm.
+#   3. SILENCE IS THE REQUIREMENT, not merely the behaviour. No stdout, no stderr, no
+#      state, exit 0 — before the payload is even read. A line per skipped call would be
+#      noise in every unrelated project on this machine.
+INSTANCE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
+INSTANCE_ROOT="$(cd "$INSTANCE_ROOT" 2>/dev/null && pwd -P || printf '%s' "$INSTANCE_ROOT")"
+[ -f "$INSTANCE_ROOT/instance.config.json" ] || exit 0
 
 # ------------------------------------------------------------------------------- payload
 payload="$(cat 2>/dev/null || true)"
@@ -779,25 +800,27 @@ EOF
 # it while `force_push_protected` stays silent, because a plain push to `main` is routine
 # FOR THE HUMAN and for the bundle. Agent-scoped like `subagent_merge`: fires only when
 # `agent_id` is present. NARROW ENOUGH TO KEEP, in three exemptions the tests pin:
-#   · the BUNDLE — the repo whose root IS `$CLAUDE_PROJECT_DIR` — is exempt: the
+#   · the BUNDLE — the repo whose root IS `$INSTANCE_ROOT` — is exempt: the
 #     project-manager tick commits and pushes the instance's own default branch by design
-#     (pm-loop step 8). The env var, not the payload `cwd`, because a dispatched agent's
-#     cwd is the WORKTREE — the same reasoning agent-control.sh records for its root;
-#   · a FEATURE branch push is untouched — it is how every PR gets opened;
-#   · `$CLAUDE_PROJECT_DIR` unset or gone is PLUMBING and fails open, like no `jq` —
-#     a rule that guessed the bundle's location would refuse the tick's own push.
+#     (the loop's final step). `$INSTANCE_ROOT` is `$CLAUDE_PROJECT_DIR`, resolved once by
+#     the guard at the top of this file — not the payload `cwd`, because a dispatched
+#     agent's cwd is the WORKTREE, the same reasoning agent-control.sh records for its root;
+#   · a FEATURE branch push is untouched — it is how every PR gets opened.
+# THERE IS NO LONGER A THIRD, unset-CLAUDE_PROJECT_DIR exemption. This rule used to read
+# the env var itself and fail open when it was unset or gone, because as an INSTANCE hook
+# it could not tell "no bundle here" from "plumbing broke". As a PLUGIN hook the guard at
+# the top of this file has already exited on exactly that condition, so the branch is
+# unreachable and is deleted rather than left to read as live: reaching this line means an
+# instance root was found, so a comparison against it is meaningful.
 # The branch set is `force_push_protected`'s: the conventional names plus the repo's
 # resolved default. `git -C <elsewhere>` shares that rule's documented limitation.
 rule_subagent_push_default() {
   [ -n "$AGENT_ID" ] || return 1          # the human's own session is never gated here
   case "$1" in *push*) ;; *) return 1 ;; esac
-  local inst root
-  inst="${CLAUDE_PROJECT_DIR:-}"
-  [ -n "$inst" ] && [ -d "$inst" ] || return 1
-  inst="$(cd "$inst" 2>/dev/null && pwd -P || printf '%s' "$inst")"
+  local root
   root="$(repo_root)"
   [ -n "$root" ] || return 1
-  [ "$root" = "$inst" ] && return 1       # the bundle: the tick pushes it by design
+  [ "$root" = "$INSTANCE_ROOT" ] && return 1   # the bundle: the tick pushes it by design
 
   local stage c w seen sub skipnext args remote r d dst p protected oldopts
   while IFS= read -r stage; do
