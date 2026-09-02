@@ -307,7 +307,7 @@ only counter-metric is `/audit`, which is retrospective and slow-cadence. So the
 piece was a **live** one: `plugin/hooks/agent-control.sh` (a `PreToolUse` hook) plus
 `scripts/control.sh` (the operator side), supporting `gate`, `steer` and `halt` against
 one agent. The two halves install separately — the operator script is instance machinery
-`install.sh` stamps, the hook ships with the `ai-bridge-v2` plugin — so arming an instance
+`install.sh` stamps, the hook ships with the `ai-bridge` plugin — so arming an instance
 whose plugin is not installed writes directives nothing reads.
 
 **It is keyed on `agent_id`, and that was measured rather than assumed.** A spike proved
@@ -727,8 +727,8 @@ which is why the convention and the check are one invariant and not two.
 
 ## 21. `/ai-bridge` reports facts that can be false, and `fix` is tiered in code
 
-> Since the plugin replatform, this contract ships as the `ai-bridge-v2` plugin's
-> `/welcome` skill (`/ai-bridge-v2:welcome [check|fix]`); the instance command file it
+> Since the plugin replatform, this contract ships as the `ai-bridge` plugin's
+> `/welcome` skill (`/ai-bridge:welcome [check|fix]`); the instance command file it
 > describes is retired. Everything below still governs the script and the relay.
 
 **The rejected shape first, because it is the one that keeps getting proposed.** The

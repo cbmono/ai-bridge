@@ -7,28 +7,28 @@ configured in `instance.config.json`.
 ## Start here
 You steer; background agents do the work. **The core loop — memorise this:**
 
-> ### `/ai-bridge-v2:new-project` → you approve `draft → ready` → `/ai-bridge-v2:dispatch` → you merge the PR
+> ### `/ai-bridge:new-project` → you approve `draft → ready` → `/ai-bridge:dispatch` → you merge the PR
 >
 > You create work and set direction; the PM refines it; you approve at the first
 > gate; role agents build **in the background** and open PRs; you merge at the
 > second gate. Everything else is support. **Steer, don't watch** — `AWAITING.md`
 > tells you what needs *you*.
 
-**The commands are the `ai-bridge-v2` plugin — per machine, not per instance.**
+**The commands are the `ai-bridge` plugin — per machine, not per instance.**
 None of them resolving means it is not installed here. Install once, then restart:
 
 ```text
 /plugin marketplace add cbmono/ai-bridge
-/plugin install ai-bridge-v2@ai-bridge
+/plugin install ai-bridge@ai-bridge
 ```
 
 | To… | Run |
 |---|---|
-| See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/ai-bridge-v2:dispatch`** — one safe, idempotent tick. Add `10m` to loop on an interval; say "DRY RUN" to preview without spawning agents. |
-| Start a new project | **`/ai-bridge-v2:new-project <description>`** — a build project (code → PRs), or add `kind=research` for docs/decks/assets (no repo). |
-| Close a finished project | **`/ai-bridge-v2:close-project <slug>`** — when its tasks are all done/cancelled. Removes the folder (git history + KB are the record; no archive) unless `project.md` says `retain: true`, which keeps it frozen and pruned. The PM flags candidates; you run it. |
-| Request grouped PR reviews | **`/ai-bridge-v2:pr-review-request <filter>`** |
-| Fan a batch of independent ad-hoc asks out to parallel background agents | **`/ai-bridge-v2:fanout`** — or just give the assistant ≥2 independent asks at once (see _Ad-hoc requests_) |
+| See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/ai-bridge:dispatch`** — one safe, idempotent tick. Add `10m` to loop on an interval; say "DRY RUN" to preview without spawning agents. |
+| Start a new project | **`/ai-bridge:new-project <description>`** — a build project (code → PRs), or add `kind=research` for docs/decks/assets (no repo). |
+| Close a finished project | **`/ai-bridge:close-project <slug>`** — when its tasks are all done/cancelled. Removes the folder (git history + KB are the record; no archive) unless `project.md` says `retain: true`, which keeps it frozen and pruned. The PM flags candidates; you run it. |
+| Request grouped PR reviews | **`/ai-bridge:pr-review-request <filter>`** |
+| Fan a batch of independent ad-hoc asks out to parallel background agents | **`/ai-bridge:fanout`** — or just give the assistant ≥2 independent asks at once (see _Ad-hoc requests_) |
 
 Your two gates: promote a task `draft → ready`, then merge the PR (build) or
 approve the deliverable (research). When a request matches a command above,
@@ -63,7 +63,7 @@ this file so product-repo sessions aren't told they are a control panel. -->
   never closes them itself.
 - **Two human authorities** (`SCHEMA.md`): only the human promotes `draft → ready`,
   and only the human merges. The PM never sets `ready` and never merges.
-- **One active `/ai-bridge-v2:dispatch` loop per clone**, run from a session **in this
+- **One active `/ai-bridge:dispatch` loop per clone**, run from a session **in this
   repo**. The one-tick-at-a-time guarantee is backed by `.tick-lock` (per clone, gitignored) —
   the launcher takes it before dispatching and the tick checks it on entry — but the
   lock catches the mistake; it does not make two loops on one clone a good idea.
@@ -92,18 +92,18 @@ Reasoning belongs where it is durable — the task doc, the commit message, a
 **Tracked work** (anything that becomes a PR or a `projects/` deliverable) flows
 through the gated loop above — heavyweight on purpose. **Ad-hoc chat requests**
 (rephrase a doc, "status of X") are not project tasks and must **not** be funnelled
-through `/ai-bridge-v2:dispatch`.
+through `/ai-bridge:dispatch`.
 
 **Offer the loop when there is work to dispatch — once, and only then.** The
 SessionStart banner prints `Ready to dispatch   N` only when at least one task is
-genuinely dispatchable. When that line is present, **offer `/ai-bridge-v2:dispatch`
+genuinely dispatchable. When that line is present, **offer `/ai-bridge:dispatch`
 in your first reply** — one sentence, naming the count, riding along with the answer
 to what they asked. Bounded: **once per session**; only off that line (never count the documents
 yourself); never instead of the answer; never for ad-hoc work.
 
 **Ad-hoc batches:** ≥2 independent, well-specified asks in one turn ⇒ act as
 coordinator — dispatch each to a **background `general-purpose` agent** in a single
-message, report results as they land. `/ai-bridge-v2:fanout` forces this. Handle
+message, report results as they land. `/ai-bridge:fanout` forces this. Handle
 **in-thread** instead when: the ask needs an interactive decision; it's a trivial lookup; or two
 asks would write the same files (serialise, or one worktree each).
 

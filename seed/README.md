@@ -7,9 +7,9 @@ background AI agents working on this group's product repositories.
 This is an **instance** of the `ai-bridge` template. The generic machinery
 (`SCHEMA.md`, `agents/`, `scripts/`, the role agents and the `SessionStart` hook)
 is **symlinked in** from the template and gitignored; the slash commands come from
-the `ai-bridge-v2` **plugin** (`/ai-bridge-v2:dispatch`, `/ai-bridge-v2:new-project`,
-`/ai-bridge-v2:close-project`, `/ai-bridge-v2:pr-review-request`,
-`/ai-bridge-v2:answer`, `/ai-bridge-v2:audit`, `/ai-bridge-v2:fanout`) and are
+the `ai-bridge` **plugin** (`/ai-bridge:dispatch`, `/ai-bridge:new-project`,
+`/ai-bridge:close-project`, `/ai-bridge:pr-review-request`,
+`/ai-bridge:answer`, `/ai-bridge:audit`, `/ai-bridge:fanout`) and are
 installed per machine, not per instance. This repo tracks only its own
 **content**: `objectives/`, `projects/`, `knowledge/`, `log.md`, and
 `instance.config.json`.
@@ -61,9 +61,9 @@ Per-machine values go in **`instance.config.local.json`** beside this file
 is — the one key a second person needs), `authorEmail`, `reposRoot`, `worktreeRoot`,
 `boardInstances`. The full set, and what each means when absent, is listed in one place:
 `SCHEMA.md` → "Per-machine config overrides".
-- `defaultRepo` — optional; default repo for `/ai-bridge-v2:pr-review-request` (bare name is
+- `defaultRepo` — optional; default repo for `/ai-bridge:pr-review-request` (bare name is
   qualified with `org`, or give `owner/name`).
-- `prReviewSlackChannel` — optional; channel name or id for `/ai-bridge-v2:pr-review-request`.
+- `prReviewSlackChannel` — optional; channel name or id for `/ai-bridge:pr-review-request`.
 
 Per-instance permission/env overrides go in `.claude/settings.local.json`
 (gitignored) — never edit the symlinked `.claude/settings.json`, which is shared
@@ -73,8 +73,8 @@ across all instances.
 ```
 Objective ──► Project ──► Task ──► (PM refines) ──► (human approves) ──► (PM dispatches) ──► role agent ──► PR ──► you merge
 ```
-The spine you drive is **`/ai-bridge-v2:new-project` → approve `draft → ready` →
-`/ai-bridge-v2:dispatch` → merge**.
+The spine you drive is **`/ai-bridge:new-project` → approve `draft → ready` →
+`/ai-bridge:dispatch` → merge**.
 You set direction and approve at two gates; the PM and role agents do the rest in
 the background. **Steer, don't watch** — act on what `AWAITING.md` asks of you, not
 on each agent's steps.
@@ -83,7 +83,7 @@ See `SCHEMA.md` for the types and lifecycle, and `CLAUDE.md` for the operational
 rules (two human gates, per-agent authorship, parallel-safety).
 
 ## Add a project
-Run **`/ai-bridge-v2:new-project <one-line description>`** from a session in this
+Run **`/ai-bridge:new-project <one-line description>`** from a session in this
 instance. It
 scaffolds `projects/<slug>/` (schema-valid `project.md`, `index.md`, `log.md`, and
 seed `draft` tasks), links it to an objective, registers it in the bundle
@@ -106,7 +106,7 @@ then promote `draft → ready`. (To hand-roll one instead, copy the shape in `SC
 When a project's tasks are all `done`/`cancelled`, the PM flags it in the awaiting-you queue as
 **ready to close** — it never closes one on its own. Close it with:
 ```
-/ai-bridge-v2:close-project <slug>
+/ai-bridge:close-project <slug>
 ```
 Closeout does a final `knowledge/` consolidation (durable learnings live on in the
 KB), records a **Project closed** entry in `log.md` (with the merged PRs and the
@@ -129,12 +129,12 @@ gitignored and safe to delete.
 
 ## Run the Project Manager
 From a fresh session **in this instance directory** (so the role agents, the
-clones, and `gh` are available), with the `ai-bridge-v2` plugin installed on this
+clones, and `gh` are available), with the `ai-bridge` plugin installed on this
 machine (`/plugin marketplace add cbmono/ai-bridge`, then `/plugin install
-ai-bridge-v2@ai-bridge`):
+ai-bridge@ai-bridge`):
 
 ```text
-/ai-bridge-v2:dispatch 10m
+/ai-bridge:dispatch 10m
 ```
 
 A SERIAL, completion-gated loop — exactly one tick at a time. Preview safely with
@@ -168,7 +168,7 @@ its verb and a real link:
 * 🏁 **close** — a project whose tasks are all terminal
 
 In-flight and upcoming work is deliberately **not** here: it needs no decision from
-you, and scrolling past it is how a queue stops getting read. Each `/ai-bridge-v2:dispatch` tick
+you, and scrolling past it is how a queue stops getting read. Each `/ai-bridge:dispatch` tick
 rewrites the file, and a `SessionStart` hook injects these items when you launch
 Claude here — so you see what needs a decision without reading the loop.
 
@@ -185,7 +185,7 @@ documents live in the **bundle** (per instance). Neither half updates the other.
 
 | Half | Reaches you by | Run |
 |---|---|---|
-| the slash commands (`/ai-bridge-v2:*`) | the plugin, installed once per machine | `/plugin marketplace add cbmono/ai-bridge` then `/plugin install ai-bridge-v2@ai-bridge` — and `/plugin` to update it later |
+| the slash commands (`/ai-bridge:*`) | the plugin, installed once per machine | `/plugin marketplace add cbmono/ai-bridge` then `/plugin install ai-bridge@ai-bridge` — and `/plugin` to update it later |
 | role agents, `scripts/`, `SCHEMA.md`, `CONVENTIONS.md`, the `SessionStart` hook | symlinks into the template checkout | `<ai-bridge>/install.sh <path-to-this-instance>` — after the template moves, or gains a new machinery file |
 
 `install.sh` also **retires** a symlink whose target the template no longer ships,

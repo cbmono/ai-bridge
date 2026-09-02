@@ -82,7 +82,7 @@ done
 echo "== 3. every dispatch string is NAMESPACED =="
 # =======================================================================================
 # The measured fact this whole slice turns on (2026-09-02, from a bare directory):
-# `ai-bridge-v2:advisor` dispatched and replied; the BARE name did NOT resolve, which
+# `ai-bridge:advisor` dispatched and replied; the BARE name did NOT resolve, which
 # contradicts the plugin docs. So a document that tells an agent to dispatch a role by
 # its bare name describes something that fails at runtime, and it fails SILENTLY — the
 # caller sees "no such agent", never "you forgot the namespace".
@@ -95,8 +95,8 @@ DISPATCHERS="plugin/skills/dispatch/SKILL.md plugin/skills/audit/SKILL.md plugin
 for d in $DISPATCHERS; do
   ok "$(basename "$(dirname "$d")")/$(basename "$d") names ai-bridge:" \
     "$(grep -cF 'ai-bridge:' "$TPL/$d" | awk '{print ($1 > 0 ? "yes" : "no")}')" yes
-  ok "…and carries no ai-bridge-v2: dispatch string" \
-    "$(grep -cF 'ai-bridge-v2:' "$TPL/$d" | awk '{print ($1 > 0 ? "no" : "yes")}')" yes
+  ok "…and carries no ai-bridge: dispatch string" \
+    "$(grep -cF 'ai-bridge:' "$TPL/$d" | awk '{print ($1 > 0 ? "no" : "yes")}')" yes
 done
 # The plugin's own name is what the namespace is derived from, so a rename of one without
 # the other leaves twelve dispatch strings pointing at nothing.

@@ -11,12 +11,12 @@ board. Procedures here; the reasoning behind each one is linked.
 
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
-| the **plugin** (`ai-bridge-v2`) | every slash command — `/ai-bridge-v2:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/ai-bridge`, then `/plugin install ai-bridge-v2@ai-bridge`; `/plugin` to update it later |
+| the **plugin** (`ai-bridge`) | every slash command — `/ai-bridge:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/ai-bridge`, then `/plugin install ai-bridge@ai-bridge`; `/plugin` to update it later |
 | the **bundle** machinery (`symlink/`) | `scripts/`, the `SessionStart` and `UserPromptSubmit` hooks, `SCHEMA.md`, `CONVENTIONS.md`, `AUTONOMY.md`, `agents/index.md`, `.claude/settings.json`, the role-agent copies the bundle still links | **per instance** | `install.sh <instance>` |
 
 **Install is therefore the plugin first, the stamp second.** A machine with the plugin and
 no bundle has commands and nothing for them to read; a bundle with no plugin has the data
-and no way to drive it, and every `/ai-bridge-v2:…` reports *unknown command*. That is the
+and no way to drive it, and every `/ai-bridge:…` reports *unknown command*. That is the
 one symptom worth memorising, because nothing else says which half is missing.
 
 **The plugin is not on the template's `VERSION`.** `VERSION` at this repo's root numbers
@@ -80,7 +80,7 @@ to guess.
 ### Then
 
 1. **Restart Claude Code** in the instance (`/exit`, then `claude`) so new agents register.
-2. **Verify.** Invoke a changed command or agent (e.g. `/ai-bridge-v2:audit`, or an `/ai-bridge-v2:dispatch` dry run) and confirm it resolves **and** that model routing resolves as configured. "Unknown command" on a `/ai-bridge-v2:…` name means the **plugin** is missing or stale on this machine, not that the stamp failed — the two halves fail differently, and that message only ever accuses the plugin.
+2. **Verify.** Invoke a changed command or agent (e.g. `/ai-bridge:audit`, or an `/ai-bridge:dispatch` dry run) and confirm it resolves **and** that model routing resolves as configured. "Unknown command" on a `/ai-bridge:…` name means the **plugin** is missing or stale on this machine, not that the stamp failed — the two halves fail differently, and that message only ever accuses the plugin.
 3. If `instance.config.json` lacks the model-routing block, add it — otherwise model routing stays off and everything runs on the session model:
 
 ```json
@@ -107,7 +107,9 @@ errors. The commands simply are not there.
 ```bash
 # 1. per MACHINE, in any Claude Code session
 /plugin marketplace add cbmono/ai-bridge
-/plugin install ai-bridge-v2@ai-bridge
+/plugin install ai-bridge@ai-bridge
+#    on ai-bridge-v2 already? uninstall it from /plugin -> Manage. It ships for one
+#    more version as a stub carrying a single skill that says exactly this.
 
 # 2-3. per INSTANCE, from the template checkout
 ./upgrade.sh ~/workspace/<group>/_ai-bridge-<group>            # report — changes nothing but symlinks
@@ -119,10 +121,10 @@ errors. The commands simply are not there.
 
 | Step | What it fixes | What you should see |
 |---|---|---|
-| 1 | the commands do not exist on this machine | `/ai-bridge-v2:welcome` resolves |
-| 2 | the dangling `.claude/commands/*` and `.claude/hooks/*` links, via `install.sh` step 2b | one `retire <path> (no longer shipped by the template)` line per migrated command, plus one each for `.claude/hooks/deny-destructive.sh` and `.claude/hooks/agent-control.sh` |
+| 1 | the commands do not exist on this machine | `/ai-bridge:welcome` resolves |
+| 2 | the dangling `.claude/commands/*`, `.claude/hooks/*` and `.claude/agents/*` links, via `install.sh` step 2b | one `retire <path> (no longer shipped by the template)` line per migrated command, one each for `.claude/hooks/deny-destructive.sh` and `.claude/hooks/agent-control.sh`, and one for each of the eight role agents |
 | 3 | the seed documents that still name the old commands | the `seed/` verdicts above — `CLAUDE.md` and `README.md` 3-way merged onto your edits, or `CONFLICT`, which writes nothing |
-| 4 | Claude Code is still holding the old registration | the `SessionStart` banner, and `/ai-bridge-v2:dispatch` in the command list |
+| 4 | Claude Code is still holding the old registration | the `SessionStart` banner, and `/ai-bridge:dispatch` in the command list |
 
 **Step 2 is not optional and is not cosmetic.** A dangling command file still registers,
 so without the re-stamp the instance offers `/pm-loop` and fails when you run it. The
@@ -144,10 +146,14 @@ it was copied, so a `CONFLICT` verdict writes nothing and names both paths: port
 command names by hand there. `upgrade.sh` lists every such file in its numbered "what's
 left for you" block, which is the part to read.
 
-**There is no step for the role agents.** They ship in both halves during the migration —
-the bundle links them and the plugin carries them — and the bundle's copies retire in the
-name swap, when every namespaced dispatch string changes at once. Until then a re-stamp
-keeps them linked, which is the intended state and not drift.
+**The role agents retired in the name swap, and step 2b is what removes them.** They
+shipped in both halves during the migration — the bundle linked them, the plugin carried
+them, byte-identical — because a same-named project agent SHADOWS the plugin copy. The
+swap deleted `symlink/.claude/agents/`, so one re-stamp sweeps all eight dangling links
+and reports each by name, and from then on the plugin copies are the only copies.
+**Dispatch strings changed in the same breath: `ai-bridge:<role>`, all eight.** A bare
+agent name does not resolve (measured 2026-09-02), so the strings had to change once —
+this was that once.
 
 ### Why `install.sh` still exists, and what would retire it
 
@@ -158,10 +164,10 @@ against `symlink/`:
 | Under `symlink/` | Files | Does the plugin carry it? |
 |---|---|---|
 | `scripts/` | 27 | **no** — and 14 of them are named by relative path in the plugin skills' own `allowed-tools`, so the plugin *depends* on the bundle delivering them |
-| `.claude/hooks/` | 4 | **no** |
-| `.claude/agents/` | 8 | yes, in parallel — deliberately, until the name swap |
+| `.claude/hooks/` | 2 | **no** — `deny-destructive.sh` and `agent-control.sh` left in task-003; `session-banner.sh` and `push-state.sh` remain |
+| `.claude/agents/` | 0 | **retired in the name swap** — the plugin copies are the only copies |
 | root documents, `agents/index.md`, `.claude/settings.json`, `.claude/rules/` | 6 | **no** |
-| **total** | **45** | **37 reach an instance only through `install.sh`** |
+| **total** | **35** | **every one of them reaches an instance only through `install.sh`** |
 
 `install.sh` also does four things no plugin can: it seeds `seed/` **if absent**, rewrites
 the instance `.gitignore`'s managed machinery block, links the product repos into
@@ -236,7 +242,7 @@ absolute, so everything broke at once:
 | `~/.claude` (the `--config` layer) | 24 |
 
 **185 broken links, and all three instances looked fine from the outside.** A dangling
-symlink is invisible until something executes it — which for an `/ai-bridge-v2:dispatch` tick means
+symlink is invisible until something executes it — which for an `/ai-bridge:dispatch` tick means
 mid-dispatch, with agents already briefed.
 
 The repair is one idempotent command per instance, from the checkout's **new** location:
@@ -328,7 +334,7 @@ scripts/build-board.sh --standalone --out /tmp/board.html    # ...the same page,
 scripts/watch-board.sh                                       # a local page, re-rendered on every change
 ```
 
-Each `/ai-bridge-v2:dispatch` tick refreshes the snapshot at the end of the tick, so on a looping
+Each `/ai-bridge:dispatch` tick refreshes the snapshot at the end of the tick, so on a looping
 instance you never run the writer by hand — and unless `board` is `false`, the same tick
 re-renders the local page and reports its path ([below](#rendering-it-from-each-tick)).
 
@@ -516,7 +522,7 @@ one from a main session, which is the path the prose version of this rule never 
 
 ### One tick at a time (the dispatch lock)
 
-The loop — `/ai-bridge-v2:dispatch` since the plugin absorbed it, `/pm-loop` before
+The loop — `/ai-bridge:dispatch` since the plugin absorbed it, `/pm-loop` before
 that — has always promised at most one PM tick at a time, and until 2026-08-30 that
 promise was kept by the launching session **remembering** it had dispatched. Memory does
 not survive a compaction, a `--resume`, or a human asking "what's next?" — measured
@@ -773,7 +779,7 @@ both, for a human piping the banner somewhere that renders escapes.
 **Three renderings, one buffer, one artifact.** `--format json` is what `settings.json` asks
 for: the client draws `systemMessage`, and that field was measured rendering SGR and printing
 markdown *literally*. `--format md` is what `scripts/ai-bridge.sh` asks for when its stdout
-is a pipe — the welcome-skill relay path (`/ai-bridge-v2:welcome`), where the output is relayed into an assistant message and
+is a pipe — the welcome-skill relay path (`/ai-bridge:welcome`), where the output is relayed into an assistant message and
 the measurement is the exact opposite: markdown renders and 0 of 4 ANSI escape bytes survive.
 Plain text is the default and what a terminal gets. The md rendering differs from the plain
 one in **emphasis markers alone** — `**…**` on the identity line and the two table headers,
@@ -865,7 +871,7 @@ model does not also get. `tests/banner-user-channel.test.sh` pins both the named
 the general property (`diff` of the two copies reports no deletions, only insertions).
 
 **The offer is not the hook's.** A hook cannot ask a question, so the rule that the
-session offers `/ai-bridge-v2:dispatch` when there is dispatchable work lives in the instance's
+session offers `/ai-bridge:dispatch` when there is dispatchable work lives in the instance's
 `CLAUDE.md` (seeded from `seed/CLAUDE.md`, beside the ad-hoc-vs-tracked-work section). The
 hook owes it one number: the `Ready to dispatch` count, which is `ready` **and** every
 `depends_on` terminal **and** owned by this clone — now delivered on the **model's channel
@@ -995,7 +1001,7 @@ and it is the one the tick passes.
 
 The board is a **static file**: it does not move until something re-renders it, and its
 masthead timestamp is the only thing that admits how old it is. So each
-`/ai-bridge-v2:dispatch` tick
+`/ai-bridge:dispatch` tick
 re-renders it as its last act, right after `write-snapshot.sh` refreshes the data:
 
 ```sh

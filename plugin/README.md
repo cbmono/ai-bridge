@@ -9,7 +9,7 @@ existing machinery uses — nothing about a bundle moves.
 
 ```
 /plugin marketplace add cbmono/ai-bridge
-/plugin install ai-bridge-v2@ai-bridge
+/plugin install ai-bridge@ai-bridge
 ```
 
 Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplaces.
@@ -25,7 +25,9 @@ Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplace
 | `/handoff <path> <login>` | Ownership transfer with the context that makes it real: `owner:` set, a dated handoff note, and a paste-ready summary (open questions, PRs, linked Findings) for the new owner. Dispatch-gating only — never a promotion. |
 | `/welcome` | The welcome screen: instance, owner, config layers, tier→model routing, board path, what awaits you. Relays the bundle's renderer verbatim. |
 
-Both also answer to their namespaced forms (`/ai-bridge-v2:brief-me`, `/ai-bridge-v2:capture`).
+Both also answer to their namespaced forms (`/ai-bridge:brief-me`, `/ai-bridge:capture`).
+**`ai-bridge-v2` was the transition name** — it ships for one more version as a
+deprecation stub (`plugin-deprecated/`) that carries a single skill pointing here.
 Run them from a bundle root (where `SCHEMA.md` and `instance.config.json` live).
 
 ## Hooks
@@ -51,19 +53,18 @@ block to carry it.
 
 ## During the transition — what stays an instance command, and why
 
-A plugin skill **shadows** a same-named project command, so the battle-tested
-one instance command is deliberately *not* duplicated here yet: `/pm-loop`, the live
-loop, keeps running from the bundle's machinery until its absorption slice.
-(`/ai-bridge` migrated first — its whole contract lives in this plugin's `/welcome` —
-then `/audit`, `/answer`, `/fanout`, `/pr-review-request`, `/new-project` and
-`/close-project` followed verbatim.) Each migrates in a
-slice that moves the contract and retires the instance copy **in one change**, with the
-template's test suite as the spec. The **enforcement hooks** have made that move (above);
-`session-banner.sh` and `push-state.sh` are still instance hooks and carry the same
-instance-root guard when they follow. The final slice swaps `ai-bridge-v2` to the bare
-name.
+A plugin skill **shadows** a same-named project command, so each command migrated in a
+slice that moved the contract and retired the instance copy **in one change**, with the
+template's test suite as the spec — `/ai-bridge` first (its whole contract is this
+plugin's `/welcome`), then `/audit`, `/answer`, `/fanout`, `/pr-review-request`,
+`/new-project`, `/close-project` and finally `/pm-loop`, which is `/dispatch` here. The
+**enforcement hooks** have made that move (above); `session-banner.sh` and
+`push-state.sh` are still instance hooks and carry the same instance-root guard when
+they follow.
 
-**Agents are the one surface with the REVERSE precedence:** a same-named project agent
-shadows the plugin copy (plugins are the lowest agent scope), so the eight role agents
-ship here in byte-parity with the instance copies — instances win until their links are
-retired, and `tests/plugin-agents.test.sh` is what keeps the two copies one.
+**Agents had the REVERSE precedence, and that is why they moved last:** a same-named
+project agent shadows the plugin copy (plugins are the lowest agent scope). So the eight
+role agents shipped here in byte-parity with the instance copies first, and the name swap
+retired those copies — the plugin is the only place they ship from now.
+**Dispatch them namespaced, `ai-bridge:<role>`.** A bare agent name does NOT resolve
+(measured 2026-09-02), which is why the strings changed exactly once, here.

@@ -606,7 +606,7 @@ in `cbmono/ai-bridge` enforces this.
   **Two readers, because what stood here was prose and prose did not stop this:**
   `tests/background-teardown.test.sh` fails the build on a background spawn in this repo's
   own `scripts/` and `tests/` that carries no bound (an allowlist entry has to state its
-  reason), and the welcome skill’s `check` (`/ai-bridge-v2:welcome check`) carries a row naming every orphaned process whose cwd is
+  reason), and the welcome skill’s `check` (`/ai-bridge:welcome check`) carries a row naming every orphaned process whose cwd is
   under `worktreeRoot` — the one line that would have printed all 34. `prune-worktrees.sh`
   still reports a worktree with a live process attached. All three only ever REPORT, so the
   teardown is yours, and your report still says what you stopped.
