@@ -102,6 +102,10 @@ ships, and its `CLAUDE.md` and `README.md` — seed content, copied once and nev
 overwritten — still tell you to run `/pm-loop`, `/new-project` and the rest. Nothing
 errors. The commands simply are not there.
 
+**This is the default path, and [migrating.md](migrating.md) is the decision rule plus
+the other one** — a fresh re-home into a clean folder, for when you want that
+deliberately.
+
 **Four steps, in this order. Step 1 is per machine; steps 2–4 are per instance.**
 
 ```bash
