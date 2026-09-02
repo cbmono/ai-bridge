@@ -117,6 +117,12 @@ ok "audit never promotes, merges, or dispatches" \
   "$(ge1 "$(grep -c 'never promotes, merges, or dispatches' "$SK/audit/SKILL.md")")" yes
 ok "answer works the tasks' open_questions, nothing else" \
   "$(ge1 "$(grep -c 'open_questions' "$SK/answer/SKILL.md")")" yes
+ok "…scopes to a project or a single task via \$ARGUMENTS" \
+  "$(ge1 "$(grep -c 'ARGUMENTS' "$SK/answer/SKILL.md")")" yes
+ok "…never widens scope on a typo" \
+  "$(ge1 "$(grep -c 'never fall back to all' "$SK/answer/SKILL.md")")" yes
+ok "…offers multiSelect where answers can jointly apply" \
+  "$(ge1 "$(grep -c 'multiSelect' "$SK/answer/SKILL.md")")" yes
 ok "fanout is for INDEPENDENT asks" \
   "$(ge1 "$(grep -ci 'independent' "$SK/fanout/SKILL.md")")" yes
 ok "pr-review-request treats Slack as optional" \
