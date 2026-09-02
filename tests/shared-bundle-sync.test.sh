@@ -31,7 +31,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TICK="$REPO/symlink/.claude/agents/project-manager.md"
-LAUNCHER="$REPO/symlink/.claude/commands/pm-loop.md"
+LAUNCHER="$REPO/plugin/skills/dispatch/SKILL.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/sync.XXXXXX")" || {
   echo "shared-bundle-sync.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -212,7 +212,7 @@ step0_mentioning_files() {
 S0FILES="$(step0_mentioning_files)"
 ok "'step 0' is named in exactly two files" "$(printf '%s\n' "$S0FILES" | grep -c .)" 2
 ok "…the tick…"     "$(printf '%s\n' "$S0FILES" | grep -qx 'symlink/.claude/agents/project-manager.md' && echo yes || echo no)" yes
-ok "…and the launcher, nowhere else"  "$(printf '%s\n' "$S0FILES" | grep -qx 'symlink/.claude/commands/pm-loop.md' && echo yes || echo no)" yes
+ok "…and the launcher, nowhere else"  "$(printf '%s\n' "$S0FILES" | grep -qx 'plugin/skills/dispatch/SKILL.md' && echo yes || echo no)" yes
 
 # The launcher's citation of the re-derivation property must point at 0.5, the step
 # it actually lives in now — not the bare "step 0" that would silently mean the new

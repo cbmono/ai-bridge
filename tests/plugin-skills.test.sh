@@ -109,8 +109,18 @@ ok "…and requires provenance" \
   "$(ge1 "$(grep -ci 'provenance' "$SK/capture/SKILL.md")")" yes
 ok "work works ONE task" \
   "$(ge1 "$(grep -ci 'one task' "$SK/work/SKILL.md")")" yes
-ok "dispatch defers to the pinned loop contract, not a paraphrase" \
-  "$(ge1 "$(grep -c 'pm-loop' "$SK/dispatch/SKILL.md")")" yes
+# dispatch no longer DELEGATES to the loop contract — it IS the loop contract, moved here
+# verbatim when `symlink/.claude/commands/pm-loop.md` retired. The property that makes it
+# the real launcher is the one it must never lose: it takes the tick lock ITSELF.
+ok "dispatch IS the loop contract: it takes the tick lock itself" \
+  "$(ge1 "$(grep -c 'scripts/tick-lock.sh acquire --agent project-manager' "$SK/dispatch/SKILL.md")")" yes
+# Its ScheduleWakeup prompt is the ONE line the move could not carry verbatim: a wakeup
+# naming a retired command re-fires into nothing, so the name it reschedules under is
+# pinned rather than left to whoever next edits step 3.
+ok "…rescheduling itself under its own name" \
+  "$(ge1 "$(grep -c '`prompt` = `/dispatch <gap>`' "$SK/dispatch/SKILL.md")")" yes
+ok "…and naming the retired command nowhere" \
+  "$(grep -c 'pm-loop' "$SK/dispatch/SKILL.md" | tr -d ' ')" 0
 ok "handoff asks for the new owner's github login" \
   "$(ge1 "$(grep -ci 'github-login\|github login' "$SK/handoff/SKILL.md")")" yes
 ok "audit never promotes, merges, or dispatches" \

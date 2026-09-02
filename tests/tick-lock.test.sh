@@ -113,7 +113,7 @@ unset CLAUDE_CODE_SESSION_ID TICK_CLAIMANT
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
 LOCKSH="$TPL/symlink/scripts/tick-lock.sh"
-LAUNCHER="$TPL/symlink/.claude/commands/pm-loop.md"
+LAUNCHER="$TPL/plugin/skills/dispatch/SKILL.md"
 TICK="$TPL/symlink/.claude/agents/project-manager.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tick-lock.XXXXXX")" || {
   echo "tick-lock.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
