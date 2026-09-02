@@ -126,7 +126,7 @@ echo "-- the expected set is derived from the probes, not hardcoded"
 ok "the machinery probes for at least one agent" \
    "$([ "$(grep -c . "$TMP/expected")" -ge 2 ] && echo yes || echo no)" yes
 ok "the derivation finds the probe in qa-reviewer" \
-   "$(grep -q 'test -f ~/.claude/agents/code-architect.md' "$REPO/symlink/.claude/agents/qa-reviewer.md" && echo yes || echo no)" yes
+   "$(grep -q 'test -f ~/.claude/agents/code-architect.md' "$REPO/plugin/agents/qa-reviewer.md" && echo yes || echo no)" yes
 
 # =========================================================================== #
 echo "-- this repo ships exactly what it probes for"

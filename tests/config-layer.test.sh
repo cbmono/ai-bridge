@@ -123,7 +123,7 @@ ok "plan-architect ships in config/required" \
    "$(yn test -f "$REPO/config/required/agents/plan-architect.md")" yes
 # And the probes themselves must SURVIVE — they are what makes a config-less machine work.
 ok "qa-reviewer still probes rather than assuming" \
-   "$(grep -q 'test -f ~/.claude/agents/code-architect.md' "$REPO/symlink/.claude/agents/qa-reviewer.md" && echo yes || echo no)" yes
+   "$(grep -q 'test -f ~/.claude/agents/code-architect.md' "$REPO/plugin/agents/qa-reviewer.md" && echo yes || echo no)" yes
 
 # =========================================================================== #
 echo "-- a fresh config install"
@@ -809,7 +809,7 @@ echo "-- …and 'provided' means a FILE, which is what the consumer probes for"
 # `[ -f ]`, not `[ -e ]`: `-e` is true for a DIRECTORY, so a directory named
 # `code-architect.md` in the provider's tree would be reported as provided — this run writes
 # nothing, exits 0, and `test -f ~/.claude/agents/code-architect.md` in
-# `symlink/.claude/agents/qa-reviewer.md` still fails, silently, in a session. That line is
+# `plugin/agents/qa-reviewer.md` still fails, silently, in a session. That line is
 # the entire content of its own commit and nothing covered it.
 D26="$(newdest 26)"; mkdir -p "$TMP/asetup3/agents/code-architect.md"
 for a in deep-bug-scan.md plan-architect.md; do printf 'ai-setup copy\n' > "$TMP/asetup3/agents/$a"; done

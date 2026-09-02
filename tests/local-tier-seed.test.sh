@@ -344,7 +344,7 @@ echo "-- 6. every prose caller carries the same instruction"
 # a caller that silently drops it is the failure this whole section is against.
 for f in symlink/CONVENTIONS.md docs/operations.md \
          plugin/skills/dispatch/SKILL.md plugin/skills/fanout/SKILL.md \
-         plugin/skills/audit/SKILL.md symlink/.claude/agents/project-manager.md; do
+         plugin/skills/audit/SKILL.md plugin/agents/project-manager.md; do
   ok "$(basename "$f") names resolve-model.sh"  "$(yn grep -q 'resolve-model\.sh' "$TPL/$f")" yes
   ok "…and says to report that line"            "$(yn grep -q 'report that line' "$TPL/$f")" yes
 done

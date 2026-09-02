@@ -702,7 +702,7 @@ config_install() {
     # `-f`, NOT `-e`. `-e` is true for a DIRECTORY, so a directory named `code-architect.md`
     # inside the provider's tree would count as "provided": this run would write nothing,
     # exit 0, and the `test -f ~/.claude/agents/code-architect.md` probe in
-    # `symlink/.claude/agents/qa-reviewer.md` would still fail — silently, in a session. The
+    # `plugin/agents/qa-reviewer.md` would still fail — silently, in a session. The
     # contract is "a FILE exists at this path", so the test has to be the same one the
     # consumer makes. This line is the whole content of its own commit; the fixture that
     # pins it is in `tests/config-layer.test.sh` (a directory in the provider's slot).

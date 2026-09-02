@@ -102,8 +102,9 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    report — a lock with no tick behind it is the stale case, arriving hours early.
 
    The tick itself: spawn a **fresh** `project-manager` agent
-   (`subagent_type: project-manager`) for ONE LIVE tick (background), with the standing
-   guardrails below. **Fresh every time — never wake a completed tick with a message**;
+   (`subagent_type: ai-bridge:project-manager` — **namespaced**, because the role agents
+   ship in the `ai-bridge` plugin and a BARE agent name does not resolve, measured
+   2026-09-02) for ONE LIVE tick (background), with the standing guardrails below. **Fresh every time — never wake a completed tick with a message**;
    step 0.5 refuses such a tick anyway. **Brief it with the gap and the guardrails, not
    with state** — it reads the bundle, `git` and `gh` itself. **Run the tick on the
    orchestrator's configured model:** resolve it with
@@ -139,11 +140,16 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    open ledger entry **reports it and holds**. Such a tick is a finished tick: schedule
    the gap as usual (step 3) and surface what it says.
 
-2b. **Ask the advisor, if this instance has one.** Two conditions, both required, and
-   **absence of either means skip this step silently** — never an error:
+2b. **Ask the advisor, if this instance has one.** One condition, and **its absence
+   means skip this step silently** — never an error:
 
-   - `"advisor"` appears in `roles` in `instance.config.json`;
-   - `.claude/agents/advisor.md` exists (the file is the off switch).
+   - `"advisor"` appears in `roles` in `instance.config.json`. **That key is the whole
+     off switch now.** It used to be two conditions, the second being that
+     `.claude/agents/advisor.md` exists — but the name swap retired the instance agent
+     links, so the plugin ships `advisor` to every machine and a file that is always
+     absent would have turned this step off everywhere, silently.
+
+   Dispatch it as `ai-bridge:advisor`, namespaced like every role agent.
 
    Its model comes from `scripts/resolve-model.sh advisor`, like every role; **absent ⇒
    `light`**, the cheapest tier — the script prints why on stderr, so report that line.
@@ -233,9 +239,12 @@ ticks, regardless of how long a tick runs.
   (absent, `<reposRoot>/_wt`) + a **private package store** (e.g. `pnpm install
   --store-dir <worktree>/.pnpm-store`) and **pushes early** — never two installs
   against the shared store at once.
-- A LIVE tick may also dispatch the **`cataloguer`** after reflecting merges —
-  read-only on product repos, writes only to `knowledge/`, **counts toward the cap**,
-  **throttled to one per tick**, never promotes or merges.
+- A LIVE tick may also dispatch the **`cataloguer`** (`ai-bridge:cataloguer`) after
+  reflecting merges — read-only on product repos, writes only to `knowledge/`,
+  **counts toward the cap**, **throttled to one per tick**, never promotes or merges.
+- **Every role-agent dispatch is namespaced `ai-bridge:<role>`** — all eight of them.
+  The three USER-level agents `install.sh` installs (`code-architect`, `deep-bug-scan`,
+  `plan-architect`) are not plugin agents and stay bare.
 - Commit hygiene in this repo: stage only your own changed files by explicit path
   (never `git add -A`); commit via
   `scripts/commit-as.sh project-manager "<msg>" -- <path>...`; never `--no-verify` in

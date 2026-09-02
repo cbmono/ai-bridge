@@ -109,7 +109,8 @@ asks would write the same files (serialise, or one worktree each).
 
 **Failure diagnosis always goes to the background.** "Build failed", "CI is red",
 "the PR isn't green" — including a bare PR ref with such a note — dispatch a
-**background `failure-analyst`** (read-only; it never changes code or opens a PR)
+**background `ai-bridge:failure-analyst`** (read-only; it never changes code or opens a
+PR; the `ai-bridge:` namespace is required — a bare role-agent name does not resolve)
 with the full brief: the ref, the repo, "root cause + ranked next steps, and a
 Finding draft if durable". Report the result when it lands; a known fix is a
 separate dispatch or a tracked task.

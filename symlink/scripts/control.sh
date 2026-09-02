@@ -101,11 +101,13 @@ USAGE
 
 # ------------------------------------------------------------------ the instance
 # Walk up for the instance root, so this works from anywhere inside the bundle.
-# The same triple the hook and `/pm-loop` use.
+# The same pair the hooks use. `.claude/agents` was a third condition until the name
+# swap retired it — the role agents ship in the `ai-bridge` plugin now, so testing for
+# that directory would refuse in every instance rather than in none.
 find_root() {
   d="$(pwd -P)"
   while [ "$d" != / ]; do
-    if [ -f "$d/SCHEMA.md" ] && [ -f "$d/instance.config.json" ] && [ -d "$d/.claude/agents" ]; then
+    if [ -f "$d/SCHEMA.md" ] && [ -f "$d/instance.config.json" ]; then
       printf '%s\n' "$d"; return 0
     fi
     d="$(dirname "$d")"
@@ -114,7 +116,7 @@ find_root() {
 }
 
 ROOT="$(find_root)" || {
-  echo "error: not inside an ai-bridge instance (no SCHEMA.md + instance.config.json + .claude/agents)." >&2
+  echo "error: not inside an ai-bridge instance (no SCHEMA.md + instance.config.json)." >&2
   echo "       Run this from an instance root." >&2
   exit 1
 }

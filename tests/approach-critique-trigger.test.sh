@@ -47,7 +47,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PM="$REPO/symlink/.claude/agents/project-manager.md"
+PM="$REPO/plugin/agents/project-manager.md"
 SCHEMA="$REPO/symlink/SCHEMA.md"
 SEED_CFG="$REPO/seed/instance.config.json"
 VALIDATOR="$REPO/symlink/scripts/validate-bundle.sh"

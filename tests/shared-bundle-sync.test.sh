@@ -30,7 +30,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-TICK="$REPO/symlink/.claude/agents/project-manager.md"
+TICK="$REPO/plugin/agents/project-manager.md"
 LAUNCHER="$REPO/plugin/skills/dispatch/SKILL.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/sync.XXXXXX")" || {
   echo "shared-bundle-sync.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -195,23 +195,15 @@ ok "…and FAILS when the push command is dropped" \
 # its own new sync step) and the launcher (which must cite 0.5 for the property
 # that moved there, never a bare "step 0").
 # =================================================================================
-# A plugin/agents/ copy that is BYTE-IDENTICAL to its symlink twin is the same copy,
-# not a third one — tests/plugin-agents.test.sh is what pins that parity during the
-# absorption's phase 1. The moment it drifts, it counts here and this pin fires.
+# The twin-dedup this used to carry is gone with the copies it deduplicated: the
+# name swap retired symlink/.claude/agents/, so plugin/agents/ is the only copy and
+# every match here is a distinct file again.
 step0_mentioning_files() {
-  grep -rl "step 0" --include="*.md" "$REPO" 2>/dev/null | grep -v "/\.git/" | sed "s#^$REPO/##" | sort \
-  | while IFS= read -r f; do
-      case "$f" in
-        plugin/agents/*.md)
-          twin="$REPO/symlink/.claude/agents/$(basename "$f")"
-          [ -f "$twin" ] && cmp -s "$REPO/$f" "$twin" && continue ;;
-      esac
-      printf '%s\n' "$f"
-    done
+  grep -rl "step 0" --include="*.md" "$REPO" 2>/dev/null | grep -v "/\.git/" | sed "s#^$REPO/##" | sort
 }
 S0FILES="$(step0_mentioning_files)"
 ok "'step 0' is named in exactly two files" "$(printf '%s\n' "$S0FILES" | grep -c .)" 2
-ok "…the tick…"     "$(printf '%s\n' "$S0FILES" | grep -qx 'symlink/.claude/agents/project-manager.md' && echo yes || echo no)" yes
+ok "…the tick…"     "$(printf '%s\n' "$S0FILES" | grep -qx 'plugin/agents/project-manager.md' && echo yes || echo no)" yes
 ok "…and the launcher, nowhere else"  "$(printf '%s\n' "$S0FILES" | grep -qx 'plugin/skills/dispatch/SKILL.md' && echo yes || echo no)" yes
 
 # The launcher's citation of the re-derivation property must point at 0.5, the step

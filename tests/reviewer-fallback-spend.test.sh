@@ -31,7 +31,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PM="$REPO/symlink/.claude/agents/project-manager.md"
+PM="$REPO/plugin/agents/project-manager.md"
 NP="$REPO/plugin/skills/new-project/SKILL.md"
 AUT="$REPO/symlink/AUTONOMY.md"
 CLEAR="$REPO/symlink/scripts/review-clearance.sh"

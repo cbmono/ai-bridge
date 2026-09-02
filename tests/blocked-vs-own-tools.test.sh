@@ -29,7 +29,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$REPO/symlink/scripts/check-dispatch.sh"
 CONV="$REPO/symlink/CONVENTIONS.md"
-PM="$REPO/symlink/.claude/agents/project-manager.md"
+PM="$REPO/plugin/agents/project-manager.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/blocked-vs-own-tools.XXXXXX")" || {
   echo "blocked-vs-own-tools.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}." >&2; exit 2; }
@@ -199,7 +199,7 @@ echo "== the fixture has to keep testing what it claims — pin it to the shippe
 # browser tools, the fixtures above quietly stop reproducing the contradiction.
 real_tools() { # <agent>
   awk 'NR==1 && $0=="---" {fm=1; next} fm==1 && $0=="---" {exit}
-       fm==1 && /^tools:/ {print}' "$REPO/symlink/.claude/agents/$1.md"
+       fm==1 && /^tools:/ {print}' "$REPO/plugin/agents/$1.md"
 }
 ok "software-engineer really grants \`Bash\`" \
    "$(grep -qE '(^|[ ,])Bash([ ,]|$)' <<<"$(real_tools software-engineer)" && echo yes || echo no)" yes

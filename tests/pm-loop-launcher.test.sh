@@ -51,7 +51,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LAUNCHER="$REPO/plugin/skills/dispatch/SKILL.md"
-TICK="$REPO/symlink/.claude/agents/project-manager.md"
+TICK="$REPO/plugin/agents/project-manager.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")" || {
   echo "pm-loop-launcher.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT

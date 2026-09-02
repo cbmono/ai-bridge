@@ -64,7 +64,7 @@ ok() { # <name> <actual> <expected>
 }
 yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 
-QA="$REPO/symlink/.claude/agents/qa-reviewer.md"
+QA="$REPO/plugin/agents/qa-reviewer.md"
 
 # Everything after the closing frontmatter delimiter. The frontmatter `description:`
 # legitimately names both agents and the cheap route, so a body-only view keeps the
@@ -120,7 +120,7 @@ ok "qa-reviewer.md exists" "$(yn test -f "$QA")" yes
 # rung 4 of the Finding — but it has to come here and delete an assertion, in the same
 # commit, where a reviewer sees it.
 echo "== the allowlists stay narrow =="
-AGENTS="$(find "$REPO/symlink/.claude/agents" -maxdepth 1 -type f -name '*.md' | sort)"
+AGENTS="$(find "$REPO/plugin/agents" -maxdepth 1 -type f -name '*.md' | sort)"
 ok "shipped agent files found" "$([ -n "$AGENTS" ] && echo yes || echo no)" yes
 
 # qa-reviewer specifically, because it is the file this harness is about and the one the

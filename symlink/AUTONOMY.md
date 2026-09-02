@@ -239,7 +239,7 @@ no amount of waiting reopens it. Then:
   `/new-project` run asks in-session; a `/pm-loop` tick is a subagent that cannot ask, so
   it writes the question into the task's `open_questions` — where the human answers by
   appending ` --- <answer>` — and holds the PR meanwhile.
-- **Under `yolo`**: dispatch `qa-reviewer` and record that you did, without asking.
+- **Under `yolo`**: dispatch `ai-bridge:qa-reviewer` and record that you did, without asking.
 
 **Exit 1 is NOT this decision, in either mode.** A transient refusal — rate-limited,
 skipped, still processing — reopens by itself, so the loop **holds and asks again next
