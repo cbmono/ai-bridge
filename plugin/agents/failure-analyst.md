@@ -52,8 +52,14 @@ You are given either a **PR reference** (a pasted PR number or URL) or a
      `gh run view <run-id> --log-failed` (or `--log` for full output).
    - Map the PR to its local clone under `reposRoot` for source/history inspection.
 2. **Branch-local / free-form** — no PR given:
-   - `gh run list --branch "$(git branch --show-current)" --status failure --limit 3`
-     to find recent failed runs, then `gh run view <run-id> --log-failed`.
+   - Resolve the branch first, and **check it is non-empty**: `git branch
+     --show-current` prints nothing on a detached HEAD — a CI checkout, a bisect, a
+     worktree pinned to a SHA — and `gh run list --branch ""` errors rather than
+     falling back. Named branch ⇒ `gh run list --branch <branch> --status failure
+     --limit 3`. Empty ⇒ query by commit instead, `gh run list --commit "$(git
+     rev-parse HEAD)" --status failure --limit 3`, and say in your report that you
+     matched on the commit — it finds runs for whatever branch pushed it.
+   - Then `gh run view <run-id> --log-failed`.
    - Use those alongside any locally captured output the user provided.
 
 ## Diagnosis
@@ -61,11 +67,13 @@ You are given either a **PR reference** (a pasted PR number or URL) or a
 1. **Gather context** — failing logs, error messages, stack traces, and the
    offending file(s). Shallow CI clones (`fetch-depth: 1`) may lack history: check
    `git rev-parse HEAD~3`; if it fails, try `HEAD~2`, then `HEAD~1`. Don't fall
-   back to `HEAD` (diffing the working tree against itself yields nothing). The
-   same depth caps `git log -10` — note when you only got 1–2 commits.
+   back to `HEAD` (diffing the working tree against itself yields nothing).
+   **Keep the ref that worked — call it `<base>`** — because step 2 diffs against it,
+   and a hardcoded `HEAD~3` there fails for exactly the shallow clone this check just
+   detected. The same depth caps `git log -10` — note when you only got 1–2 commits.
 2. **Check recent changes** — `git log --oneline -10` and
-   `git diff HEAD~3 -- <suspect paths>`. Correlate the failure location with what
-   changed.
+   `git diff <base> -- <suspect paths>`, `<base>` being the ref step 1 kept.
+   Correlate the failure location with what changed.
 3. **Classify the failure** — one of:
    - **Regression** — a recent change broke behaviour. Name the suspect commit.
    - **Flake** — timing, ordering, or external-service dependent. Confirm by

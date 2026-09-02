@@ -76,6 +76,17 @@ state, and act only on deltas.
    git pull --rebase origin <default-branch>     # only when the line above is empty
    ```
 
+   **Read that first status for CONFLICT before you read it for DIRT — an inherited `U`
+   is not an ordinary dirty tree.** A tick can start on a tree someone else left
+   mid-conflict (`UU`, `AA`, any `U` line) or mid-rebase (a `rebase-merge`/`rebase-apply`
+   directory under `.git`). Deferring that as dirt carries an unmerged index into step
+   0.5's ledger append and step 2's task edits — the one thing the conflict rule below
+   already forbids, and that rule fires only after a pull this branch never reaches. So:
+   **any `U` line, or a rebase in progress, on entry ⇒ take the stop path immediately** —
+   change nothing, dispatch nothing, take no lock, open no ledger entry, report the
+   conflicting paths, end the tick. Do not resolve it, and do not abort a rebase you did
+   not start.
+
    Empty ⇒ pull and carry on. **The pull can still refuse** — an incoming tracked path
    may collide with a local *untracked* file (*"untracked working tree file would be
    overwritten"*). Treat that refusal exactly like a dirty tree: defer to step 8, report
@@ -150,10 +161,12 @@ state, and act only on deltas.
    spawning you (see its "The launcher reads nothing else"), so if you skip it,
    nobody did it.
 
-   **Then open your own entry.** Append one line to the root `log.md`:
-   `* TICK <ISO-8601 timestamp> open: <what you are about to do>`. Step 8 rewrites it as
-   the closed summary. It must be first, not part of curation: an open `TICK` line with
-   no close is the only signal that a died tick ever dispatched.
+   **Do NOT open the tick ledger entry here — step 0.9 does, on the paths that own one.**
+   The append dirties tracked `log.md`, and `tick-delta.sh check` calls **any** tracked
+   dirt an immediate `DELTA` before it fingerprints anything: an entry written first
+   therefore forces the answer the probe exists to give, and the idle fast-path never once
+   runs. The ordering is the whole fix — the probe only reads, and nothing has been
+   dispatched yet for a ledger entry to account for.
 
    **On finding an open entry: orient first, then report, then hold.** Finish this
    step's orientation — task statuses, `worktree:`/`branch:` keys, PR state — so the
@@ -171,11 +184,18 @@ state, and act only on deltas.
    - **0 (IDLE)** — the recorded fingerprint matches: bundle HEAD unchanged, tree
      clean, nothing untracked under `projects/`, no task `in-progress`, and every
      open PR's head, state and review decision exactly as the last full tick recorded
-     them. **Skip steps 1–7.** Go straight to step 8's ledger close: rewrite this
-     tick's entry as `idle — fingerprint unchanged (tick-delta)`, commit and sync it
-     as usual, and report `noop: true`. Rewrite no queue, no snapshot, no board —
-     each derives from documents the probe just proved unchanged — and leave the
-     fingerprint record alone: an idle tick just proved it current.
+     them. **Skip steps 1–7.** Append ONE already-closed line to the root `log.md` —
+     `* TICK <ISO-8601> idle — fingerprint unchanged (tick-delta)` — then go to step 8
+     to commit and sync it as usual, reporting `noop: true`. There is no open entry to
+     rewrite, and that is correct: nothing was dispatched, so nothing could die
+     mid-dispatch, which is the only thing an open entry is for. Rewrite no queue, no
+     snapshot, no board — each derives from documents the probe just proved unchanged
+     — **and then re-record the fingerprint**, `scripts/tick-delta.sh record`,
+     **after** the commit and the push. The probe proved the record current *before*
+     your idle commit, and that commit moves bundle `HEAD`, which the fingerprint
+     covers; leave the old record standing and the next tick reads a mismatch and walks
+     the whole thing. An idle tick is the one case where the record must be rewritten
+     precisely *because* nothing else changed.
    - **1 (DELTA)** — it names what moved. Run the full tick; the named lines are a
      hint for your report, never the orientation — step 1 still reads everything
      itself.
@@ -184,6 +204,15 @@ state, and act only on deltas.
    - **Script missing** (instance not re-stamped): run the full tick and say so in
      one line — `TICK DELTA: absent — re-stamp this instance` — exactly as with the
      lock.
+
+   **On every path but IDLE, open your tick ledger entry NOW — this is where step 0.5
+   used to do it.** Append one line to the root `log.md`:
+   `* TICK <ISO-8601 timestamp> open: <what you are about to do>`. Step 8 rewrites it as
+   the closed summary. It must be the first thing the full walk does, not part of
+   curation: an open `TICK` line with no close is the only signal that a died tick ever
+   dispatched. Here rather than in step 0.5 because
+   **the probe reads a tree that append would have dirtied** — and by this point the
+   answer is already `DELTA`, so the append can no longer change it.
 
    The probe can only ever skip work the fingerprint proves un-owed; every doubt is
    exit 2 and the full tick. What it deliberately does not see — a PR body edit at an
@@ -295,7 +324,13 @@ state, and act only on deltas.
    `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the
    task — both, or neither** (`reclaim-worktree.sh` refuses a path with no branch).
    Write them BEFORE spawning, so a tick that dies mid-dispatch still leaves the
-   record. Then spawn the role with the Agent tool (`subagent_type: <assignee>`),
+   record. **And close the other half of that window: a spawn that FAILS is a
+   rollback, not a report.** If the `Agent` call errors or returns no agent, put the
+   task back to `status: ready`, clear `assignee`, and leave `worktree:`/`branch:`
+   standing — a re-dispatch reuses that worktree, and `reclaim-worktree.sh` refuses a
+   path with no branch. Say so in the tick report. Left alone, that task claims a
+   `maxAgentsInFlight` slot forever with nothing behind it.
+   Then spawn the role with the Agent tool (`subagent_type: <assignee>`),
    passing the absolute task path and its `target_repo`. Respect the concurrency cap
    **`maxAgentsInFlight`**, resolved with `scripts/resolve-max-agents.sh` rather than
    read from memory (local file first, tracked second — the cap is **this machine's**
@@ -356,6 +391,16 @@ state, and act only on deltas.
    message asking it to open the PR on what it has recovers it — the same task and
    same PR, which is the resume step 3 allows. Anything beyond that is the human's
    call — surface it in `AWAITING.md` (measured case: `docs/pm-design.md#step-4`).
+
+   **An `in-progress` task nobody reported on is not evidence of a live agent.** Run
+   `scripts/check-dispatch.sh <task-path>` over **every** build `in-progress` task, not
+   only the ones an agent reported on — exit **1** is the pre-spawn crash window's exact
+   signature (`in-progress`, no `pr:`). On a task *this* tick dispatched it means nothing.
+   On one it did not, it is either a live agent or a dispatch that never happened and
+   **disk cannot tell them apart** — so name it in the tick report as an *unreconciled
+   dispatch*, and surface it as a 🔴 item once a previous tick's report has already named
+   it. Never re-dispatch it and never roll it back yourself: both are the human's, and
+   `docs/pm-design.md#step-3` carries the price of re-running a finished sequence.
 
    **Independent verification (the verifier edge).** A PR must be checked by an
    **independent** reviewer — fresh context, judged on real signals — before it is
@@ -476,7 +521,9 @@ state, and act only on deltas.
    surface it as a 🔴 *Awaiting you* item. Only on the human's OK (in-session or via
    `/close-project <slug>`) run closeout, in order (`SCHEMA.md` "Project & objective
    completion"): (a) dispatch the `cataloguer` for a final consolidation pass (counts
-   toward the cap); for a research project, graduate the chosen `deliverables` into
+   toward the cap) — and it is THE cataloguer for this tick: step 7's throttle is
+   tick-wide, not step-7-local, so brief this one to cover the closeout consolidation
+   AND anything this tick's merges produced; for a research project, graduate the chosen `deliverables` into
    `knowledge/`; (b) prepend a dated **Project closed** entry to the root `log.md`
    naming the project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s)
    produced, and the removing commit SHA; (c) set `project.md` `status: done`, drop it
@@ -500,8 +547,13 @@ state, and act only on deltas.
    `cataloguer` (subagent) to capture `Finding`s / update the `Service` catalog / add
    or update a `Runbook`, and link the `Finding`s from the relevant task doc. **Skip**
    if neither a merge nor a `done` task happened this tick, or the work is trivial.
-   **Throttle: at most one `cataloguer` dispatch per tick.** Read-only on product
-   repos, writes only to `knowledge/`; counts toward the concurrency cap.
+   **Throttle: at most one `cataloguer` dispatch per TICK, across every step that can
+   dispatch one** — step 6(a)'s closeout pass and this refresh are the two, and a tick
+   that reflects the final merge *and* receives a close approval satisfies both. If step
+   6 already dispatched one, dispatch none here and fold this refresh into that one's
+   brief. Two cataloguers write `knowledge/` concurrently and take two slots off the cap.
+   Read-only on product repos, writes only to `knowledge/`; counts toward the
+   concurrency cap.
 
 8. **Curate.** Keep `projects/<p>/project.md`, each project's `index.md`, and the
    `log.md` files current — **for the projects you actually read this tick**; a done
@@ -621,8 +673,9 @@ state, and act only on deltas.
    ```
 
    On exit 2 say so in one line and carry on — a missing record costs the next tick a
-   full walk, never correctness. An idle fast-path tick skips this: its probe already
-   proved the record current.
+   full walk, never correctness. An idle fast-path tick records too, for the reason step
+   0.9 gives: its probe proved the record current *before* its own ledger commit moved
+   `HEAD`.
 
    **Finally, release the tick lock — which means: do not.** There is no lock a tick may
    release, so the last act of the tick is to run nothing here:

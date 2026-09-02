@@ -28,8 +28,12 @@ setting `status`, no PII/secrets, and capturing
 4. **Validate without mutating live infra.** Use static/dry checks only:
    - YAML/Actions: lint, `actionlint` if available, `--dry-run` where supported.
    - Helm: `helm lint` / `helm template`.
-   - Terraform: `terraform fmt -check` and `terraform validate` (and `plan` only
-     if it requires no credentials you lack — **never** `apply`).
+   - Terraform: `terraform fmt -check` and `terraform validate`. **Not `plan` by
+     default** — it refreshes managed resources through the provider APIs, so it reads
+     live infrastructure, which the last bullet of this step forbids; the credential
+     test it used to carry answered a different question (can I run it), not this one
+     (does it reach out). Run one only where the task's `acceptance_criteria` ask for
+     it, and say so in the PR body. **Never** `apply`.
    - Docker: build the image if feasible; otherwise hadolint.
    - **Never** run `apply`, `argocd sync`, deploys, or anything that touches a live
      environment. You propose changes via PR only.
