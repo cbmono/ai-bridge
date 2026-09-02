@@ -968,7 +968,7 @@ if [ -d "$SEED_SRC" ]; then
         # placeholder; uncomment it with this instance's absolute path so every new
         # terminal in the workspace starts in the instance rather than the group
         # root — see the comment in seed/bridge.code-workspace for why the wrong
-        # cwd silently hides /pm-loop and /new-project. Whole-line
+        # cwd silently hides the bundle's linked agents and its banner. Whole-line
         # replacement, so a marker that ever stops matching degrades to "no pin"
         # rather than to a broken workspace file. Escaped for sed's replacement
         # side ('&' means "the match", '\' escapes, '|' is our delimiter) so a path
@@ -1022,7 +1022,7 @@ if [ "$FIRST_STAMP" = yes ] && [ ! -e "$TARGET/AWAITING.md" ]; then
   cat > "$TARGET/AWAITING.md" <<'AWAITING'
 # Awaiting you
 
-Derived and gitignored — **do not hand-edit**. Rewritten each `/pm-loop` tick
+Derived and gitignored — **do not hand-edit**. Rewritten each `/ai-bridge-v2:dispatch` tick
 from `projects/*/tasks/*.md`. Delete this file to turn the queue off for good;
 the loop never recreates it. Last refreshed: never (no tick has run yet).
 
@@ -1063,7 +1063,7 @@ fi
 # machine.
 #
 # THIS IS NO LONGER THE ONLY READER OF `board`, AND THAT IS THE POINT. The key is read
-# here at STAMP time, deciding whether the file below is created at all; each /pm-loop
+# here at STAMP time, deciding whether the file below is created at all; each dispatch
 # tick and the SessionStart board hook read it again at TICK time, deciding whether the
 # page is rendered and surfaced. Until 2026-08-29 nothing re-read it, so `board: false`
 # stopped the seed and stopped nothing afterwards. Every reader takes it from THIS
@@ -1090,7 +1090,7 @@ elif [ ! -e "$TARGET/SNAPSHOT.json" ]; then
   cat > "$TARGET/SNAPSHOT.json" <<'SNAPSHOT'
 {
   "_schema": "ai-bridge board snapshot v1",
-  "_sensitivity": "Derived and gitignored. Rewritten by scripts/write-snapshot.sh each /pm-loop tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
+  "_sensitivity": "Derived and gitignored. Rewritten by scripts/write-snapshot.sh each /ai-bridge-v2:dispatch tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
   "group": "",
   "generated_at": "",
   "counts": {"projects": 0, "tasks": 0, "awaiting": 0},
@@ -1220,12 +1220,12 @@ fi
 if ! grep -qE '^/?\.tick-lock$' "$gi"; then
   cat >> "$gi" <<'GI'
 
-# The PM dispatch lock (scripts/tick-lock.sh) — written by /pm-loop immediately before it
-# dispatches a tick and released when that tick reports, so the one-tick-at-a-time
-# guarantee survives a compaction instead of resting on a session's memory. PER CLONE and
-# never committed: two humans sharing one bundle work from two clones and each dispatches
-# independently, which a shared lock would break. Derived and safe to delete when no tick
-# is running.
+# The PM dispatch lock (scripts/tick-lock.sh) — written by /ai-bridge-v2:dispatch
+# immediately before it dispatches a tick and released when that tick reports, so the
+# one-tick-at-a-time guarantee survives a compaction instead of resting on a session's
+# memory. PER CLONE and never committed: two humans sharing one bundle work from two
+# clones and each dispatches independently, which a shared lock would break. Derived and
+# safe to delete when no tick is running.
 /.tick-lock
 GI
 fi
@@ -1309,8 +1309,8 @@ IDX_END_MARK="# <<< ai-bridge index ignore <<<"
 idxbody="$(mktemp)"
 cat > "$idxbody" <<'GI'
 # Derived navigation indexes — the root one and each project's, rewritten by every
-# /pm-loop tick from the documents they summarise. A view, not source: on a bundle
-# shared by more than one human it would otherwise conflict on every push.
+# /ai-bridge-v2:dispatch tick from the documents they summarise. A view, not source: on
+# a bundle shared by more than one human it would otherwise conflict on every push.
 # `knowledge/index.md` is deliberately NOT ignored: it is the KB's curated lookup
 # surface, changes only when the KB changes, and a fresh clone needs it present.
 #
@@ -2108,8 +2108,17 @@ EOF
 fi
 
 echo "Done. Machinery symlinked & gitignored; seed content in place."
-echo "Next: edit instance.config.json, then run /pm-loop from this directory."
+echo "Next: edit instance.config.json, then run /ai-bridge-v2:dispatch from this directory."
 echo "      (Set reposRoot first, then 'scripts/link-repos.sh' fills in repos/.)"
+# THE OTHER HALF, and it is not this script's to install. Every slash command ships in the
+# ai-bridge-v2 PLUGIN now, per machine rather than per instance, so a perfect stamp still
+# leaves a bundle nobody can drive if the plugin is missing — and the only symptom is
+# "unknown command", which accuses nothing. Printed unconditionally: this script cannot see
+# what Claude Code has installed, and a nudge that fires only when it is sure would never
+# fire at all. See docs/operations.md § 1.
+echo "      (The commands are the ai-bridge-v2 PLUGIN, installed once per machine:"
+echo "       /plugin marketplace add cbmono/ai-bridge, then"
+echo "       /plugin install ai-bridge-v2@ai-bridge — then restart Claude Code.)"
 
 # 5. One nudge, and only a nudge. A pull can bring a stricter SCHEMA.md, whose validator
 # reaches the instance instantly through its symlink and starts reporting errors against

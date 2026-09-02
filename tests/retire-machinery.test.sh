@@ -153,6 +153,40 @@ assert "…and reported by name" \
 assert "…while the new name is linked and resolves" \
   "$(yes_if test -e "$INST/.claude/agents/failure-analyst.md")"
 
+# --- the eight commands the plugin absorbed (AI Bridge 2.0).
+# The whole command layer left `symlink/` between #107 and #112, one command per slice, as
+# each became an `ai-bridge-v2` plugin skill. That is the largest retirement this sweep has
+# ever had to make, and it is the one an instance FEELS: a dangling command still registers,
+# so until the re-stamp the instance offers `/pm-loop` and fails when you run it.
+#
+# Asserted as a SET rather than one more single-file case, because the failure that matters
+# is partial — seven swept and one left is indistinguishable from a clean run in any
+# assertion that looks at a single name, and `docs/operations.md` promises a human that one
+# `upgrade.sh` clears all of them. Stamped through install.sh, for the reason given above
+# the build-artifact-board block.
+V2_COMMANDS="ai-bridge answer audit fanout pr-review-request new-project close-project pm-loop"
+mkdir -p "$TPL/symlink/.claude/commands"
+for c in $V2_COMMANDS; do printf -- '---\ndescription: fixture\n---\n%s\n' "$c" \
+  > "$TPL/symlink/.claude/commands/$c.md"; done
+bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
+linked=0; for c in $V2_COMMANDS; do [ -e "$INST/.claude/commands/$c.md" ] && linked=$((linked+1)); done
+assert "an instance stamped before the migration has all 8" "$([ "$linked" -eq 8 ] && echo 0 || echo 1)"
+rm -f "$TPL"/symlink/.claude/commands/*.md
+bash "$TPL/install.sh" "$INST" >"$TMP/out-v2" 2>&1
+left=0; unreported=0
+for c in $V2_COMMANDS; do
+  [ -L "$INST/.claude/commands/$c.md" ] && left=$((left+1))
+  grep -qF "retire .claude/commands/$c.md" "$TMP/out-v2" || unreported=$((unreported+1))
+done
+assert "…and one re-stamp leaves none of them"    "$([ "$left" -eq 0 ] && echo 0 || echo 1)"
+assert "…each reported by name, all 8"            "$([ "$unreported" -eq 0 ] && echo 0 || echo 1)"
+assert "…with the line docs/operations.md quotes" \
+  "$(yes_if grep -qF 'retire .claude/commands/pm-loop.md (no longer shipped by the template)' "$TMP/out-v2")"
+# Generic, exactly as with build-artifact-board.sh: the sweep must not carry a list of the
+# commands it retired, or the next retirement needs an installer edit nobody will make.
+assert "install.sh names none of the 8 commands" \
+  "$(no_if grep -qE 'pm-loop|pr-review-request|close-project' "$TPL/install.sh")"
+
 # --- retired SEED content: reported with an rm, never removed.
 # The asymmetry with the machinery sweep above is the whole point. A symlink into this
 # template whose target is gone has one possible meaning; a seed file the human has owned
