@@ -18,7 +18,10 @@ and stop.
 - **Empty** ⇒ every project: glob `projects/*/tasks/*.md`.
 - **A project** — a slug (`ai-bridge-v2`), a `projects/<slug>` path, or a full path to
   a project directory ⇒ only that project's `tasks/*.md`.
-- **A task** — any path ending in a task `.md` ⇒ exactly that one file.
+- **A task** — a path that resolves to a file under `projects/*/tasks/` ⇒ exactly
+  that one file. A `.md` anywhere else is NOT a task and is rejected like a no-match:
+  only task documents carry `open_questions`, and the fold-back step must never
+  write answers into an arbitrary file.
 - Anything that resolves to no project directory and no task file: say what didn't
   match, list the project slugs that exist, and stop — never fall back to all
   projects on a typo, silently widening what gets edited.
