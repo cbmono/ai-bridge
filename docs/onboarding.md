@@ -37,9 +37,10 @@ read; a bundle with no stamp has the data and no way to drive it. Do the plugin 
 `SessionStart` banner and its `CLAUDE.md` load from the working directory — not from what
 your editor has open. Everything the plugin carries resolves anywhere.
 
-Then run **`/ai-bridge:welcome check`**: it reports the state that could be wrong (a
-dangling link, a missing derived file, a stray background process), and `fix` repairs only
-the part that is safe to repair.
+Then run **`/ai-bridge:welcome check`**. It reports the state that could be wrong — a
+template you are behind, machinery this clone was never linked to, uncommitted or unknown
+config keys, a tick lock, a stray background process — each line a fact with its evidence.
+`fix` repairs only the tier that has one right answer and prints the rest.
 
 **Two humans sharing one bundle** need three more values on top of the table — a `people`
 map, `defaultOwner`, and each clone's own `ownerGithubUser`. That is
@@ -89,15 +90,16 @@ Who actually does the work, and on which model:
 | Until you do it | **nothing is dispatched.** The PM refines and critiques a draft, and never sets `ready` | nothing lands. **No agent ever merges** |
 | What holds it up | the task still lists `open_questions` — answer them by appending ` --- <your answer>` to the question line | one `✗` in the PR's criteria table blocks it, however green CI is |
 
-Both gates can be delegated, and both are **on unless you install the delegation** — that
-capability is one deletable file. See [autonomy.md](autonomy.md); the two authorities
-themselves are in [`symlink/SCHEMA.md`](../symlink/SCHEMA.md).
+**Both gates hold until you deliberately delegate them**, and the delegation is one
+deletable file — delete it and every project is gated again, with no other edit. See
+[autonomy.md](autonomy.md); the two authorities themselves are in
+[`symlink/SCHEMA.md`](../symlink/SCHEMA.md).
 
 **`AWAITING.md` is where the gates queue up** — the instance's one status artifact, and
-just the items a human decision unblocks (✅ approve · ❓ answer · 🔀 merge · ⛔ unblock ·
-🏁 close). It is derived and gitignored, so **never hand-edit it**; each tick rewrites it.
-Deleting it turns the nudges off for good, `touch` turns them back on
-([README § What needs you](../README.md#what-needs-you)).
+just the items a human decision unblocks, each marked with what it needs from you
+([README § What needs you](../README.md#what-needs-you) has the markers). It is derived
+and gitignored, so **never hand-edit it**: each tick rewrites it. Deleting it turns the
+nudges off for good, and `touch AWAITING.md` turns them back on.
 
 ---
 
