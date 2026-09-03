@@ -30,7 +30,7 @@ read; a bundle with no stamp has the data and no way to drive it. Do the plugin 
 | 3 | Get the bundle | once per **instance** | **joining** one: `git clone <bundle-remote> ~/workspace/<group>/_ai-bridge-<group>` · **starting** one: [README § Install](../README.md#install), steps 3-6 |
 | 4 | Link the machinery | **each** clone | `~/workspace/ai-bridge/install.sh ~/workspace/<group>/_ai-bridge-<group>` |
 | 5 | Say which login this clone is | **each** clone | `{ "ownerGithubUser": "<login>" }` in `instance.config.local.json` (gitignored, per machine) |
-| 6 | Turn the nudges on — **joining only** | your clone | `touch AWAITING.md`. A clone is not a first stamp, so the stamp deliberately does not create it |
+| 6 | Turn the nudges on — **joining only** | your clone | `touch ~/workspace/<group>/_ai-bridge-<group>/AWAITING.md`. A clone is not a first stamp, so the stamp deliberately does not create it |
 | 7 | Open a session | | `cd ~/workspace/<group>/_ai-bridge-<group>` then `claude` |
 
 **Always launch Claude from inside the instance directory.** The bundle's role agents, its
@@ -44,8 +44,9 @@ config keys, a tick lock, a stray background process — each line a fact with i
 
 **Two humans sharing one bundle** need three more values on top of the table — a `people`
 map, `defaultOwner`, and each clone's own `ownerGithubUser`. That is
-[sharing.md](sharing.md), and `scripts/add-second-human.sh <instance>` does the tracked
-half report-only.
+[sharing.md](sharing.md). `scripts/add-second-human.sh <instance>` prepares the shared,
+tracked half (`people` and `defaultOwner`) — reporting only, until you pass `--apply` — and
+prints the commands the second machine has to run itself, which it cannot run for you.
 
 ---
 
@@ -69,8 +70,10 @@ The other five — `pr-review-request`, `capture`, `fanout`, `handoff`, `audit` 
 flags `/ai-bridge:new-project` accepts are in the
 [README's table](../README.md#commands). None of them is needed on day one.
 
-**One `/ai-bridge:dispatch` per instance.** It is serial and completion-gated, and a
-per-clone lock refuses a second one rather than letting two loops interleave.
+**One `/ai-bridge:dispatch` per clone.** It is serial and completion-gated, and the lock
+that enforces that is per clone: it refuses a second loop on **your** checkout. On a shared
+bundle each human runs their own, and what keeps those two from dispatching the same task
+is `owner`, not the lock ([sharing.md](sharing.md)).
 
 Who actually does the work, and on which model:
 [README § The team](../README.md#the-team).
@@ -80,8 +83,14 @@ Who actually does the work, and on which model:
 ## 3. The two gates — the decisions that stay yours
 
 ```text
-/ai-bridge:new-project  →  you promote draft → ready  →  /ai-bridge:dispatch  →  you merge the PR
+build     /ai-bridge:new-project  →  you promote draft → ready  →  /ai-bridge:dispatch  →  you merge the PR
+research  /ai-bridge:new-project  →  you promote draft → ready  →  you do the work  →  you approve the deliverable
 ```
+
+A `research` project has no `target_repo`, dispatches no agent and opens no pull request —
+you execute it in-session and the loop tracks it
+([README § Two kinds of project](../README.md#two-kinds-of-project)). Both kinds pass
+through the same two gates.
 
 | | **Gate 1 — promote** | **Gate 2 — accept** |
 |---|---|---|
