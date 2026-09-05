@@ -196,7 +196,12 @@ MENTION_RE="\`($VOCAB)\`"
 # `CLAUDE.md` mention that justifies it (invariant 19, the destructive-action baseline) —
 # which is the only way an entry may be added. It is a Claude Code hook EVENT, not a tool,
 # and no other rule classifies it. Guard C below fails if that mention is ever removed.
-NOT_A_TOOL='SessionStart|PreToolUse|Makefile'
+# `UserPromptSubmit` joined them in ai-bridge-v2/task-013, in the same commit as the
+# `plugin/README.md` mention that justifies it: `push-state.sh` became a PLUGIN hook, so
+# the plugin's own hook table names its event beside `SessionStart` and `PreToolUse`. It
+# had zero mentions before that and was correctly absent; it has one now and is correctly
+# here. That is the whole mechanism working, in both directions, in one change.
+NOT_A_TOOL='SessionStart|PreToolUse|UserPromptSubmit|Makefile'
 
 # Rule 2, DERIVED: OKF's document types, from the schema that defines them. `seed/SCHEMA.md`
 # writes each as a `## type: <Name>` heading, so the registry is machine-readable and a new
@@ -268,7 +273,9 @@ unclassified_names() { # <file> — backticked capitalised names no rule classif
 # retired `symlink/.claude/agents/`, and a tree that stops at `symlink/` stops seeing every
 # backticked mention the agents themselves make — Guard C then declares an entry dead that
 # is named ten lines into `software-engineer.md`.
-NOT_A_TOOL_TREE=("$REPO/symlink" "$REPO/plugin" "$REPO/.claude" "$REPO/CLAUDE.md")
+# `symlink/` is gone (ai-bridge-v2/task-013): the machinery moved into `plugin/`, which was
+# already scanned, so the set is unchanged in what it covers and one entry shorter.
+NOT_A_TOOL_TREE=("$REPO/plugin" "$REPO/.claude" "$REPO/CLAUDE.md")
 not_a_tool_uses() { # <name> — count of backticked exact mentions across NOT_A_TOOL_TREE
   # $REPO-anchored, not cwd-relative: this runs the same regardless of where the harness
   # is invoked from, unlike a bare `symlink .claude CLAUDE.md` which resolves against
@@ -1010,7 +1017,11 @@ ok "a NOT_A_TOOL_TREE entry with a space+glob path is still found" \
 NOT_A_TOOL_TREE=("${SAVED_NOT_A_TOOL_TREE[@]}")
 # The nine names removed from NOT_A_TOOL by this fix are the reproduced proof: each has
 # zero real mentions, which is exactly why they were silent before and unclassified now.
-for unearned in SessionEnd UserPromptSubmit PostToolUse SubagentStart SubagentStop PreCompact InstructionsLoaded Notification; do
+# `UserPromptSubmit` LEFT this list in ai-bridge-v2/task-013 and is in NOT_A_TOOL instead:
+# `push-state.sh` became a plugin hook, so `plugin/README.md` now names its event. The
+# other seven still have zero mentions, and the pair of changes is the check working as
+# designed rather than an exception to it.
+for unearned in SessionEnd PostToolUse SubagentStart SubagentStop PreCompact InstructionsLoaded Notification; do
   ok "removed entry \`$unearned\` had zero real mentions" "$(not_a_tool_uses "$unearned")" 0
 done
 
