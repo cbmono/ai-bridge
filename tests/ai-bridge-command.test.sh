@@ -541,11 +541,22 @@ OUT6b="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"
 ok "with only known keys, the row reports the healthy fact" \
   "$(printf '%s\n' "$OUT6b" | grep -c 'config keys: every top-level key is one the machinery knows' | tr -d ' ')" 1
 
-# No seed to compare against: a hand-copied deployment must get a non-answer, not a guess.
-NOSEED="$TMP/noseed"; mkdir -p "$NOSEED"
-OUT6c="$(bash "$SH" check --instance "$INST6" --template "$NOSEED" 2>&1)"; rc6c=$?
-ok "no template seed -> reported as not resolvable, exit 0" \
-  "$(printf '%s\n' "$OUT6c" | grep -c 'config keys: not resolvable here' | tr -d ' '):$rc6c" "1:0"
+# WHERE THE KNOWN SET COMES FROM, and the pair that says it moved. Since task-022 it is
+# read from THIS PLUGIN's own `seed/instance.config.json`, not from the checkout the
+# `--template` flag names — the plugin always has one, and the checkout is absent on every
+# ordinary install, so resolving it from there degraded the row to a non-answer exactly
+# where it should answer.
+OUT6c="$(bash "$SH" check --instance "$INST6" --template "$TMP/noseed-checkout" 2>&1)"; rc6c=$?
+ok "no CHECKOUT at all -> the row still answers, from the plugin's seed" \
+  "$(printf '%s\n' "$OUT6c" | grep -c 'config keys: every top-level key is one the machinery knows' | tr -d ' '):$rc6c" "1:0"
+# …and the non-answer still exists, for the state that really is unanswerable: a plugin
+# with no seed of its own. Without this half the row could never report "not resolvable"
+# again and nobody would know.
+NOSEED="$TMP/noseed/plugin"; mkdir -p "$NOSEED/scripts"
+cp "$TPL"/plugin/scripts/*.sh "$NOSEED/scripts/" 2>/dev/null || true
+OUT6c2="$(bash "$NOSEED/scripts/ai-bridge.sh" check --instance "$INST6" --template "$SRC" 2>&1)"; rc6c2=$?
+ok "a plugin with no seed -> reported as not resolvable, exit 0" \
+  "$(printf '%s\n' "$OUT6c2" | grep -c 'config keys: not resolvable here' | tr -d ' '):$rc6c2" "1:0"
 
 # A file jq cannot parse yields no keys, and no keys reads exactly like no UNKNOWN keys —
 # the false-healthy CodeRabbit caught on #99. A corrupt config must get a per-file
