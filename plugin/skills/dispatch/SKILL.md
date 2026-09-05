@@ -16,8 +16,13 @@ Start the **Project Manager loop** — but as a **SERIAL, completion-driven** lo
 
 Three standing facts the steps below rest on:
 
-- **Serial, gated on completion, never on a clock.** A fixed-interval loop shorter than
-  a tick makes ticks overlap: double-dispatch, shared-store corruption, racing pushes.
+- **Serial, gated on completion.** A tick runs to its notification before the next one is
+  dispatched: overlapping ticks double-dispatch a task, corrupt a shared package store and
+  race each other's pushes. **A clock is allowed to ASK — it is not allowed to overlap.**
+  That distinction is what makes `/loop` safe here and it is younger than this rule: before
+  `.tick-lock`, a fixed-interval loop shorter than a tick genuinely did overlap, so the
+  cadence had to be hand-driven. Now the firing that lands mid-tick is refused at `acquire`
+  before anything is spawned, so the interval decides only how often the loop LOOKS.
 - **The guarantee is backed by `.tick-lock`, not by session memory** — memory does not
   survive a compaction. The tick runs its own acquire too (`--as tick`, its step 0.5),
   because a resume never passes through this launcher; a merely-matching session id is
