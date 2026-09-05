@@ -213,15 +213,19 @@ ok "step 0: names the duplicate-PR failure" "$(in_step0 'duplicate PRs')" yes
 #
 # As everywhere in this file: these check the INSTRUCTION, not a model's behaviour.
 #
-# THE DELETED KEY IS ASSEMBLED AT RUNTIME so this file does not contain the string it
-# asserts nobody contains, and needs no exemption from the repo-wide scan in
-# tests/banner-board-line.test.sh. An exemption list is the part that rots.
-DEAD_KEY="board""ArtifactUrl"
+# THE URL KEY IS ASSEMBLED AT RUNTIME, which is what lets this file assert BOTH directions
+# about it — absent from the launcher, present in the tick — without the string itself
+# becoming a fixture nobody can move.
+URL_KEY="board""ArtifactUrl"
 ok "launcher grants no publish tool"     "$(granted "$LAUNCHER" 'Artifact')" no
 ok "…and says so beside the list"        "$(has "$LAUNCHER" 'Why there is no publish grant, and no publish step')" yes
 ok "…naming why it could not work"       "$(has "$LAUNCHER" 'account-scoped')" yes
+ok "…and naming the second, independent reason: no artifact tool headless" \
+  "$(has "$LAUNCHER" 'holds no')" yes
 ok "…and where the board goes instead"   "$(has "$LAUNCHER" '.board-live/board.html')" yes
-ok "launcher names no deleted config key" "$(has "$LAUNCHER" "$DEAD_KEY")" no
+# The launcher stays out of the config entirely: the URL is the TICK's read, and two
+# readers of one key is how that key went wrong the first time.
+ok "launcher names no config URL key"    "$(has "$LAUNCHER" "$URL_KEY")" no
 
 # The step is GONE, not emptied: 2c WAS the publish handoff, and the tick renders and
 # reports the path itself, so nothing replaced it.
@@ -260,7 +264,21 @@ ok "…and passes no removed --layout flag" "$(has "$TICK" '--layout')" no
 ok "tick reports the path, once"         "$(has "$TICK" 'BOARD: rendered <path>')" yes
 ok "…and never claims the page is live"  "$(has "$TICK" 'Say the path, never that it is live')" yes
 ok "tick: a render is not a change"      "$(has "$TICK" 'A render is not a state change')" yes
-ok "tick names no deleted config key"    "$(has "$TICK" "$DEAD_KEY")" no
+# THE KEY IS BACK, AND ITS SHAPE IS WHAT IS ASSERTED NOW. This line used to demand the
+# tick never name it, because publishing had been deleted. `/ai-bridge:board` reinstates
+# publishing PER MACHINE, so the tick may name the key — but only to ask WHICH LAYER
+# answers, because the tick still cannot publish: measured 2026-09-05 on Claude Code
+# 2.1.261, a headless `claude -p` session's tool inventory carries no artifact tool and a
+# tool search for one returns nothing. So "never names it" becomes "names it through the
+# resolver, acts on `local`, and is told in as many words not to try".
+ok "tick asks the resolver which layer holds the URL key" \
+  "$(has "$TICK" "scripts/resolve-config.sh --source $URL_KEY")" yes
+ok "…and prints the refresh line instead of publishing" \
+  "$(has "$TICK" 'BOARD: run /ai-bridge:board to refresh the published page')" yes
+ok "…and is told not to attempt one"     "$(has "$TICK" 'not attempt a publish')" yes
+# A `tracked` value is the deleted shape and the banner drops it; the two readers of this
+# key must agree, or one of them is publishing a promise the other silently breaks.
+ok "…and ignores a tracked value, as the banner does" "$(has "$TICK" 'a first field of `tracked`')" yes
 # The retired renderer must not come back as the thing the tick runs.
 ok "tick names no retired renderer"      "$(has "$TICK" 'build-artifact-board')" no
 ok "launcher names no retired renderer"  "$(has "$LAUNCHER" 'build-artifact-board')" no
@@ -273,7 +291,7 @@ ok "the grant checker sees a grant that IS there" "$(granted "$TMP/withstep.md" 
 ok "the 2c checker sees a 2c that IS there" \
   "$([ -n "$(step2c "$TMP/withstep.md")" ] && echo yes || echo no)" yes
 ok "…and the same key grep finds a planted key" \
-  "$(printf 'x %s y\n' "$DEAD_KEY" > "$TMP/withkey.md"; has "$TMP/withkey.md" "$DEAD_KEY")" yes
+  "$(printf 'x %s y\n' "$URL_KEY" > "$TMP/withkey.md"; has "$TMP/withkey.md" "$URL_KEY")" yes
 
 # --- non-vacuity: the two mechanical checks must reject a bad file ----------------
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")" || {
