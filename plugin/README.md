@@ -86,6 +86,47 @@ the plugin manager replaces whole.
 seeds. It is the second, unconditional layer behind the deny baseline, and a plugin
 manifest has no permissions block to carry it.
 
+## Companion plugins
+
+**Core is gated-only, and stays that way.** Optional behaviour — delegated autonomy
+today, an account switch and an alternative LLM backend next — ships as a **separate
+plugin in this same marketplace**, and core picks it up **by presence**. Nothing is
+configured, nothing is flagged: install the companion and the behaviour exists, uninstall
+it and it doesn't.
+
+**One rule, and it is not negotiable: a companion may ADD behaviour but may never remove a core gate.**
+The two human authorities (`SCHEMA.md`) — the human promotes
+`draft → ready`, the human merges — hold with no companion installed, and no companion
+may make either of them hold *less*. `ai-bridge-yolo` is not a counter-example: it does
+not delete a gate, it ships the file that defines a mode in which the loop may hold one,
+and the human still chooses that mode per project. A companion that removed a gate would
+be indistinguishable from a supply-chain downgrade of the thing this whole design exists
+to protect. Read it as a constraint on what may be *built*, not only on what is
+installed today: the next companion (an account switch, an alternative LLM backend) is
+held to it too, and a companion that could remove a core gate would not be a companion.
+
+### The contract
+
+| | |
+|---|---|
+| **How it registers** | An entry in [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) with its own `source: ./<dir>` and `.claude-plugin/plugin.json` — installed with `/plugin install <name>@ai-bridge`. |
+| **Where core looks** | `<companion plugin root>/companion/<file>` — a **fixed relative path**, so a companion's own `README.md` or docs can never be mistaken for something core reads. |
+| **Which plugins count** | Only those installed from the **same marketplace core itself came from**, read out of `~/.claude/plugins/installed_plugins.json`. An unrelated plugin that happens to carry that path is not a companion. |
+| **What core reads** | Only names it already knows. Core never executes a companion's code, and a companion ships no hook and no agent — a second copy of a `PreToolUse` hook fires in every session on the machine. |
+| **When it is absent** | The gated default, silently. Absence is never an error, and every unknown (no registry, an unreadable one, a root gone from disk) resolves to absence. |
+
+### Today's one companion
+
+| Companion | Ships | Read by |
+|---|---|---|
+| [`ai-bridge-yolo`](../plugin-yolo/README.md) | `companion/AUTONOMY.md` — the delegated-autonomy capability and the `yolo` preflight | `scripts/resolve-autonomy.sh`, and through it `scripts/commit-as.sh`'s promotion guard |
+
+`scripts/resolve-autonomy.sh` is the **one** reader of "does delegated autonomy exist
+here": the **bundle root wins outright** (a v1-era bundle carrying its own real
+`AUTONOMY.md` keeps working, installed companion or not), then an installed companion,
+then exit 1 — which is `gated`. One lookup with one reader, so the promotion guard and
+the loop cannot come to disagree about whether delegation exists at all.
+
 ## During the transition — what stays an instance command, and why
 
 A plugin skill **shadows** a same-named project command, so each command migrated in a

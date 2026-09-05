@@ -57,7 +57,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
 SEED="$REPO/plugin/seed/CLAUDE.md"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
-AUTONOMY="$REPO/docs/autonomy/AUTONOMY.md"
+AUTONOMY="$REPO/plugin-yolo/companion/AUTONOMY.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pr-body-shape.XXXXXX")" || {
   echo "pr-body-shape.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }

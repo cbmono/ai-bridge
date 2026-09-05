@@ -37,7 +37,8 @@ repos and holds only the state of the work — never application code.
 
 Normative contracts live in the machinery itself: [`plugin/seed/SCHEMA.md`](plugin/seed/SCHEMA.md)
 (document types, the verification predicate) and
-[`docs/autonomy/AUTONOMY.md`](docs/autonomy/AUTONOMY.md) (the delegated-autonomy modes).
+[`plugin-yolo/companion/AUTONOMY.md`](plugin-yolo/companion/AUTONOMY.md) (the
+delegated-autonomy modes, shipped by the `ai-bridge-yolo` companion plugin).
 
 ---
 
@@ -192,8 +193,9 @@ The idea is to **steer, not watch**. Role agents run in the background and bubbl
 results and questions, not every step.
 
 Both gates can be delegated — see [docs/autonomy.md](docs/autonomy.md). That capability is
-**off unless installed**: it lives entirely in [`docs/autonomy/AUTONOMY.md`](docs/autonomy/AUTONOMY.md),
-and deleting that one file makes every project `gated` again with no other edits.
+**off unless installed**, literally: it lives entirely in the separate
+[`ai-bridge-yolo`](plugin-yolo/README.md) companion plugin, and uninstalling that plugin
+makes every project `gated` again with no other edits.
 
 ### Who runs what, end to end
 
@@ -451,7 +453,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Review gate** | `review-clearance.sh` — a **green check from a reviewer that declined to review is not verification.** It reads the reviewer's artifacts, takes evidence and pinning from the reviews **API** (`state` + `commit_id`), leaves text matching only the job of spotting a refusal, and refuses on unknown state. `required-checks.sh` asks it on **every** PR, so a check's name never settles whether anybody looked. [→](docs/autonomy.md#the-verification-gate) |
 | **Review rounds** | `review-rounds.sh` — **two rounds, then the human decides**, as a number a dispatcher reads rather than a rule it must remember. Exits non-zero at or past two, so a third verifier is refused. [→](docs/autonomy.md#two-rounds-then-the-human-decides) |
 | **Dispatch check** | `check-dispatch.sh` — an agent's "done" is not evidence that a PR exists. Did `status:` move, does `pr:` name a URL, does that PR resolve. **Report-only.** [→](docs/autonomy.md#did-the-dispatch-produce-its-pr) |
-| **Delegated autonomy** | one deletable file. `rm docs/autonomy/AUTONOMY.md` and every project is `gated`. [→](docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) |
+| **Delegated autonomy** | one uninstallable plugin. Uninstall `ai-bridge-yolo` and every project is `gated`; `resolve-autonomy.sh` is the one reader, and a bundle's own root file still wins. [→](docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) |
 | **Dispatch lock** | `tick-lock.sh` — one PM tick at a time, taken by the launcher in the same operation that checks it, **and checked again by the tick itself**, since a resumed tick never passes through the launcher. A dispatched tick does not refuse its own lock: unclaimed means it is that dispatch. A tick that finds **no** lock was not dispatched at all — it is refused (exit 4), because **a tick is never resumed**. The claim on a lock records **whose** it is and from **which source**, and the trust is asymmetric — a runtime-derived id (`CLAUDE_CODE_SESSION_ID` names the *session*, not the tick) may refuse a claim but never clears one, so a merely-matching identity is exit 2 rather than a guess in either direction. Stale, or unattributable, means **ask the human**, never silently delete and never silently adopt. Per clone, not cross-machine. [→](docs/operations.md#one-tick-at-a-time-the-dispatch-lock) |
 | **Worktrees** | `prune-worktrees.sh` **reports, never deletes.** Do not add a delete, not even behind a flag — it destroyed three running agents' worktrees once. [→](docs/conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing) |
 | **Bundle repair** | `migrate-bundle.sh` is report-only by default and fixes only what has one right answer. **A false success is worse than the error it claims to fix.** [→](docs/conventions.md#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) |
@@ -532,6 +534,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | `ai-bridge.sh` | backs the plugin's `/welcome`: reprints the SessionStart banner, `check` reports state that could be wrong, `fix` repairs only the idempotent tier | only under `fix` |
 | `resolve-config.sh` | the one implementation of the two-file config precedence — `instance.config.local.json` first, `instance.config.json` second, dicts merged entry by entry | no |
 | `resolve-max-agents.sh` | prints the concurrency cap **this machine** should honour, from the same two files | no |
+| `resolve-autonomy.sh` | the one reader of *does delegated autonomy exist here* — prints the `AUTONOMY.md` in force (bundle root first, else an installed companion plugin from core's own marketplace), exit 1 when there is none, which is `gated` | no |
 
 ## Troubleshooting
 

@@ -4,28 +4,52 @@ By default ai-bridge keeps two gates for the human: **promote** a `draft` to `re
 and **merge** the PR (build) or **approve** the deliverable (research). Delegating
 either one is optional, and off unless you install it.
 
-**Normative source:** [`docs/autonomy/AUTONOMY.md`](../docs/autonomy/AUTONOMY.md) defines the modes;
-[`plugin/seed/SCHEMA.md`](../plugin/seed/SCHEMA.md) → "Independent verification gate" defines the
-clearance predicate. This page is orientation — don't implement from it.
+**Normative source:** [`plugin-yolo/companion/AUTONOMY.md`](../plugin-yolo/companion/AUTONOMY.md)
+defines the modes; [`plugin/seed/SCHEMA.md`](../plugin/seed/SCHEMA.md) → "Independent verification gate"
+defines the clearance predicate. This page is orientation — don't implement from it.
 
 ---
 
-## The on/off switch is one file
+## The on/off switch is one plugin
+
+**Core ships no capability file at all.** `AUTONOMY.md` is what the **`ai-bridge-yolo`
+companion plugin** carries, and core finds it by presence:
+
+```
+/plugin install ai-bridge-yolo@ai-bridge     # on
+/plugin  ->  Manage  ->  uninstall           # off
+```
 
 | State | What every project does |
 |---|---|
-| `docs/autonomy/AUTONOMY.md` **present** | a project's `autonomy:` field is honoured |
-| `docs/autonomy/AUTONOMY.md` **absent** | every project is `gated`, whatever its `autonomy:` says |
+| `AUTONOMY.md` **found** | a project's `autonomy:` field is honoured |
+| `AUTONOMY.md` **not found** | every project is `gated`, whatever its `autonomy:` says |
 
-`rm docs/autonomy/AUTONOMY.md` disables delegated autonomy with **no other edits** — that is
-the point of the design. `commit-as.sh` gates its promotion guard on the same presence
-check, fail-closed. Full reasoning, including the one hazard the pattern does not cover:
+**Uninstalling `ai-bridge-yolo` disables delegated autonomy with no other edits** — that
+is the point of the design, and it is the whole of turning it off. `commit-as.sh` gates
+its promotion guard on the same lookup, fail-closed. Full reasoning, including the one
+hazard the pattern does not cover:
 [conventions.md invariant 4](conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file).
 
-> **The hazard, in one line.** `AUTONOMY.md` lives under `plugin/`, so it is machinery,
-> and `/ai-bridge:init` re-links machinery unconditionally — a per-instance `rm` comes back on
-> the next `/ai-bridge:init`/`/ai-bridge:welcome fix`. `/ai-bridge:welcome fix` samples the file's presence *before*
-> calling the installer and reports the re-enable with the `rm` to undo it.
+`scripts/resolve-autonomy.sh` is the one reader, and it looks in exactly two places:
+
+| Order | Where | Why |
+|---|---|---|
+| 1 | `<bundle>/AUTONOMY.md` | **Root wins outright.** A v1-era bundle carrying its own real file keeps working byte for byte, with or without a companion, and no companion can override what it says. |
+| 2 | `<companion plugin root>/companion/AUTONOMY.md` | The companion, for a plugin installed from **core's own marketplace**. Read out of `installed_plugins.json` — never the plugin cache tree, which keeps every version ever fetched and would answer "installed" long after an uninstall. |
+
+Exit 1 — neither — is `gated`, and so is every unknown: no registry, an unreadable one, a
+companion root gone from disk. The full contract (how a companion registers, and the rule
+that it may ADD behaviour but never remove a core gate) is in
+[`plugin/README.md`](../plugin/README.md) → "Companion plugins".
+
+> **The hazard, in one line.** The capability is now **per machine**, not per bundle: a
+> plugin is installed once per user, so installing `ai-bridge-yolo` arms every bundle on
+> that machine at once. The per-bundle opt-out is unchanged and still the human's — set
+> that project's `autonomy: gated` — and a bundle that must never delegate is best kept on
+> a machine without the companion. `/ai-bridge:init` no longer has anything to re-link
+> here, which retires the older hazard in this slot: a per-instance `rm` that came back on
+> the next stamp.
 
 ## Modes
 

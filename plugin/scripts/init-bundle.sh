@@ -1025,7 +1025,9 @@ WS_NAME="${WS_GROUP}.code-workspace"
 # into a checkout and become the bundle's own copies.
 #
 # AUTONOMY.md IS NOT REPLACED, AND THAT IS DELIBERATE. It is the "one deletable file"
-# capability, so shipping it with the plugin would arm delegated authority everywhere. A
+# capability, so shipping it with CORE would arm delegated authority everywhere — which is
+# why it ships from the separate `ai-bridge-yolo` companion plugin instead, and why the
+# note below names an install rather than a `cp`. A
 # bundle that had it loses it here, in the safe direction (no file = always ask), and the
 # removal is reported LOUDLY with the exact command to put it back, because a capability
 # disappearing quietly is the one outcome worse than losing it.
@@ -1095,8 +1097,8 @@ EOF
   if [ "$autonomy_lost" -eq 1 ]; then
     echo "  NOTE: AUTONOMY.md was a machinery link and is GONE, so this bundle is back to" >&2
     echo "        ask-first for every delegated write. That is the safe end of the change," >&2
-    echo "        and it is not silent: to opt back in, copy the file in by hand —" >&2
-    echo "          cp $(doc_ref docs/autonomy/AUTONOMY.md) $TARGET/AUTONOMY.md" >&2
+    echo "        and it is not silent: to opt back in, install the companion that ships it —" >&2
+    echo "          /plugin install ai-bridge-yolo@ai-bridge" >&2
   fi
 }
 

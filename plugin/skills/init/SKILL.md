@@ -49,7 +49,8 @@ refresh, and never over a value already there.
   writes into files the bundle owns. Report the drift, and let the human ask.
 - **`AUTONOMY.md` disappearing is a real change, not noise.** If the conversion removed
   it, delegated authority is off and the bundle is back to ask-first. Relay that line and
-  the restore command; never re-create the file yourself.
+  the opt-back-in it prints (`/plugin install ai-bridge-yolo@ai-bridge` — the companion
+  that ships the file); never re-create the file yourself.
 
 ## Afterwards
 
