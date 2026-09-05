@@ -5,7 +5,7 @@
 # Pushes one compact line of CURRENT instance state into context on every turn.
 #
 # WHY EVERY TURN, when the PM is already told to read the bundle. "Told to read"
-# is not "always knows". `/pm-loop` is a long-lived session: after several ticks
+# is not "always knows". `/ai-bridge:dispatch` is a long-lived session: after several ticks
 # its context still describes the world as it stood at tick one — dispatches that
 # have since finished, questions since answered, a project since closed. The
 # loop's rule that "the tick's task-notification is the only valid finished

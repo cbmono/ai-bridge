@@ -52,7 +52,8 @@ a time" serialization lives in the session's wakeup chain — and a session's me
 "I dispatched" does not survive a compaction, a `--resume`, or a human asking "what's
 next?". Measured 2026-08-29: two ticks ran concurrently for about 34 minutes for
 exactly that reason, doing the same refinement work twice. So step 1 takes `.tick-lock`
-immediately before it dispatches, and a second session running `/pm-loop` against the
+immediately before it dispatches, and a second session running `/ai-bridge:dispatch`
+against the
 same working tree is refused rather than overlapping. The lock catches the mistake; it
 does not make two loops a good idea.
 
@@ -295,7 +296,8 @@ that missing signal.
 
 **What the open entry proves, precisely.** It proves a tick started and did not finish.
 It does **not** prove the agents it dispatched are still alive — nothing on disk can,
-which is why `/pm-loop` step 2 makes the `<task-notification>` the only valid finished
+which is why `/ai-bridge:dispatch` step 2 makes the `<task-notification>` the only valid
+finished
 signal. Orient-then-report-then-hold is what turns "there is an open entry" into "these
 three tasks claim in-flight, none has a worktree on disk, one has an open PR" — the
 difference between a report a human can act on and one that only says something is
@@ -456,7 +458,7 @@ in-flight count is the primary guard, which is why the prune waits for it to be 
 **Why the ledger close line is reconstructible, not descriptive**: "Refined two tasks,
 dispatched work" is useless to the next tick; "dispatched task-004, task-007; reflected
 task-002 merged" is what a successor reads instead of its own memory (see
-`/pm-loop` step 2).
+`/ai-bridge:dispatch` step 2).
 
 **Why the sync re-checks the tree instead of trusting the commit**: `commit-as.sh`
 commits only the paths named — the entire point of the explicit-path rule — so a

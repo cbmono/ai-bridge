@@ -6,9 +6,9 @@
 #
 # WHY THIS EXISTS AS A SCRIPT AND NOT A SENTENCE.
 # `roleTiers`/`models` lived only as prose in SCHEMA.md, project-manager.md,
-# advisor.md, audit.md and pm-loop.md — five files telling an agent to go and look
-# something up, and NO code that read it. So the config governed exactly the dispatch
-# paths whose markdown happened to mention it (the /pm-loop tick, the PM's own
+# advisor.md, audit.md and the loop's step file — five files telling an agent to go and
+# look something up, and NO code that read it. So the config governed exactly the dispatch
+# paths whose markdown happened to mention it (the /ai-bridge:dispatch tick, the PM's own
 # dispatches) and nothing else. Every ad-hoc `Agent` dispatch from a main session — a
 # documented, legitimate mode — silently ignored it, because the Agent tool takes its
 # model from its own parameter, else the agent's frontmatter, else the parent. Measured

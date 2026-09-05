@@ -4,7 +4,7 @@
 #
 #   Usage: check-dispatch.sh <task-doc>
 #
-# Run it whenever a dispatched agent reports — from a `/pm-loop` tick or from an ad-hoc
+# Run it whenever a dispatched agent reports — from a `/ai-bridge:dispatch` tick or from an ad-hoc
 # dispatch in a main session. It reads three things and judges nothing else:
 #
 #   1. did the task's `status:` advance off `ready`/`in-progress`;
@@ -21,7 +21,7 @@
 #
 # IT IS REPORT-ONLY, AND THAT IS THE LOAD-BEARING PROPERTY. It never re-dispatches, never
 # writes to the task document, never touches a branch, and asks the host only to READ.
-# `/pm-loop` step 2 calls re-dispatching an already-finished task sequence the most
+# `/ai-bridge:dispatch` step 2 calls re-dispatching an already-finished task sequence the most
 # expensive failure a loop of this shape has — a checker that acted on its own reading
 # would reintroduce exactly that, and would do it automatically. The verdict goes to a
 # human or to the loop's own reasoning; the recovery is usually one message to the parked

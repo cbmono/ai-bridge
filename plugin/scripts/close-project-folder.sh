@@ -21,7 +21,7 @@
 #                             · `deliverable_paths:` is stamped into project.md, and
 #                             · working files are pruned (below).
 #
-# WHY RETENTION IS SAFE NOW. Removal never was about disk — it was about the /pm-loop
+# WHY RETENTION IS SAFE NOW. Removal never was about disk — it was about the /ai-bridge:dispatch
 # tick paying context for finished work on every run. write-snapshot.sh (and the PM's own
 # project loop) now skip a `status: done` project at its frontmatter, before `tasks/` is
 # ever opened, so a retained project costs one frontmatter parse. That is what buys the

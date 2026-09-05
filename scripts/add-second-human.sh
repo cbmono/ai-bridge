@@ -171,7 +171,7 @@ echo
 echo "== the two things that break SILENTLY if skipped ======================"
 echo "  1. \`defaultOwner\` must be identical on both clones. Absent => unowned work is"
 echo "     BOTH clones' => both loops dispatch it => two PRs for one slice, no error."
-echo "  2. One active /pm-loop per CLONE. The serial guarantee is per-session with no"
+echo "  2. One active /ai-bridge:dispatch loop per CLONE. The serial guarantee is"
 echo "     cross-session lock; two loops on one clone reintroduce the same double"
 echo "     dispatch, plus a shared package store corrupting an in-flight worktree."
 echo

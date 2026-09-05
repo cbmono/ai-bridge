@@ -459,7 +459,7 @@ Everything between `ready` and `done` is the PM's to drive autonomously.
 # Ownership on a shared instance
 
 An instance may be shared by more than one human: each clones the same bundle repo
-and runs their own `/pm-loop`, so both see one set of projects and one knowledge base,
+and runs their own `/ai-bridge:dispatch`, so both see one set of projects and one knowledge base,
 and can hand a project or a single task to the other. `owner` is what keeps their two
 loops from doing the same work twice — and it is also what lets each clone's **own**
 locally rendered board separate their projects from the other's, since every owner but

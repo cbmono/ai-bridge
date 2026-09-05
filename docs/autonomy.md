@@ -290,7 +290,7 @@ There is **nothing to configure in the instance.** The Chrome extension *injects
 `.mcp.json`, and `claude mcp list` doesn't even show it. Machine-level setup is: install
 the extension, then grant it **per-site** permissions there.
 
-- **Background role agents can use it.** The connection is inherited by background subagents, so this is *not* foreground-only — `/pm-loop`-dispatched agents can drive Chrome. To make that reachable, `software-engineer`, `devops-engineer` and `qa-reviewer` carry `ToolSearch, mcp__claude-in-chrome__*` in their `tools:` allowlist (a closed allowlist otherwise excludes every MCP tool). The pattern resolves to nothing when the extension isn't paired, which is harmless — the rest of the allowlist still resolves.
+- **Background role agents can use it.** The connection is inherited by background subagents, so this is *not* foreground-only — agents dispatched by an `/ai-bridge:dispatch` tick can drive Chrome. To make that reachable, `software-engineer`, `devops-engineer` and `qa-reviewer` carry `ToolSearch, mcp__claude-in-chrome__*` in their `tools:` allowlist (a closed allowlist otherwise excludes every MCP tool). The pattern resolves to nothing when the extension isn't paired, which is harmless — the rest of the allowlist still resolves.
 - **Each agent gets its own tab group**, not the human's open tabs. Agents must navigate from an explicit URL; they can't "look at the tab you have open".
 - **A headless/cron tick has no browser.** Agents degrade to a non-browser route and say so, rather than reporting the task blocked.
 
@@ -303,7 +303,7 @@ the extension, then grant it **per-site** permissions there.
 
 ## The audit counter-metric
 
-`/pm-loop` optimizes throughput; **`/audit`** is the independent check that the throughput
+`/ai-bridge:dispatch` optimizes throughput; **`/audit`** is the independent check that the throughput
 is actually moving the real goals. Run it on a **slow cadence** — weekly, or after a batch
 of projects close.
 

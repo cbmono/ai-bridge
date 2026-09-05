@@ -59,7 +59,7 @@ in `cbmono/ai-bridge` enforces this.
   delete has read it exactly backwards, and would be reversing the deny baseline this
   bundle runs on (`.claude/settings.json`, `AUTONOMY.md`, `SCHEMA.md` → "Two human
   authorities"). That misreading is most dangerous exactly where this rule has most
-  effect — a background `/pm-loop` dispatch, hours from anyone watching — which is why it
+  effect — a background dispatch tick, hours from anyone watching — which is why it
   is stated here as a prohibition rather than left to be inferred from the table.
 - **The middle rung NEVER BLOCKS: record the tool request, then carry on.** `blocked` is
   not the response to a missing tool, and an agent that halts at the first gap turns a
@@ -306,7 +306,7 @@ in `cbmono/ai-bridge` enforces this.
   round-trip costs **about 9 minutes of wall clock and no tokens** (8-10 minutes on a
   clean runner, measured across `cbmono/ai-bridge`'s recent runs); the local full run
   measured **2026-08-29** cost **39m 47s and 269.4k tokens** on a machine that was also
-  running a `/pm-loop` tick. Same answer, several times the wall clock, and tokens on top.
+  running a `/ai-bridge:dispatch` tick. Same answer, several times the wall clock, and tokens on top.
   This is a **proportion argument, not a ban**: a *red* local run would have saved a CI
   round-trip, and the day a repo's CI is slower than its local suite, this rule inverts.
   **The local run never was the gate.** In `cbmono/ai-bridge`, the `harness suite` job is a
@@ -628,7 +628,7 @@ in `cbmono/ai-bridge` enforces this.
   no coverage at all today, because no tick ever reads it.
   **It is report-only, and that is the point: a non-zero verdict is never a licence to
   re-dispatch.** Re-running a task sequence that already finished is the most expensive
-  failure this loop has (`/pm-loop` step 2), and the usual recovery is one message to the
+  failure this loop has (`/ai-bridge:dispatch` step 2), and the usual recovery is one message to the
   parked agent telling it to open the PR on what it already has.
 - **Wide work: fan out only if you actually can — most of you can't.** For genuinely wide,
   *independent* work a parallel fan-out beats grinding serially (find the real edges → fan
@@ -646,7 +646,7 @@ in `cbmono/ai-bridge` enforces this.
   `maxAgentsInFlight` cap) — it does **not** license unlimited dispatches; a **write**
   fan-out must *also* give each subagent its own worktree — never parallel writes to a
   shared clone/worktree (the same collision the per-task isolation rule prevents). Skip it
-  for small/sequential work (pure overhead). `/pm-loop` stays serial — a fan-out lives
+  for small/sequential work (pure overhead). `/ai-bridge:dispatch` stays serial — a fan-out lives
   *inside* a task, never at the loop level.
 - **A subagent works ONE task, and is resumed only for that task's next round.** Waking a
   completed agent with a message reuses its context, and reuse is right exactly while that

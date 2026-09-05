@@ -18,7 +18,7 @@ main session stays free as a coordinator, instead of working them one at a time.
 > **Generic template file** (symlinked from the `ai-bridge` template). This is for
 > **ad-hoc chat requests** (rephrase a doc, rename a folder, research a question) —
 > **not** tracked `projects/` work. Anything that becomes a PR or a `projects/`
-> deliverable goes through `/new-project` → promote `ready` → `/pm-loop`, never here.
+> deliverable goes through `/new-project` → promote `ready` → `/ai-bridge:dispatch`, never here.
 
 ## Input
 `$ARGUMENTS` is an optional `;`-separated list of tasks. If empty, fan out the set

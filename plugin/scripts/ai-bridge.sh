@@ -41,7 +41,7 @@
 #               UNCOMMITTED CONFIG IS A QUESTION, NEVER A DEFECT.
 #   human       acting is unsafe even when the diagnosis is right. `fix` PRINTS. The live
 #               case is `.tick-lock`: `tick-lock.sh release` is documented as the
-#               human's override (`/pm-loop`, `SCHEMA.md`), and a `fix` that cleared a
+#               human's override (`/ai-bridge:dispatch`, `SCHEMA.md`), and a `fix` that cleared a
 #               lock it judged stale re-opens the double-dispatch that ran two ticks
 #               concurrently for 34 minutes on 2026-08-29. A long tick is not a dead one.
 #
@@ -832,7 +832,7 @@ EOF
 # =========================================================================================
 # CHECK 7 — tick-lock (HUMAN — SHIP-BLOCKER: never repaired)
 # =========================================================================================
-# THE FACT: whether a `/pm-loop` tick lock is held, claimed, or past its staleness
+# THE FACT: whether a `/ai-bridge:dispatch` tick lock is held, claimed, or past its staleness
 # threshold. The verdict is `tick-lock.sh status`'s, replayed here — this file has no
 # opinion about what stale means and must never grow one, or the two would drift about the
 # only question that matters.
@@ -845,7 +845,7 @@ EOF
 # `.tick-lock.claim` is written, removed or rewritten anywhere in this file.
 #
 # `status` IS THE READ-ONLY PROBE and it is the right one to call here — the prohibition in
-# `/pm-loop` is on a LAUNCHER calling `status` before `acquire`, which would rebuild the
+# `/ai-bridge:dispatch` is on a LAUNCHER calling `status` before `acquire`, which would rebuild the
 # check-then-write race `acquire` exists to close. This command dispatches nothing.
 check_tick_lock() {
   _warned=0
@@ -862,9 +862,9 @@ check_tick_lock() {
 
   out="$(bash "$sh" status --instance "$ROOT" 2>&1)"; rc=$?
   case "$rc" in
-    0) good "no tick lock held — the next /pm-loop dispatch takes it"
+    0) good "no tick lock held — the next dispatch tick takes it"
        case "$out" in *".tick-lock.claim"*) note "note: a claim file outlived its lock; the next acquire clears it" ;; esac ;;
-    1) good "a /pm-loop tick is in flight (this is a live lock, not a fault)"
+    1) good "a /ai-bridge:dispatch tick is in flight (this is a live lock, not a fault)"
        printf '%s\n' "$out" | sed -n '1,3p' | sed 's/^/    /'
        case "$out" in *"No tick has claimed it yet"*) note "unclaimed: taken for a dispatch that is starting" ;; esac ;;
     *) warn "the tick lock needs YOUR decision — this is not repaired for you"

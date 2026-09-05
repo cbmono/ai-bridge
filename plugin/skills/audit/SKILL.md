@@ -6,7 +6,7 @@ allowed-tools: Bash(pwd), Bash(ls:*), Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_RO
 ---
 
 Run one **audit pass** over this control-panel instance — the slow counter-metric loop
-that complements `/pm-loop`. It is **read-only**: it surfaces drift, it never promotes,
+that complements `/ai-bridge:dispatch`. It is **read-only**: it surfaces drift, it never promotes,
 merges, dispatches, or changes task status.
 
 ## Preconditions

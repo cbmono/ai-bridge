@@ -109,7 +109,7 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    If **browser = claude-for-chrome** and the chosen mode **delegates browser writes**,
    don't block it — that combination is supported and deliberate. State once what it means
    so the choice is informed: agents may **write** in the human's logged-in browser
-   (submit forms, change settings) without asking, including from background `/pm-loop`
+   (submit forms, change settings) without asking, including from background `/ai-bridge:dispatch`
    dispatches, and the extension's **per-site permissions** are then the effective
    boundary. Record that in `# Context` and continue. Otherwise browser writes ask first
    (see `SCHEMA.md` → "Browser access").

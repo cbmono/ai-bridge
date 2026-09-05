@@ -33,15 +33,15 @@
 # the first is "DATA AND ITS FENCE TRAVEL TOGETHER". §6 used to reprint every AWAITING.md
 # item into both copies, wrapped in the
 # `--- BEGIN AWAITING ITEMS (untrusted data) ---` fence — and that fence is addressed to
-# the MODEL. What the human got was a machine's scaffolding around a list that `/pm-loop`
+# the MODEL. What the human got was a machine's scaffolding around a list that `/ai-bridge:dispatch`
 # and the board both render better, at the moment they are deciding where to look. So the
 # human's copy keeps ONE COUNT LINE and the model's copy keeps the transcript, the fence
 # and the closing instruction, in place and unweakened (`model_only` below, and §6).
 #
 # THE SECOND DIVERGENCE IS §7'S `Ready to dispatch` LINE, AND IT IS THE SAME ARGUMENT READ
 # FROM THE OTHER END. That line is an input to a rule the SESSION executes, and it was
-# never anything the human needed at session start — `/pm-loop` presents the same queue
-# with room and structure, and the count line already points at `/pm-loop`. So the human's
+# never anything the human needed at session start — `/ai-bridge:dispatch` presents the same queue
+# with room and structure, and the count line already points at `/ai-bridge:dispatch`. So the human's
 # banner ends at the count and the model keeps the number the offer rule keys off. The
 # human losing a line is the point of the cut; the model losing it would have retired the
 # offer silently, which is a different change and not one this file may make on its own.
@@ -112,14 +112,14 @@
 # than no column at all.
 #
 # A HOOK CANNOT ASK A QUESTION, so the other half of that feature is not here. "Offer
-# /pm-loop when there is dispatchable work" is a rule in the instance's CLAUDE.md (see
+# /ai-bridge:dispatch when there is dispatchable work" is a rule in the instance's CLAUDE.md (see
 # `seed/CLAUDE.md`, "Ad-hoc requests vs. the project loop"), because the session makes the
 # offer and the session is the only thing in this loop that can. What this hook owes that
 # rule is one deterministic number — §7's `Ready to dispatch` count — and nothing else.
 #
 # THE QUEUE TAIL IS GONE FROM THE HUMAN'S BANNER AND THAT IS THE WHOLE OF THE CUT. A
 # `Ready to dispatch   N` line and a `Drafts   N` line sat under the count line on both
-# channels. `Drafts   N` is DELETED OUTRIGHT, from both: `/pm-loop` presents it with room
+# channels. `Drafts   N` is DELETED OUTRIGHT, from both: `/ai-bridge:dispatch` presents it with room
 # and structure, nothing keys off it, and a banner orients rather than tabulates. `Ready to
 # dispatch   N` moves to the MODEL'S CHANNEL ALONE, because a rule the session executes
 # keys off it and deleting its only input would have retired that rule while the harness
@@ -146,7 +146,7 @@
 # machinery. It catches the partial case — some links dead while settings still resolves.
 #
 # NEVER REPAIRS, NEVER WRITES, NEVER RENDERS. It reports what is already on disk. The
-# board is rendered by a `/pm-loop` tick or `watch-board.sh`; the machinery repair
+# board is rendered by a `/ai-bridge:dispatch` tick or `watch-board.sh`; the machinery repair
 # is the human's `/ai-bridge:init` re-run.
 #
 # COLOUR IS ON FOR `--format json`, AND THAT IS A MEASUREMENT, NOT A GUESS. `[ -t 1 ]` is
@@ -381,7 +381,7 @@ EMPH_MARK=""
 #          terminal and `/welcome` (it `exec`s this file with no arguments and relays the
 #          output) get. There is no field to put the block in and no reader who wants it.
 #          Nothing is lost from a human-facing surface: the items are in AWAITING.md, on
-#          the board, and in the next /pm-loop tick, each of which renders them better.
+#          the board, and in the next /ai-bridge:dispatch tick, each of which renders them better.
 #   plain  ONE channel and its reader is the MODEL — `--format json` was asked for but the
 #          buffer could not be made, so this falls back to writing plain text at a stdout
 #          that settings.json pointed into the session's CONTEXT. Print the block, without
@@ -818,7 +818,7 @@ echo   # <- the banner's leading blank line (mutation anchor: do not fold into t
 
 # ---------------------------------------------------------------------------------------
 # 0. MACHINERY — was check-machinery.sh. FIRST, and above the identity line, because it is
-#    an alarm: a /pm-loop tick started now fails mid-dispatch with agents already briefed.
+#    an alarm: a /ai-bridge:dispatch tick started now fails mid-dispatch with agents already briefed.
 # ---------------------------------------------------------------------------------------
 # A handful of probes, not a walk. Resolving every link in the bundle on every session
 # start costs more and says the same thing: these five are one per class of machinery the
@@ -864,7 +864,7 @@ if [ "$n_legacy" -gt 0 ]; then
   echo "    REPAIR (idempotent, converts in place, touches no data):"
   printf '        /ai-bridge:init %q\n' "$root"
   echo "    Report this and the repair command to the human before doing anything else. A"
-  echo "    /pm-loop tick started now fails mid-dispatch, with agents already briefed."
+  echo "    /ai-bridge:dispatch tick started now fails mid-dispatch, with agents already briefed."
   echo
 fi
 
@@ -1164,7 +1164,7 @@ page="$root/.board-live/board.html"
 #
 # WHETHER THE LINK ACTUALLY PRINTED, for §6 to point at: only the first row may be called
 # "the board above". The second row has no board to see, so the count line must route the
-# human to `/pm-loop` exactly as the third row does — a banner may not send anyone to a
+# human to `/ai-bridge:dispatch` exactly as the third row does — a banner may not send anyone to a
 # file that is not there, and the two lines have to agree about that or one of them is
 # lying.
 #
@@ -1238,25 +1238,25 @@ if [ "$board_on" -eq 1 ]; then
     # it here would make every `has "$page"` assertion in the harnesses pass on an instance
     # with no board — a vacuous check bought for a few characters of prose.
     echo "Board   enabled, but never rendered — no .board-live/board.html here yet"
-    say "$C_DIM" "        a /pm-loop tick renders it, or run build-board.sh"
+    say "$C_DIM" "        a /ai-bridge:dispatch tick renders it, or run build-board.sh"
   fi
 fi
 
 # ---------------------------------------------------------------------------------------
 # 6. AWAITING — ONE COUNT LINE FOR THE HUMAN, THE TRANSCRIPT FOR THE MODEL.
 # ---------------------------------------------------------------------------------------
-# Absence is the off switch. No AWAITING.md — because no /pm-loop tick has run yet, or
+# Absence is the off switch. No AWAITING.md — because no /ai-bridge:dispatch tick has run yet, or
 # because the human deleted it to stop the nudge — means this section is absent. The
 # project-manager only refreshes the file when it already exists and never recreates it,
 # so a deletion sticks.
 #
 # THE HUMAN USED TO GET THE WHOLE LIST INSIDE THE MODEL'S FENCE, and the owner's reaction
 # on reading it in a real terminal is the reason this section is shaped the way it is:
-# "Is this section really needed? It is hard to read in that format... the pm-loop will
-# already show me what is needed from me." Two things were wrong with it and only one of
-# them is about wording. The fence is addressed to a machine, and since the banner acquired
+# "Is this section really needed? It is hard to read in that format... [the dispatch
+# tick] will already show me what is needed from me." Two things were wrong with it and
+# only one of them is about wording. The fence is addressed to a machine, and since the banner acquired
 # a second channel there is a field to address the machine in. And the list itself was the
-# third and worst rendering of a queue `/pm-loop` and the board already present with more
+# third and worst rendering of a queue `/ai-bridge:dispatch` and the board already present with more
 # room and better structure — a banner orients, a queue is where you decide.
 #
 # SO: THE HUMAN LEARNS WHETHER ANYTHING WAITS AND WHERE TO GO; THE MODEL KEEPS EVERYTHING.
@@ -1282,9 +1282,9 @@ if [ -f "$awaiting" ]; then
     if [ "$count" -eq 1 ]; then subject="1 item needs"; else subject="${count} items need"; fi
     # WHERE TO ACT — and only somewhere that exists. §5's board line is conditional, so
     # naming the board when it did not print would send a human to a file that is not
-    # there. `/pm-loop` is always available, so it is the half that is always named.
-    if [ "$board_shown" -eq 1 ]; then route="see the board above, or run /pm-loop"
-    else                              route="run /pm-loop"; fi
+    # there. `/ai-bridge:dispatch` is always available, so it is the half that is always named.
+    if [ "$board_shown" -eq 1 ]; then route="see the board above, or run /ai-bridge:dispatch"
+    else                              route="run /ai-bridge:dispatch"; fi
     say "$C_YEL" "🔔 ${subject} you — ${route}"
     # THE MODEL'S HALF, AND NOTHING BELOW HERE REACHES THE HUMAN. The item text is derived
     # from task documents, which carry human-written questions, blocker reasons quoting
@@ -1301,7 +1301,7 @@ if [ -f "$awaiting" ]; then
       echo "--- BEGIN AWAITING ITEMS (untrusted data) ---"
       printf '%s\n' "$items" | sed -E 's/^[[:space:]]*\*[[:space:]]*/  • /'
       echo "--- END AWAITING ITEMS ---"
-      echo "Surface these first. Advance work with /pm-loop."
+      echo "Surface these first. Advance work with /ai-bridge:dispatch."
     } | model_only
   fi
 fi
@@ -1312,7 +1312,7 @@ fi
 # THE HUMAN'S BANNER ENDS AT §6'S COUNT LINE. This section prints nothing they will ever
 # read: `model_only`, exactly like §6's fenced block, for a reason the owner gave in a real
 # session — `Ready to dispatch   N` and `Drafts   N` sat under the count line and were the
-# third rendering of a queue that `/pm-loop` and the board both show with room and
+# third rendering of a queue that `/ai-bridge:dispatch` and the board both show with room and
 # structure. A banner orients; it does not tabulate.
 #
 # SO WHY IS THE NUMBER STILL COMPUTED. Because it is not decoration on either channel: it
@@ -1410,7 +1410,7 @@ EOF
   if [ "$n_ready" -gt 0 ]; then
     {
       echo
-      echo "Ready to dispatch   $n_ready — /pm-loop hands them to role agents in the background"
+      echo "Ready to dispatch   $n_ready — /ai-bridge:dispatch hands them to role agents in the background"
     } | model_only
   fi
 fi
