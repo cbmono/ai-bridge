@@ -122,7 +122,7 @@
 # the exact `log.md` bullet plus its `commit-as.sh` command for the human to
 # commit if the halt is worth the bundle's permanent history. That is the same
 # report-the-command-never-run-it shape as `RETIRED`, `prune-worktrees.sh` and
-# `install.sh`'s `git rm --cached`. Whether a halt deserves a permanent entry is a
+# `/ai-bridge:init`'s `git rm --cached`. Whether a halt deserves a permanent entry is a
 # judgement — a fat-fingered dispatch and an agent pushing to the wrong repo are
 # not the same event.
 #
