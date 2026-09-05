@@ -37,7 +37,9 @@ instance's `CLAUDE.md` (data-handling, units, no PII).
    **delegated merge authority** is merging PRs an independent reviewer hasn't cleared
    (unaddressed comments, or CI not green). Flag any anchor that's been weakened — those
    are the nodes an optimizer is tempted to relax. Also flag the **inverse mismatch**: a
-   project whose `autonomy` isn't `gated` while `AUTONOMY.md` is **absent**. The field is
+   project whose `autonomy` isn't `gated` while `AUTONOMY.md` is **absent** — ask
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-autonomy.sh --bundle <bundle>`, which reads the
+   bundle root first and then an installed companion, rather than testing for a path. The field is
    inert then, so the work is silently waiting for a human who believes it's delegated —
    a stall that looks like progress.
    **Sample recently merged PRs against the full clearance predicate** — all nine clauses

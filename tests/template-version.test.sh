@@ -165,14 +165,14 @@ globs="$(printf '%s\n' "$raw_globs" | awk '
     }
   }' | LC_ALL=C sort -u | tr '\n' ' ')"
 ok "the two rule files cover exactly the core paths" \
-  "$globs" "RETIRED config install.sh plugin seed upgrade.sh "
+  "$globs" "RETIRED config install.sh plugin plugin-yolo seed upgrade.sh "
 
 # Each of those names must appear in the core sentence the agent reads. Anchored on the
 # CLAUDE.md bullet rather than the whole file, so an unrelated mention elsewhere cannot
 # answer for it.
 core_bullet="$(grep -F 'A change to `core` PROPOSES a version bump' "$TPL/CLAUDE.md" || true)"
 missing=0
-for p in plugin seed config install.sh upgrade.sh RETIRED; do
+for p in plugin plugin-yolo seed config install.sh upgrade.sh RETIRED; do
   printf '%s' "$core_bullet" | grep -qF "\`$p" || { missing=$((missing+1)); printf '        NOT NAMED IN CLAUDE.md: %s\n' "$p" >&2; }
 done
 ok "…and CLAUDE.md's core bullet names every one of them" "$missing" 0

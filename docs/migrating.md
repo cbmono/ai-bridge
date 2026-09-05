@@ -40,10 +40,10 @@ somebody's work, and safe to run again.
 **Two things to know before you run it.**
 
 1. **`AUTONOMY.md` is not put back, on purpose.** It is the deletable delegated-authority
-   capability, so shipping it with the plugin would arm it everywhere. If your bundle had
-   one, the conversion removes the link and says so loudly, and the bundle is back to
-   ask-first — the safe end. To opt back in, copy the file in by hand from
-   `docs/autonomy/AUTONOMY.md`; the run prints the exact `cp`.
+   capability, so shipping it with core would arm it everywhere. If your bundle had one,
+   the conversion removes the link and says so loudly, and the bundle is back to
+   ask-first — the safe end. To opt back in, install the companion plugin that carries it:
+   `/plugin install ai-bridge-yolo@ai-bridge`; the run prints that line.
 2. **Seed drift is reported, never merged.** A seed document this repo changed since your
    bundle was stamped is listed and left alone. `/ai-bridge:welcome fix` — or
    `/ai-bridge:init <dir> --refresh-seeds` — 3-way merges the ones that merge cleanly; a
@@ -241,7 +241,7 @@ Only once this passes do you delete anything — see
 | `log.md` | the instance ledger |
 | `instance.config.json` | `org`, `reposRoot`, `worktreeRoot`, `people`, `defaultOwner`, `maxPrLoc` — tracked, and therefore shared, and therefore it travels |
 | `CLAUDE.md`, `README.md` | seed content, **yours since the day it was copied** — but port your edits onto the fresh copies rather than copying the old files, which still name `/pm-loop` |
-| `AUTONOMY.md` | the **decision** it encodes, never the file itself — it is a symlink, see below |
+| `AUTONOMY.md` | the **decision** it encodes. A **real file** at your bundle root travels and still wins; a *symlink* by that name does not, see below |
 
 ### Do not copy — every one of these regenerates
 
@@ -261,11 +261,18 @@ Only once this passes do you delete anything — see
 copy your bundle's own edits across if you made any, exactly as for `CLAUDE.md`.
 
 **`AUTONOMY.md` is the one file whose absence IS its setting**, and the stamp no longer
-puts it back. Delegated autonomy is honoured when the file is present and every project is
-`gated` when it is absent, so a bundle that had `rm`'d it was making a decision — and one
-that had it was making the other. On either path, decide once and copy the file in by hand
-from `docs/autonomy/AUTONOMY.md` if you want it; nothing recreates it for you.
-([autonomy.md](autonomy.md#the-onoff-switch-is-one-file))
+puts it back. Delegated autonomy is honoured when the file is found and every project is
+`gated` when it is not, so a bundle that had `rm`'d it was making a decision — and one that
+had it was making the other. Decide once, then turn it on by installing the companion that
+ships it: `/plugin install ai-bridge-yolo@ai-bridge`. Nothing recreates anything for you.
+
+**A v1-era bundle carrying a REAL `AUTONOMY.md` at its root keeps working unchanged, and
+the root copy WINS.** `resolve-autonomy.sh` reads the bundle root first and only then an
+installed companion, so such a bundle behaves byte for byte as it did — with or without
+`ai-bridge-yolo` installed, and a companion can never override what it says. There is
+nothing to migrate: leave the file where it is. Turning it off there means deleting **that
+file**, because uninstalling the companion alone would not reach it.
+([autonomy.md](autonomy.md#the-onoff-switch-is-one-plugin))
 
 ---
 

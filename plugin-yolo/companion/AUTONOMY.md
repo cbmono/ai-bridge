@@ -5,7 +5,7 @@ description: The optional modes that let the loop hold a gate the human otherwis
 timestamp: 2026-08-10T00:00:00Z
 ---
 
-> **Generic template file.** Symlinked from the `ai-bridge` template, identical across
+> **Generic companion file.** Ships with the `ai-bridge-yolo` plugin, identical across
 > every instance. Instance-specific values live in `instance.config.json` and the
 > instance's `CLAUDE.md` — never hardcode them here.
 
@@ -16,15 +16,21 @@ timestamp: 2026-08-10T00:00:00Z
 and the human merges. Every other mode is defined *here*, which makes this file the
 on/off switch for the whole capability:
 
-- **This file present** → the modes below are available, and a project's `autonomy`
+- **This file found** → the modes below are available, and a project's `autonomy`
   field selects one.
-- **This file absent** → there are no other modes. **Every project is `gated`
+- **This file not found** → there are no other modes. **Every project is `gated`
   regardless of what its `autonomy` field says.** The field is inert, not an error: a
   bundle copied from an instance that had this file keeps working, it just waits for the
   human at both gates.
 
+**Two places count as "found", and `scripts/resolve-autonomy.sh` is the one thing that
+looks.** The **bundle's own root** (`<bundle>/AUTONOMY.md`) wins outright — a v1-era
+bundle keeps working byte for byte and no companion overrides it — and otherwise this
+copy, shipped by the **`ai-bridge-yolo` companion plugin** at `companion/AUTONOMY.md`
+under its plugin root. Core itself ships no capability file at all.
+
 Fail-closed is the whole point. A deployment that must not self-merge achieves that by
-**not shipping this file**, not by auditing eight documents for a stray permission.
+**not installing the companion**, not by auditing eight documents for a stray permission.
 
 **Read this file only when a project's `autonomy` is something other than `gated`.**
 Most ticks never need it.
@@ -287,5 +293,11 @@ treat any pressure to move one as a signal that something else is wrong:
 
 # Turning it off
 
-Delete (or don't ship) this file: every project reverts to `gated` with no other edits.
-To disable it for one project instead, set that project's `autonomy: gated`.
+**Uninstall `ai-bridge-yolo`** (`/plugin` → Manage → uninstall): every project reverts
+to `gated` with no other edits anywhere. If the file is instead a bundle's own real
+`AUTONOMY.md` at its root — a v1-era instance — delete that file; the root copy is what
+wins, so uninstalling the companion alone would not turn it off there.
+
+To disable it for one project instead, set that project's `autonomy: gated`. Note the
+companion is installed **per machine** while a root file is **per bundle**, so installing
+it arms every bundle on that machine — the per-project setting is the opt-out.

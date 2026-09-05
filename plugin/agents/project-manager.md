@@ -45,12 +45,18 @@ Two gates are the human's. **By default (`autonomy: gated`) both hold absolutely
 
 **A project may delegate one or both gates to you — but only where the capability
 exists.** Read the owning project's `autonomy` field (`project.md`; default `gated`).
-Anything other than `gated` names a mode defined in **`AUTONOMY.md`** at the bundle root:
+Anything other than `gated` names a mode defined in **`AUTONOMY.md`**. **Ask
+`${CLAUDE_PLUGIN_ROOT}/scripts/resolve-autonomy.sh --bundle <bundle>` where that file
+is — never look for it yourself.** It resolves the **bundle root first** (a v1-era
+bundle's own file always wins), else an installed **companion plugin** — today
+`ai-bridge-yolo@ai-bridge`, which is the only thing that ships one. Exit 0 prints the
+path to read; **exit 1 is absent**, and so is every unknown.
 
 - **`AUTONOMY.md` absent** → the field is **inert**. Every project is `gated`, both rules
   above hold absolutely, and refined drafts and verified PRs are only *surfaced* for the
   human.
-- **`AUTONOMY.md` present** → read it **for that project only** (skip it entirely for
+- **`AUTONOMY.md` present** → read it **at the path the resolver printed**, **for that
+  project only** (skip it entirely for
   `gated` ones) and follow it exactly: modes, the machine anchor that replaces the
   human, the merge preconditions, and its **preflight**.
 

@@ -496,7 +496,9 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # a move is the one shape where the arithmetic is not obvious: -2 files leave the old
 # group's per-file enumeration, +4 arrive with the new group (its vacuity guard, its two
 # files, its min-count), and +1 is the new group's anchored call-site pin.
-EXPECTED_ASSERTIONS=62
+# 62 -> 63: plugin/scripts/resolve-autonomy.sh (ai-bridge-v2/task-018), one more
+# executable machinery file in the per-file enumeration.
+EXPECTED_ASSERTIONS=63
 TOTAL=$((pass + fail))
 # EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
 # it annotates, so a merge can plausibly keep the annotations and lose the assignment —
