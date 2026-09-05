@@ -6,18 +6,20 @@
 #
 # WHAT THIS IS FOR, and why it is not a delete list.
 #
-# Retiring MACHINERY is unambiguous: install.sh sweeps a symlink that points into
-# this template and whose target is gone, because such a link has exactly one
-# possible meaning (see install.sh step 2b). Retiring SEED content is not. A seed
-# file was copied into the instance once and has been the human's to edit ever
-# since, so its contents may be theirs and theirs only — `todos.md` is literally a
-# notes file. install.sh's safety property is that it only links and
-# seeds-if-absent; it never removes instance content, which is what makes it safe
-# to run blindly on a repo full of someone's work. Spending that to save one `rm`
-# would be a bad trade.
+# Retiring MACHINERY is unambiguous, and since the plugin migration it usually needs
+# nothing at all: the plugin tree is replaced whole on every update, so a file this
+# repo stops shipping simply stops existing on the machine. A bundle stamped under the
+# old design carries symlinks into a template checkout, and /ai-bridge:init's
+# conversion sweep removes those, because such a link has exactly one possible meaning.
+# Retiring SEED content is not like that. A seed file was copied into the bundle once
+# and has been the human's to edit ever since, so its contents may be theirs and theirs
+# only — `todos.md` is literally a notes file. The stamp's safety property is that it
+# only seeds-if-absent; it never removes bundle content, which is what makes it safe to
+# run blindly on a repo full of someone's work. Spending that to save one `rm` would be
+# a bad trade.
 #
 # So: every entry here is REPORTED, with the exact command to remove it, and
-# `upgrade.sh` puts it in the numbered "what's left for you" list. Nothing here is
+# `/ai-bridge:welcome fix` puts it in the numbered "what's left for you" list. Nothing here is
 # ever deleted by either script. The decision stays with the human who wrote the
 # file.
 #
@@ -30,8 +32,8 @@
 # `symlink/.claude/commands/*.md` file, as each command became a plugin skill, and
 # then every `symlink/.claude/agents/*.md` file at the name swap, as the eight role
 # agents became the plugin's only copies — and not one of them is seed content. All
-# sixteen are MACHINERY, so all sixteen are swept by install.sh step 2b and none of
-# them belongs below. Verified end to end in tests/retire-machinery.test.sh ("the
+# sixteen are MACHINERY, so all sixteen are swept by /ai-bridge:init's conversion and
+# none of them belongs below. Verified end to end in tests/retire-machinery.test.sh ("the
 # eight commands the plugin absorbed" and "the eight role agents the plugin absorbed"),
 # and `git log --diff-filter=D -- seed/` over the same range is empty. The next person
 # to retire something reads this and asks which of the two classes it is in.

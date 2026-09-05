@@ -5,7 +5,7 @@ into it and nothing else.**
 
 If you are here because a command, hook, output style or skill you wanted is not under
 `config/` any more: it is in [`cbmono/ai-setup`](https://github.com/cbmono/ai-setup), and
-the fix is to run that repo's `install.sh`, not to add a copy back here. Adding one back
+the fix is to run that repo's `/ai-bridge:init`, not to add a copy back here. Adding one back
 fails `tests/config-ownership.test.sh`, on purpose.
 
 ## What was wrong
@@ -67,7 +67,7 @@ config layer.
    requirement — *the file exists on this machine* — is already met, so it reports
    `provided by …` and writes nothing. Before that, `--config` would have exited non-zero
    on the normal configuration.
-4. **`CONFIG_MANAGED_TOPS` in `install.sh` is never pruned**, and it is what performed this
+4. **`CONFIG_MANAGED_TOPS` in `/ai-bridge:init` is never pruned**, and it is what performed this
    handover: the roots this layer used to ship stay listed, so `--config` retires the
    now-dangling links from the old layer on the next run. Prune them and a retired command
    still registers, a retired hook still exits 127 on every launch.
@@ -134,7 +134,7 @@ cannot mean "the scan never fires".
 
 ## If you need something that is not here
 
-- **A command / hook / skill on a new machine** → run ai-setup's `install.sh`. That is the
+- **A command / hook / skill on a new machine** → run ai-setup's `/ai-bridge:init`. That is the
   whole point: one repo installs it, so one repo fixes it.
 - **A new agent this repo's own machinery probes for** → add the probe in `plugin/` and the
   file under `config/required/agents/`. `tests/config-ownership.test.sh` expects exactly

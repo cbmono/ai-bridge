@@ -37,13 +37,13 @@ SNAPSHOT.json
 # The other-owners cache (scripts/build-board.sh) — the board's second half, read from
 # the tracked documents at HEAD and stored against the SHA it was computed for, because
 # that section can only change when HEAD moves. Derived and per-machine; delete it freely
-# and the next render rebuilds it. install.sh appends this line too, so it reaches
+# and the next render rebuilds it. /ai-bridge:init appends this line too, so it reaches
 # instances stamped before the cache existed.
 /.board-others.json
 
 # The local live board page (scripts/watch-board.sh) — the same HTML as board.html,
 # regenerated on every task-document change by a watcher you keep running. Derived,
-# per-machine, and safe to delete. install.sh appends this line too, so it reaches
+# per-machine, and safe to delete. /ai-bridge:init appends this line too, so it reaches
 # instances stamped before the directory existed.
 /.board-live/
 
@@ -60,7 +60,7 @@ SNAPSHOT.json
 # tells "held by the launcher that dispatched me" from "held by another tick". Per clone and
 # derived exactly like the lock, removed with it by `scripts/tick-lock.sh release`. Its own
 # line because `/.tick-lock` does not match it and instances stamped before it exists carry
-# the first line already — install.sh appends this one separately for that reason.
+# the first line already — /ai-bridge:init appends this one separately for that reason.
 /.tick-lock.claim
 
 # Per-machine identity overrides (authorEmail, ownerGithubUser). instance.config.json
@@ -70,13 +70,13 @@ SNAPSHOT.json
 instance.config.local.json
 
 # The derived navigation indexes (`/index.md`, `/projects/*/index.md`) are ignored
-# too — but the lines live in install.sh, NOT here, and that is not an oversight.
+# too — but the lines live in /ai-bridge:init, NOT here, and that is not an oversight.
 # THIS FILE IS ITSELF AN ACTIVE .gitignore INSIDE THE ai-bridge TEMPLATE'S OWN
 # `seed/` DIRECTORY, so a `/index.md` line here matches `seed/index.md`
 # and silently stops the template from tracking its own seed file. (Measured: it
-# broke the upgrade.sh fixture, which re-inits a repo over a copy of seed/.) The
+# broke the refresh-seeds.sh fixture, which re-inits a repo over a copy of seed/.) The
 # other entries above are safe because no seed file is named any of them.
-# install.sh appends both lines to an instance's .gitignore if missing, which also
+# /ai-bridge:init appends both lines to an instance's .gitignore if missing, which also
 # reaches instances stamped before they existed. `knowledge/index.md` is
 # deliberately NOT ignored anywhere — it is the KB's curated lookup surface, it
 # changes only when the KB changes, and an agent told to scan it needs it present
@@ -84,11 +84,11 @@ instance.config.local.json
 
 # Derived view of the group's product repos (scripts/link-repos.sh) — one symlink
 # per repo into reposRoot, never content, and machine-local like the machinery
-# below. Delete it freely; install.sh or that script recreates it.
+# below. Delete it freely; /ai-bridge:init or that script recreates it.
 /repos/
 
-# Generic machinery is symlinked in from the ai-bridge template by
-# install.sh and must NOT be committed here (it dangles on other machines).
-# install.sh manages the list between the markers below — do not edit by hand.
-# >>> ai-bridge machinery (symlinked) >>>
-# <<< ai-bridge machinery <<<
+# NO MACHINERY BLOCK, DELIBERATELY. A bundle used to carry 37 symlinks into a
+# template checkout, listed between a marker pair /ai-bridge:init rewrote on every
+# stamp. The machinery ships in the ai-bridge PLUGIN now — per machine, not per
+# bundle — so there is nothing here to ignore. A bundle stamped under the old design
+# still has the block; /ai-bridge:init RETIRES it, markers and all, on the next stamp.

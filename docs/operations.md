@@ -12,7 +12,14 @@ board. Procedures here; the reasoning behind each one is linked.
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
 | the **plugin** (`ai-bridge`) | every slash command — `/ai-bridge:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/ai-bridge`, then `/plugin install ai-bridge@ai-bridge`; `/plugin` to update it later |
-| the **bundle** machinery (`plugin/`) | `scripts/`, the `SessionStart` and `UserPromptSubmit` hooks, `SCHEMA.md`, `CONVENTIONS.md`, `AUTONOMY.md`, `agents/index.md`, `.claude/settings.json`, the role-agent copies the bundle still links | **per instance** | `install.sh <instance>` |
+| the **bundle** (`seed/` content + your data) | `projects/`, `knowledge/`, `objectives/`, `instance.config*.json`, the seed docs (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, `.claude/settings.json`), the managed `.gitignore` lines, and the `repos/` links | **per bundle** | `/ai-bridge:init <dir>` |
+
+**THE SECOND HALF NO LONGER CARRIES MACHINERY, AND THAT IS THE CHANGE.** A bundle used to
+hold 37 absolute symlinks into a template checkout, so `git pull` here propagated into
+every bundle. `claude plugin update` swaps the whole plugin tree and gives the same
+property, so the symlinks lost their reason to exist — and a plugin-shipped installer
+could not have kept them anyway, since the plugin cache path changes on every update and
+every link would dangle. **No clone of this repo is needed on a user's machine.**
 
 **Install is therefore the plugin first, the stamp second.** A machine with the plugin and
 no bundle has commands and nothing for them to read; a bundle with no plugin has the data
@@ -29,34 +36,34 @@ number.
 A `git pull` here updates the template. What that means for an existing instance depends
 on *what* changed — and exactly one of the five needs nothing from you.
 
-| What changed in the pull | Reaches an instance how | You must |
+| What changed in the pull | Reaches a bundle how | You must |
 |---|---|---|
-| A **`plugin/`** file (a skill, a plugin agent) | Not at all — the plugin is installed from the marketplace, not from this checkout | update the plugin (`/plugin`), on **each machine** |
-| An **edited** `plugin/` file (script, agent, `SCHEMA.md`, `CONVENTIONS.md`, a `.claude/rules/` file) | Instantly, through the existing symlink | nothing |
-| A **new** `plugin/` file | Not at all until its symlink exists | `install.sh <instance>` — once per instance |
-| A **`seed/`** file (`CLAUDE.md`, `README.md`, `index.md`, …) | Never — seed is copied only when absent, so instance data is never clobbered | port the change by hand, per instance |
-| A **schema** change | The machinery updates, the *data* does not | `scripts/validate-bundle.sh`, then `scripts/migrate-bundle.sh` (report), then `--apply` |
+| **Any** `plugin/` file — a skill, an agent, a script, a hook, new or edited | Not at all from this checkout. The plugin is installed from the marketplace | update the plugin, on **each machine**, then restart Claude Code |
+| A **`seed/`** file (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `index.md`, …) | Never by itself — seed is copied only when absent, so bundle data is never clobbered | `/ai-bridge:welcome fix`, which 3-way merges what merges cleanly and reports the rest |
+| A **schema** change | The validator updates with the plugin; the *data* does not | `/ai-bridge:welcome check`, then `migrate-bundle.sh` (report), then `--apply` |
 
-### One command walks the last four rows
+**Three rows, not five, and that is the point of the migration:** the two rows that used
+to exist for "an edited machinery file arrives instantly, a new one needs a stamp" are
+gone, because a bundle no longer links machinery at all. One plugin update moves the whole
+tree at once, and there is no per-bundle step for any of it.
 
-The plugin row is the one `upgrade.sh` cannot touch: it is per machine and installed by
-Claude Code, not by a script in this repo.
+### One command walks the seed row
 
-```bash
-./upgrade.sh ~/workspace/<group>/_ai-bridge-<group>            # report — changes nothing but symlinks
-./upgrade.sh ~/workspace/<group>/_ai-bridge-<group> --apply    # write the safe changes
+The plugin row is the one no script here can touch: it is per machine and installed by
+Claude Code.
+
+```
+/ai-bridge:welcome fix
 ```
 
-It runs `install.sh` (the new-machinery row), then the instance's `validate-bundle.sh` and
-`migrate-bundle.sh` (the schema row), then works out the `seed/` row — and ends with a
-numbered list of what is left for **you**, with the exact commands. Report-only by
-default. Re-run it any time; a second run finds nothing to do.
+It converts a bundle that still carries machinery symlinks, and 3-way merges the seed
+changes this repo has made since the bundle was stamped — verifying every write on disk,
+never forcing a hand-diverged file, and leaving a conflicted merge beside it as
+`.bak.<epoch>`. `/ai-bridge:welcome check` is the report-only half. Re-run either any
+time; a second run finds nothing to do.
 
-**The schema row is the one that bites, and it is why the order inside the script is fixed:** the
-validator ships instantly through its symlink and starts reporting errors against
-documents written under the old rules (working as intended — the errors were already
-there), but nothing repairs them until the migration runs, and on an instance older than
-those scripts it takes `install.sh` to make them exist at all.
+`/ai-bridge:init <dir> --refresh-seeds` is the same seed pass, reached from the installer
+instead — useful when you are converting a bundle and porting its seed drift in one go.
 
 ### The `seed/` row: the five seed verdicts
 
@@ -70,6 +77,7 @@ file on evidence from this repo's git history.
 | **`CONFLICT`** | your edits and the seed's collide | **nothing.** Your wording is the only copy of a decision somebody made — port it by hand |
 | seed file **never changed** since your instance was stamped | nothing to deliver | stays quiet even though your copy has grown (`log.md`, `index.md`, a `.gitignore` with the machinery block) |
 | **`UNKNOWN`** | no usable history to judge against | **nothing.** `diff` the two paths it names and port by hand |
+| **`CONFIG`** | it is `instance.config.json` or `instance.config.local.json` | **nothing, ever.** Config is the one seed file whose purpose is to diverge, and a value in it is routinely a decision somebody made minutes ago — the same reason `/ai-bridge:welcome` has no fixer for its `config-uncommitted` row |
 
 Two ways to reach `UNKNOWN`: the template you are running from has no git history for
 that seed file (a shallow clone, a downloaded archive, a file added but never committed),
@@ -94,120 +102,118 @@ to guess.
 `maxPrLoc` is optional in the same file — absent, the PR-size heuristic uses **500** — so
 add it only to move the threshold.
 
-### Moving a stamped instance into the plugin era — run this once
+### Moving a stamped bundle into the plugin era — run this once
 
-An instance stamped before the migration is in one specific, diagnosable state: its
-`.claude/commands/` still holds symlinks into command files this template no longer
-ships, and its `CLAUDE.md` and `README.md` — seed content, copied once and never
-overwritten — still tell you to run `/pm-loop`, `/new-project` and the rest. Nothing
-errors. The commands simply are not there.
+A bundle stamped before the migration is in one specific, diagnosable state: it still
+carries **machinery symlinks into a template checkout** — `scripts/`, `.claude/`,
+`SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md` — its `.claude/commands/` holds links
+into command files this repo no longer ships, and its `CLAUDE.md` and `README.md` (seed
+content, copied once and never overwritten) still tell you to run `/pm-loop`. Nothing
+errors. The commands simply are not there, and the links that *do* resolve are pinned to
+whatever that clone last pulled.
 
 **This is the default path, and [migrating.md](migrating.md) is the decision rule plus
 the other one** — a fresh re-home into a clean folder, for when you want that
 deliberately.
 
-**Four steps, in this order. Step 1 is per machine; steps 2–4 are per instance.**
+**Three steps, in this order. Step 1 is per machine; steps 2–3 are per bundle.**
 
-```bash
+```
 # 1. per MACHINE, in any Claude Code session
 /plugin marketplace add cbmono/ai-bridge
 /plugin install ai-bridge@ai-bridge
 #    on ai-bridge-v2 already? uninstall it from /plugin -> Manage. It ships for one
 #    more version as a stub carrying a single skill that says exactly this.
 
-# 2-3. per INSTANCE, from the template checkout
-./upgrade.sh ~/workspace/<group>/_ai-bridge-<group>            # report — changes nothing but symlinks
-./upgrade.sh ~/workspace/<group>/_ai-bridge-<group> --apply    # write the safe changes
+# 2. per BUNDLE — converts in place, touches no data, safe to re-run
+/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group>
 
-# 4. per INSTANCE
-#    /exit, then `claude` from inside the instance directory
+# 3. per BUNDLE
+#    /exit, then `claude` from inside the bundle directory
 ```
 
 | Step | What it fixes | What you should see |
 |---|---|---|
 | 1 | the commands do not exist on this machine | `/ai-bridge:welcome` resolves |
-| 2 | the dangling `.claude/commands/*`, `.claude/hooks/*` and `.claude/agents/*` links, via `install.sh` step 2b | one `retire <path> (no longer shipped by the template)` line per migrated command, one each for `.claude/hooks/deny-destructive.sh` and `.claude/hooks/agent-control.sh`, and one for each of the eight role agents |
-| 3 | the seed documents that still name the old commands | the `seed/` verdicts above — `CLAUDE.md` and `README.md` 3-way merged onto your edits, or `CONFLICT`, which writes nothing |
-| 4 | Claude Code is still holding the old registration | the `SessionStart` banner, and `/ai-bridge:dispatch` in the command list |
+| 2 | every machinery symlink, dangling or live, plus the managed `.gitignore` block | one `retire <path> — <reason>` line each, then `Converted: N machinery link(s) removed` |
+| 3 | Claude Code is still holding the old registration | the `SessionStart` banner, and `/ai-bridge:dispatch` in the command list |
 
 **Step 2 is not optional and is not cosmetic.** A dangling command file still registers,
-so without the re-stamp the instance offers `/pm-loop` and fails when you run it. The
-sweep is `install.sh`'s, it removes only links that point into this template's `plugin/`
-*and* whose target is gone, and it never touches instance content — [§2
-below](#2-retiring-content-swept-vs-reported).
+so without it the bundle offers `/pm-loop` and fails when you run it — and a link that
+still *resolves* is quieter and worse, because it pins the bundle to one stale checkout
+that no plugin update ever reaches. The sweep removes only symlinks outside `repos/`, it
+never touches a real file or bundle content, and it reports a symlink of your own as
+`keep` — [§2 below](#2-retiring-content-swept-vs-reported).
+
+**The seed documents are the part that can decline.** Seed content has been yours to edit
+since the day it was copied, so `/ai-bridge:welcome fix` 3-way merges what merges cleanly
+and reports a `CONFLICT` without writing — port the command names by hand there. The
+conflicted merge is saved beside the file as `.bak.<epoch>` so the markers are available
+to read.
+
+**`AUTONOMY.md` does not survive the conversion, on purpose.** It is the deletable
+delegated-authority capability, so a copy shipped with the plugin would arm it on every
+machine. If your bundle had one, the sweep removes the link and says so loudly: the bundle
+is back to ask-first — the safe end — and the run prints the exact `cp` to opt back in.
 
 **The enforcement hooks are the one case where step 1 comes first for a REASON, not just
-by convention.** `.claude/settings.json` is itself a symlink into the template, so its
-`PreToolUse` registration disappears the instant you pull the template clone — before any
-stamp, and whether or not you meant to upgrade yet. From that moment until the plugin is
-installed or updated, **the destructive-action deny baseline and the kill switch are off**.
-Nothing reports it: the hook files are still linked (dangling, until step 2) and the
-absence of a hook looks exactly like a session where nothing was denied. Do step 1 on the
-machine before you pull, or accept the gap knowingly.
+by convention.** On an unconverted bundle `.claude/settings.json` is itself a symlink into
+the template, so its `PreToolUse` registration disappears the instant you pull that clone
+— before any stamp, and whether or not you meant to upgrade yet. From that moment until
+the plugin is installed or updated, **the destructive-action deny baseline and the kill
+switch are off**. Nothing reports it: the absence of a hook looks exactly like a session
+where nothing was denied. Do step 1 on the machine before you pull, or accept the gap
+knowingly. After the conversion the question cannot arise again — all four hooks are
+registered by `plugin/hooks/hooks.json`, per machine.
 
-**Step 3 is the one that can decline.** Seed content has been yours to edit since the day
-it was copied, so a `CONFLICT` verdict writes nothing and names both paths: port the
-command names by hand there. `upgrade.sh` lists every such file in its numbered "what's
-left for you" block, which is the part to read.
+### Why `/ai-bridge:init` no longer exists, and what is left of it
 
-**The role agents retired in the name swap, and step 2b is what removes them.** They
-shipped in both halves during the migration — the bundle linked them, the plugin carried
-them, byte-identical — because a same-named project agent SHADOWS the plugin copy. The
-swap deleted `symlink/.claude/agents/`, so one re-stamp sweeps all eight dangling links
-and reports each by name, and from then on the plugin copies are the only copies.
-**Dispatch strings changed in the same breath: `ai-bridge:<role>`, all eight.** A bare
-agent name does not resolve (measured 2026-09-02), so the strings had to change once —
-this was that once.
+The command layer left first, and the obvious next question was whether the installer went
+with it. **It did — but as a relocation, not a deletion**, and the count is what forced the
+shape. Measured before the move:
 
-### Why `install.sh` still exists, and what would retire it
-
-The command layer left, so the obvious next question is whether the installer goes with
-it. **It does not, and the reason is countable rather than a preference.** Measured
-against `plugin/`:
-
-| Under `plugin/` | Files | Does the plugin carry it? |
+| What a bundle carried | Files | Where it is now |
 |---|---|---|
-| `scripts/` | 27 | **no** — and 14 of them are named by relative path in the plugin skills' own `allowed-tools`, so the plugin *depends* on the bundle delivering them |
-| `.claude/hooks/` | 2 | **no** — `deny-destructive.sh` and `agent-control.sh` left in task-003; `session-banner.sh` and `push-state.sh` remain |
-| `.claude/agents/` | 0 | **retired in the name swap** — the plugin copies are the only copies |
-| root documents, `agents/index.md`, `.claude/settings.json`, `.claude/rules/` | 6 | **no** |
-| **total** | **35** | **every one of them reaches an instance only through `install.sh`** |
+| `scripts/` | 27 | `plugin/scripts/`, invoked as `${CLAUDE_PLUGIN_ROOT}/scripts/<name>.sh` |
+| the two SessionStart / UserPromptSubmit hooks | 2 | `plugin/hooks/`, registered by `plugin/hooks/hooks.json` |
+| `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, `.claude/rules/`, `.claude/settings.json` | 5 | `seed/` — the bundle's **own** files, copied once, refreshed by the 3-way seed merge |
+| `AUTONOMY.md` | 1 | `docs/autonomy/` — **not** shipped into a bundle; absence is the safe default |
+| **total** | **35** | **none of them is a symlink in a stamped bundle** |
 
-`install.sh` also does four things no plugin can: it seeds `seed/` **if absent**, rewrites
-the instance `.gitignore`'s managed machinery block, links the product repos into
-`repos/`, and — on a first stamp, at a terminal — collects the `people` map. And its step
-2b sweep is the only thing that removes a retired path from an already-stamped instance,
-which is precisely what the plugin migration needs it for.
+The two facts that decided it: a plugin-shipped installer **cannot** stamp absolute
+symlinks into a plugin cache whose path changes on every update, and `claude plugin
+update` already gives the propagation the symlinks existed for. Everything `/ai-bridge:init`
+did that a plugin genuinely could not — seeding `seed/` if absent, the bundle
+`.gitignore`, the `repos/` links, the first-stamp roster prompt — moved into
+`plugin/scripts/init-bundle.sh` and is reached as `/ai-bridge:init`.
 
-**So the decision is reduce, not delete — and the reduction available today is nothing.**
-The installer shrinks when the *symlink farm* shrinks, and the farm has not: the commands
-that left were the only files retired, and they were already deleted. The two things that
-would move the number are the enforcement hooks becoming plugin hooks (−4) and the role
-agents' bundle copies retiring at the name swap (−8). Even both together leave 25 scripts
-plus the root documents, so **the end state is a smaller `install.sh`, not an absent
-one**, and a plugin that stops being able to reach `scripts/` would be a regression rather
-than a simplification.
+`/ai-bridge:init` and `/ai-bridge:welcome fix` remain at the repo root for **one version**, as one-screen
+stubs that print the command to run and exit 2. Delete them at the next version.
 
 ---
 
 ## 2. Retiring content: swept vs. reported
 
-| What you retired | What happens to an already-stamped instance |
+| What you retired | What happens to a stamped bundle |
 |---|---|
-| a **machinery** file under `plugin/` | `install.sh` step 2b **deletes** the now-dangling symlink |
-| a **seed** file | **reported**, never deleted — with the exact `rm`, in `upgrade.sh`'s "what's left for you" list |
+| a **machinery** file under `plugin/` | nothing to do — the plugin is replaced whole on the next update, so a retired file simply stops existing |
+| a **machinery symlink** a symlink-era bundle still carries | `/ai-bridge:init`'s conversion sweep **deletes** it |
+| a **seed** file | **reported**, never deleted — with the exact `rm`, on every stamp |
 
-The asymmetry is deliberate: a dangling symlink into this template has exactly one
+The asymmetry is deliberate: a machinery symlink into a template checkout has exactly one
 possible meaning; a seed file has been the human's to edit since the day it was copied in.
-`install.sh` never removes instance content, which is what makes it safe to run blindly on
-a repo full of somebody's work.
+The stamp never removes bundle content, which is what makes it safe to run blindly on a
+repo full of somebody's work.
 
 **When you retire a seed file, declare it in [`RETIRED`](../RETIRED)** (`<path>` TAB
 `<reason>`) **in the same commit that deletes it, and never prune the manifest** — an
 instance stamped years ago still has the file.
 
-Step 2b's sweep is narrow on purpose: a link is removed only when it points **into this
-template's `plugin/`** *and* its target is gone. Full reasoning:
+The conversion sweep is decided **structurally, never by name**: a symlink outside
+`repos/` goes when it dangles, when its target contains a `/symlink/` component, or when
+its target resolves inside a template checkout. Anything else is reported `keep` and left.
+A closed list of paths would be wrong for exactly the oldest bundles, which are the ones
+that most need converting. Full reasoning:
 [conventions.md invariants 1 and 2](conventions.md#1-retiring-content-is-asymmetric).
 
 **The plugin migration is the worked example, and it lands entirely on the top row.** Each
@@ -217,28 +223,31 @@ of them, `/ai-bridge`, `/answer`, `/audit`, `/fanout`, `/pr-review-request`,
 are swept by the re-stamp and **none** gets a `RETIRED` entry; no seed file was retired at
 all. That is not an oversight and `RETIRED` says so in its own header, because "nothing to
 declare" and "somebody forgot to declare it" look identical in an empty manifest.
-`tests/retire-machinery.test.sh` stamps an instance carrying all eight and asserts the
-re-stamp removes every one.
+`tests/retire-machinery.test.sh` stamps a bundle carrying all of them — the eight
+commands, the eight role agents, the two enforcement hooks, the retired renderer and the
+root documents — and asserts one conversion removes every one, **as a set**, because seven
+swept and one left is indistinguishable from a clean run in any single-name check.
 
 ---
 
-## 3. Machinery is machine-local
+## 3. Machinery is per machine, not per bundle
 
-The symlinks point at absolute paths into this checkout and are gitignored in the
-instance, so a clone on another machine has the committed instance data but **dangling**
-machinery until you re-run `install.sh` there. That is intentional — the machinery is
-sourced from this repo, not vendored into each instance.
+**It used to be machine-local by SYMLINK, and that is what changed.** A bundle held
+absolute links into this checkout, gitignored, so a clone on another machine had the
+committed data and dangling machinery until someone re-ran the installer there. The
+machinery ships in the **plugin** now: one install per machine arms every bundle on it, a
+`claude plugin update` replaces the whole tree at once, and a clone of a bundle on a second
+machine needs nothing but the plugin.
 
-To change the machinery: edit files under `plugin/` and commit. Every instance picks the
-change up immediately. Re-run `install.sh` on an instance only when you **add** new
-machinery files (to refresh its symlink set and `.gitignore` block). Keep machinery
-generic: no org, repo, path, team or channel literals — those belong in each instance's
-`instance.config.json` / `CLAUDE.md`.
+To change the machinery: edit files under `plugin/`, commit, and ship a version bump.
+Every machine picks it up at its next plugin update; there is no per-bundle step at all.
+Keep machinery generic: no org, repo, path, team or channel literals — those belong in
+each bundle's `instance.config.json` / `CLAUDE.md`.
 
 ### Moving this checkout: 185 dangling symlinks, and nothing noticed
 
-Measured 2026-08-23. `~/workspace/ai-bridge` was moved with a plain `mv`. Every symlink is
-absolute, so everything broke at once:
+Measured 2026-08-23, and it is the incident that ended the design. `~/workspace/ai-bridge`
+was moved with a plain `mv`. Every symlink was absolute, so everything broke at once:
 
 | where | dangling symlinks |
 |---|---|
@@ -246,46 +255,36 @@ absolute, so everything broke at once:
 | `~/.claude` (the `--config` layer) | 24 |
 
 **185 broken links, and all three instances looked fine from the outside.** A dangling
-symlink is invisible until something executes it — which for an `/ai-bridge:dispatch` tick means
-mid-dispatch, with agents already briefed.
+symlink is invisible until something executes it — which for an `/ai-bridge:dispatch` tick
+means mid-dispatch, with agents already briefed.
 
-The repair is one idempotent command per instance, from the checkout's **new** location:
+**The bundle half of that cannot happen again**, because a stamped bundle holds no link
+into any checkout. Moving this repo now costs exactly one thing: the `--config` layer's 24
+links into `~/.claude`, repaired by
 
-```bash
-bash /new/path/to/ai-bridge/install.sh ~/workspace/_ai-bridge-<group>   # per instance
-bash /new/path/to/ai-bridge/install.sh --config                         # once, for ~/.claude
+```
+bash <plugin>/scripts/init-bundle.sh --config
 ```
 
-`install.sh` relinks every machinery file and, in the same run, **sweeps the dead
-`<name>.bak.<epoch>` symlinks it makes on the way** — step 2 moves each dangling link aside
-before relinking, so without the sweep one repair left 38 dead backups in a test instance
-and 122 across two real ones. The sweep only ever removes a **dangling symlink** whose
-original now exists again as a link of ours; a `.bak.*` **regular file** is content a human
-owns and is never touched, and neither is a dangling `.bak.*` link that was not ours.
-`tests/moved-template.test.sh` pins all four negatives.
+from the checkout's new location.
 
-**Detection.** `.claude/hooks/session-banner.sh` runs at `SessionStart`, resolves four
-machinery links (a root document, a script, a role agent, a hook) and — if any dangle —
-names them, names where they pointed, and prints the exact `install.sh` line that repairs
-this instance. It never repairs anything itself. In a healthy instance that section of the
-banner is **absent**, and in any non-bridge project that inherits the hook the banner
-prints nothing at all and exits 0.
+**A bundle that has not been converted yet is still in the old state**, and that is what
+the detection below is for.
 
-> **The hole this leaves, stated rather than implied.** `.claude/settings.json` is itself
-> one of the machinery symlinks, so when the **whole** checkout moves it dangles too —
-> Claude Code then has no project settings, the hook is never registered, and it cannot
-> run. The hook therefore catches the partial cases (a file renamed or retired inside a
-> template that is still where the instance thinks it is; a half-repaired instance) and
-> **not** the wholesale move that motivated it. A detector built out of the machinery it
-> checks does not survive the total failure of that machinery.
->
-> Closing it needs one real, non-symlinked file the harness reads unconditionally. The
-> obvious candidate — make `.claude/settings.json` the one machinery file `install.sh`
-> **copies** instead of links, with the check inlined in the hook command so no script file
-> can dangle — costs the property every other machinery file has: edits under `plugin/`
-> would stop reaching already-stamped instances, and `install.sh` would have to start
-> editing a settings file it currently promises never to touch. That is a deliberate trade,
-> not a bug fix, so it is recorded here for a decision rather than made in a hook.
+**Detection.** `plugin/hooks/session-banner.sh` runs at `SessionStart` — as a **plugin**
+hook, so it fires in every project on the machine — probes five paths a symlink-era stamp
+wrote, and if any of them is still a symlink it names them, names the checkout they point
+into, and prints `/ai-bridge:init <bundle>`. It never repairs anything itself. In a
+converted bundle that section of the banner is **absent**, and in a non-bridge project the
+banner prints nothing at all and exits 0.
+
+**The hole this used to leave is closed by the move, and it is worth recording why.** The
+detector was built out of the machinery it checked: `.claude/settings.json` was itself one
+of the symlinks, so a wholesale move dangled it, Claude Code had no project settings, the
+hook was never registered, and it could not run. A detector made of symlinks cannot see
+its own failure. The hook is registered by `plugin/hooks/hooks.json` now — a real file in
+the plugin tree, which the plugin manager replaces whole — so nothing a bundle does can
+stop it from firing.
 
 ---
 
@@ -372,7 +371,7 @@ Details worth knowing before you pick one:
 2. **It colours only a TTY, and honours `NO_COLOR`.** A board redirected into a file, a
    ticket or a PR body carries no escape codes. `--color always` forces colour anyway;
    `--width N` pins the layout, which is what makes the output reproducible.
-3. **`watch-board.sh` writes into `.board-live/`, which is gitignored** (`install.sh`
+3. **`watch-board.sh` writes into `.board-live/`, which is gitignored** (`/ai-bridge:init`
    appends the line, so instances stamped before it existed get it too). It re-renders on
    any change to this instance's task documents, and on any watched instance's snapshot
    being rewritten.
@@ -390,7 +389,7 @@ Details worth knowing before you pick one:
 
 **On by default, off by `board: false`.** (Changed 2026-08-23: it used to be opt-in by presence, with `rm` permanent. That inverted the common case — every instance stamped before the board existed silently stayed off it, and three of three real instances were in that state. The decision now lives in `board` in `instance.config.json`, where it is visible and survives a re-stamp. A `rm` still drops an instance off immediately, but the next stamp restores it unless config says otherwise. A snapshot is a LOCAL gitignored file — having one does not publish anything.)
 
-**Who creates the file, and who does not.** `install.sh` creates `SNAPSHOT.json` on
+**Who creates the file, and who does not.** `/ai-bridge:init` creates `SNAPSHOT.json` on
 **any** stamp where it is missing and `board` is not `false` — not the first stamp only,
 which is how `AWAITING.md` works and is the thing this paragraph used to say. The writer
 rewrites it just when it already exists and never creates it; `build-board.sh` leaves a
@@ -477,7 +476,7 @@ Full reasoning, including why one drifted instance must not blank the board for 
 | `PRUNE_ACTIVE_MINUTES` | env | the recursive mtime veto in the worktree report |
 | `worktreeRoot` | `instance.config.json` | **`<reposRoot>/_wt`** |
 | `boardInstances` | `instance.config.json` | just this instance |
-| `board` | `instance.config.json` (tracked; read by `install.sh` **and** by each tick) | **on** — `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something commits the tracked `/board.html` |
+| `board` | `instance.config.json` (tracked; read by `/ai-bridge:init` **and** by each tick) | **on** — `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something commits the tracked `/board.html` |
 | `codegraphSkip` | `instance.config.json` | index every product repo |
 
 One hard rule holds regardless of `maxAgentsInFlight`: never two package installs against
@@ -521,7 +520,7 @@ no entry prints nothing on stdout and exits 1 — the caller then inherits the s
 rather than guessing. **Absence is not silent, though: it writes a line to stderr naming
 the agent, the lookup that failed and that consequence — report that line to the human
 rather than dispatching on a guess.** The fix goes in `instance.config.local.json`, which
-`install.sh` seeds with both keys. This applies to **every** dispatch, including an ad-hoc
+`/ai-bridge:init` seeds with both keys. This applies to **every** dispatch, including an ad-hoc
 one from a main session, which is the path the prose version of this rule never reached.
 
 ### One tick at a time (the dispatch lock)
@@ -885,7 +884,7 @@ only**, which is the channel that rule is addressed to. The trigger is unchanged
 shipped does not have the rule** — `CLAUDE.md` is seed content, copied once and never
 overwritten, so merge the paragraph in by hand if you want the offer.
 
-**A new hook reaches an instance only when you re-stamp it.** `bash <ai-bridge>/install.sh
+**A new hook reaches a machine only when the plugin updates.** `claude plugin update
 <instance>` links `session-banner.sh` and retires the three dangling links its predecessors
 left behind. Until then the instance runs whatever its own `.claude/hooks/` still points
 at.
@@ -925,12 +924,12 @@ setting ships **commented out** in `seed/bridge.code-workspace`, so an unstamped
 loses the pin rather than pointing terminals at a directory that doesn't exist (which
 blocks terminal launch outright).
 
-**`repos/`.** Created and refreshed by **`scripts/link-repos.sh`** (run by `install.sh`;
+**`repos/`.** Created and refreshed by **`scripts/link-repos.sh`** (run by `/ai-bridge:init`;
 run it again on its own after cloning a repo — no full refresh needed). It links every
 directory under `reposRoot` that has a `.git` and whose name doesn't start with `_`, which
 skips sibling instances and the `_wt/` worktree root, and it never links the instance
 holding the view — that would recurse. Stale links are pruned, real files there are never
-touched, and `--remove` tears the view down (as `install.sh --uninstall` does). It's
+touched, and `--remove` tears the view down (as `init-bundle.sh --uninstall` does). It's
 **gitignored**: symlinks into a machine-local path, so committing them would dangle on
 every other machine. The seeded workspace file sets `search.followSymlinks: false` so
 editor search doesn't report every hit twice, once per route.
@@ -954,7 +953,7 @@ cwd doesn't exist.
 The old `/status` command and `DASHBOARD.md` are gone. In each existing instance:
 
 1. Replace the `DASHBOARD.md` line in its `.gitignore` with `AWAITING.md` (that line is
-   seed content, so `install.sh` won't rewrite it for you).
+   seed content, so `/ai-bridge:init` won't rewrite it for you).
 2. `rm DASHBOARD.md` — it's a derived, gitignored leftover that nothing reads now.
 3. `touch AWAITING.md` if you want the startup queue; skip it if you don't.
 4. **Port the prose in its `CLAUDE.md`** — also seed content, so also not rewritten for
@@ -1026,7 +1025,7 @@ Six properties, and the first is the one to remember:
 
 1. **`board` is the switch, and it is the same key the installer reads.** `board: false`
    in the tracked `instance.config.json` ⇒ the tick renders nothing and says nothing;
-   absent or `true` ⇒ it renders and reports the path. `install.sh` reads that same key at
+   absent or `true` ⇒ it renders and reports the path. `/ai-bridge:init` reads that same key at
    **stamp** time (`cfg_bool board true`) to decide whether `SNAPSHOT.json` is seeded at
    all, so one key has two readers at the two ends of the lifecycle — deliberately not two
    keys, and deliberately not the local override file, which the installer does not read.
@@ -1034,9 +1033,9 @@ Six properties, and the first is the one to remember:
    the caveat
    [conventions.md invariant 4](conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file)
    ends on: machinery is re-linked unconditionally, so a file-shaped switch gets switched
-   back on by the next `install.sh`.)
+   back on by the next `/ai-bridge:init`.)
 2. **The path is the one the watcher already uses.** `.board-live/board.html` is
-   `watch-board.sh`'s default output and is gitignored by `install.sh`, so the tick and
+   `watch-board.sh`'s default output and is gitignored by `/ai-bridge:init`, so the tick and
    the watcher keep **one** board rather than two, and there is nothing new to ignore.
    Never commit it.
 3. **The tick reports the path, not a promise of freshness.** One line —
@@ -1054,7 +1053,7 @@ Six properties, and the first is the one to remember:
    which is not what the snapshot's field allowlist was ever scoped for. Measured
    2026-09-02 on the three private bundles: `has_pages: false`, and
    `GET /repos/<owner>/<repo>/pages` → 404 on each. `seed/.gitignore` therefore does
-   **not** ignore `board.html`, and `install.sh` appends a `!/board.html` un-ignore to
+   **not** ignore `board.html`, and `/ai-bridge:init` appends a `!/board.html` un-ignore to
    instances stamped while it did.
 6. **The trailing `.` is load-bearing, and the tracked copy is why.** Given no instance
    directory `build-board.sh` discovers instances from `boardInstances`, which on a real
@@ -1141,5 +1140,5 @@ board; if you cannot, there is no URL that would help you.
 **If `board.html` is missing or stale after a pull:** the tick commits it only when it
 changed something, so a quiet day leaves the file where the last real tick left it — its
 masthead timestamp says which. An instance stamped before the file was tracked also needs
-one `install.sh` run to pick up the `!/board.html` un-ignore; until then the tick renders
+one `/ai-bridge:init` run to pick up the `!/board.html` un-ignore; until then the tick renders
 the page and stages nothing. `board: false` means it is never rendered at all.

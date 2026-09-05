@@ -96,18 +96,18 @@ It does three things, and **none of them is a symlink into a checkout**:
 | # | Action | Detail |
 |---|---|---|
 | 1 | **Copies** `seed/` content — only if absent | never clobbers bundle data |
-| 2 | **Converts** a bundle stamped by the retired `install.sh` | removes its machinery links and the managed `.gitignore` block; the data is untouched |
+| 2 | **Converts** a bundle stamped by the retired `/ai-bridge:init` | removes its machinery links and the managed `.gitignore` block; the data is untouched |
 | 3 | **Links** the group's repos into `<bundle>/repos/` | skipped while `reposRoot` is the seeded placeholder. **The only symlinks a stamped bundle holds.** |
 
 It is idempotent. It backs up any conflicting real file as `<name>.bak.<epoch>`.
 `--refresh-seeds` additionally 3-way merges a seed change this repo has made since the
 bundle was stamped; without it that drift is reported and nothing is written.
 
-> **This replaced `install.sh`, and the reason is structural.** A plugin-shipped installer
+> **This replaced `/ai-bridge:init`, and the reason is structural.** A plugin-shipped installer
 > cannot stamp absolute symlinks into a plugin cache whose path changes on every update —
 > every one of them would dangle. The symlinks existed so a `git pull` of this repo
 > propagated into every bundle; `claude plugin update` gives that property for the whole
-> tree, so they lost their reason to exist. `install.sh` and `upgrade.sh` ship for one
+> tree, so they lost their reason to exist. `/ai-bridge:init` and `/ai-bridge:welcome fix` ship for one
 > version as stubs that print the command to run instead.
 
 #### It also asks who the team is — once
@@ -486,7 +486,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 
 | Script | Does | Writes? |
 |---|---|---|
-| `init-bundle.sh` | `<dir>` — creates or refreshes a bundle, and converts one stamped by the retired `install.sh`: seed content copied where absent, machinery links removed, `repos/` linked. `--config` links the `~/.claude` layer instead | yes, that bundle |
+| `init-bundle.sh` | `<dir>` — creates or refreshes a bundle, and converts one stamped by the retired `/ai-bridge:init`: seed content copied where absent, machinery links removed, `repos/` linked. `--config` links the `~/.claude` layer instead | yes, that bundle |
 | `refresh-seeds.sh` | `<dir>` — 3-way merges a seed change this repo made since the bundle was stamped; a hand-diverged file is reported, never forced, and its conflicted merge is saved as `.bak.<epoch>` | only with `--apply` |
 | `validate-bundle.sh` | schema errors + dangling frontmatter references | no |
 | `migrate-bundle.sh` | mechanical schema repairs | only with `--apply` |
@@ -528,9 +528,9 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `/ai-bridge:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine (or Claude Code has not restarted since) — never the stamp, which delivers no commands at all now | `/plugin marketplace add cbmono/ai-bridge`, `/plugin install ai-bridge@ai-bridge`, then `/exit` and relaunch |
-| A command or agent is missing after a pull | it is a **new** `plugin/` file, so no symlink exists yet | `install.sh <instance>` |
-| A seed change from a pull never arrived | seed is copied only when absent, by design | `./upgrade.sh <instance>` and port what it reports |
-| Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `install.sh` from the main working tree |
+| A command or agent is missing after a pull | it is a **new** `plugin/` file, so no symlink exists yet | `/ai-bridge:init <bundle>` |
+| A seed change from a pull never arrived | seed is copied only when absent, by design | `/ai-bridge:welcome fix` and port what it reports |
+| Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `/ai-bridge:init` from the main working tree |
 | Installer exits 2, "refusing to install from a git worktree" | working as designed | `git -C <src> worktree list` — the first entry is the main tree |
 | The startup nudge is empty | `AWAITING.md` was deleted, or the PM reshaped its layout | `touch AWAITING.md`; `session-banner.sh` greps the heading and bullets **literally** |
 | An instance is missing from the board | it has no `SNAPSHOT.json`, or `boardInstances` doesn't name it | `touch SNAPSHOT.json` in it |
@@ -540,17 +540,17 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | A `yolo` project never merges anything | preflight failed: one `gh` identity, no external reviewer, or no required checks | the loop says which; fix that, or merge by hand |
 | `required-checks.sh` exits 2 | the platform probe returned something it cannot classify | that is a refusal by design — read the message, don't loosen the script |
 | A PR is all-green but not merge-eligible | the reviewer published "Review limit reached" behind a green check — `review-clearance.sh` exit 1 | wait for the reopen time it quotes, then ask for a **first** review; nothing re-reviews a skipped PR by itself |
-| `required-checks.sh` exits 2, "review-clearance.sh not found" | the instance predates the review gate, so the new machinery isn't linked yet | `install.sh <instance>` — until then it refuses rather than clear a reviewer check it cannot interpret |
+| `required-checks.sh` exits 2, "review-clearance.sh not found" | the instance predates the review gate, so the new machinery isn't linked yet | `/ai-bridge:init <bundle>` — until then it refuses rather than clear a reviewer check it cannot interpret |
 | `required-checks.sh` exits 1, "no independent review clears" | every required check is green but no review artifact clears the head — the gate no longer decides from a check's *name* whether a reviewer is involved | ask for a review at the current head; if the repo genuinely has no reviewer, that is the thing to fix, not the gate |
-| `required-checks.sh` exits 2, "present but does not run" | the linked sibling is broken, or predates its `--self-test` contract; a mode bit is not proof a file executes | `install.sh <instance>` to relink — a sibling that fails every call looks exactly like "no reviewer is required", so this refuses |
+| `required-checks.sh` exits 2, "present but does not run" | the linked sibling is broken, or predates its `--self-test` contract; a mode bit is not proof a file executes | `/ai-bridge:init <bundle>` to relink — a sibling that fails every call looks exactly like "no reviewer is required", so this refuses |
 | `review-rounds.sh` exits 1 | the PR has already had its two verification rounds — this is the cap doing its job, not a fault | stop reviewing: put both positions (reviewer / implementer / what the criterion asks) in front of the human and let them decide |
 | An agent reported "done" but no PR ever appeared | it parked before opening one — `check-dispatch.sh` exit 1, the parked signature | one message to that agent: open the PR on what it already committed. Never re-dispatch the task |
 | `review-clearance.sh` exits 4 on a PR that *was* reviewed | the reviewer read an earlier push and does not re-review (`auto_incremental_review: false`) — the review is **stale**, not absent | ask for a review at the current head; this is the common case here, not a bug |
 | `review-clearance.sh` exits 4, "carries no evidence that a review was COMPLETED" | the only artifact is the reviewer's *"currently processing"* placeholder or similar — it names the head but nothing says anybody read it | wait for the real review, or ask for one; not-a-refusal is not a review, and clearing on it was a live false pass |
 | CodeRabbit: "Unable to determine base branch" | a remote-less instance has no `origin/HEAD` to infer one from | `git config coderabbit.baseBranch <branch>` |
-| Validator errors right after an upgrade | the machinery updated, the data didn't | `./upgrade.sh <instance>` runs validate → migrate in the right order |
+| Validator errors right after an upgrade | the machinery updated, the data didn't | `/ai-bridge:welcome fix` runs validate → migrate in the right order |
 | Two loops dispatched the same task | `defaultOwner` is not set on a shared bundle | [docs/sharing.md](docs/sharing.md) |
-| Machinery symlinks all dangle on a second machine | intentional — machinery is machine-local | re-run `install.sh` there |
+| Machinery symlinks all dangle on a second machine | intentional — machinery is machine-local | re-run `/ai-bridge:init` there |
 
 ---
 
@@ -570,7 +570,7 @@ The version lives in one place — [`VERSION`](VERSION) at this root, one line, 
 and no changelog. **There is no release process here and none is wanted.**
 
 **A change to `core` proposes the bump; you approve it by merging.** `core` is a closed
-list — `plugin/`, `seed/`, `config/`, `install.sh`, `upgrade.sh`, `RETIRED` — and it is
+list — `plugin/`, `seed/`, `config/`, `/ai-bridge:init`, `/ai-bridge:welcome fix`, `RETIRED` — and it is
 exactly what the two path-scoped rule files ([`.claude/rules/machinery.md`](.claude/rules/machinery.md),
 [`.claude/rules/installer.md`](.claude/rules/installer.md)) already govern, so an agent
 editing one of those paths meets the rule as it opens the file. A PR touching only `docs/`,
@@ -584,7 +584,7 @@ behaviour that already shipped, **minor** for a new capability or a new file und
 
 **Why the number matters more than a label.** An instance consumes this template through
 per-file symlinks, so most merges reach it live — but a **new** file under `plugin/` does
-not arrive until `install.sh` runs again, and `seed/` content is copied once, ever. That
+not arrive until `/ai-bridge:init` runs again, and `seed/` content is copied once, ever. That
 gap has cost real time: two hooks merged and sat inert in every instance for a week.
 
 So the session banner prints one line — and only one, and only sometimes. The two numbers
@@ -631,7 +631,7 @@ Agent-facing rules are in [`CLAUDE.md`](CLAUDE.md) and [`.claude/rules/`](.claud
 ai-bridge used to live as an `ai-bridge/` subtree inside
 [`ai-setup`](https://github.com/cbmono/ai-setup), the Claude Code defaults repo. **This
 repo is now the canonical copy** — every instance's machinery is symlinked from *this*
-checkout, and `install.sh` and `upgrade.sh` here are the ones to run.
+checkout, and `/ai-bridge:init` and `/ai-bridge:welcome fix` here are the ones to run.
 
 `ai-setup` **no longer carries the subtree** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69)
 removed it, because a stale second copy that documentation still described as live was
@@ -659,7 +659,7 @@ section is inlined in `seed/CLAUDE.md`, so nothing can dangle.
 
 **`${CLAUDE_CONFIG_DIR:-~/.claude}` is owned by
 [`cbmono/ai-setup`](https://github.com/cbmono/ai-setup)** — the commands, hooks, output
-style, skills and `settings.json` all install from there. Run *that* repo's `install.sh`
+style, skills and `settings.json` all install from there. Run *that* repo's `/ai-bridge:init`
 for those.
 
 ai-bridge installs into that directory too, but only the paths **it probes for**: three
@@ -673,7 +673,7 @@ existed only in the fork closed *secret-exposure* paths the public repo was stil
 `tests/config-ownership.test.sh` fails if the fork starts growing back.
 
 ```bash
-~/workspace/ai-bridge/install.sh --config
+~/workspace/ai-bridge/init-bundle.sh --config
 ```
 
 It links **one file at a time** into `${CLAUDE_CONFIG_DIR:-~/.claude}`. A real file in the
@@ -700,12 +700,12 @@ completely unaffected (`--config` then exits 2 saying there is nothing to link).
 2. **It never writes *through* a symlinked directory.** ai-setup links `~/.claude/agents` as a whole directory, so on a machine that ran its installer every entry here has a symlinked parent. When the file already resolves through it, the requirement — *this agent exists on this machine* — is met, so `--config` reports `provided by …` and writes nothing. When it does **not** resolve, nobody ships it and writing would land inside the other checkout: `--config` skips it, names it, prints the `mv` that fixes it, and exits non-zero. Either way the two installers compose in any order.
 3. **`settings.json` is not ours at all.** This layer does not ship one, does not link one, and does not report on one. A link left over from when it did is retired by the sweep in rule 4.
 4. **A retired file's link is swept — and it says where the file went.** Delete something from `config/` and the next `--config` removes the dangling link. Delete or hide *everything* and it does the opposite: an empty source list is refused rather than acted on, loudly and non-zero, because "nothing is shipped" and "I could not read the checkout" produce the same empty list and only the first licenses a delete. Removing the tier **directory** is the way to mean the first. A dangling command still registers with Claude Code; a dangling hook exits 127 every launch. The sweep is also what performs the **handover**: this layer used to ship ~21 more paths, so an existing machine's first run on the new layer retires them all at once, and it prints that they moved to [`cbmono/ai-setup`](https://github.com/cbmono/ai-setup) rather than leaving a user told only what vanished. Steady-state runs stay quiet.
-5. **Nothing here is required.** An instance never needs the config layer, and the config layer never needs an instance. `install.sh <dir>` behaves exactly as it always did.
+5. **Nothing here is required.** An instance never needs the config layer, and the config layer never needs an instance. `/ai-bridge:init <dir>` behaves exactly as it always did.
 
 ### Uninstall
 
 ```bash
-~/workspace/ai-bridge/install.sh --config --uninstall
+~/workspace/ai-bridge/init-bundle.sh --config --uninstall
 ```
 
 Removes only the symlinks it created — everywhere it created them, which includes a
@@ -718,5 +718,5 @@ still resolving into the checkout you had just detached from). Real files, `*.ba
 
 An instance stamped before this existed carries one line in its `CLAUDE.md`:
 `@~/.claude/claude-defaults.md`. That file is no longer shipped, and a missing `@import`
-fails **silently**. `install.sh <instance>` now reports it. Replace that line with the
+fails **silently**. `/ai-bridge:init <bundle>` now reports it. Replace that line with the
 `## Session defaults` section from [`seed/CLAUDE.md`](seed/CLAUDE.md).

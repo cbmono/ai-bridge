@@ -540,7 +540,7 @@ it needs it to exist in a fresh clone.
 `instance.config.json` is **tracked**, so every value in it is a statement both clones
 read. Some values cannot be shared: an absolute path on one machine, or which human a
 clone belongs to. Those go in **`instance.config.local.json`** beside it — gitignored
-(`install.sh` adds the line), read **first**, and **entirely optional: no local file
+(`/ai-bridge:init` adds the line), read **first**, and **entirely optional: no local file
 means the tracked file answers exactly as it always did.**
 
 **JSON `null` is ABSENCE, not a value.** A key or entry set to `null` in either file reads
@@ -560,8 +560,8 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `reposRoot` | **yes** — an absolute path on this machine | the readers report it as unset and skip; nothing is guessed |
 | `worktreeRoot` | **yes** — an absolute path on this machine | `<reposRoot>/_wt`, which is also still swept as the legacy root |
 | `boardInstances` | **yes** — a list of paths to sibling instances | just this instance |
-| `board` | **no** — one instance, one answer, and `install.sh` reads it from the tracked file at stamp time | on: `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something commits the tracked `/board.html` |
-| `models` | **yes**, and **seeded** — which model each tier costs **this human**. `install.sh` writes this key into the local file on any stamp that finds it missing, so local is normally the layer in force and the banner reads `local` | the tracked map, which stays as the fallback; absent from **both**, `resolve-model.sh` prints nothing on stdout, **says so on stderr**, and exits 1 |
+| `board` | **no** — one instance, one answer, and `/ai-bridge:init` reads it from the tracked file at stamp time | on: `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something commits the tracked `/board.html` |
+| `models` | **yes**, and **seeded** — which model each tier costs **this human**. `/ai-bridge:init` writes this key into the local file on any stamp that finds it missing, so local is normally the layer in force and the banner reads `local` | the tracked map, which stays as the fallback; absent from **both**, `resolve-model.sh` prints nothing on stdout, **says so on stderr**, and exits 1 |
 | `roleTiers` | **yes**, and **seeded** on the same terms — the same bill, per agent. **A partial override replaces only the entries it names**, so moving one agent to a cheaper tier leaves every other agent's tier standing, and the installer never tops a partial map up | as `models` above |
 | `maxAgentsInFlight` | **yes** — how many agents **this machine** can carry (below) | the tracked value; absent from both, `resolve-max-agents.sh` prints nothing and exits 1, and the caller applies the fallback its own document states |
 | `defaultOwner` | **no, by design** | step 4 above: unowned, so every clone treats it as its own |
@@ -584,7 +584,7 @@ the cap. Neither script invents a value it cannot find; both print nothing on st
 exit 1 instead, and the caller applies its own documented fallback.
 
 **`models` and `roleTiers` are SEEDED into the local file, and the tracked pair is the
-fallback — both halves are load-bearing.** `install.sh` writes them into
+fallback — both halves are load-bearing.** `/ai-bridge:init` writes them into
 `instance.config.local.json` on any stamp that finds the key missing, seeded from the
 tracked values when present and from the documented defaults (`light→haiku`,
 `standard→sonnet`, `deep→opus`, `apex→fable`) when not. That is what makes spend a
@@ -597,7 +597,7 @@ The tracked keys were **not** removed in the same change, and that is the design
 exit code inherits the session model — for every role at once, with nothing anywhere
 saying so. Removing the tracked pair first would open exactly that window on any instance
 the seeding step had not yet reached, and **a merge is not a stamp**: an instance is
-re-stamped only when somebody runs `install.sh`. With both layers present there is no
+re-stamped only when somebody runs `/ai-bridge:init`. With both layers present there is no
 ordering in which the pair resolves to nothing.
 
 **`maxAgentsInFlight` is deliberately NOT seeded.** It is overridable and per-machine
@@ -616,7 +616,7 @@ still exits 1 when a role has no tier or a tier has no alias — every caller ca
 stdout, and a word printed there becomes a model alias. But it now writes a line to
 **stderr** naming the agent, which lookup failed, both files, and the consequence: a
 caller that ignores the exit code dispatches on the session model. A caller must surface
-that line rather than dispatch on a guess. `install.sh` asks the same resolver after
+that line rather than dispatch on a guess. `/ai-bridge:init` asks the same resolver after
 seeding and warns by name about any role that still resolves to nothing.
 
 ### `maxAgentsInFlight` bounds an instance, not a machine — a known hole
@@ -654,7 +654,7 @@ value produced **one working board and one silently dead publish step** on which
 did not own the artifact. Then the owning account was switched and the page disappeared
 from under its own owner, which is the failure the key could not survive. Publishing is
 deleted outright: the board is now a local file each tick re-renders, `board` is the
-switch, and it is **not** overridable, because `install.sh` reads that same key from the
+switch, and it is **not** overridable, because `/ai-bridge:init` reads that same key from the
 tracked file at stamp time and a per-machine override would give one switch two answers.
 Nothing was lost on a shared bundle — the cross-owner view was never the published page.
 It is the *other owners* section that `scripts/build-board.sh` reads from the tracked task

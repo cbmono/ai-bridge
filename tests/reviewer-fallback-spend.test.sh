@@ -120,7 +120,7 @@ ok "…absent AUTONOMY.md means gated"      "$(saw "$PM_FLAT" '**`AUTONOMY.md` a
 
 # THE CAP, which this change must not spend. A "just dispatch the fallback" branch that
 # skipped review-rounds.sh would create the third round CONVENTIONS.md forbids.
-ok "the cap is counted before the spend"  "$(saw "$PM_FLAT" 'count with `scripts/review-rounds.sh` **before** dispatching')" yes
+ok "the cap is counted before the spend"  "$(saw "$PM_FLAT" 'count with `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh` **before** dispatching')" yes
 ok "…and nothing here creates a third round" "$(saw "$PM_FLAT" 'Nothing here creates a third')" yes
 
 # ============================================ 2. the scaffold surface: same policy, one-shot

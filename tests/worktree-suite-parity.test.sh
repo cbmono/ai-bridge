@@ -61,11 +61,22 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$(
 git -C "$REPO" worktree add -q --detach "$WT" HEAD >/dev/null 2>&1 || {
   echo "worktree-suite-parity.test: could not create a worktree from $REPO at HEAD." >&2; exit 2; }
 
-# --- half 1: the guard this task must not weaken is still there -------------
-guard_out="$(bash "$WT/plugin/scripts/init-bundle.sh" "$TMP/never-stamped" 2>&1)"; guard_rc=$?
-ok "install.sh still refuses to run from this worktree" "$guard_rc" 2
-ok "…still says why"                                     "$(printf '%s' "$guard_out" | grep -qi 'refusing to install from a git worktree' && echo yes || echo no)" yes
-ok "…still stamped nothing"                              "$(find "$TMP/never-stamped" -mindepth 1 2>/dev/null | wc -l | tr -d ' ')" 0
+# --- half 1: the guard, in the shape task-013 left it ----------------------
+# IT NARROWED, AND BOTH DIRECTIONS ARE PINNED HERE. The refusal covered a BUNDLE STAMP too,
+# because a stamp wrote 37 absolute symlinks into the source checkout — which is the very
+# reason this parity file exists: every harness had to copy the template out of the
+# worktree first. A bundle carries no machinery now, so the stamp writes no such link and
+# the refusal is gone with the hazard. `--config` still links into
+# ${CLAUDE_CONFIG_DIR:-~/.claude} by absolute path, so for that half nothing changed.
+stamp_out="$(bash "$WT/plugin/scripts/init-bundle.sh" "$TMP/stamped-from-wt" 2>&1)"; stamp_rc=$?
+ok "a BUNDLE stamp from this worktree is allowed"        "$stamp_rc" 0
+ok "…and it really stamped"                              "$([ -f "$TMP/stamped-from-wt/instance.config.json" ] && echo yes || echo no)" yes
+ok "…leaving no symlink behind"                          "$(find "$TMP/stamped-from-wt" -type l 2>/dev/null | wc -l | tr -d ' ')" 0
+cfg_dest="$TMP/cfgdest"; mkdir -p "$cfg_dest"
+guard_out="$(CLAUDE_CONFIG_DIR="$cfg_dest" bash "$WT/plugin/scripts/init-bundle.sh" --config 2>&1)"; guard_rc=$?
+ok "--config still refuses to run from this worktree"    "$guard_rc" 2
+ok "…still says why"                                     "$(printf '%s' "$guard_out" | grep -qi 'refusing to link the config layer from a git worktree' && echo yes || echo no)" yes
+ok "…still linked nothing"                               "$(find "$cfg_dest" -mindepth 1 2>/dev/null | wc -l | tr -d ' ')" 0
 
 # --- half 2: none of the six below still depends on install.sh having run from a
 # location the guard above would refuse ---------------------------------------

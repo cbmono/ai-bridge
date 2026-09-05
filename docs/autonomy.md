@@ -23,8 +23,8 @@ check, fail-closed. Full reasoning, including the one hazard the pattern does no
 [conventions.md invariant 4](conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file).
 
 > **The hazard, in one line.** `AUTONOMY.md` lives under `plugin/`, so it is machinery,
-> and `install.sh` re-links machinery unconditionally — a per-instance `rm` comes back on
-> the next `install.sh`/`upgrade.sh`. `upgrade.sh` samples the file's presence *before*
+> and `/ai-bridge:init` re-links machinery unconditionally — a per-instance `rm` comes back on
+> the next `/ai-bridge:init`/`/ai-bridge:welcome fix`. `/ai-bridge:welcome fix` samples the file's presence *before*
 > calling the installer and reports the re-enable with the `rm` to undo it.
 
 ## Modes
@@ -270,7 +270,7 @@ the extension, then grant it **per-site** permissions there.
 - **Each agent gets its own tab group**, not the human's open tabs. Agents must navigate from an explicit URL; they can't "look at the tab you have open".
 - **A headless/cron tick has no browser.** Agents degrade to a non-browser route and say so, rather than reporting the task blocked.
 
-> **Upgrading an existing instance:** re-running `install.sh` picks up `SCHEMA.md` and the
+> **Upgrading an existing instance:** re-running `/ai-bridge:init` picks up `SCHEMA.md` and the
 > role agents (symlinked), but **not** `CLAUDE.md` — seed content is copied only when
 > absent, never clobbered. Add the **Browser** bullet from `seed/CLAUDE.md`'s "Conventions
 > for role agents working in target repos" to your instance's `CLAUDE.md` by hand.

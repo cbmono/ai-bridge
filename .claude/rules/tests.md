@@ -42,7 +42,7 @@ for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done
 ## Run the suite from the MAIN checkout, never a worktree
 
 Four harnesses — `derived-indexes`, `link-repos`, `snapshot` and `board-renderers` —
-invoke this repo's own `install.sh`, and `install.sh` **refuses to run from a git worktree**
+invoke this repo's own `init-bundle.sh --config`, which **refuses to run from a git worktree**
 by design (it would create symlinks into a directory that `git worktree remove` later
 deletes). So running the suite inside a worktree fails those four, well over a hundred
 assertions, for a reason that has nothing to do with the code under test.
