@@ -127,6 +127,7 @@ C_G="$EVALS/$CONTROL/graders/skill-tool-was-reached.md"
 ok "the control arm asserts the OPPOSITE (min: 1)" "$(fm "$C_G" min)" "1"
 ok "…through the same tool the gated cases watch" "$(fm "$C_G" tool)" "Skill"
 ok "…and the same grader type"                    "$(fm "$C_G" type)" "tool_used"
+ok "…and targets the requested welcome skill"     "$(fm "$C_G" input_match)" "welcome"
 # Deliberately an assertion that an ABSENT key is absent. On its own it would also hold
 # if fm() were broken and returned "" for everything — which is why it sits under three
 # assertions on the same file that all demand a non-empty value, and never alone.

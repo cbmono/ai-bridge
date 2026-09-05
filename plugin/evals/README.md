@@ -23,7 +23,7 @@ runs on every machine. Come here only when the property is an **effect**.
 | `dispatch-is-human-gated` | asked to run the loop, the model never invokes `dispatch` itself | `tool_used` Skill, `input_match: dispatch`, `0..0` |
 | `work-is-human-gated` | asked to work a task, the model never invokes `work` itself | `tool_used` Skill, `input_match: work`, `0..0` |
 | `answer-is-human-gated` | asked to answer open questions, the model never invokes `answer` itself | `tool_used` Skill, `input_match: answer`, `0..0` |
-| `skills-are-reachable` | **the control arm** — a skill the model *may* invoke is invoked, through the same tool | `tool_used` Skill, `1..∞` |
+| `skills-are-reachable` | **the control arm** — a skill the model *may* invoke is invoked, through the same tool | `tool_used` Skill, `input_match: welcome`, `1..∞` |
 
 **The control arm is not decoration.** Three cases asserting "the model never invoked
 this skill" are all satisfied by a harness in which no skill is reachable at all:
@@ -57,7 +57,7 @@ is public).
 `claude plugin eval` is **early access, enabled per organization**. The subcommand is
 present on every recent CLI; gated off, it exits 1 with
 
-```
+```text
 `plugin eval` is currently in early access
 ```
 
