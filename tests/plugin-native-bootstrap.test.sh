@@ -238,6 +238,91 @@ bash "$INIT" "$LEG" >"$TMP/convert2.out" 2>&1
 ok "a second conversion retires nothing" "$(grep -c '^  retire ' "$TMP/convert2.out" | tr -d ' ')" 0
 ok "…and the human's link is still there" "$(yn test -L "$LEG/mynotes")" yes
 
+# =========================================================================================
+echo "== 5. the INSTALLED layout: a stamp from a plugin cache, with no checkout anywhere =="
+# =========================================================================================
+# THE SECTION THIS FILE WAS MISSING, AND THE BUG IT MISSED. Section 2 stamps from
+# `$REPO/plugin/scripts/`, which is a CHECKOUT — the only layout every harness here has
+# ever exercised. A marketplace install is `source: ./plugin`, so what lands on a machine
+# is the CONTENTS of `plugin/` under a version directory and nothing above it. Measured on
+# the real 0.15.0 cache, 2026-09-05: `agents/ evals/ hooks/ scripts/ skills/ README.md`,
+# and `init-bundle.sh` exited 2 with "cannot locate the ai-bridge template root". A
+# criterion of "no clone is needed" that is only ever verified against the repo is a
+# criterion verified against the one layout where it could not fail.
+#
+# The fixture is therefore built from `git ls-files plugin/` ALONE, flattened by one level,
+# under a parent that holds nothing else — so a rule that reaches upward finds what the
+# real cache offers it, which is nothing.
+CACHE="$TMP/cache/ai-bridge/ai-bridge/9.9.9"
+mkdir -p "$CACHE"
+( cd "$REPO" && git ls-files plugin ) | while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  rel="${f#plugin/}"
+  mkdir -p "$CACHE/$(dirname "$rel")"; cp "$REPO/$f" "$CACHE/$rel" 2>/dev/null || true
+done
+chmod +x "$CACHE"/scripts/*.sh "$CACHE"/hooks/*.sh 2>/dev/null || true
+
+# THE FIXTURE IS THE BROKEN SHAPE, asserted before anything is run against it. Without
+# these three lines the section below could pass on a fixture that is quietly a checkout.
+ok "the cache fixture carries VERSION where the plugin ships it" "$(yn test -f "$CACHE/VERSION")" yes
+ok "…and seed/ beside scripts/"                                  "$(yn test -d "$CACHE/seed")" yes
+ok "…and the OLD rule's target does not exist"                   "$(yn test -e "$CACHE/../VERSION")" no
+ok "…nor does a marketplace manifest above it"                   "$(yn test -e "$CACHE/../.claude-plugin/marketplace.json")" no
+
+CFRESH="$TMP/_ai-bridge-from-cache"
+CLAUDE_PLUGIN_ROOT="$CACHE" bash "$CACHE/scripts/init-bundle.sh" "$CFRESH" >"$TMP/cache.out" 2>&1
+CRC=$?
+ok "the stamp exits 0 from the installed layout" "$CRC" 0
+[ "$CRC" -eq 0 ] || sed 's/^/        /' "$TMP/cache.out" >&2
+ok "…with instance.config.json"                  "$(yn test -f "$CFRESH/instance.config.json")" yes
+ok "…the seed docs"                              "$(yn bash -c 'test -f "$1/CLAUDE.md" && test -f "$1/SCHEMA.md" && test -f "$1/CONVENTIONS.md" && test -f "$1/agents/index.md"' _ "$CFRESH")" yes
+ok "…and its own .claude/settings.json"          "$(yn test -f "$CFRESH/.claude/settings.json")" yes
+ok "validate-bundle.sh reports no error" \
+   "$( ( cd "$CFRESH" && bash "$CACHE/scripts/validate-bundle.sh" >/dev/null 2>&1 ); echo $? )" 0
+CBANNER="$(CLAUDE_PROJECT_DIR="$CFRESH" CLAUDE_PLUGIN_ROOT="$CACHE" bash "$CACHE/hooks/session-banner.sh" 2>&1)"
+ok "the welcome banner prints"                   "$([ -n "$CBANNER" ] && echo yes || echo no)" yes
+ok "…and raises no machinery alarm"              "$(printf '%s' "$CBANNER" | grep -c 'MACHINERY SYMLINKS' | tr -d ' ')" 0
+# THE VERSION REACHES THE HEADER, which is the other half of "readable from inside the
+# plugin": before the mirror the banner looked one directory ABOVE the cache and found
+# nothing, so an installed plugin printed a versionless header.
+ok "…and the header carries the plugin's own version" \
+   "$(printf '%s\n' "$CBANNER" | grep -cF "AI-Bridge v$(head -n 1 "$REPO/VERSION")" | tr -d ' ')" 1
+# BYTE-FOR-BYTE THE SAME BUNDLE either layout stamps. A cache run that merely EXITS 0
+# while seeding something different is the failure this catches, and it is the assertion
+# that makes the rest of this section about the LAYOUT rather than about exit codes.
+# Against a bundle stamped fresh here rather than section 2's `$FRESH`, which that section
+# then re-stamps and mutates — comparing to it would compare two histories, not two
+# layouts. The exclusions are the four paths that are per-bundle by construction: the
+# workspace file is named after the directory, and the other three are generated.
+RFRESH="$TMP/_ai-bridge-from-repo"
+bash "$INIT" "$RFRESH" >"$TMP/repo-layout.out" 2>&1
+ok "the checkout layout stamps its own control bundle" "$?" 0
+ok "the two layouts stamp identical seed content" \
+   "$(yn bash -c 'diff -r -q --exclude=.git --exclude=instance.config.local.json --exclude=SNAPSHOT.json --exclude=.board-live --exclude=*.code-workspace "$1" "$2" >/dev/null' _ "$RFRESH" "$CFRESH")" yes
+# …and the same comparison sees a difference when there is one.
+printf 'planted\n' >> "$CFRESH/CLAUDE.md"
+ok "…and that comparison catches a planted difference" \
+   "$(yn bash -c 'diff -r -q --exclude=.git --exclude=instance.config.local.json --exclude=SNAPSHOT.json --exclude=.board-live --exclude=*.code-workspace "$1" "$2" >/dev/null' _ "$RFRESH" "$CFRESH")" no
+
+# NON-VACUITY, by mutation: the derivation is VERIFIED, not assumed. Take `seed/` away and
+# the same run must refuse rather than stamp an empty bundle — which is what tells this
+# apart from a script that would accept any directory it is started from.
+MUT="$TMP/cache-mut"; cp -R "$CACHE" "$MUT"; rm -rf "$MUT/seed"
+bash "$MUT/scripts/init-bundle.sh" "$TMP/_never" >"$TMP/mut.out" 2>&1
+ok "a plugin root with no seed/ is REFUSED"      "$?" 2
+ok "…naming the plugin root it could not verify" "$(grep -c 'cannot locate the ai-bridge plugin root' "$TMP/mut.out" | tr -d ' ')" 1
+ok "…and nothing was stamped"                    "$(yn test -e "$TMP/_never")" no
+
+# `--config` is the ONE thing an installed plugin cannot do, and it must say so by name.
+# `config/` links absolute paths into ${CLAUDE_CONFIG_DIR:-~/.claude}, a per-machine
+# decision, so it deliberately stays outside the plugin — and the refusal has to be
+# distinguishable from "some directory is missing" or nobody knows to clone.
+CLAUDE_CONFIG_DIR="$TMP/cfgdest" bash "$CACHE/scripts/init-bundle.sh" --config >"$TMP/cfg.out" 2>&1
+ok "--config from an installed plugin refuses"   "$?" 2
+ok "…saying a checkout is what it needs"         "$(grep -c 'needs a checkout of this repo' "$TMP/cfg.out" | tr -d ' ')" 1
+ok "…and printing the clone command"             "$(grep -c 'git clone' "$TMP/cfg.out" | tr -d ' ')" 1
+ok "…having written nothing into the config dir" "$(yn test -e "$TMP/cfgdest")" no
+
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
