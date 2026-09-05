@@ -275,6 +275,56 @@ assert "…and the seed ships none to restore"    "$(yes_if test ! -e "$TPL/plug
 AUT_OUT="$(bash "$TPL/plugin/scripts/refresh-seeds.sh" "$AUT" 2>&1)"
 assert "…so the refresh has nothing to warn about" "$(hasnt 'AUTONOMY' "$AUT_OUT")"
 
+echo "== the seed PATH MOVED, and the base is still found across the rename =="
+# ai-bridge-v2/task-024. #125 did `git mv seed plugin/seed`, and a by-path history lookup
+# sees only the commits at the NEW path — which, for a file whose last change was the move
+# itself, is one commit whose blob IS the current seed. `prior` then comes back empty, and
+# the script reads that as "this seed file has only ever held its current content, so the
+# difference is entirely the bundle's own" and stays SILENT. Nothing is reported, nothing
+# is wrong on the face of the report, and the seed change simply never reaches a bundle
+# stamped before the move — the worst shape a drift report has, because it looks clean.
+# So the assertions below are on the VERDICT. The unknown count is asserted too, because
+# 0 is what a moved seed must still produce and it is the number the bug was reported as.
+MTPL="$TMP/tpl-moved"
+mkdir -p "$MTPL/plugin/scripts"
+cp -R "$TPL_SRC/plugin/seed" "$MTPL/seed"
+cp "$TPL_SRC/plugin/scripts/init-bundle.sh" "$TPL_SRC/plugin/scripts/refresh-seeds.sh" \
+   "$TPL_SRC/plugin/scripts/validate-bundle.sh" "$MTPL/plugin/scripts/"
+cp "$TPL_SRC/VERSION" "$MTPL/plugin/VERSION"
+cp "$TPL_SRC/VERSION" "$MTPL/VERSION"
+printf '# Index\nline A\nline B\n'        > "$MTPL/seed/index.md"
+printf '# Panel\nintro line\ntail line\n' > "$MTPL/seed/CLAUDE.md"
+( cd "$MTPL" && git init -q -b main . && git add -A && gc "template, seed at seed/ (pre-move)" )
+
+# A bundle stamped from the PRE-MOVE seed. The stamp reads <plugin>/seed, so the seed is
+# copied there for the stamp and removed again — the tracked seed is still at seed/, which
+# is the state every real bundle was stamped in before #125.
+MINST="$TMP/group/_ai-bridge-moved"
+mkdir -p "$MINST"
+cp -R "$MTPL/seed" "$MTPL/plugin/seed"
+bash "$MTPL/plugin/scripts/init-bundle.sh" "$MINST" > "$TMP/moved-stamp.out" 2>&1
+rm -rf "$MTPL/plugin/seed"
+sed 's/^intro line$/intro line — HOUSE EDIT/' "$MINST/CLAUDE.md" > "$TMP/mc" && mv "$TMP/mc" "$MINST/CLAUDE.md"
+
+# The seed changes, still at the old path…
+printf 'line C (new in seed v2)\n' >> "$MTPL/seed/index.md"
+sed 's/^intro line$/intro line — TEMPLATE V2/' "$MTPL/seed/CLAUDE.md" > "$TMP/mc" && mv "$TMP/mc" "$MTPL/seed/CLAUDE.md"
+( cd "$MTPL" && git add -A && gc "seed v2, still at seed/" )
+# …and only THEN moves, so the newest commit at the new path is the rename itself.
+( cd "$MTPL" && git mv seed plugin/seed && gc "move seed/ under plugin/ — the #125 shape" )
+
+MOVED="$(bash "$MTPL/plugin/scripts/refresh-seeds.sh" "$MINST" 2>&1)"
+assert "a moved seed still reports 0 unknown"  "$(has 'summary: .* 0 unknown' "$MOVED")"
+assert "a copy stamped before the move is PORTABLE" "$(has 'PORTABLE  index.md' "$MOVED")"
+assert "…on a base found at the OLD path, verbatim" "$(has 'seed verbatim' "$MOVED")"
+assert "a hand-diverged copy still CONFLICTS"       "$(has 'CONFLICT  CLAUDE.md' "$MOVED")"
+assert "…and the conflict shows the seed change to port" "$(has 'TEMPLATE V2' "$MOVED")"
+MAPPLY="$(bash "$MTPL/plugin/scripts/refresh-seeds.sh" "$MINST" --apply 2>&1)"
+assert "--apply delivers the pre-move seed change"  "$(has 'PORTED    index.md' "$MAPPLY")"
+assert "…so the bundle now matches the moved seed" \
+  "$(yes_if cmp -s "$MTPL/plugin/seed/index.md" "$MINST/index.md")"
+assert "…and the hand-diverged file was not forced" "$(yes_if grep -q 'HOUSE EDIT' "$MINST/CLAUDE.md")"
+
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]
