@@ -765,7 +765,9 @@ bash "$LOCKSH" release --instance "$N" >/dev/null 2>&1
 # top of this file; what follows only pins that `--as` is validated rather than assumed.
 OUT="$(bash "$LOCKSH" acquire --as sideways --instance "$N" 2>&1)"; RC=$?
 ok "an unknown --as is refused"          "$RC" 3
-ok "…naming the two it accepts"          "$(printf '%s' "$OUT" | grep -qF 'launcher or tick' && echo yes || echo no)" yes
+# THREE since `--as loop` joined them (the interval-driven launcher). The refusal must name
+# the whole vocabulary or a typo reads as "not that one" rather than "one of these".
+ok "…naming the three it accepts"        "$(printf '%s' "$OUT" | grep -qF 'launcher, loop or tick' && echo yes || echo no)" yes
 OUT="$(bash "$LOCKSH" acquire --as --instance "$N" 2>&1)"; RC=$?
 ok "a bare trailing --as is refused too" "$RC" 3
 
