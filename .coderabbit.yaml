@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://www.coderabbit.ai/integrations/schema.v2.json
 #
-# One review per PR, then done.
+# One review per PR, ASKED FOR AT THE FINAL HEAD.
 #
 # Rationale: PRs here are agent-authored and land pre-reviewed (self-review, the test
 # suite), so CodeRabbit's job is a single fresh-context pass. Its findings get fixed in
@@ -17,15 +17,38 @@
 # Validate keys against the schema URL above before editing — don't invent keys.
 reviews:
   auto_review:
-    enabled: true
-    # "Re-run the review on each push." This is the main cost lever: with it off,
-    # a PR is reviewed once, when it opens. Push fixes freely — no re-review.
-    # Need another pass after a substantial rewrite? Ask for it explicitly with an
-    # `@coderabbitai review` comment.
+    # OFF, AND THE EXPLICIT REQUEST IS THE CONTRACT. An `@coderabbitai review` comment
+    # at the head the agent considers final is the ONLY thing that spends a review here.
+    #
+    # Why, measured on the three PRs that merged 2026-09-05/06 — #129, #130, #131 — every
+    # one of which carried a GREEN CodeRabbit check while declining to review, and every
+    # one of which merged on the owner's override with no independent clearance:
+    #   #131  a real review, but at no commit it names (review-clearance.sh exit 4, STALE)
+    #   #130  "Review limit reached", reopens in 1 minute   (exit 1, TRANSIENT)
+    #   #129  "Review limit reached", reopens in 23 minutes (exit 1, TRANSIENT)
+    # `auto_incremental_review: false` (below) already stopped the re-review per push, so
+    # the review that fired on OPEN was the whole remaining spend — and an agent pushes
+    # its self-review fixes after that, which makes that review stale by construction.
+    # #131 is that shape exactly. So the open-time review is not a free first look; it is
+    # a guaranteed-stale review bought out of the same hourly quota the final-head request
+    # needs, on an org that has hit CodeRabbit's fair-usage ceiling credits do not lift.
+    #
+    # THE TRADE-OFF, stated because it is real: an intermediate push now gets NO free
+    # review, and a PR nobody asks about gets NO review at all. The second half is the one
+    # that matters, and it is caught rather than trusted — `scripts/review-clearance.sh`
+    # answers exit 3 (no reviewer signal at all) and exit 0 is the only clearance, so an
+    # unrequested PR cannot ride a green check into a merge.
+    #
+    # Contract: https://docs.coderabbit.ai/reference/configuration#reviews
+    enabled: false
+    # "Re-run the review on each push." Kept pinned even with `enabled: false`, because
+    # the two keys answer different questions and re-enabling the one above must not
+    # silently restore per-push reviews with it.
     auto_incremental_review: false
     # Draft PRs aren't reviewed (already the default, pinned so the "review fires
     # once, when the PR is marked ready" contract is explicit): open as a draft
-    # while iterating, and the single review lands on `ready for review`.
+    # while iterating. With `enabled: false` this no longer fires a review on
+    # `ready for review` either — the explicit request is the only trigger.
     drafts: false
   # Don't narrate the diff back at us in prose+mermaid — the walkthrough and
   # high-level summary already cover it. (This is not about shell dialect: this

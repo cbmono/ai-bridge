@@ -486,6 +486,7 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `ownerGithubUser` | this clone has no configured human | **local file only** |
 | `maxAgentsInFlight` | **4** | yes |
 | `maxPrLoc` | **500** | yes |
+| `maxPrFiles` | **100** | yes |
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
 | `boardInstances` | the board is just this instance | yes |

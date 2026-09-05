@@ -115,8 +115,8 @@ to guess.
                "cataloguer": "standard", "auditor": "deep", "plan-architect": "apex" }
 ```
 
-`maxPrLoc` is optional in the same file — absent, the PR-size heuristic uses **500** — so
-add it only to move the threshold.
+`maxPrLoc` and `maxPrFiles` are optional in the same file — absent, the PR-size heuristic
+uses **500** lines and **100** files — so add either only to move that threshold.
 
 ### Moving a stamped bundle into the plugin era — run this once
 
@@ -496,6 +496,7 @@ Full reasoning, including why one drifted instance must not blank the board for 
 |---|---|---|
 | `maxAgentsInFlight` | `instance.config.json` | **4** — a throughput/cost throttle, not a safety lock |
 | `maxPrLoc` | `instance.config.json` | **500** — the agent **proposes** a split and opens the PR anyway; never a gate, never a review criterion |
+| `maxPrFiles` | `instance.config.json` | **100** — the same heuristic counted in FILES, because that is what the reviewer counts; same "propose, never block" status as `maxPrLoc` |
 | `PUSH_STATE_MAX` | env | **12** items per list in the per-turn state injection |
 | `PRUNE_ACTIVE_MINUTES` | env | the recursive mtime veto in the worktree report |
 | `worktreeRoot` | `instance.config.json` | **`<reposRoot>/_wt`** |
@@ -832,6 +833,18 @@ generated boilerplate, codemods, lockfiles and dense logic all move the real num
 line count cannot decide reviewability on its own. It is not a review criterion — no
 reviewer withholds clearance over it. An existing instance whose config predates the key
 needs no edit.
+
+**`maxPrFiles` (**100** when the key is absent) is the same heuristic counted in FILES,
+and it is the one the reviewer counts.** CodeRabbit's free plan refuses a pull request
+over 100 files outright — before any quota question, offering only "split the PR or
+upgrade" — so a PR past this number gets no independent review at all, whatever its line
+count says. The two keys are both needed because they disagree in both directions: a
+`git mv` sweep is 1 file per rename and almost no lines, while one generated lockfile is
+thousands of lines in a single file. Same status as `maxPrLoc` in every other respect —
+the agent proposes the split in the PR body and opens the PR anyway, and no reviewer
+withholds clearance over it. **The `project-manager` reads it one step earlier**, when a
+task's expected diff is already known to exceed it: it proposes splitting the *task*
+before dispatch, which is the only point at which the split is cheap.
 
 ### The session banner
 

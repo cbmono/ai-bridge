@@ -195,6 +195,7 @@ tracked_cfg() {
   "authorEmail": "you@example.com",
   "maxAgentsInFlight": 9,
   "maxPrLoc": 2000,
+  "maxPrFiles": 100,
   "models":    { "light": "haiku", "standard": "sonnet", "deep": "opus" },
   "roleTiers": { "software-engineer": "deep", "cataloguer": "standard" }
 }
@@ -207,6 +208,14 @@ assert "exit 0"                                  "$(eq "$RC" 0)"
 assert "no local file: maxAgentsInFlight is tracked"  "$(eq "$(from maxAgentsInFlight)" tracked)"
 assert "…and it is the tracked VALUE, 9"              "$(eq "$(value maxAgentsInFlight)" 9)"
 assert "…and maxPrLoc is tracked too"                 "$(eq "$(from maxPrLoc)" tracked)"
+# `maxPrFiles` IS PINNED BESIDE `maxPrLoc`, NOT INSTEAD OF IT. They are one PR-size
+# heuristic in two units — lines and files — and only the file count is enforced by the
+# external reviewer (a free-plan CodeRabbit refuses a PR over 100 files outright and
+# reviews none of it). A banner that surfaced one and not the other would hide the bound
+# that decides whether a PR gets reviewed at all, which is why the row is asserted here
+# rather than left to whoever remembers the key exists.
+assert "…and maxPrFiles is tracked beside it"         "$(eq "$(from maxPrFiles)" tracked)"
+assert "…and it is the tracked VALUE, 100"            "$(eq "$(value maxPrFiles)" 100)"
 # ONE `owner` ROW FOR TWO KEYS, and the FROM column still answers per key. Asserted in both
 # arrangements below: agreeing sources collapse to one word, disagreeing ones print both in
 # the order the values appear, because a merged row that reported one source would be
@@ -231,6 +240,7 @@ run
 assert "local override: maxAgentsInFlight now reads local" "$(eq "$(from maxAgentsInFlight)" local)"
 assert "…and shows the LOCAL value, 2"                     "$(eq "$(value maxAgentsInFlight)" 2)"
 assert "…while maxPrLoc, untouched, still reads tracked"   "$(eq "$(from maxPrLoc)" tracked)"
+assert "…and maxPrFiles, untouched, still reads tracked"   "$(eq "$(from maxPrFiles)" tracked)"
 assert "…and the owner row too"                            "$(eq "$(from owner)" tracked)"
 
 # The two halves of the merged row disagreeing: the FROM column must say so rather than
