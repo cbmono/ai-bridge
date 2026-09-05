@@ -721,7 +721,7 @@ state, and act only on deltas.
       published. Ask the resolver, never the file:
 
       ```bash
-      scripts/resolve-config.sh --source boardArtifactUrl
+      bash ${CLAUDE_PLUGIN_ROOT}/scripts/resolve-config.sh --source boardArtifactUrl
       ```
 
       Exit 1, or a first field of `tracked`, ⇒ **no line**. `tracked` is the deleted shape

@@ -8,7 +8,7 @@ argument-hint: "(no arguments)"
 Publish this instance's board as a **private artifact**, at **one URL that never
 changes**. Run it from the instance root.
 
-The page is the same page the tick already renders — `scripts/build-board.sh`, from
+The page is the same page the tick already renders — `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh`, from
 `SNAPSHOT.json` and nothing else. This skill adds no markup, no heading and no note of
 its own; what it publishes is the bytes the renderer wrote.
 
@@ -16,7 +16,7 @@ its own; what it publishes is the bytes the renderer wrote.
 
 1. **Confirm you are at an instance root** — `instance.config.json` is present. If it is
    not, say which directory this is and stop. Never improvise a board.
-2. **Refresh the data**: `scripts/write-snapshot.sh --quiet`. No `SNAPSHOT.json` ⇒ the
+2. **Refresh the data**: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet`. No `SNAPSHOT.json` ⇒ the
    writer writes nothing and exits 0 — that is how a human takes this instance off the
    board, so say so in one line and stop. Never create the file.
 3. **Read `board` from the tracked `instance.config.json`** — the same key `install.sh`
@@ -25,7 +25,7 @@ its own; what it publishes is the bytes the renderer wrote.
 4. **Render, scoped to this instance**, from the instance root:
 
    ```bash
-   scripts/build-board.sh --out .board-live/artifact-body.html .
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --out .board-live/artifact-body.html .
    ```
 
    **No `--standalone`**: the artifact host supplies `<!doctype>`, `<html>`, `<head>` and
