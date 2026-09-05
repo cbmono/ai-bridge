@@ -178,6 +178,19 @@ else
   echo "  SKIP  jq not installed — the manifest checks need it"
 fi
 
+# The vendor's own validator, when present. It is the closest thing to "installable" that
+# can be answered before the entry is on the default branch: `/plugin install` resolves the
+# marketplace from the REMOTE, so the install itself is only exercisable after merge — and
+# actually installing it here would arm delegated autonomy on this machine, which is a
+# decision, not a test step.
+if command -v claude >/dev/null 2>&1; then
+  vout="$(claude plugin validate "$YOLO" --strict 2>&1)"; vrc=$?
+  ok "claude plugin validate --strict passes on plugin-yolo" "$vrc" 0
+  [ "$vrc" -eq 0 ] || printf '%s\n' "$vout" | sed 's/^/        | /'
+else
+  echo "  SKIP  claude CLI not on PATH — the jq manifest checks above still hold"
+fi
+
 echo
 echo "== 7. the companion ships the capability file AND NOTHING ELSE core needs =="
 ok "plugin-yolo/companion/AUTONOMY.md exists" "$(yn test -f "$YOLO/companion/AUTONOMY.md")" yes
