@@ -100,6 +100,7 @@ echo "== 3. the gated cases pin the EFFECT of disable-model-invocation, both end
 for s in $GATED; do
   G="$EVALS/$s-is-human-gated/graders/$s-not-self-invoked.md"
   ok "$s: its grader ships"                     "$(yn test -f "$G")" yes
+  ok "…a tool_used grader, not a paid judge"    "$(fm "$G" type)" "tool_used"
   ok "…graded on the Skill tool"                "$(fm "$G" tool)" "Skill"
   ok "…scoped to this skill by input_match"     "$(fm "$G" input_match)" "$s"
   # min AND max, both zero. `max: 0` alone reads as "1..0" — min defaults to 1 — and a
@@ -117,6 +118,10 @@ done
 C_G="$EVALS/$CONTROL/graders/skill-tool-was-reached.md"
 ok "the control arm asserts the OPPOSITE (min: 1)" "$(fm "$C_G" min)" "1"
 ok "…through the same tool the gated cases watch" "$(fm "$C_G" tool)" "Skill"
+ok "…and the same grader type"                    "$(fm "$C_G" type)" "tool_used"
+# Deliberately an assertion that an ABSENT key is absent. On its own it would also hold
+# if fm() were broken and returned "" for everything — which is why it sits under three
+# assertions on the same file that all demand a non-empty value, and never alone.
 ok "…and sets no upper bound"                     "$(fm "$C_G" max)" ""
 
 # =======================================================================================
