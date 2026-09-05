@@ -697,9 +697,15 @@ check_config_layers() {
 # THE KNOWN SET IS THE SEED'S OWN KEY LIST — `seed/instance.config.json` in the template
 # this script already resolves itself from — because the seed ships every key the machinery
 # reads, and a name list here would be a second copy that drifts. Keys beginning `$` are
-# comments by convention, on both sides. ONE addition, justified by its reader the way the
-# tool vocabulary's hand-list entries are: `ownerGithubUser` is never seeded — it is
-# per-machine by design (docs/sharing.md) — but `task-owner.sh` reads it, so it is known.
+# comments by convention, on both sides. TWO additions, each justified by its reader the
+# way the tool vocabulary's hand-list entries are, and each never seeded for the same
+# reason — seeding a per-machine key writes one machine's answer into every clone:
+#   · `ownerGithubUser` — per-machine by design (docs/sharing.md); `task-owner.sh` reads it;
+#   · `boardArtifactUrl` — the page `/ai-bridge:board` published FROM THIS CLONE. Publishing
+#     is account-scoped, so exactly one account can update a given page and a tracked value
+#     is meaningless on the other clone; `session-banner.sh` reads it, from the local layer
+#     only. It is deliberately NOT in `seed/instance.config.json`, and
+#     tests/banner-board-line.test.sh fails if it appears there.
 #
 # AMBIGUOUS TIER, NO FIXER, for the `maxPrLoc` reason: deleting a key could delete a
 # decision. `fix` prints it and does nothing. No template seed to compare against — a
@@ -723,7 +729,8 @@ check_config_unknown_keys() {
     return 0
   fi
   known="$known
-ownerGithubUser"
+ownerGithubUser
+boardArtifactUrl"
 
   # A file jq cannot parse yields NO keys, and no keys reads exactly like no unknown keys —
   # a false healthy about a corrupt config, the false-zero class this file's own header

@@ -716,6 +716,23 @@ state, and act only on deltas.
    5. End your report with exactly one line — `BOARD: rendered <path>` — giving the
       **absolute** path of the tracked `board.html` when you wrote one, else the live
       path from item 2.
+   6. **If this machine publishes a board, say that it is now stale, and stop there.**
+      `boardArtifactUrl` in `instance.config.local.json` records the page this clone
+      published. When that key has a value, add exactly one more line to your report:
+
+      ```
+      BOARD: run /ai-bridge:board to refresh the published page
+      ```
+
+      No key ⇒ **no line**: an instance that has never published does not need telling
+      about a page it does not have.
+
+      **You cannot publish it yourself, and that is measured rather than assumed.** On
+      Claude Code 2.1.261 a headless `claude -p` session's tool inventory carries no
+      artifact tool, and a tool search for one returns nothing — so a tick that tried
+      would fail, and a tick that stayed silent would leave a human reading a page whose
+      data moved this tick. The line is the whole of what the tick can do about it. Do
+      not attempt a publish, and do not treat the absence as an error.
 
    **Say the path, never that it is live.** A rendered file is only as fresh as the
    tick that wrote it; the masthead timestamp says how stale. A human who wants a live
