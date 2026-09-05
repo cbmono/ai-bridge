@@ -1,11 +1,12 @@
 # Sharing one instance between two humans
 
 An ai-bridge bundle can be shared by two humans, each with their own clone and their
-own `/pm-loop`. Both see one set of projects and one knowledge base, and either can hand
+own `/ai-bridge:dispatch` loop. Both see one set of projects and one knowledge base, and either can hand
 a project or a single task across.
 
 **The board is not shared either — each clone renders its own, and that costs nothing.**
-There is no published page to share: every `/pm-loop` tick renders `.board-live/board.html`
+There is no published page to share: every `/ai-bridge:dispatch` tick renders
+`.board-live/board.html`
 on the machine it runs on. Each human's own projects come from their own snapshot, and
 every *other* owner's is a named, collapsed section read from the tracked task documents at
 their current git `HEAD`. **Git is what two clones genuinely share**, which is why this
@@ -139,7 +140,8 @@ not be the instance directory itself.
 
 **The tick syncs for you; ownership does not.** Since
 [#26](https://github.com/cbmono/ai-bridge/pull/26) and
-[#27](https://github.com/cbmono/ai-bridge/pull/27), a `/pm-loop` tick pulls `--rebase`
+[#27](https://github.com/cbmono/ai-bridge/pull/27), an `/ai-bridge:dispatch` tick pulls
+`--rebase`
 before it re-derives anything and pushes after it commits, whenever the bundle has a
 remote — so neither human runs git by hand for the loop's own work. A dirty tree
 **defers** that pull to the end of the tick rather than blocking it, because concurrent

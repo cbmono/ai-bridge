@@ -5,9 +5,9 @@
 #   Usage: resolve-max-agents.sh [--instance DIR]
 #
 # WHY THIS EXISTS AS A SCRIPT AND NOT A SENTENCE — the same reason resolve-model.sh does.
-# `maxAgentsInFlight` lived only as prose in pm-loop.md and project-manager.md, so the cap
-# was honoured wherever somebody remembered to read the file. Worse, it was TRACKED, which
-# forces one number on every clone of a shared bundle.
+# `maxAgentsInFlight` lived only as prose in the loop's step file and in
+# project-manager.md, so the cap was honoured wherever somebody remembered to read the
+# file. Worse, it was TRACKED, which forces one number on every clone of a shared bundle.
 #
 # Measured 2026-08-29: the key read 4 / 6 / 10 across three instances on ONE 11-core Mac —
 # up to 20 concurrent agents against a measured ceiling near 4. The cap is per instance and

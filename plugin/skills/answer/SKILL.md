@@ -46,15 +46,15 @@ and stop.
    what makes the draft promotable, so an entry left in both places blocks it forever.
    `answered_questions` is a human audit record — nothing reads it (see `SCHEMA.md`).
 4. **Report** which tasks became clean (empty `open_questions`). Under `gated` they're
-   now promotable by the human; where the project delegates promotion (`AUTONOMY.md`), the next `/pm-loop` tick will
+   now promotable by the human; where the project delegates promotion (`AUTONOMY.md`), the next `/ai-bridge:dispatch` tick will
    auto-promote the clean **build** tasks (research stays human-driven). This command
    **only answers questions** — it never promotes,
    dispatches, or merges.
 
 ## Notes
-- **Foreground/interactive only** — a background `/pm-loop` tick can't prompt you; it
+- **Foreground/interactive only** — a background `/ai-bridge:dispatch` tick can't prompt you; it
   parks questions on the 🔴 board, and you clear them here (or by editing the task docs).
-- Commit is optional: the next `/pm-loop` tick commits the doc changes under the PM
+- Commit is optional: the next `/ai-bridge:dispatch` tick commits the doc changes under the PM
   identity, or commit them yourself using this bundle's usual process.
 - No customer PII in answers written to task docs — and note `answered_questions`
   **keeps them for the life of the repo**, so an answer you would not commit is an

@@ -31,7 +31,7 @@
 #   · this                    — live, local-only, per-machine, and it costs a process.
 #
 # WHAT IT ACTUALLY DOES, PER CYCLE. Refresh THIS instance's snapshot (so the page
-# reflects the documents rather than the last /pm-loop tick), then run
+# reflects the documents rather than the last /ai-bridge:dispatch tick), then run
 # `build-board.sh --standalone` over every watched instance. It adds no renderer of its
 # own and no HTML of its own: forking the board's markup would mean two pages to keep
 # escaping correctly, and escaping untrusted titles is the one thing that page must
@@ -42,7 +42,7 @@
 # rewrote another group's SNAPSHOT.json every couple of seconds — a file that group's
 # own loop owns. So: the writer runs here, and a sibling instance is rendered from
 # whatever snapshot it currently has. That is honestly less live for the siblings, and
-# it is the trade: their snapshots are refreshed by their own /pm-loop tick (or their
+# it is the trade: their snapshots are refreshed by their own /ai-bridge:dispatch tick (or their
 # own watcher), and when one of them changes THIS page re-renders, because a watched
 # instance's SNAPSHOT.json is part of the trigger set below.
 #
@@ -140,7 +140,7 @@ STAMP="$OUT_DIR/.watch-stamp"
 # THE TRIGGER SET, in two parts:
 #   · every markdown document under THIS instance's projects/ — the schema-defined
 #     location the snapshot is derived from, and the only input the refresh below reads;
-#   · every watched instance's SNAPSHOT.json, so a sibling group's own /pm-loop tick
+#   · every watched instance's SNAPSHOT.json, so a sibling group's own /ai-bridge:dispatch tick
 #     shows up on this page too, without this script writing in their directory.
 DOC_DIRS=()
 [[ -d "./projects" ]] && DOC_DIRS+=("./projects")

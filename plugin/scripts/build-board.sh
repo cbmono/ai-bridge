@@ -55,7 +55,7 @@
 #                       instance's .gitignore already covers)
 #     --standalone      wrap the output in <!doctype html>/<head> for opening in a
 #                       browser directly. PASS IT unless something else supplies that
-#                       wrapper — watch-board.sh and the /pm-loop tick both do, and the
+#                       wrapper — watch-board.sh and the /ai-bridge:dispatch tick both do, and the
 #                       publish step that could not is deleted. Wrapping, not markup:
 #                       the same page either way, so omitting it leaves a fragment to
 #                       embed, which is all the default is for now.
@@ -74,7 +74,7 @@
 #      and not the other.
 #   2. one script, two layouts, `--layout` choosing the markup. That fixed the
 #      duplication and left a new problem in its place: a DEFAULT. Every caller now had
-#      to remember the flag, and the /pm-loop tick published with `--layout table` while
+#      to remember the flag, and the /ai-bridge:dispatch tick published with `--layout table` while
 #      watch-board.sh forwarded no layout at all — so the local live page and the
 #      published page were two different boards rendered by one script, and nothing in
 #      the code said so.
@@ -131,7 +131,7 @@
 # hand-rolled JSON reader mis-handling a quote inside a title is exactly the bug that
 # turns an untrusted title into markup on a published page. `json` and
 # `html.escape(..., quote=True)` are the right primitives, they are in the standard
-# library, and this is a human-run reporting step — not tick machinery a /pm-loop
+# library, and this is a human-run reporting step — not tick machinery an /ai-bridge:dispatch
 # depends on. No npm, no pip, no new runtime.
 #
 # OUTPUT SHAPE. The default output is an **Artifact page body**: a <title>, an inline
@@ -2011,7 +2011,7 @@ if STANDALONE:
 else:
     doc = head_html + "\n" + body_html + "\n"
 # The output DIRECTORY is created, and only here — after the "nothing to write" exit
-# above, so an instance that is off the board still leaves no trace. The /pm-loop tick
+# above, so an instance that is off the board still leaves no trace. The /ai-bridge:dispatch tick
 # renders to `.board-live/board.html`, which exists on a machine that has run
 # watch-board.sh and on no other, and a renderer that fails with a FileNotFoundError the
 # first time each tick calls it would be a board nobody ever sees.

@@ -235,7 +235,7 @@ ok "…and carries its PRINCIPLE"            "$(saw "$CONV" 'tool availability w
 ok "an unplaceable case resolves human"    "$(saw_flat "$CONV" 'cannot place is an authority gap until a human says otherwise')" yes
 ok "THE sentence that refuses the licence" "$(saw "$CONV" '**Nothing in this bullet is licence over the authority class.**')" yes
 ok "…and says rung 1 never reaches one"    "$(saw "$CONV" '**it never reaches an authority gap at all**')" yes
-ok "…naming the unwatched dispatch"        "$(saw "$CONV" 'a background `/pm-loop` dispatch, hours from anyone watching')" yes
+ok "…naming the unwatched dispatch"        "$(saw "$CONV" 'a background dispatch tick, hours from anyone watching')" yes
 # THE MIDDLE RUNG NEVER BLOCKS (Q1, option b).
 ok "the middle rung never blocks"          "$(saw "$CONV" '**The middle rung NEVER BLOCKS: record the tool request, then carry on.**')" yes
 ok "…blocked is not the response"          "$(saw_flat "$CONV" '`blocked` is not the response to a missing tool')" yes

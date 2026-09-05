@@ -39,7 +39,7 @@ prints the clone command rather than reporting a missing directory.
 | `/brief-me [project]` | Read-only. No argument: the board brief — what needs you, what's in flight, what moved since the last full tick. With a project slug: a meeting-ready brief with questions quoted by number and a "decide today" list. |
 | `/capture <notes>` | Intake. Turns a decision or meeting notes into `draft` projects/tasks with provenance, fitted into existing projects where they belong. Never promotes; refinement stays the loop's job, promotion stays yours. |
 | `/work <task>` | Work one `ready` task in the current session — the solo alternative to a background dispatch, leaving the same record (worktree/branch on the task, PR in `pr:`, `in-review` at the end). The gates still hold: no merging, review still independent. |
-| `/dispatch [gap]` | The gated background loop. During the migration it delegates to the bundle's proven `/pm-loop` contract verbatim — no second implementation to drift. |
+| `/dispatch [gap]` | The gated background loop. It carries the contract itself now — during the migration it delegated to the bundle's own copy verbatim, so there was never a second implementation to drift. |
 | `/handoff <path> <login>` | Ownership transfer with the context that makes it real: `owner:` set, a dated handoff note, and a paste-ready summary (open questions, PRs, linked Findings) for the new owner. Dispatch-gating only — never a promotion. |
 | `/welcome` | The welcome screen: bundle, owner, config layers, tier→model routing, board path, what awaits you. `check` reports state that could be wrong; `fix` repairs only the idempotent tier. |
 | `/init <dir>` | Create a bundle, refresh one, or convert one stamped by the retired `install.sh` — data only, and the only symlinks it leaves are under `repos/`. |
@@ -133,7 +133,8 @@ A plugin skill **shadows** a same-named project command, so each command migrate
 slice that moved the contract and retired the instance copy **in one change**, with the
 template's test suite as the spec — `/ai-bridge` first (its whole contract is this
 plugin's `/welcome`), then `/audit`, `/answer`, `/fanout`, `/pr-review-request`,
-`/new-project`, `/close-project` and finally `/pm-loop`, which is `/dispatch` here. The
+`/new-project`, `/close-project` and finally the loop itself, which is `/dispatch` here.
+The
 **enforcement hooks** have made that move (above); `session-banner.sh` and
 `push-state.sh` are still instance hooks and carry the same instance-root guard when
 they follow.

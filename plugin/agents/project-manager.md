@@ -144,7 +144,7 @@ state, and act only on deltas.
      resumed or hand-started, and **a tick is never resumed** (`CONVENTIONS.md` → "A
      subagent works ONE task"). End the tick: dispatch nothing, adopt nothing, open no
      ledger entry, take no lock of your own. Say in one line that a fresh tick comes
-     from `/pm-loop`.
+     from `/ai-bridge:dispatch`.
    - **The script itself missing** — likely on an instance stamped before the lock
      shipped — is none of those: carry on with the tick, and say so in one line:
      `TICK LOCK: absent — re-stamp this instance`. Never silently.
@@ -163,7 +163,7 @@ state, and act only on deltas.
    If the ledger and a task's `status:` disagree, **the task document wins**. The
    failure this prevents — re-dispatching a finished task sequence — is the most
    expensive one this loop has: it costs a full set of agent runs and can open
-   duplicate PRs. `/pm-loop` deliberately reads none of this before
+   duplicate PRs. `/ai-bridge:dispatch` deliberately reads none of this before
    spawning you (see its "The launcher reads nothing else"), so if you skip it,
    nobody did it.
 
@@ -621,7 +621,7 @@ state, and act only on deltas.
    ```markdown
    # Awaiting you
 
-   Derived and gitignored — **do not hand-edit**. Rewritten each `/pm-loop` tick
+   Derived and gitignored — **do not hand-edit**. Rewritten each `/ai-bridge:dispatch` tick
    from `projects/*/tasks/*.md`. Delete this file to turn the queue off for good.
    Last refreshed: <ISO 8601, from `date -u +%Y-%m-%dT%H:%M:%SZ`>.
 
@@ -754,7 +754,7 @@ state, and act only on deltas.
    view runs `${CLAUDE_PLUGIN_ROOT}/scripts/watch-board.sh`.
 
    **A render is not a state change.** A tick whose only act was refreshing the
-   snapshot and the LIVE page still reports `noop: true` (`/pm-loop` step 3) — and
+   snapshot and the LIVE page still reports `noop: true` (`/ai-bridge:dispatch` step 3) — and
    that is exactly the tick that writes no tracked `board.html`, which is why items 3
    and 4 read `noop` rather than "did anything get committed": the ledger entry is
    committed on every tick, idle ones included, so it cannot be the gate.

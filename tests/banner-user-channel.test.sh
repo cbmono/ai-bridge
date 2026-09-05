@@ -658,7 +658,7 @@ assert "…and the section is byte for byte the one line it now owes" \
   "$(eq "$BOARD_SECTION" "$BOARD_FIXTURE")"
 # THE COUNT LINE'S ADAPTIVE CLAUSE, first half: there IS a board above, so it may say so.
 assert "…so the count line may point at the board" \
-  "$(user_visible "$OUT" '🔔 2 items need you — see the board above, or run /pm-loop')"
+  "$(user_visible "$OUT" '🔔 2 items need you — see the board above, or run /ai-bridge:dispatch')"
 
 # --- state 2: enabled, NEVER RENDERED. The bug: this state used to be silence -----------
 rm -rf "$BOARD_DIR"
@@ -666,8 +666,8 @@ hook_run
 SM_UNRENDERED="$(field "$OUT" systemMessage)"
 assert "board enabled with no page: the HUMAN is told, in systemMessage" \
   "$(user_visible "$OUT" 'Board   enabled, but never rendered')"
-assert "…and told what renders it — a /pm-loop tick" \
-  "$(user_visible "$OUT" '/pm-loop tick renders it')"
+assert "…and told what renders it — an /ai-bridge:dispatch tick" \
+  "$(user_visible "$OUT" '/ai-bridge:dispatch tick renders it')"
 assert "…or build-board.sh"                            "$(user_visible "$OUT" 'build-board.sh')"
 # TEXTUALLY DISTINCT FROM THE RENDERED ROW, keyed on what that row actually prints. The old
 # key here was the staleness note, which task-023 deleted from every state — an assertion
@@ -679,7 +679,7 @@ assert "…nor a link to a file that is not there"        "$(hasnt_sm "$OUT" "$B
 # either line on its own.
 assert "…and the count line does NOT send the human to a board that is not there" \
   "$(hasnt_sm "$OUT" 'see the board above')"
-assert "…it routes to /pm-loop alone"                   "$(user_visible "$OUT" '🔔 2 items need you — run /pm-loop')"
+assert "…it routes to /ai-bridge:dispatch alone"        "$(user_visible "$OUT" '🔔 2 items need you — run /ai-bridge:dispatch')"
 # DIFFERENT TEXT, which is the property the whole change is about: two states that print
 # the same bytes are one state, and the bytes these two used to share were none at all.
 assert "…and states 1 and 2 are genuinely different text on the human's channel" \
@@ -700,7 +700,7 @@ assert "…not even the never-rendered line"              "$(hasnt_sm "$OUT" 'ne
 mkdir -p "$BOARD_DIR"; printf '<!doctype html>\n' > "$BOARD_DIR/board.html"
 hook_run
 assert "board: false WITH a page on disk: still nothing" "$(hasnt_sm "$OUT" 'Board   ')"
-assert "…and the count line still routes to /pm-loop alone" \
+assert "…and the count line still routes to /ai-bridge:dispatch alone" \
   "$(hasnt_sm "$OUT" 'see the board above')"
 cp "$TMP/cfg8.bak" "$INST/instance.config.json"
 rm -rf "$BOARD_DIR"
@@ -738,7 +738,7 @@ assert "…nor on the model's — nothing keys off it, so it is deleted outright
 # survived the move to this channel, rather than the section counting every `ready:` it
 # sees.
 assert "…while the model's copy gains the dispatchable count" \
-  "$(has 'Ready to dispatch   1 — /pm-loop hands them to role agents in the background' "$AC")"
+  "$(has 'Ready to dispatch   1 — /ai-bridge:dispatch hands them to role agents in the background' "$AC")"
 assert "…and the count is DISPATCHABLE, not merely ready (2 are ready, 1 can be dispatched)" \
   "$(hasnt 'Ready to dispatch   2' "$AC")"
 # THE BLOCK IS EXACTLY TWO LINES — a blank and the count — and the blank is inside it. An

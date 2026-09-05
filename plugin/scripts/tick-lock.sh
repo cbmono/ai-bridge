@@ -6,10 +6,10 @@
 #                                       [--instance DIR]
 #          tick-lock.sh release [--instance DIR]   ·   status [--instance DIR]
 #
-# WHY THIS EXISTS. `/pm-loop` promises at most one PM tick at a time. Until this script,
+# WHY THIS EXISTS. `/ai-bridge:dispatch` promises at most one PM tick at a time. Until this script,
 # that promise rested on TWO things, and neither is a mechanism:
 #
-#   1. THE LAUNCHING SESSION REMEMBERING IT DISPATCHED. `/pm-loop` step 4 defines "still
+#   1. THE LAUNCHING SESSION REMEMBERING IT DISPATCHED. `/ai-bridge:dispatch` step 4 defines "still
 #      in flight" as "this session dispatched a tick and has not yet seen its
 #      notification" — answered from session history, which a compaction, a `--resume` or
 #      a human asking "what's next?" all discard. Measured 2026-08-29 in a real instance:
@@ -173,7 +173,7 @@
 #     parent    CLAUDE_CODE_SESSION_ID=aaf01a1c-fc30-4e96-99e9-a2c43733c10f
 #     subagent  CLAUDE_CODE_SESSION_ID=aaf01a1c-fc30-4e96-99e9-a2c43733c10f
 #
-# Identical, character for character. Every tick one `/pm-loop` session starts carries the
+# Identical, character for character. Every tick one `/ai-bridge:dispatch` session starts carries the
 # same value, so as a positive signal it is worthless — and worse than worthless, because
 # the sequence it gets wrong is the exact one the claimed branch was kept for: launcher S
 # dispatches tick A, A claims, S resumes tick R, and R reads A's claim as its own. That is
@@ -228,7 +228,7 @@
 # WINDOW: the interval between the launcher taking the lock and the tick it spawned claiming
 # it. A resumed tick reaching its `acquire` in that window meets a live UNCLAIMED lock —
 # which is exactly what a fresh dispatch looks like — so it adopts and runs, and the genuine
-# tick then holds. Exactly one tick runs, which is the property that matters, but `/pm-loop`
+# tick then holds. Exactly one tick runs, which is the property that matters, but `/ai-bridge:dispatch`
 # step 2 releases that lock when its own (held) tick reports, freeing a lock the resumed
 # tick is still running under.
 #
@@ -385,7 +385,7 @@
 #
 # IT IS A PER-CLONE LOCK AND IT MUST NOT PRETEND OTHERWISE. The file is gitignored and
 # lives in one working tree. Two humans sharing one bundle from two clones each dispatch
-# independently, which is the SUPPORTED design (`/pm-loop` → "Why serial"; SCHEMA.md →
+# independently, which is the SUPPORTED design (`/ai-bridge:dispatch` → "Why serial"; SCHEMA.md →
 # "Ownership on a shared instance"), and a committed or shared lock would break it. What
 # stops those two loops dispatching the same TASK is `task-owner.sh`, not this.
 #
@@ -403,9 +403,9 @@
 # `release` IS UNCONDITIONAL, AND THAT PUTS AN OBLIGATION ON THE CALLER. It holds no
 # session identity and cannot tell your lock from a sibling's — it is the human's
 # override, and an override that asked who you were would not be one. So a caller must
-# release only a lock IT took: a `/pm-loop` session that skipped because another loop held
+# release only a lock IT took: an `/ai-bridge:dispatch` session that skipped because another loop held
 # the lock and then released it on the way out would delete a LIVE holder's lock and
-# re-open the double-dispatch. `/pm-loop` step 5 states that condition. The second acquire
+# re-open the double-dispatch. `/ai-bridge:dispatch` step 5 states that condition. The second acquire
 # site does not relax this and has the simplest obligation there is: A TICK RELEASES
 # NOTHING, EVER. The only lock it can be running under is one it ADOPTED, and that one is
 # the launcher's to release when the tick reports; a tick that was refused (1, 2 or 4) has
@@ -943,7 +943,7 @@ case "$cmd" in
 
       maybe)
         # THE ONE THIS FILE WILL NOT DECIDE. The ids are equal, but at least one came from
-        # the runtime, and the runtime's id is one per SESSION: every tick a `/pm-loop`
+        # the runtime, and the runtime's id is one per SESSION: every tick an `/ai-bridge:dispatch`
         # session starts carries it, so equality is consistent with "you, re-entering" AND
         # with "a sibling this session resumed". Guessing either way has a name — proceed is
         # the 2026-08-29 double-dispatch, hold is the 2026-08-30 stand-down — so it is
@@ -952,7 +952,7 @@ case "$cmd" in
         echo "     and the identity on it EQUALS yours — which is not proof that it is you." >&2
         identity_lines "     " >&2
         echo "     A session-derived id names the SESSION, not the tick: every tick one" >&2
-        echo "     /pm-loop session starts shares it, so this reads the same whether you are" >&2
+        echo "     /ai-bridge:dispatch session starts shares it, so this reads the same whether you are" >&2
         echo "     re-entering your own claim or meeting a sibling that session resumed." >&2
         echo "     Do not dispatch and do not delete anything. A human decides:" >&2
         echo "       - if no other tick is running:  tick-lock.sh release, then re-run" >&2
@@ -1024,7 +1024,7 @@ case "$cmd" in
     # A launcher that called `status` and then `acquire` would have re-created the
     # check-then-write window that `acquire` exists to close.
     if [ ! -e "$LOCK" ]; then
-      echo "free: no $LOCK — the next /pm-loop dispatch takes it."
+      echo "free: no $LOCK — the next dispatch tick takes it."
       [ -e "$CLAIM" ] && echo "note: $CLAIM outlived its lock; the next acquire clears it."
       exit 0
     fi

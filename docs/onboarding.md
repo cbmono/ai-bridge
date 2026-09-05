@@ -9,7 +9,7 @@ Every section links to the page that owns the detail. Nothing here restates one.
 Placeholders throughout: `<group>` is the group folder, `<login>` is your GitHub login,
 `<bundle-remote>` is the bundle repo somebody shared with you.
 
-> **Already running a pre-plugin install** — bare `/pm-loop`, `/new-project`, and
+> **Already running a pre-plugin install** — bare `/new-project`, `/close-project`, and
 > `.claude/commands/` full of symlinks? Do [migrating.md](migrating.md) first. It is a
 > different job from this one, and this page assumes it is done.
 
