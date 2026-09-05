@@ -74,7 +74,10 @@ ok "plugin/evals/ exists"                       "$(yn test -d "$EVALS")" yes
 ok "…and its results/ output is gitignored" \
   "$(cd "$TPL" && git check-ignore -q plugin/evals/results && echo yes || echo no)" yes
 
-CASES="$(ls "$EVALS" | grep -v '^results$' | sort | tr '\n' ' ' | sed 's/ $//')"
+# Directories only, and `results/` is a run artifact rather than a case — so the eval
+# dir's own README.md (and any other prose beside the cases) is not read as one.
+CASES="$(cd "$EVALS" && find . -mindepth 1 -maxdepth 1 -type d ! -name results -exec basename {} \; | sort | tr '\n' ' ' | sed 's/ $//')"
+# shellcheck disable=SC2046,SC2086  # GATED/CONTROL are deliberate word lists, as in plugin-skills.test.sh
 EXPECTED_CASES="$(printf '%s\n' $CONTROL $(for s in $GATED; do echo "$s-is-human-gated"; done) | sort | tr '\n' ' ' | sed 's/ $//')"
 ok "the case set is exactly the four this file asserts" "$CASES" "$EXPECTED_CASES"
 
@@ -87,7 +90,8 @@ for c in $EXPECTED_CASES; do
   ok "…it declares the Skill tool as allowed"   "$(fm "$P" allowed_tools | grep -c 'Skill' | tr -d ' ')" 1
   ok "…and it carries a prompt, not just a header" \
     "$([ "$(awk 'NR==1 && $0=="---" {infm=1; next} infm && $0=="---" {infm=0; inb=1; next} inb' "$P" | grep -c .)" -ge 1 ] && echo yes || echo no)" yes
-  ok "…with at least one grader beside it"      "$([ "$(ls "$EVALS/$c/graders"/*.md 2>/dev/null | grep -c .)" -ge 1 ] && echo yes || echo no)" yes
+  n_graders=0; for g in "$EVALS/$c/graders"/*.md; do [ -f "$g" ] && n_graders=$((n_graders+1)); done
+  ok "…with at least one grader beside it"      "$([ "$n_graders" -ge 1 ] && echo yes || echo no)" yes
 done
 
 # =======================================================================================
