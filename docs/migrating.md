@@ -75,10 +75,10 @@ breaks nothing — that is the property this migration bought.
 **B is not a better A.** It buys exactly one thing — a folder with no history — and pays
 for it with the history. If you cannot name why you want that, you want A.
 
-**Either way, the plugin is `ai-bridge`.** `ai-bridge-v2` was the transition name and
-ships for one more version as a stub that says so. Every command is namespaced —
-`/ai-bridge:dispatch`, `/ai-bridge:welcome`, `/ai-bridge:new-project`, and the
-[rest](../README.md#commands) — and so is every role agent
+**Either way, the plugin is `ai-bridge`.** `ai-bridge-v2` was the transition name; its
+stub shipped for one version and was removed in 1.0.0, so install the bare name.
+Every command is namespaced — `/ai-bridge:dispatch`, `/ai-bridge:welcome`,
+`/ai-bridge:new-project`, and the [rest](../README.md#commands) — and so is every role agent
 (`ai-bridge:software-engineer`), because a bare name does not resolve.
 
 ---
