@@ -173,6 +173,17 @@ ok "…and updating the SAME artifact rather than making a second one" \
 # silently did nothing headless would be indistinguishable from one that was broken.
 ok "…and states the measured headless limit" \
   "$(ge1 "$(grep -c 'run /ai-bridge:board to refresh' "$SK/board/SKILL.md")")" yes
+# Publishing is irreversible and recording the URL is not, so the gap between them is the
+# one place this skill can strand an artifact nobody can name. Three pins, one per half of
+# the fix: the ordering, the failure report that carries the URL out of the session, and
+# the named exit from the duplicate state. The last two are what a human acts on, so an
+# assertion that only held the ordering would pass over a skill that still loses the URL.
+ok "…reporting success only AFTER the URL is recorded" \
+  "$(ge1 "$(grep -cF 'only after the URL is recorded' "$SK/board/SKILL.md")")" yes
+ok "…and failing LOUDLY with the URL quoted when the record cannot be written" \
+  "$(ge1 "$(grep -cF 'BOARD: PUBLISHED BUT NOT RECORDED <url> — add "boardArtifactUrl"' "$SK/board/SKILL.md")")" yes
+ok "…and naming the duplicate-artifact state, which only the human can leave" \
+  "$(ge1 "$(grep -cF 'Two artifacts, one instance' "$SK/board/SKILL.md")")" yes
 
 # =======================================================================================
 echo "== 6. manifest validation, where the CLI exists =="
