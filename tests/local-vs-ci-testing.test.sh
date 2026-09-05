@@ -192,7 +192,7 @@ echo
 echo "== 8. the two repo-local docs no longer instruct the routine full local run =="
 ok "CLAUDE.md: the suite must pass in CI"  "$(saw "$CLAUDE_FLAT" '**There is a test suite and it must pass — in CI.**')" yes
 ok "CLAUDE.md: run what you touch locally" "$(saw "$CLAUDE_FLAT" '**Locally, run only the harnesses your change touches**')" yes
-ok "CLAUDE.md: points at CONVENTIONS.md"   "$(saw "$CLAUDE_FLAT" 'See `seed/CONVENTIONS.md` → "The full suite belongs to CI"')" yes
+ok "CLAUDE.md: points at CONVENTIONS.md"   "$(saw "$CLAUDE_FLAT" 'See `plugin/seed/CONVENTIONS.md` → "The full suite belongs to CI"')" yes
 ok "tests rule: not all of them"           "$(saw "$RULE_FLAT" '**Run the harnesses your change touches before pushing — not all of them:**')" yes
 ok "tests rule: no longer 'run them all'"  "$(saw "$RULE_FLAT" 'Run them all before pushing')" no
 ok "tests rule: defers to CONVENTIONS.md"  "$(saw "$RULE_FLAT" 'is the rule this defers to')" yes

@@ -322,6 +322,16 @@ ok "--config from an installed plugin refuses"   "$?" 2
 ok "…saying a checkout is what it needs"         "$(grep -c 'needs a checkout of this repo' "$TMP/cfg.out" | tr -d ' ')" 1
 ok "…and printing the clone command"             "$(grep -c 'git clone' "$TMP/cfg.out" | tr -d ' ')" 1
 ok "…having written nothing into the config dir" "$(yn test -e "$TMP/cfgdest")" no
+# AND THE UNINSTALL HALF, which is the one with teeth. `config_ours` classifies a link by
+# `case $(readlink …) in "$CONFIG_SRC"/*`, so an EMPTY $CONFIG_SRC would make that pattern
+# `/*` — matching every absolute symlink in the config dir and removing links this layer
+# never wrote. `config_require_src` runs first on both paths, which is what keeps the
+# empty value from ever reaching the glob; asserted here rather than trusted.
+mkdir -p "$TMP/cfgdest2/agents"
+ln -s "$TMP" "$TMP/cfgdest2/agents/somebody-elses.md"
+CLAUDE_CONFIG_DIR="$TMP/cfgdest2" bash "$CACHE/scripts/init-bundle.sh" --config --uninstall >"$TMP/cfgu.out" 2>&1
+ok "--config --uninstall refuses too"            "$?" 2
+ok "…leaving a stranger's absolute link alone"   "$(yn test -L "$TMP/cfgdest2/agents/somebody-elses.md")" yes
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
