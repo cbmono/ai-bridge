@@ -34,8 +34,13 @@
 #     routinely a decision somebody made minutes ago. Same reason `/ai-bridge:welcome` has
 #     no fixer for its `config-uncommitted` row.
 #   · No git history at all for the seed file (no repo, shallow clone, an uncommitted seed
-#     file, a rename this script does not follow) ⇒ no merge base, no evidence, no action.
-#     Reported for a human.
+#     file) ⇒ no merge base, no evidence, no action. Reported for a human.
+#     A PATH MOVE IS NOT ONE OF THOSE CASES, AND KEEPING IT OUT IS WHAT `git log --follow`
+#     BUYS: when #125 did `git mv seed plugin/seed`, a by-path lookup saw only the commits
+#     at the NEW path — for six seed docs, the rename alone, whose blob IS the current seed
+#     — so the base every bundle was stamped from became unreachable and the drift read as
+#     UNKNOWN where there was no history to fall back on and, worse, as a silent "in sync"
+#     where there was. Follow renames, or the next move repeats it.
 #
 # "PRIOR" is doing real work in those rules. The current content's own blob is in the history
 # too, and for a file the bundle grew past it is often the blob CLOSEST to what the bundle
@@ -153,14 +158,29 @@ fi
 [ "$GIT_OK" -eq 1 ] || echo "  note: the template is not a git checkout, so no merge base can be"
 [ "$GIT_OK" -eq 1 ] || echo "        established — differing files can only be reported, never ported."
 
-# Every historical blob of a seed path, newest first, deduplicated. Renames are NOT
-# followed: a renamed seed file simply has less history, which degrades to "no base"
-# (reported) rather than to a wrong base (ported).
+# Every historical blob of a seed path, newest first, deduplicated — ACROSS RENAMES.
+#
+# `--follow` is the whole of this function's correctness, not a nicety. Without it the walk
+# stops at the commit that created the current path, and a seed directory that moves takes
+# every bundle's merge base with it: #125's `git mv seed plugin/seed` left six seed docs
+# with exactly one commit at the new path, the rename, whose blob is the seed's CURRENT
+# content — so "prior" came back empty and the drift was read as the bundle's own.
+#
+# `--name-only` is what makes it usable: under `--follow` it prints the path AS IT WAS in
+# each commit, so the blob is read from the tree with the name that commit actually had.
+# `ls-tree`ing the new path against a pre-rename commit finds nothing, which is the same
+# empty answer by a longer route. A 40-hex line is the commit, anything else is the path —
+# a seed path can never look like a SHA. `core.quotePath=false` keeps a non-ASCII name
+# readable; a name with a newline in it is still beyond this parse, and is not a seed path.
 hist_blobs() { # <repo-relative path>
   [ "$GIT_OK" -eq 1 ] || return 0
-  git -C "$REPO_ROOT" log --format=%H -- "$1" 2>/dev/null | while IFS= read -r c; do
-    git -C "$REPO_ROOT" ls-tree "$c" -- "$1" 2>/dev/null | awk '{print $3}'
-  done | awk 'NF && !seen[$0]++'
+  git -C "$REPO_ROOT" -c core.quotePath=false \
+      log --follow --format=%H --name-only -- "$1" 2>/dev/null \
+  | awk '/^[0-9a-f]+$/ && length($0) == 40 { c = $0; next }
+         NF && c != "" { print c " " $0 }' \
+  | while IFS=' ' read -r c p; do
+      git -C "$REPO_ROOT" ls-tree "$c" -- "$p" 2>/dev/null | awk '{print $3}'
+    done | awk 'NF && !seen[$0]++'
 }
 
 blob_of() { git -C "$PLUGIN_ROOT" hash-object --no-filters -- "$1"; }
@@ -270,6 +290,10 @@ EOF
       # to deliver: the difference is entirely the instance's own. Quiet on purpose — this
       # is the normal state of `log.md`, `index.md` and a managed `.gitignore`, and naming
       # them every run is how a report teaches people to stop reading it.
+      # THAT INFERENCE IS ONLY AS GOOD AS `hist_blobs`. Read a partial history — the walk
+      # stopping at a rename, as it did after #125 — and "the seed never changed" is false
+      # while looking identical here, which is why this is the quietest branch in the
+      # script and the one a path move breaks first.
       insync=$((insync+1)); continue
     fi
     unknown=$((unknown+1))
