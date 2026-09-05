@@ -5,11 +5,17 @@ name: Tests
 # and on every push that lands on it, so main itself always carries its own signal.
 #
 # ONE deliberate scope cut: a PR whose every changed path lives under plugin/ or
-# .claude-plugin/ cannot touch the machinery the other 59 harnesses test, so it runs
-# ONLY the two plugin harnesses — same job, same required-check name, same
-# per-harness verification — instead of paying the full ~15-minute suite. The rule is
-# strict on purpose: ONE path outside those two directories (a README line, a test
-# edit, anything) and the full suite runs. Pushes to main always run everything.
+# .claude-plugin/ runs a SELECTED set of harnesses — same job, same required-check
+# name, same per-harness verification — instead of paying the full ~15-minute suite.
+# The rule is strict on purpose: ONE path outside those two directories (a README
+# line, a test edit, anything) and the full suite runs. Pushes to main always run
+# everything.
+#
+# The selection is a small CORE plus a set DERIVED from the diff — never a hand-kept
+# list alone. ai-bridge-v2/task-030: the list used to be hand-kept, #124 moved the
+# two-human-authority guard under plugin/, its harness was not added, and the required
+# check could go green having never run the guard. A harness is now selected because it
+# NAMES a changed path, so the next move under plugin/ carries its own harness in.
 on:
   pull_request:
     branches: [main]
@@ -85,25 +91,77 @@ jobs:
 
           # ---- the plugin-only fast path (see the header comment) -------------------
           # PRs only; a push to main always runs the full suite. The diff is against
-          # the PR base, and the verdict FAILS TOWARD THE FULL SUITE: an empty diff,
-          # a failed fetch, or any path outside plugin/ and .claude-plugin/ keeps
-          # every harness. The one harness the fast path runs goes through exactly
-          # the same loop, checkout verification and pass/fail parsing below.
+          # the PR base, and the verdict FAILS TOWARD THE FULL SUITE at every step: an
+          # empty diff, a failed fetch, any path outside plugin/ and .claude-plugin/,
+          # or a changed path that NO harness names, all keep every harness. Whatever
+          # is selected goes through exactly the same loop, checkout verification and
+          # pass/fail parsing below.
           if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then
             if git fetch --quiet origin "$GITHUB_BASE_REF"; then
               changed="$(git diff --name-only "origin/$GITHUB_BASE_REF"...HEAD)"
               if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(plugin/|\.claude-plugin/)'; then
-                echo "plugin-only diff — running the plugin harnesses only:"
-                printf '%s\n' "$changed" | sed 's/^/  /'
-                # plugin-eval is on this list because the eval SUITE lives under
-                # plugin/evals/ — a plugin-only PR editing a case would otherwise
-                # change the eval and never run it. It self-skips loudly where the
-                # CLI has `plugin eval` gated off, which is every hosted runner today.
-                # deny-baseline and agent-control are on this list because the two
-                # enforcement HOOKS now live under plugin/ (ai-bridge-v2/task-003).
-                # Without them a plugin-only PR editing a hook would skip the 283
-                # assertions that are the only proof either one still fires.
-                files=(tests/plugin-manifest.test.sh tests/plugin-skills.test.sh tests/plugin-agents.test.sh tests/plugin-eval.test.sh tests/deny-baseline.test.sh tests/agent-control.test.sh)
+                # CORE — harnesses no changed path can be expected to name, because they
+                # read plugin/ WHOLESALE or reach their subject INDIRECTLY.
+                #   plugin-manifest / plugin-skills / plugin-agents  structural, whole-tree
+                #   plugin-eval                                      the eval SUITE lives under plugin/evals/
+                #   deny-baseline / agent-control                    the two enforcement HOOKS (ai-bridge-v2/task-003)
+                #   commit-as-guard / companion-plugins              the two-human-authority guard (ai-bridge-v2/task-030).
+                #     Both are ALSO reachable by derivation, and both stay here anyway: the
+                #     guard's behaviour depends on plugin/scripts/resolve-autonomy.sh, which
+                #     commit-as-guard.test.sh never names, so a diff touching only that file
+                #     would derive companion-plugins and miss the guard's own harness.
+                core='tests/plugin-manifest.test.sh
+          tests/plugin-skills.test.sh
+          tests/plugin-agents.test.sh
+          tests/plugin-eval.test.sh
+          tests/deny-baseline.test.sh
+          tests/agent-control.test.sh
+          tests/commit-as-guard.test.sh
+          tests/companion-plugins.test.sh'
+                core="$(printf '%s\n' "$core" | sed 's/^[[:space:]]*//')"
+
+                # DERIVED — every harness that NAMES a changed path, or a >=2-component
+                # suffix of one (so "$REPO/scripts/foo.sh" style references still match;
+                # never a bare basename, which would match half the suite). This is the
+                # half a hand-kept list cannot have: a harness is selected because it
+                # reads the path that changed, not because somebody remembered a line.
+                derived=""
+                unnamed=""
+                while IFS= read -r p; do
+                  if [ -z "$p" ]; then continue; fi
+                  hits=""
+                  suffix="$p"
+                  while : ; do
+                    m="$(grep -lF -e "$suffix" tests/*.test.sh 2>/dev/null || true)"
+                    if [ -n "$m" ]; then hits="${hits}${m}"$'\n'; fi
+                    case "$suffix" in
+                      */*/*) suffix="${suffix#*/}" ;;
+                      *)     break ;;
+                    esac
+                  done
+                  if [ -z "$hits" ]; then
+                    unnamed="${unnamed:+$unnamed }$p"
+                  else
+                    derived="${derived}${hits}"
+                  fi
+                done <<CHANGED_PATHS
+          $changed
+          CHANGED_PATHS
+
+                if [ -n "$unnamed" ]; then
+                  echo "plugin-only diff, but no harness names these paths — running the FULL suite: $unnamed"
+                else
+                  selected="$(printf '%s\n%s\n' "$core" "$derived" | grep -v '^[[:space:]]*$' | sort -u || true)"
+                  files=()
+                  while IFS= read -r h; do
+                    if [ -n "$h" ]; then files+=("$h"); fi
+                  done <<SELECTED
+          $selected
+          SELECTED
+                  echo "plugin-only diff — running the core plugin harnesses plus every harness that names a changed path:"
+                  printf '%s\n' "$changed"     | sed 's/^/  changed: /'
+                  printf '%s\n' "${files[@]}"  | sed 's/^/  harness: /'
+                fi
               fi
             fi
           fi
