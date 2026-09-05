@@ -171,7 +171,8 @@ to read.
 **`AUTONOMY.md` does not survive the conversion, on purpose.** It is the deletable
 delegated-authority capability, so a copy shipped with the plugin would arm it on every
 machine. If your bundle had one, the sweep removes the link and says so loudly: the bundle
-is back to ask-first — the safe end — and the run prints the exact `cp` to opt back in.
+is back to ask-first — the safe end — and the run prints the exact companion install that
+opts back in: `/plugin install ai-bridge-yolo@ai-bridge`.
 
 **The enforcement hooks are the one case where step 1 comes first for a REASON, not just
 by convention.** On an unconverted bundle `.claude/settings.json` is itself a symlink into
@@ -194,7 +195,7 @@ shape. Measured before the move:
 | `scripts/` | 27 | `plugin/scripts/`, invoked as `${CLAUDE_PLUGIN_ROOT}/scripts/<name>.sh` |
 | the two SessionStart / UserPromptSubmit hooks | 2 | `plugin/hooks/`, registered by `plugin/hooks/hooks.json` |
 | `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, `.claude/rules/`, `.claude/settings.json` | 5 | `plugin/seed/` — the bundle's **own** files, copied once, refreshed by the 3-way seed merge |
-| `AUTONOMY.md` | 1 | `docs/autonomy/` — **not** shipped into a bundle; absence is the safe default |
+| `AUTONOMY.md` | 1 | `plugin-yolo/companion/` — shipped by **installing the `ai-bridge-yolo` companion**, never by core; not installed is the safe default |
 | **total** | **35** | **none of them is a symlink in a stamped bundle** |
 
 The two facts that decided it: a plugin-shipped installer **cannot** stamp absolute
@@ -601,7 +602,7 @@ via the claude.ai CCR API"* (same 2.1.261 build). Remote is the problem. A routi
 fresh clone of a **GitHub repository**; a bundle is a local checkout whose every operating
 input is deliberately *not* in that repository.
 
-Measured against `seed/.gitignore`, the file every stamped bundle carries — **7 of 7
+Measured against `plugin/seed/.gitignore`, the file every stamped bundle carries — **7 of 7
 operating inputs are gitignored, so a fresh clone has none of them**:
 
 | Absent from a remote clone | Why it is gitignored |
