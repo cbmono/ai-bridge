@@ -30,6 +30,14 @@ Both also answer to their namespaced forms (`/ai-bridge:brief-me`, `/ai-bridge:c
 deprecation stub (`plugin-deprecated/`) that carries a single skill pointing here.
 Run them from a bundle root (where `SCHEMA.md` and `instance.config.json` live).
 
+## Evals
+
+`evals/` holds the `claude plugin eval` suite: real model runs, graded, pinning the one
+class of contract a file check cannot reach — that the model never reaches for `/dispatch`,
+`/work` or `/answer` on its own. Four cases, three gated plus a control arm that proves the
+other three are not vacuous. See [`evals/README.md`](evals/README.md) for how to run it and
+why it self-skips where `plugin eval` is not enabled.
+
 ## Hooks
 
 Registered by `hooks/hooks.json`. Unlike the skills these are **not invoked** — they fire

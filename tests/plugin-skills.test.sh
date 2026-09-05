@@ -15,6 +15,16 @@
 # verbatim relay, provenance, the two non-actions), not the prose around it — the wording
 # may move; the property may not.
 #
+# WHERE A NEW PIN GOES — this file reads the skill FILES, so everything it holds is a
+# claim about TEXT. That is the right shape for most of the contract and it is where a
+# new pin belongs by default: free, offline, runs on every machine.
+#   this file            something is WRITTEN in a skill file
+#   plugin/evals/        something is true of WHAT THE MODEL DOES with the plugin loaded
+#   tests/plugin-eval.test.sh   the eval suite's own shape, and running it
+# The split above is why the model-invocation assertions here were kept, not moved, when
+# plugin/evals/ arrived: the eval grades the EFFECT of `disable-model-invocation: true`
+# for three skills; this file still owns the flag as written, for all ten.
+#
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
 

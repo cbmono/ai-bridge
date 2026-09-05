@@ -741,7 +741,7 @@ owner asked three times in one session, for three different instances.
 
 ```text
 
-AI-Bridge v0.31.0 · _ai-bridge-private · org: cbmono
+AI-Bridge v0.32.0 · _ai-bridge-private · org: cbmono
 ────────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM

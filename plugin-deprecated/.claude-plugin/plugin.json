@@ -1,7 +1,7 @@
 {
   "name": "ai-bridge-v2",
   "displayName": "AI Bridge (v2 — renamed)",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "DEPRECATED. The transition name. This plugin is now ai-bridge: run /plugin install ai-bridge@ai-bridge, uninstall this one, restart Claude Code. Removed after one version.",
   "author": {
     "name": "cbmono"

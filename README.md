@@ -26,6 +26,7 @@ repos and holds only the state of the work — never application code.
 | Doc | Read it when |
 |---|---|
 | **This page** | setting up, or looking up a command or a config key |
+| [docs/onboarding.md](docs/onboarding.md) | **you are new, or someone is joining you** — one page: install, the seven skills of week one, the two gates that stay yours |
 | [docs/schema.md](docs/schema.md) | you need to know what a document type holds |
 | [docs/autonomy.md](docs/autonomy.md) | you want the loop to promote or merge without you |
 | [docs/operations.md](docs/operations.md) | installing and upgrading (the plugin half and the bundle half), the board's three renderers, worktrees, editor setup |
@@ -626,6 +627,18 @@ than shortening it.
 - Machinery goes in `symlink/`. Keep it **generic**: no org, repo, path, team or channel literals — those belong in an instance's `instance.config.json` / `CLAUDE.md`.
 - Starting content goes in `seed/`. Retiring a seed file needs an entry in [`RETIRED`](RETIRED) in the same commit.
 - Tests live in `tests/`, never under `symlink/` — everything there ships into every instance.
+- **Adding a pin to the plugin's skill contract? Two harnesses, and which one is not a judgement call:**
+
+  | The property you want to hold | Where it goes |
+  |---|---|
+  | Something is **written** in a skill file — frontmatter, a named non-action, a phrase the contract turns on | [`tests/plugin-skills.test.sh`](tests/plugin-skills.test.sh) |
+  | Something is **true of what the model does** with the plugin loaded — a skill it must not reach for, a tool order, a refusal | a case under [`plugin/evals/`](plugin/evals/README.md) |
+  | The eval suite's own shape, and running it | [`tests/plugin-eval.test.sh`](tests/plugin-eval.test.sh) |
+
+  Prefer the first: it is free, offline and runs on every machine. The eval costs real model
+  runs and needs `claude plugin eval`, which is **early access** — where it is unavailable the
+  harness prints `skipped: plugin eval unavailable — <why>` rather than passing quietly.
+  [→](plugin/evals/README.md)
 - Run the suite before pushing: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. CI runs the same full suite as the required check **`harness suite`**, which `main`'s branch protection requires and is strict about — so be up to date with `main`. [→](docs/conventions.md#repo-conventions-that-are-not-invariants)
 - Adding to the harness itself? Measure what your diff adds under `symlink/**/*.sh`, and at or above ~150 lines ask in the PR body instead of assuming. [→](docs/conventions.md#repo-conventions-that-are-not-invariants)
 - This repo is **public**. Placeholders must be verified unclaimed: `example-user-007` / `example-user-008` and `example.com`.
