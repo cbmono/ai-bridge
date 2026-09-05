@@ -46,22 +46,45 @@ its own; what it publishes is the bytes the renderer wrote.
    - a URL already recorded (step 6)? **update that artifact in place**, so the URL a
      human bookmarked, or shared, keeps working. Never create a second one;
    - no URL recorded? create one, **private** — the default, and the only setting this
-     skill ever asks for. It shares the page with nobody.
+     skill ever asks for. It shares the page with nobody. **A create is irreversible and
+     its URL is not durable until step 6 writes it**: carry the URL straight to step 6,
+     and if that write cannot be made, report the failure line in step 7 rather than a
+     success. A created URL that exists only in this transcript is an orphaned artifact —
+     the next run finds no record, creates a second one, and the first page is stale
+     forever.
 
    **Title it with the page's own `<h1>`** — the masthead the renderer already wrote from
    the snapshot's `group`. Do not compose a title, a description or a summary: an org, a
    person, a repo or a path you type in is a literal the field allowlist never cleared,
    and it would sit on the page next to data that did.
 6. **Record the URL in `instance.config.local.json`**, under `boardArtifactUrl`, creating
-   the file if it is absent and preserving every key already in it.
+   the file if it is absent and preserving every key already in it. **Record before you
+   report**: step 7 reports *this* step, not step 5, because step 5 is where the
+   irreversible act happened and step 6 is where the URL becomes durable.
+
+   **The write cannot be made durable — not writable, edit rejected, anything?** The
+   artifact exists and nothing on disk names it. Do not retry silently and do not stop
+   quietly: go to step 7's failure line, which quotes the URL so a human can paste it in
+   by hand.
 
    **That file and no other.** It is per-machine and gitignored;
    `instance.config.json` is tracked, and a tracked URL is the failure this design exists
    to avoid — publishing is **account-scoped**, so exactly one account can ever update a
    given artifact, and a shared value produces one working board and one silently dead
    publish step on the other clone (`SCHEMA.md` → "Per-machine config overrides").
-7. **Report one line** — `BOARD: published <url>` — and nothing else. The next session's
-   banner prints the same URL.
+7. **Report one line, and only after the URL is recorded** — `BOARD: published <url>` —
+   and nothing else. The next session's banner prints the same URL.
+
+   **Step 6 did not complete? The report is a failure, and it quotes the URL:**
+
+   ```
+   BOARD: PUBLISHED BUT NOT RECORDED <url> — add "boardArtifactUrl": "<url>" to instance.config.local.json
+   ```
+
+   That line is the whole recovery: it is the only place the URL survives the session, and
+   pasting it into the file makes the next run update that page instead of creating a
+   second one. Never report `BOARD: published` for an artifact whose URL is not recorded —
+   the human reads that line as "done", and the URL goes with the transcript.
 
 ## When this session cannot publish
 
@@ -74,6 +97,25 @@ So if this session has no artifact capability either: **say that in one line, na
 rendered file, and stop.** It is not an error and not a failure of the instance —
 `.board-live/artifact-body.html` is on disk, `/board.html` is the tracked fallback, and
 nothing is half-published.
+
+## Two artifacts, one instance
+
+The state the ordering above exists to prevent, and how to leave it if you are already in
+it. A run created an artifact, step 6 never recorded the URL, and a later run found no
+record and created a second one — or two sessions ran this skill at once on a first run
+and both took the create branch. Both pages are private to the same account, both render
+the same board, and only one of them is ever updated again; the other is stale forever,
+and it is the one that may have been bookmarked or shared.
+
+The tell is a `BOARD: PUBLISHED BUT NOT RECORDED` line in an earlier session, or a
+bookmarked board that stopped moving.
+
+**This skill never picks between them.** Which page was bookmarked or shared is a fact
+only the human has, so the recovery is theirs: delete one artifact, put the surviving URL
+in `instance.config.local.json` under `boardArtifactUrl`, and the next run updates that
+page in place. Handed a URL that disagrees with the recorded one? Say so and stop — never
+overwrite the recorded key on a guess. Publishing is **account-scoped**, so nobody else
+can resolve this for you either.
 
 ## Sharing it with a second human
 
@@ -91,6 +133,9 @@ never from anybody's published page.
   committed; this skill only ever writes under `.board-live/`.
 - **Never put the URL in `instance.config.json`**, and never remove or rewrite a key
   already in the local file.
+- **Never report `BOARD: published` before the URL is recorded**, and never end a session
+  that created an artifact without printing its URL somewhere the human can read it. A
+  published page nobody can name is the failure this whole ordering is for.
 - **Never widen what the page carries.** The renderer's input is the snapshot, whose
   field allowlist is a data-governance boundary (`docs/operations.md` → "Before it leaves
   the machine, know what it carries"). Publishing does not license adding to it.
