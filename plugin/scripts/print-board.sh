@@ -229,7 +229,7 @@ def dirname(d):
     """The directory's own name — never a path.
 
     `.resolve()` first, because the default discovery target is Path("."), whose
-    `.name` is EMPTY: a snapshot carrying no `group` (exactly what install.sh seeds
+    `.name` is EMPTY: a snapshot carrying no `group` (exactly what /ai-bridge:init seeds
     on a first stamp) then fell through to str(d) and labelled the instance ".".
     Resolving yields the real basename, and taking only the basename keeps the
     published-page rule intact — a name leaves, a path never does.

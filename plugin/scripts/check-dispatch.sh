@@ -203,7 +203,7 @@ bundle_root() { # <task-doc>
 #      `installPath`, which is the only source that knows WHICH cached version is live;
 #   3. the newest cached version, for a machine whose install record cannot be parsed.
 #
-# `CLAUDE_CONFIG_DIR` is honoured because install.sh honours it: a machine that moved its
+# `CLAUDE_CONFIG_DIR` is honoured because `/ai-bridge:init` honours it: a machine that moved its
 # config dir has its plugins there too.
 agent_file() { # <bundle-root> <agent-name>
   local root="$1" agent="$2" cfgdir p

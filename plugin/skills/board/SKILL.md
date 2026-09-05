@@ -19,7 +19,7 @@ its own; what it publishes is the bytes the renderer wrote.
 2. **Refresh the data**: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet`. No `SNAPSHOT.json` ⇒ the
    writer writes nothing and exits 0 — that is how a human takes this instance off the
    board, so say so in one line and stop. Never create the file.
-3. **Read `board` from the tracked `instance.config.json`** — the same key `install.sh`
+3. **Read `board` from the tracked `instance.config.json`** — the same key `/ai-bridge:init`
    reads at stamp time, and deliberately *not* per-machine overridable. `false` ⇒ say the
    board is switched off and stop. Absent or `true` ⇒ carry on.
 4. **Render, scoped to this instance**, from the instance root:

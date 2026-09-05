@@ -17,8 +17,8 @@ directory means the current one. That is the whole skill: every decision, every 
 every line of output lives in the script, so a human running it in a terminal and a
 session running it here get the same answer, and there is no second copy here to drift.
 
-**It replaces `install.sh`.** No clone of this template is needed on the machine — the
-plugin carries the installer, and a plugin update is what updates it.
+**The plugin carries the installer.** No clone of this template is needed on the machine,
+and a plugin update is what updates it.
 
 ## What it does, in one table
 
