@@ -348,13 +348,13 @@ re-renders the local page and reports its path ([below](#rendering-it-from-each-
 
 ### Which renderer to reach for
 
-| | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` |
-|---|---|---|---|---|
-| Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, no `<html>` wrapper | the same page, kept fresh |
-| Freshness | the moment you ran it | the moment you ran it — or **every tick**, on a looping instance | the moment you ran it | live, to the second |
-| Leaves the machine | no | no | only if you carry it somewhere | no |
-| Costs | nothing | a re-run, or a looping instance | a re-run to refresh | **a resident process** |
-| Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue |
+| | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` | `/ai-bridge:board` |
+|---|---|---|---|---|---|
+| Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, no `<html>` wrapper | the same page, kept fresh | the same body, as a **private artifact** at a fixed URL |
+| Freshness | the moment you ran it | the moment you ran it — or **every tick**, on a looping instance | the moment you ran it | live, to the second | the last time you ran it — no tick can refresh it |
+| Leaves the machine | no | no | only if you carry it somewhere | no | **yes — titles go to claude.ai** |
+| Costs | nothing | a re-run, or a looping instance | a re-run to refresh | **a resident process** | a re-run, and it must be a human typing |
+| Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue | somebody needs the board on a phone, or without a clone |
 
 **The watcher needs a process you keep alive, and that is a real cost, not a detail.**
 ai-bridge deliberately has no resident process: its agents are ephemeral subagents inside
@@ -1081,7 +1081,7 @@ returns a tool for a query it can answer, so the probe discriminates. A dispatch
 that session. So the tick renders the two local pages exactly as before and adds **one
 line** when this machine has published a board:
 
-```
+```text
 BOARD: run /ai-bridge:board to refresh the published page
 ```
 

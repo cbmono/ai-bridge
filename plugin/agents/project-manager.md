@@ -729,7 +729,7 @@ state, and act only on deltas.
       and the SessionStart banner ignores it for the same reason; the two must agree.
       A first field of `local` ⇒ add exactly one more line to your report:
 
-      ```
+      ```text
       BOARD: run /ai-bridge:board to refresh the published page
       ```
 
