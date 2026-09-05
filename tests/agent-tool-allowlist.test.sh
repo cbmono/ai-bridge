@@ -207,7 +207,7 @@ NOT_A_TOOL='SessionStart|PreToolUse|UserPromptSubmit|Makefile'
 # writes each as a `## type: <Name>` heading, so the registry is machine-readable and a new
 # type classifies itself. An empty result would un-classify 43 mentions at once, so it is
 # asserted below rather than trusted.
-OKF_TYPE_SRC="$REPO/seed/SCHEMA.md"
+OKF_TYPE_SRC="$REPO/plugin/seed/SCHEMA.md"
 OKF_TYPES="$(grep -oE '^#+[[:space:]]+type:[[:space:]]+[A-Za-z]+' "$OKF_TYPE_SRC" 2>/dev/null \
   | awk '{print $NF}' | sort -u | paste -sd'|' - )"
 [ -n "$OKF_TYPES" ] || OKF_TYPES='__no_okf_types_derived__'
@@ -612,7 +612,10 @@ doc_refs_of() { # <agent-file> — every `*.md` reference in its body, normalise
 
 resolve_doc() { # <reference> — repo-relative path of the shipped doc, or nothing
   local ref="$1" cand
-  for cand in "symlink/$ref" "seed/$ref"; do
+  # `plugin/seed/` is where the seed lives since task-022; `symlink/` is the retired tree,
+  # kept ahead of it so an agent reference that named a machinery doc still resolves the
+  # way it always did on a checkout that still has one.
+  for cand in "symlink/$ref" "plugin/seed/$ref"; do
     # An agent file is audited against its OWN allowlist in §1, never as a shared doc, and
     # a slash command is run by the main session, which holds every tool and so cannot
     # have this defect. Both are skipped by path rather than by name.
@@ -643,7 +646,7 @@ readers_of() { # <shared-doc-relpath> — agent files that read it
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     [ "$(has_tools_key "$f")" = yes ] || continue
-    if [ "$doc" = seed/CLAUDE.md ]; then printf '%s\n' "$f"; continue; fi
+    if [ "$doc" = plugin/seed/CLAUDE.md ]; then printf '%s\n' "$f"; continue; fi
     while IFS= read -r ref; do
       [ -n "$ref" ] || continue
       [ "$(resolve_doc "$ref")" = "$doc" ] && { printf '%s\n' "$f"; break; }
@@ -691,14 +694,14 @@ ok "shared docs scanned" "$([ "$SHARED_SCANNED" -ge 5 ] && echo yes || echo no)"
 # The DERIVATION is the check here, so name the docs it must reach. The first two are what
 # the hardcoded list used to hold; `seed/SCHEMA.md` is the one it missed, and naming it
 # means a derivation that silently narrows back to the old pair fails instead of passing.
-for must in seed/CONVENTIONS.md seed/CLAUDE.md seed/SCHEMA.md; do
+for must in plugin/seed/CONVENTIONS.md plugin/seed/CLAUDE.md plugin/seed/SCHEMA.md; do
   ok "derived set reaches $must" "$(printf '%s\n' "$SHARED_DOCS" | grep -cxF "$must")" 1
 done
 
 # The reader derivation must find the real set, or the intersection is meaningless.
-CONV_READERS="$(readers_of seed/CONVENTIONS.md | wc -l | tr -d ' ')"
+CONV_READERS="$(readers_of plugin/seed/CONVENTIONS.md | wc -l | tr -d ' ')"
 ok "CONVENTIONS.md readers derived"  "$([ "$CONV_READERS" -ge 3 ] && echo yes || echo no)" yes
-SCHEMA_READERS="$(readers_of seed/SCHEMA.md | wc -l | tr -d ' ')"
+SCHEMA_READERS="$(readers_of plugin/seed/SCHEMA.md | wc -l | tr -d ' ')"
 ok "SCHEMA.md readers derived"       "$([ "$SCHEMA_READERS" -ge 3 ] && echo yes || echo no)" yes
 
 [ -s "$FINDINGS" ] && cat "$FINDINGS"
@@ -1027,8 +1030,8 @@ done
 
 # 4m. the DERIVED scanned set: resolution is what decides which files are looked at, so
 # assert the resolver rather than only the list it produced.
-ok "resolves a symlink/ doc"                 "$(resolve_doc SCHEMA.md)" seed/SCHEMA.md
-ok "falls through to seed/ for CLAUDE.md"    "$(resolve_doc CLAUDE.md)" seed/CLAUDE.md
+ok "resolves a shipped doc"                  "$(resolve_doc SCHEMA.md)" plugin/seed/SCHEMA.md
+ok "falls through to plugin/seed/ for CLAUDE.md" "$(resolve_doc CLAUDE.md)" plugin/seed/CLAUDE.md
 ok "an instance-only doc resolves to nothing" "$(resolve_doc AWAITING.md)" ""
 ok "an agent file is never a shared doc"     "$(resolve_doc .claude/agents/qa-reviewer.md)" ""
 ok "a slash command is never a shared doc"   "$(resolve_doc .claude/commands/pm-loop.md)" ""

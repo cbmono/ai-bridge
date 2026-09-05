@@ -83,7 +83,7 @@ assert "…and check-machinery.sh is NOT registered any more" \
 # And the bundle's own seeded settings.json must register NONE of them, or a converted
 # bundle would run the banner twice — once from the plugin, once from itself.
 assert "…and the seeded settings.json registers no hook" \
-  "$(no_if grep -q '"hooks"' "$TPLSRC/seed/.claude/settings.json")"
+  "$(no_if grep -q '"hooks"' "$TPLSRC/plugin/seed/.claude/settings.json")"
 
 echo "== every probe path is a path the OLD installer really stamped =="
 # The probe list is five literal paths naming the symlink-era layout. It fails CLOSED — a
@@ -96,7 +96,7 @@ assert "the probe list is readable from the hook"  "$([ -n "$PROBES" ] && echo 0
 for rel in $PROBES; do
   base="$(basename "$rel")"
   assert "probe names something this repo ships: $rel" \
-    "$(yes_if bash -c "test -f '$TPLSRC/seed/$rel' || test -f '$TPLSRC/plugin/scripts/$base' || test -f '$TPLSRC/plugin/hooks/$base' || test -f '$TPLSRC/seed/.claude/$base'")"
+    "$(yes_if bash -c "test -f '$TPLSRC/plugin/seed/$rel' || test -f '$TPLSRC/plugin/scripts/$base' || test -f '$TPLSRC/plugin/hooks/$base' || test -f '$TPLSRC/plugin/seed/.claude/$base'")"
 done
 
 # A copy of the template, so moving or mutilating it cannot touch the real one. Same
@@ -165,7 +165,7 @@ echo "== the whole symlink-era bundle, against a template that MOVED =="
 # bought — under the old design the hook was itself one of the dead links.
 LEG="$TMP/group/_ai-bridge-legacy"
 mkdir -p "$LEG/scripts" "$LEG/.claude/hooks" "$LEG/agents" "$LEG/projects/demo/tasks" "$LEG/knowledge/findings"
-cp "$TPL/seed/instance.config.json" "$LEG/instance.config.json"
+cp "$TPL/plugin/seed/instance.config.json" "$LEG/instance.config.json"
 printf 'a decision only this bundle holds\n' > "$LEG/projects/demo/index.md"
 printf -- '---\ntype: Task\ntitle: t\nstatus: draft\n---\n' > "$LEG/projects/demo/tasks/task-001-x.md"
 printf 'a finding\n' > "$LEG/knowledge/findings/f.md"

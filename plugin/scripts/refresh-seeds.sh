@@ -70,14 +70,16 @@
 # Verified by tests/upgrade.test.sh.
 set -euo pipefail
 
-# The template root — two directories up from this script and then verified. See
-# init-bundle.sh for why it is derived from the fixed plugin layout and not searched for.
+# The plugin root — ONE directory up from this script and then verified. Same rule as
+# init-bundle.sh, and see the long comment there for why: `source: ./plugin` means an
+# INSTALLED plugin is the contents of `plugin/`, so `<cache>/scripts` and
+# `<root>/plugin/scripts` both resolve to the directory that carries `seed/` and `VERSION`.
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 SELF="$BIN_DIR/$(basename "$0")"
-TEMPLATE_DIR="$(cd "$BIN_DIR/../.." 2>/dev/null && pwd || true)"
-[ -n "$TEMPLATE_DIR" ] && [ -f "$TEMPLATE_DIR/VERSION" ] || {
-  echo "refresh-seeds: cannot locate the ai-bridge template root from $BIN_DIR" >&2; exit 2; }
-SEED_SRC="$TEMPLATE_DIR/seed"
+PLUGIN_ROOT="$(cd "$BIN_DIR/.." 2>/dev/null && pwd || true)"
+[ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/VERSION" ] || {
+  echo "refresh-seeds: cannot locate the ai-bridge plugin root from $BIN_DIR" >&2; exit 2; }
+SEED_SRC="$PLUGIN_ROOT/seed"
 DIFF_CAP="${UPGRADE_DIFF_LINES:-40}"   # lines of a conflicting diff to print inline
 
 APPLY=0
@@ -124,7 +126,7 @@ left_more() { printf '    %s\n' "$1" >> "$TMPD/left"; }
 : > "$TMPD/conflicts"
 
 echo "ai-bridge seed refresh — $TARGET"
-echo "template: $TEMPLATE_DIR"
+echo "plugin:   $PLUGIN_ROOT"
 if [ "$APPLY" -eq 1 ]; then
   echo "mode:     APPLY — the mergeable changes below WILL be written."
 else
@@ -136,15 +138,15 @@ echo
 echo "== seed drift (a seed edit never reaches a stamped bundle by itself) =="
 
 # Every git query below runs from the REPO ROOT with root-relative paths. `git -C <dir>`
-# makes a pathspec relative to <dir>, so querying from the template dir with the path
+# makes a pathspec relative to <dir>, so querying from the plugin dir with the path
 # git reports for it ("seed/…") silently matched nothing — and "no history"
 # is indistinguishable from "no evidence", which downgraded every drifted file to
 # UNKNOWN. Resolve the root once, and prefix paths with the template's own prefix.
 GIT_OK=1
 REPO_ROOT=""; PREFIX=""
-if git -C "$TEMPLATE_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
-  REPO_ROOT="$(git -C "$TEMPLATE_DIR" rev-parse --show-toplevel)"
-  PREFIX="$(git -C "$TEMPLATE_DIR" rev-parse --show-prefix)"
+if git -C "$PLUGIN_ROOT" rev-parse --show-toplevel >/dev/null 2>&1; then
+  REPO_ROOT="$(git -C "$PLUGIN_ROOT" rev-parse --show-toplevel)"
+  PREFIX="$(git -C "$PLUGIN_ROOT" rev-parse --show-prefix)"
 else
   GIT_OK=0
 fi
@@ -161,7 +163,7 @@ hist_blobs() { # <repo-relative path>
   done | awk 'NF && !seen[$0]++'
 }
 
-blob_of() { git -C "$TEMPLATE_DIR" hash-object --no-filters -- "$1"; }
+blob_of() { git -C "$PLUGIN_ROOT" hash-object --no-filters -- "$1"; }
 
 # Changed-line count between two files. awk rather than `grep -c`, because grep exits 1
 # on zero matches and `set -o pipefail` would turn "identical" into a script failure.

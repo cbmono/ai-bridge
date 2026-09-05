@@ -18,7 +18,7 @@ The full suite is CI's job: `harness suite` is a required check with `strict=tru
 runs everything against the merged base. Locally the same loop measured **39m 47s and
 269.4k tokens** (2026-08-29) against ~9 minutes and no tokens in CI. So run it only when
 your change touches shared machinery every harness loads, and say why in the PR body —
-`seed/CONVENTIONS.md` → "The full suite belongs to CI" is the rule this defers to.
+`plugin/seed/CONVENTIONS.md` → "The full suite belongs to CI" is the rule this defers to.
 
 The full loop, for that exception only — and never polled:
 

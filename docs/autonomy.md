@@ -5,7 +5,7 @@ and **merge** the PR (build) or **approve** the deliverable (research). Delegati
 either one is optional, and off unless you install it.
 
 **Normative source:** [`plugin-yolo/companion/AUTONOMY.md`](../plugin-yolo/companion/AUTONOMY.md)
-defines the modes; [`seed/SCHEMA.md`](../seed/SCHEMA.md) → "Independent verification gate"
+defines the modes; [`plugin/seed/SCHEMA.md`](../plugin/seed/SCHEMA.md) → "Independent verification gate"
 defines the clearance predicate. This page is orientation — don't implement from it.
 
 ---
@@ -87,7 +87,7 @@ the host only to read.
 
 Ask it about a task you **dispatched**: one nobody has dispatched reads as exit 1 too,
 correctly and uselessly. The measurement behind it is in
-[`seed/CONVENTIONS.md`](../seed/CONVENTIONS.md) → "A dispatch is not finished until
+[`plugin/seed/CONVENTIONS.md`](../plugin/seed/CONVENTIONS.md) → "A dispatch is not finished until
 its artifact exists".
 
 ## Required checks — exit 0 is the only clearance
@@ -130,7 +130,7 @@ a replacement for the independent gate.
 ends its review with a machine-readable `okf-verdict` trailer; the loop reads the verdict
 **only** from that trailer and criteria coverage only from the checklist's checkbox state,
 never from prose. **The full predicate — the normative list every consumer must check — is
-in [`SCHEMA.md`](../seed/SCHEMA.md) → "Independent verification gate".** Don't
+in [`SCHEMA.md`](../plugin/seed/SCHEMA.md) → "Independent verification gate".** Don't
 implement from the summary below; it names three *failure classes* to convey the shape,
 not the complete set of requirements.
 
@@ -240,7 +240,7 @@ clean. Three rules keep it to one.
 
 A **hard cap** on how many verification rounds one PR gets, so an unresolved disagreement
 costs the human one decision rather than an unbounded review.
-[`seed/CONVENTIONS.md`](../seed/CONVENTIONS.md) → "TWO ROUNDS, THEN THE HUMAN
+[`plugin/seed/CONVENTIONS.md`](../plugin/seed/CONVENTIONS.md) → "TWO ROUNDS, THEN THE HUMAN
 DECIDES" is normative and carries the measurement behind the number.
 
 | Round | What happens |
@@ -276,12 +276,12 @@ screenshots need no permission either way.
 Permissions are pre-wired so nothing stalls: Claude Code's tool permissions sit
 *underneath* a project's `autonomy`, and left prompting a background agent would stall on
 a prompt nobody is watching — the task would read as hung rather than blocked. So
-`seed/.claude/settings.json` allows `mcp__claude-in-chrome__*` and every instance picks
+`plugin/seed/.claude/settings.json` allows `mcp__claude-in-chrome__*` and every instance picks
 it up through the symlink. From there the extension's **per-site permissions** are the
 boundary that actually holds, so restrict there. To restore prompts, shadow the rule with
 `ask` in the instance's `.claude/settings.local.json`.
 
-Agent-facing rules: [`SCHEMA.md` → "Browser access"](../seed/SCHEMA.md).
+Agent-facing rules: [`SCHEMA.md` → "Browser access"](../plugin/seed/SCHEMA.md).
 
 ### What browser access looks like in practice
 
@@ -296,7 +296,7 @@ the extension, then grant it **per-site** permissions there.
 
 > **Upgrading an existing instance:** re-running `/ai-bridge:init` picks up `SCHEMA.md` and the
 > role agents (symlinked), but **not** `CLAUDE.md` — seed content is copied only when
-> absent, never clobbered. Add the **Browser** bullet from `seed/CLAUDE.md`'s "Conventions
+> absent, never clobbered. Add the **Browser** bullet from `plugin/seed/CLAUDE.md`'s "Conventions
 > for role agents working in target repos" to your instance's `CLAUDE.md` by hand.
 
 ---

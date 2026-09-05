@@ -35,7 +35,7 @@ repos and holds only the state of the work — never application code.
 | [docs/conventions.md](docs/conventions.md) | **you are changing this repo** — every design invariant and why it exists |
 | [The config layer](#the-config-layer) | you want this repo's agents, commands and hooks in `~/.claude` too |
 
-Normative contracts live in the machinery itself: [`seed/SCHEMA.md`](seed/SCHEMA.md)
+Normative contracts live in the machinery itself: [`plugin/seed/SCHEMA.md`](plugin/seed/SCHEMA.md)
 (document types, the verification predicate) and
 [`plugin-yolo/companion/AUTONOMY.md`](plugin-yolo/companion/AUTONOMY.md) (the
 delegated-autonomy modes, shipped by the `ai-bridge-yolo` companion plugin).
@@ -97,7 +97,7 @@ It does three things, and **none of them is a symlink into a checkout**:
 
 | # | Action | Detail |
 |---|---|---|
-| 1 | **Copies** `seed/` content — only if absent | never clobbers bundle data |
+| 1 | **Copies** `plugin/seed/` content — only if absent | never clobbers bundle data |
 | 2 | **Converts** a bundle stamped by the retired `/ai-bridge:init` | removes its machinery links and the managed `.gitignore` block; the data is untouched |
 | 3 | **Links** the group's repos into `<bundle>/repos/` | skipped while `reposRoot` is the seeded placeholder. **The only symlinks a stamped bundle holds.** |
 
@@ -222,19 +222,19 @@ instance sets its own in `roleTiers`/`models`
 > ### HUMAN GATE 1 — you promote the task `draft → ready`
 >
 > **Nothing is dispatched until you do.** The PM refines and critiques a draft but never
-> sets `ready` ([two human authorities](seed/SCHEMA.md)).
+> sets `ready` ([two human authorities](plugin/seed/SCHEMA.md)).
 
 | # | Step | Who runs it |
 |---|---|---|
 | 6 | **Dispatch** the `ready` task — its own worktree and branch, both recorded on the task before the agent spawns | `project-manager` → the assignee [→](plugin/agents/project-manager.md) |
-| 7 | **Build it**, then **self-review your own diff** — a pre-filter, never the gate | `software-engineer` / `devops-engineer` (`deep`) [→](seed/CONVENTIONS.md) |
+| 7 | **Build it**, then **self-review your own diff** — a pre-filter, never the gate | `software-engineer` / `devops-engineer` (`deep`) [→](plugin/seed/CONVENTIONS.md) |
 | 8 | **Open the PR** carrying the task's `acceptance_criteria` as a ✓/✗ table — the artifact `pr-body-clearance.sh` reads. The agent never merges | the same agent |
-| 9 | **Independent review** at the PR's current head: the external reviewer where one is configured, else the `qa-reviewer` fallback. The PM reads that verdict with `review-clearance.sh`, and `review-rounds.sh` stops it at two rounds | external reviewer, else `qa-reviewer` (`deep`) [→](seed/SCHEMA.md) |
+| 9 | **Independent review** at the PR's current head: the external reviewer where one is configured, else the `qa-reviewer` fallback. The PM reads that verdict with `review-clearance.sh`, and `review-rounds.sh` stops it at two rounds | external reviewer, else `qa-reviewer` (`deep`) [→](plugin/seed/SCHEMA.md) |
 
 > ### HUMAN GATE 2 — you merge the PR
 >
 > **One `✗` in that criteria table blocks it, however green CI is**
-> ([SCHEMA.md](seed/SCHEMA.md)).
+> ([SCHEMA.md](plugin/seed/SCHEMA.md)).
 
 The next tick reflects the merge — `status: done`, and the task's worktree is reclaimed.
 
@@ -474,7 +474,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 
 `instance.config.json` (tracked) and `instance.config.local.json` (gitignored, per
 machine). The **one** authoritative list of which keys are locally overridable is
-[`SCHEMA.md` → "Per-machine config overrides"](seed/SCHEMA.md).
+[`SCHEMA.md` → "Per-machine config overrides"](plugin/seed/SCHEMA.md).
 
 | Key | Absent means | Overridable per machine |
 |---|---|---|
@@ -585,12 +585,14 @@ each instance keeps its own git history, so work and personal stay separate.
 
 ## Versioning and drift
 
-The version lives in one place — [`VERSION`](VERSION) at this root, one line, no extension.
-`cat VERSION` reads it; nothing parses prose for it and there is no `package.json`, no tag
-and no changelog. **There is no release process here and none is wanted.**
+The version lives at this root — [`VERSION`](VERSION), one line, no extension — and is
+MIRRORED byte-for-byte into [`plugin/VERSION`](plugin/VERSION), because an installed plugin
+has no checkout around it to read the root copy from. `cat VERSION` reads it;
+`tests/template-version.test.sh` fails if the two disagree, so bump both. Nothing parses
+prose for it and there is no `package.json`, no tag and no changelog. **There is no release process here and none is wanted.**
 
 **A change to `core` proposes the bump; you approve it by merging.** `core` is a closed
-list — `plugin/`, `seed/`, `config/`, `RETIRED` — and it is
+list — `plugin/` (which carries `seed/`, `RETIRED` and the shipped `VERSION`) and `config/` — and it is
 exactly what the two path-scoped rule files ([`.claude/rules/machinery.md`](.claude/rules/machinery.md),
 [`.claude/rules/installer.md`](.claude/rules/installer.md)) already govern, so an agent
 editing one of those paths meets the rule as it opens the file. A PR touching only `docs/`,
@@ -604,7 +606,7 @@ behaviour that already shipped, **minor** for a new capability or a new file und
 
 **Why the number matters more than a label.** A bundle consumes nothing from this checkout
 any more — the machinery ships in the plugin, replaced whole on every update — but
-`seed/` content is copied into a bundle once, ever, so a seed edit reaches a stamped
+`plugin/seed/` content is copied into a bundle once, ever, so a seed edit reaches a stamped
 bundle only through `/ai-bridge:welcome fix`. That gap has cost real time: two hooks
 merged and sat inert in every instance for a week, back when a stamp was the only route.
 
@@ -639,7 +641,7 @@ what went wrong to produce each one — the reasoning is the asset, so relocate 
 than shortening it.
 
 - Machinery goes in `plugin/`. Keep it **generic**: no org, repo, path, team or channel literals — those belong in an instance's `instance.config.json` / `CLAUDE.md`.
-- Starting content goes in `seed/`. Retiring a seed file needs an entry in [`RETIRED`](RETIRED) in the same commit.
+- Starting content goes in `plugin/seed/`. Retiring a seed file needs an entry in [`RETIRED`](plugin/RETIRED) in the same commit.
 - Tests live in `tests/`, never under `plugin/` — everything there ships into every instance.
 - **Adding a pin to the plugin's skill contract? Two harnesses, and which one is not a judgement call:**
 
@@ -684,7 +686,7 @@ The two repos are independent by design: `ai-setup`'s user-wide installer is sco
 [docs/claude-config-ownership.md](docs/claude-config-ownership.md) for why. This repo
 installs only the three agents its own role agents probe for. The
 `@~/.claude/claude-defaults.md` import that every instance used to inherit is gone: that
-section is inlined in `seed/CLAUDE.md`, so nothing can dangle.
+section is inlined in `plugin/seed/CLAUDE.md`, so nothing can dangle.
 
 ---
 
@@ -758,4 +760,4 @@ still resolving into the checkout you had just detached from). Real files, `*.ba
 An instance stamped before this existed carries one line in its `CLAUDE.md`:
 `@~/.claude/claude-defaults.md`. That file is no longer shipped, and a missing `@import`
 fails **silently**. `/ai-bridge:init <bundle>` now reports it. Replace that line with the
-`## Session defaults` section from [`seed/CLAUDE.md`](seed/CLAUDE.md).
+`## Session defaults` section from [`plugin/seed/CLAUDE.md`](plugin/seed/CLAUDE.md).

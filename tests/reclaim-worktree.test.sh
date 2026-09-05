@@ -78,7 +78,7 @@ JSON
 # The script requires an instance root (SCHEMA.md + instance.config.json), exactly
 # as task-owner.sh does. A copy of the real one, so the fixture cannot drift from
 # what an instance actually has.
-cp "$TPLSRC/seed/SCHEMA.md" "$INSTANCE/SCHEMA.md"
+cp "$TPLSRC/plugin/seed/SCHEMA.md" "$INSTANCE/SCHEMA.md"
 
 # --- the upstream + clone -----------------------------------------------------
 g() { git -C "$REPO" "$@"; }

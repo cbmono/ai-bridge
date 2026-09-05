@@ -28,7 +28,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$REPO/plugin/scripts/check-dispatch.sh"
-CONV="$REPO/seed/CONVENTIONS.md"
+CONV="$REPO/plugin/seed/CONVENTIONS.md"
 PM="$REPO/plugin/agents/project-manager.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/blocked-vs-own-tools.XXXXXX")" || {

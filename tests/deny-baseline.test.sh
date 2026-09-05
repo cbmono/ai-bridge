@@ -35,7 +35,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$REPO/plugin/hooks/deny-destructive.sh"
 HOOKSJSON="$REPO/plugin/hooks/hooks.json"
-SETTINGS="$REPO/seed/.claude/settings.json"
+SETTINGS="$REPO/plugin/seed/.claude/settings.json"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/denybase.XXXXXX")" || {
   echo "deny-baseline.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT

@@ -436,7 +436,7 @@ ok "a second disarm is quiet and still exits 0"        "$(ctl_rc disarm)" 0
 
 echo
 echo "--- registration: the hook is wired up and shippable --------------------"
-SETTINGS="$REPO/seed/.claude/settings.json"
+SETTINGS="$REPO/plugin/seed/.claude/settings.json"
 ok "hooks.json is valid JSON"                          "$(jq -e . "$HOOKSJSON" >/dev/null 2>&1 && echo yes || echo no)" yes
 # SELECTED BY NAME, NOT COUNTED AND NOT BY INDEX. What this asserts is that THIS hook is
 # registered. `PreToolUse | length` said so only for as long as this was the only entry,

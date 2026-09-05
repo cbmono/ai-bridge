@@ -307,23 +307,23 @@ eq "a hyphenated login does resolve"           "hyphen@example.com" "$(ae)"
 # public, and a real address or a live login in the seed is stamped into every future
 # instance.
 assert "the seed people map uses the placeholder logins" \
-  "$(grep -q '"example-user-007"' "$TPL/seed/instance.config.json" && echo 0 || echo 1)"
+  "$(grep -q '"example-user-007"' "$TPL/plugin/seed/instance.config.json" && echo 0 || echo 1)"
 assert "…and says it is an example"           \
-  "$(grep -q 'EXAMPLE ONLY' "$TPL/seed/instance.config.json" && echo 0 || echo 1)"
+  "$(grep -q 'EXAMPLE ONLY' "$TPL/plugin/seed/instance.config.json" && echo 0 || echo 1)"
 assert "…and says placeholders must be verified unclaimed" \
-  "$(grep -q 'VERIFIED UNCLAIMED' "$TPL/seed/instance.config.json" && echo 0 || echo 1)"
+  "$(grep -q 'VERIFIED UNCLAIMED' "$TPL/plugin/seed/instance.config.json" && echo 0 || echo 1)"
 assert "…and every address is at example.com" \
-  "$(grep -oE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+' "$TPL/seed/instance.config.json" \
+  "$(grep -oE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+' "$TPL/plugin/seed/instance.config.json" \
      | grep -vE '@example\.com$' | grep -q . && echo 1 || echo 0)"
 # Plausible names are taken: these are real GitHub accounts and must never be examples.
 assert "…and names no live account (alice/bob/jane-doe)" \
-  "$(grep -qE '"(alice|bob|jane-doe)"' "$TPL/seed/instance.config.json" && echo 1 || echo 0)"
+  "$(grep -qE '"(alice|bob|jane-doe)"' "$TPL/plugin/seed/instance.config.json" && echo 1 || echo 0)"
 
 echo
 echo "== the override is gitignored by the template's seed =="
 
 assert "seed/.gitignore ignores it" \
-  "$(grep -qxF 'instance.config.local.json' "$TPL/seed/.gitignore" && echo 0 || echo 1)"
+  "$(grep -qxF 'instance.config.local.json' "$TPL/plugin/seed/.gitignore" && echo 0 || echo 1)"
 # install.sh must also add it to an instance whose .gitignore predates the line —
 # the seed is copied only when absent, so an older instance would never get it.
 INST="$TMP/g/_ai-bridge-g"; mkdir -p "$INST"

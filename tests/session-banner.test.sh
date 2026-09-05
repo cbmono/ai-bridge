@@ -38,7 +38,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
 HOOKDIR="$TPL/plugin/hooks"
-SETTINGS="$TPL/seed/.claude/settings.json"
+SETTINGS="$TPL/plugin/seed/.claude/settings.json"
 # WHERE THE REGISTRATION LIVES NOW. It was the bundle's settings.json, symlinked in from
 # the template; the four ai-bridge hooks ship with the PLUGIN since task-013, so one
 # install arms every bundle on the machine instead of only the ones somebody re-stamped.
@@ -578,7 +578,7 @@ echo "== 7. the offer is prose, and it lives where a session will read it =="
 # nothing emits: an offer that can never fire, under a harness that stays green because it
 # only checks the seed contains the phrase. That is the failure this pair exists to catch,
 # so the second half below reads the hook's OUTPUT and not its source.
-SEED="$TPL/seed/CLAUDE.md"
+SEED="$TPL/plugin/seed/CLAUDE.md"
 assert "seed/CLAUDE.md tells the session to offer /pm-loop" \
   "$(grep -qi 'offer.*/pm-loop\|offer the loop' "$SEED" && echo 0 || echo 1)"
 assert "…keyed off the banner's Ready-to-dispatch line" \

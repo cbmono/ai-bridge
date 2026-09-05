@@ -42,12 +42,16 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-54s (%s)\n' "$1" "$2"; pass=$(
 # fixture without one is not a template at all.
 make_template() { # <dir>
   local d="$1"
-  mkdir -p "$d/seed" "$d/plugin/scripts" "$d/config/required/agents"
+  mkdir -p "$d/plugin/seed" "$d/plugin/scripts" "$d/config/required/agents" "$d/.claude-plugin"
   cp "$REPO/VERSION" "$d/VERSION"
+  cp "$REPO/VERSION" "$d/plugin/VERSION"
+  # The marketplace manifest is what tells init-bundle.sh there is a CHECKOUT around the
+  # plugin — and the worktree guard under test only has a checkout to refuse when there is.
+  printf '{ "name": "ai-bridge", "plugins": [] }\n' > "$d/.claude-plugin/marketplace.json"
   cp "$REPO/plugin/scripts/init-bundle.sh" "$d/plugin/scripts/init-bundle.sh"
-  printf '{}\n' > "$d/seed/instance.config.json"
+  printf '{}\n' > "$d/plugin/seed/instance.config.json"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$d/plugin/scripts/s.sh"
-  printf 'x\n' > "$d/seed/SCHEMA.md"
+  printf 'x\n' > "$d/plugin/seed/SCHEMA.md"
   printf '# a probed agent\n' > "$d/config/required/agents/plan-architect.md"
 }
 

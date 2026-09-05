@@ -54,9 +54,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/seed/CONVENTIONS.md"
-SEED="$REPO/seed/CLAUDE.md"
-SCHEMA="$REPO/seed/SCHEMA.md"
+CONV="$REPO/plugin/seed/CONVENTIONS.md"
+SEED="$REPO/plugin/seed/CLAUDE.md"
+SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 AUTONOMY="$REPO/plugin-yolo/companion/AUTONOMY.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pr-body-shape.XXXXXX")" || {

@@ -46,7 +46,7 @@ LOCKSH="$REPO/plugin/scripts/tick-lock.sh"
 DISPATCH="$REPO/plugin/skills/dispatch/SKILL.md"
 AUDIT="$REPO/plugin/skills/audit/SKILL.md"
 OPS="$REPO/docs/operations.md"
-SEEDIGNORE="$REPO/seed/.gitignore"
+SEEDIGNORE="$REPO/plugin/seed/.gitignore"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/loop-cadence.XXXXXX")" || {
   echo "loop-cadence.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2

@@ -225,7 +225,7 @@ ok "…naming the thing that may not be removed" \
 # companion installed, which is section 1 above plus this: core seeds the deny baseline
 # and SCHEMA.md's two human authorities regardless of what is installed.
 ok "…and core still states the two human authorities" \
-   "$(grep -c 'Two human authorities' "$REPO/seed/SCHEMA.md" | tr -d ' ')" 1
+   "$(grep -c 'Two human authorities' "$REPO/plugin/seed/SCHEMA.md" | tr -d ' ')" 1
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

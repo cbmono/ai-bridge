@@ -731,9 +731,13 @@ check_config_layers() {
 # typo'd key silently configures nothing, the "a config switch is inert until something
 # reads it" class the KB records.
 #
-# THE KNOWN SET IS THE SEED'S OWN KEY LIST — `seed/instance.config.json` in the template
-# this script already resolves itself from — because the seed ships every key the machinery
-# reads, and a name list here would be a second copy that drifts. Keys beginning `$` are
+# THE KNOWN SET IS THE SEED'S OWN KEY LIST — `seed/instance.config.json`, read from THIS
+# PLUGIN rather than from the checkout around it — because the seed ships every key the
+# machinery reads, and a name list here would be a second copy that drifts. From the plugin
+# because that is where the seed now lives (task-022), and because it is the only one of
+# the two that exists on a machine that installed the plugin and never cloned this repo:
+# resolving it from `$TEMPLATE` degraded this row to a non-answer on exactly those
+# machines, which is every ordinary install. Keys beginning `$` are
 # comments by convention, on both sides. TWO additions, each justified by its reader the
 # way the tool vocabulary's hand-list entries are, and each never seeded for the same
 # reason — seeding a per-machine key writes one machine's answer into every clone:
@@ -758,8 +762,8 @@ check_config_unknown_keys() {
     return 0
   fi
   local seedcfg known f k unknown
-  seedcfg="$TEMPLATE/seed/instance.config.json"
-  if [ -z "$TEMPLATE" ] || [ ! -f "$seedcfg" ]; then
+  seedcfg="$PLUGIN_ROOT/seed/instance.config.json"
+  if [ -z "$PLUGIN_ROOT" ] || [ ! -f "$seedcfg" ]; then
     good "config keys: not resolvable here (no template seed to compare against)"
     return 0
   fi

@@ -56,21 +56,51 @@
 # Backs up any conflicting real file as <name>.bak.<epoch> before writing.
 set -euo pipefail
 
-# WHERE THIS REPO IS. The layout is fixed by the marketplace manifest (`source: ./plugin`),
-# so a script at <root>/plugin/scripts/ has its template root exactly two directories up —
-# in a plugin cache and in a checkout of this repo alike. Two directories up and then
-# VERIFIED (`VERSION` and `seed/` must be there), rather than searched for: a walk that
-# keeps climbing will eventually find SOME ancestor with a VERSION file, and answering with
-# an unrelated repo is worse than refusing.
+# WHERE THE PLUGIN IS — ONE RULE FOR BOTH LAYOUTS, and that is the whole of task-022.
+# `source: ./plugin` in the marketplace manifest means an INSTALLED plugin is the CONTENTS
+# of `plugin/`, not the repo around it: the cache holds `agents/ evals/ hooks/ scripts/
+# skills/` and nothing else. The previous rule ("two directories up from scripts/") was
+# written against a checkout and only ever verified against one, so `/ai-bridge:init` exited
+# 2 with "cannot locate the ai-bridge template root" on every machine that installed the
+# plugin the supported way — measured on 0.15.0, 2026-09-05.
+#
+# The rule now is ONE directory up from scripts/, which is the plugin root in both places:
+#   installed:  <cache>/scripts/init-bundle.sh   ->  <cache>
+#   checkout:   <root>/plugin/scripts/init-bundle.sh  ->  <root>/plugin
+# That only works because everything a stamp READS now ships inside `plugin/` — `seed/`,
+# `VERSION` and `RETIRED` all moved there in the same change. Derived and then VERIFIED
+# (`VERSION` and `seed/` must be there), never searched for: a walk that keeps climbing
+# will eventually find SOME ancestor with a VERSION file, and answering with an unrelated
+# repo is worse than refusing.
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
-TEMPLATE_DIR="$(cd "$BIN_DIR/../.." 2>/dev/null && pwd || true)"
-if [ -z "$TEMPLATE_DIR" ] || [ ! -f "$TEMPLATE_DIR/VERSION" ] || [ ! -d "$TEMPLATE_DIR/seed" ]; then
-  echo "error: cannot locate the ai-bridge template root from $BIN_DIR" >&2
-  echo "       (expected <root>/plugin/scripts/, with VERSION and seed/ at <root>)" >&2
+PLUGIN_ROOT="$(cd "$BIN_DIR/.." 2>/dev/null && pwd || true)"
+if [ -z "$PLUGIN_ROOT" ] || [ ! -f "$PLUGIN_ROOT/VERSION" ] || [ ! -d "$PLUGIN_ROOT/seed" ]; then
+  echo "error: cannot locate the ai-bridge plugin root from $BIN_DIR" >&2
+  echo "       (expected <plugin>/scripts/, with VERSION and seed/ at <plugin>)" >&2
   exit 2
 fi
 
-SEED_SRC="$TEMPLATE_DIR/seed"
+# THE CHECKOUT AROUND THE PLUGIN, WHEN THERE IS ONE — and empty is the NORMAL case, because
+# an installed plugin has no repo around it. It answers for exactly one thing a stamp does
+# not need: the `--config` layer (`config/` is not shipped in the plugin — it links files
+# into ~/.claude, which is a machine decision, not a bundle one). Every other use below is a
+# path printed inside a hint, and each one is guarded rather than left to print `/docs/...`.
+#
+# Recognised by the marketplace manifest itself rather than by climbing until something
+# looks right: `<root>/.claude-plugin/marketplace.json` is the file that DEFINES this
+# layout, so it is the only honest marker for it.
+TEMPLATE_DIR=""
+if [ -f "$PLUGIN_ROOT/../.claude-plugin/marketplace.json" ]; then
+  TEMPLATE_DIR="$(cd "$PLUGIN_ROOT/.." && pwd)"
+fi
+
+SEED_SRC="$PLUGIN_ROOT/seed"
+
+# A DOC PATH A HUMAN CAN OPEN, printable from either layout. Inside a checkout it is the
+# file; from an installed plugin there is no checkout, so it is the same path under a
+# placeholder for one. Never a bare `/docs/...`, which is what an unguarded `$TEMPLATE_DIR`
+# would have printed once TEMPLATE_DIR became legitimately empty.
+doc_ref() { printf '%s/%s' "${TEMPLATE_DIR:-<ai-bridge>}" "$1"; }
 # The managed machinery block a symlink-era bundle carries. It is RETIRED, never
 # rewritten: there is no machinery in a bundle to list any more.
 BEGIN_MARK="# >>> ai-bridge machinery (symlinked) >>>"
@@ -147,7 +177,7 @@ fi
 # dir rather than the main tree in that setup — measured both. Printing a confidently
 # wrong path to paste is worse than printing none, so it names the command that always
 # knows instead of guessing. Don't "improve" this by deriving it.
-if [ "$LAYER" = "config" ] && command -v git >/dev/null 2>&1; then
+if [ "$LAYER" = "config" ] && [ -n "$TEMPLATE_DIR" ] && command -v git >/dev/null 2>&1; then
   _gd="$(git -C "$TEMPLATE_DIR" rev-parse --absolute-git-dir 2>/dev/null || true)"
   _gc="$(git -C "$TEMPLATE_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
   if [ -n "$_gd" ] && [ -n "$_gc" ] && [ "$_gd" != "$_gc" ]; then
@@ -203,7 +233,12 @@ fi
 # directory that owns its own contents, so a drop-in can never reach this checkout and
 # no .gitignore allow-list is needed to keep it out. Do not "simplify" this to whole-dir
 # links — `tests/config-layer.test.sh` asserts a fresh drop-in stays outside the repo.
-CONFIG_SRC="$TEMPLATE_DIR/config"
+# EMPTY WHEN THERE IS NO CHECKOUT, never `/config`: an unguarded expansion would turn the
+# absence of the repo into a probe of the filesystem root. `config_require_src` refuses on
+# it by name, so `--config` from an installed plugin says what to clone instead of
+# reporting that some directory it never named is missing.
+CONFIG_SRC=""
+if [ -n "$TEMPLATE_DIR" ]; then CONFIG_SRC="$TEMPLATE_DIR/config"; fi
 CONFIG_TIERS="required"
 # Honour CLAUDE_CONFIG_DIR: when it is set, Claude Code reads settings, agents and hooks
 # from there instead of ~/.claude, so installing into $HOME would put the layer somewhere
@@ -677,6 +712,19 @@ config_sweep_warn() {
 }
 
 config_require_src() {
+  # THE ONE THING AN INSTALLED PLUGIN CANNOT DO, and it says so by name rather than by
+  # reporting a missing directory. `config/` deliberately does not ship in the plugin: it
+  # links files into ~/.claude, which is a per-machine decision and not a bundle one, and
+  # `plugin/` must never *require* `config/` (CLAUDE.md, docs/claude-config-ownership.md).
+  # A bundle stamp never needs this layer — only `--config` does.
+  if [ -z "$CONFIG_SRC" ]; then
+    echo "error: --config needs a checkout of this repo, and this is an installed plugin." >&2
+    echo "       config/ is not shipped in the plugin: it links three agent files into" >&2
+    echo "       \${CLAUDE_CONFIG_DIR:-~/.claude}, which is a machine decision, not a bundle one." >&2
+    echo "       git clone https://github.com/cbmono/ai-bridge && ai-bridge/plugin/scripts/init-bundle.sh --config" >&2
+    echo "       Bundle stamps (init-bundle.sh [TARGET]) need none of this." >&2
+    exit 2
+  fi
   if [ ! -d "$CONFIG_SRC" ]; then
     echo "error: this checkout has no config layer ($CONFIG_SRC)." >&2
     echo "       Nothing to link. A bundle stamp (init-bundle.sh [TARGET]) never needs it." >&2
@@ -985,7 +1033,10 @@ WS_NAME="${WS_GROUP}.code-workspace"
 # disappearing quietly is the one outcome worse than losing it.
 #
 # Idempotent: a bundle with no such links prints nothing and changes nothing.
-looks_like_template() { # <dir> — is this a template checkout?
+# The LEGACY root shape — `seed/` and `VERSION` at the top — and deliberately not the
+# current one. Every link this can classify was written by the retired install.sh, from a
+# checkout of a version that kept them there; a post-move checkout stamps no links at all.
+looks_like_template() { # <dir> — is this a template checkout a legacy stamp came from?
   [ -d "$1/seed" ] && [ -f "$1/VERSION" ]
 }
 
@@ -1630,7 +1681,7 @@ TEAM_LCFG="$TARGET/instance.config.local.json"
 # How to do it by hand. Printed on every path that decides not to write, so a skip is
 # never a dead end — the same "say the exact thing to do" contract as RETIRED.
 team_manual_note() {
-  echo "        Set it by hand instead (the full order is in $TEMPLATE_DIR/docs/sharing.md):"
+  echo "        Set it by hand instead (the full order is in $(doc_ref docs/sharing.md)):"
   echo "          instance.config.json        \"people\": { \"<login>\": \"<commit-email>\" }"
   echo "          instance.config.json        \"defaultOwner\": \"<login>\""
   echo "          instance.config.local.json  { \"ownerGithubUser\": \"<your-login>\" }"
@@ -2240,7 +2291,7 @@ echo "       /plugin install ai-bridge@ai-bridge — then restart Claude Code.)"
 # above may delete and this may not: a machinery symlink into a template checkout has one
 # possible meaning; a seed file the human has owned since it was copied does not. Absence
 # of the manifest, or an empty one, is silence — not an error.
-RETIRED_LIST="$TEMPLATE_DIR/RETIRED"
+RETIRED_LIST="$PLUGIN_ROOT/RETIRED"
 if [ -f "$RETIRED_LIST" ]; then
   retired_found=0
   while IFS= read -r line || [ -n "$line" ]; do

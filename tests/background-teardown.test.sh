@@ -52,7 +52,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/seed/CONVENTIONS.md"
+CONV="$REPO/plugin/seed/CONVENTIONS.md"
 AIB="$REPO/plugin/scripts/ai-bridge.sh"
 for f in "$CONV" "$AIB"; do
   [ -f "$f" ] || { echo "background-teardown.test: missing $f" >&2; exit 2; }

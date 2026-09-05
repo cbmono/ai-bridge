@@ -258,8 +258,8 @@ echo "-- 4. the TRACKED pair stays, and answers with no local file at all"
 # The state of every instance between a merge and the stamp that follows it. If the
 # tracked keys had been removed instead of kept, this is where every role would silently
 # fall back to the session model.
-ok "seed/instance.config.json still has models"    "$(jcount "$TPL/seed/instance.config.json" models)" 4
-ok "…and still has roleTiers"                      "$([ "$(jcount "$TPL/seed/instance.config.json" roleTiers)" -ge 4 ] && echo yes || echo no)" yes
+ok "seed/instance.config.json still has models"    "$(jcount "$TPL/plugin/seed/instance.config.json" models)" 4
+ok "…and still has roleTiers"                      "$([ "$(jcount "$TPL/plugin/seed/instance.config.json" roleTiers)" -ge 4 ] && echo yes || echo no)" yes
 I="$(newinst 5)"
 stamp "$I" >/dev/null 2>&1
 rm -f "$I/instance.config.local.json"
@@ -280,7 +280,7 @@ mm = re.search(r'"models": \{(.*?)\}', block, re.S)
 print(json.dumps(dict(re.findall(r'"([^"]+)": "([^"]+)"', mm.group(1))), sort_keys=True))
 PY
 )"
-ok "install.sh's default models == the seed's"  "$DEFAULTS_MODELS" "$(jget "$TPL/seed/instance.config.json" models)"
+ok "install.sh's default models == the seed's"  "$DEFAULTS_MODELS" "$(jget "$TPL/plugin/seed/instance.config.json" models)"
 DEFAULTS_TIERS="$(python3 - "$TPL/plugin/scripts/init-bundle.sh" <<'PY'
 import json, re, sys
 src = open(sys.argv[1]).read()
@@ -290,7 +290,7 @@ mm = re.search(r'"roleTiers": \{(.*?)\n    \}', block, re.S)
 print(json.dumps(dict(re.findall(r'"([^"]+)": "([^"]+)"', mm.group(1))), sort_keys=True))
 PY
 )"
-ok "…and its default roleTiers too"             "$DEFAULTS_TIERS" "$(jget "$TPL/seed/instance.config.json" roleTiers)"
+ok "…and its default roleTiers too"             "$DEFAULTS_TIERS" "$(jget "$TPL/plugin/seed/instance.config.json" roleTiers)"
 
 # And they are really used: a tracked config with neither key still produces a working
 # instance, which is the "fresh install, no manual editing" promise for an older bundle.
@@ -342,7 +342,7 @@ echo "-- 6. every prose caller carries the same instruction"
 # has no shell callers at all — every caller is an AGENT following a document. So the
 # document is where "report that line rather than dispatching on a guess" has to live, and
 # a caller that silently drops it is the failure this whole section is against.
-for f in seed/CONVENTIONS.md docs/operations.md \
+for f in plugin/seed/CONVENTIONS.md docs/operations.md \
          plugin/skills/dispatch/SKILL.md plugin/skills/fanout/SKILL.md \
          plugin/skills/audit/SKILL.md plugin/agents/project-manager.md; do
   ok "$(basename "$f") names resolve-model.sh"  "$(yn grep -q 'resolve-model\.sh' "$TPL/$f")" yes
@@ -350,7 +350,7 @@ for f in seed/CONVENTIONS.md docs/operations.md \
 done
 # SCHEMA.md is the one place the overridable set is listed, so the seeding contract and
 # the deliberate exception belong there rather than in six documents.
-SCHEMA="$TPL/seed/SCHEMA.md"
+SCHEMA="$TPL/plugin/seed/SCHEMA.md"
 ok "SCHEMA.md says the installer seeds them"    "$(yn grep -q 'SEEDED into the local file' "$SCHEMA")" yes
 ok "…and that the tracked pair is the fallback" "$(yn grep -q 'tracked pair is the' "$SCHEMA")" yes
 ok "…and that a merge is not a stamp"           "$(yn grep -q 'a merge is not a stamp' "$SCHEMA")" yes

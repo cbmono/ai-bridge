@@ -395,7 +395,7 @@ echo "== the closeout PROSE routes to this script, and invents no status value =
 # `git rm -r` back beside a tested script, or grow the status enum a value.
 CMD="$TPL/plugin/skills/close-project/SKILL.md"
 PM="$TPL/plugin/agents/project-manager.md"
-SCH="$TPL/seed/SCHEMA.md"
+SCH="$TPL/plugin/seed/SCHEMA.md"
 assert "/close-project's folder step calls the script" \
   "$(yes_if grep -q 'close-project-folder.sh <slug> --apply' "$CMD")"
 assert "…and says not to remove the folder by hand"     "$(yes_if grep -q 'Do not .git rm. or .rm. the folder by hand' "$CMD")"

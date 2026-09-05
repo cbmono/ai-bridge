@@ -104,7 +104,7 @@ through the same two gates.
 **Both gates hold until you deliberately delegate them**, and the delegation is one
 deletable file — delete it and every project is gated again, with no other edit. See
 [autonomy.md](autonomy.md); the two authorities themselves are in
-[`seed/SCHEMA.md`](../seed/SCHEMA.md), which the stamp copies into your bundle root.
+[`plugin/seed/SCHEMA.md`](../plugin/seed/SCHEMA.md), which the stamp copies into your bundle root.
 
 **`AWAITING.md` is where the gates queue up** — the instance's one status artifact, and
 just the items a human decision unblocks, each marked with what it needs from you

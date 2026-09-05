@@ -69,7 +69,7 @@ said()    { grep -q -- "$1" "$TMP/out" && echo yes || echo no; }
 asked()   { grep -q 'Team roster for this instance' "$TMP/out" && echo yes || echo no; }
 owner()   { sed -n 's/.*"defaultOwner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1/instance.config.json" | head -n1; }
 # The seeded config, byte for byte, so "unchanged" is a comparison rather than a spot check.
-SEED_CFG="$(cat "$TPL/seed/instance.config.json")"
+SEED_CFG="$(cat "$TPL/plugin/seed/instance.config.json")"
 same_as_seed() { [ "$(cat "$1/instance.config.json")" = "$SEED_CFG" ] && echo yes || echo no; }
 # WHAT "NOTHING WAS WRITTEN" MEANS FOR THE LOCAL FILE, since install.sh's step 4c now
 # seeds this machine's `models`/`roleTiers` into it on EVERY completed stamp. Its mere
@@ -177,8 +177,8 @@ echo "-- 4. a value already there is never overwritten"
 # precisely so it does not depend on FIRST_STAMP being right.)
 T2="$TMP/tpl-owned"; make_tpl "$T2"
 sed 's/"defaultOwner": null,/"defaultOwner": "example-user-008",/' \
-  "$T2/seed/instance.config.json" > "$T2/seed/instance.config.json.new"
-mv "$T2/seed/instance.config.json.new" "$T2/seed/instance.config.json"
+  "$T2/plugin/seed/instance.config.json" > "$T2/plugin/seed/instance.config.json.new"
+mv "$T2/plugin/seed/instance.config.json.new" "$T2/plugin/seed/instance.config.json"
 I="$(newinst 4)"
 printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$T2/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "an existing defaultOwner: exits 0"    "$?" 0
@@ -191,8 +191,8 @@ ok "…no identity is written either"       "$(no_identity "$I")" yes
 # login's own is somebody's real roster, whatever the login looks like.
 T3="$TMP/tpl-peopled"; make_tpl "$T3"
 sed 's/"example-user-007": "example-user-007@example.com",/"example-user-007": "billing@example.com",/' \
-  "$T3/seed/instance.config.json" > "$T3/seed/instance.config.json.new"
-mv "$T3/seed/instance.config.json.new" "$T3/seed/instance.config.json"
+  "$T3/plugin/seed/instance.config.json" > "$T3/plugin/seed/instance.config.json.new"
+mv "$T3/plugin/seed/instance.config.json.new" "$T3/plugin/seed/instance.config.json"
 I="$(newinst 5)"
 printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$T3/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "an existing people entry: exits 0"    "$?" 0

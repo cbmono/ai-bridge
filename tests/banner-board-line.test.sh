@@ -417,7 +417,7 @@ echo "== the key is never SEEDED, so no instance is stamped with a shared one ==
 # lesson: `seed/instance.config.json` is copied into every new instance as its TRACKED
 # config, so the key appearing there would put a shared URL back in every bundle.
 assert "seed/instance.config.json does not carry it" \
-  "$(grep -qF "$KEY" "$TPL/seed/instance.config.json" && echo 1 || echo 0)"
+  "$(grep -qF "$KEY" "$TPL/plugin/seed/instance.config.json" && echo 1 || echo 0)"
 assert "…and install.sh never writes it into the tracked config" \
   "$(grep -qF "$KEY" "$TPL/install.sh" && echo 1 || echo 0)"
 # NON-VACUITY: the same scan must FIND a planted one, or it is checking nothing.
