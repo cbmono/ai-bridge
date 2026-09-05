@@ -1162,6 +1162,12 @@ page="$root/.board-live/board.html"
 # ESC (which would repaint the terminal) and the emphasis marker byte (which would forge
 # bold), drops the value entirely. `https://` only: nothing else is a page a human opens,
 # and `file://` would let a config key impersonate the line below.
+#
+# NO python3, OR AN INSTANCE STAMPED BEFORE resolve-config.sh SHIPPED => no URL row, in
+# silence, because `$dump` is empty and `leaf` answers nothing. Same degradation the
+# settings block already takes at §1, for the same reason: a hook that printed an
+# interpreter error at every session start is worse than one that omits a row, and the
+# `file://` row below is unaffected — it reads the filesystem, not the config.
 art=""
 if [ "$board_on" -eq 1 ]; then
   _art_leaf="$(leaf boardArtifactUrl)"

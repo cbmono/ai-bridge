@@ -718,14 +718,23 @@ state, and act only on deltas.
       path from item 2.
    6. **If this machine publishes a board, say that it is now stale, and stop there.**
       `boardArtifactUrl` in `instance.config.local.json` records the page this clone
-      published. When that key has a value, add exactly one more line to your report:
+      published. Ask the resolver, never the file:
+
+      ```bash
+      scripts/resolve-config.sh --source boardArtifactUrl
+      ```
+
+      Exit 1, or a first field of `tracked`, ⇒ **no line**. `tracked` is the deleted shape
+      — publishing is account-scoped, so a shared URL is a page this clone cannot write —
+      and the SessionStart banner ignores it for the same reason; the two must agree.
+      A first field of `local` ⇒ add exactly one more line to your report:
 
       ```
       BOARD: run /ai-bridge:board to refresh the published page
       ```
 
-      No key ⇒ **no line**: an instance that has never published does not need telling
-      about a page it does not have.
+      An instance that has never published does not need telling about a page it does not
+      have, which is why the absent case is silence rather than an invitation.
 
       **You cannot publish it yourself, and that is measured rather than assumed.** On
       Claude Code 2.1.261 a headless `claude -p` session's tool inventory carries no
