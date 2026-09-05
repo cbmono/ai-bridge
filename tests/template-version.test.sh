@@ -259,9 +259,13 @@ for p in plugins:
 }
 # Prints three fault counts — shape, MAJOR, manifest pair — so each detector is asserted
 # separately and the planted case below can show all three firing.
-companion_faults() { # <marketplace.json> <tree root> <core MAJOR> -> "<shape> <major> <pair>"
+# A READER FAILURE IS NOT ZERO FAULTS. `companion_rows` exits non-zero on a marketplace it
+# cannot parse, and an empty row set walks this loop zero times — so without this the one
+# input that matters most (a marketplace.json someone has just broken) would report a clean
+# "0 0 0". It reports a value that can never be mistaken for clean instead.
+companion_faults() { # <marketplace.json> <tree root> <core MAJOR> -> "<shape> <major> <pair>" | "UNREADABLE"
   local rows shape=0 major=0 pair=0 name mver pver
-  rows="$(companion_rows "$1" "$2")"
+  rows="$(companion_rows "$1" "$2")" || { printf 'UNREADABLE'; return; }
   while IFS="$(printf '\t')" read -r name mver pver; do
     [ -n "$name" ] || continue
     if printf '%s' "$mver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
@@ -305,6 +309,12 @@ cat > "$PL/.claude-plugin/marketplace.json" <<'JSON'
 JSON
 ok "…and that audit flags a planted drift of each kind (core skipped)" \
   "$(companion_faults "$PL/.claude-plugin/marketplace.json" "$PL" 9 2>/dev/null)" "1 1 1"
+
+# …and that refusal is asserted, not just written: a marketplace this reader cannot parse
+# must come back UNREADABLE, never "0 0 0".
+printf 'not json\n' > "$PL/.claude-plugin/broken.json"
+ok "…and an unparseable marketplace is never reported as clean" \
+  "$(companion_faults "$PL/.claude-plugin/broken.json" "$PL" 9 2>/dev/null)" "UNREADABLE"
 
 # THE RULE ITSELF IS A SHIPPED DOC, so it is asserted where it ships: a test pinning
 # numbers against a rule nobody wrote down is pinning a coincidence.
