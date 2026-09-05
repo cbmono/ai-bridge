@@ -102,7 +102,7 @@ ok "…exactly once"                       "$(count "$CONV" "$CANON")" 1
 # the two will disagree. Every shipped tree is scanned, not a list somebody remembers.
 copies="$(grep -rlF -- 'DISPATCH FRESH.' "$REPO/symlink" "$REPO/plugin/seed" "$REPO/docs" \
   "$REPO/README.md" "$REPO/CLAUDE.md" 2>/dev/null | sort | sed "s|^$REPO/||" | tr '\n' ' ' | sed 's/ *$//')"
-ok "…and exactly one shipped file carries the table" "$copies" "seed/CONVENTIONS.md"
+ok "…and exactly one shipped file carries the table" "$copies" "plugin/seed/CONVENTIONS.md"
 
 echo
 echo "== 2. it reaches every dispatcher, word for word, with the citation =="
