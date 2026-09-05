@@ -503,7 +503,13 @@ check_bundle_unconverted() {
   while IFS= read -r l; do
     [ -n "$l" ] || continue
     rel="${l#"$ROOT"/}"
-    case "$rel" in repos/*|repos) continue ;; esac
+    # THE SAME EXCLUSIONS THE SWEEP USES, and they have to be the same or this row warns
+    # about something `/ai-bridge:init` will never remove: `repos/` is the derived view,
+    # and `projects/`, `knowledge/` and `objectives/` are DATA, where no installer ever
+    # stamped machinery and a symlink is therefore the human's own.
+    case "$rel" in
+      repos|repos/*|projects|projects/*|knowledge|knowledge/*|objectives|objectives/*) continue ;;
+    esac
     n=$((n + 1))
     [ -e "$l" ] || dead=$((dead + 1))
     [ "$n" -le 12 ] && shown="${shown:+$shown
@@ -513,11 +519,11 @@ $(find "$ROOT" -name .git -prune -o -type l -print 2>/dev/null | sort)
 EOF
 
   if [ "$n" -eq 0 ]; then
-    good "no symlinks outside repos/ — this bundle carries no machinery and no template link"
+    good "no symlinks outside repos/ and the data dirs — no machinery, no template link"
     return 0
   fi
   _warned=1
-  warn "$n symlink(s) outside repos/ — this bundle has not been converted ($dead already dead)"
+  warn "$n symlink(s) outside repos/ and the data dirs — this bundle has not been converted ($dead already dead)"
   printf '%s\n' "$shown"
   [ "$n" -gt 12 ] && note "… and $((n - 12)) more"
   note "the machinery ships in the plugin now; a link into a checkout is frozen there"

@@ -1011,7 +1011,15 @@ convert_bundle() { # removes legacy machinery links; prints one line each
     # GLOB, so a bundle path containing [ ] * or ? strips nothing and the relative path
     # stays absolute. (SC2295.)
     rel="${dst#"$TARGET"/}"
-    case "$rel" in repos/*|repos) continue ;; esac
+    # NEVER INSIDE THE DATA DIRECTORIES, and that is the guarantee this whole step makes.
+    # No installer ever stamped machinery under `projects/`, `knowledge/` or `objectives/`,
+    # so a symlink there is the human's — a linked spec, a shared notes folder, a broken
+    # one they have not fixed yet — and none of that is ours to judge, dangling or not.
+    # `repos/` is excluded for the opposite reason: it IS the derived view this script
+    # maintains, and its links point at reposRoot rather than into any checkout.
+    case "$rel" in
+      repos|repos/*|projects|projects/*|knowledge|knowledge/*|objectives|objectives/*) continue ;;
+    esac
     kind="$(legacy_link_kind "$dst")"
     [ -n "$kind" ] || { echo "  keep  $rel (a symlink of your own — left alone)"; continue; }
     rm -f "$dst"

@@ -80,6 +80,19 @@ assert "a real file is NOT removed"         "$(yes_if grep -q 'my own notes' "$I
 assert "a foreign dangling link is removed" "$(no_if test -L "$INST/scripts/foreign-dangling")"
 assert "…because a dangling link in a bundle has one meaning" \
   "$(yes_if grep -q 'retire scripts/foreign-dangling — dangling' "$TMP/out3")"
+# …EXCEPT INSIDE THE DATA DIRECTORIES, where it has the opposite meaning. No installer
+# ever stamped machinery under projects/, knowledge/ or objectives/, so a symlink there is
+# the human's — a linked spec, a shared notes folder, one they have not fixed yet — and
+# "data untouched" has to hold for a broken link as much as for a file.
+mkdir -p "$INST/projects/demo" "$INST/knowledge/findings" "$INST/objectives"
+ln -s "$TMP/nowhere-at-all" "$INST/projects/demo/spec.md"
+ln -s "$TMP/nowhere-at-all" "$INST/knowledge/findings/linked.md"
+ln -s "$TMP/nowhere-at-all" "$INST/objectives/linked.md"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out-data" 2>&1
+assert "a dangling link under projects/ survives"   "$(yes_if test -L "$INST/projects/demo/spec.md")"
+assert "…under knowledge/ too"                      "$(yes_if test -L "$INST/knowledge/findings/linked.md")"
+assert "…and under objectives/"                     "$(yes_if test -L "$INST/objectives/linked.md")"
+assert "…and none of the three is even mentioned"   "$(no_if grep -qE 'projects/demo/spec.md|knowledge/findings/linked.md|objectives/linked.md' "$TMP/out-data")"
 assert "a resolving link of the human's OWN survives" "$(yes_if test -L "$INST/my-own-link")"
 assert "…and is reported as kept, not removed" "$(yes_if grep -q 'keep  my-own-link' "$TMP/out3")"
 # Idempotent: a second sweep with nothing to do says nothing and still exits 0.
