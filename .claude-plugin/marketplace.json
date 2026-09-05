@@ -33,6 +33,22 @@
       "keywords": [
         "deprecated"
       ]
+    },
+    {
+      "name": "ai-bridge-yolo",
+      "source": "./plugin-yolo",
+      "description": "COMPANION to ai-bridge. Ships AUTONOMY.md, the capability file that defines the `yolo` mode — the loop may promote fully-refined build drafts and merge on an independent clearance. Not installed = every project is gated. A companion ADDS behaviour and never removes a core gate.",
+      "version": "0.15.0",
+      "author": {
+        "name": "cbmono"
+      },
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "ai-bridge-companion",
+        "autonomy",
+        "okf"
+      ]
     }
   ]
 }

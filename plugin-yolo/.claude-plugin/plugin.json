@@ -1,0 +1,15 @@
+{
+  "name": "ai-bridge-yolo",
+  "displayName": "AI Bridge — yolo (delegated autonomy)",
+  "version": "0.15.0",
+  "description": "COMPANION. Ships AUTONOMY.md, the capability file that defines the yolo mode: the loop may promote fully-refined build drafts and merge on an independent clearance. Not installed = every project is gated. Adds behaviour; removes no gate.",
+  "author": {
+    "name": "cbmono"
+  },
+  "repository": "https://github.com/cbmono/ai-bridge",
+  "license": "MIT",
+  "keywords": [
+    "ai-bridge-companion",
+    "autonomy"
+  ]
+}
