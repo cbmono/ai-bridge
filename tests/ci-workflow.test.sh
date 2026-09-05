@@ -276,7 +276,110 @@ RB
     assert "…reporting the all-clear banner it should not" \
       "$(printf '%s\n' "$MUT_OUT" | grep -qF 'ok: all' && echo 0 || echo 1)"
   fi
+
+  # ---- ai-bridge-v2/task-030: the plugin-only fast path, EXECUTED ---------------
+  # #121 gave the required `harness suite` check a fast path: a PR whose every changed
+  # path is under plugin/ or .claude-plugin/ runs a subset instead of all 74. #124 then
+  # moved the two-human-authority promotion guard to plugin/scripts/commit-as.sh and did
+  # NOT add tests/commit-as-guard.test.sh to that hand-kept list — so a PR editing only
+  # the guard took the fast path and the required check went green having never run it.
+  #
+  # The list is now a small CORE plus a set DERIVED from the diff, and this section runs
+  # the WORKFLOW'S OWN extracted script against fixture repos to check the three
+  # properties that matter — a text grep over the list would go green on a selector that
+  # never reads it. The fixture's harness set is read out of the extracted script, so a
+  # name added to the core cannot leave the fixture behind.
+  fp_names="$(grep -oE 'tests/[A-Za-z0-9_-]+\.test\.sh' "$EXTRACTED" | sort -u)"
+  assert "the fixture's harness set was read out of the runner (the core names were found)" \
+    "$([ -n "$fp_names" ] && echo 0 || echo 1)"
+
+  # <root> — a base repo plus a clone of it, so the runner's `git fetch origin
+  # $GITHUB_BASE_REF` and `git diff origin/main...HEAD` both work for real.
+  fp_build() {
+    local root="$1" h
+    mkdir -p "$root/base/tests" "$root/base/plugin/scripts" "$root/base/plugin/agents"
+    for h in $fp_names; do
+      printf '#!/usr/bin/env bash\necho "pass=1 fail=0"\n' > "$root/base/$h"
+    done
+    # NAMES the guard's path and is on no list — it must be selected by DERIVATION.
+    printf '#!/usr/bin/env bash\n# reads "$REPO/plugin/scripts/commit-as.sh"\necho "pass=1 fail=0"\n' \
+      > "$root/base/tests/fp-names-the-guard.test.sh"
+    # Names nothing that changes below — it must NOT be selected, which is what tells
+    # a real derivation from a selector that simply runs everything.
+    printf '#!/usr/bin/env bash\necho "pass=1 fail=0"\n' \
+      > "$root/base/tests/fp-names-nothing.test.sh"
+    printf '#!/bin/sh\n' > "$root/base/plugin/scripts/commit-as.sh"
+    printf 'seed\n'      > "$root/base/plugin/agents/unread-by-any-harness.md"
+    # `symbolic-ref`, not `git init -b`: -b needs git >= 2.28 and this must not start
+    # failing on an older host for a reason unrelated to the workflow.
+    ( cd "$root/base" && git init -q . && git symbolic-ref HEAD refs/heads/main \
+      && git config user.email t@example.com && git config user.name t \
+      && git add -A && git commit -qm base ) >/dev/null 2>&1
+    git clone -q "$root/base" "$root/work" >/dev/null 2>&1
+  }
+
+  fp_edit() { # <workdir> <path> — one commit on a branch off main
+    ( cd "$1" && git checkout -q -b feat && printf 'edited\n' >> "$2" \
+      && git add -A && git commit -qm edit ) >/dev/null 2>&1
+  }
+
+  fp_run() { # <workdir> [runner] — the extracted runner, as a pull_request event
+    ( cd "$1" && GITHUB_WORKSPACE="$1" RUNNER_TEMP="$1/.rt" \
+        GITHUB_EVENT_NAME=pull_request GITHUB_BASE_REF=main bash "${2:-$EXTRACTED}" 2>&1 )
+  }
+
+  FP_A="$RUNNER_TMP/fp-a"; mkdir -p "$FP_A"; fp_build "$FP_A"
+  fp_edit "$FP_A/work" plugin/scripts/commit-as.sh
+  FP_A_OUT="$(fp_run "$FP_A/work")"
+  assert "a commit-as.sh-only diff still takes the fast path" \
+    "$(printf '%s\n' "$FP_A_OUT" | grep -qF 'plugin-only diff — running' && echo 0 || echo 1)"
+  assert "…and it SELECTS tests/commit-as-guard.test.sh — the harness #124 left behind" \
+    "$(printf '%s\n' "$FP_A_OUT" | grep -qF '  harness: tests/commit-as-guard.test.sh' && echo 0 || echo 1)"
+  assert "…and tests/companion-plugins.test.sh" \
+    "$(printf '%s\n' "$FP_A_OUT" | grep -qF '  harness: tests/companion-plugins.test.sh' && echo 0 || echo 1)"
+  assert "…and a harness that merely NAMES the changed path, on no list at all" \
+    "$(printf '%s\n' "$FP_A_OUT" | grep -qF '  harness: tests/fp-names-the-guard.test.sh' && echo 0 || echo 1)"
+  assert "…and NOT one that names nothing in the diff (it derives, it does not run everything)" \
+    "$(printf '%s\n' "$FP_A_OUT" | grep -qF '  harness: tests/fp-names-nothing.test.sh' && echo 1 || echo 0)"
+
+  # PROVING IT BY REMOVAL — the task's own step 3. Strike the guard's harness out of the
+  # extracted runner's core and the IDENTICAL fixture must stop running it. Without this
+  # the assertion above could be reading a selector that ignores the core entirely.
+  # (In the real repo removal would not hide it: tests/commit-as-guard.test.sh names
+  # plugin/scripts/commit-as.sh, so derivation catches it. The fixture's copy is a stub
+  # that names nothing, which is what isolates the core to the one thing under test.)
+  FP_MUT="$RUNNER_TMP/runner-no-guard.sh"
+  grep -vF 'tests/commit-as-guard.test.sh' "$EXTRACTED" > "$FP_MUT"
+  assert "the removal mutant dropped exactly one line from the runner" \
+    "$([ "$(( $(wc -l < "$EXTRACTED") - $(wc -l < "$FP_MUT") ))" -eq 1 ] && echo 0 || echo 1)"
+  FP_MUT_OUT="$(fp_run "$FP_A/work" "$FP_MUT")"
+  assert "…the mutant still fast-paths (the difference is the selection, not a crash)" \
+    "$(printf '%s\n' "$FP_MUT_OUT" | grep -qF 'plugin-only diff — running' && echo 0 || echo 1)"
+  assert "…and on the SAME fixture it no longer runs the guard's harness (removal bites)" \
+    "$(printf '%s\n' "$FP_MUT_OUT" | grep -qF '  harness: tests/commit-as-guard.test.sh' && echo 1 || echo 0)"
+
+  # The fallback, which is what keeps the derivation honest about what it cannot see: a
+  # changed plugin path NO harness names buys the full suite, never a narrower one.
+  FP_B="$RUNNER_TMP/fp-b"; mkdir -p "$FP_B"; fp_build "$FP_B"
+  fp_edit "$FP_B/work" plugin/agents/unread-by-any-harness.md
+  FP_B_OUT="$(fp_run "$FP_B/work")"
+  assert "a changed plugin path no harness names falls back to the FULL suite" \
+    "$(printf '%s\n' "$FP_B_OUT" | grep -qF 'running the FULL suite' && echo 0 || echo 1)"
+  assert "…and that full suite really does include the harness the fast path leaves out" \
+    "$(printf '%s\n' "$FP_B_OUT" | grep -qF '::group::tests/fp-names-nothing.test.sh' && echo 0 || echo 1)"
 fi
+
+echo "== the fast path names the two authority harnesses, and derives the rest =="
+# The cheap half of ai-bridge-v2/task-030, readable without a YAML parser: the two
+# harnesses guarding SCHEMA.md's two human authorities are in the core by name, and the
+# selector genuinely reads the diff instead of enumerating. The behavioural proof is the
+# fixture section above; these three are what still fire on a host with no YAML oracle.
+assert "the fast-path core names tests/commit-as-guard.test.sh" \
+  "$(grep -qF 'tests/commit-as-guard.test.sh' <<<"$WF_TEXT" && echo 0 || echo 1)"
+assert "…and tests/companion-plugins.test.sh" \
+  "$(grep -qF 'tests/companion-plugins.test.sh' <<<"$WF_TEXT" && echo 0 || echo 1)"
+assert "…and the rest is DERIVED — the selector greps the harnesses for each changed path" \
+  "$(grep -qF 'grep -lF -e "$suffix" tests/*.test.sh' <<<"$WF_TEXT" && echo 0 || echo 1)"
 
 echo "== the check name is declared as a required check, verbatim, on both sides =="
 # CHECK_NAME above is the pin; both the workflow and the declared-checks file are
