@@ -110,6 +110,29 @@ assert "…and gates on the reported fail count, not only on the exit status" \
 echo "== the runner re-verifies the checkout itself survives each harness =="
 assert "a checkout-integrity check runs after every harness, not just once at the start" \
   "$(grep -qF 'verify_checkout' <<<"$WF_TEXT" && echo 0 || echo 1)"
+# EVERY DIRECTORY IT PROBES FOR MUST ACTUALLY EXIST IN THIS REPO, and that is not a
+# tautology — it is the assertion this file was missing. `verify_checkout` fails CLOSED:
+# a probe naming a directory the repo no longer has refuses EVERY checkout, before a
+# single harness runs, with "checkout is not intact before the suite even started". It
+# happened: `symlink/` was in the list, ai-bridge-v2/task-013 retired that directory, the
+# whole suite went red at 6 seconds, and every green assertion in this file stayed green
+# because none of them read the NAME.
+probe_missing=""
+while IFS= read -r d; do
+  [ -n "$d" ] || continue
+  # `-e`, not `-d`: CI runs on a plain clone where `.git` is a directory, but this
+  # harness also runs from a linked WORKTREE, where `.git` is a FILE. The property under
+  # test is "the path exists in this repo", and requiring a directory here would fail
+  # every worktree run for a reason that has nothing to do with the workflow.
+  [ -e "$REPO/$d" ] || probe_missing="${probe_missing:+$probe_missing }$d"
+done <<EOF
+$(printf '%s\n' "$WF_TEXT" | sed -n 's#.*\[ -d "\$workspace/\([A-Za-z0-9._-]*\)" \].*#\1#p' | sort -u)
+EOF
+assert "…and every directory it probes for exists in this repo${probe_missing:+ (missing: $probe_missing)}" \
+  "$([ -z "$probe_missing" ] && echo 0 || echo 1)"
+# Non-vacuity: the extraction really found probes to check.
+assert "…and it found some to check (the extraction is not empty)" \
+  "$(printf '%s\n' "$WF_TEXT" | sed -n 's#.*\[ -d "\$workspace/\([A-Za-z0-9._-]*\)" \].*#\1#p' | grep -qc . >/dev/null && echo 0 || echo 1)"
 
 echo "== the runner treats a MISSING pass/fail summary as a FAILURE, never a pass =="
 # ai-bridge-v4/task-031, criterion 4. Every assertion above this one reads the
@@ -157,10 +180,15 @@ RB
     "$([ -s "$EXTRACTED" ] && echo 0 || echo 1)"
 
   # A minimal workspace covering the extracted script's own preconditions: a git repo
-  # with a commit (verify_checkout reads HEAD), and tests/ + symlink/ present. ONE
+  # with a commit (verify_checkout reads HEAD), and tests/ + plugin/ present. ONE
   # fixture harness, printing nothing and exiting non-zero.
+  #
+  # `plugin/`, not `symlink/`: the directory verify_checkout probes for moved with the
+  # machinery (ai-bridge-v2/task-013), and a fixture built on the old name proves the
+  # extracted script runs while the real workflow refuses every checkout — which is
+  # exactly what happened, on the first CI run of that change.
   WS="$RUNNER_TMP/ws"
-  mkdir -p "$WS/tests" "$WS/symlink"
+  mkdir -p "$WS/tests" "$WS/plugin"
   ( cd "$WS" && git init -q . && git config user.email t@e.st && git config user.name t \
     && : > .keep && git add .keep && git commit -qm seed >/dev/null )
   cat > "$WS/tests/silent-death.test.sh" <<'FIX'

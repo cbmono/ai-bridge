@@ -71,7 +71,7 @@ jobs:
             git -C "$workspace" rev-parse --verify -q HEAD >/dev/null 2>&1 \
               && [ -d "$workspace/.git" ] \
               && [ -d "$workspace/tests" ] \
-              && [ -d "$workspace/symlink" ]
+              && [ -d "$workspace/plugin" ]
           }
 
           verify_checkout || {
