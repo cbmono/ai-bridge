@@ -22,3 +22,8 @@ tmp/
 #                          Never add an `/index.md` line THERE: it would match
 #                          seed/index.md and stop this repo tracking its own seed file.
 #                          tests/derived-indexes.test.sh holds that trap closed.
+
+# `claude plugin eval` writes a timestamped results/ directory and an HTML report under
+# the eval dir on every run. Run artifacts, never sources — and this repo is public, so
+# a transcript of a model run is not something to commit by accident.
+/plugin/evals/results/

@@ -15,6 +15,16 @@
 # verbatim relay, provenance, the two non-actions), not the prose around it — the wording
 # may move; the property may not.
 #
+# WHERE A NEW PIN GOES — this file reads the skill FILES, so everything it holds is a
+# claim about TEXT. That is the right shape for most of the contract and it is where a
+# new pin belongs by default: free, offline, runs on every machine.
+#   this file            something is WRITTEN in a skill file
+#   plugin/evals/        something is true of WHAT THE MODEL DOES with the plugin loaded
+#   tests/plugin-eval.test.sh   the eval suite's own shape, and running it
+# The split above is why the model-invocation assertions here were kept, not moved, when
+# plugin/evals/ arrived: the eval grades the EFFECT of `disable-model-invocation: true`
+# for three skills; this file still owns the flag as written, for all ten.
+#
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
 
@@ -43,7 +53,7 @@ body() { # <skill> — everything after the closing `---`
     "$SK/$1/SKILL.md"
 }
 
-STATE_CHANGING="capture work dispatch handoff audit answer fanout pr-review-request new-project close-project init"
+STATE_CHANGING="capture work dispatch handoff audit answer fanout pr-review-request new-project close-project board init"
 READ_ONLY="brief-me welcome"
 ALL="$STATE_CHANGING $READ_ONLY"
 
@@ -145,6 +155,24 @@ ok "close-project keeps the retain: true freeze route" \
   "$(ge1 "$(grep -c 'retain: true' "$SK/close-project/SKILL.md")")" yes
 ok "…and stays human-gated" \
   "$(ge1 "$(grep -ci 'human-gated' "$SK/close-project/SKILL.md")")" yes
+# board — the properties that make publishing safe, one assertion each. Its markup
+# comes from the renderer, so the pins are about SCOPE and DESTINATION, not about prose.
+ok "board renders scoped to THIS instance (the trailing dot)" \
+  "$(ge1 "$(grep -cF -- 'scripts/build-board.sh --out .board-live/artifact-body.html .' "$SK/board/SKILL.md")")" yes
+ok "…as an artifact page BODY, never --standalone" \
+  "$(grep -c -- '--standalone --out' "$SK/board/SKILL.md" | tr -d ' ')" 0
+ok "…recording the URL under boardArtifactUrl in the per-machine file" \
+  "$(ge1 "$(grep -cF 'instance.config.local.json' "$SK/board/SKILL.md")")" yes
+ok "…which is the key name the banner reads" \
+  "$(ge1 "$(grep -cF 'boardArtifactUrl' "$SK/board/SKILL.md")")" yes
+ok "…and forbidding the TRACKED file outright, which is the failure it replaces" \
+  "$(ge1 "$(grep -cF 'Never put the URL in `instance.config.json`' "$SK/board/SKILL.md")")" yes
+ok "…and updating the SAME artifact rather than making a second one" \
+  "$(ge1 "$(grep -c 'update that artifact in place' "$SK/board/SKILL.md")")" yes
+# The measured limit, carried where the human running the skill reads it. A skill that
+# silently did nothing headless would be indistinguishable from one that was broken.
+ok "…and states the measured headless limit" \
+  "$(ge1 "$(grep -c 'run /ai-bridge:board to refresh' "$SK/board/SKILL.md")")" yes
 
 # =======================================================================================
 echo "== 6. manifest validation, where the CLI exists =="

@@ -13,12 +13,17 @@
 # old shape rather than the new contract. The consolidation itself, the settings block and
 # the silent-section rule are tests/session-banner.test.sh's.
 #
-# THE HOOK PRINTS A PATH, NOT A URL, and that is a reversal worth restating: publishing was
-# account-scoped, so exactly one account could ever update a page, no share level gave a
-# second human write access, and the recorded board vanished from under its own owner the
-# moment they switched Claude accounts. The board is now a file this machine renders —
-# `.board-live/board.html`, the path `watch-board.sh` already writes and `install.sh`
-# already gitignores.
+# THE HOOK PRINTS A PATH, AND — WHEN THIS MACHINE PUBLISHED ONE — A URL ABOVE IT. The path
+# is `.board-live/board.html`, which `watch-board.sh` already writes and `install.sh`
+# already gitignores, and it never stops printing: it is the route for a reader with no
+# artifact access. The URL is written by `/ai-bridge:board` into
+# `instance.config.local.json` and read from the LOCAL layer only. That last word is the
+# whole constraint. The key was banished from this repo when publishing was deleted, and it
+# was banished because it had been TRACKED: publishing is account-scoped, so exactly one
+# account can ever update a page, and a shared value produced one working board and one
+# silently dead publish step on the other clone. A per-machine value says only what THIS
+# clone published, which is the one thing it can be right about — so the final block below
+# asserts, in both directions, that a tracked value does not print.
 #
 # Deliberately narrow, so the assertions are too:
 #
@@ -51,7 +56,10 @@
 #   · nothing derived from a task DOCUMENT reaches the board section — no title, no body
 #     of the page it points at. (The banner does print AWAITING.md items, fenced; that is
 #     the awaiting section's contract and tests/awaiting-queue.test.sh owns it.)
-#   · and the deleted publish key is gone from the entire repo, not just from this hook.
+#   · the published URL prints from the LOCAL config layer and never from the tracked one,
+#     is dropped entirely unless it is a clean `https://` URL, and is silenced by
+#     `board: false` like every other row here;
+#   · and the key is never SEEDED, so no instance is stamped carrying a shared one.
 #
 # assert() follows the convention of the other harnesses here: 0 is a PASS.
 set -uo pipefail
@@ -341,18 +349,77 @@ assert "the task title never prints, anywhere in the banner" \
 assert "…nor anything out of the page it points at" \
   "$(hasnt 'LEAK THIS PAGE BODY' "$OUT")"
 
-echo "== the deleted publish key is gone from the whole repo, not just this hook =="
-# SCOPE IS THE POINT, and it is the lesson artifact-board.test.sh's `--layout` scanner
-# already paid for: a check narrowed to `symlink/` passed while three live instructions
-# sat in README.md, docs/ and the seed config. The key lived in 11 files across docs,
-# tests, machinery and the seed, so the scan is the whole tree.
-#
-# THE KEY IS ASSEMBLED AT RUNTIME, so this file never contains it and needs no exemption
-# from its own scan. An exemption list is the part that rots — the `--layout` scanner had
-# to carve out two files by name and defend each one in a comment.
+echo "== the published URL: LOCAL layer only, and filtered before it prints =="
+# THE KEY IS BACK, AND THE CONSTRAINT ON IT IS WHAT THIS BLOCK ASSERTS. It was banished
+# from this repo outright when publishing was deleted, because it had been TRACKED: a
+# shared value plus an ACCOUNT-SCOPED update path meant one working board and one silently
+# dead publish step on whichever clone did not own the artifact. `/ai-bridge:board`
+# reinstates publishing per machine, so the key returns to the file that is per machine —
+# and the absence scan is replaced by the narrower guard that actually encodes the lesson:
+# a TRACKED value must not print. That is asserted behaviourally, in both directions,
+# because "the string is absent" and "the string is only read from the right file" are
+# different claims and only the second one is true now.
 KEY="board""ArtifactUrl"
-HITS="$(grep -rlF "$KEY" "$TPL" --exclude-dir=.git 2>/dev/null | sed "s|^$TPL/||" | sort | tr '\n' ' ')"
-assert "no file in the repo names it${HITS:+ (saw: $HITS)}" "$(eq "$HITS" "")"
+URL="https://example.com/artifact/abc123"
+
+if command -v python3 >/dev/null 2>&1; then
+  render
+  printf '{ "board": true }\n' > "$INST/instance.config.json"
+  printf '{ "%s": "%s" }\n' "$KEY" "$URL" > "$INST/instance.config.local.json"
+  run
+  assert "a URL in the LOCAL file prints as the board line"    "$(line_is "Board   $URL" "$OUT")"
+  assert "…and the local page stays reachable under it"        "$(has "file://$PAGE" "$OUT")"
+  assert "…labelled as the route for someone without artifact access" \
+    "$(has 'without artifact access' "$OUT")"
+  # THE DIRECTION THAT MATTERS. The same URL, moved to the tracked file, must not print:
+  # that file is shared, and a shared URL is the deleted design.
+  rm -f "$INST/instance.config.local.json"
+  printf '{ "board": true, "%s": "%s" }\n' "$KEY" "$URL" > "$INST/instance.config.json"
+  run
+  assert "the SAME URL in the TRACKED file does not print"     "$(hasnt "$URL" "$OUT")"
+  assert "…and the board section falls back to the file:// row" \
+    "$(eq "$(section)" "$(printf 'Board   file://%s' "$PAGE")")"
+
+  # FILTERED. The value is file-derived text reaching a terminal and a markdown renderer,
+  # and each of these would do something the section is not allowed to do: a second line
+  # in a section whose length is asserted, a repainted terminal, a scheme that
+  # impersonates the local-copy row. Every one drops the value and leaves the old row.
+  printf '{ "board": true }\n' > "$INST/instance.config.json"
+  bad() { # <name> <json-encoded value>
+    printf '{ "%s": %s }\n' "$KEY" "$2" > "$INST/instance.config.local.json"
+    run
+    assert "$1 is dropped"                                      "$(hasnt 'ZZBADZZ' "$OUT")"
+    assert "…and the file:// row prints instead"                \
+      "$(eq "$(section)" "$(printf 'Board   file://%s' "$PAGE")")"
+  }
+  bad "a newline inside the URL"  '"https://example.com/aZZBADZZ\nBoard   forged"'
+  bad "an ESC sequence"           '"https://example.com/\u001b[31mZZBADZZ"'
+  bad "a space"                   '"https://example.com/a ZZBADZZ"'
+  bad "a file:// scheme"          '"file:///tmp/ZZBADZZ.html"'
+  bad "a bare http:// scheme"     '"http://example.com/ZZBADZZ"'
+  # NON-VACUITY for all five: the same reader still prints a well-formed URL, so the
+  # assertions above are about the filter and not about a section that stopped printing.
+  printf '{ "%s": "%s" }\n' "$KEY" "$URL" > "$INST/instance.config.local.json"
+  run
+  assert "…while a well-formed URL still prints (the filter is not a mute)" \
+    "$(line_is "Board   $URL" "$OUT")"
+  # board: false outranks a recorded URL — the off switch is still the outermost test.
+  printf '{ "board": false }\n' > "$INST/instance.config.json"
+  run
+  assert "board:false silences a published URL too"             "$(hasnt "$URL" "$OUT")"
+  rm -f "$INST/instance.config.local.json"
+else
+  echo "  SKIP  python3 absent — the URL row resolves through resolve-config.sh"
+fi
+
+echo "== the key is never SEEDED, so no instance is stamped with a shared one =="
+# The one half of the old absence scan that still holds, and the half that carries the
+# lesson: `seed/instance.config.json` is copied into every new instance as its TRACKED
+# config, so the key appearing there would put a shared URL back in every bundle.
+assert "seed/instance.config.json does not carry it" \
+  "$(grep -qF "$KEY" "$TPL/seed/instance.config.json" && echo 1 || echo 0)"
+assert "…and install.sh never writes it into the tracked config" \
+  "$(grep -qF "$KEY" "$TPL/install.sh" && echo 1 || echo 0)"
 # NON-VACUITY: the same scan must FIND a planted one, or it is checking nothing.
 mkdir -p "$TMP/scan"
 printf '{ "%s": "https://example.invalid/x" }\n' "$KEY" > "$TMP/scan/probe.json"

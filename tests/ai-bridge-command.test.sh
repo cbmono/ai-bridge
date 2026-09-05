@@ -511,8 +511,32 @@ ok "a \$-prefixed comment key is not a key" \
 ok "…and fix will not touch it: the row's tier is ambiguous" \
   "$(bash "$SH" check --list | awk -F'\t' '$1=="config-unknown-keys"{print $2}')" "ambiguous"
 
+# THE KNOWN SET IS PER FILE FOR EXACTLY ONE KEY, and both directions are asserted because
+# only the pair says anything. `boardArtifactUrl` is read from the LOCAL layer and nowhere
+# else — `session-banner.sh` checks the source and drops a `tracked` value in silence — so
+# a tracked copy is read by NOTHING, which is the "looks authoritative, configures nothing"
+# state this whole row exists to name. A global known set would have blessed it, and that
+# is the shape the key was deleted for the first time round. The literal is assembled at
+# runtime for the reason the other harnesses assemble it: this file then needs no exemption
+# from any repo-wide scan of it.
+URLKEY="board""ArtifactUrl"
+printf '{\n  "org": "example-org",\n  "%s": "https://example.com/a"\n}\n' "$URLKEY" > "$INST6/instance.config.json"
+printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$INST6/instance.config.local.json"
+OUT6f="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"
+WARN6F="$(printf '%s\n' "$OUT6f" | grep 'config carries key(s) nothing reads:')"
+ok "the URL key in the TRACKED file is named as a key nothing reads" \
+  "$(printf '%s\n' "$WARN6F" | grep -c "instance\.config\.json:$URLKEY" | tr -d ' ')" 1
+# …and the same key, same instance, moved to the file that IS read: silence. Without this
+# half the assertion above is satisfied by a check that rejects the key everywhere.
+printf '{\n  "org": "example-org"\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "ownerGithubUser": "example-user-007",\n  "%s": "https://example.com/a"\n}\n' "$URLKEY" > "$INST6/instance.config.local.json"
+OUT6g="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"
+ok "…while the SAME key in the local file is known, and the row is healthy" \
+  "$(printf '%s\n' "$OUT6g" | grep -c 'config keys: every top-level key is one the machinery knows' | tr -d ' ')" 1
+
 # The clean direction, on the same instance with the stray key removed.
 printf '{\n  "org": "example-org"\n}\n' > "$INST6/instance.config.json"
+printf '{\n  "ownerGithubUser": "example-user-007",\n  "reposRoot": "/tmp/x"\n}\n' > "$INST6/instance.config.local.json"
 OUT6b="$(bash "$SH" check --instance "$INST6" --template "$SRC" 2>&1)"
 ok "with only known keys, the row reports the healthy fact" \
   "$(printf '%s\n' "$OUT6b" | grep -c 'config keys: every top-level key is one the machinery knows' | tr -d ' ')" 1

@@ -11,7 +11,7 @@ board. Procedures here; the reasoning behind each one is linked.
 
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
-| the **plugin** (`ai-bridge`) | every slash command — `/ai-bridge:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/ai-bridge`, then `/plugin install ai-bridge@ai-bridge`; `/plugin` to update it later |
+| the **plugin** (`ai-bridge`) | every slash command — `/ai-bridge:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:board`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/ai-bridge`, then `/plugin install ai-bridge@ai-bridge`; `/plugin` to update it later |
 | the **bundle** (`seed/` content + your data) | `projects/`, `knowledge/`, `objectives/`, `instance.config*.json`, the seed docs (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, `.claude/settings.json`), the managed `.gitignore` lines, and the `repos/` links | **per bundle** | `/ai-bridge:init <dir>` |
 
 **THE SECOND HALF NO LONGER CARRIES MACHINERY, AND THAT IS THE CHANGE.** A bundle used to
@@ -337,19 +337,23 @@ scripts/build-board.sh --standalone --out /tmp/board.html .  # ...the same page,
 scripts/watch-board.sh                                       # a local page, re-rendered on every change
 ```
 
+`/ai-bridge:board` is the fifth way to look at it and the only one that leaves the machine:
+it renders the same body and publishes it as a **private artifact** at a URL that does not
+change between runs ([below](#opening-the-board-laptop-phone-published-live)).
+
 Each `/ai-bridge:dispatch` tick refreshes the snapshot at the end of the tick, so on a looping
 instance you never run the writer by hand — and unless `board` is `false`, the same tick
 re-renders the local page and reports its path ([below](#rendering-it-from-each-tick)).
 
 ### Which renderer to reach for
 
-| | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` |
-|---|---|---|---|---|
-| Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, no `<html>` wrapper | the same page, kept fresh |
-| Freshness | the moment you ran it | the moment you ran it — or **every tick**, on a looping instance | the moment you ran it | live, to the second |
-| Leaves the machine | no | no | only if you carry it somewhere | no |
-| Costs | nothing | a re-run, or a looping instance | a re-run to refresh | **a resident process** |
-| Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue |
+| | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` | `/ai-bridge:board` |
+|---|---|---|---|---|---|
+| Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, no `<html>` wrapper | the same page, kept fresh | the same body, as a **private artifact** at a fixed URL |
+| Freshness | the moment you ran it | the moment you ran it — or **every tick**, on a looping instance | the moment you ran it | live, to the second | the last time you ran it — no tick can refresh it |
+| Leaves the machine | no | no | only if you carry it somewhere | no | **yes — titles go to claude.ai** |
+| Costs | nothing | a re-run, or a looping instance | a re-run to refresh | **a resident process** | a re-run, and it must be a human typing |
+| Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue | somebody needs the board on a phone, or without a clone |
 
 **The watcher needs a process you keep alive, and that is a real cost, not a detail.**
 ai-bridge deliberately has no resident process: its agents are ephemeral subagents inside
@@ -413,9 +417,10 @@ at its next stamp, with no `touch` needed.
 
 ### Before it leaves the machine, know what it carries
 
-Nothing publishes the board any more — the tick renders a local file — but a file is
-copyable, and the board's HTML can therefore still leave the machine if you carry it
-somewhere. So the snapshot deliberately carries *less* than `AWAITING.md` does.
+`/ai-bridge:board` publishes this page, and a local file is copyable even when you do not.
+Either way the board's HTML can leave the machine, so the snapshot deliberately carries
+*less* than `AWAITING.md` does — and the list below is the whole of what a published page
+can contain, because the renderer reads the snapshot and nothing else.
 
 | Carried | Never carried |
 |---|---|
@@ -735,7 +740,7 @@ owner asked three times in one session, for three different instances.
 
 ```text
 
-AI-Bridge v0.31.0 · _ai-bridge-private · org: cbmono
+AI-Bridge v0.33.0 · _ai-bridge-private · org: cbmono
 ────────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
@@ -973,11 +978,12 @@ The old `/status` command and `DASHBOARD.md` are gone. In each existing instance
 
 ## Which renderer, and the one question that decides it
 
-**How fresh does it have to be?** That is the whole decision now. It used to be *where
-may this board go*, and that question has one fixed answer: **every renderer below writes
-to the machine it runs on**, and nothing is served or published to an account. The one
-copy that travels is `/board.html`, which the tick *commits* — so its audience is this
-repo's permission list, decided when you granted access and not by any renderer here.
+**How fresh does it have to be, and who has to reach it?** Two questions now, and the
+second one has exactly two answers. **Every renderer in the table below writes to the
+machine it runs on**; the two copies that travel are `/board.html`, which the tick
+*commits* — audience: this repo's permission list — and the page `/ai-bridge:board`
+publishes as a private artifact — audience: you, plus anyone you shared it with. Nothing
+is *served*: no Pages site, no host, no URL that works without one of those two grants.
 
 | | Reach | Process | Use it when |
 |---|---|---|---|
@@ -985,17 +991,19 @@ repo's permission list, decided when you granted access and not by any renderer 
 | `build-board.sh --standalone` | a local HTML file | none | you want to open the page — and it is what each tick renders |
 | `build-board.sh` | a page **body**, no wrapper | none | you are embedding the markup in something else |
 | `watch-board.sh` | this machine only | **a resident one** | you want the page to follow your work *between* ticks |
+| `/ai-bridge:board` | a private artifact URL | none | somebody needs the board on a phone, or without a clone |
 
-**The compliance question answered itself, and that is the point of deleting the publish
-path.** Every task **title** used to be sent to claude.ai by the tick; the snapshot's own
-`_sensitivity` field says it is "as sensitive as the task documents it comes from".
-`watch-board.sh` was kept — rather than retired when the publishable page arrived —
-precisely because it was the only renderer that answered "nowhere", and an instance whose
-`CLAUDE.md` carries no-PII rules had to have one. Now they all answer "nowhere", so
-`watch-board.sh` is the *live* one rather than the *compliant* one, and the rest of that
-reasoning is history rather than a constraint on which renderer you may use. (It was
-recorded as a Finding in the private instance that raised it, so it is not linkable from
-this public repo; the short version is the paragraph you just read.)
+**The compliance question is a per-instance decision, and it is decided by not running one
+command.** Publishing sends every task **title** to claude.ai; the snapshot's own
+`_sensitivity` field says it is "as sensitive as the task documents it comes from", and an
+instance whose `CLAUDE.md` carries no-PII rules may not want that. This is why the publish
+step is a **human-typed skill** rather than something the tick does: no tick, no cron and
+no agent publishes anything, so an instance that never runs `/ai-bridge:board` never sends
+a byte. Every renderer in the table answers "nowhere" until you type it, `watch-board.sh`
+is the *live* one rather than the *compliant* one, and the choice stays where it was — with
+the human, per instance. (It was recorded as a Finding in the private instance that raised
+it, so it is not linkable from this public repo; the short version is the paragraph you
+just read.)
 
 `build-board.sh` emits a page **body** by default — no `<!doctype>`, `<html>`, `<head>`
 or `<body>`, because a host used to supply exactly those. Nothing supplies them now, so
@@ -1065,23 +1073,38 @@ Six properties, and the first is the one to remember:
    a day at the default `10m` — and would leave the tracked tree dirty, which makes the
    next tick defer its `git pull --rebase`.
 
-**There was a publish path here until 2026-08-29, and deleting it is the headline, not a
-footnote.** A recorded artifact URL made each tick republish the page to claude.ai. It
-could not work: publishing is **account-scoped** — the update path needs an artifact the
-account owns, and no share level grants it, so exactly one account could ever update a
-given URL. Verified live: a `scope: all` listing did not include the other human's board,
-and reading it directly returned *artifact not found — it may have been deleted, or it has
-not been shared with you*. So a shared URL never produced one shared board; it produced one
-working board and one publish step that failed silently on the other clone forever. Then
-the owner switched Claude accounts and the recorded page disappeared from under them,
-which is the failure that ended it. The key, the step, the publish grant and the
-per-machine override row are all gone; the cross-owner section survives untouched, because
-it never came from the published page — `build-board.sh` reads it from the tracked task
-documents at your current git `HEAD`.
+**The tick does not publish, and that is measured rather than assumed.** Measured
+2026-09-05 on Claude Code 2.1.261: a headless `claude -p` session's tool inventory carries
+**no artifact tool**, and a tool search for one returns nothing — while the same search
+returns a tool for a query it can answer, so the probe discriminates. A dispatch tick is
+that session. So the tick renders the two local pages exactly as before and adds **one
+line** when this machine has published a board:
 
-**The `SessionStart` banner surfaces the path too.** `.claude/hooks/session-banner.sh`
-prints the rendered board when a session starts, so the human can open it instead of
-digging for it: **one line — the label and a `file://` link, and the path exactly once.**
+```text
+BOARD: run /ai-bridge:board to refresh the published page
+```
+
+No recorded URL ⇒ no line. Publishing stays a thing a human types.
+
+**A tick DID publish, from 2026-08-26 until 2026-08-29, and the reason it stopped is why
+the URL is now per machine.** The URL sat in the **tracked** config, and publishing is
+**account-scoped** — the update path needs an artifact the account owns, and no share
+level grants it, so exactly one account can ever update a given URL. Verified live: a
+`scope: all` listing did not include the other human's board, and reading it directly
+returned *artifact not found — it may have been deleted, or it has not been shared with
+you*. A shared URL therefore never produced one shared board; it produced one working
+board and one publish step that failed silently on the other clone forever, and when the
+owner switched Claude accounts the recorded page disappeared from under them.
+`boardArtifactUrl` now lives in `instance.config.local.json` and is read from that layer
+only — a value in the tracked file is dropped rather than printed — so two humans on one
+bundle keep two URLs, which is what the account scoping was asking for all along. The
+cross-owner section is untouched either way: it never came from the published page, and
+`build-board.sh` reads it from the tracked task documents at your current git `HEAD`.
+
+**The `SessionStart` banner surfaces the board too.** `.claude/hooks/session-banner.sh`
+prints where it is when a session starts, so the human can open it instead of digging for
+it: **one line — the label and a `file://` link, and the path exactly once**, plus the
+published URL above it on a machine that has published one (the fourth row below).
 It was three lines until ai-bridge-v5/task-023 (the URL, the same path again bare, and a
 staleness note); the owner read the duplicated path as a bug on sight, and the note said
 nothing that was true of the session — the page's own masthead carries the render time and
@@ -1105,6 +1128,16 @@ last row stays silent on purpose — the human switched the board off and does n
 telling every session start. The count line agrees with whichever row printed: it says
 *"see the board above"* only for the first.
 
+**A fourth row sits above the first when this machine has published a board**: the
+artifact URL becomes the `Board` line and the `file://` path follows it as a dim
+continuation, labelled as the copy for a reader without artifact access. It is an
+**addition** — an instance that has never published prints exactly the bytes it printed
+before the row existed. The URL is read from `instance.config.local.json` **only**: a value
+in the tracked file is dropped in silence, because a tracked URL is one clone's page that
+the other can never write. It is filtered before it prints — `https://` only, no
+whitespace, no control bytes — since a config value reaching a terminal is file-derived
+text like any other.
+
 The banner reads the task documents for exactly one number, the `Ready to dispatch` count,
 and that number reaches the **model's** copy alone. The `AWAITING.md` items are the one
 piece of task-derived *text* it carries, and they too reach the model's copy alone and only
@@ -1112,30 +1145,49 @@ inside the untrusted-data fence — the single place a title, a question or a pr
 enters session context, and it enters labelled as data. **The human's copy carries one
 count and nothing else**: no title, no question text, no project slug, no queue tally.
 
-### Opening the board (laptop, phone, live)
+### Opening the board (laptop, phone, published, live)
 
-The board is a **file**, in three places at once, and which one you want depends on where
-you are standing. `/board.html` at the bundle root is the tracked one — the tick commits
-it, so `git pull` is how it reaches another machine.
+The board is a **page in four places**, and which one you want depends on where you are
+standing. `/board.html` at the bundle root is the tracked one — the tick commits it, so
+`git pull` is how it reaches another machine. The **published artifact** is the one that
+reaches a device with no checkout on it.
 
 | Where you are | Do this | Freshness |
 |---|---|---|
 | **Laptop** (the canonical route) | `git pull`, then open `board.html` — `open board.html` on macOS | the last tick that changed something |
-| **Phone** | open `board.html` on github.com → **Download raw file** → open it from Files/Downloads | same |
-| **Phone, one step** | a git client that previews HTML (e.g. Working Copy on iOS) — pull, tap the file | same |
+| **Phone** | open the artifact URL — the session banner prints it, and it is the same URL every time | the last `/ai-bridge:board` you ran |
+| **No Claude access** (the fallback) | `git pull`, then a git client that previews HTML (e.g. Working Copy on iOS) — tap `board.html` | the last tick that changed something |
 | **Between ticks** | `scripts/watch-board.sh` → `.board-live/board.html`, on this machine | live, while the watcher runs |
 
-**github.com does not render an `.html` blob as a page — it shows you the source**, in
-the web UI and in the mobile app alike. There is no "view rendered" button to look for and
-nothing here is misconfigured; the raw file has to reach the device before a browser will
-draw it. That is the whole reason the phone row has a download step in it. (`htmlpreview`
-and friends fetch through a third party, so they are **not** a route for a private
-bundle — the page would leave the repo's permission list to be rendered.)
+**The phone row used to be a download**, and that is what `/ai-bridge:board` replaces:
+github.com does not render an `.html` blob as a page — it shows you the source, in the web
+UI and in the mobile app alike — so the raw file had to reach the device before a browser
+would draw it. The artifact is a page, so there is nothing to download. (`htmlpreview` and
+friends fetch through a third party and are **not** a route for a private bundle — the
+page would leave the repo's permission list to be rendered.)
 
-**Nothing is served, so there is nothing to switch off.** No Pages site is enabled on any
-bundle repo, nothing is published to an account, and the only access-control system in
-play is the repo's own permission list. If you can clone the bundle you can read the
-board; if you cannot, there is no URL that would help you.
+**`board.html` stays, and it is the fallback on purpose.** A published artifact needs a
+Claude account; the tracked file needs a clone. Anyone who has the second and not the first
+reads the same page from the repo, which is why the tick keeps committing it and why the
+banner keeps printing its path under the URL.
+
+### Sharing it with a second human — one step
+
+Open the artifact and share it with them, read-only, from the page's own share control.
+That is the whole step. The URL does not change, so every later `/ai-bridge:board` updates
+the page they already have.
+
+**What sharing does not do is let them publish.** Artifact publishing is account-scoped:
+no share level makes a second account able to update your page. On a bundle two humans
+clone, each runs `/ai-bridge:board` from their own clone and keeps their own URL in their
+own `instance.config.local.json` — which is why that key is per-machine and why a value in
+the tracked config is ignored. Neither of you is missing anything by that: the cross-owner
+half of the board is read from the tracked task documents at your git `HEAD`, not from
+anybody's published page.
+
+**Nothing is *served*.** No Pages site is enabled on any bundle repo, and there is no URL
+that works without either a clone of the repo or a share of the artifact. Those are the
+only two access-control systems in play, and both are lists you granted by hand.
 
 **If `board.html` is missing or stale after a pull:** the tick commits it only when it
 changed something, so a quiet day leaves the file where the last real tick left it — its
