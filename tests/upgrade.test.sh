@@ -29,7 +29,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL_SRC="$HERE/.."
-[[ -f "$TPL_SRC/upgrade.sh" ]] || { echo "upgrade.test: not found at $TPL_SRC/upgrade.sh" >&2; exit 2; }
+[[ -f "$TPL_SRC/plugin/scripts/refresh-seeds.sh" ]] || { echo "upgrade.test: not found at $TPL_SRC/plugin/scripts/refresh-seeds.sh" >&2; exit 2; }
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/upgrade-fixture.XXXXXX")" || {
   echo "upgrade.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -56,7 +56,7 @@ gc() { git -c user.email=a@b -c user.name=a commit -qm "$1"; }
 # ---------------------------------------------------------------- the template, seed v1
 TPL="$TMP/tpl"
 mkdir -p "$TPL"
-cp -R "$TPL_SRC/install.sh" "$TPL_SRC/upgrade.sh" "$TPL_SRC/seed" "$TPL_SRC/symlink" "$TPL/"
+cp -R "$TPL_SRC/plugin/scripts/init-bundle.sh" "$TPL_SRC/plugin/scripts/refresh-seeds.sh" "$TPL_SRC/seed" "$TPL_SRC/symlink" "$TPL/"
 
 # Controlled seed content, so the assertions below describe this test's edits rather than
 # whatever the real seed files happen to say today.
@@ -70,12 +70,12 @@ printf '# Log\n'                                    > "$TPL/seed/log.md"
 # template — and therefore the seed/ and the git history it judges drift against — from
 # its OWN location. Running the repo's copy against the fixture instance silently compares
 # it to the real seed files, which is how the first version of this harness lied.
-UPGRADE="$TPL/upgrade.sh"
+UPGRADE="$TPL/plugin/scripts/refresh-seeds.sh"
 
 # ---------------------------------------------------------------- an instance, stamped
 INST="$TMP/group/_ai-bridge-fixture"
 mkdir -p "$INST"
-bash "$TPL/install.sh" "$INST" > "$TMP/install1.out" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" > "$TMP/install1.out" 2>&1
 
 # Documents for steps 2 and 3: one mechanical repair, one that needs a human.
 mkdir -p "$INST/knowledge/findings"
@@ -188,18 +188,18 @@ assert "…and reports 0 ported"          "$(has '0 ported' "$THIRD")"
 assert "the conflict is still reported, not forgotten" "$(has 'CONFLICT  CLAUDE.md' "$THIRD")"
 
 echo "== install.sh nudges toward upgrade.sh, but only when there is something to fix =="
-NUDGE="$(bash "$TPL/install.sh" "$INST" 2>&1)"
-assert "install.sh still exits 0 with a broken bundle" "$(yes_if bash "$TPL/install.sh" "$INST")"
+NUDGE="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" 2>&1)"
+assert "install.sh still exits 0 with a broken bundle" "$(yes_if bash "$TPL/plugin/scripts/init-bundle.sh" "$INST")"
 assert "it points at upgrade.sh"       "$(has 'upgrade.sh' "$NUDGE")"
 assert "it says why"                   "$(has 'schema errors' "$NUDGE")"
 rm "$INST/knowledge/findings/needs-human.md"
-CLEAN="$(bash "$TPL/install.sh" "$INST" 2>&1)"
+CLEAN="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" 2>&1)"
 assert "a clean bundle gets no nudge"  "$(hasnt 'upgrade.sh' "$CLEAN")"
 # An instance older than the validator has no validator to run: still silent, still 0.
-rm "$TPL/symlink/scripts/validate-bundle.sh"
+rm "$TPL/plugin/scripts/validate-bundle.sh"
 OLD="$TMP/group/_ai-bridge-old"; mkdir -p "$OLD"
 OLD_RC=0
-OLD_OUT="$(bash "$TPL/install.sh" "$OLD" 2>&1)" || OLD_RC=$?
+OLD_OUT="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$OLD" 2>&1)" || OLD_RC=$?
 assert "no validator, no nudge"        "$(hasnt 'upgrade.sh' "$OLD_OUT")"
 assert "no validator, still exits 0"   "$([[ $OLD_RC -eq 0 ]] && echo 0 || echo 1)"
 
@@ -207,7 +207,7 @@ echo "== a template with no git history reports rather than guesses =="
 NOGIT="$TMP/tpl-nogit"
 cp -R "$TPL" "$NOGIT" && rm -rf "$NOGIT/.git"
 printf 'a further seed change\n' >> "$NOGIT/seed/index.md"
-NOGIT_OUT="$(bash "$NOGIT/upgrade.sh" "$INST" --apply 2>&1)"
+NOGIT_OUT="$(bash "$NOGIT/plugin/scripts/refresh-seeds.sh" "$INST" --apply 2>&1)"
 assert "a drifted file with no merge base is UNKNOWN" "$(has 'UNKNOWN   index.md' "$NOGIT_OUT")"
 assert "…and is not ported"            "$(hasnt 'PORTED    index.md' "$NOGIT_OUT")"
 assert "…and index.md was not written" \
@@ -223,7 +223,7 @@ DIRCASE="$TMP/group/_ai-bridge-dircase"
 cp -R "$INST" "$DIRCASE"
 rm -f "$DIRCASE/index.md" && mkdir -p "$DIRCASE/index.md/somebody-made-this-a-folder"
 DIR_RC=0
-DIR_OUT="$(bash "$TPL/upgrade.sh" "$DIRCASE" --apply 2>&1)" || DIR_RC=$?
+DIR_OUT="$(bash "$TPL/plugin/scripts/refresh-seeds.sh" "$DIRCASE" --apply 2>&1)" || DIR_RC=$?
 assert "a directory at a seeded path is UNKNOWN" "$(has 'UNKNOWN   index.md' "$DIR_OUT")"
 assert "…and is not ported"                      "$(hasnt 'PORTED    index.md' "$DIR_OUT")"
 assert "…and the directory is untouched"         "$(yes_if test -d "$DIRCASE/index.md/somebody-made-this-a-folder")"
@@ -241,10 +241,10 @@ assert "…and the run still exits 0"              "$([[ $DIR_RC -eq 0 ]] && ech
 #    so a 0 exit there lets a caller treat "machinery never installed" as a clean run.
 BADTPL="$TMP/tpl-badinstall"
 cp -R "$TPL" "$BADTPL"
-printf '#!/usr/bin/env bash\necho "  boom"\nexit 7\n' > "$BADTPL/install.sh"
-chmod +x "$BADTPL/install.sh"
+printf '#!/usr/bin/env bash\necho "  boom"\nexit 7\n' > "$BADTPL/plugin/scripts/init-bundle.sh"
+chmod +x "$BADTPL/plugin/scripts/init-bundle.sh"
 BAD_RC=0
-BAD_OUT="$(bash "$BADTPL/upgrade.sh" "$INST" 2>&1)" || BAD_RC=$?
+BAD_OUT="$(bash "$BADTPL/plugin/scripts/refresh-seeds.sh" "$INST" 2>&1)" || BAD_RC=$?
 assert "a failing install.sh is reported"   "$(has 'install.sh exited 7' "$BAD_OUT")"
 assert "…and it is listed as manual work"   "$(has 'install.sh failed' "$BAD_OUT")"
 assert "…and the run exits NON-zero"        "$([[ $BAD_RC -ne 0 ]] && echo 0 || echo 1)"
@@ -252,7 +252,7 @@ assert "…and the run exits NON-zero"        "$([[ $BAD_RC -ne 0 ]] && echo 0 |
 # 3. Report-only must not overclaim. install.sh restores an ABSENT seed file by design
 #    (its seeds-if-absent contract), so "nothing changes" was false. What report-only
 #    really guarantees is that no instance CONTENT is rewritten.
-REPORT_OUT="$(bash "$TPL/upgrade.sh" "$INST" 2>&1)"
+REPORT_OUT="$(bash "$TPL/plugin/scripts/refresh-seeds.sh" "$INST" 2>&1)"
 assert "report mode does not claim nothing changes" \
   "$(hasnt 'nothing changes' "$REPORT_OUT")"
 assert "report mode names what install.sh still writes" \
@@ -268,11 +268,11 @@ assert "report mode leaves diverged content alone" \
 AUT="$TMP/group/_ai-bridge-autonomy"
 cp -R "$INST" "$AUT"
 rm -f "$AUT/AUTONOMY.md"
-AUT_OUT="$(bash "$TPL/upgrade.sh" "$AUT" 2>&1)"
+AUT_OUT="$(bash "$TPL/plugin/scripts/refresh-seeds.sh" "$AUT" 2>&1)"
 assert "a re-linked AUTONOMY.md is flagged"  "$(has 'AUTONOMY WAS RE-ENABLED' "$AUT_OUT")"
 assert "…with the command to turn it off"    "$(has 'rm .*_ai-bridge-autonomy/AUTONOMY.md' "$AUT_OUT")"
 # Non-vacuous: an instance that still has it must NOT get the warning.
-STILL_OUT="$(bash "$TPL/upgrade.sh" "$INST" 2>&1)"
+STILL_OUT="$(bash "$TPL/plugin/scripts/refresh-seeds.sh" "$INST" 2>&1)"
 assert "…and not warned when it was present" "$(hasnt 'AUTONOMY WAS RE-ENABLED' "$STILL_OUT")"
 
 echo

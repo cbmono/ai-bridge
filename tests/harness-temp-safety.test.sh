@@ -597,7 +597,7 @@ for h in board-renderers snapshot moved-template; do
   COPY="$TMP/checkout-$h"
   fresh_copy "$COPY" || die "could not copy the checkout for $h"
   ok "$h: fixture copy is a checkout" \
-     "$([ -f "$COPY/tests/$h.test.sh" ] && [ -f "$COPY/install.sh" ] && echo yes || echo no)" yes
+     "$([ -f "$COPY/tests/$h.test.sh" ] && [ -f "$COPY/plugin/scripts/init-bundle.sh" ] && echo yes || echo no)" yes
   # Capped, because an UNFIXED harness does not abort: it sets TMP to its own cwd and
   # runs its whole suite before the trap deletes it, which is minutes. A test that HANGS
   # is worse than one that fails, so a breach is reported as rc 124 — and the assertion
@@ -655,7 +655,7 @@ for h in banner-board-line; do
   COPY="$TMP/checkout-$h"
   fresh_copy "$COPY" || die "could not copy the checkout for $h"
   ok "$h: fixture copy is a checkout" \
-     "$([ -f "$COPY/tests/$h.test.sh" ] && [ -f "$COPY/install.sh" ] && echo yes || echo no)" yes
+     "$([ -f "$COPY/tests/$h.test.sh" ] && [ -f "$COPY/plugin/scripts/init-bundle.sh" ] && echo yes || echo no)" yes
   LOG="$TMP/run-$h.log"; : > "$LOG"
   ( cd "$COPY" && TMPDIR="$COPY/no-such-tmpdir" bash "tests/$h.test.sh" >"$LOG" 2>&1 ) &
   pid=$!; waited=0

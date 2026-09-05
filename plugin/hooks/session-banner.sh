@@ -554,7 +554,7 @@ bin=""
 # comparison and nothing else. A plugin installed from a marketplace has one; a plugin
 # vendored some other way may not, and that is reported as "cannot compare", never guessed.
 tmpl=""
-if [ -n "$plugin_root" ] && [ -d "$plugin_root/../seed" ] && [ -f "$plugin_root/../VERSION" ]; then
+if [ -n "$plugin_root" ] && [ -f "$plugin_root/../VERSION" ]; then
   tmpl="$(cd "$plugin_root/.." && pwd)"
 fi
 

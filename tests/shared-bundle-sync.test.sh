@@ -10,7 +10,7 @@
 #
 # WHY THIS IS A TEST AND NOT A CONVENTION. `git push` and `git pull` appeared
 # NOWHERE in the shipped machinery before this change — not the PM agent, not
-# `/pm-loop`, not any of the 14 `symlink/scripts/*.sh`, not a hook. A tick committed
+# `/pm-loop`, not any of the 14 `plugin/scripts/*.sh`, not a hook. A tick committed
 # locally via `commit-as.sh` and stopped. That was harmless while every instance had
 # one human; it stopped being harmless the day a second clone started sharing one
 # bundle, because the two clones now diverge silently until somebody pushes by hand

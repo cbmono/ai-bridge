@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Exercises symlink/scripts/migrate-bundle.sh. The properties that matter most are
+# Exercises plugin/scripts/migrate-bundle.sh. The properties that matter most are
 # the negative ones: the default run must change nothing on disk, a missing timestamp
 # git cannot date must NOT be invented, and a dangling reference must be reported
 # rather than rewritten — that decision belongs to /close-project step 6, where the
@@ -10,8 +10,8 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-MIGRATE="$HERE/../symlink/scripts/migrate-bundle.sh"
-VALIDATE="$HERE/../symlink/scripts/validate-bundle.sh"
+MIGRATE="$HERE/../plugin/scripts/migrate-bundle.sh"
+VALIDATE="$HERE/../plugin/scripts/validate-bundle.sh"
 [[ -f "$MIGRATE" ]] || { echo "migrate-bundle.test: not found at $MIGRATE" >&2; exit 2; }
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/migrate-bundle-fixture.XXXXXX")" || {

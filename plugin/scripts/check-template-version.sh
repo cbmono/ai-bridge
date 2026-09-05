@@ -75,14 +75,13 @@ if [ -z "$TEMPLATE" ]; then
     target="$(readlink "$self" 2>/dev/null || printf '%s' "$self")"
     case "$target" in /*) self="$target" ;; *) self="$(dirname "$self")/$target" ;; esac
   fi
-  # Walk up for the two files that define a template root, rather than matching a marker
-  # in the path: the plugin lives at <clone>/plugin/scripts/ when installed from a
-  # marketplace and in the same shape in a checkout, and neither is hardcoded this way.
-  probe="$(dirname "$self")"
-  while [ "$probe" != "/" ] && [ -n "$probe" ]; do
-    if [ -d "$probe/seed" ] && [ -f "$probe/VERSION" ]; then TEMPLATE="$probe"; break; fi
-    probe="$(dirname "$probe")"
-  done
+  # The layout is fixed by the marketplace manifest (`source: ./plugin`): this file sits at
+  # <root>/plugin/scripts/, so the template root is exactly two directories up. Derived and
+  # then VERIFIED against `VERSION`, never searched for — a walk that keeps climbing finds
+  # SOME ancestor with a VERSION file eventually, and comparing against an unrelated repo
+  # is the one answer worse than silence.
+  guess="$(cd "$(dirname "$self")/../.." 2>/dev/null && pwd || true)"
+  [ -n "$guess" ] && [ -f "$guess/VERSION" ] && TEMPLATE="$guess"
 fi
 [ -n "$TEMPLATE" ] && [ -d "$TEMPLATE" ] || exit 0
 

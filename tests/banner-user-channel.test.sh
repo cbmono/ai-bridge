@@ -57,8 +57,8 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
-HOOK="$TPL/symlink/.claude/hooks/session-banner.sh"
-SETTINGS="$TPL/symlink/.claude/settings.json"
+HOOK="$TPL/plugin/hooks/session-banner.sh"
+SETTINGS="$TPL/seed/.claude/settings.json"
 [ -f "$HOOK" ]     || { echo "banner-user-channel.test: hook not found at $HOOK" >&2; exit 2; }
 [ -f "$SETTINGS" ] || { echo "banner-user-channel.test: settings.json not found at $SETTINGS" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || {
@@ -446,7 +446,7 @@ echo "== 6. /ai-bridge INVOKES this hook, it does not reproduce it =="
 # The equality is therefore against the hook in that same rendering, and it still says the
 # thing it always said: the wrapper contributes not one byte of its own. Comparing it to the
 # hook's BARE output would now be asserting that the wrapper ignores its reader.
-AB="$TPL/symlink/scripts/ai-bridge.sh"
+AB="$TPL/plugin/scripts/ai-bridge.sh"
 if [ -f "$AB" ]; then
   AB_OUT="$( cd "$INST" && CLAUDE_PROJECT_DIR="$INST" bash "$AB" 2>/dev/null )"
   MD_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"

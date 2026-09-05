@@ -49,7 +49,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPT="$REPO/symlink/scripts/review-rounds.sh"
+SCRIPT="$REPO/plugin/scripts/review-rounds.sh"
 FIXTURES="$REPO/tests/fixtures/reviewer"
 CLEAN_BODY="$FIXTURES/clean-review.pr29.md"
 REFUSAL_BODY="$FIXTURES/rate-limit-refusal.pr30.md"
@@ -315,7 +315,7 @@ echo "== the wiring, so refusing is mechanical rather than remembered =="
 # the two dispatch paths NAME the script: an agent that is merely told a rule follows it
 # when it remembers to, which is the failure this whole task exists to close.
 has() { grep -q "review-rounds.sh" "$1" && echo 0 || echo 1; }
-ok "CONVENTIONS.md names the script"  "$(has "$REPO/symlink/CONVENTIONS.md")" "0"
+ok "CONVENTIONS.md names the script"  "$(has "$REPO/seed/CONVENTIONS.md")" "0"
 ok "qa-reviewer.md names the script"  "$(has "$REPO/plugin/agents/qa-reviewer.md")" "0"
 ok "project-manager.md names it"      "$(has "$REPO/plugin/agents/project-manager.md")" "0"
 

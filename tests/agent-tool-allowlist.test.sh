@@ -56,8 +56,8 @@
 # where they are implemented rather than summarised away here.
 #
 # WHICH FILES ARE SCANNED IS DERIVED, NOT LISTED. The first version named two shared docs
-# by hand (`symlink/CONVENTIONS.md`, `seed/CLAUDE.md`) and so could only ever check the
-# two someone remembered — `symlink/SCHEMA.md`'s browser-access section named
+# by hand (`seed/CONVENTIONS.md`, `seed/CLAUDE.md`) and so could only ever check the
+# two someone remembered — `seed/SCHEMA.md`'s browser-access section named
 # `mcp__claude-in-chrome__*` to five readers whose intersection is `Bash Glob Grep Read`,
 # and the check was
 # silent because the file was not on the list. A doc addresses an agent when an agent is
@@ -127,7 +127,7 @@ ok() { # <name> <actual> <expected>
 # to "a hand-maintained list of non-tools is the same closed-list problem one level over":
 #
 #   1. IT IS A HARNESS TOOL — `VOCAB` below, pinned by Guard A. (24 names plus `mcp__*`.)
-#   2. IT IS AN OKF DOCUMENT TYPE — DERIVED from `symlink/SCHEMA.md`'s own `type:` headings,
+#   2. IT IS AN OKF DOCUMENT TYPE — DERIVED from `seed/SCHEMA.md`'s own `type:` headings,
 #      which is the schema registry itself. Covers 7 distinct / 43 mentions (`Finding`,
 #      `Service`, `Runbook`, `Team`, `Reference`, `Project`, `Task`). Self-tightening: a new
 #      OKF type is classified by the commit that documents it, with no edit here. This also
@@ -164,7 +164,7 @@ ok() { # <name> <actual> <expected>
 #
 # `Task` is DELIBERATELY NOT IN `VOCAB` even though it is the dispatch tool's name in some
 # harness versions: OKF's own document type is also `Task`, and this bundle backticks that
-# type constantly (`symlink/SCHEMA.md:441`, `docs/schema.md:27`, `new-project.md:58`).
+# type constantly (`seed/SCHEMA.md:441`, `docs/schema.md:27`, `new-project.md:58`).
 # Including it would flag the bundle's core vocabulary as a tool reference. It is now kept
 # quiet by rule 2 rather than by a comment, which is stronger: the schema is what says it is
 # a document type. `Agent` is the name that decides dispatch here and it is BOTH an OKF type
@@ -198,11 +198,11 @@ MENTION_RE="\`($VOCAB)\`"
 # and no other rule classifies it. Guard C below fails if that mention is ever removed.
 NOT_A_TOOL='SessionStart|PreToolUse|Makefile'
 
-# Rule 2, DERIVED: OKF's document types, from the schema that defines them. `symlink/SCHEMA.md`
+# Rule 2, DERIVED: OKF's document types, from the schema that defines them. `seed/SCHEMA.md`
 # writes each as a `## type: <Name>` heading, so the registry is machine-readable and a new
 # type classifies itself. An empty result would un-classify 43 mentions at once, so it is
 # asserted below rather than trusted.
-OKF_TYPE_SRC="$REPO/symlink/SCHEMA.md"
+OKF_TYPE_SRC="$REPO/seed/SCHEMA.md"
 OKF_TYPES="$(grep -oE '^#+[[:space:]]+type:[[:space:]]+[A-Za-z]+' "$OKF_TYPE_SRC" 2>/dev/null \
   | awk '{print $NF}' | sort -u | paste -sd'|' - )"
 [ -n "$OKF_TYPES" ] || OKF_TYPES='__no_okf_types_derived__'
@@ -519,7 +519,7 @@ audit() {
   while IFS= read -r unknown; do
     [ -n "$unknown" ] || continue
     v=$((v+1))
-    note "        UNCLASSIFIED ${label} names \`${unknown}\` (body line(s) $(mention_lines "$file" "$unknown")) — no classification rule recognises it. Add it to VOCAB if it is a harness tool; if it is not, it should already be an OKF type in symlink/SCHEMA.md or a SCREAMING literal, and otherwise add it to NOT_A_TOOL. Do not leave it unclassified: silence here is what let AskUserQuestion, Artifact and a hallucinated single-word \`Deploy\` through"
+    note "        UNCLASSIFIED ${label} names \`${unknown}\` (body line(s) $(mention_lines "$file" "$unknown")) — no classification rule recognises it. Add it to VOCAB if it is a harness tool; if it is not, it should already be an OKF type in seed/SCHEMA.md or a SCREAMING literal, and otherwise add it to NOT_A_TOOL. Do not leave it unclassified: silence here is what let AskUserQuestion, Artifact and a hallucinated single-word \`Deploy\` through"
   done < <(unclassified_names "$file")
   echo "$v $d $s $r"
 }
@@ -593,7 +593,7 @@ ok "shipped agents scanned"              "$([ "$SCANNED" -ge 8 ] && echo yes || 
 
 # =============================================== 2. the shared docs an agent is told to read
 # DERIVED, NOT LISTED. Two paths used to be hardcoded here, and a hardcoded list can only
-# check what someone remembered to add — `symlink/SCHEMA.md` named a browser MCP tool to
+# check what someone remembered to add — `seed/SCHEMA.md` named a browser MCP tool to
 # five readers who mostly cannot hold it, and was simply not looked at. So the set is the
 # `*.md` references in the restricted agents' own bodies, resolved against the trees this
 # repo ships. Adding a doc reference to an agent puts that doc in scope by itself, which
@@ -682,16 +682,16 @@ EOF
 ok "shared docs scanned" "$([ "$SHARED_SCANNED" -ge 5 ] && echo yes || echo no)" yes
 
 # The DERIVATION is the check here, so name the docs it must reach. The first two are what
-# the hardcoded list used to hold; `symlink/SCHEMA.md` is the one it missed, and naming it
+# the hardcoded list used to hold; `seed/SCHEMA.md` is the one it missed, and naming it
 # means a derivation that silently narrows back to the old pair fails instead of passing.
-for must in symlink/CONVENTIONS.md seed/CLAUDE.md symlink/SCHEMA.md; do
+for must in seed/CONVENTIONS.md seed/CLAUDE.md seed/SCHEMA.md; do
   ok "derived set reaches $must" "$(printf '%s\n' "$SHARED_DOCS" | grep -cxF "$must")" 1
 done
 
 # The reader derivation must find the real set, or the intersection is meaningless.
-CONV_READERS="$(readers_of symlink/CONVENTIONS.md | wc -l | tr -d ' ')"
+CONV_READERS="$(readers_of seed/CONVENTIONS.md | wc -l | tr -d ' ')"
 ok "CONVENTIONS.md readers derived"  "$([ "$CONV_READERS" -ge 3 ] && echo yes || echo no)" yes
-SCHEMA_READERS="$(readers_of symlink/SCHEMA.md | wc -l | tr -d ' ')"
+SCHEMA_READERS="$(readers_of seed/SCHEMA.md | wc -l | tr -d ' ')"
 ok "SCHEMA.md readers derived"       "$([ "$SCHEMA_READERS" -ge 3 ] && echo yes || echo no)" yes
 
 [ -s "$FINDINGS" ] && cat "$FINDINGS"
@@ -1016,7 +1016,7 @@ done
 
 # 4m. the DERIVED scanned set: resolution is what decides which files are looked at, so
 # assert the resolver rather than only the list it produced.
-ok "resolves a symlink/ doc"                 "$(resolve_doc SCHEMA.md)" symlink/SCHEMA.md
+ok "resolves a symlink/ doc"                 "$(resolve_doc SCHEMA.md)" seed/SCHEMA.md
 ok "falls through to seed/ for CLAUDE.md"    "$(resolve_doc CLAUDE.md)" seed/CLAUDE.md
 ok "an instance-only doc resolves to nothing" "$(resolve_doc AWAITING.md)" ""
 ok "an agent file is never a shared doc"     "$(resolve_doc .claude/agents/qa-reviewer.md)" ""

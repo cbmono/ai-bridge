@@ -66,17 +66,12 @@
 # Verified by tests/upgrade.test.sh.
 set -euo pipefail
 
-# The template root, walked up from this script — see init-bundle.sh for why the two
-# layouts (a plugin cache and a checkout of this repo) are found rather than assumed.
+# The template root — two directories up from this script and then verified. See
+# init-bundle.sh for why it is derived from the fixed plugin layout and not searched for.
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 SELF="$BIN_DIR/$(basename "$0")"
-TEMPLATE_DIR=""
-_probe="$BIN_DIR"
-while [ "$_probe" != "/" ] && [ -n "$_probe" ]; do
-  if [ -d "$_probe/seed" ] && [ -f "$_probe/VERSION" ]; then TEMPLATE_DIR="$_probe"; break; fi
-  _probe="$(dirname "$_probe")"
-done
-[ -n "$TEMPLATE_DIR" ] || {
+TEMPLATE_DIR="$(cd "$BIN_DIR/../.." 2>/dev/null && pwd || true)"
+[ -n "$TEMPLATE_DIR" ] && [ -f "$TEMPLATE_DIR/VERSION" ] || {
   echo "refresh-seeds: cannot locate the ai-bridge template root from $BIN_DIR" >&2; exit 2; }
 SEED_SRC="$TEMPLATE_DIR/seed"
 DIFF_CAP="${UPGRADE_DIFF_LINES:-40}"   # lines of a conflicting diff to print inline

@@ -33,10 +33,10 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PM="$REPO/plugin/agents/project-manager.md"
 NP="$REPO/plugin/skills/new-project/SKILL.md"
-AUT="$REPO/symlink/AUTONOMY.md"
-CLEAR="$REPO/symlink/scripts/review-clearance.sh"
-ROUNDS="$REPO/symlink/scripts/review-rounds.sh"
-REQ="$REPO/symlink/scripts/required-checks.sh"
+AUT="$REPO/docs/autonomy/AUTONOMY.md"
+CLEAR="$REPO/plugin/scripts/review-clearance.sh"
+ROUNDS="$REPO/plugin/scripts/review-rounds.sh"
+REQ="$REPO/plugin/scripts/required-checks.sh"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/fallback-spend.XXXXXX")" || {
   echo "reviewer-fallback-spend.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }

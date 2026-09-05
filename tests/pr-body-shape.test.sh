@@ -54,10 +54,10 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/symlink/CONVENTIONS.md"
+CONV="$REPO/seed/CONVENTIONS.md"
 SEED="$REPO/seed/CLAUDE.md"
-SCHEMA="$REPO/symlink/SCHEMA.md"
-AUTONOMY="$REPO/symlink/AUTONOMY.md"
+SCHEMA="$REPO/seed/SCHEMA.md"
+AUTONOMY="$REPO/docs/autonomy/AUTONOMY.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pr-body-shape.XXXXXX")" || {
   echo "pr-body-shape.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }

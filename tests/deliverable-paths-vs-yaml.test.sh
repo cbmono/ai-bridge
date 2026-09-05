@@ -44,8 +44,8 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
-WRITER="$TPL/symlink/scripts/write-snapshot.sh"
-BOARD="$TPL/symlink/scripts/build-board.sh"
+WRITER="$TPL/plugin/scripts/write-snapshot.sh"
+BOARD="$TPL/plugin/scripts/build-board.sh"
 
 pass=0; fail=0; skip=0
 assert()  { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));

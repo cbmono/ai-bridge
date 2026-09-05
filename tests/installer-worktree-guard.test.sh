@@ -34,11 +34,11 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-54s (%s)\n' "$1" "$2"; pass=$(
 # instance or touches the user's own workspace.
 make_template() { # <dir>
   local d="$1"
-  mkdir -p "$d/seed" "$d/symlink/scripts"
-  cp "$REPO/install.sh" "$d/install.sh"
+  mkdir -p "$d/seed" "$d/plugin/scripts"
+  cp "$REPO/plugin/scripts/init-bundle.sh" "$d/plugin/scripts/init-bundle.sh"
   printf '{}\n' > "$d/seed/instance.config.json"
-  printf '#!/usr/bin/env bash\nexit 0\n' > "$d/symlink/scripts/s.sh"
-  printf 'x\n' > "$d/symlink/SCHEMA.md"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$d/plugin/scripts/s.sh"
+  printf 'x\n' > "$d/seed/SCHEMA.md"
 }
 
 M="$TMP/main"; make_template "$M"
@@ -46,7 +46,7 @@ M="$TMP/main"; make_template "$M"
 git -C "$M" worktree add -q "$TMP/linked" -b wt >/dev/null 2>&1
 L="$TMP/linked"
 
-run() { local src="$1" target="$2"; bash "$src/install.sh" "$target" >"$TMP/out" 2>&1; printf '%s' "$?"; }
+run() { local src="$1" target="$2"; bash "$src/plugin/scripts/init-bundle.sh" "$target" >"$TMP/out" 2>&1; printf '%s' "$?"; }
 
 # --- the main working tree must still work (the non-vacuity half) -----------
 i="$TMP/inst1"; mkdir -p "$i"

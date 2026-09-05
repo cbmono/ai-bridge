@@ -48,11 +48,11 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PM="$REPO/plugin/agents/project-manager.md"
-SCHEMA="$REPO/symlink/SCHEMA.md"
+SCHEMA="$REPO/seed/SCHEMA.md"
 SEED_CFG="$REPO/seed/instance.config.json"
-VALIDATOR="$REPO/symlink/scripts/validate-bundle.sh"
-WRITER="$REPO/symlink/scripts/write-snapshot.sh"
-RESOLVE="$REPO/symlink/scripts/resolve-model.sh"
+VALIDATOR="$REPO/plugin/scripts/validate-bundle.sh"
+WRITER="$REPO/plugin/scripts/write-snapshot.sh"
+RESOLVE="$REPO/plugin/scripts/resolve-model.sh"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/approach-critique.XXXXXX")" || {
   echo "approach-critique-trigger.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }

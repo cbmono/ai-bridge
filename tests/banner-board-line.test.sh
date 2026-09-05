@@ -58,8 +58,8 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
-HOOK="$TPL/symlink/.claude/hooks/session-banner.sh"
-SETTINGS="$TPL/symlink/.claude/settings.json"
+HOOK="$TPL/plugin/hooks/session-banner.sh"
+SETTINGS="$TPL/seed/.claude/settings.json"
 [ -f "$HOOK" ] || { echo "banner-board-line.test: hook not found at $HOOK" >&2; exit 2; }
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/banner-board-line.XXXXXX")" || {

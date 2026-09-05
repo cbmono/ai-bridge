@@ -3,7 +3,7 @@
 # deny-baseline.test.sh — the destructive-action deny baseline:
 # `plugin/hooks/deny-destructive.sh` (PreToolUse enforcement), the `plugin/hooks/hooks.json`
 # manifest that registers it, and the `permissions.deny` block that backs it in
-# `symlink/.claude/settings.json` — which a plugin manifest has no field to carry, so that
+# `seed/.claude/settings.json` — which a plugin manifest has no field to carry, so that
 # second layer stays where it is.
 #
 # WHY EVERY RULE IS ASSERTED IN BOTH DIRECTIONS, WITHOUT EXCEPTION. A deny list has two
@@ -35,7 +35,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$REPO/plugin/hooks/deny-destructive.sh"
 HOOKSJSON="$REPO/plugin/hooks/hooks.json"
-SETTINGS="$REPO/symlink/.claude/settings.json"
+SETTINGS="$REPO/seed/.claude/settings.json"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/denybase.XXXXXX")" || {
   echo "deny-baseline.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT

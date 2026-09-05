@@ -36,10 +36,10 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
-HOOK="$TPL/symlink/.claude/hooks/session-banner.sh"
-HOOKDIR="$TPL/symlink/.claude/hooks"
-SETTINGS="$TPL/symlink/.claude/settings.json"
-SCRIPTS="$TPL/symlink/scripts"
+HOOK="$TPL/plugin/hooks/session-banner.sh"
+HOOKDIR="$TPL/plugin/hooks"
+SETTINGS="$TPL/seed/.claude/settings.json"
+SCRIPTS="$TPL/plugin/scripts"
 [ -f "$HOOK" ] || { echo "session-banner.test: hook not found at $HOOK" >&2; exit 2; }
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/session-banner.XXXXXX")" || {
@@ -103,7 +103,7 @@ echo "== 1b. a stamp links the new hook and RETIRES the three =="
 # filesystem-level copy outside any git repository, exactly as awaiting-queue.test.sh and
 # board-renderers.test.sh do; see there for the full rationale and the TMPDIR-recursion
 # guard carried along with it.
-BRIDGE_INSTALL="$TPL/install.sh"
+BRIDGE_INSTALL="$TPL/plugin/scripts/init-bundle.sh"
 if command -v git >/dev/null 2>&1; then
   _gd="$(git -C "$TPL" rev-parse --absolute-git-dir 2>/dev/null || true)"
   _gc="$(git -C "$TPL" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
@@ -113,7 +113,7 @@ if command -v git >/dev/null 2>&1; then
       "$_tpl_res"/*) echo "session-banner.test: TMPDIR ($_src_res) is inside the template tree; the install-source copy would recurse. Point TMPDIR outside the checkout." >&2; exit 2 ;;
     esac
     mkdir -p "$TMP/install-src"; cp -R "$TPL"/. "$TMP/install-src"/; rm -rf "$TMP/install-src/.git"
-    BRIDGE_INSTALL="$TMP/install-src/install.sh"
+    BRIDGE_INSTALL="$TMP/install-src/plugin/scripts/init-bundle.sh"
   fi
 fi
 SRC_TPL="$(cd "$(dirname "$BRIDGE_INSTALL")" && pwd)"
@@ -128,7 +128,7 @@ assert "…and links none of the three it replaced" \
 # whose targets are gone. `ours()` recognises them as ones the installer created, and the
 # step-2b sweep must retire all three.
 for gone in check-machinery.sh show-awaiting.sh show-board-link.sh; do
-  ln -s "$SRC_TPL/symlink/.claude/hooks/$gone" "$STAMPED/.claude/hooks/$gone"
+  ln -s "$SRC_TPL/plugin/hooks/$gone" "$STAMPED/.claude/hooks/$gone"
 done
 bash "$BRIDGE_INSTALL" "$STAMPED" >"$TMP/stamp2.log" 2>&1
 left="$(ls "$STAMPED/.claude/hooks/" 2>/dev/null | grep -cE '^(check-machinery|show-awaiting|show-board-link)\.sh$')"
@@ -350,13 +350,13 @@ assert "…and the header prints that version" "$(has "AI-Bridge v$tpl_ver ·" "
 # ABSENT, UNREADABLE OR JUNK ⇒ THE REST OF THE BANNER, NEVER A CRASH AND NEVER A GUESS. A
 # copy of the hook outside the template cannot find a VERSION at all; the fixtures below
 # put a real but unusable one where a copy inside a fake template will look.
-FAKETPL="$TMP/faketpl/symlink/.claude/hooks"
-mkdir -p "$FAKETPL" "$TMP/faketpl/symlink/scripts"
+FAKETPL="$TMP/faketpl/plugin/hooks"
+mkdir -p "$FAKETPL" "$TMP/faketpl/plugin/scripts"
 cp "$HOOK" "$FAKETPL/session-banner.sh"
 # The resolver travels with it, so a missing VERSION is the ONLY thing different about
 # this copy — otherwise "the rest of the banner is intact" would pass for a banner that
 # lost its settings block for an unrelated reason.
-cp "$SCRIPTS/resolve-config.sh" "$TMP/faketpl/symlink/scripts/"
+cp "$SCRIPTS/resolve-config.sh" "$TMP/faketpl/plugin/scripts/"
 vrun() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/session-banner.sh" 2>&1)"; RC=$?; }
 rm -f "$TMP/faketpl/VERSION"
 vrun
@@ -964,12 +964,12 @@ assert "…and fails once the renderer has collapsed it to one character" \
 # symlink would resolve straight back to the real template) and the sibling scripts are
 # linked in beside it.
 FAKETPL="$TMP/faketpl"
-mkdir -p "$FAKETPL/symlink/.claude/hooks"
-cp "$HOOK" "$FAKETPL/symlink/.claude/hooks/session-banner.sh"
-ln -s "$SCRIPTS" "$FAKETPL/symlink/scripts"
+mkdir -p "$FAKETPL/plugin/hooks"
+cp "$HOOK" "$FAKETPL/plugin/hooks/session-banner.sh"
+ln -s "$SCRIPTS" "$FAKETPL/plugin/scripts"
 printf '9.9.9_beta\n' > "$FAKETPL/VERSION"
 tracked_cfg
-FAKE_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/symlink/.claude/hooks/session-banner.sh" 2>/dev/null)"
+FAKE_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/plugin/hooks/session-banner.sh" 2>/dev/null)"
 assert "a VERSION carrying an emphasis character still prints a version…" \
   "$(has 'AI-Bridge v9.9.9' "$FAKE_OUT")"
 assert "…with the character neutralised on the way to the reader" \
@@ -997,11 +997,11 @@ echo "== 12. NON-VACUITY: the blank line, and the section order, each with its o
 # and a different scripts/ dir; comparing a mutant's output to the REAL hook's would be
 # comparing two runs that differ in more than the mutation.
 MUTTPL="$TMP/muttpl"
-mkdir -p "$MUTTPL/symlink/.claude/hooks"
-ln -s "$SCRIPTS" "$MUTTPL/symlink/scripts"
-cp "$HOOK" "$MUTTPL/symlink/.claude/hooks/control.sh"
+mkdir -p "$MUTTPL/plugin/hooks"
+ln -s "$SCRIPTS" "$MUTTPL/plugin/scripts"
+cp "$HOOK" "$MUTTPL/plugin/hooks/control.sh"
 tracked_cfg
-mut_run() { CLAUDE_PROJECT_DIR="$INST" bash "$MUTTPL/symlink/.claude/hooks/$1" 2>/dev/null; }
+mut_run() { CLAUDE_PROJECT_DIR="$INST" bash "$MUTTPL/plugin/hooks/$1" 2>/dev/null; }
 
 # The one line the banner prints for this, carrying the trailing comment that exists to make
 # it findable exactly once. A bare `echo` is not something a grep can anchor on in a file
@@ -1017,12 +1017,12 @@ mutate() { # <name> <source-file> <awk-program> -> 0 and sets MUT_PATH, or 1 hav
     skipped=$((skipped+1)); return 1
   fi
   MUT_PATH="mutant-$RANDOM.sh"
-  awk -v anchor="$ANCHOR_RE" "$prog" "$file" > "$MUTTPL/symlink/.claude/hooks/$MUT_PATH"
+  awk -v anchor="$ANCHOR_RE" "$prog" "$file" > "$MUTTPL/plugin/hooks/$MUT_PATH"
   # EXECUTABLE LIKE THE HOOK IT MUTATES: `mut_run` uses `bash <path>` and does not need it,
   # but settings.json runs the real file with no interpreter in front, and a mutant that
   # cannot run produces no output — which reddens every "goes RED" assertion for the wrong
   # reason. tests/banner-user-channel.test.sh §9 hit exactly that.
-  chmod +x "$MUTTPL/symlink/.claude/hooks/$MUT_PATH"
+  chmod +x "$MUTTPL/plugin/hooks/$MUT_PATH"
   return 0
 }
 
@@ -1055,7 +1055,7 @@ assert "CONTROL: intact, its first NON-EMPTY line is the identity line" \
 if mutate "mutant: the leading blank line deleted" "$HOOK" '$0 ~ anchor { next } { print }'; then
   M1="$MUT_PATH"; M1_OUT="$(mut_run "$M1")"
   assert "the mutant really lost the line" \
-    "$(eq "$(grep -cE "$ANCHOR_RE" "$MUTTPL/symlink/.claude/hooks/$M1")" 0)"
+    "$(eq "$(grep -cE "$ANCHOR_RE" "$MUTTPL/plugin/hooks/$M1")" 0)"
   # …AND IT RAN. A mutant that printed nothing reddens the assertions below for the wrong
   # reason, which is the vacuity this section exists to refuse.
   assert "…and still prints a banner"  "$(has 'AI-Bridge' "$M1_OUT")"

@@ -2,7 +2,7 @@
 #
 # Exercises the UserPromptSubmit current-state injection in push-state.sh.
 #
-# This hook is registered in `symlink/.claude/settings.json`, so it runs on EVERY
+# This hook is registered in `seed/.claude/settings.json`, so it runs on EVERY
 # prompt in every project that inherits that file. The properties that matter are
 # therefore mostly negative, in this order:
 #
@@ -37,7 +37,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-HOOK="$HERE/../symlink/.claude/hooks/push-state.sh"
+HOOK="$HERE/../plugin/hooks/push-state.sh"
 [ -f "$HOOK" ] || { echo "push-state.test: hook not found at $HOOK" >&2; exit 2; }
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/push-state-fixture.XXXXXX")" || {
@@ -455,7 +455,7 @@ chmod u+rw "$INST/projects/good/tasks/locked.md" 2>/dev/null
 # ============================================================ registration
 echo "-- registration in the shipped settings.json"
 
-SETTINGS="$HERE/../symlink/.claude/settings.json"
+SETTINGS="$HERE/../seed/.claude/settings.json"
 S="$(cat "$SETTINGS")"
 assert "settings.json registers push-state.sh"      "$(has 'push-state.sh' "$S")"
 assert "  ...as a UserPromptSubmit hook"            \

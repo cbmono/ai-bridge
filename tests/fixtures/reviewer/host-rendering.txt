@@ -3,7 +3,7 @@
 # Recorded from github.com's Markdown endpoint by `record-host-rendering.sh`, which is
 # checked in beside this file; re-run it to refresh or to verify. Every line below is the
 # HOST's answer, not this repository's — it is the only thing that can prove the block
-# reader in `symlink/scripts/review-clearance.sh` wrong, and `review-clearance.test.sh`
+# reader in `plugin/scripts/review-clearance.sh` wrong, and `review-clearance.test.sh`
 # asserts against it.
 #
 # Format, one case per block:

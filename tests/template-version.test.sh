@@ -32,8 +32,8 @@
 set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
-CHECK="$TPL/symlink/scripts/check-template-version.sh"
-BANNER="$TPL/symlink/.claude/hooks/session-banner.sh"
+CHECK="$TPL/plugin/scripts/check-template-version.sh"
+BANNER="$TPL/plugin/hooks/session-banner.sh"
 VERFILE="$TPL/VERSION"
 [ -f "$CHECK" ] || { echo "template-version.test: missing $CHECK" >&2; exit 2; }
 
@@ -167,11 +167,11 @@ ok "…and CLAUDE.md's core bullet names every one of them" "$missing" 0
 # CONVENTIONS.md (symlinked into every instance) before their first write in a target repo,
 # and the two rule files load on a read of the paths they govern.
 ok "CONVENTIONS.md carries the propose-don't-bump-silently rule" \
-  "$(grep -qF 'PROPOSE the bump, never make it silently' "$TPL/symlink/CONVENTIONS.md" && echo yes || echo no)" yes
+  "$(grep -qF 'PROPOSE the bump, never make it silently' "$TPL/seed/CONVENTIONS.md" && echo yes || echo no)" yes
 ok "…and says the human approves by merging" \
-  "$(grep -qF 'approves it by merging' "$TPL/symlink/CONVENTIONS.md" && echo yes || echo no)" yes
+  "$(grep -qF 'approves it by merging' "$TPL/seed/CONVENTIONS.md" && echo yes || echo no)" yes
 ok "…and forbids inventing a release process" \
-  "$(grep -qiE 'no changelog, no tag' "$TPL/symlink/CONVENTIONS.md" && echo yes || echo no)" yes
+  "$(grep -qiE 'no changelog, no tag' "$TPL/seed/CONVENTIONS.md" && echo yes || echo no)" yes
 ok "machinery.md carries it (loads on a /symlink/** read)" \
   "$(grep -qF 'PROPOSES a version bump' "$TPL/.claude/rules/machinery.md" && echo yes || echo no)" yes
 ok "installer.md carries it (loads on install.sh, seed/, config/)" \
@@ -205,8 +205,8 @@ mkfixture() { # <name> <remote-version> <local-version> [branch]
   # the script learns the default branch without assuming one.
   GIT clone -q "$bare" "$tpl" 2>/dev/null
   rm -rf "$work"
-  mkdir -p "$tpl/symlink/scripts"
-  cp "$CHECK" "$tpl/symlink/scripts/"
+  mkdir -p "$tpl/plugin/scripts"
+  cp "$CHECK" "$tpl/plugin/scripts/"
   printf '%s\n' "$lver" > "$tpl/VERSION"
   GIT -C "$tpl" add -A >/dev/null 2>&1
   GIT -C "$tpl" commit -qm "local $lver" >/dev/null 2>&1
@@ -216,7 +216,7 @@ mkfixture() { # <name> <remote-version> <local-version> [branch]
 # --template, so the self-location path is exercised too.
 run_check() { # <template-dir> [extra args…]
   local tpl="$1"; shift
-  OUT="$(bash "$tpl/symlink/scripts/check-template-version.sh" --instance "$TMP/inst" "$@" 2>/dev/null)"
+  OUT="$(bash "$tpl/plugin/scripts/check-template-version.sh" --instance "$TMP/inst" "$@" 2>/dev/null)"
   RC=$?
 }
 len() { printf '%s' "${#OUT}"; }
@@ -225,16 +225,19 @@ behind="$(mkfixture behind 0.10.0 0.9.1)"
 run_check "$behind"
 ok "behind: exit 0"                       "$RC" 0
 ok "…says so once"                        "$(printf '%s\n' "$OUT" | grep -c 'UPDATE')" 1
-ok "…naming the version this instance links" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'links 0.9.1' && echo yes || echo no)" yes
+ok "…naming the version this machine runs" \
+  "$(printf '%s\n' "$OUT" | grep -qF 'runs 0.9.1' && echo yes || echo no)" yes
 ok "…and the version on the default branch" \
   "$(printf '%s\n' "$OUT" | grep -qF 'has 0.10.0' && echo yes || echo no)" yes
 # 0.10.0 > 0.9.1 is FALSE as a string compare, and that is the whole reason this fixture
 # uses those two numbers rather than 1.0.0 and 2.0.0.
 ok "…so the compare is numeric per field, not lexicographic" \
   "$(printf '%s\n' "$OUT" | grep -qF 'UPDATE' && echo yes || echo no)" yes
-ok "…and it names the RE-STAMP, not just the pull" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'install.sh' && echo yes || echo no)" yes
+# THE REPAIR IS TWO COMMANDS AND THE SECOND ONE IS STILL THE POINT: updating the plugin
+# refreshes the machinery, but a SEED change reaches a bundle only through a stamp. It was
+# `install.sh`; it is `/ai-bridge:init` since the bundle stopped carrying machinery.
+ok "…and it names the RE-STAMP, not just the update" \
+  "$(printf '%s\n' "$OUT" | grep -qF '/ai-bridge:init' && echo yes || echo no)" yes
 
 equal="$(mkfixture equal 1.2.3 1.2.3)"
 run_check "$equal"
@@ -319,8 +322,8 @@ ok "…and the line names the template checkout, not a hardcoded project" \
 
 # 5d. Not a git checkout at all (a template copied, not cloned).
 plain="$TMP/plain"
-mkdir -p "$plain/symlink/scripts"
-cp "$CHECK" "$plain/symlink/scripts/"
+mkdir -p "$plain/plugin/scripts"
+cp "$CHECK" "$plain/plugin/scripts/"
 printf '1.0.0\n' > "$plain/VERSION"
 run_check "$plain"
 ok "not a git checkout: byte-empty"           "$(len)" 0
@@ -344,8 +347,8 @@ GIT -C "$novremote.seed" commit -qm "no VERSION here"
 GIT -C "$novremote.seed" push -q "$novremote.git" main
 GIT clone -q "$novremote.git" "$novremote" 2>/dev/null
 rm -rf "$novremote.seed"
-mkdir -p "$novremote/symlink/scripts"
-cp "$CHECK" "$novremote/symlink/scripts/"
+mkdir -p "$novremote/plugin/scripts"
+cp "$CHECK" "$novremote/plugin/scripts/"
 printf '1.0.0\n' > "$novremote/VERSION"
 run_check "$novremote"
 ok "remote branch has no VERSION: byte-empty"  "$(len)" 0
@@ -385,12 +388,12 @@ printf 'stub\n' > "$INST/SCHEMA.md"
 printf '{ "org": "example-org" }\n' > "$INST/instance.config.json"
 
 wire() { # <template-dir> — give a fixture template the hook the banner is
-  mkdir -p "$1/symlink/.claude/hooks"
-  cp "$BANNER" "$1/symlink/.claude/hooks/session-banner.sh"
-  cp "$TPL/symlink/scripts/resolve-config.sh" "$1/symlink/scripts/" 2>/dev/null || true
+  mkdir -p "$1/plugin/hooks"
+  cp "$BANNER" "$1/plugin/hooks/session-banner.sh"
+  cp "$TPL/plugin/scripts/resolve-config.sh" "$1/plugin/scripts/" 2>/dev/null || true
 }
 banner() { # <template-dir>
-  OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$1/symlink/.claude/hooks/session-banner.sh" 2>&1)"
+  OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$1/plugin/hooks/session-banner.sh" 2>&1)"
   RC=$?
 }
 
@@ -420,7 +423,7 @@ ok "…and the rest of the banner is intact"     "$(printf '%s\n' "$OUT" | grep 
 
 # An instance stamped before this script shipped has no file to run. Absence is silence —
 # the same contract every other optional section of the banner keeps.
-rm -f "$equal/symlink/scripts/check-template-version.sh"
+rm -f "$equal/plugin/scripts/check-template-version.sh"
 banner "$equal"
 ok "checker absent: still exit 0"              "$RC" 0
 ok "…and still no line about it"               "$(printf '%s\n' "$OUT" | grep -c 'UPDATE' || true)" 0
@@ -433,7 +436,7 @@ echo "== 7. the shipped file is executable in the INDEX, like every other script
 # too, and not left to scripts-executable.test.sh alone, because this is the file the
 # change adds and a 644 here means the banner's `bash <path>` still works while a direct
 # invocation does not.
-mode="$(cd "$TPL" && git ls-files -s symlink/scripts/check-template-version.sh | awk '{print $1}')"
+mode="$(cd "$TPL" && git ls-files -s plugin/scripts/check-template-version.sh | awk '{print $1}')"
 ok "check-template-version.sh is 100755 in the index" "$mode" 100755
 
 echo

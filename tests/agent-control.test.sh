@@ -2,7 +2,7 @@
 #
 # agent-control.test.sh — the live kill switch: `plugin/hooks/agent-control.sh`
 # (PreToolUse enforcement), the `plugin/hooks/hooks.json` manifest that registers it, and
-# `symlink/scripts/control.sh` (the operator side).
+# `plugin/scripts/control.sh` (the operator side).
 #
 # WHY THIS FILE IS MOSTLY REFUSALS. The hook sits in front of EVERY tool call in
 # EVERY session of an instance, so its failure modes are far more expensive than
@@ -33,7 +33,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK_SRC="$REPO/plugin/hooks/agent-control.sh"
 HOOKSJSON="$REPO/plugin/hooks/hooks.json"
-CTL_SRC="$REPO/symlink/scripts/control.sh"
+CTL_SRC="$REPO/plugin/scripts/control.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/agentctl.XXXXXX")" || {
   echo "agent-control.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -436,7 +436,7 @@ ok "a second disarm is quiet and still exits 0"        "$(ctl_rc disarm)" 0
 
 echo
 echo "--- registration: the hook is wired up and shippable --------------------"
-SETTINGS="$REPO/symlink/.claude/settings.json"
+SETTINGS="$REPO/seed/.claude/settings.json"
 ok "hooks.json is valid JSON"                          "$(jq -e . "$HOOKSJSON" >/dev/null 2>&1 && echo yes || echo no)" yes
 # SELECTED BY NAME, NOT COUNTED AND NOT BY INDEX. What this asserts is that THIS hook is
 # registered. `PreToolUse | length` said so only for as long as this was the only entry,

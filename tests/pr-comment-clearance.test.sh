@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# pr-comment-clearance.test.sh — exercises symlink/scripts/pr-comment-clearance.sh, the
+# pr-comment-clearance.test.sh — exercises plugin/scripts/pr-comment-clearance.sh, the
 # reader for a PR COMMENT.
 #
 # WHAT IT HAS TO PROVE, AND WHY EACH HALF IS HERE.
@@ -46,8 +46,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPT="$REPO/symlink/scripts/pr-comment-clearance.sh"
-CONV="$REPO/symlink/CONVENTIONS.md"
+SCRIPT="$REPO/plugin/scripts/pr-comment-clearance.sh"
+CONV="$REPO/seed/CONVENTIONS.md"
 SELFTEST_OK="pr-comment-clearance: self-test ok"
 [ -r "$SCRIPT" ] || { echo "pr-comment-clearance.test: missing $SCRIPT" >&2; exit 2; }
 [ -r "$CONV" ]   || { echo "pr-comment-clearance.test: missing $CONV" >&2; exit 2; }

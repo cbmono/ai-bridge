@@ -32,7 +32,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
-SCRIPT="$TPL/symlink/scripts/close-project-folder.sh"
+SCRIPT="$TPL/plugin/scripts/close-project-folder.sh"
 [[ -f "$SCRIPT" ]] || { echo "close-project-folder.test: missing $SCRIPT" >&2; exit 2; }
 
 # TWO STEPS, NEVER ONE — the one-expression form is DESTRUCTIVE when $TMPDIR names a
@@ -395,7 +395,7 @@ echo "== the closeout PROSE routes to this script, and invents no status value =
 # `git rm -r` back beside a tested script, or grow the status enum a value.
 CMD="$TPL/plugin/skills/close-project/SKILL.md"
 PM="$TPL/plugin/agents/project-manager.md"
-SCH="$TPL/symlink/SCHEMA.md"
+SCH="$TPL/seed/SCHEMA.md"
 assert "/close-project's folder step calls the script" \
   "$(yes_if grep -q 'close-project-folder.sh <slug> --apply' "$CMD")"
 assert "…and says not to remove the folder by hand"     "$(yes_if grep -q 'Do not .git rm. or .rm. the folder by hand' "$CMD")"
@@ -408,7 +408,7 @@ assert "…and that non-terminal tasks become cancelled"  "$(yes_if grep -q 'not
 # The enum itself, at its enforcement point. A "closed-unfinished" sibling status would
 # show up here first, and the criterion this pins is that none was introduced.
 assert "the Task status enum is unchanged (seven values)" \
-  "$(yes_if grep -qF 'Task)      echo "draft ready in-progress in-review blocked cancelled done" ;;' "$TPL/symlink/scripts/validate-bundle.sh")"
+  "$(yes_if grep -qF 'Task)      echo "draft ready in-progress in-review blocked cancelled done" ;;' "$TPL/plugin/scripts/validate-bundle.sh")"
 
 printf '\nclose-project-folder.test: pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]] || exit 1

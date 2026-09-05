@@ -41,9 +41,9 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
-HOOK="$TPL/symlink/.claude/hooks/session-banner.sh"
-AB="$TPL/symlink/scripts/ai-bridge.sh"
-SETTINGS="$TPL/symlink/.claude/settings.json"
+HOOK="$TPL/plugin/hooks/session-banner.sh"
+AB="$TPL/plugin/scripts/ai-bridge.sh"
+SETTINGS="$TPL/seed/.claude/settings.json"
 CMDDOC="$TPL/plugin/skills/welcome/SKILL.md"
 for f in "$HOOK" "$AB" "$SETTINGS" "$CMDDOC"; do
   [ -f "$f" ] || { echo "banner-colour-channel.test: missing $f" >&2; exit 2; }

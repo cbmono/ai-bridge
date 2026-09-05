@@ -56,21 +56,17 @@
 # Backs up any conflicting real file as <name>.bak.<epoch> before writing.
 set -euo pipefail
 
-# WHERE THIS REPO IS, walked up from this script rather than assumed. Installed as a
-# plugin the layout is <clone>/plugin/scripts/init-bundle.sh, so the seed lives two
-# directories up; run from a checkout of this repo it is the same shape. Walking for the
-# two files that define a template root (`seed/` and `VERSION`) means neither layout is
-# hardcoded and a wrong answer is impossible rather than merely unlikely.
+# WHERE THIS REPO IS. The layout is fixed by the marketplace manifest (`source: ./plugin`),
+# so a script at <root>/plugin/scripts/ has its template root exactly two directories up —
+# in a plugin cache and in a checkout of this repo alike. Two directories up and then
+# VERIFIED (`VERSION` and `seed/` must be there), rather than searched for: a walk that
+# keeps climbing will eventually find SOME ancestor with a VERSION file, and answering with
+# an unrelated repo is worse than refusing.
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
-TEMPLATE_DIR=""
-_probe="$BIN_DIR"
-while [ "$_probe" != "/" ] && [ -n "$_probe" ]; do
-  if [ -d "$_probe/seed" ] && [ -f "$_probe/VERSION" ]; then TEMPLATE_DIR="$_probe"; break; fi
-  _probe="$(dirname "$_probe")"
-done
-if [ -z "$TEMPLATE_DIR" ]; then
+TEMPLATE_DIR="$(cd "$BIN_DIR/../.." 2>/dev/null && pwd || true)"
+if [ -z "$TEMPLATE_DIR" ] || [ ! -f "$TEMPLATE_DIR/VERSION" ] || [ ! -d "$TEMPLATE_DIR/seed" ]; then
   echo "error: cannot locate the ai-bridge template root from $BIN_DIR" >&2
-  echo "       (looked upward for a directory holding both seed/ and VERSION)" >&2
+  echo "       (expected <root>/plugin/scripts/, with VERSION and seed/ at <root>)" >&2
   exit 2
 fi
 

@@ -6,7 +6,7 @@
 #
 # WHY THIS EXISTS. install.sh refuses, by design, to run from a linked worktree (see its
 # own header and tests/installer-worktree-guard.test.sh, which owns that guard). Calls in
-# several harnesses used to hand it $TPL/install.sh unconditionally, so whenever $TPL
+# several harnesses used to hand it $TPL/plugin/scripts/init-bundle.sh unconditionally, so whenever $TPL
 # itself was a worktree — which is EVERY role agent's working copy, per CONVENTIONS.md —
 # the guard fired, those calls silently stamped nothing, and every downstream assertion
 # that depended on the stamp failed for a reason that had nothing to do with whatever the
@@ -62,14 +62,14 @@ git -C "$REPO" worktree add -q --detach "$WT" HEAD >/dev/null 2>&1 || {
   echo "worktree-suite-parity.test: could not create a worktree from $REPO at HEAD." >&2; exit 2; }
 
 # --- half 1: the guard this task must not weaken is still there -------------
-guard_out="$(bash "$WT/install.sh" "$TMP/never-stamped" 2>&1)"; guard_rc=$?
+guard_out="$(bash "$WT/plugin/scripts/init-bundle.sh" "$TMP/never-stamped" 2>&1)"; guard_rc=$?
 ok "install.sh still refuses to run from this worktree" "$guard_rc" 2
 ok "…still says why"                                     "$(printf '%s' "$guard_out" | grep -qi 'refusing to install from a git worktree' && echo yes || echo no)" yes
 ok "…still stamped nothing"                              "$(find "$TMP/never-stamped" -mindepth 1 2>/dev/null | wc -l | tr -d ' ')" 0
 
 # --- half 2: none of the six below still depends on install.sh having run from a
 # location the guard above would refuse ---------------------------------------
-# One function, run over every harness known to carry the $TPL/install.sh dependency,
+# One function, run over every harness known to carry the $TPL/plugin/scripts/init-bundle.sh dependency,
 # so a sixth one found later is a one-line addition here rather than a sixth copy of
 # this whole block (that is the "one pin file, not N copies" this test exists to be).
 check_harness_parity() { # <test-file-basename, without .test.sh>

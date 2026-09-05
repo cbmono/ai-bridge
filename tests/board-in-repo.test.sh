@@ -55,7 +55,7 @@ TPL="$TMP/tpl"; mkdir -p "$TPL"
   [ -n "$f" ] || continue
   mkdir -p "$TPL/$(dirname "$f")"; cp "$TPLSRC/$f" "$TPL/$f" 2>/dev/null || true
 done
-chmod +x "$TPL/install.sh" "$TPL"/symlink/scripts/*.sh 2>/dev/null || true
+chmod +x "$TPL/plugin/scripts/init-bundle.sh" "$TPL"/plugin/scripts/*.sh 2>/dev/null || true
 
 ignored() { # <dir> <path> -> yes if git says the path is ignored there
   ( cd "$1" && git init -q . >/dev/null 2>&1 || true; git check-ignore -q "$2" ) \
@@ -83,18 +83,18 @@ echo "== 2. install.sh migrates an instance stamped while board.html was ignored
 # A stamp, then the OLD ignore line put back by hand — this is the shape every existing
 # instance is in right now, and it must not be simulated away.
 LEGACY="$TMP/legacy"; mkdir -p "$LEGACY"
-bash "$TPL/install.sh" "$LEGACY" >"$TMP/outL1" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$LEGACY" >"$TMP/outL1" 2>&1
 printf '\n# derived board snapshot (legacy comment)\nSNAPSHOT.json\nboard.html\n' >> "$LEGACY/.gitignore"
 : > "$LEGACY/board.html"
 ok "the legacy shape really does ignore board.html first" "$(ignored "$LEGACY" board.html)" yes
 
-bash "$TPL/install.sh" "$LEGACY" >"$TMP/outL2" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$LEGACY" >"$TMP/outL2" 2>&1
 ok "a re-stamp appends the un-ignore"        "$(yes_if grep -qxF '!/board.html' "$LEGACY/.gitignore")" yes
 ok "…and git now reports board.html as NOT ignored"      "$(ignored "$LEGACY" board.html)" no
 # The migration must never remove a line from a live instance's .gitignore.
 ok "…the human's old line is left in place"  "$(yes_if grep -qxF 'board.html' "$LEGACY/.gitignore")" yes
 
-bash "$TPL/install.sh" "$LEGACY" >"$TMP/outL3" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$LEGACY" >"$TMP/outL3" 2>&1
 ok "a THIRD stamp appends nothing (idempotent)" \
   "$(grep -cxF '!/board.html' "$LEGACY/.gitignore")" 1
 ok "…and board.html is still not ignored"                "$(ignored "$LEGACY" board.html)" no
@@ -103,14 +103,14 @@ ok "…and board.html is still not ignored"                "$(ignored "$LEGACY" 
 # and the migration must stay quiet — an unconditional append would put a negation into
 # every new instance for no reason.
 FRESH="$TMP/fresh"; mkdir -p "$FRESH"
-bash "$TPL/install.sh" "$FRESH" >"$TMP/outF1" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$FRESH" >"$TMP/outF1" 2>&1
 ok "a fresh stamp appends NO un-ignore"      "$(grep -cxF '!/board.html' "$FRESH/.gitignore")" 0
 ok "…and board.html is not ignored there either"         "$(ignored "$FRESH" board.html)" no
 
 # =======================================================================================
 echo "== 3. THE CROSS-BUNDLE LEAK: --out board.html . renders THIS instance only =="
 # =======================================================================================
-BB="$TPL/symlink/scripts/build-board.sh"
+BB="$TPL/plugin/scripts/build-board.sh"
 snap() { # <dir> <slug> <unique title>
   cat > "$1/SNAPSHOT.json" <<JSON
 {

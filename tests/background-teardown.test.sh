@@ -52,8 +52,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/symlink/CONVENTIONS.md"
-AIB="$REPO/symlink/scripts/ai-bridge.sh"
+CONV="$REPO/seed/CONVENTIONS.md"
+AIB="$REPO/plugin/scripts/ai-bridge.sh"
 for f in "$CONV" "$AIB"; do
   [ -f "$f" ] || { echo "background-teardown.test: missing $f" >&2; exit 2; }
 done
@@ -207,8 +207,8 @@ count_lines() { printf '%s' "$1" | grep -c . || true; }
 IN_SCOPE=()
 while IFS= read -r f; do [ -n "$f" ] && IN_SCOPE+=("$f"); done <<SCOPE
 $(cd "$REPO" && {
-   find symlink/scripts -name '*.sh' -type f
-   find symlink/.claude/hooks -name '*.sh' -type f 2>/dev/null
+   find plugin/scripts -name '*.sh' -type f
+   find plugin/hooks -name '*.sh' -type f 2>/dev/null
    find scripts -name '*.sh' -type f 2>/dev/null
    find tests -name '*.sh' -type f
    ls install.sh upgrade.sh 2>/dev/null
@@ -326,7 +326,7 @@ echo "== 4. this repo's own machinery is clean, or allowlisted with a reason =="
 # `watch-board.sh` driven by board-renderers, an installer blocked on a fifo, a whole harness
 # run in a fixture copy — were FIXED in this change rather than listed here.
 ALLOW=(
-  "symlink/scripts/watch-board.sh|1|run_wait backgrounds a one-shot render (write-snapshot, build-board) and waits on it immediately, so its own INT/TERM trap fires at once instead of after the child returns; the child exits on its own and nothing is detached."
+  "plugin/scripts/watch-board.sh|1|run_wait backgrounds a one-shot render (write-snapshot, build-board) and waits on it immediately, so its own INT/TERM trap fires at once instead of after the child returns; the child exits on its own and nothing is detached."
   "tests/artifact-board.test.sh|1|a one-shot page render of a 900-million-question fixture, backgrounded only so the harness can cap the hang it is asserting about; the generator exits on its own."
   "tests/tick-lock.test.sh|3|N concurrent one-shot tick-lock.sh acquire calls, racing on purpose; each exits in milliseconds and the harness waits for all of them."
 )

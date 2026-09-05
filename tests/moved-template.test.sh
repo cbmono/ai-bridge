@@ -66,7 +66,7 @@ no_if()  { if "$@" >/dev/null 2>&1; then echo 1; else echo 0; fi; }
 has()    { printf '%s\n' "$2" | grep -qF -- "$1" && echo 0 || echo 1; }
 hasnt()  { printf '%s\n' "$2" | grep -qF -- "$1" && echo 1 || echo 0; }
 
-HOOK_SRC="$TPLSRC/symlink/.claude/hooks/session-banner.sh"
+HOOK_SRC="$TPLSRC/plugin/hooks/session-banner.sh"
 # The one string that only the machinery section ever prints.
 WARN="ai-bridge machinery is DANGLING"
 
@@ -75,7 +75,7 @@ assert "session-banner.sh ships"         "$(yes_if test -f "$HOOK_SRC")"
 assert "…and is executable"              "$(yes_if test -x "$HOOK_SRC")"
 assert "…and parses"                     "$(yes_if bash -n "$HOOK_SRC")"
 # A hook nothing registers is a file. settings.json is the only thing that runs it.
-SET="$TPLSRC/symlink/.claude/settings.json"
+SET="$TPLSRC/seed/.claude/settings.json"
 assert "settings.json registers it at SessionStart" \
   "$(yes_if bash -c "awk '/\"SessionStart\"/,0' '$SET' | grep -q 'session-banner.sh'")"
 # The consolidation, stated from this side too: the hook it replaced must not still be
@@ -102,10 +102,10 @@ TPL="$TMP/here/tpl"; mkdir -p "$TPL"
   [ -n "$f" ] || continue
   mkdir -p "$TPL/$(dirname "$f")"; cp "$TPLSRC/$f" "$TPL/$f" 2>/dev/null || true
 done
-chmod +x "$TPL/install.sh" "$TPL"/symlink/scripts/*.sh "$TPL"/symlink/.claude/hooks/*.sh 2>/dev/null || true
+chmod +x "$TPL/plugin/scripts/init-bundle.sh" "$TPL"/plugin/scripts/*.sh "$TPL"/plugin/hooks/*.sh 2>/dev/null || true
 
 INST="$TMP/group/_ai-bridge-group"; mkdir -p "$INST"
-bash "$TPL/install.sh" "$INST" >"$TMP/stamp" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/stamp" 2>&1
 assert "a fresh instance stamps"         "$(yes_if test -f "$INST/instance.config.json")"
 
 echo "== healthy instance: silent, exit 0 =="
@@ -146,25 +146,25 @@ echo "== one dead link is enough, and SCHEMA.md dangling must not silence the ho
 # is FALSE for a dangling symlink. Reusing that triple here would have made the hook mute
 # in the one situation it is for. Reproduced with a single link, not a whole move, so the
 # assertion is about the guard and nothing else.
-ln -s "$TPL/symlink/SCHEMA.md" "$INST/SCHEMA.md"
-mv "$TPL/symlink/SCHEMA.md" "$TPL/symlink/SCHEMA.md.hidden"
+ln -s "$TPL/seed/SCHEMA.md" "$INST/SCHEMA.md"
+mv "$TPL/seed/SCHEMA.md" "$TPL/seed/SCHEMA.md.hidden"
 OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)"
 assert "a dangling SCHEMA.md is reported"   "$(has 'SCHEMA.md' "$OUT")"
 assert "…and counted as 1 of 4"             "$(has '1 of 4' "$OUT")"
-assert "…and the repair is named"           "$(has "bash $TPL/install.sh $INST" "$OUT")"
-mv "$TPL/symlink/SCHEMA.md.hidden" "$TPL/symlink/SCHEMA.md"
+assert "…and the repair is named"           "$(has "bash $TPL/plugin/scripts/init-bundle.sh $INST" "$OUT")"
+mv "$TPL/seed/SCHEMA.md.hidden" "$TPL/seed/SCHEMA.md"
 
 echo "== the whole template moves =="
 # The real incident. Everything dangles at once; the hook still resolves because it is
 # invoked from the template's NEW location, which is also how it knows the path to print.
 mv "$TMP/here" "$TMP/there"
 TPL2="$TMP/there/tpl"
-RC=0; OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$TPL2/symlink/.claude/hooks/session-banner.sh" 2>&1)" || RC=$?
+RC=0; OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$TPL2/plugin/hooks/session-banner.sh" 2>&1)" || RC=$?
 assert "exit 0 even when reporting"      "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "all four probes are named"       "$(has '4 of 4' "$OUT")"
 assert "…the dead paths are listed"      "$(has 'scripts/commit-as.sh' "$OUT")"
 assert "…the OLD location is named"      "$(has "$TPL" "$OUT")"
-assert "…and the repair uses the NEW one" "$(has "bash $TPL2/install.sh $INST" "$OUT")"
+assert "…and the repair uses the NEW one" "$(has "bash $TPL2/plugin/scripts/init-bundle.sh $INST" "$OUT")"
 # It names the repair; it must not BE the repair. A hook that silently relinked an
 # instance's machinery at session start would leave a move with no trace at all.
 assert "nothing was repaired"            "$(no_if test -e "$INST/SCHEMA.md")"
@@ -175,7 +175,7 @@ echo "== the repair sweeps its own dead backups =="
 printf 'content a human wants back\n' > "$INST/CONVENTIONS.md.bak.1700000000"  # a real FILE
 ln -s "$TMP/nowhere-ever" "$INST/stranger.bak.1700000001"   # dangles, original not ours
 ln -s "$INST/instance.config.json" "$INST/live.bak.1700000002"  # a backup that RESOLVES
-RC=0; bash "$TPL2/install.sh" "$INST" >"$TMP/repair" 2>&1 || RC=$?
+RC=0; bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/repair" 2>&1 || RC=$?
 assert "the repair exits 0"              "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "…and relinks the machinery"      "$(yes_if test -e "$INST/SCHEMA.md")"
 assert "…moving the dead links aside"    "$(yes_if grep -q '^  moved ' "$TMP/repair")"
@@ -190,7 +190,7 @@ assert "a .bak link that resolves survives"   "$(yes_if test -e "$INST/live.bak.
 assert "the instance is healthy again"   "$(hasnt "$WARN" "$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)")"
 
 echo "== idempotent =="
-bash "$TPL2/install.sh" "$INST" >"$TMP/again" 2>&1
+bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/again" 2>&1
 assert "a second run sweeps nothing"     "$(no_if grep -q '^  sweep ' "$TMP/again")"
 assert "…and retires nothing"            "$(no_if grep -q '^  retire ' "$TMP/again")"
 
@@ -199,7 +199,7 @@ echo "== a name that is not ours is not a backup =="
 ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.backup"
 ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak"
 ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.old"
-bash "$TPL2/install.sh" "$INST" >/dev/null 2>&1
+bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST" >/dev/null 2>&1
 assert "'.backup' is left alone"         "$(yes_if test -L "$INST/SCHEMA.md.backup")"
 assert "'.bak' with no epoch is too"     "$(yes_if test -L "$INST/SCHEMA.md.bak")"
 assert "'.bak.old' likewise"             "$(yes_if test -L "$INST/SCHEMA.md.bak.old")"
@@ -214,7 +214,7 @@ echo "== the epoch suffix must be ALL digits, not merely start with one =="
 ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.1700000004.manual"  # digit start, trailing ext
 ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.notdigits"          # no leading digit at all
 ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak."                   # empty suffix
-bash "$TPL2/install.sh" "$INST" >"$TMP/epoch-guard" 2>&1
+bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/epoch-guard" 2>&1
 assert "'.bak.<epoch>.manual' is left alone" "$(yes_if test -L "$INST/SCHEMA.md.bak.1700000004.manual")"
 assert "'.bak.notdigits' is left alone"      "$(yes_if test -L "$INST/SCHEMA.md.bak.notdigits")"
 assert "'.bak.' (empty suffix) is too"       "$(yes_if test -L "$INST/SCHEMA.md.bak.")"
@@ -224,7 +224,7 @@ echo "== …while a genuine all-digit .bak.<epoch> is still swept =="
 # The positive control for the assertion above: prove the guard rejects the malformed
 # names on their shape, not by accident sweeping nothing at all this run.
 ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.1700000005"
-bash "$TPL2/install.sh" "$INST" >"$TMP/real-bak" 2>&1
+bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/real-bak" 2>&1
 assert "a real .bak.<epoch> backup is swept" "$(no_if test -L "$INST/SCHEMA.md.bak.1700000005")"
 assert "…and the sweep is logged"            "$(yes_if grep -q '^  sweep ' "$TMP/real-bak")"
 # The three malformed decoys from the block above must still be untouched by this run too.
@@ -237,7 +237,7 @@ echo "== uninstall sweeps nothing, so its promise stays true =="
 # the link instead of recreating it, so every backup survives — which is what
 # "your runtime state, real files, and *.bak.* backups were left untouched" claims.
 ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.1700000003"
-bash "$TPL2/install.sh" --uninstall "$INST" >"$TMP/uninst" 2>&1
+bash "$TPL2/plugin/scripts/init-bundle.sh" --uninstall "$INST" >"$TMP/uninst" 2>&1
 assert "uninstall sweeps no backups"     "$(no_if grep -q '^  sweep ' "$TMP/uninst")"
 assert "…and the dead backup is still there" "$(yes_if test -L "$INST/SCHEMA.md.bak.1700000003")"
 

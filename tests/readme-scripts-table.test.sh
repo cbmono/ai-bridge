@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# readme-scripts-table.test.sh — README.md's `## Scripts` section and `symlink/scripts/`
+# readme-scripts-table.test.sh — README.md's `## Scripts` section and `plugin/scripts/`
 # account for each other, in both directions.
 #
 # WHY. A hand-maintained table of scripts drifts the moment a PR adds one, silently, and
@@ -12,7 +12,7 @@
 # longer than anyone thought — which is exactly what a table with no reader looks like.
 #
 # THE CONTRACT THIS PINS IS "EVERY SCRIPT IS ACCOUNTED FOR", NOT "EVERY SCRIPT IS A USER
-# COMMAND". Some of what ships in `symlink/scripts/` is internal plumbing a reader should
+# COMMAND". Some of what ships in `plugin/scripts/` is internal plumbing a reader should
 # not be told to run (`resolve-config.sh`, `resolve-max-agents.sh`, `ai-bridge.sh`, which
 # backs the `/ai-bridge` command). The README therefore carries a second, explicitly
 # labelled **Internal helpers** table under the same heading, and this file scans the whole
@@ -43,7 +43,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 README="$REPO/README.md"
-SCRIPTS="$REPO/symlink/scripts"
+SCRIPTS="$REPO/plugin/scripts"
 [ -f "$README" ] || { echo "readme-scripts-table.test: missing $README" >&2; exit 2; }
 [ -d "$SCRIPTS" ] || { echo "readme-scripts-table.test: missing $SCRIPTS" >&2; exit 2; }
 
@@ -57,7 +57,7 @@ ok() { # <name> <actual> <expected>
   else printf '  FAIL  %-56s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
 }
 
-# Every `*.sh` that ships in symlink/scripts/, one per line, sorted.
+# Every `*.sh` that ships in plugin/scripts/, one per line, sorted.
 shipped() { find "$SCRIPTS" -maxdepth 1 -name '*.sh' -exec basename {} \; | sort; }
 
 # Every script named in the leading cell of a row of ANY table inside the `## Scripts`

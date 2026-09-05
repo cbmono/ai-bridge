@@ -38,8 +38,8 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
-SH="$TPL/symlink/scripts/ai-bridge.sh"
-BANNER="$TPL/symlink/.claude/hooks/session-banner.sh"
+SH="$TPL/plugin/scripts/ai-bridge.sh"
+BANNER="$TPL/plugin/hooks/session-banner.sh"
 CMD="$TPL/plugin/skills/welcome/SKILL.md"
 [ -f "$SH" ] || { echo "ai-bridge-command.test: missing $SH" >&2; exit 2; }
 
@@ -92,7 +92,7 @@ mkinstance() {
 # carries no `.git`, so that row reports "not a git checkout" and reaches nothing.
 SRC="$TMP/tplcopy"; mkdir -p "$SRC"
 ( cd "$TPL" && tar cf - --exclude .git . ) | ( cd "$SRC" && tar xf - )
-[ -f "$SRC/install.sh" ] || { echo "ai-bridge-command.test: the template copy is missing install.sh" >&2; exit 2; }
+[ -f "$SRC/plugin/scripts/init-bundle.sh" ] || { echo "ai-bridge-command.test: the template copy is missing install.sh" >&2; exit 2; }
 
 # =======================================================================================
 echo "== 1. the bare form INVOKES the banner — it does not reproduce it =="
@@ -168,23 +168,23 @@ ok "…with the stamp command, which is the repair"          "$(printf '%s\n' "$
 # -- symlink/ | grep '^A'` is what a human runs after a merge; `--since` runs exactly that,
 # and "this range added nothing" is a reported answer, not silence.
 RTPL="$TMP/rangetpl"
-mkdir -p "$RTPL/symlink/scripts"
-printf 'old\n' > "$RTPL/symlink/scripts/one.sh"
+mkdir -p "$RTPL/plugin/scripts"
+printf 'old\n' > "$RTPL/plugin/scripts/one.sh"
 GIT -C "$RTPL" init -q 2>/dev/null || GIT init -q "$RTPL"
 GIT -C "$RTPL" add -A; GIT -C "$RTPL" commit -qm base
 base="$(GIT -C "$RTPL" rev-parse HEAD)"
-printf 'edited\n' > "$RTPL/symlink/scripts/one.sh"
+printf 'edited\n' > "$RTPL/plugin/scripts/one.sh"
 GIT -C "$RTPL" commit -qam "edit an already-linked file"
 edited="$(GIT -C "$RTPL" rev-parse HEAD)"
 S1="$(bash "$SH" check --instance "$INST1" --template "$RTPL" --since "$base" 2>&1)"
 ok "--since over an edit-only range REPORTS that it added nothing" \
   "$(printf '%s\n' "$S1" | grep -c 'added no symlink/ files' | tr -d ' ')" 1
-printf 'brand new\n' > "$RTPL/symlink/scripts/two.sh"
+printf 'brand new\n' > "$RTPL/plugin/scripts/two.sh"
 GIT -C "$RTPL" add -A; GIT -C "$RTPL" commit -qm "add a new file"
 S2="$(bash "$SH" check --instance "$INST1" --template "$edited" 2>/dev/null; \
       bash "$SH" check --instance "$INST1" --template "$RTPL" --since "$base" 2>&1)"
 ok "…and names the added file when the range has one" \
-  "$(printf '%s\n' "$S2" | grep -c 'symlink/scripts/two.sh' | tr -d ' ')" 1
+  "$(printf '%s\n' "$S2" | grep -c 'plugin/scripts/two.sh' | tr -d ' ')" 1
 ok "…while the edited file is NOT reported as added (that is the whole distinction)" \
   "$(printf '%s\n' "$S2" | grep -c '^      A.*one\.sh' | tr -d ' ')" 0
 # AN UNASKED QUESTION IS ALSO A FACT. $RTPL ships no check-template-version.sh, so the
@@ -319,7 +319,7 @@ echo "== 5. SHIP-BLOCKER: fix never clears a tick lock, not even a stale one =="
 # legitimately run long, so "stale" is a threshold and not a death certificate — clearing
 # one on that evidence is the double-dispatch this machinery exists to prevent.
 INST3="$TMP/inst3"; mkinstance "$INST3"
-cp "$TPL/symlink/scripts/tick-lock.sh" "$INST3/scripts/tick-lock.sh"
+cp "$TPL/plugin/scripts/tick-lock.sh" "$INST3/scripts/tick-lock.sh"
 old="$(date -u -r $(( $(date +%s) - 7200 )) +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
        || date -u -d '-2 hours' +%Y-%m-%dT%H:%M:%SZ)"
 printf 'timestamp: %s\nagent: project-manager\n' "$old" > "$INST3/.tick-lock"
@@ -422,12 +422,12 @@ bash "$SH" fix --instance "$INST4" --template "$SRC" >/dev/null 2>&1
 ok "…and fix relinks it"                                   "$(yn test -L "$INST4/scripts/commit-as.sh")" yes
 # A DANGLING link stays a different defect — the banner's machinery probes own it, and
 # double-reporting it here is how a banner becomes wallpaper.
-ln -sfn "$SRC/symlink/scripts/does-not-exist.sh" "$INST4/.claude/hooks/session-banner.sh"
+ln -sfn "$SRC/plugin/scripts/does-not-exist.sh" "$INST4/.claude/hooks/session-banner.sh"
 CHK4D="$(bash "$SH" check --instance "$INST4" --template "$SRC" 2>&1)"
 ok "a DANGLING link is NOT counted as unstamped"           "$(printf '%s\n' "$CHK4D" | grep -c 'nothing to stamp' | tr -d ' ')" 1
 # Restored by hand, not by `fix`: the installer's retire-dangling sweep would REMOVE this
 # link rather than repoint it, and §8 below reads INST4 as the healthy instance.
-ln -sfn "$SRC/symlink/.claude/hooks/session-banner.sh" "$INST4/.claude/hooks/session-banner.sh"
+ln -sfn "$SRC/plugin/hooks/session-banner.sh" "$INST4/.claude/hooks/session-banner.sh"
 
 # =======================================================================================
 echo "== 8. the SessionStart path: silent when clean, bounded when not =="
@@ -518,8 +518,8 @@ ok "…and the unparseable sibling is named beside it" \
 echo "== 10. it ships like every other script here =="
 # =======================================================================================
 ok "ai-bridge.sh parses"                                   "$(yn bash -n "$SH")" yes
-ok "…and is 100755 in the index"                           "$(cd "$TPL" && git ls-files -s symlink/scripts/ai-bridge.sh | awk '{print $1}')" 100755
-ok "…and in HEAD"                                          "$(cd "$TPL" && git ls-tree HEAD symlink/scripts/ai-bridge.sh | awk '{print $1}')" 100755
+ok "…and is 100755 in the index"                           "$(cd "$TPL" && git ls-files -s plugin/scripts/ai-bridge.sh | awk '{print $1}')" 100755
+ok "…and in HEAD"                                          "$(cd "$TPL" && git ls-tree HEAD plugin/scripts/ai-bridge.sh | awk '{print $1}')" 100755
 ok "the welcome skill ships"                                "$(yn test -f "$CMD")" yes
 # `symlink/**` must carry no org, repo, path or channel literal — it is linked into every
 # instance, whoever owns it.

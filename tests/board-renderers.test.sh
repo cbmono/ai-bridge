@@ -47,11 +47,11 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
-WRITER="$TPL/symlink/scripts/write-snapshot.sh"
-BOARD="$TPL/symlink/scripts/build-board.sh"
-PRINT="$TPL/symlink/scripts/print-board.sh"
-WATCH="$TPL/symlink/scripts/watch-board.sh"
-BRIDGE_INSTALL="$TPL/install.sh"
+WRITER="$TPL/plugin/scripts/write-snapshot.sh"
+BOARD="$TPL/plugin/scripts/build-board.sh"
+PRINT="$TPL/plugin/scripts/print-board.sh"
+WATCH="$TPL/plugin/scripts/watch-board.sh"
+BRIDGE_INSTALL="$TPL/plugin/scripts/init-bundle.sh"
 for f in "$WRITER" "$BOARD" "$PRINT" "$WATCH" "$BRIDGE_INSTALL"; do
   [[ -f "$f" ]] || { echo "board-renderers.test: missing $f" >&2; exit 2; }
 done
@@ -88,7 +88,7 @@ trap 'rm -rf "$TMP"' EXIT
 # THIS checkout (uncommitted changes included, since it copies files rather than
 # `git archive`-ing a committed tree) into a directory outside any git repository at all,
 # where the guard's own test (`--git-dir` vs `--git-common-dir`) cannot fire for lack of
-# a repository to ask about. Skipped entirely — $BRIDGE_INSTALL stays $TPL/install.sh —
+# a repository to ask about. Skipped entirely — $BRIDGE_INSTALL stays $TPL/plugin/scripts/init-bundle.sh —
 # when $TPL is already a main tree or no git repo at all, which is exactly install.sh's
 # own two non-firing cases, so a plain clone pays nothing extra here.
 if command -v git >/dev/null 2>&1; then
@@ -109,7 +109,7 @@ if command -v git >/dev/null 2>&1; then
     mkdir -p "$INSTALL_SRC"
     cp -R "$TPL"/. "$INSTALL_SRC"/
     rm -rf "$INSTALL_SRC/.git"
-    BRIDGE_INSTALL="$INSTALL_SRC/install.sh"
+    BRIDGE_INSTALL="$INSTALL_SRC/plugin/scripts/init-bundle.sh"
   fi
 fi
 

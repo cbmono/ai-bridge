@@ -41,7 +41,7 @@
 set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPTS="$TPL/symlink/scripts"
+SCRIPTS="$TPL/plugin/scripts"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/config-override.XXXXXX")" || {
   echo "config-override.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -358,7 +358,7 @@ assert "resolve-config.sh reports which file won, per leaf" \
 # TRACKED file switched on. So flip the switch in each file in turn and look at the
 # output, which is the same two-sided shape that caught `board` shipping inert once
 # already (a reader that always answers "default" passes any one-sided test).
-BANNER="$TPL/symlink/.claude/hooks/session-banner.sh"
+BANNER="$TPL/plugin/hooks/session-banner.sh"
 BINST="$TMP/_board-gate"; mkdir -p "$BINST/.claude/agents" "$BINST/.board-live"
 printf '<!doctype html>\n' > "$BINST/.board-live/board.html"
 banner_out() { CLAUDE_PROJECT_DIR="$BINST" bash "$BANNER" 2>&1; }
@@ -376,9 +376,9 @@ assert "…while the TRACKED board:false still switches it off" \
   "$(hasnt 'Board   file://' "$(banner_out)")"
 rm -rf "$BINST"
 assert "install.sh still reads the same key, at stamp time" \
-  "$( grep -q 'cfg_bool board true' "$TPL/install.sh" && echo 0 || echo 1 )"
+  "$( grep -q 'cfg_bool board true' "$TPL/plugin/scripts/init-bundle.sh" && echo 0 || echo 1 )"
 assert "…from the tracked instance.config.json" \
-  "$( grep -q 'cfg_bool board true "$TARGET/instance.config.json"' "$TPL/install.sh" && echo 0 || echo 1 )"
+  "$( grep -q 'cfg_bool board true "$TARGET/instance.config.json"' "$TPL/plugin/scripts/init-bundle.sh" && echo 0 || echo 1 )"
 assert "task-owner.sh reads defaultOwner from the tracked config" \
   "$(grep -q 'json_string "\$CONFIG" defaultOwner' "$SCRIPTS/task-owner.sh" && echo 0 || echo 1)"
 assert "…and never from the local one" \
@@ -404,7 +404,7 @@ done
 
 echo
 echo "== the overridable set is documented in ONE place =="
-SCHEMA="$TPL/symlink/SCHEMA.md"
+SCHEMA="$TPL/seed/SCHEMA.md"
 assert "SCHEMA.md has the override section" \
   "$(grep -q '^## Per-machine config overrides' "$SCHEMA" && echo 0 || echo 1)"
 for k in ownerGithubUser authorEmail reposRoot worktreeRoot boardInstances board \

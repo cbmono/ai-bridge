@@ -26,7 +26,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SEED_CFG="$REPO/seed/instance.config.json"
-VALIDATOR="$REPO/symlink/scripts/validate-bundle.sh"
+VALIDATOR="$REPO/plugin/scripts/validate-bundle.sh"
 [[ -f "$SEED_CFG" ]] || { echo "roles-roletiers-asymmetry.test: $SEED_CFG not found" >&2; exit 2; }
 [[ -f "$VALIDATOR" ]] || { echo "roles-roletiers-asymmetry.test: $VALIDATOR not found" >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || { echo "roles-roletiers-asymmetry.test: jq required" >&2; exit 2; }

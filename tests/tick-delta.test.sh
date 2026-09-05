@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# tick-delta.test.sh — the idle-tick fast-path probe: `symlink/scripts/tick-delta.sh`.
+# tick-delta.test.sh — the idle-tick fast-path probe: `plugin/scripts/tick-delta.sh`.
 #
 # THE ONE PROPERTY THAT MATTERS, asserted from both sides everywhere: a false DELTA
 # costs one full tick — the price that was always paid — but a false IDLE skips owed
@@ -18,7 +18,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-SRC="$REPO/symlink/scripts/tick-delta.sh"
+SRC="$REPO/plugin/scripts/tick-delta.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tickdelta.XXXXXX")" || {
   echo "tick-delta.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -170,7 +170,7 @@ echo "== plumbing =="
 ok "not a git repo is exit 2"    "$(mkdir -p "$TMP/plain"; "$SH" check --instance "$TMP/plain" >/dev/null 2>&1; echo $?)" 2
 ok "a bad mode is usage (3)"     "$("$SH" frobnicate >/dev/null 2>&1; echo $?)" 3
 ok "the shipped file is executable in the index" \
-   "$(cd "$REPO" && git ls-files -s symlink/scripts/tick-delta.sh | awk '{print $1}')" 100755
+   "$(cd "$REPO" && git ls-files -s plugin/scripts/tick-delta.sh | awk '{print $1}')" 100755
 
 echo
 echo "pass=$pass fail=$fail"

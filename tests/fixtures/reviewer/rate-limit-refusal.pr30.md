@@ -47,9 +47,9 @@
 > * `symlink/.claude/agents/project-manager.md`
 > * `symlink/.claude/commands/close-project.md`
 > * `symlink/.claude/commands/pm-loop.md`
-> * `symlink/SCHEMA.md`
-> * `symlink/scripts/close-project-folder.sh`
-> * `symlink/scripts/write-snapshot.sh`
+> * `seed/SCHEMA.md`
+> * `plugin/scripts/close-project-folder.sh`
+> * `plugin/scripts/write-snapshot.sh`
 > * `tests/close-project-folder.test.sh`
 > * `tests/machinery-ceiling.test.sh`
 > * `tests/snapshot.test.sh`

@@ -36,7 +36,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 # No render below passes a layout flag: there is one page, and `--layout` now exits 2
 # rather than selecting anything.
-GEN="$REPO/symlink/scripts/build-board.sh"
+GEN="$REPO/plugin/scripts/build-board.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/artboard.XXXXXX")" || {
   echo "artifact-board.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -1649,8 +1649,8 @@ assert "…and writes no page"                         "$(fhasnt x "$TMP/x.html"
 # renders it, so the markup and its selector are both gone from the script.
 assert "the kanban strip is not in the page"         "$(fhasnt 'class="cols"' "$OUT")"
 assert "…and the decision rail IS"                   "$(fhas 'class="rail"' "$OUT")"
-assert "…no columns renderer in the script"          "$(fhasnt 'render_columns' "$REPO/symlink/scripts/build-board.sh")"
-assert "…and no layout variable to select one"       "$(fhasnt 'BOARD_LAYOUT' "$REPO/symlink/scripts/build-board.sh")"
+assert "…no columns renderer in the script"          "$(fhasnt 'render_columns' "$REPO/plugin/scripts/build-board.sh")"
+assert "…and no layout variable to select one"       "$(fhasnt 'BOARD_LAYOUT' "$REPO/plugin/scripts/build-board.sh")"
 
 echo "== --standalone is wrapping, not markup =="
 SA="$TMP/sa.html"
@@ -1689,7 +1689,7 @@ root = Path(sys.argv[1])
 # The only two files where the flag's NAME may still appear: the script that refuses it
 # (its header records why it went, and its arg loop names it to refuse it) and this
 # harness, which asserts that refusal. Neither is a caller. Nothing else is exempt.
-SKIP = {"symlink/scripts/build-board.sh", "tests/artifact-board.test.sh"}
+SKIP = {"plugin/scripts/build-board.sh", "tests/artifact-board.test.sh"}
 # An INVOCATION, not a mention: `build-board.sh` followed by whitespace and then only
 # argument-shaped tokens up to `--layout`. Prose about the removal ("`build-board.sh`
 # refuses `--layout` by name") cannot match, because a backtick is not an argument
@@ -1735,7 +1735,7 @@ assert "…and flags neither prose about the removal nor a clean call" "$(eq "$(
 rm -rf "$FIX"
 
 echo "== there is only ONE HTML renderer now =="
-assert "build-artifact-board.sh is gone"             "$(yes_if test ! -e "$REPO/symlink/scripts/build-artifact-board.sh")"
+assert "build-artifact-board.sh is gone"             "$(yes_if test ! -e "$REPO/plugin/scripts/build-artifact-board.sh")"
 # The runnable form, not the name: build-board.sh's own header still explains what was
 # merged into it, and a comment recording that is not a caller.
 assert "…and no machinery still tells anyone to run it" "$(yes_if bash -c "! grep -rlF scripts/build-artifact-board '$REPO/symlink' >/dev/null 2>&1")"

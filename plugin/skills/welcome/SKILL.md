@@ -5,8 +5,8 @@ argument-hint: "[check|fix]  omit for the banner"
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
 
-Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh $ARGUMENTS` from the bundle root and **relay
-its output verbatim**. `$ARGUMENTS` is empty, `check` or `fix` — nothing else; anything else is a
+Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh $ARGUMENTS` from the bundle root and
+**relay its output verbatim**. `$ARGUMENTS` is empty, `check` or `fix` — nothing else; anything else is a
 typo and the script will say so rather than guess.
 
 That is the whole skill. Every fact, every warning and every repair lives in the

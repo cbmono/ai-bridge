@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Exercises symlink/scripts/validate-bundle.sh against a throwaway bundle whose
+# Exercises plugin/scripts/validate-bundle.sh against a throwaway bundle whose
 # every document is a deliberate decision class: valid, invalid enum, missing
 # field, dangling structural reference, declared-but-unwritten artifact, and the
 # non-concept files that must NOT be validated at all.
@@ -14,7 +14,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-VALIDATOR="$HERE/../symlink/scripts/validate-bundle.sh"
+VALIDATOR="$HERE/../plugin/scripts/validate-bundle.sh"
 [[ -f "$VALIDATOR" ]] || { echo "validate-bundle.test: validator not found at $VALIDATOR" >&2; exit 2; }
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/validate-bundle-fixture.XXXXXX")" || {

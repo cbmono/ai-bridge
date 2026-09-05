@@ -204,11 +204,8 @@ HOOKS="$PLUGIN_ROOT/hooks"
 # bundle has no such links, so there is no per-bundle template at all — one plugin per
 # machine answers for every bundle on it.
 if [ -z "$TEMPLATE" ]; then
-  _probe="$BIN"
-  while [ "$_probe" != "/" ] && [ -n "$_probe" ]; do
-    if [ -d "$_probe/seed" ] && [ -f "$_probe/VERSION" ]; then TEMPLATE="$_probe"; break; fi
-    _probe="$(dirname "$_probe")"
-  done
+  TEMPLATE="$(cd "$BIN/../.." 2>/dev/null && pwd || true)"
+  [ -n "$TEMPLATE" ] && [ -f "$TEMPLATE/VERSION" ] || TEMPLATE=""
 fi
 [ -n "$TEMPLATE" ] && [ -d "$TEMPLATE" ] || TEMPLATE=""
 

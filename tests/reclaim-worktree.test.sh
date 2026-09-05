@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# reclaim-worktree.test.sh — exercises symlink/scripts/reclaim-worktree.sh, the ONE
+# reclaim-worktree.test.sh — exercises plugin/scripts/reclaim-worktree.sh, the ONE
 # script in this template that deletes a worktree.
 #
 # WHY THIS HARNESS EXISTS AT ALL. The pruner's delete path destroyed three running
@@ -38,7 +38,7 @@
 #         RECLAIM=/path/to/reclaim-worktree.sh tests/reclaim-worktree.test.sh
 set -uo pipefail
 
-RECLAIM="${RECLAIM:-$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/reclaim-worktree.sh}"
+RECLAIM="${RECLAIM:-$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts/reclaim-worktree.sh}"
 TPLSRC="$(cd "$(dirname "$0")/.." && pwd)"
 
 die() { printf 'reclaim-worktree.test: %s\n' "$*" >&2; exit 2; }
@@ -78,7 +78,7 @@ JSON
 # The script requires an instance root (SCHEMA.md + instance.config.json), exactly
 # as task-owner.sh does. A copy of the real one, so the fixture cannot drift from
 # what an instance actually has.
-cp "$TPLSRC/symlink/SCHEMA.md" "$INSTANCE/SCHEMA.md"
+cp "$TPLSRC/seed/SCHEMA.md" "$INSTANCE/SCHEMA.md"
 
 # --- the upstream + clone -----------------------------------------------------
 g() { git -C "$REPO" "$@"; }

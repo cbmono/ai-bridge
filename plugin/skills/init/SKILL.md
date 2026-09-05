@@ -2,6 +2,7 @@
 name: init
 description: Create a new AI Bridge bundle, refresh an existing one, or convert a symlink-era bundle in place. Data only — a bundle it stamps carries no machinery and no link into any checkout.
 argument-hint: "<dir>  [--refresh-seeds]"
+disable-model-invocation: true
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
 
@@ -16,8 +17,8 @@ directory means the current one. That is the whole skill: every decision, every 
 every line of output lives in the script, so a human running it in a terminal and a
 session running it here get the same answer, and there is no second copy here to drift.
 
-**It replaces `install.sh`.** No clone of `cbmono/ai-bridge` is needed on the machine —
-the plugin carries the installer, and `claude plugin update` is what updates it.
+**It replaces `install.sh`.** No clone of this template is needed on the machine — the
+plugin carries the installer, and a plugin update is what updates it.
 
 ## What it does, in one table
 
