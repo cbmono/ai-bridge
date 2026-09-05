@@ -1044,7 +1044,7 @@ echo
 echo "== the wiring: the launcher runs the acquire, and holds exactly the grant for it =="
 grants() { awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
   | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$'; }
-ok "allowed-tools grants the script"     "$(grants "$LAUNCHER" | grep -qx 'Bash(scripts/tick-lock.sh:\*)' && echo yes || echo no)" yes
+ok "allowed-tools grants the script"     "$(grants "$LAUNCHER" | grep -qx 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' && echo yes || echo no)" yes
 ok "…and grants nothing else new"        "$(grants "$LAUNCHER" | wc -l | tr -d ' ')" 7
 ok "step 1 runs the acquire"             "$(has "$LAUNCHER" 'scripts/tick-lock.sh acquire --agent project-manager')" yes
 ok "…and step 2 releases on the notification" "$(has "$LAUNCHER" 'scripts/tick-lock.sh release')" yes

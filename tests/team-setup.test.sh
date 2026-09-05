@@ -101,8 +101,11 @@ ok "the config is byte-identical to the seed" "$(same_as_seed "$I")" yes
 ok "…so the placeholder roster survives"   "$(said 'nothing was asked')" yes
 ok "no identity in instance.config.local.json" "$(no_identity "$I")" yes
 ok "…though step 4c seeded this machine's tiers" "$(yn grep -q '"roleTiers"' "$I/instance.config.local.json")" yes
-ok "the instance is otherwise stamped"     "$(yn test -L "$I/SCHEMA.md")" yes
-ok "…machinery and all"                    "$(yn test -L "$I/scripts/commit-as.sh")" yes
+# A STAMP DELIVERS SEED CONTENT AND NO LINK (task-013). Both halves, so the change cannot
+# be read as a loss: the document arrived, and it arrived as the bundle's own file.
+ok "the bundle is otherwise stamped"       "$(yn test -f "$I/SCHEMA.md")" yes
+ok "…as a real file, not a link"           "$(yn test -L "$I/SCHEMA.md")" no
+ok "…and no machinery came with it"        "$(yn test -e "$I/scripts")" no
 
 # =========================================================================== #
 echo "-- 2. the positive path: one batched answer, at (a simulated) terminal"
@@ -125,7 +128,7 @@ ok "…and it parses too"                   "$(yn jq -e . "$I/instance.config.lo
 ok "…and is gitignored"                   "$(yn grep -qxF 'instance.config.local.json' "$I/.gitignore")" yes
 # The property that matters is not the file's text but that the REAL consumer reads it.
 # task-owner.sh resolves "who is this clone?" from exactly these two files.
-ok "task-owner.sh --self resolves it"     "$( cd "$I" && bash scripts/task-owner.sh --self 2>&1 | head -1 )" \
+ok "task-owner.sh --self resolves it"     "$( cd "$I" && bash "$TPL/plugin/scripts/task-owner.sh" --self 2>&1 | head -1 )" \
                                           "self: example-user-007 (from instance.config.local.json)"
 # commit-as.sh looks the address up in `people` via that login, with its own awk parser —
 # a shape it cannot read would strand every agent commit.
@@ -352,17 +355,25 @@ ok "--config --uninstall asks nothing"    "$(asked)" no
 
 # =========================================================================== #
 echo "-- 7. the guards that were already here still hold"
-# The worktree guard runs before anything is written, so it must win even with a piped
-# answer waiting: a prompt answered from a temporary checkout would write a config into an
-# instance whose machinery is about to dangle.
+# THE WORKTREE GUARD IS `--config`'s ALONE NOW (task-013). It existed because a bundle
+# stamp wrote absolute symlinks into the source checkout — delete the worktree and every
+# one of them dangled. A stamp writes no such link any more, so refusing here would refuse
+# a stamp that is perfectly safe, and it was the reason every fixture in this suite had to
+# copy the template out of the checkout first. `--config` still links into
+# ${CLAUDE_CONFIG_DIR:-~/.claude} by absolute path, so for that half nothing changed.
 WM="$TMP/wtmain"; make_tpl "$WM"
 ( cd "$WM" && git init -q . && git add -A && git -c user.name=t -c user.email=t@t commit -qm init ) >/dev/null 2>&1
 git -C "$WM" worktree add -q "$TMP/wtlinked" -b wt >/dev/null 2>&1
 I="$(newinst 16)"
 printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TMP/wtlinked/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
-ok "from a worktree: exits 2"             "$?" 2
-ok "…asks nothing"                        "$(asked)" no
-ok "…and stamps nothing"                  "$(yn test -e "$I/instance.config.json")" no
+ok "from a worktree: a bundle stamp is allowed" "$?" 0
+ok "…and it asked, like any other stamp"  "$(asked)" yes
+ok "…and it stamped"                      "$(yn test -e "$I/instance.config.json")" yes
+ok "…leaving no symlink behind"           "$([ -z "$(find "$I" -type l 2>/dev/null)" ] && echo yes || echo no)" yes
+D_WT="$TMP/dest-wt"; mkdir -p "$D_WT"
+CLAUDE_CONFIG_DIR="$D_WT" bash "$TMP/wtlinked/plugin/scripts/init-bundle.sh" --config >"$TMP/out" 2>&1
+ok "…while --config from that same worktree still exits 2" "$?" 2
+ok "…saying why"                          "$(said 'refusing to link the config layer from a git worktree')" yes
 # The bare-TARGET interface: three live instances and upgrade.sh call it that way.
 I="$(newinst 17)"
 printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
