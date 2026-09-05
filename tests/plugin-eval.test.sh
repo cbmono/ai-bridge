@@ -71,8 +71,16 @@ ok "plugin/evals/ exists"                       "$(yn test -d "$EVALS")" yes
 [ -d "$EVALS" ] || { printf '\npass=%s fail=%s skip=%s\n' "$pass" "$fail" "$skip"; exit 1; }
 # Results are run artifacts (a timestamped dir per run, plus an HTML report); they must
 # never be committed, and this repo is public.
+#
+# ASKED ABOUT A PATH INSIDE THE DIRECTORY, NEVER THE DIRECTORY ITSELF. `.gitignore`'s
+# `/plugin/evals/results/` carries a trailing slash, so it matches a DIRECTORY — and
+# `git check-ignore plugin/evals/results` answers "not ignored" when that directory does
+# not exist yet. It exists on a machine that has run the eval and not on a fresh
+# checkout, so the bare form passes locally and fails in CI, which is exactly what it did
+# (run 33961927498, the one assertion red in 5,937). A path below it is answered from the
+# pattern alone, whether or not anything is there.
 ok "…and its results/ output is gitignored" \
-  "$(cd "$TPL" && git check-ignore -q plugin/evals/results && echo yes || echo no)" yes
+  "$(cd "$TPL" && git check-ignore -q plugin/evals/results/RUN/report.html && echo yes || echo no)" yes
 
 # Directories only, and `results/` is a run artifact rather than a case — so the eval
 # dir's own README.md (and any other prose beside the cases) is not read as one.
