@@ -161,8 +161,15 @@ Answer its questions. Review the draft tasks. Promote the ones you want (`draft 
 Then:
 
 ```text
-/ai-bridge:dispatch 10m
+/loop 10m /ai-bridge:dispatch
 ```
+
+`/loop` is Claude Code's own repeat-a-slash-command primitive, and it is the standard way
+to run the cadence: one pass every ten minutes, in the session you are already in, with
+nothing installed to drive it. Omit the interval (`/loop /ai-bridge:dispatch`) on a quiet
+bundle and the model paces itself. A pass that fires while a tick is still running prints
+one line and skips — the dispatch lock refuses it, so a clock can never start a second
+orchestrator. `docs/operations.md` → "Running the loop on a cadence" has the reasoning.
 
 **Always launch Claude from inside the instance directory.** The bundle's linked role
 agents, its `SessionStart` banner and this panel's `CLAUDE.md` load from the instance's

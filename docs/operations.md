@@ -528,6 +528,89 @@ rather than dispatching on a guess.** The fix goes in `instance.config.local.jso
 `/ai-bridge:init` seeds with both keys. This applies to **every** dispatch, including an ad-hoc
 one from a main session, which is the path the prose version of this rule never reached.
 
+### Running the loop on a cadence
+
+**`/loop 10m /ai-bridge:dispatch`.** That is the whole answer, and it is first-party:
+`/loop [interval] <prompt>` ships with Claude Code (measured on **2.1.261**, whose own help
+string is `/loop 5m /foo`) and re-fires a slash command on a clock in the session you are
+already in. **Nothing is installed for cadence** — no watcher process, no `sleep` loop, no
+cron entry, and no script in this repo. `/ai-bridge:dispatch`'s precondition 2 goes further
+and *deletes* the fixed-interval PM cron an older approach left behind.
+
+| | |
+|---|---|
+| **`/loop 10m /ai-bridge:dispatch`** | the default. A fixed heartbeat while work is landing. |
+| **`/loop /ai-bridge:dispatch`** | no interval ⇒ `/loop`'s dynamic mode, where the model paces itself. The right shape for a quiet bundle whose passes would mostly find nothing. |
+
+**Why 10m, since the interval is not tuned to tick length.** A tick that dispatches role
+agents runs as long as it runs; the lock below is what makes that safe, so the interval
+never has to guess at it. What the interval *is* tuned to is the slowest thing a tick waits
+on — an external review round-trip. A CodeRabbit review plus the required checks lands in
+minutes, so a pass every 10 minutes notices a merged PR or a finished review about one pass
+after it happens. Below ~5m the extra passes find the state the last one found; past ~30m
+the loop stops being the thing that notices.
+
+**A `/loop` never spawns a second orchestrator, and the lock is the proof.** Firing into a
+running tick is not an edge case here — it is what a clock does, several times per tick. In
+that firing `scripts/tick-lock.sh acquire` refuses at exit 1 *before* anything is spawned,
+and the check and the write are one `O_EXCL` create, so there is no window to interleave.
+The guarantee never rested on the cadence, which is why putting a clock in front of it
+changes nothing. **One `/loop` per clone** still holds for the same reason two `/pm-loop`
+sessions on one working tree was always the bug: the lock bounds ticks, not loops.
+
+**A firing that lands mid-tick is a clean skip, not a fault** — `acquire --as loop` prints
+one line on **stdout** and exits 1:
+
+```text
+tick in progress since 2026-09-05T10:22:04Z (project-manager, taken 12m ago) — nothing to dispatch this pass.
+```
+
+That mode changes the *report* and nothing else: it takes a free lock exactly as the
+launcher does and stays silent when it does, and STALE, AHEAD OF THE CLOCK, UNREADABLE and
+an unwritable root keep their loud stderr text and their non-zero exits. **The exit code
+deliberately does not move.** `0` is the only clearance to dispatch, and a mode where `0`
+sometimes meant "do not dispatch" would leave the caller telling the two apart by reading
+what was printed — a second, weaker reader of a signal the exit code already carries. What
+makes the *pass* clean is the skill: it defines exit 1 as an expected, non-escalating skip
+and ends the pass on it.
+
+#### Why not a scheduled cloud routine
+
+`/schedule` (alias `/routines`) is the first-party scheduler, and its own description says
+what it schedules: *"Create and manage scheduled **remote** Claude Code agents (routines)
+via the claude.ai CCR API"* (same 2.1.261 build). Remote is the problem. A routine gets a
+fresh clone of a **GitHub repository**; a bundle is a local checkout whose every operating
+input is deliberately *not* in that repository.
+
+Measured against `seed/.gitignore`, the file every stamped bundle carries — **7 of 7
+operating inputs are gitignored, so a fresh clone has none of them**:
+
+| Absent from a remote clone | Why it is gitignored |
+|---|---|
+| `instance.config.local.json` | per-machine identity (`ownerGithubUser`, `authorEmail`) |
+| `.tick-lock`, `.tick-lock.claim` | **per clone** — see below |
+| `AWAITING.md`, `SNAPSHOT.json` | derived views, rewritten by each tick |
+| `repos/` | symlinks into `reposRoot` |
+| `.board-live/` | the local live board |
+
+And `reposRoot` in `instance.config.json` *is* tracked — but it holds an absolute path on
+your machine, so in a cloud sandbox it names nothing. The target-repo clones, the worktrees
+under `worktreeRoot` and the package stores a role agent installs into are all outside the
+bundle entirely.
+
+**The `.tick-lock` row is the one that would be unsafe rather than merely broken.** The lock
+is per clone, by design, so two humans sharing a bundle can each dispatch. A routine running
+in its own clone therefore has its own lock and cannot see yours — so a routine driving
+`/ai-bridge:dispatch` would be a **second orchestrator**, which is the exact failure the
+lock exists to prevent, arriving by a route the lock cannot see. It is not a gap to close
+with a shared lock file either: two dispatchers on two machines against one set of local
+worktrees has no correct behaviour to converge on.
+
+So the fallback is documented and it is the same primitive: **`/loop 7d /ai-bridge:audit`**
+for the slow counter-metric cadence, in a session on the machine that holds the bundle.
+This is recorded in the control panel's knowledge base as
+`a-cloud-routine-cannot-run-a-bundle-checkout`.
+
 ### One tick at a time (the dispatch lock)
 
 The loop — `/ai-bridge:dispatch` since the plugin absorbed it, `/pm-loop` before
@@ -740,7 +823,7 @@ owner asked three times in one session, for three different instances.
 
 ```text
 
-AI-Bridge v0.34.0 · _ai-bridge-private · org: cbmono
+AI-Bridge v0.35.0 · _ai-bridge-private · org: cbmono
 ────────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM

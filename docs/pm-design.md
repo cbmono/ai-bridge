@@ -32,11 +32,19 @@ role agents. Wrong shape on all three counts — so the mechanism stays as it is
 ### Why serial (do not revert to a fixed interval)
 
 A LIVE tick can take a long time because it dispatches real role agents that
-build/test/push, and those agents may share **one clone + one package store**. A
-fixed-interval loop shorter than a tick (e.g. a naive `/loop 15m`) makes ticks
-**overlap** → concurrent PMs double-dispatch the same task (two PRs for one slice) and
-a sibling's package install corrupts an in-flight worktree. So the loop is gated on
-**completion**, never on a clock.
+build/test/push, and those agents may share **one clone + one package store**. Before
+`.tick-lock` existed, a fixed-interval loop shorter than a tick (e.g. a naive `/loop 15m`)
+made ticks **overlap** → concurrent PMs double-dispatch the same task (two PRs for one
+slice) and a sibling's package install corrupts an in-flight worktree. So the loop is gated
+on **completion**.
+
+**That is no longer an argument against a clock, and the distinction matters because
+`/loop 10m /ai-bridge:dispatch` is now the documented cadence** (`docs/operations.md` →
+"Running the loop on a cadence"). A clock is allowed to *ask*; it is not allowed to
+*overlap*. The firing that lands mid-tick is refused by `acquire` before anything is
+spawned — one line, exit 1, `--as loop` — so the interval decides how often the loop
+**looks**, and the lock decides whether it may **dispatch**. What is still forbidden is
+the thing that was always forbidden: dispatching a second tick while one is in flight.
 
 **The guarantee is backed by a lock file, not by a session's memory.** The "one tick at
 a time" serialization lives in the session's wakeup chain — and a session's memory of

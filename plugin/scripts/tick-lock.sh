@@ -2,7 +2,7 @@
 #
 # tick-lock.sh — the one-tick-at-a-time guarantee, as a file instead of a memory.
 #
-#   Usage: tick-lock.sh acquire [--as launcher|tick] [--agent <id>] [--claimant <id>]
+#   Usage: tick-lock.sh acquire [--as launcher|loop|tick] [--agent <id>] [--claimant <id>]
 #                                       [--instance DIR]
 #          tick-lock.sh release [--instance DIR]   ·   status [--instance DIR]
 #
@@ -85,6 +85,36 @@
 #                                          normal answer under Claude Code today.
 #   --as launcher (the default)         -> unchanged in every respect: any live lock
 #                                          refuses, claimed or not, and it never claims.
+#   --as loop                           -> a launcher on a CLOCK. Identical in every
+#                                          decision it makes; a HELD lock is reported in
+#                                          ONE line on stdout instead of the launcher's
+#                                          block on stderr. See the next section.
+#
+# `--as loop` — THE INTERVAL-DRIVEN LAUNCHER, AND WHY IT IS A MODE AND NOT A SECOND SCRIPT.
+# `/loop <interval> /ai-bridge:dispatch` is the documented way to run the cadence, and a
+# clock knows nothing about tick length: most firings of a 10m loop land while a tick from
+# an earlier firing is still running. So for this caller a held lock is the ORDINARY
+# outcome, not an incident — and the launcher's HELD block (three to six lines on stderr,
+# written for a human who typed a command and expected a dispatch) reads as a fault every
+# time the clock ticks. Repeated six times an hour, that is how a working loop teaches its
+# operator to stop reading its output.
+#
+#   tick in progress since 2026-09-05T10:22:04Z (project-manager, taken 12m ago) — nothing
+#   to dispatch this pass.
+#
+# One line, and on STDOUT rather than stderr, because it is not an error: the pass did
+# exactly what it should. Everything else about the mode is the launcher's, deliberately:
+# it takes a free lock the same way and stays byte-silent when it does, and STALE, AHEAD OF
+# THE CLOCK, UNREADABLE and an unwritable root all keep their loud stderr text and their
+# non-zero exits — those need a human whether a clock or a person asked.
+#
+# THE EXIT CODE DOES NOT MOVE, AND THAT IS THE WHOLE OF THE SAFETY ARGUMENT. A held lock is
+# still exit 1 here. `0 is the only clearance to dispatch` is the one invariant every caller
+# of this file rests on, and a mode in which 0 sometimes meant "do not dispatch" would force
+# the caller to tell the two apart by PARSING WHAT WAS PRINTED — a second, weaker reader of
+# a signal the exit code already carries exactly. What makes the /loop PASS clean is not a
+# zero from this script: it is that the skill defines exit 1 as an expected, non-escalating
+# skip and ends the pass on it. See `skills/dispatch/SKILL.md` -> "Running it on a cadence".
 #
 # An `--as tick` acquire that proceeds prints `adopted:` on stdout, optionally preceded by
 # `re-entered:`, and that is its only success — a tick never takes a lock of its own, so it
@@ -397,6 +427,8 @@
 #   1  HELD — a live lock, younger than the staleness threshold. Do not dispatch. For
 #      `--as tick` this means the claim on it is NOT YOURS as far as anything on disk can
 #      show: report and hold. Never a claim proved to be yours — that is a 0 (`re-entered:`).
+#      For `--as loop` it is the EXPECTED outcome of a firing that landed mid-tick: one
+#      line on stdout, and the pass ends clean. Same code, because 0 still means dispatch.
 #   2  needs a human: the lock is STALE, dated in the future, unreadable, or CLAIMED BY AN
 #      IDENTITY THAT MIGHT BE YOURS AND CANNOT BE PROVED TO BE. Do not dispatch, and do not
 #      delete it on the lock's behalf.
@@ -416,7 +448,7 @@ LOCK_NAME=".tick-lock"
 CLAIM_NAME=".tick-lock.claim"
 
 usage() {
-  echo "Usage: $(basename "$0") acquire [--as launcher|tick] [--agent <id>] [--claimant <id>]" >&2
+  echo "Usage: $(basename "$0") acquire [--as launcher|loop|tick] [--agent <id>] [--claimant <id>]" >&2
   echo "                            [--instance DIR]" >&2
   echo "       $(basename "$0") release [--instance DIR]" >&2
   echo "       $(basename "$0") status  [--instance DIR]" >&2
@@ -456,10 +488,10 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || { echo "tick-lock: --claimant needs an id" >&2; exit 3; }
       claimant="$2"; claimant_given=yes; shift 2 ;;
     --as)
-      [ $# -ge 2 ] || { echo "tick-lock: --as needs launcher or tick" >&2; exit 3; }
+      [ $# -ge 2 ] || { echo "tick-lock: --as needs launcher, loop or tick" >&2; exit 3; }
       case "$2" in
-        launcher|tick) as="$2"; as_given=yes ;;
-        *) echo "tick-lock: --as must be launcher or tick, got: $2" >&2; exit 3 ;;
+        launcher|loop|tick) as="$2"; as_given=yes ;;
+        *) echo "tick-lock: --as must be launcher, loop or tick, got: $2" >&2; exit 3 ;;
       esac
       shift 2 ;;
     *) echo "tick-lock: unexpected argument $1" >&2; usage ;;
@@ -859,6 +891,27 @@ case "$cmd" in
     # but for a tick the same verdict is only half of one, and printing "HELD" before
     # discovering the lock is the tick's own would be a lie the launcher's path never told.
     verdict="$(judge_existing 2>&1)"; vrc=$?
+
+    # AN INTERVAL-DRIVEN PASS THAT LANDED MID-TICK. The decision is the launcher's — do not
+    # dispatch, exit 1 — and only the REPORT changes: one line, on stdout, because a clock
+    # firing into a running tick is the ordinary case and not a fault. Read from the lock
+    # rather than from `$verdict`, so this line cannot drift with the launcher's wording.
+    loop_ts=""; loop_ag=""; loop_age=""
+    if [ "$as" = loop ] && [ "$vrc" -eq 1 ]; then
+      loop_ts="$(lock_field timestamp)"
+      loop_ag="$(lock_field agent)"
+      loop_age="$(lock_age)" || loop_age=""
+    fi
+    # All three non-empty is implied by a verdict of 1 — `judge_existing` returns 2 when any
+    # of them is missing — but this re-reads the file, so it is asserted rather than assumed:
+    # an empty age would reach `human_age` as `[ "" -lt 60 ]`, and a shell error where a
+    # quiet line belongs is exactly the noise this mode exists to remove. Empty falls through
+    # to the launcher's block below, which is louder and never wrong.
+    if [ -n "$loop_ts" ] && [ -n "$loop_ag" ] && [ -n "$loop_age" ]; then
+      echo "tick in progress since $loop_ts ($loop_ag, taken $(human_age "$loop_age") ago) — nothing to dispatch this pass."
+      exit 1
+    fi
+
     if [ "$as" != tick ] || [ "$vrc" -ne 1 ]; then
       [ -n "$verdict" ] && printf '%s\n' "$verdict" >&2
       exit "$vrc"
