@@ -557,6 +557,18 @@ tmpl=""
 if [ -n "$plugin_root" ] && [ -f "$plugin_root/../VERSION" ]; then
   tmpl="$(cd "$plugin_root/.." && pwd)"
 fi
+# WHERE THE NUMBER ITSELF COMES FROM, which is a different question from where the checkout
+# is. The plugin carries its own `VERSION` (task-022), so the header prints a version on a
+# machine that has only ever installed the plugin — the normal case, and the one where
+# `$plugin_root/..` is the marketplace cache directory and holds nothing. The checkout is
+# still the fallback, so a bundle running against a plugin from before that file existed
+# reads the same number it always did.
+ver_src=""
+if [ -n "$plugin_root" ] && [ -r "$plugin_root/VERSION" ]; then
+  ver_src="$plugin_root/VERSION"
+elif [ -n "$tmpl" ] && [ -r "$tmpl/VERSION" ]; then
+  ver_src="$tmpl/VERSION"
+fi
 
 # A literal tab is the resolver's field separator and is invisible in a diff, so it is
 # named once here and never typed inline again.
@@ -888,11 +900,11 @@ leaf_source() { printf '%s' "${1%%"$TAB"*}"; }
 # session context, so it is filtered rather than trusted — an ESC sequence in a VERSION file
 # would otherwise repaint the terminal from the first line of the banner.
 ver=""
-if [ -n "$tmpl" ] && [ -r "$tmpl/VERSION" ]; then
+if [ -n "$ver_src" ]; then
   # TRIMMED AT THE EDGES, NOT SQUEEZED THROUGHOUT. `tr -d [:space:]` would fold the prose
   # line `not a version` into the perfectly version-shaped token `notaversion` and print
   # it — the filter has to see the internal space in order to reject it.
-  ver="$(head -n 1 "$tmpl/VERSION" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  ver="$(head -n 1 "$ver_src" 2>/dev/null | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   case "$ver" in [0-9]*) ;; *) ver="" ;; esac
   case "$ver" in *[!0-9A-Za-z.+_-]*) ver="" ;; esac
   [ "${#ver}" -le 24 ] || ver=""
