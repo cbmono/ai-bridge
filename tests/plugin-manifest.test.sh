@@ -53,10 +53,27 @@ ok "…and so is its marketplace entry" \
 # answer about ai-bridge-v2 and not a jq expression that can only ever say no.
 ok "…while the lookup still finds a name that IS listed" \
    "$(jq -r '[.plugins[].name] | index("ai-bridge") | if . == null then "no" else "yes" end' "$MJ")" yes
-# Every remaining source must resolve, which is what the removal could have broken.
+# Every REMAINING source must still resolve — the other thing the removal could have
+# broken, and the one a jq check on names alone cannot see. ONE SCANNER, RUN TWICE: over
+# the real manifest, and over a planted source that points at the directory just deleted.
+# A sweep that can only pass is not a sweep, and a `bad` count of 0 over an EMPTY source
+# list is the vacuous form this one would decay into, so the count is asserted too.
+unresolved() { # reads sources on stdin, prints how many resolve to no plugin manifest
+  local s n=0
+  while read -r s; do
+    [ -n "$s" ] || continue
+    [ -f "$REPO/${s#./}/.claude-plugin/plugin.json" ] || n=$((n+1))
+  done
+  printf '%s' "$n"
+}
+srcs="$(jq -r '.plugins[].source' "$MJ")"
 ok "every marketplace source resolves to a plugin manifest" \
-   "$(jq -r '.plugins[].source' "$MJ" | while read -r s; do
-        [ -f "$REPO/${s#./}/.claude-plugin/plugin.json" ] || echo bad; done | grep -c . | tr -d ' ')" 0
+   "$(printf '%s\n' "$srcs" | unresolved)" 0
+ok "…over at least the two entries that are left (the sweep is not vacuous)" \
+   "$([ "$(printf '%s\n' "$srcs" | grep -c . | tr -d ' ')" -ge 2 ] && echo yes || echo no)" yes
+# The same scanner, on the source the removed entry carried. It must come back 1.
+ok "…and that same scanner flags the source the stub entry used to carry" \
+   "$(printf './plugin-deprecated\n' | unresolved)" 1
 
 echo "== every skill has the frontmatter the loader keys on =="
 n=0

@@ -68,7 +68,7 @@ the rest of the table [below](#commands); so is every role agent —
 `ai-bridge:software-engineer` and the rest — because a bare agent name does not resolve.
 See [`plugin/README.md`](plugin/README.md).
 
-**Already on `ai-bridge-v2`?** The transition name is gone as of 1.0.0 — [docs/migrating.md](docs/migrating.md) has the swap.
+**Already on `ai-bridge-v2`?** That name is gone in 1.0.0 — [the swap](docs/migrating.md).
 
 ### 2. Make the bundle directory
 
