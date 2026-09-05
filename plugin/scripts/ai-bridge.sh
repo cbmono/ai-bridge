@@ -40,7 +40,7 @@
 #               that "helpfully" reverted it would have destroyed that choice.
 #               UNCOMMITTED CONFIG IS A QUESTION, NEVER A DEFECT.
 #   human       acting is unsafe even when the diagnosis is right. `fix` PRINTS. The live
-#               case is `.tick-lock`: `scripts/tick-lock.sh release` is documented as the
+#               case is `.tick-lock`: `tick-lock.sh release` is documented as the
 #               human's override (`/pm-loop`, `SCHEMA.md`), and a `fix` that cleared a
 #               lock it judged stale re-opens the double-dispatch that ran two ticks
 #               concurrently for 34 minutes on 2026-08-29. A long tick is not a dead one.
@@ -69,7 +69,7 @@
 #   relayed by the model (`/ai-bridge:welcome check` in a session)   markdown renders; ANSI DOES NOT.
 #       0 of 4 ESC bytes survived the relay and the human was left reading a literal `[1m`.
 #       Single newlines and leading indent survive, so the block keeps its shape.
-#   a human's terminal (`bash scripts/ai-bridge.sh check`)   ANSI renders; markdown does not.
+#   a human's terminal (`bash ai-bridge.sh check`)   ANSI renders; markdown does not.
 #   inlined into the SessionStart banner (`--banner`)        NEITHER, here. That channel does
 #       render ANSI — but `session-banner.sh` owns the weight of every line it prints, so
 #       this side stays plain and the banner colours it. Two writers on one line is how a
@@ -109,7 +109,7 @@ set -uo pipefail
 # must happen before re-stamping from it, or the stamp is taken from the stale tree — the
 # exact failure that produced this file.
 CHECKS='template-behind|idempotent|no
-unstamped-machinery|idempotent|yes
+bundle-stamp|idempotent|yes
 config-uncommitted|ambiguous|yes
 config-layers|ambiguous|no
 config-unknown-keys|ambiguous|yes
@@ -119,7 +119,13 @@ orphan-processes|human|yes'
 # =========================================================================================
 # ARGUMENTS
 # =========================================================================================
-FORM=""; ROOT=""; TEMPLATE=""; ONLY_PROBLEMS=0; BANNER_ONLY=0; FETCH=0; SINCE=""
+FORM=""; ROOT=""; TEMPLATE=""; ONLY_PROBLEMS=0; BANNER_ONLY=0; FETCH=0
+# `--since <ref>` is ACCEPTED AND IGNORED, deliberately. It asked the retired
+# `unstamped-machinery` check for the literal post-merge form — which machinery files a
+# template range ADDED, because only a stamp delivered a new machinery file. A bundle has
+# no machinery, so the question has no answer to give; the flag stays parsed for one
+# version so a saved command line does not become a fatal "unknown argument".
+SINCE=""
 LIST=0; STYLE=auto
 
 # usage — the three forms and their flags, on stderr so `--help` never pollutes a pipeline.
@@ -157,8 +163,8 @@ if [ "$FORM" != banner ]; then
       --instance=*)  ROOT="${1#--instance=}"; shift ;;
       --template)    [ $# -ge 2 ] || { echo "ai-bridge: --template needs a directory" >&2; exit 2; }; TEMPLATE="$2"; shift 2 ;;
       --template=*)  TEMPLATE="${1#--template=}"; shift ;;
-      --since)       [ $# -ge 2 ] || { echo "ai-bridge: --since needs a git ref" >&2; exit 2; }; SINCE="$2"; shift 2 ;;
-      --since=*)     SINCE="${1#--since=}"; shift ;;
+      --since)       [ $# -ge 2 ] || { echo "ai-bridge: --since needs a git ref" >&2; exit 2; }; SINCE="$2"; shift 2 ;;  # accepted, ignored — see above
+      --since=*)     SINCE="${1#--since=}"; shift ;;                                                                       # accepted, ignored
       --only-problems) ONLY_PROBLEMS=1; shift ;;
       --banner)      BANNER_ONLY=1; shift ;;
       --list)        LIST=1; shift ;;
@@ -173,37 +179,38 @@ fi
 
 [ -n "$ROOT" ] || ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 
-# WHERE THE TEMPLATE IS, read from this script's own resolved path — the one machinery path
-# known to resolve, because it is executing. The instance's copy of this file IS a symlink
-# into the template and `install.sh` writes absolute targets, so this cannot be wrong; the
-# same derivation `check-template-version.sh` and the banner use, for the same reason.
+# WHERE THE SIBLING MACHINERY IS. Beside this file, always — it is the plugin's own
+# `scripts/` directory and this script is executing out of it, so `dirname $0` is right by
+# construction whether the plugin came from a marketplace cache or a checkout of this repo.
+# The hooks are one level up, in the plugin's `hooks/`.
+SELF_PATH="${BASH_SOURCE[0]:-$0}"
+case "$SELF_PATH" in /*) ;; *) SELF_PATH="$PWD/$SELF_PATH" ;; esac
+if [ -L "$SELF_PATH" ]; then
+  _t="$(readlink "$SELF_PATH" 2>/dev/null || printf '%s' "$SELF_PATH")"
+  case "$_t" in /*) SELF_PATH="$_t" ;; *) SELF_PATH="$(dirname "$SELF_PATH")/$_t" ;; esac
+fi
+BIN="$(cd "$(dirname "$SELF_PATH")" && pwd)"
+PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$BIN/.." && pwd)}"
+HOOKS="$PLUGIN_ROOT/hooks"
+
+# WHERE THE TEMPLATE CHECKOUT IS — the repo AROUND the plugin, when there is one. It is
+# used for exactly one thing: comparing this plugin's VERSION against the remote's. A
+# plugin installed from a marketplace sits inside a clone of this repo, so it is normally
+# there; a plugin vendored some other way has none, and that is reported as "cannot
+# compare" rather than guessed at.
+#
+# NOTE WHAT THIS IS NOT ANY MORE. It used to be the checkout an instance's symlinks
+# pointed into, derived from a marker in this file's own path. A
+# bundle has no such links, so there is no per-bundle template at all — one plugin per
+# machine answers for every bundle on it.
 if [ -z "$TEMPLATE" ]; then
-  self="${BASH_SOURCE[0]:-$0}"
-  # Absolute first: the marker below is `/symlink/scripts/`, so `bash symlink/scripts/…`
-  # would match nothing and silently answer "no template", and a symlink is allowed to
-  # carry a relative target that only means anything beside the link itself.
-  case "$self" in /*) ;; *) self="$PWD/$self" ;; esac
-  if [ -L "$self" ]; then
-    target="$(readlink "$self" 2>/dev/null || printf '%s' "$self")"
-    case "$target" in /*) self="$target" ;; *) self="$(dirname "$self")/$target" ;; esac
-  fi
-  guess="${self%/symlink/scripts/*}"
-  [ "$guess" != "$self" ] && TEMPLATE="$guess"
+  _probe="$BIN"
+  while [ "$_probe" != "/" ] && [ -n "$_probe" ]; do
+    if [ -d "$_probe/seed" ] && [ -f "$_probe/VERSION" ]; then TEMPLATE="$_probe"; break; fi
+    _probe="$(dirname "$_probe")"
+  done
 fi
 [ -n "$TEMPLATE" ] && [ -d "$TEMPLATE" ] || TEMPLATE=""
-
-# WHICH COPY OF THE SIBLING SCRIPTS TO RUN. The template's, when this is running from one —
-# an instance stamped before a helper shipped has no link to it, and answering "that check
-# does not exist here" about a template that plainly ships it would be a lie about the
-# wrong thing. Falls back to the instance's own `scripts/`, which is what a hand-copied
-# deployment has. Mirrors the banner's `bin` resolution exactly.
-if [ -n "$TEMPLATE" ] && [ -d "$TEMPLATE/symlink/scripts" ]; then
-  BIN="$TEMPLATE/symlink/scripts"
-  HOOKS="$TEMPLATE/symlink/.claude/hooks"
-else
-  BIN="$ROOT/scripts"
-  HOOKS="$ROOT/.claude/hooks"
-fi
 
 # =========================================================================================
 # FORM 1 — THE BANNER. One `exec`, no output of its own, ever.
@@ -227,19 +234,20 @@ fi
 # is that reader's colour. `--style` has no counterpart here — a caller that wants a specific
 # rendering passes the hook's own `--format`, which is why ANY argument leaves this decision
 # alone. That is the one form that must not grow a second opinion about its own options: the
-# flags belong to the banner, and `bash scripts/ai-bridge.sh --format json` must reach it
+# flags belong to the banner, and `bash ai-bridge.sh --format json` must reach it
 # unedited.
 #
 # `CLAUDE_PROJECT_DIR` is exported because it is the only thing the hook reads to decide
 # which instance it is describing. This form takes none of our own flags — `--instance` is a
 # `check`/`fix` option — so the value is whatever the environment already said, or this
-# directory; setting it explicitly is what makes `bash scripts/ai-bridge.sh` from an
+# directory; setting it explicitly is what makes `bash ai-bridge.sh` from an
 # instance root print the same thing the hook prints at session start.
 if [ "$FORM" = banner ]; then
   hook="$HOOKS/session-banner.sh"
   if [ ! -f "$hook" ]; then
-    echo "ai-bridge: the session banner is not installed here ($hook)." >&2
-    echo "           Re-stamp this instance to link it: bash <template>/install.sh $ROOT" >&2
+    echo "ai-bridge: the session banner is not where this script expects it ($hook)." >&2
+    echo "           That is a broken plugin install, not a bundle problem. Re-install:" >&2
+    echo "           /plugin install ai-bridge@ai-bridge, then restart Claude Code." >&2
     exit 2
   fi
   export CLAUDE_PROJECT_DIR="$ROOT"
@@ -380,8 +388,8 @@ git_ok() {
 check_template_behind() {
   _warned=0
   if [ -z "$TEMPLATE" ]; then
-    good "template clone: not locatable from here, so a stamp cannot be judged"
-    note "this script was not run through a symlink into a template checkout"
+    good "plugin version: no checkout around this plugin, so drift cannot be judged"
+    note "a plugin installed from a marketplace has one; a vendored copy may not"
     return 0
   fi
   if ! git_ok "$TEMPLATE"; then
@@ -454,112 +462,99 @@ fix_template_behind() {
   if GIT_TERMINAL_PROMPT=0 git -C "$TEMPLATE" pull --ff-only 2>&1 | sed 's/^/      /'; then
     return 0
   fi
-  note "the pull did not fast-forward — the checkout is unchanged. Resolve it by hand."
+  note "the pull did not fast-forward — the checkout is unchanged. The supported route is"
+  note "/plugin update ai-bridge@ai-bridge, then restart Claude Code."
   return 0
 }
 
 # =========================================================================================
-# CHECK 2 — unstamped-machinery (idempotent)
+# CHECK 2 — bundle-stamp (idempotent)
 # =========================================================================================
-# THE FACT: every file this template ships under `symlink/` is linked into this instance.
+# THE FACT: this bundle carries machinery symlinks into a template checkout, and/or seed
+# documents this template has changed since the bundle was stamped.
 #
-# THIS IS THE READER for the trap in the KB Finding "pulling the template half-upgrades
-# every unstamped instance". An edit to an ALREADY-linked file reaches an instance the
-# moment the template clone is pulled — `settings.json` included, because it is itself a
-# symlink — while a NEW file stays unlinked until `install.sh` runs. So an instance ends up
-# configured to call machinery it does not have, with no error to say so: measured, a
-# SessionStart hook pointing at a file that did not exist. Until now that trap was prose in
-# a knowledge base that a human had to remember to apply.
+# THIS ROW REPLACED `unstamped-machinery`, AND THE QUESTION INVERTED. That check asked
+# which of the template's machinery files were NOT linked here, because a stamp was how a
+# new machinery file reached a bundle. There is no machinery in a bundle now — it runs
+# from the plugin root — so the question worth asking is the opposite one: is anything
+# still linked? A LIVE link is as wrong as a dead one, and quieter: it resolves into a
+# checkout that `claude plugin update` never touches, so the bundle runs machinery frozen
+# at whatever that clone last pulled, with nothing anywhere saying so.
 #
-# WHY THE ON-DISK INVENTORY AND NOT ONLY THE GIT DIFF. After a merge the question is asked
-# as `git diff --name-status <old>..<new> -- symlink/ | grep '^A'`, and `--since` below runs
-# exactly that. But NO INSTANCE RECORDS `<old>`: there is no stamp receipt anywhere in this
-# machinery, so from inside an instance that range cannot be constructed. The equivalent
-# question that can always be answered is the one this asks by default — which of the files
-# a stamp WOULD link are not linked here — and it is strictly stronger, because it also
-# catches a file missed by an interrupted stamp or removed by hand. The enumeration is
-# `find . -type f` under `symlink/`, byte for byte the one `install.sh` walks, so the two
-# cannot come to disagree about what a stamp covers.
+# THE SECOND HALF IS THE ONE A CONVERSION DOES NOT FIX. `seed/` is copied only when
+# absent, so a seed edit never reaches a bundle already stamped; `refresh-seeds.sh` is the
+# 3-way merge that ports it, and asking it here is how the fact reaches a human. It is
+# consulted in REPORT mode — `fix` below is what asks it to write.
 #
-# EMPTY IS AN ANSWER, NOT SILENCE. "Nothing is unstamped" is the useful half of this check
-# on most days and it is printed as a `✓` line with its count.
-check_unstamped_machinery() {
+# EMPTY IS AN ANSWER, NOT SILENCE. "No links, nothing to port" is the useful half on most
+# days and it prints as a `✓` line.
+check_bundle_stamp() {
   _warned=0
-  if [ -z "$TEMPLATE" ] || [ ! -d "$TEMPLATE/symlink" ]; then
-    good "unstamped machinery: no template checkout located, so nothing to compare"
-    return 0
-  fi
 
-  local rel total=0 n=0 missing=""
-  while IFS= read -r rel; do
-    [ -n "$rel" ] || continue
-    total=$((total + 1))
-    # A LINK, OR IT IS NOT STAMPED — and a REGULAR FILE HERE IS NOT STAMPED. `install.sh`
-    # only ever symlinks a `symlink/` path (it moves anything else aside to `.bak.<ts>`
-    # first), so a real file at one of these paths is a copy that no template pull will
-    # ever reach again: it reads as present, the instance keeps calling it, and it silently
-    # stops tracking the template. That is this row's whole subject, so it counts.
-    # `-L` and not `-e`: `-e` is false for a DANGLING link, which is a different defect
-    # (the banner's machinery probes own it) and must not be reported as unstamped here.
-    if [ ! -L "$ROOT/$rel" ]; then
-      n=$((n + 1))
-      [ "$n" -le 12 ] && missing="${missing:+$missing
+  # THE LINK HALF. A walk of the whole bundle, not a probe list: the set of paths the old
+  # installer stamped changed across template versions, so a closed list is wrong for
+  # exactly the oldest bundles. `repos/` is excluded because it IS the derived view the
+  # stamp maintains, and `find` does not follow symlinks so it cannot descend into a
+  # linked repo. `.git` is pruned for speed.
+  local l rel n=0 dead=0 shown=""
+  while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    rel="${l#"$ROOT"/}"
+    case "$rel" in repos/*|repos) continue ;; esac
+    n=$((n + 1))
+    [ -e "$l" ] || dead=$((dead + 1))
+    [ "$n" -le 12 ] && shown="${shown:+$shown
 }    $rel"
-    fi
   done <<EOF
-$(cd "$TEMPLATE/symlink" 2>/dev/null && find . -type f | sed 's#^\./##' | sort)
+$(find "$ROOT" -name .git -prune -o -type l -print 2>/dev/null | sort)
 EOF
 
-  if [ "$total" -eq 0 ]; then
-    good "unstamped machinery: the template ships no symlink/ files to compare"
-    return 0
-  fi
   if [ "$n" -eq 0 ]; then
-    good "every one of the template's $total symlink/ files is linked here — nothing to stamp"
+    good "no symlinks outside repos/ — this bundle carries no machinery and no template link"
   else
-    warn "$n of the template's $total symlink/ files are NOT linked in this instance"
-    printf '%s\n' "$missing"
+    _warned=1
+    warn "$n symlink(s) outside repos/ — this bundle has not been converted ($dead already dead)"
+    printf '%s\n' "$shown"
     [ "$n" -gt 12 ] && note "… and $((n - 12)) more"
-    note "a merge alone never delivers a NEW file; only a stamp does:"
-    hint "bash $TEMPLATE/install.sh $ROOT"
+    note "the machinery ships in the plugin now; a link into a checkout is frozen there"
+    hint "/ai-bridge:init $ROOT"
   fi
 
-  # THE LITERAL POST-MERGE FORM, on request. `<old>..<new>` is `<--since>..HEAD` in the
-  # template checkout, and EMPTY OUTPUT IS REPORTED — "this merge added no new files, so
-  # nobody has homework" is precisely the answer worth having.
-  if [ -n "$SINCE" ]; then
-    if ! git_ok "$TEMPLATE"; then
-      note "--since $SINCE: the template is not a git checkout, so the range cannot be read"
-    elif ! git -C "$TEMPLATE" rev-parse --verify -q "$SINCE" >/dev/null 2>&1; then
-      note "--since $SINCE: no such ref in $TEMPLATE"
+  # THE SEED HALF, delegated. Its output is multi-line and already written for a human;
+  # only the lines that name a file needing something are kept, because a full report on
+  # every session start is wallpaper.
+  if [ -f "$BIN/refresh-seeds.sh" ]; then
+    local drift
+    drift="$(bash "$BIN/refresh-seeds.sh" "$ROOT" 2>/dev/null | grep -E '^  (PORTABLE|CONFLICT|UNKNOWN) ' || true)"
+    if [ -n "$drift" ]; then
+      _warned=1
+      warn "seed documents have drifted from this template — a stamp cannot deliver a seed edit"
+      printf '%s\n' "$drift" | sed 's/^  /    /'
+      hint "/ai-bridge:welcome fix   (3-way merges the portable ones; conflicts stay yours)"
     else
-      local added
-      added="$(git -C "$TEMPLATE" diff --name-status "$SINCE..HEAD" -- symlink/ 2>/dev/null | grep '^A' || true)"
-      if [ -z "$added" ]; then
-        note "$SINCE..HEAD added no symlink/ files — that range needs no stamp"
-      else
-        note "$SINCE..HEAD added these symlink/ files (a stamp is what delivers them):"
-        printf '%s\n' "$added" | sed 's/^/      /'
-      fi
+      good "seed documents are in step with this template — nothing to port"
     fi
+  else
+    note "cannot compare seed drift: no refresh-seeds.sh at $BIN"
   fi
+
   return "$_warned"
 }
 
-# fix_unstamped_machinery — re-stamp, by running the installer this template ships.
+# fix_bundle_stamp — run the bundle installer this plugin ships, with the seed merge on.
 #
-# `install.sh` only links, seeds-if-absent and sweeps dangling machinery links; it never
-# removes instance content. That is what makes re-running it the idempotent repair rather
-# than a risk, and it is why this is the only writing operation in the file besides the
-# fast-forward pull above.
-fix_unstamped_machinery() {
-  [ -n "$TEMPLATE" ] || { note "nothing to stamp: no template checkout located"; return 0; }
-  if [ ! -f "$TEMPLATE/install.sh" ]; then
-    note "NOT stamped: $TEMPLATE/install.sh is missing"
+# `init-bundle.sh` converts (removes machinery links), seeds-if-absent, and — with
+# `--refresh-seeds` — 3-way merges the seed changes a bundle can accept cleanly. It never
+# removes bundle content and never overwrites a hand-diverged file: a conflict is reported
+# and the conflicted merge is left beside the file as `.bak.<epoch>`. That is what makes
+# re-running it the idempotent repair rather than a risk.
+fix_bundle_stamp() {
+  if [ ! -f "$BIN/init-bundle.sh" ]; then
+    note "NOT stamped: $BIN/init-bundle.sh is missing — re-install the plugin"
     return 0
   fi
-  note "running: bash $TEMPLATE/install.sh $ROOT"
-  bash "$TEMPLATE/install.sh" "$ROOT" 2>&1 | sed 's/^/      /'
+  note "running: bash $BIN/init-bundle.sh $ROOT --refresh-seeds"
+  bash "$BIN/init-bundle.sh" "$ROOT" --refresh-seeds 2>&1 | sed 's/^/      /'
   return 0
 }
 
@@ -774,7 +769,7 @@ EOF
 # opinion about what stale means and must never grow one, or the two would drift about the
 # only question that matters.
 #
-# THERE IS NO `fix_tick_lock`, AND THERE MUST NEVER BE ONE. `scripts/tick-lock.sh release`
+# THERE IS NO `fix_tick_lock`, AND THERE MUST NEVER BE ONE. `tick-lock.sh release`
 # is documented as the HUMAN's override. A tick that dispatched role agents can legitimately
 # run long, so "stale" is a threshold, not a death certificate; clearing a lock on that
 # evidence re-opens the double-dispatch that ran two ticks concurrently for 34 minutes on
@@ -787,9 +782,11 @@ EOF
 check_tick_lock() {
   _warned=0
   local sh out rc
+  # The plugin's copy, and only that one: a bundle no longer carries a `scripts/`
+  # directory, so the old bundle-first lookup could only ever find an unconverted
+  # bundle's frozen link.
   sh=""
-  [ -f "$ROOT/scripts/tick-lock.sh" ] && sh="$ROOT/scripts/tick-lock.sh"
-  [ -z "$sh" ] && [ -f "$BIN/tick-lock.sh" ] && sh="$BIN/tick-lock.sh"
+  [ -f "$BIN/tick-lock.sh" ] && sh="$BIN/tick-lock.sh"
   if [ -z "$sh" ]; then
     good "tick lock: tick-lock.sh is not installed here, so no lock is being kept"
     return 0

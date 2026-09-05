@@ -3,8 +3,8 @@
 # commit-as.sh — commit to THIS control-panel instance repo under a per-agent
 # author identity, for provenance in the autonomous PM loop.
 #
-#   Usage: scripts/commit-as.sh <role> "<commit message>" [git args...] -- <path>...
-#          scripts/commit-as.sh <role> "<commit message>" --all-staged [git args...]
+#   Usage: commit-as.sh <role> "<commit message>" [git args...] -- <path>...
+#          commit-as.sh <role> "<commit message>" --all-staged [git args...]
 #
 # The author NAME is the role; the author EMAIL is shared so the host (e.g.
 # GitHub) still links commits to the human's account, while `git log --format=%an`

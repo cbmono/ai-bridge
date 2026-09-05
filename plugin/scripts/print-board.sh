@@ -5,7 +5,7 @@
 # the awaiting count.
 #
 #   Usage:
-#     scripts/print-board.sh [--width N] [--color auto|always|never] [INSTANCE_DIR ...]
+#     print-board.sh [--width N] [--color auto|always|never] [INSTANCE_DIR ...]
 #
 #     INSTANCE_DIR ...  the instances to print. With none given, the list comes from
 #                       `boardInstances` in ./instance.config.local.json, else
@@ -423,7 +423,7 @@ if not rows:
         emit("No readable instance on the board.")
     else:
         wrap("No instance on the board. An instance joins once it has a SNAPSHOT.json — "
-             "`touch SNAPSHOT.json` in it, then run scripts/write-snapshot.sh.")
+             "`touch SNAPSHOT.json` in it, then run write-snapshot.sh.")
 elif vertical:
     # The narrow fallback: one block per project, never a wrapped table. Only the
     # non-zero statuses are listed — on a narrow screen the zeros are the noise.
@@ -468,11 +468,11 @@ if (broken or unknown) and lines and lines[-1] != "":
     emit()
 for name, msg in broken:
     wrap(paint(f"! {name}: unreadable SNAPSHOT.json — that instance is not on the board. "
-               f"Re-run scripts/write-snapshot.sh there. ({msg})", YELLOW), hang="  ")
+               f"Re-run write-snapshot.sh there. ({msg})", YELLOW), hang="  ")
 if unknown:
     wrap(paint("! task status(es) outside the schema enum, counted under OTHER: "
                + ", ".join(sorted(unknown))
-               + " — a drifted instance; run scripts/validate-bundle.sh there.", YELLOW),
+               + " — a drifted instance; run validate-bundle.sh there.", YELLOW),
          hang="  ")
 
 if lines and lines[-1] != "":

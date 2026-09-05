@@ -191,7 +191,7 @@ fi
 # re-creates the collision; `tests/config-ownership.test.sh` fails if you do.
 # Full reasoning: docs/claude-config-ownership.md.
 #
-# THE ARROW IS ONE-WAY. `symlink/` must never *require* `config/`. The role agents keep
+# THE ARROW IS ONE-WAY. The plugin must never *require* `config/`. The role agents keep
 # probing with `test -f`, so an instance stamped on a machine that never ran `--config`
 # works — it loses a second opinion, not a feature. `tests/config-layer.test.sh` asserts
 # a config-less stamp. `rm -rf config/required` must leave `--config` at exit 0 with
@@ -683,7 +683,7 @@ config_sweep_warn() {
 config_require_src() {
   if [ ! -d "$CONFIG_SRC" ]; then
     echo "error: this checkout has no config layer ($CONFIG_SRC)." >&2
-    echo "       Nothing to link. An instance install (install.sh [TARGET]) never needs it." >&2
+    echo "       Nothing to link. A bundle stamp (init-bundle.sh [TARGET]) never needs it." >&2
     exit 2
   fi
   if [ -L "$CONFIG_DEST" ]; then
@@ -707,7 +707,7 @@ config_install() {
   # as a .bak and shadow it. There is one tier now, so the check could not fire, and an
   # unreachable guard is one no test can cover. What replaced it is stronger and does fire:
   # `tests/config-ownership.test.sh` derives the whole shippable set from the `test -f`
-  # probes in `symlink/`, so a second tier cannot appear here unnoticed in the first place.
+  # probes in the plugin, so a second tier cannot appear here unnoticed in the first place.
   # The LAST unchecked write in this half, and it is checked for the reason blocker A
   # existed: fixing the writes one loop noticed and leaving the sibling it did not is how a
   # false success survives a round of review. Its failure is currently reported per file by
@@ -1182,9 +1182,9 @@ fi
 # carries no machinery name at all) went red. Name the capability; leave the entry point
 # to docs/operations.md, which is checked against the tree.
 #
-# It is deliberately generated ROOT content and not a file under symlink/: machinery is
-# re-linked unconditionally on every run, so a deletable capability built out of a
-# machinery file comes back by itself. A gitignored root file has no such hole.
+# It is deliberately generated ROOT content and not seed content: a seed file is restored
+# whenever it is absent, so a deletable capability built out of one comes back by itself.
+# A gitignored root file created only under this guard has no such hole.
 #
 # Seeded content is a VALID EMPTY snapshot rather than an empty file: build-board.sh
 # parses this as JSON, and a zero-byte file would render an "unreadable snapshot" note
@@ -1196,7 +1196,7 @@ elif [ ! -e "$TARGET/SNAPSHOT.json" ]; then
   cat > "$TARGET/SNAPSHOT.json" <<'SNAPSHOT'
 {
   "_schema": "ai-bridge board snapshot v1",
-  "_sensitivity": "Derived and gitignored. Rewritten by scripts/write-snapshot.sh each /ai-bridge:dispatch tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
+  "_sensitivity": "Derived and gitignored. Rewritten by write-snapshot.sh each /ai-bridge:dispatch tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
   "group": "",
   "generated_at": "",
   "counts": {"projects": 0, "tasks": 0, "awaiting": 0},
@@ -1245,46 +1245,46 @@ fi
 if ! grep -qE '^/?repos/?$' "$gi"; then
   cat >> "$gi" <<'GI'
 
-# Derived view of the group's product repos (scripts/link-repos.sh) — symlinks
+# Derived view of the group's product repos (link-repos.sh) — symlinks
 # into reposRoot, never content, and machine-local like the rest. Delete it
-# freely; the next install or `scripts/link-repos.sh` run recreates it.
+# freely; the next install or `link-repos.sh` run recreates it.
 /repos/
 GI
 fi
 
-# The local live board (scripts/watch-board.sh) writes its page here. Appended for the
+# The local live board (watch-board.sh) writes its page here. Appended for the
 # same reason as /repos/ and instance.config.local.json below: seed content is copied
 # only when ABSENT, so an instance stamped before this directory existed — which is
 # every instance in existence — would otherwise commit a generated HTML page.
 if ! grep -qE '^/?\.board-live/?$' "$gi"; then
   cat >> "$gi" <<'GI'
 
-# The local live board page (scripts/watch-board.sh). Derived output, regenerated on
+# The local live board page (watch-board.sh). Derived output, regenerated on
 # every task-document change, and per-machine. Delete it freely.
 /.board-live/
 GI
 fi
 
-# The board's other-owners cache (scripts/build-board.sh), appended for exactly the same
+# The board's other-owners cache (build-board.sh), appended for exactly the same
 # reason: every instance in existence was stamped before this file existed, and a derived
 # cache of committed state has no business being committed back.
 if ! grep -qE '^/?\.board-others\.json$' "$gi"; then
   cat >> "$gi" <<'GI'
 
-# The board's other-owners cache (scripts/build-board.sh) — the second half of the page,
+# The board's other-owners cache (build-board.sh) — the second half of the page,
 # read from the tracked documents at HEAD and stored against the SHA it was computed for.
 # Derived and per-machine. Delete it freely; the next render rebuilds it.
 /.board-others.json
 GI
 fi
 
-# The PM dispatch lock (scripts/tick-lock.sh), appended for the third time for exactly the
+# The PM dispatch lock (tick-lock.sh), appended for the third time for exactly the
 # same reason: every instance in existence was stamped before this file existed, and a lock
 # that got committed would stop being per-clone — which is the one property it has.
 if ! grep -qE '^/?\.tick-lock$' "$gi"; then
   cat >> "$gi" <<'GI'
 
-# The PM dispatch lock (scripts/tick-lock.sh) — written by /ai-bridge:dispatch
+# The PM dispatch lock (tick-lock.sh) — written by /ai-bridge:dispatch
 # immediately before it dispatches a tick and released when that tick reports, so the
 # one-tick-at-a-time guarantee survives a compaction instead of resting on a session's
 # memory. PER CLONE and never committed: two humans sharing one bundle work from two
@@ -1302,16 +1302,16 @@ fi
 if ! grep -qE '^/?\.tick-lock\.claim$' "$gi"; then
   cat >> "$gi" <<'GI'
 
-# The tick's claim on the dispatch lock (scripts/tick-lock.sh) — the tick checks the lock on
+# The tick's claim on the dispatch lock (tick-lock.sh) — the tick checks the lock on
 # entry too, because a resumed tick never passes through the launcher, and this file is what
 # tells "held by the launcher that dispatched me" from "held by another tick". Per clone and
 # derived exactly like the lock beside it, and removed with it by
-# `scripts/tick-lock.sh release`.
+# `tick-lock.sh release`.
 /.tick-lock.claim
 GI
 fi
 
-# The idle-tick fingerprint (scripts/tick-delta.sh) — its OWN guard, the .tick-lock.claim
+# The idle-tick fingerprint (tick-delta.sh) — its OWN guard, the .tick-lock.claim
 # lesson applied again: every instance stamped since the lock shipped satisfies the guards
 # above, so a line added to their heredocs reaches nobody. Per clone and derived: a full
 # tick records it, the next tick's probe compares against it, and deleting it costs one
@@ -1319,7 +1319,7 @@ fi
 if ! grep -qE '^/?\.tick-state$' "$gi"; then
   cat >> "$gi" <<'GI'
 
-# The idle-tick fingerprint (scripts/tick-delta.sh) — written at the end of a FULL tick,
+# The idle-tick fingerprint (tick-delta.sh) — written at the end of a FULL tick,
 # compared by the next tick's fast-path probe. PER CLONE and never committed; delete
 # freely (absence = the next tick runs in full).
 /.tick-state
@@ -1342,7 +1342,7 @@ fi
 if grep -qE '^/?board\.html$' "$gi" && ! grep -qE '^!/?board\.html$' "$gi"; then
   cat >> "$gi" <<'GI'
 
-# The bundle's board page (scripts/build-board.sh) — TRACKED on purpose, re-rendered and
+# The bundle's board page (build-board.sh) — TRACKED on purpose, re-rendered and
 # committed by each /ai-bridge:dispatch tick that changed something. Committing it IS how
 # the board is published: who may read it is this repo's permission list, by construction.
 # This line un-ignores it for instances stamped while board.html was ignored; git takes the
@@ -1546,7 +1546,7 @@ fi
 #
 # WHAT IT WRITES, AND WHY IT IS WORTH ASKING. Three values, all of them already
 # specified in docs/sharing.md and SCHEMA.md → "Per-machine config overrides": the
-# TRACKED `people` map (GitHub login → commit email, so scripts/commit-as.sh can author
+# TRACKED `people` map (GitHub login → commit email, so commit-as.sh can author
 # each clone's commits as the human running it), the TRACKED `defaultOwner` (so two
 # clones of one bundle agree who *unowned* work belongs to instead of both dispatching
 # it), and this clone's own gitignored `instance.config.local.json`, naming which login
@@ -1886,7 +1886,7 @@ if [ "${team_state:-}" = write ]; then
     fi
   done < "$TEAM_ROSTER"
 
-  team_note="Collected by install.sh when this instance was stamped: GitHub login -> commit email, for THIS instance. The address is PER-INSTANCE, not per-person -- it says which entity the work belongs to -- so never derive it from the login, and never move it into instance.config.local.json (that file says which login this clone IS). Read by scripts/commit-as.sh via ownerGithubUser; see SCHEMA.md 'Per-machine config overrides' and docs/sharing.md. Edit by hand to add or remove someone."
+  team_note="Collected by /ai-bridge:init when this bundle was stamped: GitHub login -> commit email, for THIS instance. The address is PER-INSTANCE, not per-person -- it says which entity the work belongs to -- so never derive it from the login, and never move it into instance.config.local.json (that file says which login this clone IS). Read by commit-as.sh via ownerGithubUser; see SCHEMA.md 'Per-machine config overrides' and docs/sharing.md. Edit by hand to add or remove someone."
 
   # Temp file BESIDE the target, carrying the target's mode: mktemp creates 0600, so a
   # rename from $TMPDIR would silently make this config 0600, and a cross-filesystem mv
@@ -1932,7 +1932,7 @@ if [ "${team_state:-}" = write ]; then
     # Verified BEFORE the rename, so an unparseable file never lands at all.
     rm -f "$team_tmp" "$team_orig" "$team_lines" "$TEAM_ROSTER"
     echo "error: the roster this would have written does not verify, so instance.config.json" >&2
-    echo "       was left exactly as it is. That is a bug in install.sh, not something you did." >&2
+    echo "       was left exactly as it is. That is a bug in init-bundle.sh, not something you did." >&2
     team_manual_note >&2
     exit 1
   else
@@ -1993,7 +1993,7 @@ fi
 # whose decision is operating.
 #
 # THE TRACKED KEYS DELIBERATELY STAY, AS A FALLBACK. That is the migration design and
-# not an oversight. `scripts/resolve-model.sh` with NEITHER source resolves to nothing,
+# not an oversight. `resolve-model.sh` with NEITHER source resolves to nothing,
 # and a caller that gets nothing inherits the session model — for every role at once,
 # with no error. Removing the tracked keys in the same change would open exactly that
 # window on any instance this step had not yet reached, and a merge is not a stamp: an
@@ -2009,7 +2009,7 @@ fi
 # do anywhere else either. So the unit is the key: present ⇒ untouched, absent ⇒ seeded.
 #
 # PYTHON3 OR NOTHING, and the reason is that the only reader of these keys is
-# `scripts/resolve-config.sh`, which requires python3 outright. On a machine without it
+# `resolve-config.sh`, which requires python3 outright. On a machine without it
 # a seeded value would be a value nothing can read, so the honest outcome is to say so
 # and leave the tracked fallback answering — the same "no verifier, no write" rule the
 # roster block above applies, for the same reason. Never silent: the skip prints.
@@ -2023,7 +2023,7 @@ spend_manual_note() {
 }
 
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "  skip  per-machine models/roleTiers (no python3 here, and scripts/resolve-config.sh"
+  echo "  skip  per-machine models/roleTiers (no python3 here, and resolve-config.sh"
   echo "        needs it to read them at all — the tracked instance.config.json still answers)."
   spend_manual_note
 else

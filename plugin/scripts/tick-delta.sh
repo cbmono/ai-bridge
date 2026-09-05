@@ -2,9 +2,9 @@
 #
 # tick-delta.sh — the idle-tick fast-path probe: can this tick skip the full walk?
 #
-#   Usage: scripts/tick-delta.sh check  [--instance DIR]
-#          scripts/tick-delta.sh record [--instance DIR]
-#          scripts/tick-delta.sh digest [--instance DIR]
+#   Usage: tick-delta.sh check  [--instance DIR]
+#          tick-delta.sh record [--instance DIR]
+#          tick-delta.sh digest [--instance DIR]
 #
 # WHY THIS EXISTS. A tick re-derives everything every time — full task walk, a live
 # read of every open PR — which is correct and stays the default. But measured on a
@@ -211,7 +211,7 @@ case "$cmd" in
     # record for the next check to "match".
     tmp="$STATE.tmp.$$"
     {
-      printf '# tick-delta fingerprint — written by scripts/tick-delta.sh record at the END\n'
+      printf '# tick-delta fingerprint — written by tick-delta.sh record at the END\n'
       printf '# of a FULL tick. Read by `check` on the next tick; a byte-for-byte match is\n'
       printf '# the idle fast-path. Gitignored, per clone. Delete freely: absence = full tick.\n'
       printf 'recorded: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

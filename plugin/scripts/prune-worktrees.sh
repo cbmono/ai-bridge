@@ -143,14 +143,14 @@
 # Run from a control-panel instance root (reads `reposRoot` and `worktreeRoot`
 # from instance.config.json). Generic: no org/repo/path literals.
 #
-# Usage:  scripts/prune-worktrees.sh          # classify and report; never removes
-#         scripts/prune-worktrees.sh --dry-run  # accepted, no-op (always dry now)
+# Usage:  prune-worktrees.sh          # classify and report; never removes
+#         prune-worktrees.sh --dry-run  # accepted, no-op (always dry now)
 #
 # Verified by tests/prune-worktrees.test.sh in the ai-bridge template
 # repo, which builds one throwaway worktree per decision class and asserts every
 # outcome. Run it after any change here — this script cannot be exercised safely
-# by hand. (The harness lives outside symlink/ deliberately: everything under
-# symlink/ is symlinked into every instance, and a test harness is not machinery
+# by hand. (The harness lives outside plugin/ deliberately: everything under
+# plugin/ ships to every machine that installs it, and a test harness is not machinery
 # an instance needs.)
 set -euo pipefail
 

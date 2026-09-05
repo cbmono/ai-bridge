@@ -2,7 +2,7 @@
 #
 # resolve-max-agents.sh — print the concurrency cap this MACHINE should honour.
 #
-#   Usage: scripts/resolve-max-agents.sh [--instance DIR]
+#   Usage: resolve-max-agents.sh [--instance DIR]
 #
 # WHY THIS EXISTS AS A SCRIPT AND NOT A SENTENCE — the same reason resolve-model.sh does.
 # `maxAgentsInFlight` lived only as prose in pm-loop.md and project-manager.md, so the cap
@@ -43,7 +43,7 @@ done
 
 # Local override first, then the tracked file — the precedence every overridable key
 # uses (SCHEMA.md, "Per-machine config overrides"), implemented ONCE in
-# `scripts/resolve-config.sh` and delegated to here. The per-key merge lives there too, so
+# `resolve-config.sh` and delegated to here. The per-key merge lives there too, so
 # a local file naming one key never blanks the rest of the config.
 #
 # THE SELF PATH IS RESOLVED THROUGH THE SYMLINK for the reason resolve-model.sh states: an
@@ -54,7 +54,7 @@ self="${BASH_SOURCE[0]:-$0}"
 here="$(cd "$(dirname "$self")" 2>/dev/null && pwd)" || here=""
 resolver="$here/resolve-config.sh"
 [ -n "$here" ] && [ -f "$resolver" ] || {
-  echo "resolve-max-agents: scripts/resolve-config.sh not found beside this script" >&2; exit 2; }
+  echo "resolve-max-agents: resolve-config.sh not found beside this script" >&2; exit 2; }
 
 # `--json`, NOT the plain value, and that is what preserves the type check. Plain mode
 # prints a string bare, so `"maxAgentsInFlight": "4"` and `: 4` would arrive here identical

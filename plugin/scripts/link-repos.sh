@@ -11,7 +11,7 @@
 #
 # It is a VIEW, not a work location. Role agents still work in their own worktree
 # under <reposRoot>/_wt/ (see the project-manager agent), and `repos/` is
-# gitignored — install.sh manages that line.
+# gitignored — the bundle stamp manages that line.
 #
 # WHAT GETS LINKED: every directory directly under `reposRoot` that contains a
 # `.git` and whose name does NOT start with `_`. That one underscore rule skips
@@ -29,7 +29,7 @@
 # half-torn-down instance can still be cleaned up. Generic: no org/repo/path
 # literals.
 #
-# Usage:  scripts/link-repos.sh [--dry-run|-n] [--remove]
+# Usage:  link-repos.sh [--dry-run|-n] [--remove]
 #           --remove   delete the links and the (then empty) repos/ dir
 set -euo pipefail
 # dotglob as well as nullglob: a repo name may legitimately start with a dot (an
@@ -62,7 +62,7 @@ link_target() {
 # --- --remove: tear the view down. Deliberately BEFORE the instance-root check
 # below, and it reads no config: the case that needs it most is a half-torn-down
 # instance whose instance.config.json is already gone, where refusing would leave
-# the links dangling forever (install.sh --uninstall calls this). Safe unguarded
+# the links dangling forever (init-bundle.sh --uninstall calls this). Safe unguarded
 # because of what it will and won't touch: only symlinks placed DIRECTLY inside
 # ./repos, never a real file or directory, never recursing, and never the link
 # targets — so the worst it can do in the wrong directory is unlink, which loses no
@@ -115,11 +115,11 @@ done
 REPOS_ROOT=${REPOS_ROOT/#\~/$HOME}
 
 # A fresh instance ships a PLACEHOLDER reposRoot, so "not set yet" is the expected
-# state on a first stamp, not a failure. Exit 0 with an explanation: install.sh
-# calls this script, and an unconfigured instance must still install cleanly.
+# state on a first stamp, not a failure. Exit 0 with an explanation: init-bundle.sh
+# calls this script, and an unconfigured bundle must still stamp cleanly.
 if [[ -z "$REPOS_ROOT" || ! -d "$REPOS_ROOT" ]]; then
   echo "  skip  repos/ view — reposRoot ('$REPOS_ROOT') is unset or missing."
-  echo "        Set it in $CONFIG (or $LOCAL_CONFIG), then run scripts/link-repos.sh."
+  echo "        Set it in $CONFIG (or $LOCAL_CONFIG), then run link-repos.sh."
   exit 0
 fi
 # Canonicalize so the instance-identity check below compares resolved paths.

@@ -44,8 +44,8 @@
 # that way, and why it is not a shared board, is the "OTHER OWNERS" block further down.
 #
 #   Usage:
-#     scripts/build-board.sh [--out FILE] [--standalone] [INSTANCE_DIR ...]
-#     scripts/build-board.sh --list-instances [INSTANCE_DIR ...]
+#     build-board.sh [--out FILE] [--standalone] [INSTANCE_DIR ...]
+#     build-board.sh --list-instances [INSTANCE_DIR ...]
 #
 #     INSTANCE_DIR ...  the instances to render. With none given, the list comes
 #                       from `boardInstances` in ./instance.config.local.json, else
@@ -1610,7 +1610,7 @@ def render_table():
     for d, msg in broken:
         o.append('<div class="snapnote"><strong>Unreadable snapshot.</strong> '
                  '<code>%s/SNAPSHOT.json</code> could not be parsed, so that instance is '
-                 'not on the board. Re-run <code>scripts/write-snapshot.sh</code> there. '
+                 'not on the board. Re-run <code>write-snapshot.sh</code> there. '
                  '<br>%s</div>' % (e(d), e(msg)))
 
     # ---- one project's decision rail: one click copies a complete prompt ----

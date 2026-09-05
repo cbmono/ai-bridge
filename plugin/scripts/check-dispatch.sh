@@ -2,7 +2,7 @@
 #
 # check-dispatch.sh — did the dispatch produce the artifact it promised?
 #
-#   Usage: scripts/check-dispatch.sh <task-doc>
+#   Usage: check-dispatch.sh <task-doc>
 #
 # Run it whenever a dispatched agent reports — from a `/pm-loop` tick or from an ad-hoc
 # dispatch in a main session. It reads three things and judges nothing else:

@@ -2,12 +2,12 @@
 #
 # write-snapshot.sh — write this instance's board snapshot (SNAPSHOT.json).
 #
-#   Usage: scripts/write-snapshot.sh [--quiet]
+#   Usage: write-snapshot.sh [--quiet]
 #
 # WHAT IT IS. One flat JSON file at the bundle root, derived from the bundle's own
 # frontmatter (`projects/*/project.md`, `projects/*/phases/*.md`,
 # `projects/*/tasks/*.md` — the schema-defined locations, per SCHEMA.md). It is the
-# OBSERVATION CONTRACT for the cross-instance board: `scripts/build-board.sh` reads
+# OBSERVATION CONTRACT for the cross-instance board: `build-board.sh` reads
 # these files, from several instances, and renders one HTML page. Nothing else reads
 # it, and nothing reads the bundle to build the board.
 #
@@ -22,9 +22,9 @@
 #   · `touch SNAPSHOT.json` turns it back on. Presence is the switch; content is
 #     derived, so an empty or truncated file is fine — the next run overwrites it.
 #
-# It must NOT be a file under `symlink/`. AUTONOMY.md is a deletable capability that
-# does live there, and install.sh re-links it unconditionally, so a per-instance `rm`
-# is silently undone (upgrade.sh now has to warn about exactly that). A generated,
+# It must NOT be machinery the stamp re-creates. AUTONOMY.md is a deletable capability that
+# used to live there, and the old install.sh re-linked it unconditionally, so a
+# per-bundle `rm` was silently undone. A generated,
 # gitignored root file has no such hole.
 #
 # DATA GOVERNANCE — READ BEFORE ADDING A FIELD.

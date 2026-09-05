@@ -3,14 +3,14 @@
 # control.sh — the operator side of the live kill switch. Steer, gate or cleanly
 # halt ONE dispatched role agent while it is still running.
 #
-#   scripts/control.sh agents                        # who is in flight, with ids
-#   scripts/control.sh halt  <agent-id> [reason...]   # stop it cleanly
-#   scripts/control.sh gate  <agent-id> [reason...]   # pause its tool use
-#   scripts/control.sh steer <agent-id>  note...      # one course correction
-#   scripts/control.sh status                         # what is pending, what fired
-#   scripts/control.sh clear <agent-id> | --all       # release
-#   scripts/control.sh arm | disarm                   # turn the surface on / off
-#   scripts/control.sh log [n]                        # the action log
+#   control.sh agents                        # who is in flight, with ids
+#   control.sh halt  <agent-id> [reason...]   # stop it cleanly
+#   control.sh gate  <agent-id> [reason...]   # pause its tool use
+#   control.sh steer <agent-id>  note...      # one course correction
+#   control.sh status                         # what is pending, what fired
+#   control.sh clear <agent-id> | --all       # release
+#   control.sh arm | disarm                   # turn the surface on / off
+#   control.sh log [n]                        # the action log
 #
 # Enforcement happens in the `agent-control.sh` PreToolUse hook, which reads the
 # files this script writes. Read that file's header for the design; this one is the
@@ -84,14 +84,14 @@ usage() {
   cat <<'USAGE'
 control.sh — steer, gate or cleanly halt ONE dispatched role agent, live.
 
-  scripts/control.sh agents                        who is in flight, with ids
-  scripts/control.sh halt  <agent-id> [reason...]  stop it cleanly
-  scripts/control.sh gate  <agent-id> [reason...]  pause its tool use (alias: pause)
-  scripts/control.sh steer <agent-id>  note...     one course correction, delivered once
-  scripts/control.sh status                        what is pending, what fired
-  scripts/control.sh clear <agent-id> | --all      release
-  scripts/control.sh arm | disarm                  turn the surface on / off
-  scripts/control.sh log [n]                       the action log
+  control.sh agents                        who is in flight, with ids
+  control.sh halt  <agent-id> [reason...]  stop it cleanly
+  control.sh gate  <agent-id> [reason...]  pause its tool use (alias: pause)
+  control.sh steer <agent-id>  note...     one course correction, delivered once
+  control.sh status                        what is pending, what fired
+  control.sh clear <agent-id> | --all      release
+  control.sh arm | disarm                  turn the surface on / off
+  control.sh log [n]                       the action log
 
 Absent `.claude/control/` means the PreToolUse hook is a strict no-op. `disarm`
 removes it. Env: CONTROL_MAX (pending directives, default 20).
@@ -152,7 +152,7 @@ oneline() {
 # refusal.
 check_id() { # <id>
   case "$1" in
-    '' ) echo "error: no agent id. Run 'scripts/control.sh agents' to see them." >&2; return 1 ;;
+    '' ) echo "error: no agent id. Run 'control.sh agents' to see them." >&2; return 1 ;;
     *[[:space:]]*|*[[:cntrl:]]* )
       echo "error: agent id contains whitespace or a control character: '$1'" >&2; return 1 ;;
   esac
@@ -204,7 +204,7 @@ arm)
     exit 1
   fi
   arm
-  echo "       Roster starts filling on the next agent tool call: scripts/control.sh agents"
+  echo "       Roster starts filling on the next agent tool call: control.sh agents"
   ;;
 
 disarm)
@@ -222,7 +222,7 @@ disarm)
 
 agents)
   if ! armed; then
-    echo "not armed — no roster. Run 'scripts/control.sh arm' (do it before you need it:"
+    echo "not armed — no roster. Run 'control.sh arm' (do it before you need it:"
     echo "an agent dispatched while disarmed is not recorded, and its id is not kept"
     echo "anywhere else in the instance)."
     exit 0
@@ -238,7 +238,7 @@ agents)
     | awk -F'\t' 'BEGIN { printf "%-40s %-22s %s\n", "AGENT ID", "TYPE", "FIRST SEEN" }
                   { printf "%-40s %-22s %s\n", $1, $2, $3 }'
   echo
-  echo "Halt one with: scripts/control.sh halt <agent-id> \"<why>\""
+  echo "Halt one with: control.sh halt <agent-id> \"<why>\""
   ;;
 
 status)
@@ -252,11 +252,11 @@ status)
     awk -F'\t' '/^[[:space:]]*(#|$)/ { next }
       { printf "%-8s %-40s %-22s %s\n", $1, $2, $3, $4 }' "$DIRECTIVES"
     echo
-    echo "Release one with: scripts/control.sh clear <agent-id>   (or --all)"
+    echo "Release one with: control.sh clear <agent-id>   (or --all)"
   fi
   if [ -s "$ACTIONLOG" ]; then
     echo
-    echo "last actions the hook actually took (scripts/control.sh log for more):"
+    echo "last actions the hook actually took (control.sh log for more):"
     tail -n 5 "$ACTIONLOG" | sed 's/^/  /'
   fi
   ;;
@@ -326,7 +326,7 @@ halt|gate|pause|steer)
     echo >&2
     awk -F'\t' '/^[[:space:]]*(#|$)/ { next } { printf "         %-8s %s\n", $1, $2 }' "$DIRECTIVES" >&2
     echo >&2
-    echo "         scripts/control.sh clear <agent-id>   (or --all)" >&2
+    echo "         control.sh clear <agent-id>   (or --all)" >&2
     exit 1
   fi
 
@@ -338,7 +338,7 @@ halt|gate|pause|steer)
     echo "note   replaced the directive already pending for $id"
   fi
 
-  [ -f "$DIRECTIVES" ] || printf '%s\n' "# ai-bridge agent control — <verb>\\t<agent-id>\\t<set-at>\\t<reason>. Written by scripts/control.sh." > "$DIRECTIVES"
+  [ -f "$DIRECTIVES" ] || printf '%s\n' "# ai-bridge agent control — <verb>\\t<agent-id>\\t<set-at>\\t<reason>. Written by control.sh." > "$DIRECTIVES"
   printf '%s\t%s\t%s\t%s\n' "$verb" "$id" "$(now)" "$reason" >> "$DIRECTIVES" \
     || { echo "error: could not write $DIRECTIVES" >&2; exit 1; }
 
@@ -354,7 +354,7 @@ halt|gate|pause|steer)
       echo "  It takes effect at that agent's NEXT tool call: the call is refused and the"
       echo "  agent is told to stop. It does not interrupt a command already running, and"
       echo "  an agent doing no tool calls at all is not reached."
-      echo "  Release with: scripts/control.sh clear $id"
+      echo "  Release with: control.sh clear $id"
       echo
       echo "  If this halt belongs in the bundle's permanent history, add it yourself —"
       echo "  the hook deliberately never edits tracked files (see its header). Prepend to"
@@ -362,12 +362,12 @@ halt|gate|pause|steer)
       echo
       echo "    * **Agent halted**: $id — $reason"
       echo
-      echo "    scripts/commit-as.sh human \"chore: record halt of $id\" -- log.md"
+      echo "    commit-as.sh human \"chore: record halt of $id\" -- log.md"
       ;;
     gate)
       echo "GATE set for $id. Every tool call is refused until you clear it; the agent is"
       echo "  told to report what it was about to do and wait."
-      echo "  Release with: scripts/control.sh clear $id"
+      echo "  Release with: control.sh clear $id"
       ;;
     steer)
       echo "STEER queued for $id — delivered once, at its next tool call, then consumed."

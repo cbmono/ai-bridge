@@ -8,9 +8,9 @@
 # precondition 1 and calls in here for every PR it is about to clear, exactly as it calls
 # `review-clearance.sh`.
 #
-#   Usage: scripts/pr-body-clearance.sh <pr> [--repo <owner>/<name>] [--head <sha>]
-#          scripts/pr-body-clearance.sh --body-file <path>   (decide on a local draft)
-#          scripts/pr-body-clearance.sh --self-test          (prove this script RUNS)
+#   Usage: pr-body-clearance.sh <pr> [--repo <owner>/<name>] [--head <sha>]
+#          pr-body-clearance.sh --body-file <path>   (decide on a local draft)
+#          pr-body-clearance.sh --self-test          (prove this script RUNS)
 #
 # WHY THIS EXISTS — `CONVENTIONS.md` has required a short, shaped PR body since the rule
 # merged at 14:59 UTC on 2026-08-29. FIVE HOURS LATER an agent that had that rule — the

@@ -2,9 +2,9 @@
 #
 # tick-lock.sh — the one-tick-at-a-time guarantee, as a file instead of a memory.
 #
-#   Usage: scripts/tick-lock.sh acquire [--as launcher|tick] [--agent <id>] [--claimant <id>]
+#   Usage: tick-lock.sh acquire [--as launcher|tick] [--agent <id>] [--claimant <id>]
 #                                       [--instance DIR]
-#          scripts/tick-lock.sh release [--instance DIR]   ·   status [--instance DIR]
+#          tick-lock.sh release [--instance DIR]   ·   status [--instance DIR]
 #
 # WHY THIS EXISTS. `/pm-loop` promises at most one PM tick at a time. Until this script,
 # that promise rested on TWO things, and neither is a mechanism:
@@ -357,9 +357,9 @@
 # lives in one working tree. Two humans sharing one bundle from two clones each dispatch
 # independently, which is the SUPPORTED design (`/pm-loop` → "Why serial"; SCHEMA.md →
 # "Ownership on a shared instance"), and a committed or shared lock would break it. What
-# stops those two loops dispatching the same TASK is `scripts/task-owner.sh`, not this.
+# stops those two loops dispatching the same TASK is `task-owner.sh`, not this.
 #
-# IT BOUNDS TICKS, NOT ROLE AGENTS. `maxAgentsInFlight` (via `scripts/resolve-max-agents.sh`)
+# IT BOUNDS TICKS, NOT ROLE AGENTS. `maxAgentsInFlight` (via `resolve-max-agents.sh`)
 # is the other concurrency limit and is untouched: it caps the role agents a tick dispatches.
 # A held lock must never block those — nothing in the role-agent path reads this file.
 #
@@ -630,7 +630,7 @@ claim_exclusive() { # <origin: adopted — `took` is legacy-read only, never wri
         "# a later acquire that can PROVE it is the same tick re-enters and proceeds; anyone" \
         "# else holds; an identity that merely matches is exit 2 and a human's call." \
         "# NOT a second lock and NOT a second clock: staleness is computed from .tick-lock" \
-        "# alone. Removed with the lock by: scripts/tick-lock.sh release" \
+        "# alone. Removed with the lock by: tick-lock.sh release" \
         "timestamp: $NOW_ISO" \
         "epoch: $NOW" \
         "agent: $agent" \
@@ -751,7 +751,7 @@ judge_existing() {
     echo "UNREADABLE: $LOCK exists but does not say when it was taken or by whom," >&2
     echo "            so whether a tick is running cannot be computed from it. Refusing" >&2
     echo "            rather than guessing. Read the file, then either fix it or run:" >&2
-    echo "              scripts/tick-lock.sh release" >&2
+    echo "              tick-lock.sh release" >&2
     return 2
   fi
 
@@ -773,7 +773,7 @@ judge_existing() {
     echo "       This is NOT deleted for you and NOT assumed dead: a tick that dispatched" >&2
     echo "       role agents can legitimately run long, and deleting a live tick's lock is" >&2
     echo "       the double-dispatch this file exists to prevent. Decide, then either wait" >&2
-    echo "       or run: scripts/tick-lock.sh release" >&2
+    echo "       or run: tick-lock.sh release" >&2
     echo "       (TICK_LOCK_STALE_MINUTES raises the threshold if your ticks are longer.)" >&2
     return 2
   fi
@@ -824,7 +824,7 @@ case "$cmd" in
            "# PER CLONE and gitignored — NOT a cross-machine lock: two clones of one shared" \
            "# bundle each have their own, and each dispatches independently by design." \
            "# Stale after ${STALE_MINUTES}m (TICK_LOCK_STALE_MINUTES). Clear it with:" \
-           "#   scripts/tick-lock.sh release" \
+           "#   tick-lock.sh release" \
            "timestamp: $NOW_ISO" \
            "epoch: $NOW" \
            "agent: $agent" > "$LOCK"
@@ -902,7 +902,7 @@ case "$cmd" in
         echo "     /pm-loop session starts shares it, so this reads the same whether you are" >&2
         echo "     re-entering your own claim or meeting a sibling that session resumed." >&2
         echo "     Do not dispatch and do not delete anything. A human decides:" >&2
-        echo "       - if no other tick is running:  scripts/tick-lock.sh release, then re-run" >&2
+        echo "       - if no other tick is running:  tick-lock.sh release, then re-run" >&2
         echo "       - if one is:                    let it finish; this tick ends here" >&2
         echo "     To make this decidable, give each tick a per-tick id: --claimant <id>." >&2
         exit 2 ;;

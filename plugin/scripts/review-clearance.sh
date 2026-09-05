@@ -5,10 +5,10 @@
 # (`AUTONOMY.md` → "Merge under `yolo`"). `required-checks.sh` is precondition 1, and
 # calls in here for every PR it is about to clear.
 #
-#   Usage: scripts/review-clearance.sh <pr> [--repo <owner>/<name>] [--head <sha>]
+#   Usage: review-clearance.sh <pr> [--repo <owner>/<name>] [--head <sha>]
 #                                           [--reviewer <login>] [--for-check <name>]
-#          scripts/review-clearance.sh --match-check <check-name>
-#          scripts/review-clearance.sh --self-test
+#          review-clearance.sh --match-check <check-name>
+#          review-clearance.sh --self-test
 #
 # WHY THIS EXISTS — three pull requests in one tick. All three carried a GREEN reviewer
 # status check. One had been reviewed; the other two carried a comment reading "Review

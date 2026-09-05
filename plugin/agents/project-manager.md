@@ -119,7 +119,7 @@ state, and act only on deltas.
    **The lock comes first — before you re-derive anything, and whatever woke you:**
 
    ```bash
-   scripts/tick-lock.sh acquire --as tick --agent project-manager
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire --as tick --agent project-manager
    ```
 
    - **0** — the lock is yours; carry on. It printed `adopted:`: that lock is the
@@ -132,7 +132,7 @@ state, and act only on deltas.
    - **2** — the lock is stale, dated in the future, unreadable, or **claimed by an
      identity that equals yours without proving to be yours**. The script printed
      everything the decision needs — put it in front of the human verbatim and stop.
-     `scripts/tick-lock.sh release` is their answer, not yours.
+     `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is their answer, not yours.
    - **3** — it could not be written at all. Report and stop; never run unguarded.
    - **4** — REFUSED: no lock exists, so **no launcher dispatched you** — you were
      resumed or hand-started, and **a tick is never resumed** (`CONVENTIONS.md` → "A
@@ -178,7 +178,7 @@ state, and act only on deltas.
 0.9. **Probe the idle fast-path — one command decides whether the full walk is owed.**
 
    ```bash
-   scripts/tick-delta.sh check
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh check
    ```
 
    - **0 (IDLE)** — the recorded fingerprint matches: bundle HEAD unchanged, tree
@@ -190,7 +190,7 @@ state, and act only on deltas.
      rewrite, and that is correct: nothing was dispatched, so nothing could die
      mid-dispatch, which is the only thing an open entry is for. Rewrite no queue, no
      snapshot, no board — each derives from documents the probe just proved unchanged
-     — **and then re-record the fingerprint**, `scripts/tick-delta.sh record`,
+     — **and then re-record the fingerprint**, `${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh record`,
      **after** the commit and the push. The probe proved the record current *before*
      your idle commit, and that commit moves bundle `HEAD`, which the fingerprint
      covers; leave the old record standing and the next tick reads a mismatch and walks
@@ -222,7 +222,7 @@ state, and act only on deltas.
 1. **Orient — one digest, then open only what you act on.** Read `index.md`, then run
 
    ```bash
-   scripts/tick-delta.sh digest
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh digest
    ```
 
    Its output IS the enumeration — **all of it, every tick**, nothing upstream oriented
@@ -295,7 +295,7 @@ state, and act only on deltas.
    one `advisor_notes` entry each; none raised ⇒ one `answered_questions` line,
    `<ISO 8601> · advisor: approach critique — no concerns`. **Either marker means the
    critique has run: do not dispatch it again.** Neither is a gate — they are a receipt.
-   Its model comes from `scripts/resolve-model.sh plan-architect` — `roleTiers`
+   Its model comes from `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh plan-architect` — `roleTiers`
    (`apex`) through `models` — never a hard-coded alias; and `plan-architect` stays out
    of `roles`.
 
@@ -311,7 +311,7 @@ state, and act only on deltas.
    (`docs/pm-design.md#step-3` has the price of not holding it).
 
    **Dispatch only your own human's work.** Before spawning anything for a task, run
-   `scripts/task-owner.sh <task-path>` — never re-derive ownership by reading the
+   `${CLAUDE_PLUGIN_ROOT}/scripts/task-owner.sh <task-path>` — never re-derive ownership by reading the
    fields yourself. **Exit 0 is the only clearance**: exit 1 means the task is the
    other human's — leave it exactly as it is and report it as theirs; exit 2 means it
    could not answer, which is also a refusal. On a single-human instance every task
@@ -331,10 +331,10 @@ state, and act only on deltas.
    bare `subagent_type` fails with "no such agent", never with "you forgot the
    namespace". **It applies to every one of the eight** — `ai-bridge:cataloguer`,
    `ai-bridge:advisor`, `ai-bridge:qa-reviewer` and the rest, wherever this document
-   tells you to dispatch one. The three USER-level agents `install.sh` puts in
+   tells you to dispatch one. The three USER-level agents `init-bundle.sh --config` puts in
    `~/.claude/agents/` — `code-architect`, `deep-bug-scan`, `plan-architect` — are not
    plugin agents and stay BARE. Respect the concurrency cap
-   **`maxAgentsInFlight`**, resolved with `scripts/resolve-max-agents.sh` rather than
+   **`maxAgentsInFlight`**, resolved with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-max-agents.sh` rather than
    read from memory (local file first, tracked second — the cap is **this machine's**
    capacity, `SCHEMA.md` → "Per-machine config overrides"); it prints nothing and
    exits 1 when neither file sets the key — fall back to 4 then, the seeded, measured
@@ -350,7 +350,7 @@ state, and act only on deltas.
    name it, never decide it.
 
    **A dispatch you send is not finished when the agent says so.** Whatever you
-   dispatch here, you check when it reports — `scripts/check-dispatch.sh <task-path>`,
+   dispatch here, you check when it reports — `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>`,
    per step 4. Note it now, because the completion notice is exactly what cannot be
    trusted (`docs/pm-design.md#step-3`).
 
@@ -376,7 +376,7 @@ state, and act only on deltas.
    default tier; **bump one tier up** (toward `deep`) for a genuinely complex build
    task (the same signal that makes the `plan-architect` approach critique mandatory); **drop toward `light`**
    for a trivial one. A task may set a `model:` field — honor it verbatim. Resolve
-   the chosen tier with `scripts/resolve-model.sh <agent>` and pass it as the model
+   the chosen tier with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh <agent>` and pass it as the model
    when you spawn — the same for **every** dispatch, including the `cataloguer` and
    the `plan-architect` critique. If `models`/`roleTiers` are absent the script prints
    why on stderr — **report that line to the human**, then inherit the session model;
@@ -389,7 +389,7 @@ state, and act only on deltas.
    don't mark them `blocked` for lacking a PR.
 
    **Check the artifact, don't believe the report.** For every task a dispatched agent
-   has reported on, run `scripts/check-dispatch.sh <task-path>` and act on its exit
+   has reported on, run `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>` and act on its exit
    code, not on the agent's summary. **0** — it produced what it promised, **or**
    stopped honestly at `blocked`/`cancelled` (no artifact was due). **1** — PARKED:
    still `ready`/`in-progress` and names no PR — what an agent that ended its turn
@@ -403,7 +403,7 @@ state, and act only on deltas.
    call — surface it in `AWAITING.md` (measured case: `docs/pm-design.md#step-4`).
 
    **An `in-progress` task nobody reported on is not evidence of a live agent.** Run
-   `scripts/check-dispatch.sh <task-path>` over **every** build `in-progress` task, not
+   `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>` over **every** build `in-progress` task, not
    only the ones an agent reported on — exit **1** is the pre-spawn crash window's exact
    signature (`in-progress`, no `pr:`). On a task *this* tick dispatched it means nothing.
    On one it did not, it is either a live agent or a dispatch that never happened and
@@ -422,7 +422,7 @@ state, and act only on deltas.
    current head is reused, never re-earned. Only tasks actually at `in-review` are
    eligible: an `in-progress` one still has a live agent that may advance the head.
    - **Count the rounds BEFORE you dispatch a verifier —
-     `scripts/review-rounds.sh <pr> --repo <org>/<repo>`.** It exits non-zero at or
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --repo <org>/<repo>`.** It exits non-zero at or
      past **two**, the hard cap (`CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN
      DECIDES"). Non-zero means **do not dispatch a third verifier and do not wait on
      another external review**: surface the PR as a 🔴 item with **both positions in
@@ -442,7 +442,7 @@ state, and act only on deltas.
      the independent verifier; the PR isn't merge-eligible until it has passed **and**
      CI is green. A reviewer that declares it didn't review counts as **no review**
      even beside a green check. **Don't read this off the check** — run
-     `scripts/review-clearance.sh <pr> --repo <org>/<repo> --head <sha>`: exit 0
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-clearance.sh <pr> --repo <org>/<repo> --head <sha>`: exit 0
      means a review artifact exists at that head; every other exit is a refusal it
      explains. **Exit 4 is the common answer and it is not exit 1**: a real review of
      an *earlier* commit — surface as "reviewed at `<sha>`, head has moved — ask for a
@@ -479,7 +479,7 @@ state, and act only on deltas.
        **`AUTONOMY.md` absent means every project is `gated`**, so the ask always holds.
      **Ask once per reviewer failure, not once per PR** — raise it on one task, name
      the other affected PRs in it. **The cap is untouched by any of this**: count with
-     `scripts/review-rounds.sh` **before** dispatching the fallback or re-requesting;
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh` **before** dispatching the fallback or re-requesting;
      if it refuses, surface both positions instead. Nothing here creates a third round.
    - **Fallback when none is configured — a SETUP decision, made once, not this.** If the
      repo runs **no** external reviewer at all, `qa-reviewer` is simply the independent
@@ -502,7 +502,7 @@ state, and act only on deltas.
 
 5. **Reflect merges.** For `in-review` tasks, check the PR(s): when **all** of a
    task's PRs are **merged** → `status: done`, then **reclaim that task's worktree**:
-   `scripts/reclaim-worktree.sh <task-path>`. It refuses unless every guard passes,
+   `${CLAUDE_PLUGIN_ROOT}/scripts/reclaim-worktree.sh <task-path>`. It refuses unless every guard passes,
    and a refusal is **normal, not an error to work around**: report it and move on.
    Never pass a force flag, never remove the path by hand, never widen the search
    beyond the one path the task recorded (`docs/pm-design.md#step-5` has the incident
@@ -518,7 +518,7 @@ state, and act only on deltas.
    **preflight**. Never merge on your reading of PR prose. `AUTONOMY.md` absent ⇒
    surface, don't merge.
 
-   **Report the worktree, never remove it.** `scripts/prune-worktrees.sh` is
+   **Report the worktree, never remove it.** `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` is
    report-only: it classifies every worktree and prints the exact
    `git worktree remove` commands. Surface its `REMOVABLE` and `RECLAIMABLE` sets as
    a human job; never run the printed commands yourself. **Run it at most once per
@@ -540,12 +540,12 @@ state, and act only on deltas.
    from the active `## Projects` list in the ROOT `index.md`, refresh
    `projects/<slug>/index.md` when the project is retained, and update its objective —
    when **all** of an objective's projects are terminal, likewise **propose**
-   `objective status: achieved`; (d) run `scripts/close-project-folder.sh <slug>
+   `objective status: achieved`; (d) run `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug>
    --apply` — never `git rm` or `rm` the folder yourself. It reads `retain:` and
    either removes the folder or keeps it pruned; it prints a `log.md fragment` — put
    that in (b)'s entry. Then stage the edits from (b) and (c) by explicit path — plus
    `projects/<slug>` itself when retained — and commit in one go via
-   `scripts/commit-as.sh project-manager "chore: close <slug> project" --
+   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "chore: close <slug> project" --
    projects/<slug> log.md objectives/<objective>.md <kb-path>...`. (The ROOT
    `index.md` is edited but **not** staged — derived and gitignored; a retained
    project's OWN `index.md` is the exception, step 8.) There is **no `archive/`** —
@@ -580,7 +580,7 @@ state, and act only on deltas.
    you dispatched and every one whose completion you reflected — "dispatched task-004,
    task-007; reflected task-002 merged" is what a successor reads instead of its own
    memory. Commit your changes under your own author identity:
-   `scripts/commit-as.sh project-manager "<conventional message>" -- <path>...`
+   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<conventional message>" -- <path>...`
    (stage by explicit path, then name those same paths). Never use the helper in
    target product repos.
 
@@ -608,7 +608,7 @@ state, and act only on deltas.
 
    The queue holds **only** what a human decision unblocks — never in-flight, next, or
    blocked-but-progressing work. **On a shared instance it narrows once more: queue
-   only what *this* clone's human can decide** (`scripts/task-owner.sh` exit 0); the
+   only what *this* clone's human can decide** (`${CLAUDE_PLUGIN_ROOT}/scripts/task-owner.sh` exit 0); the
    other human's items belong in *their* queue — report them in the tick summary
    instead. One line per item, verb glyph first, real links:
 
@@ -646,7 +646,7 @@ state, and act only on deltas.
 
    **Refresh the board snapshot — again, only if it already exists.** At the very end
    of the tick, after the curation commit and the queue rewrite, run
-   `scripts/write-snapshot.sh --quiet` — the script, never hand-assembled JSON (the
+   `${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet` — the script, never hand-assembled JSON (the
    field allowlist is a data-governance boundary). **No `SNAPSHOT.json` ⇒ it writes
    nothing and exits 0** — absence is how a human takes this instance off the board.
    Never create the file, never stage or commit it.
@@ -660,7 +660,7 @@ state, and act only on deltas.
       overridable). `false` ⇒ **skip the rest of this step in silence**.
       Absent or `true` ⇒ render.
    2. Render to the bundle's live path:
-      `scripts/build-board.sh --standalone --out .board-live/board.html`, from the
+      `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone --out .board-live/board.html`, from the
       bundle root. `--standalone` is required (a file opened straight in a browser
       needs the full HTML wrapper); the path is the one `watch-board.sh` already
       writes and `install.sh` already gitignores — never stage or commit it. No
@@ -675,7 +675,7 @@ state, and act only on deltas.
       Otherwise, from the bundle root:
 
       ```bash
-      scripts/build-board.sh --standalone --out board.html .
+      ${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone --out board.html .
       ```
 
       **The trailing `.` is load-bearing — never drop it.** Given no instance
@@ -687,7 +687,7 @@ state, and act only on deltas.
    4. **Commit it and push, by explicit path:**
 
       ```bash
-      scripts/commit-as.sh project-manager "chore: refresh board.html" -- board.html
+      ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "chore: refresh board.html" -- board.html
       git push origin <default-branch>
       ```
 
@@ -705,7 +705,7 @@ state, and act only on deltas.
       about — resolve it by regenerating rather than by merging text:
 
       ```bash
-      scripts/build-board.sh --standalone --out board.html .
+      ${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone --out board.html .
       git add board.html && git rebase --continue
       ```
 
@@ -719,7 +719,7 @@ state, and act only on deltas.
 
    **Say the path, never that it is live.** A rendered file is only as fresh as the
    tick that wrote it; the masthead timestamp says how stale. A human who wants a live
-   view runs `scripts/watch-board.sh`.
+   view runs `${CLAUDE_PLUGIN_ROOT}/scripts/watch-board.sh`.
 
    **A render is not a state change.** A tick whose only act was refreshing the
    snapshot and the LIVE page still reports `noop: true` (`/pm-loop` step 3) — and
@@ -731,7 +731,7 @@ state, and act only on deltas.
    FULL tick, after the commit, the sync, the queue and the board:
 
    ```bash
-   scripts/tick-delta.sh record
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh record
    ```
 
    On exit 2 say so in one line and carry on — a missing record costs the next tick a
@@ -750,7 +750,7 @@ state, and act only on deltas.
    step 0.5, and the launcher releases it when your completion notification arrives — a
    signal you cannot see. A tick that held (exit 1), one handed a claim it could not
    attribute (exit 2), and one refused as a resume (exit 4) all release nothing too.
-   `scripts/tick-lock.sh release` is **the human's override**; it is not yours to run at
+   `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is **the human's override**; it is not yours to run at
    the end of a tick (`docs/pm-design.md#step-8`).
 
 9. **Leave for the human.** By default, do not act on a `draft` beyond surfacing it (a

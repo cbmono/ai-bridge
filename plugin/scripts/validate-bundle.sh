@@ -4,7 +4,7 @@
 # alone: every concept document has a known `type`, a `status` in that type's enum,
 # a `timestamp`, and every structural cross-reference resolves.
 #
-#   Usage: scripts/validate-bundle.sh [--strict]
+#   Usage: validate-bundle.sh [--strict]
 #          --strict   treat warnings as failures too
 #
 # WHY THIS EXISTS, AND WHAT IT DELIBERATELY DOES NOT CHECK.
@@ -40,7 +40,7 @@
 #                        structural reference — it names a person outside the bundle,
 #                        so nothing here can resolve it, and a warning about a name
 #                        this script cannot verify is exactly the noise that buries
-#                        real errors. `scripts/task-owner.sh` validates the shape at
+#                        real errors. `task-owner.sh` validates the shape at
 #                        the one moment it matters: when the loop decides to dispatch.
 #   · `id` / `updated`:  NOT required, and not added. No document in any instance
 #                        carried either. The file path is already the identifier —

@@ -10,11 +10,10 @@
 # through per-file symlinks, so most changes are live the moment they are merged and a
 # "you are N commits behind" line would fire constantly for changes that already reached
 # here. The two that do NOT arrive by themselves are the ones worth a line: a NEW file
-# under `symlink/` reaches an instance only when `install.sh` is re-run (measured twice in
-# one week — `deny-destructive.sh` and `tick-lock.sh` were absent in all three instances
-# after merge, and the deny guard was inert until stamped), and `seed/` content is copied
-# once, ever. Both are exactly the changes the bump convention (`docs/conventions.md` §20)
-# requires a version bump for, so the version — not the commit graph — is the signal.
+# in the plugin reaches a machine only when the plugin is UPDATED, and `seed/` content is
+# copied into a bundle once, ever. Both are exactly the changes the bump convention
+# (`docs/conventions.md` §20) requires a version bump for, so the version — not the commit
+# graph — is the signal.
 #
 # IT SPEAKS ONLY WHEN BEHIND. Equal or ahead is byte-empty output. A line every session is
 # wallpaper, and wallpaper is how AWAITING.md rows come to be skipped; the banner this
@@ -64,21 +63,26 @@ done
 
 # WHERE THE TEMPLATE IS, read from this script's own path when it was not passed one. The
 # instance's copy of this file IS a symlink into the template, so resolving it is the one
-# lookup that cannot be wrong; `install.sh` writes absolute targets. Callers that already
+# lookup that cannot be wrong, because it is executing. Callers that already
 # know (the banner, the tests) pass `--template` and skip this.
 if [ -z "$TEMPLATE" ]; then
   self="${BASH_SOURCE[0]:-$0}"
-  # ABSOLUTE BEFORE ANYTHING ELSE, twice over: the marker below is `/symlink/scripts/`, so
-  # a relative invocation (`bash symlink/scripts/check-template-version.sh`) would match
-  # nothing and silently answer "no template", and a symlink is allowed to hold a relative
-  # target that only means anything beside the link itself.
+  # ABSOLUTE BEFORE ANYTHING ELSE: a relative invocation would make the walk below start
+  # from a path that means nothing outside this process's cwd, and a symlink is allowed to
+  # hold a relative target that only means anything beside the link itself.
   case "$self" in /*) ;; *) self="$PWD/$self" ;; esac
   if [ -L "$self" ]; then
     target="$(readlink "$self" 2>/dev/null || printf '%s' "$self")"
     case "$target" in /*) self="$target" ;; *) self="$(dirname "$self")/$target" ;; esac
   fi
-  guess="${self%/symlink/scripts/*}"
-  [ "$guess" != "$self" ] && TEMPLATE="$guess"
+  # Walk up for the two files that define a template root, rather than matching a marker
+  # in the path: the plugin lives at <clone>/plugin/scripts/ when installed from a
+  # marketplace and in the same shape in a checkout, and neither is hardcoded this way.
+  probe="$(dirname "$self")"
+  while [ "$probe" != "/" ] && [ -n "$probe" ]; do
+    if [ -d "$probe/seed" ] && [ -f "$probe/VERSION" ]; then TEMPLATE="$probe"; break; fi
+    probe="$(dirname "$probe")"
+  done
 fi
 [ -n "$TEMPLATE" ] && [ -d "$TEMPLATE" ] || exit 0
 
@@ -179,11 +183,11 @@ newer "$there" "$here" || exit 0
 #
 # THE REPAIR IS TWO COMMANDS AND THE SECOND ONE IS THE POINT: pulling the template updates
 # every file already linked, but a file that is NEW in that pull reaches this instance only
-# when install.sh runs again. Someone who pulls and stops is exactly the state this check
+# when the bundle is re-stamped. Someone who updates and stops is exactly the state this check
 # exists to end.
 # THE NAME IS DERIVED, NEVER A LITERAL. This file is symlinked into instances from a
 # template checkout that is not required to be called anything in particular, and
-# `symlink/**` carries no org, repo or path literals (`.claude/rules/machinery.md`). The
+# `plugin/**` carries no org, repo or path literals (`.claude/rules/machinery.md`). The
 # checkout's own directory name is the honest label — it is also the name in the `git -C`
 # line below, so a fork or a renamed clone names itself instead of claiming to be some
 # other project. Control characters are stripped because the value comes from the
@@ -192,9 +196,9 @@ newer "$there" "$here" || exit 0
 name="$(basename -- "$TEMPLATE" 2>/dev/null | tr -d '[:cntrl:]')"
 label="TEMPLATE UPDATE"
 [ -n "$name" ] && label="TEMPLATE UPDATE ($name)"
-printf '%s\n' "⬆️  $label — this instance links ${here}, ${REF} has ${there}"
-echo "    Pull the template, then RE-STAMP this instance (a file that is new in that pull"
-echo "    reaches an instance only through a stamp):"
-printf '        git -C %q pull\n' "$TEMPLATE"
-printf '        bash %q %q\n' "$TEMPLATE/install.sh" "$INSTANCE"
+printf '%s\n' "⬆️  $label — this machine runs ${here}, ${REF} has ${there}"
+echo "    Update the plugin, then re-stamp this bundle (a seed change reaches a bundle"
+echo "    only through a stamp, and only that way):"
+echo "        /plugin update ai-bridge@ai-bridge      (then restart Claude Code)"
+printf '        /ai-bridge:init %q\n' "$INSTANCE"
 exit 0

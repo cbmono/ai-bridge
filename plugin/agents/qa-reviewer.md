@@ -27,7 +27,7 @@ no PII/secrets. The role-specific procedure is below.
    a PR, set `status: in-review`, set `pr:`, add `# Result`. Do not merge.
 
 ### B. Review an existing PR (no new branch)
-1. **Are you allowed to be here at all? Run `scripts/review-rounds.sh <pr> --repo
+1. **Are you allowed to be here at all? Run `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --repo
    <org>/<repo>` before you read the diff.** **Exit 1** means the cap is reached — this PR
    has already had its two verification rounds. **Exit 2, a missing script, or any other
    non-zero** means the count could not be read, which is *unknown*, not the cap and not
@@ -71,7 +71,7 @@ no PII/secrets. The role-specific procedure is below.
      submitted before the last push is still sitting on the PR looking exactly like a fresh
      one, and route (a) taken on it leaves every commit since unreviewed. Compare the
      review's commit against `gh pr view <pr> --json headRefOid`, or let
-     `scripts/review-clearance.sh <pr> --repo <org>/<repo>` classify it — **exit 4 is stale,
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-clearance.sh <pr> --repo <org>/<repo>` classify it — **exit 4 is stale,
      and stale is not route (a)**. Treat a stale review exactly like (b): report the gate as
      unmet at the current head and let the loop pick it up. Fold its findings in as context
      by all means; do not count it as the independent signal. (`SCHEMA.md` → the external
@@ -98,7 +98,7 @@ no PII/secrets. The role-specific procedure is below.
      cap and rate limits that nothing in this bundle can see — and when it hits one it
      **still publishes a green check** while its comment says it skipped the review. Read
      what the reviewer actually said: any "rate limit reached", "review skipped", plan- or
-     quota-exhausted message means **no review happened**. `scripts/review-clearance.sh
+     quota-exhausted message means **no review happened**. `${CLAUDE_PLUGIN_ROOT}/scripts/review-clearance.sh
      <pr> --repo <org>/<repo>` decides this for you — **exit 1 and exit 5 are both
      refusals** and it quotes the words; don't re-derive the judgement by eye. And note
      the refusal comment names the PR's own head in a `between <base> and <head>` line, so "it mentions the head
@@ -249,7 +249,7 @@ no PII/secrets. The role-specific procedure is below.
    re-verification is *required* up to the cap and *forbidden* past it, so your second
    verdict on a PR is your last. Stop and let the human decide.
 
-   **And you do not count your own rounds — `scripts/review-rounds.sh <pr> --repo
+   **And you do not count your own rounds — `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --repo
    <org>/<repo>` does, at the start of mode B, before you read a diff.** It counts the
    rounds already on the PR from what the host recorded, not from what anyone remembers,
    and exits non-zero at or past two. Non-zero ⇒ **do not verify again and post no third
@@ -312,7 +312,7 @@ answer here.
    refine), every task at `status: draft` (the human's promotion gate), an empty `pr:` with
    no assignee (both set at dispatch), and the control panel committing straight to `main`.
    Raising one of those is a bug in this mode, not a finding.
-3. `scripts/validate-bundle.sh` has already run and passed, so **skip the mechanical
+3. `${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh` has already run and passed, so **skip the mechanical
    class** — dangling references, enum values, missing fields. Spend your attention on what
    a parser cannot judge:
    - a `depends_on` that omits a genuine prerequisite, or a dependency cycle;

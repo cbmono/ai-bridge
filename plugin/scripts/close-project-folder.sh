@@ -3,8 +3,8 @@
 # close-project-folder.sh — the folder half of closeout: REMOVE a finished project's
 # folder, or, when the project is RETAINED, freeze it and KEEP it.
 #
-#   Usage: scripts/close-project-folder.sh <slug>            # report only
-#          scripts/close-project-folder.sh <slug> --apply    # do it
+#   Usage: close-project-folder.sh <slug>            # report only
+#          close-project-folder.sh <slug> --apply    # do it
 #
 # WHY THIS IS A SCRIPT AND NOT A PARAGRAPH IN /close-project. Every other closeout step
 # is prose an agent executes, and that is fine for editing a log entry. This step

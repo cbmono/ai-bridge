@@ -12,8 +12,8 @@
 # instance.config.json). Generic: no org/repo/path literals.
 #
 # Usage:
-#   scripts/index-kb.sh                 # index/refresh every product repo
-#   scripts/index-kb.sh --with-serena   # also warm Serena's LSP cache (if installed)
+#   index-kb.sh                 # index/refresh every product repo
+#   index-kb.sh --with-serena   # also warm Serena's LSP cache (if installed)
 #
 # Repos skipped by default: worktrees (_wt), instance dirs (_ai-bridge-*), and any
 # non-git directory. Add more (infra/assets repos with no useful call graph) via

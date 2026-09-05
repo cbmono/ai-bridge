@@ -3,8 +3,8 @@
 # migrate-bundle.sh — repair the mechanical schema violations `validate-bundle.sh`
 # reports, in this instance's bundle.
 #
-#   Usage: scripts/migrate-bundle.sh            # report what it WOULD change (default)
-#          scripts/migrate-bundle.sh --apply    # write the changes
+#   Usage: migrate-bundle.sh            # report what it WOULD change (default)
+#          migrate-bundle.sh --apply    # write the changes
 #
 # REPORT-ONLY BY DEFAULT, for the same reason `prune-worktrees.sh` is: a script that
 # edits many files should not be one keystroke away from doing it. Read the report,
@@ -208,7 +208,7 @@ echo "---"
 if [[ $APPLY -eq 1 ]]; then
   printf 'migrate-bundle: %d fixed, %d left for a human, %d skipped, %d FAILED.\n' \
     "$fixed" "$human" "$skipped" "$failed"
-  echo "Now run: scripts/validate-bundle.sh"
+  echo "Now run: validate-bundle.sh"
   [[ $failed -eq 0 ]] || exit 1
 else
   printf 'migrate-bundle: %d would be fixed, %d need a human, %d skipped. (report only — nothing changed)\n' \

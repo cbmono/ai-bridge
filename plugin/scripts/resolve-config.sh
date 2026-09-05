@@ -2,10 +2,10 @@
 #
 # resolve-config.sh — the ONE implementation of the two-file config precedence.
 #
-#   Usage: scripts/resolve-config.sh [--instance DIR] <key> [<entry>]
-#          scripts/resolve-config.sh [--instance DIR] --source <key> [<entry>]
-#          scripts/resolve-config.sh [--instance DIR] --json <key> [<entry>]
-#          scripts/resolve-config.sh [--instance DIR] --dump
+#   Usage: resolve-config.sh [--instance DIR] <key> [<entry>]
+#          resolve-config.sh [--instance DIR] --source <key> [<entry>]
+#          resolve-config.sh [--instance DIR] --json <key> [<entry>]
+#          resolve-config.sh [--instance DIR] --dump
 #
 # WHY IT EXISTS, AND WHY IT IS NOT A FOURTH READER. `instance.config.local.json` is read
 # first and `instance.config.json` second, per KEY, with a dict value present in both

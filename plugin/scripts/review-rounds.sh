@@ -3,7 +3,7 @@
 # review-rounds.sh — how many verification rounds has this pull request already had, and
 # may another verifier be dispatched against it?
 #
-#   Usage: scripts/review-rounds.sh <pr> [--repo <owner>/<name>]
+#   Usage: review-rounds.sh <pr> [--repo <owner>/<name>]
 #
 # This is the mechanism behind `CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN DECIDES".
 # That cap answers the most expensive failure this bundle has recorded — one pull request

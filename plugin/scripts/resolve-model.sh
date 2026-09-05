@@ -2,7 +2,7 @@
 #
 # resolve-model.sh — print the model alias a given agent should run on.
 #
-#   Usage: scripts/resolve-model.sh <agent-name> [--instance DIR]
+#   Usage: resolve-model.sh <agent-name> [--instance DIR]
 #
 # WHY THIS EXISTS AS A SCRIPT AND NOT A SENTENCE.
 # `roleTiers`/`models` lived only as prose in SCHEMA.md, project-manager.md,
@@ -36,7 +36,7 @@
 #
 # Both keys are read from `instance.config.local.json` FIRST and the tracked
 # `instance.config.json` second, per entry. THAT RULE IS NOT WRITTEN HERE: it lives in
-# `scripts/resolve-config.sh`, which this delegates to, because the session banner needs
+# `resolve-config.sh`, which this delegates to, because the session banner needs
 # the same precedence plus the answer to "which file won" and a second copy of the merge
 # is how the two would come to disagree. This file owns the two-step lookup below and the
 # contract that absence is not an error; precedence is that file's.
@@ -59,7 +59,7 @@ done
 [ -n "$agent" ] || { echo "Usage: resolve-model.sh <agent-name> [--instance DIR]" >&2; exit 2; }
 
 # THE SELF PATH IS RESOLVED THROUGH THE SYMLINK, and that is load-bearing rather than
-# tidy. `install.sh` links every machinery file individually into an instance, so an
+# tidy. A bundle carries no machinery at all now, so an
 # instance stamped BEFORE `resolve-config.sh` shipped has no such file in its own
 # `scripts/` — a plain `dirname "$0"` would look there, miss it, and break a resolver that
 # worked yesterday. `readlink` lands in the template that is actually executing, where the
@@ -70,7 +70,7 @@ self="${BASH_SOURCE[0]:-$0}"
 here="$(cd "$(dirname "$self")" 2>/dev/null && pwd)" || here=""
 resolver="$here/resolve-config.sh"
 [ -n "$here" ] && [ -f "$resolver" ] || {
-  echo "resolve-model: scripts/resolve-config.sh not found beside this script" >&2; exit 2; }
+  echo "resolve-model: resolve-config.sh not found beside this script" >&2; exit 2; }
 
 # roleTiers[<agent>] -> a tier name, then models[<tier>] -> an alias. Either step missing
 # means this prints nothing on stdout and exits 1 — and says so on stderr first.
@@ -79,15 +79,15 @@ resolver="$here/resolve-config.sh"
 # file; "this agent will run on whatever the session happens to be" is what the reader has
 # to decide about, and it is the half a caller cannot work out for itself. It also names
 # both files, because which one is missing the entry decides where the fix goes: the
-# per-machine file is where spend belongs, and `install.sh` seeds it.
+# per-machine file is where spend belongs, and the bundle stamp seeds it.
 unresolved() { # <what-is-missing> <fix>
   echo "resolve-model: no model for '$agent' — $1." >&2
   echo "  Nothing was printed, so a caller that ignores this exit code will dispatch on" >&2
   echo "  the SESSION model instead of a chosen one, silently, for this agent." >&2
   echo "  Fix: $2" >&2
   echo "       to instance.config.local.json — per-machine spend, and the tracked" >&2
-  echo "       instance.config.json is the fallback. Or re-run the template's" >&2
-  echo "       install.sh, which seeds both keys into the local file." >&2
+  echo "       instance.config.json is the fallback. Or re-run /ai-bridge:init on this" >&2
+  echo "       bundle, which seeds both keys into the local file." >&2
   exit 1
 }
 

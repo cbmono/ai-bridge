@@ -2,8 +2,8 @@
 #
 # reclaim-worktree.sh — remove ONE task's worktree, named by the task itself.
 #
-#   Usage: scripts/reclaim-worktree.sh <task-path>              # verify, then remove
-#          scripts/reclaim-worktree.sh --dry-run <task-path>    # verify only, remove nothing
+#   Usage: reclaim-worktree.sh <task-path>              # verify, then remove
+#          reclaim-worktree.sh --dry-run <task-path>    # verify only, remove nothing
 #
 # Exit codes:
 #

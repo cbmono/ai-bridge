@@ -4,10 +4,10 @@
 # of a reply to review findings: a lead, one ENTRY per finding with an explicit verdict on
 # it, and the closing evidence — each of those elements inside one measured ceiling.
 #
-#   Usage: scripts/pr-comment-clearance.sh --comment <id> [--repo <owner>/<name>]
-#          scripts/pr-comment-clearance.sh --review-comment <id> [--repo <owner>/<name>]
-#          scripts/pr-comment-clearance.sh --comment-file <path>  (decide before posting)
-#          scripts/pr-comment-clearance.sh --self-test            (prove this script RUNS)
+#   Usage: pr-comment-clearance.sh --comment <id> [--repo <owner>/<name>]
+#          pr-comment-clearance.sh --review-comment <id> [--repo <owner>/<name>]
+#          pr-comment-clearance.sh --comment-file <path>  (decide before posting)
+#          pr-comment-clearance.sh --self-test            (prove this script RUNS)
 #
 # WHY THIS EXISTS, AND WHY THE SIBLING DID NOT COVER IT. `pr-body-clearance.sh` reads a
 # pull request's BODY. It does not look at comments at all. So the house style for a reply

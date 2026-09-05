@@ -25,7 +25,7 @@ and a `done`/`cancelled` task is finished.
    `worktree:` (absolute) and `branch:` on the task — **both, or neither** — before
    any target-repo work, so an interrupted session still leaves the record the
    reclaim machinery depends on. Commit that edit by explicit path:
-   `scripts/commit-as.sh human 'chore: start <task-id> in-session' -- <task-path>`.
+   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human 'chore: start <task-id> in-session' -- <task-path>`.
 3. For a **build** task: create the worktree explicitly —
    `git worktree add <worktreeRoot>/<slug> -b <branch> origin/<default-branch>`
    (detect the default branch; `worktreeRoot` from `instance.config.json`, absent ⇒
@@ -38,7 +38,7 @@ and a `done`/`cancelled` task is finished.
   commits. No customer PII anywhere. Never echo or log secrets.**
 - Verify against the task's `acceptance_criteria`; the PR body carries them as a
   `✓`/`✗` table — tick only what you actually verified, and run
-  `scripts/pr-body-clearance.sh --body-file <draft>` before posting.
+  `${CLAUDE_PLUGIN_ROOT}/scripts/pr-body-clearance.sh --body-file <draft>` before posting.
 - Push early; open the PR against the default branch with the task id in the title.
 - Hit a genuine ambiguity ⇒ add a numbered entry to the task's `open_questions` and
   say so — in-session the human may answer immediately, which you then fold in and

@@ -14,7 +14,7 @@ exist in the cwd. If not, say which instance directories exist nearby (if any) a
 
 ## Gather — cheaply, in this order
 
-1. `scripts/tick-delta.sh digest` — one command yields every live project, every task's
+1. `${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh digest` — one command yields every live project, every task's
    status/kind/assignee/deps/open-question count, and each open PR's state, head and
    review decision. Any exit but 0 ⇒ fall back to reading `projects/*/project.md` and
    task frontmatter yourself (skip `status: done` projects at their frontmatter).

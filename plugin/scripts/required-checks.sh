@@ -11,7 +11,7 @@
 # (`AUTONOMY.md` → "Merge under `yolo`"); nothing else in the bundle may merge a PR
 # without it exiting 0.
 #
-#   Usage: scripts/required-checks.sh <pr> [--repo <owner>/<name>] [--head <sha>]
+#   Usage: required-checks.sh <pr> [--repo <owner>/<name>] [--head <sha>]
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:
 #

@@ -105,7 +105,7 @@
 #
 # THE `FROM` COLUMN IS THE POINT OF THE SETTINGS BLOCK, not decoration. `tracked` /
 # `local` says which of the two config files won for that key, and that is invisible in
-# either file alone. It is resolved by `scripts/resolve-config.sh` — the same code
+# either file alone. It is resolved by `resolve-config.sh` — the same code
 # `resolve-model.sh` and `resolve-max-agents.sh` now delegate to, reading the same two
 # files in the same order. A private re-implementation here would drift silently, and a
 # `FROM` column that disagrees with the resolver the dispatcher actually uses is worse
@@ -146,7 +146,7 @@
 # machinery. It catches the partial case — some links dead while settings still resolves.
 #
 # NEVER REPAIRS, NEVER WRITES, NEVER RENDERS. It reports what is already on disk. The
-# board is rendered by a `/pm-loop` tick or `scripts/watch-board.sh`; the machinery repair
+# board is rendered by a `/pm-loop` tick or `watch-board.sh`; the machinery repair
 # is the human's `install.sh` re-run.
 #
 # COLOUR IS ON FOR `--format json`, AND THAT IS A MEASUREMENT, NOT A GUESS. `[ -t 1 ]` is
@@ -171,7 +171,7 @@
 # `[1m`. One answer does not fit both channels, which is why each one is asked separately.
 #
 # SO THERE ARE THREE RENDERINGS, NOT TWO, AND THE THIRD IS `--format md`. It is the path
-# `/welcome` relays — `scripts/ai-bridge.sh` asks for it when its own stdout is a pipe —
+# `/welcome` relays — `ai-bridge.sh` asks for it when its own stdout is a pipe —
 # and it exists because that channel renders MARKDOWN and destroys SGR, so the mechanism
 # every other line of this file reaches for is worth nothing there. Two things make it a
 # THIRD rendering rather than an edit to either existing one:
@@ -191,7 +191,7 @@
 # same columns, same values, which is what tests/banner-user-channel.test.sh pins.
 #
 # AND ITS EMPHASIS IS ITS COLOUR, so `NO_COLOR` and `--color never` turn it off there too —
-# one opt-out a reader already knows, not a second one (`scripts/ai-bridge.sh` states the
+# one opt-out a reader already knows, not a second one (`ai-bridge.sh` states the
 # same contract for `--style markdown`). `--color always` does NOT put SGR into it: 0 of 4
 # escape bytes survive that relay, so emitting them would be writing bytes for nobody.
 #
@@ -219,7 +219,7 @@
 # noise in a field whose whole job is carrying instructions to the session.
 #
 # `NO_COLOR` (set and non-empty) turns it off on every path, the same contract
-# `scripts/print-board.sh` states, and the banner must stay correct and readable with it set.
+# `print-board.sh` states, and the banner must stay correct and readable with it set.
 # `--color always|never|auto` overrides, so the degraded paths and the coloured one are all
 # testable; a hook registered in settings.json is invoked with `--format json` and gets
 # `auto`, which is now colour ON.
@@ -232,8 +232,8 @@
 #
 # THE VERSION COMES FROM `VERSION` AT THE TEMPLATE ROOT, read through this script's own
 # resolved path — not from a literal here, which is one more thing to forget on a release.
-# It is not shipped INTO an instance (install.sh links files under `symlink/` and that file
-# is not one), so it is read from the template that is executing. Absent, unreadable, empty
+# It is not shipped INTO a bundle (a bundle carries no machinery at all), so it is read
+# from the checkout around the plugin that is executing. Absent, unreadable, empty
 # or not version-shaped ⇒ the identity line prints WITHOUT a version and everything else is
 # unchanged. A banner that dies, or that guesses a number, over a cosmetic field would be a
 # worse trade than a header that is one token shorter.
@@ -266,7 +266,7 @@ done
 # An unrecognised FORMAT is text, for the same reason an unrecognised argument is ignored:
 # this is a SessionStart hook, and printing the banner beats exiting 2 at every launch.
 # THREE ARE RECOGNISED AND text IS STILL THE DEFAULT: `json` is what settings.json asks for,
-# `md` is what `scripts/ai-bridge.sh` asks for when its reader is a markdown renderer, and a
+# `md` is what `ai-bridge.sh` asks for when its reader is a markdown renderer, and a
 # terminal gets neither.
 case "$FORMAT" in json|md) ;; *) FORMAT=text ;; esac
 
@@ -531,19 +531,31 @@ root="${CLAUDE_PROJECT_DIR:-$PWD}"
 cfg="$root/instance.config.json"
 [ -f "$cfg" ] || exit 0
 
-# Where this template lives NOW, read from this script's own path — the one machinery path
-# known to resolve, because it is executing. It names the repair command, and it locates
-# the helper scripts for an instance stamped before they shipped (a plain "$root/scripts"
-# would miss those). If the hook is running from somewhere unexpected, say less rather
-# than print a wrong path.
+# WHERE THE MACHINERY IS. `${CLAUDE_PLUGIN_ROOT}` first, because this hook is registered
+# by the plugin's own hooks.json and Claude Code sets that variable for it — it is the one
+# answer that is right by construction. Falling back to this script's own resolved path
+# keeps the hook runnable by hand and by the tests, which invoke it directly.
+#
+# THE BUNDLE'S OWN `scripts/` IS NOT A FALLBACK ANY MORE. A bundle carries no machinery, so
+# a path under it would resolve only on an unconverted bundle — and reading a stale
+# checkout's copy is exactly the drift this migration removes. Unresolvable ⇒ `bin` is
+# empty, and every section that needs a helper reports its absence rather than guessing.
 self="${BASH_SOURCE[0]:-$0}"
+case "$self" in /*) ;; *) self="$PWD/$self" ;; esac
 [ -L "$self" ] && self="$(readlink "$self" 2>/dev/null || printf '%s' "$self")"
-tmpl="${self%/symlink/.claude/hooks/*}"
-[ "$tmpl" != "$self" ] || tmpl=""
-if [ -n "$tmpl" ] && [ -d "$tmpl/symlink/scripts" ]; then
-  bin="$tmpl/symlink/scripts"
-else
-  bin="$root/scripts"
+plugin_root="${CLAUDE_PLUGIN_ROOT:-}"
+if [ -z "$plugin_root" ]; then
+  plugin_root="${self%/hooks/*}"
+  [ "$plugin_root" != "$self" ] || plugin_root=""
+fi
+bin=""
+[ -n "$plugin_root" ] && [ -d "$plugin_root/scripts" ] && bin="$plugin_root/scripts"
+# The template checkout around the plugin, when there is one — it names the version-drift
+# comparison and nothing else. A plugin installed from a marketplace has one; a plugin
+# vendored some other way may not, and that is reported as "cannot compare", never guessed.
+tmpl=""
+if [ -n "$plugin_root" ] && [ -d "$plugin_root/../seed" ] && [ -f "$plugin_root/../VERSION" ]; then
+  tmpl="$(cd "$plugin_root/.." && pwd)"
 fi
 
 # A literal tab is the resolver's field separator and is invisible in a diff, so it is
@@ -577,7 +589,7 @@ esac
 # `--color always --format md` would be writing bytes for nobody and leaving a literal `[1m`
 # in a human's page. And markdown emphasis instead, which that channel does render — but
 # gated on the SAME opt-out, because on a channel that draws `**bold**` as bold, bold IS the
-# colour, and a second switch for it is a switch nobody knows about. `scripts/ai-bridge.sh`
+# colour, and a second switch for it is a switch nobody knows about. `ai-bridge.sh`
 # resolves `--style markdown` by the identical rule, deliberately.
 use_emph=0
 if [ "$FORMAT" = md ]; then
@@ -797,52 +809,48 @@ echo   # <- the banner's leading blank line (mutation anchor: do not fold into t
 #    an alarm: a /pm-loop tick started now fails mid-dispatch with agents already briefed.
 # ---------------------------------------------------------------------------------------
 # A handful of probes, not a walk. Resolving every link in the bundle on every session
-# start costs more and says the same thing: these four are one per class of machinery
-# (root document, script, nested document, hook), and anything that breaks the template's path
-# breaks all four at once. The list FAILS CLOSED — a path this template stops shipping
-# simply stops being a symlink in the instance, so a stale entry can cost a missed report
-# but can never raise a false alarm. tests/moved-template.test.sh asserts every entry is
-# still a real file under symlink/, which is what notices the staleness.
-PROBES="SCHEMA.md scripts/commit-as.sh agents/index.md .claude/hooks/push-state.sh"
+# start costs more and says the same thing: these five are one per class of machinery the
+# old installer stamped (root document, script, nested document, hook, settings), and a
+# bundle that has one of them as a symlink has all of them. The list FAILS CLOSED — a path
+# this template stopped shipping simply is not a symlink here, so a stale entry can cost a
+# missed report but can never raise a false alarm.
+#
+# THE ALARM CHANGED SHAPE WITH THE MIGRATION, AND THE NEW TEST IS WIDER. It used to fire
+# only on a DANGLING link, because a live one meant a healthy stamp. A bundle carries no
+# machinery now, so ANY of these being a symlink means the bundle is still symlink-era:
+# a dangling one is broken, and a LIVE one is worse in the way that matters — it resolves
+# into a template checkout that `claude plugin update` never touches, so the bundle runs
+# machinery frozen at whatever that clone last pulled, silently, forever. Both are one
+# fact ("this bundle has not been converted") with one repair.
+PROBES="SCHEMA.md scripts/commit-as.sh agents/index.md .claude/hooks/push-state.sh .claude/settings.json"
 
-dead=""; n_dead=0; gone=""
+legacy=""; n_legacy=0; gone=""; n_dangling=0
 for rel in $PROBES; do
   p="$root/$rel"
-  # A symlink whose target is missing — both halves load-bearing, the same test step 2b of
-  # install.sh uses. A file the instance never had is absent, not broken; a real file is
-  # never ours to complain about.
-  if [ -L "$p" ] && [ ! -e "$p" ]; then
-    n_dead=$((n_dead+1)); dead="${dead:+$dead, }$rel"
-    if [ -z "$gone" ]; then
-      gone="$(readlink "$p" 2>/dev/null || true)"
-      gone="${gone%/symlink/*}"
-    fi
+  [ -L "$p" ] || continue
+  n_legacy=$((n_legacy+1)); legacy="${legacy:+$legacy, }$rel"
+  [ -e "$p" ] || n_dangling=$((n_dangling+1))
+  if [ -z "$gone" ]; then
+    gone="$(readlink "$p" 2>/dev/null || true)"
+    gone="${gone%/symlink/*}"
   fi
 done
-# Counted, never written twice: a hardcoded "of 4" drifts the moment a probe is added.
+# Counted, never written twice: a hardcoded "of 5" drifts the moment a probe is added.
 # shellcheck disable=SC2086  # unquoted on purpose — the split into words IS the count.
 n_probes="$(set -- $PROBES; echo $#)"
 
-if [ "$n_dead" -gt 0 ]; then
+if [ "$n_legacy" -gt 0 ]; then
   # NOT FENCED AS UNTRUSTED DATA, unlike the awaiting items below, and the reason is that
   # nothing here is bundle-authored: the names come from PROBES (literals in this file)
-  # and the paths are this instance's own root and this template's own location.
-  say "$C_RED" "⚠️  ai-bridge machinery is DANGLING in this instance — ${n_dead} of ${n_probes} probed symlinks"
-  echo "    point at a path that no longer exists."
-  echo "    dead: $dead"
-  [ -n "$gone" ] && echo "    pointing into: $gone (no longer there)"
-  echo "    Assume every other machinery link is dead too — scripts, role agents, commands,"
-  echo "    SCHEMA.md. Nothing has been changed here."
-  if [ -n "$tmpl" ]; then
-    echo "    REPAIR (idempotent, safe to re-run, once per instance):"
-    # %q shell-quotes only what needs it — a plain path (the common case) still prints
-    # bare and copy-pastes as-is; a path with whitespace or a shell metacharacter comes
-    # out quoted instead of pasting into a different, wrong command.
-    printf '        bash %q %q\n' "$tmpl/install.sh" "$root"
-  else
-    echo "    REPAIR: re-run install.sh from wherever the ai-bridge template now lives:"
-    printf '        bash <ai-bridge>/install.sh %q\n' "$root"
-  fi
+  # and the paths are this bundle's own root and the checkout it points into.
+  say "$C_RED" "⚠️  this bundle still carries MACHINERY SYMLINKS — ${n_legacy} of ${n_probes} probed paths"
+  echo "    are links into a template checkout, and ${n_dangling} of them are already dead."
+  echo "    linked: $legacy"
+  [ -n "$gone" ] && echo "    pointing into: $gone"
+  echo "    The machinery ships in the ai-bridge PLUGIN now, so these links are frozen at"
+  echo "    whatever that checkout last pulled — a plugin update never reaches them."
+  echo "    REPAIR (idempotent, converts in place, touches no data):"
+  printf '        /ai-bridge:init %q\n' "$root"
   echo "    Report this and the repair command to the human before doing anything else. A"
   echo "    /pm-loop tick started now fails mid-dispatch, with agents already briefed."
   echo
@@ -929,7 +937,7 @@ say "$C_DIM" "$rule"
 # branch has a newer one. Above the tables and below the rule keeps it attached to the
 # number rather than filed among the settings.
 #
-# THE VERDICT IS NOT COMPUTED HERE. `scripts/check-template-version.sh` owns every way this
+# THE VERDICT IS NOT COMPUTED HERE. `check-template-version.sh` owns every way this
 # can be wrong — equal, ahead, offline, unauthenticated, no checkout, no remote-tracking
 # ref, no VERSION on either side, a version it cannot parse — and every one of those is
 # byte-empty output. This prints what it is given and nothing else, so there is no second
@@ -1152,7 +1160,7 @@ if [ "$board_on" -eq 1 ]; then
     # that is a reason to change WHICH line prints, never to print both again.
     #
     # AND THE STALENESS NOTE IS DELETED OUTRIGHT, not shortened. The masthead of the page
-    # itself carries the render time, and `scripts/watch-board.sh` is documentation — a
+    # itself carries the render time, and `watch-board.sh` is documentation — a
     # banner fact is something true of THIS session, and neither of those is.
     echo "Board   file://$page"
   else
@@ -1162,7 +1170,7 @@ if [ "$board_on" -eq 1 ]; then
     # it here would make every `has "$page"` assertion in the harnesses pass on an instance
     # with no board — a vacuous check bought for a few characters of prose.
     echo "Board   enabled, but never rendered — no .board-live/board.html here yet"
-    say "$C_DIM" "        a /pm-loop tick renders it, or run scripts/build-board.sh"
+    say "$C_DIM" "        a /pm-loop tick renders it, or run build-board.sh"
   fi
 fi
 
@@ -1340,7 +1348,7 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------------------
-# 8. STATE THAT COULD BE WRONG — `scripts/ai-bridge.sh check`, problems only.
+# 8. STATE THAT COULD BE WRONG — `ai-bridge.sh check`, problems only.
 # ---------------------------------------------------------------------------------------
 # THIS IS THE READER FOR A TRAP THAT HAD NONE. "Pulling the template half-upgrades every
 # unstamped instance" was prose in a knowledge base: an edit to an already-linked file

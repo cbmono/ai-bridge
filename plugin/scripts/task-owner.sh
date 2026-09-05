@@ -3,8 +3,8 @@
 # task-owner.sh — resolve WHOSE a task is, so an instance shared by two humans
 # dispatches only its own human's work.
 #
-#   Usage: scripts/task-owner.sh <task-path>     # verdict for one task
-#          scripts/task-owner.sh --self          # print this clone's human, informationally
+#   Usage: task-owner.sh <task-path>     # verdict for one task
+#          task-owner.sh --self          # print this clone's human, informationally
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:
 #

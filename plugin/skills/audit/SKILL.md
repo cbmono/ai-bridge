@@ -16,7 +16,7 @@ and stop.
 
 ## Steps
 1. Read `instance.config.json`. **Resolve the auditor's model** the same way the PM
-   routes dispatches: run `scripts/resolve-model.sh auditor` — it looks `auditor` up in `roleTiers` (default `deep`) and maps it to an
+   routes dispatches: run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh auditor` — it looks `auditor` up in `roleTiers` (default `deep`) and maps it to an
    alias via `models`; if those maps are absent it prints why on stderr — report that line,
    then inherit the session model rather than dispatching on a guess.
 2. Dispatch the **`auditor`** agent (`subagent_type: ai-bridge:auditor` — the plugin

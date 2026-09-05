@@ -4,7 +4,7 @@
 # gitignored directory, then re-render whenever a task document changes.
 #
 #   Usage:
-#     scripts/watch-board.sh [--out DIR] [--interval SECS] [--once] [INSTANCE_DIR ...]
+#     watch-board.sh [--out DIR] [--interval SECS] [--once] [INSTANCE_DIR ...]
 #
 #     INSTANCE_DIR ...  the instances to render and watch. With none given, the list
 #                       comes from `boardInstances` in ./instance.config.local.json,
@@ -24,9 +24,9 @@
 # machine, or lose the session. In exchange you get a page that is live to the second
 # and never leaves the machine. Weigh it against the other two:
 #
-#   · scripts/print-board.sh  — one shot, in the terminal you are already in. No
+#   · print-board.sh  — one shot, in the terminal you are already in. No
 #     process, no browser, no file. Reach for this by default.
-#   · scripts/build-board.sh  — one shot, an HTML page you can publish and read on a
+#   · build-board.sh  — one shot, an HTML page you can publish and read on a
 #     phone. No process either, but the page is only as fresh as the last run.
 #   · this                    — live, local-only, per-machine, and it costs a process.
 #
