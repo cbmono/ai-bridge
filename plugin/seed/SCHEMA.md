@@ -439,11 +439,34 @@ paragraph) — there is no third way for the loop to acquire either:
 **Delegated authority (optional, and off by default).** A project's `autonomy` field
 (default `gated`) can hand one or both of these gates to the loop — replacing the human
 with a **machine** anchor, never a self-report. The available modes, their anchors, and
-their preconditions live in **`AUTONOMY.md`** at the bundle root, which is also the
-capability's on/off switch: **if that file is absent, there are no other modes and every
-project is `gated` no matter what its `autonomy` field says.** Read `AUTONOMY.md` only
-when a project's `autonomy` is something other than `gated` — most ticks never need it.
-Either way the human opts in per project at creation; no agent escalates it.
+their preconditions live in **`AUTONOMY.md`**, which is also the capability's on/off
+switch: **if no such file is found, there are no other modes and every project is `gated`
+no matter what its `autonomy` field says.** Read it only when a project's `autonomy` is
+something other than `gated` — most ticks never need it. Either way the human opts in per
+project at creation; no agent escalates it.
+
+**There are exactly TWO places that file can be, and `scripts/resolve-autonomy.sh` is the
+one reader of both.** Nothing else may re-derive this; a second reader is a second answer
+to "may the loop merge without a human".
+
+| Order | Where | What makes it count |
+|---|---|---|
+| 1 | **`<bundle>/AUTONOMY.md`** — the bundle root | The file simply being there. **Root wins outright**, so a bundle that carries its own real file keeps working byte for byte, with or without any companion, and no companion can override what it says. |
+| 2 | **`<companion plugin root>/companion/AUTONOMY.md`** — an installed companion plugin | The plugin being **INSTALLED**, read from the installed-plugins registry (`installed_plugins.json`), and installed from the **same marketplace core itself came from**. |
+
+**Location 2 is decided by the registry and NEVER by the plugin cache tree, and that
+distinction is the whole of "uninstall turns it off".** The cache keeps every version ever
+fetched, uninstalled ones included — measured: 11 stale version directories on a machine
+with the companion uninstalled, its `companion/AUTONOMY.md` still sitting on disk in each
+one. A resolver that answered from the cache would therefore keep answering *installed*
+forever, and the human's promotion and merge gates would stay delegated after the human
+removed the thing that delegated them, with nothing anywhere saying so. So: **the registry
+is the only authority for location 2**, a registry entry naming a directory that is gone
+is not a companion (the answer is not "find another cached version"), and **every unknown
+resolves to `gated`** — no registry, an unparseable one, a format this reader does not
+understand. The safe end of an unknown is the end where the human keeps both gates.
+`tests/companion-plugins.test.sh` pins the uninstalled-but-cached case against a fixture
+laid out exactly as the real cache is.
 
 **Research tasks (`kind: research`) are human-driven.** Same statuses, but no PRs
 and no role-agent dispatch — the human (with Claude in-session) produces the
