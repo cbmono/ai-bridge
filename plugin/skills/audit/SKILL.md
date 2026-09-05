@@ -33,6 +33,18 @@ and stop.
 
 ## Cadence
 This is a **slow** loop — run it weekly, or after a batch of projects close, not every
-tick. It can be scheduled to run periodically (e.g. a cron job or your scheduler of
-choice). It changes no task state, but it **prepends to `log.md`** — as does each `/pm-loop`
-tick — so run it **between** ticks, not concurrently, to avoid a write race on that file.
+tick. It changes no task state, but it **prepends to `log.md`** — as does each
+`/ai-bridge:dispatch` tick — so run it **between** ticks, not concurrently, to avoid a
+write race on that file.
+
+**Run it with `/loop 7d /ai-bridge:audit`, in a session on the machine that holds the
+bundle** — the same first-party `/loop` the dispatch cadence uses, at a slow interval.
+Nothing is installed for it: no cron, no watcher, no script.
+
+**A scheduled cloud routine cannot do this job, and the reason is structural rather than a
+preference.** `/schedule` (alias `/routines`) creates *remote* Claude Code agents via the
+claude.ai API; a remote agent gets a fresh clone of a **GitHub repository**, and every
+input this audit needs is either gitignored or outside the repo — `instance.config.local.json`,
+`/repos/`, `SNAPSHOT.json`, `AWAITING.md`, and the target-repo clones under `reposRoot`,
+which is an absolute path on your machine. The measurement, and what a routine *can*
+usefully do instead, are in `docs/operations.md` → "Running the loop on a cadence".

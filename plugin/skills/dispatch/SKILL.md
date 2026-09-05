@@ -74,6 +74,59 @@ reasons: it is account-scoped, so one URL can never be written by two humans
 artifact tool at all — measured 2026-09-05 on Claude Code 2.1.261, inventory and tool
 search both. So the tick prints `run /ai-bridge:board to refresh` and stops there.
 
+## Running it on a cadence: `/loop`, and nothing else
+
+**`/loop 10m /ai-bridge:dispatch` is the standard way to run this loop in a session.**
+`/loop [interval] <prompt>` is first-party (Claude Code 2.1.261, `/loop 5m /foo`); it
+re-fires a slash command on a clock in the session you are already in. Nothing else is
+installed, started or supervised — **there is no watcher, no `sleep` loop, no cron and no
+script for cadence**, and precondition 2 above deletes the fixed-interval cron an older
+approach left behind.
+
+**10m, and here is the number it comes from.** The gap is not tuned to tick length — a tick
+that dispatches role agents runs as long as it runs, and the lock is what keeps that safe.
+It is tuned to **the slowest thing a tick waits on**, which is an external review
+round-trip: a CodeRabbit review plus the required checks lands in **minutes, not seconds**,
+so a pass every 10 minutes meets a merged PR or a finished review roughly one pass after it
+happens, and a shorter interval buys nothing but passes that find the same state. Longer
+than ~30m and the loop stops being the thing that notices.
+
+**A quiet bundle wants the self-paced form: `/loop /ai-bridge:dispatch`, with no
+interval.** Omitting the interval is `/loop`'s dynamic mode — the model paces its own
+iterations instead of a clock doing it — which is the right shape when most passes would
+find nothing to do. Reach for it on a bundle with one or two active projects; reach for the
+interval form when work is landing and you want a fixed heartbeat.
+
+**Under `/loop`, two of the steps below change, and only two:**
+
+1. **Step 1 takes the lock with `--as loop`** — `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh
+   acquire --as loop --agent project-manager`. Every decision is the launcher's; the only
+   difference is that a held lock is reported in **one line** instead of a block, because
+   at a fixed interval most firings land while an earlier tick is still running.
+2. **Skip step 3.** `/loop` *is* the cadence, so scheduling a wakeup as well gives the
+   session two schedulers and double the passes. Dispatch, wait for the notification,
+   release the lock, and end the pass.
+
+**Exit 1 from that acquire is a CLEAN SKIP, not an error.** It is the expected outcome of a
+firing that landed mid-tick. Print the one line it gave you, **end the pass successfully**,
+and let the next firing try again: no error, no `⚠️`, nothing put in front of the human,
+and nothing retried. A loop that reports a fault six times an hour for working correctly is
+one an operator stops reading. The other codes are unchanged and still stop the loop: 2
+and 3 go to the human exactly as step 1 says.
+
+**A `/loop` can never spawn a second orchestrator, and the lock is the proof — not this
+paragraph.** `/loop` fires on a clock, so it will fire into a running tick; `acquire`
+refuses with exit 1 in that firing, before anything is spawned, and the check and the write
+are one `O_EXCL` create with nothing to interleave. So the "one orchestrator" guarantee
+holds under `/loop` for the same reason it holds when you type the command yourself — the
+guarantee never rested on the cadence, and adding a clock does not touch it. **One `/loop`
+per clone**, exactly as before: the lock bounds ticks, not loops, so two loops against one
+working tree is still the bug it always was — the lock catches it rather than blessing it.
+
+**Not a cloud routine.** `/schedule` (alias `/routines`) creates *remote* agents; a bundle
+is a local checkout whose every operating input is gitignored, so a routine cannot run this
+loop at all. The measurement is in `docs/operations.md` → "Running the loop on a cadence".
+
 ## How the serial loop works
 
 Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
@@ -83,6 +136,7 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
        ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire --agent project-manager
 
+   (add `--as loop` when a `/loop` is driving — see "Running it on a cadence" above)
    and act on its exit code. **The check and the write are that one call** (`O_EXCL` —
    no read-then-write to interleave with): it closes a window of seconds to minutes —
    between your dispatch and the tick's own ledger entry — in which the ledger truthfully
@@ -92,7 +146,8 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    - **0** — the lock is yours, and it printed nothing. **Spawn the tick now**, as the
      very next thing you do.
    - **1** — HELD: a tick is in flight. Do **not** dispatch. Schedule the gap (step 3,
-     `noop: true`) and skip, exactly as step 4 does.
+     `noop: true`) and skip, exactly as step 4 does. Under `/loop` there is no gap to
+     schedule: print the one line and end the pass clean.
    - **2** — stale, future-dated, or unreadable; the script printed the details. Do
      **not** dispatch and do **not** delete it: put what it printed in front of the
      human and stop until they answer. `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is the human's answer, not yours.
