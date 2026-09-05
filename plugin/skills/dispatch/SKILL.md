@@ -272,7 +272,10 @@ ticks, regardless of how long a tick runs.
 
 - Honor the human gates **per the owning project's `autonomy`** (default `gated`):
   never promote `draft → ready` and never merge. A project may delegate a gate **only**
-  where `AUTONOMY.md` exists at the bundle root and defines the mode — then follow that
+  where `AUTONOMY.md` exists and defines the mode — resolved by
+  `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-autonomy.sh --bundle <bundle>`, which reads the
+  **bundle root first** and then an installed **companion plugin**
+  (`ai-bridge-yolo@ai-bridge`); exit 1 is absent. Then follow that
   file exactly, including its preflight. **No `AUTONOMY.md` ⇒ every project is
   `gated`** and the field is inert. When `autonomy` is unset, act as `gated`.
 - Reconcile doc `status:` against live `gh`/`git` before acting; act only on deltas.

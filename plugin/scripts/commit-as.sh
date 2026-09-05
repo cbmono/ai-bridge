@@ -332,8 +332,8 @@ gitx() {
 # Two-human-authority guard (SCHEMA.md): draft→ready is the human's gate.
 #
 # A project may DELEGATE that gate to the loop via `autonomy:` in its project.md —
-# but only where the capability exists at all, which is what AUTONOMY.md at the
-# repo root is (see "Delegated authority" in SCHEMA.md). No AUTONOMY.md means no
+# but only where the capability exists at all, which is what AUTONOMY.md is (see
+# "Delegated authority" in SCHEMA.md). No AUTONOMY.md means no
 # modes exist, so every `autonomy` value is inert and every agent-role promotion
 # is a violation. Delegation also applies ONLY to `kind: build` tasks, because
 # SCHEMA.md keeps research human-driven in every mode. So this guard is decided
@@ -362,9 +362,26 @@ gitx() {
 # project.md's `autonomy:` line — a project.md born in this commit included —
 # refuses the promotion: land the autonomy change first (that edit is the human's),
 # promote in the next commit.
+#
+# WHERE THE CAPABILITY FILE IS LOOKED FOR is `resolve-autonomy.sh`'s question, not this
+# script's: the bundle root first (a v1-era bundle's own file always wins), else an
+# installed companion plugin from core's own marketplace. That is one lookup with one
+# reader, so this guard and the loop cannot come to disagree about whether delegation
+# exists. DEGRADE TOWARDS THE OLD BEHAVIOUR, NEVER PAST IT: a missing or unrunnable
+# resolver falls back to the root-only check this line used to be, which is strictly
+# narrower than the resolver — it can only ever refuse a promotion the resolver would
+# have allowed, and never allow one it would have refused.
 if [ "$role" != "human" ]; then
   delegation_possible=0
-  [ -f "$repo_root/AUTONOMY.md" ] && delegation_possible=1
+  # `|| true`: with `set -e`, a command substitution that fails takes the ASSIGNMENT's
+  # status with it, so an unreadable script directory would abort the commit instead of
+  # falling through to the root-only check below.
+  autonomy_resolver="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/resolve-autonomy.sh"
+  if [ -x "$autonomy_resolver" ]; then
+    "$autonomy_resolver" --bundle "$repo_root" >/dev/null 2>&1 && delegation_possible=1
+  else
+    [ -f "$repo_root/AUTONOMY.md" ] && delegation_possible=1
+  fi
   violations=""
   # Enumerate staged files under projects/ ONCE. Fail CLOSED if git itself errors
   # (corrupt index, disk error): refuse rather than proceed with an empty list, which
@@ -431,7 +448,8 @@ EOF
     echo "error: role '$role' may not promote these tasks to 'ready':" >&2
     printf '%s' "$violations" >&2
     echo "       draft→ready is the human's authority (SCHEMA.md). The loop may promote a task" >&2
-    echo "       only where AUTONOMY.md exists (no file = no delegated modes), the owning" >&2
+    echo "       only where AUTONOMY.md exists (no file = no delegated modes) — at this" >&2
+    echo "       bundle's root, or from the ai-bridge-yolo companion plugin — the owning" >&2
     echo "       project's 'autonomy' is exactly 'yolo' — the one mode AUTONOMY.md defines;" >&2
     echo "       any other value fails closed — the task is 'kind: build' (research stays" >&2
     echo "       human-driven), AND this commit does not itself edit that 'autonomy:' line:" >&2

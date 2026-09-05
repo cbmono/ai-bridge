@@ -215,7 +215,7 @@ assert "CONVENTIONS.md too"              "$(yes_if bash -c "test -f '$LEG/CONVEN
 # removal is reported loudly with the command to put it back.
 assert "AUTONOMY.md is NOT put back"     "$(no_if test -e "$LEG/AUTONOMY.md")"
 assert "…and the loss is reported"       "$(yes_if grep -q 'back to' "$TMP/convert")"
-assert "…with the command to restore it" "$(yes_if grep -q 'docs/autonomy/AUTONOMY.md' "$TMP/convert")"
+assert "…with the install that opts back in" "$(yes_if grep -q 'ai-bridge-yolo@ai-bridge' "$TMP/convert")"
 assert "the bundle's DATA is byte-identical" \
   "$([ "$DATA_BEFORE" = "$(cat "$LEG/projects/demo/index.md" "$LEG/knowledge/findings/f.md")" ] && echo 0 || echo 1)"
 assert "the task document is still there" "$(yes_if test -f "$LEG/projects/demo/tasks/task-001-x.md")"

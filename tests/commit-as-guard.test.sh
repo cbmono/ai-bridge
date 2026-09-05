@@ -10,6 +10,15 @@ SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts/commit-as.sh"
 TMP="$(mktemp -d)" || {
   echo "commit-as-guard.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+
+# NO COMPANION PLUGIN MAY ANSWER FOR THIS FIXTURE. The guard now resolves AUTONOMY.md via
+# `resolve-autonomy.sh` — bundle root first, else an installed companion — so the
+# "capability absent" cases below would otherwise be decided by whatever the developer
+# happens to have installed rather than by the fixture. An empty config dir means an
+# absent registry, which is the gated answer. Every assertion in this file is unchanged.
+export CLAUDE_CONFIG_DIR="$TMP/no-plugins"
+mkdir -p "$CLAUDE_CONFIG_DIR"
+
 pass=0; fail=0
 
 setup() {

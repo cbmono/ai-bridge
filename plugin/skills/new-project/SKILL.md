@@ -84,7 +84,9 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    was omitted; batching kind alongside a question its own answer suppresses is what puts
    `render` and `supabase` in front of a research project.
    - **kind** — build / research.
-   - **autonomy** — read `AUTONOMY.md` at the bundle root first. **Absent ⇒ don't ask at
+   - **autonomy** — resolve `AUTONOMY.md` first, with
+     `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-autonomy.sh --bundle <bundle>` (bundle root,
+     then an installed companion — exit 1 means absent). **Absent ⇒ don't ask at
      all**: `gated` is the only mode, so record it and move on — and that holds **even
      against an explicit flag**. `autonomy=<anything-else>` with no `AUTONOMY.md` records
      `gated` and says so in one line; it is never recorded verbatim and never errors out.

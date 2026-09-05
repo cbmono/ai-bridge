@@ -221,7 +221,7 @@ ok "agents/index.md too"                 "$(yn bash -c 'test -f "$1/agents/index
 # restored, and the loss is reported loudly with the command to undo it.
 ok "AUTONOMY.md is NOT restored"         "$(yn test -e "$LEG/AUTONOMY.md")" no
 ok "…and the loss is reported"           "$(grep -c 'ask-first' "$TMP/convert.out" | tr -d ' ')" 1
-ok "…with the cp that opts back in"      "$(grep -c 'docs/autonomy/AUTONOMY.md' "$TMP/convert.out" | tr -d ' ')" 1
+ok "…with the install that opts back in" "$(grep -c 'ai-bridge-yolo@ai-bridge' "$TMP/convert.out" | tr -d ' ')" 1
 ok "the machinery .gitignore block is retired" \
    "$(grep -c 'ai-bridge machinery' "$LEG/.gitignore" | tr -d ' ')" 0
 ok "…while the human's own rule survives" "$(grep -cx 'my-own-rule/' "$LEG/.gitignore" | tr -d ' ')" 1
