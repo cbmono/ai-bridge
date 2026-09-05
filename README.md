@@ -26,6 +26,7 @@ repos and holds only the state of the work — never application code.
 | Doc | Read it when |
 |---|---|
 | **This page** | setting up, or looking up a command or a config key |
+| [docs/onboarding.md](docs/onboarding.md) | **you are new, or someone is joining you** — one page: install, the seven skills of week one, the two gates that stay yours |
 | [docs/schema.md](docs/schema.md) | you need to know what a document type holds |
 | [docs/autonomy.md](docs/autonomy.md) | you want the loop to promote or merge without you |
 | [docs/operations.md](docs/operations.md) | installing and upgrading (the plugin half and the bundle half), the board's three renderers, worktrees, editor setup |
