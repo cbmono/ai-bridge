@@ -200,7 +200,7 @@ marketplace_clone() {
 # The seed tree a repo carries at HEAD under <prefix>, as "<blob> <path-under-seed>" lines.
 # `ls-tree`'s own output is "<mode> <type> <blob>\t<path>"; --format is git ≥2.36 only.
 tree_seed_list() { # <repo> <prefix>
-  git -C "$1" ls-tree -r HEAD -- "${2}seed" 2>/dev/null \
+  git -C "$1" -c core.quotePath=false ls-tree -r HEAD -- "${2}seed" 2>/dev/null \
     | awk -v pre="${2}seed/" '{ sha=$3; sub(/^[^\t]*\t/, ""); p=$0;
                                 if (index(p, pre) == 1) { print sha " " substr(p, length(pre)+1) } }' \
     | sort
@@ -211,7 +211,10 @@ tree_seed_list() { # <repo> <prefix>
 # this copy never carried, and a merge base taken from it is a base for somebody else's
 # plugin. Cheap: the seed is 20 files.
 plugin_seed_list() {
-  ( cd "$SEED_SRC" && find . -type f | sed 's#^\./##' | sort ) \
+  # `.DS_Store` is excluded because the Finder writes one into any directory it visits and
+  # a cache copy is a directory like any other; it is in `seed/.gitignore`, so it can never
+  # be on the git side of this comparison and would reject a clone that is in fact correct.
+  ( cd "$SEED_SRC" && find . -type f ! -name .DS_Store | sed 's#^\./##' | sort ) \
     | while IFS= read -r f; do [ -n "$f" ] && printf '%s %s\n' "$(blob_of "$SEED_SRC/$f")" "$f"; done \
     | sort
 }
