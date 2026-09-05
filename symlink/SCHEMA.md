@@ -561,6 +561,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `worktreeRoot` | **yes** — an absolute path on this machine | `<reposRoot>/_wt`, which is also still swept as the legacy root |
 | `boardInstances` | **yes** — a list of paths to sibling instances | just this instance |
 | `board` | **no** — one instance, one answer, and `install.sh` reads it from the tracked file at stamp time | on: `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something commits the tracked `/board.html` |
+| `boardArtifactUrl` | **local ONLY** — the page **this clone** published with `/ai-bridge:board`. Never in the tracked file, and never seeded: publishing is account-scoped, so a shared value is one clone's URL that the other can never write | nothing was published from this machine; the banner prints the `file://` path alone and the tick says nothing about a published page |
 | `models` | **yes**, and **seeded** — which model each tier costs **this human**. `install.sh` writes this key into the local file on any stamp that finds it missing, so local is normally the layer in force and the banner reads `local` | the tracked map, which stays as the fallback; absent from **both**, `resolve-model.sh` prints nothing on stdout, **says so on stderr**, and exits 1 |
 | `roleTiers` | **yes**, and **seeded** on the same terms — the same bill, per agent. **A partial override replaces only the entries it names**, so moving one agent to a cheaper tier leaves every other agent's tier standing, and the installer never tops a partial map up | as `models` above |
 | `maxAgentsInFlight` | **yes** — how many agents **this machine** can carry (below) | the tracked value; absent from both, `resolve-max-agents.sh` prints nothing and exits 1, and the caller applies the fallback its own document states |
@@ -645,20 +646,29 @@ overridable, because an override is exactly the disagreement that breaks it. Spe
 capacity fail that test in the other direction: `models`, `roleTiers` and
 `maxAgentsInFlight` are correct *while the clones differ*, so they are overridable.
 
-**A published-board URL key sat in this table from 2026-08-26 until 2026-08-29, and its
-deletion is the reason `board` is in the row above.** It named the page each human
-published to, and it was moved here once artifact publishing turned out to be
-**account-scoped**: the update path requires an artifact the account owns and no share
-level grants it, so exactly one account could ever publish to a given URL — a tracked
-value produced **one working board and one silently dead publish step** on whichever clone
-did not own the artifact. Then the owning account was switched and the page disappeared
-from under its own owner, which is the failure the key could not survive. Publishing is
-deleted outright: the board is now a local file each tick re-renders, `board` is the
-switch, and it is **not** overridable, because `install.sh` reads that same key from the
-tracked file at stamp time and a per-machine override would give one switch two answers.
-Nothing was lost on a shared bundle — the cross-owner view was never the published page.
-It is the *other owners* section that `scripts/build-board.sh` reads from the tracked task
-documents at your current git `HEAD`, which is the one thing both clones genuinely share.
+**`boardArtifactUrl` was TRACKED from 2026-08-26 until 2026-08-29, and was deleted with
+the publish path it served. It is back, and the only thing that changed is which file it
+lives in.** The constraint that killed it is unchanged and is not a bug anyone can fix:
+artifact publishing is **account-scoped** — the update path requires an artifact the
+account owns and no share level grants it — so exactly one account can ever publish to a
+given URL. **Tracked**, that produced one working board and one **silently dead publish
+step** on whichever clone did not own the artifact, and when the owning account was
+switched the recorded page disappeared from under its own owner. **Per machine**, the key
+says only what *this* clone published, which is the one thing it can be right about: two
+humans on one bundle keep two URLs and each publishes their own, exactly as the
+account-scoping requires. `session-banner.sh` reads it through `resolve-config.sh` and then
+checks the **source**: a value resolving from `tracked` is dropped rather than printed, so
+the old shape cannot come back by someone pasting a URL into the wrong file.
+
+**`board` stays not overridable, and for its own reason** — `install.sh` reads that key
+from the tracked file at stamp time, and a per-machine override would give one switch two
+answers. It gates `boardArtifactUrl` too: `board: false` silences the published row like
+every other one.
+
+**Nothing about a shared bundle depends on the published page**, then or now. The
+cross-owner view is the *other owners* section that `scripts/build-board.sh` reads from the
+tracked task documents at your current git `HEAD`, which is the one thing both clones
+genuinely share.
 
 Two constraints survive the override and must be checked against the *effective*
 values, not the tracked ones:

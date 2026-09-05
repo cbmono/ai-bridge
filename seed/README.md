@@ -9,7 +9,8 @@ This is an **instance** of the `ai-bridge` template. The generic machinery
 is **symlinked in** from the template and gitignored; the slash commands come from
 the `ai-bridge` **plugin** (`/ai-bridge:dispatch`, `/ai-bridge:new-project`,
 `/ai-bridge:close-project`, `/ai-bridge:pr-review-request`,
-`/ai-bridge:answer`, `/ai-bridge:audit`, `/ai-bridge:fanout`) and are
+`/ai-bridge:answer`, `/ai-bridge:audit`, `/ai-bridge:board`,
+`/ai-bridge:fanout`) and are
 installed per machine, not per instance. This repo tracks only its own
 **content**: `objectives/`, `projects/`, `knowledge/`, `log.md`, and
 `instance.config.json`.
