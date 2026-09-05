@@ -373,7 +373,10 @@ gitx() {
 # have allowed, and never allow one it would have refused.
 if [ "$role" != "human" ]; then
   delegation_possible=0
-  autonomy_resolver="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/resolve-autonomy.sh"
+  # `|| true`: with `set -e`, a command substitution that fails takes the ASSIGNMENT's
+  # status with it, so an unreadable script directory would abort the commit instead of
+  # falling through to the root-only check below.
+  autonomy_resolver="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/resolve-autonomy.sh"
   if [ -x "$autonomy_resolver" ]; then
     "$autonomy_resolver" --bundle "$repo_root" >/dev/null 2>&1 && delegation_possible=1
   else

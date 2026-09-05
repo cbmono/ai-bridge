@@ -79,7 +79,13 @@ if [ -f "$bundle/AUTONOMY.md" ]; then
 fi
 
 # 2. An installed companion.
-registry="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/installed_plugins.json"
+#
+# `${HOME:-}` and not `$HOME`: under `set -u` a bare `$HOME` ABORTS where the variable is
+# unset (a `git` hook, a stripped `env -i` shell), and this script's callers read its exit
+# status — an abort is exit 1, which happens to be the right answer here by luck rather
+# than by design, and a stderr line nobody asked for. Unset resolves to a path that does
+# not exist, which is the same fail-closed `gated` every other unknown gets.
+registry="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/plugins/installed_plugins.json"
 [ -f "$registry" ] || exit 1
 
 # This plugin's own root: `<...>/scripts/resolve-autonomy.sh` -> `<...>`. Used twice —
