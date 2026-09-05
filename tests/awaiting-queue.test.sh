@@ -318,12 +318,12 @@ simple_ok "six is plural and says six: '6 items need you'" \
   "$(printf '%s' "$HUMAN_6" | grep -qF '🔔 6 items need you' && echo 0 || echo 1)"
 # WHERE TO ACT, and only somewhere that exists. No rendered board ⇒ the line must not send
 # a human to one; a rendered board ⇒ it may, and does.
-simple_ok "…and with no board rendered it routes to /pm-loop only" \
-  "$(printf '%s' "$HUMAN_6" | grep -qF '🔔 6 items need you — run /pm-loop' && echo 0 || echo 1)"
+simple_ok "…and with no board rendered it routes to /ai-bridge:dispatch only" \
+  "$(printf '%s' "$HUMAN_6" | grep -qF '🔔 6 items need you — run /ai-bridge:dispatch' && echo 0 || echo 1)"
 mkdir -p "$TMP/inst/.board-live"; printf '<!doctype html>\n' > "$TMP/inst/.board-live/board.html"
 run_banner
 simple_ok "…and with one rendered it names the board as well" \
-  "$(printf '%s' "$HUMAN" | grep -qF '🔔 6 items need you — see the board above, or run /pm-loop' && echo 0 || echo 1)"
+  "$(printf '%s' "$HUMAN" | grep -qF '🔔 6 items need you — see the board above, or run /ai-bridge:dispatch' && echo 0 || echo 1)"
 rm -rf "$TMP/inst/.board-live"
 
 # AWAITING.md ABSENT is the off switch, and it must leave the human's copy exactly as it is

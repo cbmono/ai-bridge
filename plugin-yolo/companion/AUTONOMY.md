@@ -243,9 +243,8 @@ no amount of waiting reopens it. Then:
 
 - **Under `gated`** (and under every project when this file is absent): **ask**. A
   `/new-project` run asks in-session; an `/ai-bridge:dispatch` tick is a subagent that
-  cannot ask, so
-  it writes the question into the task's `open_questions` — where the human answers by
-  appending ` --- <answer>` — and holds the PR meanwhile.
+  cannot ask, so it writes the question into the task's `open_questions` — where the
+  human answers by appending ` --- <answer>` — and holds the PR meanwhile.
 - **Under `yolo`**: dispatch `ai-bridge:qa-reviewer` and record that you did, without asking.
 
 **Exit 1 is NOT this decision, in either mode.** A transient refusal — rate-limited,

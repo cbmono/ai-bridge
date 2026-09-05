@@ -832,7 +832,7 @@ EOF
 # =========================================================================================
 # CHECK 7 — tick-lock (HUMAN — SHIP-BLOCKER: never repaired)
 # =========================================================================================
-# THE FACT: whether a `/ai-bridge:dispatch` tick lock is held, claimed, or past its staleness
+# THE FACT: whether an `/ai-bridge:dispatch` tick lock is held, claimed, or past its staleness
 # threshold. The verdict is `tick-lock.sh status`'s, replayed here — this file has no
 # opinion about what stale means and must never grow one, or the two would drift about the
 # only question that matters.
@@ -864,7 +864,7 @@ check_tick_lock() {
   case "$rc" in
     0) good "no tick lock held — the next dispatch tick takes it"
        case "$out" in *".tick-lock.claim"*) note "note: a claim file outlived its lock; the next acquire clears it" ;; esac ;;
-    1) good "a /ai-bridge:dispatch tick is in flight (this is a live lock, not a fault)"
+    1) good "an /ai-bridge:dispatch tick is in flight (this is a live lock, not a fault)"
        printf '%s\n' "$out" | sed -n '1,3p' | sed 's/^/    /'
        case "$out" in *"No tick has claimed it yet"*) note "unclaimed: taken for a dispatch that is starting" ;; esac ;;
     *) warn "the tick lock needs YOUR decision — this is not repaired for you"

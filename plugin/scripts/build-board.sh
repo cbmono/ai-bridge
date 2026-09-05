@@ -131,7 +131,7 @@
 # hand-rolled JSON reader mis-handling a quote inside a title is exactly the bug that
 # turns an untrusted title into markup on a published page. `json` and
 # `html.escape(..., quote=True)` are the right primitives, they are in the standard
-# library, and this is a human-run reporting step — not tick machinery a /ai-bridge:dispatch
+# library, and this is a human-run reporting step — not tick machinery an /ai-bridge:dispatch
 # depends on. No npm, no pip, no new runtime.
 #
 # OUTPUT SHAPE. The default output is an **Artifact page body**: a <title>, an inline

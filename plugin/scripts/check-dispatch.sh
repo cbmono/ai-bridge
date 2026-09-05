@@ -4,7 +4,7 @@
 #
 #   Usage: check-dispatch.sh <task-doc>
 #
-# Run it whenever a dispatched agent reports — from a `/ai-bridge:dispatch` tick or from an ad-hoc
+# Run it whenever a dispatched agent reports — from an `/ai-bridge:dispatch` tick or from an ad-hoc
 # dispatch in a main session. It reads three things and judges nothing else:
 #
 #   1. did the task's `status:` advance off `ready`/`in-progress`;

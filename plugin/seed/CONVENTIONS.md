@@ -306,7 +306,7 @@ in `cbmono/ai-bridge` enforces this.
   round-trip costs **about 9 minutes of wall clock and no tokens** (8-10 minutes on a
   clean runner, measured across `cbmono/ai-bridge`'s recent runs); the local full run
   measured **2026-08-29** cost **39m 47s and 269.4k tokens** on a machine that was also
-  running a `/ai-bridge:dispatch` tick. Same answer, several times the wall clock, and tokens on top.
+  running an `/ai-bridge:dispatch` tick. Same answer, several times the wall clock, and tokens on top.
   This is a **proportion argument, not a ban**: a *red* local run would have saved a CI
   round-trip, and the day a repo's CI is slower than its local suite, this rule inverts.
   **The local run never was the gate.** In `cbmono/ai-bridge`, the `harness suite` job is a

@@ -403,7 +403,7 @@
 # `release` IS UNCONDITIONAL, AND THAT PUTS AN OBLIGATION ON THE CALLER. It holds no
 # session identity and cannot tell your lock from a sibling's — it is the human's
 # override, and an override that asked who you were would not be one. So a caller must
-# release only a lock IT took: a `/ai-bridge:dispatch` session that skipped because another loop held
+# release only a lock IT took: an `/ai-bridge:dispatch` session that skipped because another loop held
 # the lock and then released it on the way out would delete a LIVE holder's lock and
 # re-open the double-dispatch. `/ai-bridge:dispatch` step 5 states that condition. The second acquire
 # site does not relax this and has the simplest obligation there is: A TICK RELEASES
@@ -943,7 +943,7 @@ case "$cmd" in
 
       maybe)
         # THE ONE THIS FILE WILL NOT DECIDE. The ids are equal, but at least one came from
-        # the runtime, and the runtime's id is one per SESSION: every tick a `/ai-bridge:dispatch`
+        # the runtime, and the runtime's id is one per SESSION: every tick an `/ai-bridge:dispatch`
         # session starts carries it, so equality is consistent with "you, re-entering" AND
         # with "a sibling this session resumed". Guessing either way has a name — proceed is
         # the 2026-08-29 double-dispatch, hold is the 2026-08-30 stand-down — so it is

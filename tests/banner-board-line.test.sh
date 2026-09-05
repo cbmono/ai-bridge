@@ -174,7 +174,7 @@ assert "board enabled, nothing rendered: it SAYS SO rather than saying nothing" 
   "$(has 'Board   enabled, but never rendered' "$OUT")"
 # NAMING THE REPAIR IS HALF THE LINE. "Something is missing" without "here is what makes it"
 # leaves the reader exactly where the silence did — reaching for `ls`.
-assert "…and names a /pm-loop tick as what renders it"  "$(has '/pm-loop tick renders it' "$OUT")"
+assert "…names an /ai-bridge:dispatch tick as the renderer"  "$(has '/ai-bridge:dispatch tick renders it' "$OUT")"
 assert "…and build-board.sh as the other route" "$(has 'build-board.sh' "$OUT")"
 # TEXTUALLY DISTINCT FROM THE RENDERED ROW, which is the whole property: two states that
 # print strings a human (or a grep) cannot tell apart are one state with extra steps. Keyed

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # install-era-wording.test.sh — every surviving mention of `install.sh`, `upgrade.sh` or
-# `symlink/` in the shipped surface is DECLARED, and nothing may tell a reader to run
-# either retired script.
+# `symlink/` in the shipped surface is DECLARED, nothing may tell a reader to run either
+# retired script, and the retired `/pm-loop` command name appears nowhere at all.
 #
 # WHY THIS IS A TEST AND NOT A ONE-OFF SWEEP. `install.sh` and `upgrade.sh` are refusal
 # stubs that exit 2, and `symlink/` is a directory that no longer exists — so a sentence
@@ -17,7 +17,8 @@
 # it. Finding those cost a hunt across 56 mentions. THE POINT OF THIS FILE IS THAT THE
 # NEXT SWEEP IS A DIFF INSTEAD.
 #
-# THE TWO PROPERTIES, AND WHY EACH IS SHAPED THE WAY IT IS.
+# THE THREE PROPERTIES, AND WHY EACH IS SHAPED THE WAY IT IS. The third is stated at its
+# own section below, because what makes it different is that it has no allowlist.
 #
 #   1. THE INVENTORY EQUALS THE ALLOWLIST, EXACTLY — a new mention fails, and so does a
 #      new FILE. `ALLOWED` below is the declared set: one row per file, the number of
@@ -222,6 +223,53 @@ ok "…and a planted bash-upgrade.sh instruction is caught" \
 sed -i.bak -E 's/install\.sh|upgrade\.sh|symlink\//RETIRED-NAME/g' "$FIX/docs/pm-design.md" && rm -f "$FIX/docs/pm-design.md.bak"
 ok "…a row whose mentions all disappeared is reported stale" \
    "$(LC_ALL=C comm -13 <(inventory "$FIX") "$TMP/declared" | grep -c '^docs/pm-design\.md' | tr -d ' ')" 1
+
+# =======================================================================================
+echo
+echo "== 4. the retired /pm-loop command name is gone from the shipped surface =="
+# =======================================================================================
+# THE SAME REPLATFORM RETIRED A SECOND NAME, and it rots the same way. `/pm-loop` became
+# `/ai-bridge:dispatch` in ai-bridge-v2/task-005, and the sweep reached the command file
+# and not the strings around it: the first 1.0.0 session on a real bundle printed
+# "18 items need you — see the board above, or run /pm-loop" out of `session-banner.sh`,
+# a command the installed plugin does not have. `grep` found ~60 more across `plugin/`.
+#
+# WHY IT NEEDS NO ALLOWLIST, WHICH IS THE DIFFERENCE FROM PROPERTY 1. `install.sh` is a
+# refusal stub that still exists, so naming it can be legitimate history; `/pm-loop` is a
+# command the runtime cannot resolve at all, so every mention inside the shipped surface
+# reads as an instruction whatever the sentence around it intends. The two documents where
+# naming it IS the job — `docs/migrating.md`, the conversion guide, and `docs/releases/`,
+# the frozen record of what shipped — are already out of `scope_files`, and property 1
+# asserts that exclusion above. So the budget here is zero and stays zero.
+#
+# THE PLUGIN HALF IS ASSERTED IN THE CRITERION'S OWN FORM — `grep -r 'pm-loop' plugin/`,
+# on the tree rather than through `git ls-files` — because that is the command the task
+# was written against and an untracked file under `plugin/` ships just the same.
+PM_RE='pm-loop'
+
+# pm_hits — `<path>:<line>:<text>` for every surviving mention in the tracked scope.
+pm_hits() { # <root>
+  local root="$1" f
+  while IFS= read -r f; do
+    [ -f "$root/$f" ] || continue
+    grep -nE "$PM_RE" "$root/$f" 2>/dev/null | sed "s|^|$f:|"
+  done < <(scope_files "$root")
+}
+
+pm_found="$(pm_hits "$REPO")"
+ok "no /pm-loop mention in README.md, docs/ or plugin/" \
+   "$([ -z "$pm_found" ] && echo none || printf '%s' "$pm_found" | head -3 | tr '\n' ' ')" none
+ok "…and plugin/ carries none, counted as the criterion counts it" \
+   "$( ( cd "$REPO" && grep -r 'pm-loop' plugin/ 2>/dev/null | wc -l ) | tr -d ' ' )" 0
+
+# CAPABLE OF FAILING, both halves, against the same fixture tree property 3 built. A
+# document and a script, because the two halves read the tree by different routes.
+printf '\nRun `/pm-loop` when the queue has work.\n' >> "$FIX/docs/sharing.md"
+printf '\n# a /pm-loop tick renders it\n'            >> "$FIX/plugin/scripts/build-board.sh"
+ok "…a planted mention in a doc is caught" \
+   "$(pm_hits "$FIX" | grep -c '^docs/sharing\.md' | tr -d ' ')" 1
+ok "…and a planted mention under plugin/ fails the criterion's own grep" \
+   "$( ( cd "$FIX" && grep -r 'pm-loop' plugin/ 2>/dev/null | wc -l ) | tr -d ' ' )" 1
 
 echo
 printf '%s passed, %s failed\n' "$pass" "$fail"

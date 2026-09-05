@@ -146,7 +146,7 @@
 # machinery. It catches the partial case — some links dead while settings still resolves.
 #
 # NEVER REPAIRS, NEVER WRITES, NEVER RENDERS. It reports what is already on disk. The
-# board is rendered by a `/ai-bridge:dispatch` tick or `watch-board.sh`; the machinery repair
+# board is rendered by an `/ai-bridge:dispatch` tick or `watch-board.sh`; the machinery repair
 # is the human's `/ai-bridge:init` re-run.
 #
 # COLOUR IS ON FOR `--format json`, AND THAT IS A MEASUREMENT, NOT A GUESS. `[ -t 1 ]` is
@@ -818,7 +818,7 @@ echo   # <- the banner's leading blank line (mutation anchor: do not fold into t
 
 # ---------------------------------------------------------------------------------------
 # 0. MACHINERY — was check-machinery.sh. FIRST, and above the identity line, because it is
-#    an alarm: a /ai-bridge:dispatch tick started now fails mid-dispatch with agents already briefed.
+#    an alarm: an /ai-bridge:dispatch tick started now fails mid-dispatch with agents already briefed.
 # ---------------------------------------------------------------------------------------
 # A handful of probes, not a walk. Resolving every link in the bundle on every session
 # start costs more and says the same thing: these five are one per class of machinery the
@@ -1238,7 +1238,7 @@ if [ "$board_on" -eq 1 ]; then
     # it here would make every `has "$page"` assertion in the harnesses pass on an instance
     # with no board — a vacuous check bought for a few characters of prose.
     echo "Board   enabled, but never rendered — no .board-live/board.html here yet"
-    say "$C_DIM" "        a /ai-bridge:dispatch tick renders it, or run build-board.sh"
+    say "$C_DIM" "        an /ai-bridge:dispatch tick renders it, or run build-board.sh"
   fi
 fi
 
