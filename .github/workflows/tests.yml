@@ -118,6 +118,9 @@ jobs:
           tests/agent-control.test.sh
           tests/commit-as-guard.test.sh
           tests/companion-plugins.test.sh'
+                # The continuation lines sit at the block scalar's own base indent, which
+                # YAML strips, so the shell already sees them flush left. The sed is
+                # insurance: re-indent them to read as a list and nothing breaks.
                 core="$(printf '%s\n' "$core" | sed 's/^[[:space:]]*//')"
 
                 # DERIVED — every harness that NAMES a changed path, or a >=2-component
