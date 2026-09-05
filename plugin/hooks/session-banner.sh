@@ -147,7 +147,7 @@
 #
 # NEVER REPAIRS, NEVER WRITES, NEVER RENDERS. It reports what is already on disk. The
 # board is rendered by a `/pm-loop` tick or `watch-board.sh`; the machinery repair
-# is the human's `install.sh` re-run.
+# is the human's `/ai-bridge:init` re-run.
 #
 # COLOUR IS ON FOR `--format json`, AND THAT IS A MEASUREMENT, NOT A GUESS. `[ -t 1 ]` is
 # still the right question for a PIPE and it is still false here — but it stopped being the
@@ -1113,7 +1113,7 @@ table() { # <header-label> <header-value> <rows>
 #
 # THE `board` GATE IS READ FROM THE TRACKED FILE ONLY, and not through resolve-config.sh,
 # because `board` is deliberately NOT in the per-machine override set (SCHEMA.md →
-# "Per-machine config overrides"). `install.sh` reads the same key from the same tracked
+# "Per-machine config overrides"). `/ai-bridge:init` reads the same key from the same tracked
 # file at stamp time; reading it from somewhere the stamp-time reader does not look is how
 # one key becomes two switches, and the half that disagreed would be the silent one.
 #

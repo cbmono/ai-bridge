@@ -35,7 +35,7 @@
 # from a file they never wrote. A `*` inside the directory ignores every file in it
 # INCLUDING itself, so git sees the directory as empty and never tracks any of it —
 # and an empty directory is not a thing git records. That keeps the whole feature
-# out of `install.sh` and out of `seed/.gitignore`: it works identically on an
+# out of `/ai-bridge:init` and out of `seed/.gitignore`: it works identically on an
 # instance stamped today and one stamped a year ago, with no installer run.
 #
 # ------------------------------------------------------------------- ARM / DISARM
@@ -70,7 +70,7 @@
 # The hook writes every action it takes to `control.log` — that is the durable
 # record, and `status` surfaces it. This script additionally PRINTS the exact
 # `log.md` bullet and its `commit-as.sh` command, and never runs either: the same
-# report-the-command shape as `RETIRED`, `prune-worktrees.sh` and `install.sh`'s
+# report-the-command shape as `RETIRED`, `prune-worktrees.sh` and `/ai-bridge:init`'s
 # `git rm --cached`. Two reasons. `log.md` is tracked and several agents share one
 # working tree, so a spontaneous diff there gets absorbed under the wrong author by
 # whichever sibling stages `log.md` by name next. And whether a halt belongs in the

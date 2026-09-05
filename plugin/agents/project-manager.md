@@ -669,7 +669,7 @@ state, and act only on deltas.
       `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone --out .board-live/board.html`, from the
       bundle root. `--standalone` is required (a file opened straight in a browser
       needs the full HTML wrapper); the path is the one `watch-board.sh` already
-      writes and `install.sh` already gitignores — never stage or commit it. No
+      writes and `/ai-bridge:init` already gitignores — never stage or commit it. No
       readable snapshot ⇒ the renderer writes nothing and exits 0 ⇒ stop here, in
       silence.
    3. **Render the TRACKED board — but only on a tick that changed something.** If
@@ -702,7 +702,7 @@ state, and act only on deltas.
       construction. Nothing is sent to Pages and nothing to an account
       (`docs/operations.md` → "Opening the board"). No remote ⇒ no push, silently, as
       everywhere else in this step. An instance whose `.gitignore` still ignores
-      `board.html` stages nothing and that is fine — `install.sh` appends the
+      `board.html` stages nothing and that is fine — `/ai-bridge:init` appends the
       `!/board.html` un-ignore on its next stamp.
 
       **On a SHARED bundle two clones write this file, and the conflict has one right
