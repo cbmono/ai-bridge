@@ -1075,12 +1075,21 @@ table() { # <header-label> <header-value> <rows>
 [ -n "$trows" ] && table 'AGENT (role)' 'TIER → MODEL' "$trows"
 
 # ---------------------------------------------------------------------------------------
-# 5. BOARD — was show-board-link.sh. A LOCAL FILE, NEVER A PUBLISHED URL.
+# 5. BOARD — a local file, and the PER-MACHINE URL of a page this human published.
 # ---------------------------------------------------------------------------------------
-# That is a reversal, not an omission: publishing was ACCOUNT-SCOPED, so the board vanished
-# from under its own owner the moment they switched Claude accounts and no share level ever
-# made it writable by a second human. The config key that recorded the URL is deleted from
-# this repo and must not come back.
+# THE URL IS READ FROM THE LOCAL LAYER AND FROM NOWHERE ELSE, and that constraint is the
+# whole of what was learned the first time this key existed. Publishing is ACCOUNT-SCOPED:
+# the update path needs an artifact the account owns and no share level grants it, so
+# exactly one account can ever update a given page. Recorded in the TRACKED config, the key
+# therefore produced one working board and one silently dead publish step on whichever
+# clone did not own the artifact, and it survived the feature's deletion in two of three
+# live instances. Recorded per machine it says only what THIS clone published, which is the
+# one thing it can be right about — so a value that resolves from `tracked` is ignored here
+# rather than printed, and `/ai-bridge:board` writes only the local file.
+#
+# THE PAGE ITSELF NEVER STOPS BEING A FILE. The URL is an addition to the `file://` line,
+# never a replacement: `/board.html` is what a human without artifact access reads, and a
+# banner that dropped the path would take that route away from them.
 #
 # THE `board` GATE IS READ FROM THE TRACKED FILE ONLY, and not through resolve-config.sh,
 # because `board` is deliberately NOT in the per-machine override set (SCHEMA.md →
@@ -1117,9 +1126,14 @@ page="$root/.board-live/board.html"
 # and a broken one is the wallpaper this file exists not to print, and printing NOTHING is
 # the worst version of it — there is not even a line to be suspicious of.
 #
+#   board: true  + a local URL   -> the published page, and the `file://` copy under it
 #   board: true  + page present  -> ONE line: the label and the `file://` link
 #   board: true  + page ABSENT   -> enabled but never rendered, and what renders it
 #   board: false                 -> SILENCE, whatever is on disk
+#
+# THE FIRST ROW IS AN ADDITION AND CHANGES NOTHING BELOW IT. An instance that has never
+# published prints exactly the bytes it printed before this row existed, which is what
+# keeps the three states three rather than turning them into a matrix nobody can read.
 #
 # THE THIRD ROW STAYS SILENT AND THAT IS NOT AN OVERSIGHT. The human turned the board off;
 # telling them so every session start is the "only fire what is true" rule broken in the
@@ -1133,10 +1147,46 @@ page="$root/.board-live/board.html"
 # human to `/pm-loop` exactly as the third row does — a banner may not send anyone to a
 # file that is not there, and the two lines have to agree about that or one of them is
 # lying.
+#
+# THE PUBLISHED URL, when this machine recorded one. `leaf` resolves it through
+# resolve-config.sh like every other key, and the SOURCE is then checked: only `local`
+# prints. A tracked value is the deleted design, so it is dropped in silence rather than
+# warned about — this section reports where the board is, and a config critique belongs to
+# `/welcome check`, which already names every key nothing reads.
+#
+# FILTERED, BECAUSE IT IS FILE-DERIVED TEXT REACHING A TERMINAL AND A MARKDOWN RENDERER.
+# It is not passed through `cell()`: that helper rewrites `&`, `~` and `_`, which are
+# ordinary URL bytes, so celling a URL would print a broken one. The conservative character
+# class below does the same job the other way round — anything outside it, including a
+# newline (which would forge a second line in a section whose line count is asserted), an
+# ESC (which would repaint the terminal) and the emphasis marker byte (which would forge
+# bold), drops the value entirely. `https://` only: nothing else is a page a human opens,
+# and `file://` would let a config key impersonate the line below.
+art=""
+if [ "$board_on" -eq 1 ]; then
+  _art_leaf="$(leaf boardArtifactUrl)"
+  if [ -n "$_art_leaf" ] && [ "$(leaf_source "$_art_leaf")" = "local" ]; then
+    art="$(leaf_value "$_art_leaf")"
+    case "$art" in https://?*) ;; *) art="" ;; esac
+    case "$art" in *[!A-Za-z0-9:/._~%?\#=\&+-]*) art="" ;; esac
+    [ "${#art}" -le 300 ] || art=""
+  fi
+fi
+
 board_shown=0
 if [ "$board_on" -eq 1 ]; then
   echo
-  if [ -f "$page" ]; then
+  if [ -n "$art" ]; then
+    # THE PUBLISHED PAGE IS THE HEADLINE ROW when there is one: it is the only route that
+    # works from a phone without a checkout, which is the whole reason it exists. The local
+    # file follows it as a dim continuation line — still there, still openable, and labelled
+    # as the route for a reader with no access to the published page.
+    board_shown=1
+    echo "Board   $art"
+    if [ -f "$page" ]; then
+      say "$C_DIM" "        file://$page — the local copy, for anyone without artifact access"
+    fi
+  elif [ -f "$page" ]; then
     board_shown=1
     # ONE PATH, PRINTED ONCE. This row used to be THREE lines for one link: the `file://`
     # URL, the same path again bare on a line of its own, and a note about staleness. The
