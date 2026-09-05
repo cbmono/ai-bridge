@@ -561,7 +561,7 @@ sessions on one working tree was always the bug: the lock bounds ticks, not loop
 **A firing that lands mid-tick is a clean skip, not a fault** — `acquire --as loop` prints
 one line on **stdout** and exits 1:
 
-```
+```text
 tick in progress since 2026-09-05T10:22:04Z (project-manager, taken 12m ago) — nothing to dispatch this pass.
 ```
 

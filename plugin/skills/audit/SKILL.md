@@ -2,7 +2,7 @@
 name: audit
 disable-model-invocation: true
 description: Run the slow-cadence audit loop — the counter-metric that grounds objectives against reality and flags Goodhart drift, stale knowledge, and green-but-not-progressing work. The audit agent is read-only; the command's only write is prepending its report to log.md; never promotes, merges, or dispatches.
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(date:*), Read, Edit, Agent
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status:*), Read, Edit, Agent
 ---
 
 Run one **audit pass** over this control-panel instance — the slow counter-metric loop
@@ -10,9 +10,21 @@ that complements `/pm-loop`. It is **read-only**: it surfaces drift, it never pr
 merges, dispatches, or changes task status.
 
 ## Preconditions
-Run from a control-panel instance root — confirm `SCHEMA.md`, `.claude/agents`, and
-`instance.config.json` exist in the cwd; if not, tell the user to `cd` into the instance
-and stop.
+1. Run from a control-panel instance root — confirm `SCHEMA.md`, `.claude/agents`, and
+   `instance.config.json` exist in the cwd; if not, tell the user to `cd` into the instance
+   and stop.
+2. **Stand down while a tick is in flight.** Step 3 prepends to `log.md`, and so does every
+   non-idle dispatch tick, so the two must not run at once. Run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` — **exit 0 (`free:`) is the only
+   clearance.** Exit 1 (`HELD:`) means a tick is running: say so in one line and stop,
+   exactly as a `/loop` dispatch pass does, and let the next firing take it. Exit 2 or 3 is
+   a lock that needs a human — print what it said and stop. This is the read-only probe, so
+   nothing is taken and nothing is released.
+   **It narrows the window; it does not close it.** A tick dispatched in the moment between
+   this read and the audit's write would still collide, and closing that properly needs a
+   write lock over `log.md` shared by both paths — a mechanism neither this skill nor the
+   tick has today. Run the slow cadence on a bundle whose dispatch loop you are not also
+   watching, and read this as the cheap 90% rather than a guarantee.
 
 ## Steps
 1. Read `instance.config.json`. **Resolve the auditor's model** the same way the PM
@@ -45,6 +57,6 @@ Nothing is installed for it: no cron, no watcher, no script.
 preference.** `/schedule` (alias `/routines`) creates *remote* Claude Code agents via the
 claude.ai API; a remote agent gets a fresh clone of a **GitHub repository**, and every
 input this audit needs is either gitignored or outside the repo — `instance.config.local.json`,
-`/repos/`, `SNAPSHOT.json`, `AWAITING.md`, and the target-repo clones under `reposRoot`,
+`repos/`, `SNAPSHOT.json`, `AWAITING.md`, and the target-repo clones under `reposRoot`,
 which is an absolute path on your machine. The measurement, and what a routine *can*
 usefully do instead, are in `docs/operations.md` → "Running the loop on a cadence".
