@@ -1,43 +1,40 @@
 #!/usr/bin/env bash
 #
-# moved-template.test.sh — moving the template must be DETECTED, and repairing it must not
-# leave 122 dead backups behind.
+# moved-template.test.sh — a bundle that still carries machinery symlinks must be
+# DETECTED, and converting it must not touch the data.
 #
 # WHY. On 2026-08-23 this checkout was moved with a plain `mv`. 185 symlinks dangled across
 # three instances plus the ~/.claude config layer — every script, every role agent, every
 # command, SCHEMA.md, settings.json — and nothing noticed. A dangling symlink is invisible
 # until something executes it, which for a /pm-loop tick means mid-dispatch with agents
-# already briefed. install.sh already refuses to install FROM a worktree for exactly this
-# reason (installer-worktree-guard.test.sh pins that), so the hazard was known; what was
-# missing was any signal that links which USED to resolve had stopped.
+# already briefed.
+#
+# WHAT CHANGED (ai-bridge-v2/task-013), AND WHY THIS FILE STILL EXISTS. The design that
+# made that incident possible is gone: machinery ships in the PLUGIN, and a bundle
+# `/ai-bridge:init` stamps carries no link into any checkout. So the question is no longer
+# "did a link die?" but "is anything still linked at all?" — and the answer must be the
+# same alarm, because a LIVE machinery link is the quieter half of the same defect: it
+# resolves into a clone that `claude plugin update` never touches, so the bundle runs
+# machinery frozen at whatever that clone last pulled, forever, with nothing saying so.
 #
 # Two halves, and the negative properties are most of the file:
 #
 #   session-banner.sh (SessionStart hook — the MACHINERY section of it)
-#     · names the dead links, where they pointed, and the exact repair command;
-#     · that section is ABSENT and exit 0 in a healthy instance; in a non-bridge project
+#     · names the links, where they point, and the exact repair command;
+#     · that section is ABSENT and exit 0 in a converted bundle; in a non-bridge project
 #       that inherits the hook the whole banner is silent, which is the reason it is safe
-#       to ship. (This hook was `check-machinery.sh` until the three SessionStart hooks
-#       were consolidated. A healthy INSTANCE is no longer wholly silent — the banner
-#       always prints an identity line and a settings block, on purpose — so the healthy
-#       case asserts the absence of the WARNING rather than of all output. The rest of
-#       the banner is tests/session-banner.test.sh's.);
-#     · does not identify an instance by SCHEMA.md. That is the trap: SCHEMA.md is itself
-#       machinery, `[ -f ]` on a dangling symlink is FALSE, and the obvious guard
-#       (push-state.sh's triple) would therefore silence the hook in exactly the case it
-#       exists for. Asserted directly, because it is invisible in review;
+#       to ship user-wide as a plugin hook;
+#     · does not identify a bundle by SCHEMA.md. That is the trap: an unconverted bundle
+#       carries SCHEMA.md as a symlink, `[ -f ]` on a dangling one is FALSE, and the
+#       obvious guard (push-state.sh's pair) would therefore silence the hook in exactly
+#       the case it exists for. Asserted directly, because it is invisible in review;
 #     · an ABSENT probe path, and a REAL FILE at one, are both left alone.
 #
-#   install.sh (the .bak.* sweep)
-#     · a dangling `.bak.*` SYMLINK whose original has just been relinked is swept;
-#     · a `.bak.*` REGULAR FILE is never touched — it is a human's content the installer
-#       moved aside, and that distinction is the whole safety property;
-#     · a dangling `.bak.*` symlink whose original is NOT ours survives;
-#     · a `.bak.*` symlink that still resolves survives;
-#     · the epoch suffix must be ALL digits, not merely start with one — `.bak.<epoch>` is
-#       swept, but `.bak.<epoch>.manual`, `.bak.notdigits` and `.bak.` (empty suffix) are
-#       someone else's name and must survive even when the original is ours again;
-#     · an uninstall sweeps nothing, so "backups were left untouched" stays true.
+#   init-bundle.sh (the conversion)
+#     · removes every machinery link, dangling or live, and says which and why;
+#     · leaves a symlink of the human's own, and every real file, alone;
+#     · leaves the bundle's DATA byte-identical;
+#     · is idempotent — a second run retires nothing.
 #
 # assert(): 0 is a PASS, matching the other harnesses here.
 set -uo pipefail
@@ -51,11 +48,10 @@ TPLSRC="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/moved-tpl.XXXXXX")" || {
   echo "moved-template.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 # PHYSICAL path, before anything is built under it. On macOS $TMPDIR lives under /var,
-# which is a symlink to /private/var, and install.sh derives its own location with
-# cd+pwd — so the link it writes records the RESOLVED path. The hook then prints that
-# path back, and an assertion built from the unresolved $TMPDIR would compare
-# "/private/var/…" against "/var/…" and fail for a reason that has nothing to do with the
-# behaviour. retire-machinery.test.sh hit the same edge from the other direction.
+# which is a symlink to /private/var, and the installer derives its own location with
+# cd+pwd — so a path it prints back is the RESOLVED one, and an assertion built from the
+# unresolved $TMPDIR would compare "/private/var/…" against "/var/…" and fail for a reason
+# that has nothing to do with the behaviour.
 TMP="$(cd "$TMP" && pwd -P)"
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
@@ -68,30 +64,39 @@ hasnt()  { printf '%s\n' "$2" | grep -qF -- "$1" && echo 1 || echo 0; }
 
 HOOK_SRC="$TPLSRC/plugin/hooks/session-banner.sh"
 # The one string that only the machinery section ever prints.
-WARN="ai-bridge machinery is DANGLING"
+WARN="MACHINERY SYMLINKS"
 
 echo "== the hook is wired up at all =="
 assert "session-banner.sh ships"         "$(yes_if test -f "$HOOK_SRC")"
 assert "…and is executable"              "$(yes_if test -x "$HOOK_SRC")"
 assert "…and parses"                     "$(yes_if bash -n "$HOOK_SRC")"
-# A hook nothing registers is a file. settings.json is the only thing that runs it.
-SET="$TPLSRC/seed/.claude/settings.json"
-assert "settings.json registers it at SessionStart" \
+# A hook nothing registers is a file. The PLUGIN manifest is the only thing that runs it
+# now — it used to be the bundle's own settings.json, symlinked in from the template, so
+# the hook reached only bundles somebody had re-stamped.
+SET="$TPLSRC/plugin/hooks/hooks.json"
+assert "hooks.json registers it at SessionStart" \
   "$(yes_if bash -c "awk '/\"SessionStart\"/,0' '$SET' | grep -q 'session-banner.sh'")"
 # The consolidation, stated from this side too: the hook it replaced must not still be
-# registered beside it. A settings.json naming both would run the machinery probe twice.
+# registered beside it. A manifest naming both would run the machinery probe twice.
 assert "…and check-machinery.sh is NOT registered any more" \
   "$(no_if grep -q 'check-machinery.sh' "$SET")"
+# And the bundle's own seeded settings.json must register NONE of them, or a converted
+# bundle would run the banner twice — once from the plugin, once from itself.
+assert "…and the seeded settings.json registers no hook" \
+  "$(no_if grep -q '"hooks"' "$TPLSRC/seed/.claude/settings.json")"
 
-echo "== every probe path is still real machinery =="
-# The probe list is four literal paths. It fails CLOSED — a path the template stops
-# shipping stops being a symlink in the instance, so a stale entry costs a missed report
-# rather than a false alarm, which means nothing else would ever notice it going stale.
-# This is what notices.
+echo "== every probe path is a path the OLD installer really stamped =="
+# The probe list is five literal paths naming the symlink-era layout. It fails CLOSED — a
+# path that is not a symlink here is simply not counted — so a stale entry costs a missed
+# report rather than a false alarm, which means nothing else would ever notice it going
+# stale. This is what notices: each one must still be a file this repo ships, under the
+# plugin or the seed, or the probe is aimed at nothing.
 PROBES="$(sed -n 's/^PROBES="\(.*\)"$/\1/p' "$HOOK_SRC")"
 assert "the probe list is readable from the hook"  "$([ -n "$PROBES" ] && echo 0 || echo 1)"
 for rel in $PROBES; do
-  assert "probe exists in the template: $rel" "$(yes_if test -f "$TPLSRC/symlink/$rel")"
+  base="$(basename "$rel")"
+  assert "probe names something this repo ships: $rel" \
+    "$(yes_if bash -c "test -f '$TPLSRC/seed/$rel' || test -f '$TPLSRC/plugin/scripts/$base' || test -f '$TPLSRC/plugin/hooks/$base' || test -f '$TPLSRC/seed/.claude/$base'")"
 done
 
 # A copy of the template, so moving or mutilating it cannot touch the real one. Same
@@ -102,144 +107,134 @@ TPL="$TMP/here/tpl"; mkdir -p "$TPL"
   [ -n "$f" ] || continue
   mkdir -p "$TPL/$(dirname "$f")"; cp "$TPLSRC/$f" "$TPL/$f" 2>/dev/null || true
 done
-chmod +x "$TPL/plugin/scripts/init-bundle.sh" "$TPL"/plugin/scripts/*.sh "$TPL"/plugin/hooks/*.sh 2>/dev/null || true
+chmod +x "$TPL"/plugin/scripts/*.sh "$TPL"/plugin/hooks/*.sh 2>/dev/null || true
 
 INST="$TMP/group/_ai-bridge-group"; mkdir -p "$INST"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/stamp" 2>&1
-assert "a fresh instance stamps"         "$(yes_if test -f "$INST/instance.config.json")"
+assert "a fresh bundle stamps"           "$(yes_if test -f "$INST/instance.config.json")"
+assert "…carrying no symlink at all"     "$([ -z "$(find "$INST" -type l 2>/dev/null)" ] && echo 0 || echo 1)"
 
-echo "== healthy instance: silent, exit 0 =="
-RC=0; OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)" || RC=$?
+echo "== converted bundle: silent, exit 0 =="
+RC=0; OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK_SRC" 2>&1)" || RC=$?
 assert "exit 0"                          "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "…and raises no machinery warning" "$(hasnt "$WARN" "$OUT")"
 
 echo "== a non-bridge project that inherits the hook: silent, exit 0 =="
-# The realistic shape of the accident: someone copies .claude/ around, or the config layer
-# ends up in a plain repo. It must not print, and it must not care that it is not an
-# instance — including when a .claude/agents directory happens to exist.
+# THE REALISTIC SHAPE, and it is sharper now than it was: the hook is a PLUGIN hook, so it
+# fires in EVERY project on the machine, not only in one that copied a .claude directory.
+# It must not print, and it must not care that it is not a bundle.
 PLAIN="$TMP/plain-repo"; mkdir -p "$PLAIN/.claude/agents"
 RC=0; OUT="$(CLAUDE_PROJECT_DIR="$PLAIN" bash "$HOOK_SRC" 2>&1)" || RC=$?
 assert "exit 0"                          "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "…and prints NOTHING"             "$([ -z "$OUT" ] && echo 0 || echo 1)"
-# The guard is ONE marker now. `.claude/agents` was its second half until the name swap
+# The guard is ONE marker. `.claude/agents` was its second half until the name swap
 # retired that directory — the eight role agents ship in the `ai-bridge` plugin — so a
-# config file with no agents directory beside it is an ORDINARY instance, and the banner
-# is required to print in it. Requiring silence here would be requiring silence
-# everywhere, one re-stamp from now.
+# config file with no agents directory beside it is an ORDINARY bundle, and the banner is
+# required to print in it. Requiring silence here would be requiring silence everywhere.
 BARE="$TMP/bare-repo"; mkdir -p "$BARE"; printf '{}\n' > "$BARE/instance.config.json"
 OUT="$(CLAUDE_PROJECT_DIR="$BARE" bash "$HOOK_SRC" 2>&1)"
 assert "config file, no .claude/agents: prints" "$([ -n "$OUT" ] && echo 0 || echo 1)"
 
-echo "== an absent, or real, probe path is not a broken one =="
-# Absent means the instance never had it. A real file is never ours to complain about.
-# Both must be distinguished from a dangling link, or the hook cries wolf on every start.
+echo "== an absent, or real, probe path is not an unconverted one =="
+# Absent means the bundle never had it. A real file is the CONVERTED state — the thing
+# this migration produces — so complaining about it would be crying wolf on every start.
 rm -f "$INST/SCHEMA.md"
-OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)"
+OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK_SRC" 2>&1)"
 assert "an absent probe path says nothing"  "$(hasnt "$WARN" "$OUT")"
 printf 'my own SCHEMA\n' > "$INST/SCHEMA.md"
-OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)"
+OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK_SRC" 2>&1)"
 assert "a REAL file at a probe path too"    "$(hasnt "$WARN" "$OUT")"
 rm -f "$INST/SCHEMA.md"
 
-echo "== one dead link is enough, and SCHEMA.md dangling must not silence the hook =="
-# The trap this asserts: push-state.sh's instance test includes `[ -f SCHEMA.md ]`, which
-# is FALSE for a dangling symlink. Reusing that triple here would have made the hook mute
-# in the one situation it is for. Reproduced with a single link, not a whole move, so the
+echo "== one machinery link is enough, and a dangling SCHEMA.md must not silence the hook =="
+# The trap this asserts: push-state.sh's bundle test includes `[ -f SCHEMA.md ]`, which is
+# FALSE for a dangling symlink. Reusing that pair here would have made the hook mute in the
+# one situation it is for. Reproduced with a single link, not a whole move, so the
 # assertion is about the guard and nothing else.
-ln -s "$TPL/seed/SCHEMA.md" "$INST/SCHEMA.md"
-mv "$TPL/seed/SCHEMA.md" "$TPL/seed/SCHEMA.md.hidden"
-OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)"
+ln -s "$TPL/symlink/SCHEMA.md" "$INST/SCHEMA.md"
+OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK_SRC" 2>&1)"
 assert "a dangling SCHEMA.md is reported"   "$(has 'SCHEMA.md' "$OUT")"
-assert "…and counted as 1 of 4"             "$(has '1 of 4' "$OUT")"
-assert "…and the repair is named"           "$(has "bash $TPL/plugin/scripts/init-bundle.sh $INST" "$OUT")"
-mv "$TPL/seed/SCHEMA.md.hidden" "$TPL/seed/SCHEMA.md"
+assert "…and counted as 1 of 5"             "$(has '1 of 5' "$OUT")"
+assert "…and as already dead"               "$(has '1 of them are already dead' "$OUT")"
+assert "…and the repair is /ai-bridge:init" "$(has "/ai-bridge:init $INST" "$OUT")"
 
-echo "== the whole template moves =="
-# The real incident. Everything dangles at once; the hook still resolves because it is
-# invoked from the template's NEW location, which is also how it knows the path to print.
+echo "== the whole symlink-era bundle, against a template that MOVED =="
+# The real incident, in the shape it takes today: a bundle stamped by the old install.sh,
+# whose template has since been moved. Every machinery link dangles at once. The hook still
+# resolves because it runs from the PLUGIN, which is exactly the property this migration
+# bought — under the old design the hook was itself one of the dead links.
+LEG="$TMP/group/_ai-bridge-legacy"
+mkdir -p "$LEG/scripts" "$LEG/.claude/hooks" "$LEG/agents" "$LEG/projects/demo/tasks" "$LEG/knowledge/findings"
+cp "$TPL/seed/instance.config.json" "$LEG/instance.config.json"
+printf 'a decision only this bundle holds\n' > "$LEG/projects/demo/index.md"
+printf -- '---\ntype: Task\ntitle: t\nstatus: draft\n---\n' > "$LEG/projects/demo/tasks/task-001-x.md"
+printf 'a finding\n' > "$LEG/knowledge/findings/f.md"
+DATA_BEFORE="$(cat "$LEG/projects/demo/index.md" "$LEG/knowledge/findings/f.md")"
+for p in SCHEMA.md CONVENTIONS.md AUTONOMY.md; do ln -s "$TPL/symlink/$p" "$LEG/$p"; done
+ln -s "$TPL/symlink/agents/index.md" "$LEG/agents/index.md"
+ln -s "$TPL/symlink/scripts/commit-as.sh" "$LEG/scripts/commit-as.sh"
+ln -s "$TPL/symlink/.claude/hooks/push-state.sh" "$LEG/.claude/hooks/push-state.sh"
+ln -s "$TPL/symlink/.claude/settings.json" "$LEG/.claude/settings.json"
+mkdir -p "$TMP/mynotes"; ln -s "$TMP/mynotes" "$LEG/mynotes"
+cat > "$LEG/.gitignore" <<'GI'
+.DS_Store
+my-own-rule/
+
+# >>> ai-bridge machinery (symlinked) >>>
+/SCHEMA.md
+/CONVENTIONS.md
+/scripts/commit-as.sh
+# <<< ai-bridge machinery <<<
+GI
 mv "$TMP/here" "$TMP/there"
 TPL2="$TMP/there/tpl"
-RC=0; OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$TPL2/plugin/hooks/session-banner.sh" 2>&1)" || RC=$?
-assert "exit 0 even when reporting"      "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
-assert "all four probes are named"       "$(has '4 of 4' "$OUT")"
-assert "…the dead paths are listed"      "$(has 'scripts/commit-as.sh' "$OUT")"
-assert "…the OLD location is named"      "$(has "$TPL" "$OUT")"
-assert "…and the repair uses the NEW one" "$(has "bash $TPL2/plugin/scripts/init-bundle.sh $INST" "$OUT")"
-# It names the repair; it must not BE the repair. A hook that silently relinked an
-# instance's machinery at session start would leave a move with no trace at all.
-assert "nothing was repaired"            "$(no_if test -e "$INST/SCHEMA.md")"
 
-echo "== the repair sweeps its own dead backups =="
-# Decoys planted BEFORE the repair, so the sweep meets them in the same run it creates
-# its own debris.
-printf 'content a human wants back\n' > "$INST/CONVENTIONS.md.bak.1700000000"  # a real FILE
-ln -s "$TMP/nowhere-ever" "$INST/stranger.bak.1700000001"   # dangles, original not ours
-ln -s "$INST/instance.config.json" "$INST/live.bak.1700000002"  # a backup that RESOLVES
-RC=0; bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/repair" 2>&1 || RC=$?
-assert "the repair exits 0"              "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
-assert "…and relinks the machinery"      "$(yes_if test -e "$INST/SCHEMA.md")"
-assert "…moving the dead links aside"    "$(yes_if grep -q '^  moved ' "$TMP/repair")"
-assert "…then sweeping those backups"    "$(yes_if grep -q '^  sweep ' "$TMP/repair")"
-assert "…and saying where each pointed"  "$(yes_if grep -q 'sweep .*was -> .*here/tpl' "$TMP/repair")"
-LEFT="$(find "$INST" -name '*.bak.*' -type l ! -exec test -e {} \; -print | wc -l | tr -d ' ')"
-assert "exactly one dead .bak link is left (the stranger)" \
-  "$([ "$LEFT" = 1 ] && echo 0 || echo 1)"
-assert "a .bak REGULAR FILE survives"    "$(yes_if grep -q 'content a human wants back' "$INST/CONVENTIONS.md.bak.1700000000")"
-assert "a stranger's dead .bak link survives" "$(yes_if test -L "$INST/stranger.bak.1700000001")"
-assert "a .bak link that resolves survives"   "$(yes_if test -e "$INST/live.bak.1700000002")"
-assert "the instance is healthy again"   "$(hasnt "$WARN" "$(CLAUDE_PROJECT_DIR="$INST" bash "$INST/.claude/hooks/session-banner.sh" 2>&1)")"
+RC=0; OUT="$(CLAUDE_PROJECT_DIR="$LEG" bash "$TPL2/plugin/hooks/session-banner.sh" 2>&1)" || RC=$?
+assert "exit 0 even when reporting"      "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
+assert "all five probes are named"       "$(has '5 of 5' "$OUT")"
+assert "…the linked paths are listed"    "$(has 'scripts/commit-as.sh' "$OUT")"
+assert "…the OLD location is named"      "$(has "$TPL" "$OUT")"
+assert "…and the repair is /ai-bridge:init" "$(has "/ai-bridge:init $LEG" "$OUT")"
+# It names the repair; it must not BE the repair. A hook that silently converted a bundle
+# at session start would leave a migration with no trace at all.
+assert "nothing was repaired"            "$(yes_if test -L "$LEG/SCHEMA.md")"
+
+echo "== the conversion: links out, data untouched =="
+RC=0; bash "$TPL2/plugin/scripts/init-bundle.sh" "$LEG" >"$TMP/convert" 2>&1 || RC=$?
+assert "the conversion exits 0"          "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
+assert "…and says what it retired"       "$(yes_if grep -q '^  retire SCHEMA.md' "$TMP/convert")"
+assert "…naming the reason for a live link" "$(yes_if grep -q 'machinery link into a template checkout\|dangling' "$TMP/convert")"
+assert "…and counts them"                "$(yes_if grep -q 'machinery link(s) removed' "$TMP/convert")"
+assert "no symlink is left outside repos/" \
+  "$([ -z "$(find "$LEG" -type l -not -path "$LEG/repos/*" -not -name mynotes 2>/dev/null)" ] && echo 0 || echo 1)"
+assert "a symlink of the human's own survives" "$(yes_if test -L "$LEG/mynotes")"
+assert "SCHEMA.md is a real file now"    "$(yes_if bash -c "test -f '$LEG/SCHEMA.md' && ! test -L '$LEG/SCHEMA.md'")"
+assert "CONVENTIONS.md too"              "$(yes_if bash -c "test -f '$LEG/CONVENTIONS.md' && ! test -L '$LEG/CONVENTIONS.md'")"
+# AUTONOMY.md is the deliberate exception: it is the deletable delegated-authority
+# capability, so it is NOT replaced — absence means ask-first, the safe end — and the
+# removal is reported loudly with the command to put it back.
+assert "AUTONOMY.md is NOT put back"     "$(no_if test -e "$LEG/AUTONOMY.md")"
+assert "…and the loss is reported"       "$(yes_if grep -q 'back to' "$TMP/convert")"
+assert "…with the command to restore it" "$(yes_if grep -q 'docs/autonomy/AUTONOMY.md' "$TMP/convert")"
+assert "the bundle's DATA is byte-identical" \
+  "$([ "$DATA_BEFORE" = "$(cat "$LEG/projects/demo/index.md" "$LEG/knowledge/findings/f.md")" ] && echo 0 || echo 1)"
+assert "the task document is still there" "$(yes_if test -f "$LEG/projects/demo/tasks/task-001-x.md")"
+assert "the machinery .gitignore block is retired" \
+  "$(no_if grep -q 'ai-bridge machinery' "$LEG/.gitignore")"
+assert "…while the human's own rules survive" "$(yes_if grep -qx 'my-own-rule/' "$LEG/.gitignore")"
+assert "the bundle is healthy afterwards" \
+  "$(hasnt "$WARN" "$(CLAUDE_PROJECT_DIR="$LEG" bash "$TPL2/plugin/hooks/session-banner.sh" 2>&1)")"
 
 echo "== idempotent =="
-bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/again" 2>&1
-assert "a second run sweeps nothing"     "$(no_if grep -q '^  sweep ' "$TMP/again")"
-assert "…and retires nothing"            "$(no_if grep -q '^  retire ' "$TMP/again")"
+bash "$TPL2/plugin/scripts/init-bundle.sh" "$LEG" >"$TMP/again" 2>&1
+assert "a second run retires nothing"    "$(no_if grep -q '^  retire ' "$TMP/again")"
+assert "…and the human's link is still there" "$(yes_if test -L "$LEG/mynotes")"
 
-echo "== a name that is not ours is not a backup =="
-# `.bak.<digits>` is the shape this installer writes. Anything else is somebody's file.
-ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.backup"
-ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak"
-ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.old"
-bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST" >/dev/null 2>&1
-assert "'.backup' is left alone"         "$(yes_if test -L "$INST/SCHEMA.md.backup")"
-assert "'.bak' with no epoch is too"     "$(yes_if test -L "$INST/SCHEMA.md.bak")"
-assert "'.bak.old' likewise"             "$(yes_if test -L "$INST/SCHEMA.md.bak.old")"
-
-echo "== the epoch suffix must be ALL digits, not merely start with one =="
-# The regression this pins: the shape check alone (*.bak.[0-9]*) only requires the FIRST
-# character after ".bak." to be a digit, so "…bak.1700000000.manual" passes it — a name
-# this installer never writes. Each decoy below starts with a digit (so the OLD, unfixed
-# check would have accepted it) but is rejected once the whole suffix must be digits-only.
-# SCHEMA.md is already ours-and-resolved at this point (relinked earlier in this file), so
-# if any of these were mistaken for a real backup, the sweep below would remove it.
-ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.1700000004.manual"  # digit start, trailing ext
-ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.notdigits"          # no leading digit at all
-ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak."                   # empty suffix
-bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/epoch-guard" 2>&1
-assert "'.bak.<epoch>.manual' is left alone" "$(yes_if test -L "$INST/SCHEMA.md.bak.1700000004.manual")"
-assert "'.bak.notdigits' is left alone"      "$(yes_if test -L "$INST/SCHEMA.md.bak.notdigits")"
-assert "'.bak.' (empty suffix) is too"       "$(yes_if test -L "$INST/SCHEMA.md.bak.")"
-assert "…none of the three was swept"        "$(no_if grep -q '^  sweep ' "$TMP/epoch-guard")"
-
-echo "== …while a genuine all-digit .bak.<epoch> is still swept =="
-# The positive control for the assertion above: prove the guard rejects the malformed
-# names on their shape, not by accident sweeping nothing at all this run.
-ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.1700000005"
-bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/real-bak" 2>&1
-assert "a real .bak.<epoch> backup is swept" "$(no_if test -L "$INST/SCHEMA.md.bak.1700000005")"
-assert "…and the sweep is logged"            "$(yes_if grep -q '^  sweep ' "$TMP/real-bak")"
-# The three malformed decoys from the block above must still be untouched by this run too.
-assert "…the manual-suffixed decoy still survives" "$(yes_if test -L "$INST/SCHEMA.md.bak.1700000004.manual")"
-assert "…the notdigits decoy still survives"       "$(yes_if test -L "$INST/SCHEMA.md.bak.notdigits")"
-assert "…the empty-suffix decoy still survives"    "$(yes_if test -L "$INST/SCHEMA.md.bak.")"
-
-echo "== uninstall sweeps nothing, so its promise stays true =="
-# The sweep requires the original to exist again as a link of OURS. An uninstall removes
-# the link instead of recreating it, so every backup survives — which is what
-# "your runtime state, real files, and *.bak.* backups were left untouched" claims.
-ln -s "$TMP/nowhere-ever" "$INST/SCHEMA.md.bak.1700000003"
-bash "$TPL2/plugin/scripts/init-bundle.sh" --uninstall "$INST" >"$TMP/uninst" 2>&1
-assert "uninstall sweeps no backups"     "$(no_if grep -q '^  sweep ' "$TMP/uninst")"
-assert "…and the dead backup is still there" "$(yes_if test -L "$INST/SCHEMA.md.bak.1700000003")"
+echo "== uninstall removes the derived views and nothing else =="
+bash "$TPL2/plugin/scripts/init-bundle.sh" --uninstall "$LEG" >"$TMP/uninst" 2>&1
+assert "uninstall exits 0"               "$(yes_if grep -q 'Done.' "$TMP/uninst")"
+assert "…and leaves the seed content"    "$(yes_if test -f "$LEG/SCHEMA.md")"
+assert "…and the data"                   "$(yes_if test -f "$LEG/projects/demo/tasks/task-001-x.md")"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
