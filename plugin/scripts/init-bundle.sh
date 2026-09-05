@@ -930,7 +930,19 @@ if [ "$LAYER" = "config" ]; then
   exit "$config_rc"
 fi
 
-TARGET="$(cd "${TARGET:-$PWD}" 2>/dev/null && pwd || true)"
+# CREATE THE DIRECTORY IF IT IS NOT THERE — the one behaviour `install.sh` did not have.
+# It required the target to exist, because `mkdir && cd && install.sh .` was the documented
+# first step. `/ai-bridge:init <dir>` is supposed to BE that first step, so refusing an
+# absent directory would leave the command unable to do the thing it is named for. Only
+# the leaf is created (`mkdir -p` on the whole path), and an existing path that is not a
+# directory is refused rather than replaced.
+_want="${TARGET:-$PWD}"
+if [ ! -e "$_want" ]; then
+  mkdir -p "$_want" || { echo "error: could not create $_want" >&2; exit 2; }
+elif [ ! -d "$_want" ]; then
+  echo "error: $_want exists and is not a directory" >&2; exit 2
+fi
+TARGET="$(cd "$_want" 2>/dev/null && pwd || true)"
 [ -n "$TARGET" ] || { echo "error: target directory does not exist" >&2; exit 2; }
 [ -d "$SEED_SRC" ] || { echo "error: template missing $SEED_SRC" >&2; exit 2; }
 
@@ -1013,6 +1025,15 @@ convert_bundle() { # removes legacy machinery links; prints one line each
   done <<EOF
 $(find "$TARGET" -name .git -prune -o -type l -print 2>/dev/null | sort)
 EOF
+  # The directories those links lived in are the old machinery's, not the bundle's, so an
+  # EMPTY one left behind is litter. `rmdir` and not `rm -r`: a directory that still holds
+  # anything — a file the human put there, a link left alone above — is kept, silently,
+  # because the failure is the whole guard.
+  local d
+  for d in scripts .claude/hooks .claude/commands .claude/agents .claude/rules agents; do
+    [ -d "$TARGET/$d" ] && rmdir "$TARGET/$d" 2>/dev/null && echo "  rmdir  $d/ (emptied by the conversion)"
+  done
+  rmdir "$TARGET/.claude" 2>/dev/null || true
   if [ "$n" -gt 0 ]; then
     echo "  Converted: $n machinery link(s) removed. The machinery runs from the plugin now."
   fi
@@ -1247,7 +1268,7 @@ if ! grep -qE '^/?repos/?$' "$gi"; then
 
 # Derived view of the group's product repos (link-repos.sh) — symlinks
 # into reposRoot, never content, and machine-local like the rest. Delete it
-# freely; the next install or `link-repos.sh` run recreates it.
+# freely; the next /ai-bridge:init run recreates it.
 /repos/
 GI
 fi
@@ -1407,11 +1428,11 @@ cat > "$idxbody" <<'GI'
 # the tick stops touching a retained project at all, so its index.md becomes a
 # permanent, hand-committed front door instead of a rewritten view. To retain one,
 # add a negation line AFTER the two blanket lines below (i.e. after this block's END
-# marker, never inside it — install.sh rewrites everything between the markers on
+# marker, never inside it — /ai-bridge:init rewrites everything between the markers on
 # every run), then `git add -f` the file once — e.g. `!projects/<slug>/index.md`.
 # Git applies .gitignore patterns in file order, so a LATER negation overrides an
 # earlier blanket pattern; putting the override before the two blanket lines below,
-# or inside this block, does not survive the next `install.sh` run.
+# or inside this block, does not survive the next `/ai-bridge:init` run.
 /index.md
 /projects/*/index.md
 GI
@@ -2278,7 +2299,9 @@ fi
 #
 # Non-fatal on every path. A template with no git history, a bundle that is not a
 # checkout, an absent helper — all of them report and none of them fails the stamp.
-if [ -x "$BIN_DIR/refresh-seeds.sh" ] || [ -f "$BIN_DIR/refresh-seeds.sh" ]; then
+# Skipped on a FIRST stamp: everything was just copied, so nothing can have drifted, and a
+# full "0 portable, 0 conflicting" report is the wallpaper this machinery is written against.
+if [ "$FIRST_STAMP" = no ] && [ -f "$BIN_DIR/refresh-seeds.sh" ]; then
   if [ "$REFRESH_SEEDS" -eq 1 ]; then
     bash "$BIN_DIR/refresh-seeds.sh" "$TARGET" --apply || true
   else
