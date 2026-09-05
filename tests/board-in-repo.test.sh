@@ -4,13 +4,19 @@
 # safe are asserted behaviourally rather than by grepping for prose.
 #
 # WHY THE PAGE IS IN THE REPO AT ALL. The board had to become visible to a teammate on a
-# phone, and every publishing route was measured and rejected: access-controlled GitHub
+# phone, and the serving routes were measured and rejected: access-controlled GitHub
 # Pages is an Enterprise Cloud feature, so a Pages site on a private bundle serves the
 # page to the WORLD at an unlisted URL (measured 2026-09-02: `has_pages: false` and
-# `GET /repos/<owner>/<repo>/pages` -> 404 on all three private bundles), and the
-# account-scoped artifact path was deleted in 2026-08 for reasons of its own. Committing
+# `GET /repos/<owner>/<repo>/pages` -> 404 on all three private bundles). Committing
 # the file into the private bundle needs no second access-control system: who may read it
-# IS the repo's permission list. A GitHub Actions workflow cannot render it either — a
+# IS the repo's permission list.
+#
+# AND THE ARTIFACT PATH IS BACK ALONGSIDE IT, per machine — `/ai-bridge:board`, sections 5
+# and 6 below. It was deleted in 2026-08 because the URL was TRACKED and publishing is
+# account-scoped; recorded per machine it is a second route to the same page rather than a
+# replacement for this one, and `/board.html` stays what a reader without artifact access
+# opens. The tracked page's rules are unchanged and every assertion about them below is the
+# one it already made. A GitHub Actions workflow cannot render it either — a
 # runner's checkout has neither the machinery (all of an instance's scripts/ are absolute
 # symlinks into a machine-local template clone, and gitignored) nor the input
 # (SNAPSHOT.json is gitignored) — so "each tick" means the LOCAL tick.
@@ -172,6 +178,99 @@ ok "…and still names the live render it does NOT commit" \
 SK="$TPL/plugin/skills/dispatch/SKILL.md"
 ok "the dispatch skill names the tracked board" \
   "$(yes_if grep -qF -- '--standalone --out board.html .' "$SK")" yes
+
+# =======================================================================================
+echo "== 5. THE SAME BOUNDARY ON THE ARTIFACT PATH: /ai-bridge:board publishes =="
+# =======================================================================================
+# WHY THIS SECTION EXISTS ALONGSIDE SECTION 3 RATHER THAN INSTEAD OF IT. Section 3 renders
+# `--standalone --out board.html .` — the tick's tracked page, whose audience is the repo's
+# permission list. `/ai-bridge:board` renders the SAME script with the SAME trailing `.`
+# but WITHOUT `--standalone`, because the artifact host supplies the wrapper — a different
+# invocation, and an invocation is what the scoping lives in. A guard asserted only against
+# the flag combination the tick happens to use would go green on a publish path that
+# dropped the `.`, and that page's audience is whoever holds the URL rather than whoever
+# holds a clone. So the boundary is asserted against the bytes the publish step reads.
+ABASE="$TMP/artifact"; AMINE="$ABASE/mine"; AOTHER="$ABASE/other"
+mkdir -p "$AMINE" "$AOTHER"
+snap "$AMINE"  mine-slug  ZZMINEPROJECTZZ
+snap "$AOTHER" other-slug ZZOTHERPROJECTZZ
+# A config carrying one planted literal of each kind the publish criterion names. Every one
+# is a real key of a real instance config, and NONE is in the snapshot's field allowlist —
+# so any of them reaching the page means the renderer found a route back to the bundle that
+# the allowlist never cleared.
+#
+# `ownerGithubUser` MATCHES `defaultOwner` ON PURPOSE, and it is not decoration: the page is
+# per owner, so a project with an empty `owner` resolves to `defaultOwner`, and if that is
+# not this clone's login the project sinks into the collapsed other-owners section — which
+# reads TRACKED task documents at HEAD, of which this fixture has none. The project would
+# then be absent for a reason that has nothing to do with scoping, and the leak assertion
+# below would pass vacuously on an empty page.
+cat > "$AMINE/instance.config.json" <<JSON
+{ "group": "mine-group", "board": true,
+  "boardInstances": ["$AMINE", "$AOTHER"],
+  "org": "ZZORGLITERALZZ",
+  "defaultRepo": "ZZREPOLITERALZZ",
+  "defaultOwner": "ZZPERSONLITERALZZ",
+  "ownerGithubUser": "ZZPERSONLITERALZZ",
+  "authorEmail": "ZZEMAILLITERALZZ@example.com",
+  "reposRoot": "/tmp/ZZPATHLITERALZZ",
+  "people": { "ZZPERSONLITERALZZ": "ZZEMAILLITERALZZ@example.com" } }
+JSON
+
+( cd "$AMINE" && bash "$BB" --out artifact-body.html . ) >"$TMP/out-art" 2>&1
+ok "the artifact render writes a body"       "$(yes_if test -s "$AMINE/artifact-body.html")" yes
+ok "…and it carries THIS instance's project" "$(yes_if grep -q ZZMINEPROJECTZZ "$AMINE/artifact-body.html")" yes
+ok "…and NOT the sibling bundle's project"   "$(yes_if grep -q ZZOTHERPROJECTZZ "$AMINE/artifact-body.html")" no
+# The same two-sided shape section 3 uses, and for the same reason: without it the
+# assertion above passes on a fixture whose sibling had quietly stopped rendering.
+( cd "$AMINE" && bash "$BB" --out bare-artifact.html ) >"$TMP/out-art-bare" 2>&1
+ok "a BARE artifact render still reaches boardInstances (fixture is live)" \
+  "$(yes_if grep -q ZZOTHERPROJECTZZ "$AMINE/bare-artifact.html")" yes
+
+# ONE LITERAL AT A TIME, NAMED IN THE FAILURE. Checked over the SCOPED page, which is the
+# one that gets published.
+for lit in ZZORGLITERALZZ ZZREPOLITERALZZ ZZPERSONLITERALZZ ZZEMAILLITERALZZ ZZPATHLITERALZZ; do
+  ok "no $lit in the published page" \
+    "$(yes_if grep -q "$lit" "$AMINE/artifact-body.html")" no
+done
+# The bundle's own absolute path is a path literal too, and the one a renderer is most
+# likely to embed by accident — it is an argument to the command that produced the page.
+ok "…nor the instance's own absolute path" "$(yes_if grep -qF "$AMINE" "$AMINE/artifact-body.html")" no
+
+# NON-VACUITY, and it is the assertion that makes the six above mean something. "No literal
+# appears" is satisfied by a renderer that emits nothing at all, so a REPO NAME the snapshot
+# DOES allow — inside a PR link, which is on the documented carried list — must still reach
+# the page. It is the same kind of literal as `defaultRepo` above and the opposite verdict,
+# which is exactly the distinction the criterion draws: what the allowlist cleared travels,
+# what it never cleared does not.
+python3 - "$AMINE/SNAPSHOT.json" <<'PYALLOW' 2>/dev/null || true
+import json, sys
+d = json.load(open(sys.argv[1]))
+d["projects"][0]["tasks"][0]["prs"] = [
+    {"repo": "o/ZZALLOWEDREPOZZ", "number": 7,
+     "url": "https://example.com/o/ZZALLOWEDREPOZZ/pull/7"}]
+json.dump(d, open(sys.argv[1], "w"))
+PYALLOW
+( cd "$AMINE" && bash "$BB" --out allowed.html . ) >"$TMP/out-art-allowed" 2>&1
+ok "an ALLOWED repo name inside a PR link does render (the scan is not vacuous)" \
+  "$(yes_if grep -q ZZALLOWEDREPOZZ "$AMINE/allowed.html")" yes
+ok "…while the config's defaultRepo still does not" \
+  "$(yes_if grep -q ZZREPOLITERALZZ "$AMINE/allowed.html")" no
+
+# =======================================================================================
+echo "== 6. the skill and the tick each carry their half of the publish contract =="
+# =======================================================================================
+# Text checks, because both are documents an agent reads. Kept to the strings that are
+# load-bearing: the scoped render on the skill's side (a missing `.` is the leak above),
+# and on the tick's side the fact that it does NOT publish — measured, not assumed.
+SK_BOARD="$TPL/plugin/skills/board/SKILL.md"
+ok "the board skill ships"                              "$(yes_if test -f "$SK_BOARD")" yes
+ok "…and names the SCOPED artifact render" \
+  "$(yes_if grep -qF -- 'scripts/build-board.sh --out .board-live/artifact-body.html .' "$SK_BOARD")" yes
+ok "…and never writes the tracked board.html" \
+  "$(yes_if grep -qF -- '--out board.html' "$SK_BOARD")" no
+ok "the tick tells the human what refreshes the published page" \
+  "$(yes_if grep -qF -- 'run /ai-bridge:board to refresh' "$PM")" yes
 
 printf '\nboard-in-repo.test: pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

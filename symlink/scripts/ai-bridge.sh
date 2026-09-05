@@ -697,9 +697,18 @@ check_config_layers() {
 # THE KNOWN SET IS THE SEED'S OWN KEY LIST — `seed/instance.config.json` in the template
 # this script already resolves itself from — because the seed ships every key the machinery
 # reads, and a name list here would be a second copy that drifts. Keys beginning `$` are
-# comments by convention, on both sides. ONE addition, justified by its reader the way the
-# tool vocabulary's hand-list entries are: `ownerGithubUser` is never seeded — it is
-# per-machine by design (docs/sharing.md) — but `task-owner.sh` reads it, so it is known.
+# comments by convention, on both sides. TWO additions, each justified by its reader the
+# way the tool vocabulary's hand-list entries are, and each never seeded for the same
+# reason — seeding a per-machine key writes one machine's answer into every clone:
+#   · `ownerGithubUser` — per-machine by design (docs/sharing.md); `task-owner.sh` reads it;
+#   · `boardArtifactUrl` — the page `/ai-bridge:board` published FROM THIS CLONE.
+#     **Known in `instance.config.local.json` ONLY**, which is where it differs from the
+#     entry above and why the known set is built per file. Publishing is account-scoped,
+#     so exactly one account can update a given page; `session-banner.sh` reads it from
+#     the local layer and drops a `tracked` value in silence, so a tracked copy is read by
+#     NOTHING and this check must say so rather than bless it. It is deliberately NOT in
+#     `seed/instance.config.json`, and tests/banner-board-line.test.sh fails if it appears
+#     there.
 #
 # AMBIGUOUS TIER, NO FIXER, for the `maxPrLoc` reason: deleting a key could delete a
 # decision. `fix` prints it and does nothing. No template seed to compare against — a
@@ -729,9 +738,21 @@ ownerGithubUser"
   # a false healthy about a corrupt config, the false-zero class this file's own header
   # names as the one to guard. So the parse status is captured per file and an unparseable
   # file gets a non-answer, never a clean bill.
+  # ONE KEY IS KNOWN IN ONE FILE ONLY, and making that per-file is the whole point rather
+  # than a refinement of it. `boardArtifactUrl` is read from the LOCAL layer and nowhere
+  # else (SCHEMA.md → "Per-machine config overrides"; `session-banner.sh` checks the
+  # source and drops a `tracked` value in silence), so a tracked copy is read by NOTHING —
+  # which is precisely the "looks authoritative, configures nothing" state this check
+  # exists to name. Adding it to the global set would have made that state pass as
+  # healthy, and it is the exact shape the key was deleted for the first time round.
   unknown=""; unparsed=""; fkeys=""
   for f in instance.config.json instance.config.local.json; do
     [ -f "$ROOT/$f" ] || continue
+    fknown="$known"
+    if [ "$f" = "instance.config.local.json" ]; then
+      fknown="$fknown
+boardArtifactUrl"
+    fi
     if ! fkeys="$(jq -r 'keys[]' "$ROOT/$f" 2>/dev/null)"; then
       unparsed="${unparsed:+$unparsed }$f"
       continue
@@ -739,7 +760,7 @@ ownerGithubUser"
     while IFS= read -r k; do
       [ -n "$k" ] || continue
       case "$k" in \$*) continue ;; esac
-      if ! printf '%s\n' "$known" | grep -qFx -- "$k"; then
+      if ! printf '%s\n' "$fknown" | grep -qFx -- "$k"; then
         unknown="${unknown:+$unknown }$f:$k"
       fi
     done <<EOF
@@ -760,7 +781,8 @@ EOF
   warn "config carries key(s) nothing reads: $unknown"
   [ -n "$unparsed" ] && note "(and no answer for $unparsed — not parseable as JSON)"
   note "a retired or typo'd key looks authoritative and configures nothing; the known set"
-  note "is the template seed's key list (plus the per-machine ownerGithubUser)"
+  note "is the template seed's key list, plus ownerGithubUser in either file and"
+  note "boardArtifactUrl in instance.config.local.json only — nothing reads a tracked one"
   note "THIS IS A QUESTION, NOT A DEFECT — the key may be a decision; fix will not touch it"
   hint "yours, not fix's: edit the file, or compare: jq -r 'keys[]' $ROOT/instance.config.json"
   return "$_warned"

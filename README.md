@@ -238,6 +238,7 @@ Run these inside an instance.
 | `/ai-bridge:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
 | `/ai-bridge:dispatch [gap]` | (plugin) the serial background loop: dispatch, track, report. `/ai-bridge:dispatch 10m` ticks every ten minutes |
 | `/ai-bridge:answer` | (plugin) answer the PM's open questions from inside the session |
+| `/ai-bridge:board` | (plugin) publish this instance's board as a private artifact, at the same URL every run |
 | `/ai-bridge:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
 | `/ai-bridge:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/ai-bridge:fanout <task>` | (plugin) parallel work across several repos |
@@ -391,12 +392,20 @@ is only as fresh as the last tick — the page's masthead says when that was, an
 `watch-board.sh` is the view that follows your work in between.
 
 **And a tick that changed something commits a second copy, `/board.html`, into the bundle
-repo.** That commit is the whole of "publishing" here: the page is readable by the repo's
-permission list and by nothing else, no Pages site is enabled anywhere, and an idle tick
-commits nothing. It is why the render above passes an explicit `.` — without it the
-renderer reads `boardInstances`, and a bundle must not commit another bundle's project
-titles. Opening it, including from a phone: [docs/operations.md §
-opening-the-board](docs/operations.md#opening-the-board-laptop-phone-live).
+repo.** That page is readable by the repo's permission list and by nothing else, no Pages
+site is enabled anywhere, and an idle tick commits nothing. It is why the render above
+passes an explicit `.` — without it the renderer reads `boardInstances`, and a bundle must
+not commit another bundle's project titles.
+
+**`/ai-bridge:board` publishes the same page as a private artifact**, at a URL that does
+not change between runs and that the session banner prints. It is the route to a phone
+with no clone on it; `/board.html` stays the route for anyone without a Claude account. The
+URL is recorded per machine, in `instance.config.local.json`, because artifact publishing
+is account-scoped — no share level lets a second account update your page. **A headless
+tick never publishes**: measured 2026-09-05 on Claude Code 2.1.261, a `claude -p` session
+has no artifact tool at all, so the tick prints `run /ai-bridge:board to refresh` and stops
+there. Opening it, including from a phone: [docs/operations.md §
+opening-the-board](docs/operations.md#opening-the-board-laptop-phone-published-live).
 
 **The board is per installation, and it still shows everybody.** Your own projects come
 from your `SNAPSHOT.json`; every other owner's is a collapsed, **named** section below
