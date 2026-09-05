@@ -570,7 +570,7 @@ The version lives in one place — [`VERSION`](VERSION) at this root, one line, 
 and no changelog. **There is no release process here and none is wanted.**
 
 **A change to `core` proposes the bump; you approve it by merging.** `core` is a closed
-list — `plugin/`, `seed/`, `config/`, `/ai-bridge:init`, `/ai-bridge:welcome fix`, `RETIRED` — and it is
+list — `plugin/`, `seed/`, `config/`, `RETIRED` — and it is
 exactly what the two path-scoped rule files ([`.claude/rules/machinery.md`](.claude/rules/machinery.md),
 [`.claude/rules/installer.md`](.claude/rules/installer.md)) already govern, so an agent
 editing one of those paths meets the rule as it opens the file. A PR touching only `docs/`,
@@ -582,10 +582,11 @@ Rough scale, enough to act on without a policy document: **patch** for a fix ins
 behaviour that already shipped, **minor** for a new capability or a new file under
 `plugin/`, **major** for anything an instance has to be repaired by hand to survive.
 
-**Why the number matters more than a label.** An instance consumes this template through
-per-file symlinks, so most merges reach it live — but a **new** file under `plugin/` does
-not arrive until `/ai-bridge:init` runs again, and `seed/` content is copied once, ever. That
-gap has cost real time: two hooks merged and sat inert in every instance for a week.
+**Why the number matters more than a label.** A bundle consumes nothing from this checkout
+any more — the machinery ships in the plugin, replaced whole on every update — but
+`seed/` content is copied into a bundle once, ever, so a seed edit reaches a stamped
+bundle only through `/ai-bridge:welcome fix`. That gap has cost real time: two hooks
+merged and sat inert in every instance for a week, back when a stamp was the only route.
 
 So the session banner prints one line — and only one, and only sometimes. The two numbers
 below are an example, not this repo's current pair; the only place the current one is

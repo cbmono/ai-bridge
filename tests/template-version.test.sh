@@ -147,18 +147,32 @@ echo "== 3. \`core\` is a closed list, and it is the list the rule files govern 
 # `LC_ALL=C` on the sort: the set is compared as a string, and a locale that orders
 # `RETIRED` after `config` would fail this for a reason that has nothing to do with the
 # rule files.
-globs="$(sed -n '/^---$/,/^---$/p' "$TPL/.claude/rules/machinery.md" "$TPL/.claude/rules/installer.md" \
+# A PER-FILE GLOB INSIDE A DIRECTORY GLOB IS NOT A NEW CORE PATH, and collapsing it here
+# is what keeps this list about the CONVENTION rather than about rule-file plumbing:
+# `installer.md` names `/plugin/scripts/init-bundle.sh` so its own rules load when you open
+# the installer, but `/plugin/**` already made that path core. Only the outermost entries
+# are compared.
+raw_globs="$(sed -n '/^---$/,/^---$/p' "$TPL/.claude/rules/machinery.md" "$TPL/.claude/rules/installer.md" \
          | grep -oE '"/[^"]+"' | tr -d '"' | sed -e 's#^/##' -e 's#/\*\*$##' \
-         | LC_ALL=C sort -u | tr '\n' ' ')"
+         | LC_ALL=C sort -u)"
+globs="$(printf '%s\n' "$raw_globs" | awk '
+  NF { g[++n] = $0 }
+  END {
+    for (i = 1; i <= n; i++) {
+      keep = 1
+      for (j = 1; j <= n; j++) if (i != j && index(g[i], g[j] "/") == 1) keep = 0
+      if (keep) print g[i]
+    }
+  }' | LC_ALL=C sort -u | tr '\n' ' ')"
 ok "the two rule files cover exactly the core paths" \
-  "$globs" "RETIRED config install.sh seed symlink upgrade.sh "
+  "$globs" "RETIRED config install.sh plugin seed upgrade.sh "
 
 # Each of those names must appear in the core sentence the agent reads. Anchored on the
 # CLAUDE.md bullet rather than the whole file, so an unrelated mention elsewhere cannot
 # answer for it.
 core_bullet="$(grep -F 'A change to `core` PROPOSES a version bump' "$TPL/CLAUDE.md" || true)"
 missing=0
-for p in symlink seed config install.sh upgrade.sh RETIRED; do
+for p in plugin seed config install.sh upgrade.sh RETIRED; do
   printf '%s' "$core_bullet" | grep -qF "\`$p" || { missing=$((missing+1)); printf '        NOT NAMED IN CLAUDE.md: %s\n' "$p" >&2; }
 done
 ok "…and CLAUDE.md's core bullet names every one of them" "$missing" 0
