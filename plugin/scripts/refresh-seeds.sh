@@ -341,10 +341,23 @@ EOF
     # there to read. Written only under --apply, because a report-only run writes
     # nothing at all, and named with the same `.bak.<epoch>` convention every other
     # backup in this machinery uses.
+    # IDEMPOTENT: written once, not once per run. A conflict is not repaired by running
+    # this again, so a second --apply would otherwise drop a second identical backup
+    # beside the first, and a tenth a tenth — which is how a directory of `.bak.<epoch>`
+    # files nobody can tell apart gets built.
     if [ "$APPLY" -eq 1 ]; then
-      cbak="$inst_f.bak.$(date +%s)"
-      if cp "$TMPD/merged" "$cbak" 2>/dev/null; then
-        detail "the conflicted merge (with markers) is saved as $(basename "$cbak")"
+      have_bak=0
+      for cb in "$inst_f".bak.*; do
+        [ -f "$cb" ] || continue
+        if cmp -s "$TMPD/merged" "$cb"; then have_bak=1; break; fi
+      done
+      if [ "$have_bak" -eq 1 ]; then
+        detail "the conflicted merge is already saved beside it (an earlier run wrote it)"
+      else
+        cbak="$inst_f.bak.$(date +%s)"
+        if cp "$TMPD/merged" "$cbak" 2>/dev/null; then
+          detail "the conflicted merge (with markers) is saved as $(basename "$cbak")"
+        fi
       fi
     fi
     printf '%s\n' "$rel" >> "$TMPD/conflicts"

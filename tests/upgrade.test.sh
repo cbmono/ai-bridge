@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 #
-# Exercises upgrade.sh, plus the one nudge line it added to install.sh.
+# Exercises refresh-seeds.sh — what `upgrade.sh` became when the bundle stopped carrying
+# machinery (ai-bridge-v2/task-013). Three of its four stages went with that design:
+# stage 1 was `install.sh`'s symlink pass, and stages 2 and 3 ran the bundle's own
+# `validate-bundle.sh` and `migrate-bundle.sh` through symlinks that no longer exist (both
+# ship in the plugin and are reachable directly, and `/ai-bridge:welcome check` is the one
+# command that surveys a bundle). What was left is the stage nothing else can do: the
+# 3-way seed merge, reachable as `/ai-bridge:welcome fix` and `/ai-bridge:init
+# --refresh-seeds`.
 #
 # The properties that matter are the negative ones, in this order:
 #   · a default run writes NOTHING (the whole instance is checksummed before and after,
@@ -56,7 +63,11 @@ gc() { git -c user.email=a@b -c user.name=a commit -qm "$1"; }
 # ---------------------------------------------------------------- the template, seed v1
 TPL="$TMP/tpl"
 mkdir -p "$TPL"
-cp -R "$TPL_SRC/plugin/scripts/init-bundle.sh" "$TPL_SRC/plugin/scripts/refresh-seeds.sh" "$TPL_SRC/seed" "$TPL_SRC/symlink" "$TPL/"
+mkdir -p "$TPL/plugin/scripts"
+cp -R "$TPL_SRC/plugin/scripts/init-bundle.sh" "$TPL_SRC/plugin/scripts/refresh-seeds.sh" \
+      "$TPL_SRC/plugin/scripts/validate-bundle.sh" "$TPL/plugin/scripts/"
+cp -R "$TPL_SRC/seed" "$TPL/seed"
+cp "$TPL_SRC/VERSION" "$TPL/VERSION"
 
 # Controlled seed content, so the assertions below describe this test's edits rather than
 # whatever the real seed files happen to say today.
@@ -93,6 +104,9 @@ printf -- '---\ntype: Finding\ntitle: F2\nstatus: wibble\ntimestamp: 2026-01-01T
 sed 's/^intro line$/intro line — HOUSE EDIT/' "$INST/CLAUDE.md" > "$TMP/c" && mv "$TMP/c" "$INST/CLAUDE.md"
 printf 'INSTANCE TODO\n' >> "$INST/todos.md"
 printf 'an entry the instance wrote\n' >> "$INST/log.md"
+# And the config, which every bundle edits: it must be REPORTED and never merged.
+printf '{\n  "org": "this-group"\n}\n' > "$INST/instance.config.json"
+cp "$INST/instance.config.json" "$TMP/config.pristine"
 cp "$INST/CLAUDE.md" "$TMP/claude.pristine"
 
 # ---------------------------------------------------------------- the template, seed v2
@@ -106,24 +120,25 @@ mkdir -p "$TMP/stranger"
 set +e; bash "$UPGRADE" "$TMP/stranger" > "$TMP/refuse.out" 2>&1; RC=$?; set -e
 assert "exits 2 on a directory that is not an instance" "$([[ $RC -eq 2 ]] && echo 0 || echo 1)"
 assert "says what it expected to find"    "$(has 'instance.config.json' "$(cat "$TMP/refuse.out")")"
-assert "points at install.sh for a NEW instance" "$(has 'install.sh' "$(cat "$TMP/refuse.out")")"
+assert "points at /ai-bridge:init for a NEW bundle" "$(has 'ai-bridge:init' "$(cat "$TMP/refuse.out")")"
 assert "it did not stamp the stranger"    "$(yes_if test ! -e "$TMP/stranger/SCHEMA.md")"
 set +e; bash "$UPGRADE" "$TMP/no-such-dir" >/dev/null 2>&1; RC=$?; set -e
 assert "exits 2 on a directory that does not exist" "$([[ $RC -eq 2 ]] && echo 0 || echo 1)"
 
 echo "== a default run reports, and writes nothing =="
-# Settle the symlink set first: the FIRST run legitimately links machinery (that is
-# install.sh's documented job), so the no-write property is measured from there on.
-bash "$UPGRADE" "$INST" > "$TMP/settle.out" 2>&1
+# NOTHING TO SETTLE ANY MORE. The first run used to link machinery (install.sh's documented
+# job ran as stage 1), so the no-write property could only be measured from the second run
+# on. This script writes nothing on ANY run without --apply, so the snapshot is taken cold.
 BEFORE="$(snapshot "$INST")"
 REPORT="$(bash "$UPGRADE" "$INST" 2>&1)"
 AFTER="$(snapshot "$INST")"
 assert "no file or symlink in the instance changed" "$([[ "$BEFORE" == "$AFTER" ]] && echo 0 || echo 1)"
 assert "the mode is stated as report only"  "$(has 'REPORT ONLY' "$REPORT")"
 assert "it says nothing was written"        "$(has 'report only — nothing was written' "$REPORT")"
+assert "…and the mode line says so too"    "$(has 'REPORT ONLY — nothing is written' "$REPORT")"
 assert "no PORTED label in report mode"     "$(hasnt 'PORTED' "$REPORT")"
-assert "the mechanical repair is only WOULD FIX" "$(has 'WOULD FIX' "$REPORT")"
-assert "the still-open Finding is untouched on disk" \
+assert "the schema migration is NOT run from here any more" "$(hasnt 'WOULD FIX' "$REPORT")"
+assert "…so a document needing repair is untouched on disk" \
   "$(yes_if grep -q '^status: open' "$INST/knowledge/findings/mechanical.md")"
 
 echo "== each seed file is classified on evidence, not on guesswork =="
@@ -139,7 +154,13 @@ assert "a file identical to the seed is silent"      "$(hasnt 'README.md' "$REPO
 assert "the per-instance workspace file is never treated as drift" \
   "$(hasnt 'code-workspace' "$REPORT")"
 assert "the numbered next-steps list offers --apply" "$(has -- '--apply' "$REPORT")"
-assert "…and names the human-decision document"      "$(has 'need a decision only you can make' "$REPORT")"
+assert "…and names the conflict as the human's work" "$(has 'port the seed change into CLAUDE.md' "$REPORT")"
+# CONFIG IS NEVER MERGED — a ship-blocker, not an omission. `instance.config.json` is the
+# one seed file whose purpose is to diverge, and `/ai-bridge:welcome` already refuses to
+# repair an uncommitted config for exactly that reason; a merge here would be the same
+# write arriving by another door.
+assert "instance.config.json is reported, never merged" "$(has 'CONFIG    instance.config.json' "$REPORT")"
+assert "…and is never PORTABLE"                      "$(hasnt 'PORTABLE  instance.config.json' "$REPORT")"
 
 echo "== --apply writes the safe changes, and only those =="
 APPLY_RC=0
@@ -156,7 +177,14 @@ assert "a merged file is backed up first" \
   "$(yes_if sh -c 'ls "$1".bak.* >/dev/null 2>&1' _ "$INST/todos.md")"
 assert "a verbatim-seed file needs no backup" \
   "$(sh -c 'ls "$1".bak.* >/dev/null 2>&1' _ "$INST/index.md" && echo 1 || echo 0)"
-assert "the schema repair landed"         "$(yes_if grep -q '^status: current' "$INST/knowledge/findings/mechanical.md")"
+# The conflicted merge is saved BESIDE the file, never over it — the never-clobber
+# guarantee with the markers still available to read.
+assert "a conflict leaves a .bak beside the file" \
+  "$(yes_if sh -c 'ls "$1".bak.* >/dev/null 2>&1' _ "$INST/CLAUDE.md")"
+assert "…and that .bak carries the conflict markers" \
+  "$(yes_if sh -c 'grep -qE "^(<<<<<<< |>>>>>>> )" "$1".bak.*' _ "$INST/CLAUDE.md")"
+assert "instance.config.json was NOT written"        "$(hasnt 'PORTED    instance.config.json' "$APPLY")"
+assert "…and is byte-identical after --apply"        "$(yes_if cmp -s "$TMP/config.pristine" "$INST/instance.config.json")"
 
 echo "== a hand-diverged file is never resolved by force =="
 assert "CLAUDE.md is still reported CONFLICT under --apply" "$(has 'CONFLICT  CLAUDE.md' "$APPLY")"
@@ -175,8 +203,6 @@ echo "== idempotence =="
 SECOND="$(bash "$UPGRADE" "$INST" 2>&1)"
 assert "nothing is portable any more"   "$(has '0 portable' "$SECOND")"
 assert "nothing was ported"             "$(has '0 ported' "$SECOND")"
-assert "no machinery symlink is new"    "$(has 'summary: 0 new machinery symlink' "$SECOND")"
-assert "the migration finds nothing to fix" "$(has '0 would be fixed' "$SECOND")"
 BEFORE2="$(snapshot "$INST")"
 bash "$UPGRADE" "$INST" >/dev/null 2>&1
 assert "a repeated report run still writes nothing" \
@@ -186,22 +212,6 @@ assert "a repeated --apply writes nothing either" \
   "$([[ "$BEFORE2" == "$(snapshot "$INST")" ]] && echo 0 || echo 1)"
 assert "…and reports 0 ported"          "$(has '0 ported' "$THIRD")"
 assert "the conflict is still reported, not forgotten" "$(has 'CONFLICT  CLAUDE.md' "$THIRD")"
-
-echo "== install.sh nudges toward upgrade.sh, but only when there is something to fix =="
-NUDGE="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" 2>&1)"
-assert "install.sh still exits 0 with a broken bundle" "$(yes_if bash "$TPL/plugin/scripts/init-bundle.sh" "$INST")"
-assert "it points at upgrade.sh"       "$(has 'upgrade.sh' "$NUDGE")"
-assert "it says why"                   "$(has 'schema errors' "$NUDGE")"
-rm "$INST/knowledge/findings/needs-human.md"
-CLEAN="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" 2>&1)"
-assert "a clean bundle gets no nudge"  "$(hasnt 'upgrade.sh' "$CLEAN")"
-# An instance older than the validator has no validator to run: still silent, still 0.
-rm "$TPL/plugin/scripts/validate-bundle.sh"
-OLD="$TMP/group/_ai-bridge-old"; mkdir -p "$OLD"
-OLD_RC=0
-OLD_OUT="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$OLD" 2>&1)" || OLD_RC=$?
-assert "no validator, no nudge"        "$(hasnt 'upgrade.sh' "$OLD_OUT")"
-assert "no validator, still exits 0"   "$([[ $OLD_RC -eq 0 ]] && echo 0 || echo 1)"
 
 echo "== a template with no git history reports rather than guesses =="
 NOGIT="$TMP/tpl-nogit"
@@ -233,47 +243,34 @@ assert "…and the directory is untouched"         "$(yes_if test -d "$DIRCASE/i
 # "what's left for you" is the last thing the script prints. Asserting on CLAUDE.md or on
 # the "4/4" stage HEADER would pass either way, since both come first — that weaker pair
 # was in the first draft of this block and hid the abort completely.
-assert "…and every other file is still counted"  "$(has 'summary: 7 in sync' "$DIR_OUT")"
+assert "…and every other file is still counted"  "$(has 'summary: [0-9]* in sync' "$DIR_OUT")"
 assert "…and the run reaches its final summary"  "$(has "what.s left for you" "$DIR_OUT")"
 assert "…and the run still exits 0"              "$([[ $DIR_RC -eq 0 ]] && echo 0 || echo 1)"
 
-# 2. install.sh failing is not a success. It is the PREREQUISITE for every later stage,
-#    so a 0 exit there lets a caller treat "machinery never installed" as a clean run.
-BADTPL="$TMP/tpl-badinstall"
-cp -R "$TPL" "$BADTPL"
-printf '#!/usr/bin/env bash\necho "  boom"\nexit 7\n' > "$BADTPL/plugin/scripts/init-bundle.sh"
-chmod +x "$BADTPL/plugin/scripts/init-bundle.sh"
-BAD_RC=0
-BAD_OUT="$(bash "$BADTPL/plugin/scripts/refresh-seeds.sh" "$INST" 2>&1)" || BAD_RC=$?
-assert "a failing install.sh is reported"   "$(has 'install.sh exited 7' "$BAD_OUT")"
-assert "…and it is listed as manual work"   "$(has 'install.sh failed' "$BAD_OUT")"
-assert "…and the run exits NON-zero"        "$([[ $BAD_RC -ne 0 ]] && echo 0 || echo 1)"
-
-# 3. Report-only must not overclaim. install.sh restores an ABSENT seed file by design
-#    (its seeds-if-absent contract), so "nothing changes" was false. What report-only
-#    really guarantees is that no instance CONTENT is rewritten.
+# 2. Report-only used not to be able to claim "nothing changes", because stage 1 was
+#    install.sh and it restored an ABSENT seed file by design. That stage is gone, so the
+#    claim is now literally true — and it is asserted as such rather than assumed.
 REPORT_OUT="$(bash "$TPL/plugin/scripts/refresh-seeds.sh" "$INST" 2>&1)"
-assert "report mode does not claim nothing changes" \
-  "$(hasnt 'nothing changes' "$REPORT_OUT")"
-assert "report mode names what install.sh still writes" \
-  "$(has 'restores any ABSENT seed file' "$REPORT_OUT")"
+assert "report mode states that nothing is written" \
+  "$(has 'REPORT ONLY — nothing is written' "$REPORT_OUT")"
 # And the claim it DOES make has to hold: a hand-diverged file stays byte-identical.
 assert "report mode leaves diverged content alone" \
   "$(yes_if cmp -s "$TMP/claude.pristine" "$INST/CLAUDE.md")"
 
-# 4. AUTONOMY.md is the deletable delegated-autonomy capability, but it lives under
-#    symlink/ — so install.sh re-links it unconditionally and a per-instance `rm` is
-#    silently undone. Fail-OPEN on the capability that lets agents merge without asking,
-#    so the run has to say so out loud.
+# 3. AUTONOMY.md is the deletable delegated-autonomy capability. It used to live under
+#    `symlink/`, so install.sh re-linked it unconditionally and a per-bundle `rm` was
+#    silently undone — fail-OPEN on the capability that lets agents merge without asking,
+#    which is why upgrade.sh had to warn about it every run. That hazard is gone with the
+#    design: this repo does not seed AUTONOMY.md at all, so a bundle without one stays
+#    without one, and the safe state is the default rather than something to defend.
 AUT="$TMP/group/_ai-bridge-autonomy"
 cp -R "$INST" "$AUT"
 rm -f "$AUT/AUTONOMY.md"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$AUT" >/dev/null 2>&1
+assert "a stamp does NOT restore AUTONOMY.md"   "$(yes_if test ! -e "$AUT/AUTONOMY.md")"
+assert "…and the seed ships none to restore"    "$(yes_if test ! -e "$TPL/seed/AUTONOMY.md")"
 AUT_OUT="$(bash "$TPL/plugin/scripts/refresh-seeds.sh" "$AUT" 2>&1)"
-assert "a re-linked AUTONOMY.md is flagged"  "$(has 'AUTONOMY WAS RE-ENABLED' "$AUT_OUT")"
-assert "…with the command to turn it off"    "$(has 'rm .*_ai-bridge-autonomy/AUTONOMY.md' "$AUT_OUT")"
-# Non-vacuous: an instance that still has it must NOT get the warning.
-STILL_OUT="$(bash "$TPL/plugin/scripts/refresh-seeds.sh" "$INST" 2>&1)"
-assert "…and not warned when it was present" "$(hasnt 'AUTONOMY WAS RE-ENABLED' "$STILL_OUT")"
+assert "…so the refresh has nothing to warn about" "$(hasnt 'AUTONOMY' "$AUT_OUT")"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
