@@ -39,6 +39,10 @@ TPL="$(cd "$HERE/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
 HOOKDIR="$TPL/plugin/hooks"
 SETTINGS="$TPL/seed/.claude/settings.json"
+# WHERE THE REGISTRATION LIVES NOW. It was the bundle's settings.json, symlinked in from
+# the template; the four ai-bridge hooks ship with the PLUGIN since task-013, so one
+# install arms every bundle on the machine instead of only the ones somebody re-stamped.
+HOOKSJSON="$TPL/plugin/hooks/hooks.json"
 SCRIPTS="$TPL/plugin/scripts"
 [ -f "$HOOK" ] || { echo "session-banner.test: hook not found at $HOOK" >&2; exit 2; }
 
@@ -75,18 +79,27 @@ assert "…and parses"              "$(bash -n "$HOOK" >/dev/null 2>&1 && echo 0
 for gone in check-machinery.sh show-awaiting.sh show-board-link.sh; do
   assert "the template no longer ships $gone" \
     "$([ -e "$HOOKDIR/$gone" ] && echo 1 || echo 0)"
-  assert "…and settings.json does not register it" \
-    "$(grep -qF "$gone" "$SETTINGS" && echo 1 || echo 0)"
+  assert "…and neither hooks.json nor settings.json registers it" \
+    "$( { grep -qF "$gone" "$HOOKSJSON" || grep -qF "$gone" "$SETTINGS"; } && echo 1 || echo 0)"
 done
 # THE COUNT, not merely the presence. A banner added alongside the three would satisfy
 # "session-banner.sh is registered" and still be the rejected shape. The SessionStart block
 # runs to the end of the file, so everything after its key belongs to it.
-n_hooks="$(awk '/"SessionStart"/,0' "$SETTINGS" | grep -c '/\.claude/hooks/')"
+n_hooks="$(python3 -c 'import json,sys
+d=json.load(open(sys.argv[1]))
+print(sum(len(m.get("hooks",[])) for m in d.get("hooks",{}).get("SessionStart",[])))' "$HOOKSJSON" 2>/dev/null || echo 0)"
 assert "exactly ONE SessionStart hook is registered (saw $n_hooks)" "$(eq "$n_hooks" 1)"
-assert "…and it is session-banner.sh" \
-  "$(awk '/"SessionStart"/,0' "$SETTINGS" | grep -q 'session-banner.sh' && echo 0 || echo 1)"
+assert "…and it is session-banner.sh, via \${CLAUDE_PLUGIN_ROOT}" \
+  "$(python3 -c 'import json,sys
+d=json.load(open(sys.argv[1]))
+c=d["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+sys.exit(0 if c.startswith("${CLAUDE_PLUGIN_ROOT}/hooks/session-banner.sh") else 1)' "$HOOKSJSON" 2>/dev/null && echo 0 || echo 1)"
+assert "hooks.json is still valid JSON" \
+  "$(python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$HOOKSJSON" >/dev/null 2>&1 && echo 0 || echo 1)"
 assert "settings.json is still valid JSON" \
   "$(python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$SETTINGS" >/dev/null 2>&1 && echo 0 || echo 1)"
+assert "…and the seeded settings.json registers NO ai-bridge hook of its own" \
+  "$(grep -q '"hooks"' "$SETTINGS" && echo 1 || echo 0)"
 
 # =======================================================================================
 echo "== 1b. a stamp links the new hook and RETIRES the three =="
@@ -119,14 +132,15 @@ fi
 SRC_TPL="$(cd "$(dirname "$BRIDGE_INSTALL")" && pwd)"
 STAMPED="$TMP/_stamped"; mkdir -p "$STAMPED"
 bash "$BRIDGE_INSTALL" "$STAMPED" >"$TMP/stamp1.log" 2>&1
-assert "a fresh stamp links session-banner.sh" \
-  "$([ -L "$STAMPED/.claude/hooks/session-banner.sh" ] && echo 0 || echo 1)"
-assert "…and links none of the three it replaced" \
-  "$(ls "$STAMPED/.claude/hooks/" 2>/dev/null | grep -qE '^(check-machinery|show-awaiting|show-board-link)\.sh$' && echo 1 || echo 0)"
+assert "a fresh stamp links NO hook at all — the plugin registers them" \
+  "$([ -e "$STAMPED/.claude/hooks" ] && echo 1 || echo 0)"
+assert "…and the bundle it made carries no symlink outside repos/" \
+  "$([ -z "$(find "$STAMPED" -type l -not -path "$STAMPED/repos/*" 2>/dev/null)" ] && echo 0 || echo 1)"
 
 # Now the instance an EARLIER template stamped: three links into this template's symlink/
 # whose targets are gone. `ours()` recognises them as ones the installer created, and the
 # step-2b sweep must retire all three.
+mkdir -p "$STAMPED/.claude/hooks"
 for gone in check-machinery.sh show-awaiting.sh show-board-link.sh; do
   ln -s "$SRC_TPL/plugin/hooks/$gone" "$STAMPED/.claude/hooks/$gone"
 done
@@ -135,8 +149,14 @@ left="$(ls "$STAMPED/.claude/hooks/" 2>/dev/null | grep -cE '^(check-machinery|s
 assert "a re-stamp retires the three dangling hook links (left $left)" "$(eq "$left" 0)"
 assert "…and says so, rather than removing them silently" \
   "$(grep -q 'retire .*hooks/show-awaiting.sh' "$TMP/stamp2.log" && echo 0 || echo 1)"
-assert "…while session-banner.sh survives the sweep" \
-  "$([ -e "$STAMPED/.claude/hooks/session-banner.sh" ] && echo 0 || echo 1)"
+# The sweep is now indiscriminate about machinery links BY DESIGN — a live one is as wrong
+# as a dead one, because it resolves into a checkout no plugin update ever touches. So the
+# thing that must survive is the human's OWN link, and nothing else.
+ln -s "$TMP" "$STAMPED/my-own-link"
+bash "$BRIDGE_INSTALL" "$STAMPED" >"$TMP/stamp3.log" 2>&1
+assert "…while a symlink of the human's own survives the sweep" \
+  "$([ -L "$STAMPED/my-own-link" ] && echo 0 || echo 1)"
+rm -f "$STAMPED/my-own-link"
 
 # =======================================================================================
 echo "== 2. the FROM column: both directions, one instance =="
@@ -1091,14 +1111,16 @@ fi
 # The probe planted here has to be one the hook's own PROBES list names. It used to be
 # `.claude/agents/project-manager.md`; the name swap retired that path, so the list names
 # `agents/index.md` instead and a fixture aimed at the old one plants a dangling link the
-# hook is right to ignore.
+# hook is right to ignore. Since task-013 the alarm is about a bundle that still carries
+# MACHINERY SYMLINKS, dangling or live — a live one resolves into a checkout no plugin
+# update reaches — so the wording it looks for moved with it.
 DANGLING="$TMP/_dangling"
 mkdir -p "$DANGLING/agents"
 printf 'stub\n' > "$DANGLING/SCHEMA.md"
 printf '{ "org": "example-org" }\n' > "$DANGLING/instance.config.json"
 ln -s "$TMP/never-existed/index.md" "$DANGLING/agents/index.md"
 DANG="$(CLAUDE_PROJECT_DIR="$DANGLING" bash "$HOOK" 2>/dev/null)"
-assert "a dangling probe really fires §0's alarm" "$(has 'machinery is DANGLING' "$DANG")"
+assert "a dangling probe really fires §0's alarm" "$(has 'MACHINERY SYMLINKS' "$DANG")"
 assert "§0 ABOVE THE HEADER: the first NON-EMPTY line stops being the identity line" \
   "$([ "$(nth "$DANG" "$(head_no "$DANG")" | cut -c1-9)" != 'AI-Bridge' ] && echo 0 || echo 1)"
 assert "…and the alarm, not the header, is what the label now prefixes — still one blank line" \

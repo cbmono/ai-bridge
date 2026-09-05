@@ -58,7 +58,8 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
-SETTINGS="$TPL/seed/.claude/settings.json"
+# The four ai-bridge hooks are registered by the PLUGIN since task-013.
+SETTINGS="$TPL/plugin/hooks/hooks.json"
 [ -f "$HOOK" ]     || { echo "banner-user-channel.test: hook not found at $HOOK" >&2; exit 2; }
 [ -f "$SETTINGS" ] || { echo "banner-user-channel.test: settings.json not found at $SETTINGS" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || {
@@ -173,8 +174,8 @@ EOF
 # =======================================================================================
 echo "== 1. the command settings.json REGISTERS delivers the banner to the human =="
 # =======================================================================================
-# READ OUT OF settings.json, NEVER RETYPED HERE. A harness that ran `session-banner.sh
-# --format json` of its own accord would stay green through a settings.json that dropped
+# READ OUT OF hooks.json, NEVER RETYPED HERE. A harness that ran `session-banner.sh
+# --format json` of its own accord would stay green through a manifest that dropped
 # the flag — and a hook registered without it is the original failure, restored.
 CMD="$(python3 - "$SETTINGS" <<'PY'
 import json, sys
@@ -183,14 +184,29 @@ cmds = [h["command"] for b in blocks for h in b["hooks"]]
 print(cmds[0] if len(cmds) == 1 else "")
 PY
 )"
-assert "settings.json registers exactly one SessionStart command" \
+assert "hooks.json registers exactly one SessionStart command" \
   "$([ -n "$CMD" ] && echo 0 || echo 1)"
 assert "…and it is the banner hook" "$(has 'session-banner.sh' "$CMD")"
 
 # `bash -c` on the registered string, with CLAUDE_PROJECT_DIR exported the way the harness
 # exports it. stderr is captured SEPARATELY: merging it into stdout is what would let a
 # stray warning corrupt the channel unnoticed, and this file has to be able to see that.
-hook_run() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>"$TMP/stderr")"; RC=$?
+# `${CLAUDE_PLUGIN_ROOT}` is what a plugin hook's registered command is written against,
+# and Claude Code sets it before running one; setting it here is what makes "run exactly
+# the registered string" a test rather than a `bad substitution`.
+# A SHADOW PLUGIN ROOT, so the mutation section below can still swap the hook the
+# registered command runs. The command used to resolve through the INSTANCE
+# (`"$CLAUDE_PROJECT_DIR"/.claude/hooks/…`), which `use_hook` re-linked; a plugin hook
+# resolves through `${CLAUDE_PLUGIN_ROOT}` instead, so the swappable copy has to live
+# there. `scripts/` is linked to the real one and `VERSION` to the real file, so the hook
+# finds its helpers and its version exactly as it would in a real install.
+PLUGROOT="$TMP/tplroot/plugin"
+mkdir -p "$PLUGROOT/hooks"
+ln -s "$TPL/plugin/scripts" "$PLUGROOT/scripts"
+ln -s "$TPL/VERSION" "$TMP/tplroot/VERSION"
+ln -s "$HOOK" "$PLUGROOT/hooks/session-banner.sh"
+export CLAUDE_PLUGIN_ROOT="$PLUGROOT"
+hook_run() { OUT="$(CLAUDE_PLUGIN_ROOT="$PLUGROOT" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>"$TMP/stderr")"; RC=$?
              ERR="$(cat "$TMP/stderr" 2>/dev/null || true)"; }
 
 mkdir -p "$INST/.board-live"; printf '<!doctype html>\n' > "$INST/.board-live/board.html"
@@ -652,7 +668,7 @@ assert "board enabled with no page: the HUMAN is told, in systemMessage" \
   "$(user_visible "$OUT" 'Board   enabled, but never rendered')"
 assert "…and told what renders it — a /pm-loop tick" \
   "$(user_visible "$OUT" '/pm-loop tick renders it')"
-assert "…or scripts/build-board.sh"                     "$(user_visible "$OUT" 'scripts/build-board.sh')"
+assert "…or build-board.sh"                            "$(user_visible "$OUT" 'build-board.sh')"
 # TEXTUALLY DISTINCT FROM THE RENDERED ROW, keyed on what that row actually prints. The old
 # key here was the staleness note, which task-023 deleted from every state — an assertion
 # that can no longer fail is worth nothing, and this file has already caught one of those.
@@ -834,8 +850,8 @@ assert "…and no trailing blank line is introduced" \
 # section 1, and not something a mutation check gets to give up.
 MUTDIR="$TMP/mutants"; mkdir -p "$MUTDIR"
 ANCHOR_RE="^echo +# <- the banner's leading blank line"
-use_hook() { rm -f "$INST/.claude/hooks/session-banner.sh"
-             ln -s "$1" "$INST/.claude/hooks/session-banner.sh"; }
+use_hook() { rm -f "$PLUGROOT/hooks/session-banner.sh"
+             ln -s "$1" "$PLUGROOT/hooks/session-banner.sh"; }
 MUT_PATH=""
 mutate() { # <name> <source-file> <awk-program> -> 0 and sets MUT_PATH, or 1 having reported SKIP
   local name="$1" file="$2" prog="$3" anchors

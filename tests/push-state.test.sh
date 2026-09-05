@@ -453,22 +453,28 @@ fi
 chmod u+rw "$INST/projects/good/tasks/locked.md" 2>/dev/null
 
 # ============================================================ registration
-echo "-- registration in the shipped settings.json"
-
-SETTINGS="$HERE/../seed/.claude/settings.json"
+echo "-- registration in the plugin's hooks.json"
+# IT MOVED, AND THE MOVE IS THE POINT. This hook used to be registered by the bundle's
+# own settings.json, itself a symlink into a template checkout — so it reached only the
+# bundles somebody had re-stamped. It ships with the PLUGIN since task-013: one install
+# per machine arms every bundle on it, and the command is resolved through
+# ${CLAUDE_PLUGIN_ROOT} rather than the project directory.
+SETTINGS="$HERE/../plugin/hooks/hooks.json"
 S="$(cat "$SETTINGS")"
-assert "settings.json registers push-state.sh"      "$(has 'push-state.sh' "$S")"
+assert "hooks.json registers push-state.sh"         "$(has 'push-state.sh' "$S")"
 assert "  ...as a UserPromptSubmit hook"            \
   "$( command -v python3 >/dev/null 2>&1 \
       && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if any("push-state.sh" in h.get("command","") for g in d["hooks"]["UserPromptSubmit"] for h in g["hooks"]) else 1)' "$SETTINGS" \
       && echo 0 || echo 1 )"
 # A bare relative `.claude/hooks/...` resolves against the SESSION CWD, so it
 # exits 127 on every prompt in any project that does not itself ship the script.
-assert "  ...via the \$CLAUDE_PROJECT_DIR absolute-path idiom" \
+assert "  ...via the \${CLAUDE_PLUGIN_ROOT} absolute-path idiom" \
   "$( command -v python3 >/dev/null 2>&1 \
-      && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); want="\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/push-state.sh"; sys.exit(0 if any(h.get("command")==want for g in d["hooks"]["UserPromptSubmit"] for h in g["hooks"]) else 1)' "$SETTINGS" \
+      && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); want="${CLAUDE_PLUGIN_ROOT}/hooks/push-state.sh"; sys.exit(0 if any(h.get("command")==want for g in d["hooks"]["UserPromptSubmit"] for h in g["hooks"]) else 1)' "$SETTINGS" \
       && echo 0 || echo 1 )"
-assert "  ...and settings.json is still valid JSON"  \
+assert "  ...and the seeded settings.json registers no hook of its own" \
+  "$( grep -q '"hooks"' "$HERE/../seed/.claude/settings.json" && echo 1 || echo 0 )"
+assert "  ...and hooks.json is still valid JSON"  \
   "$( command -v python3 >/dev/null 2>&1 && python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$SETTINGS" && echo 0 || echo 1 )"
 
 echo

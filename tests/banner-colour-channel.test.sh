@@ -43,7 +43,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
 AB="$TPL/plugin/scripts/ai-bridge.sh"
-SETTINGS="$TPL/seed/.claude/settings.json"
+# The four ai-bridge hooks are registered by the PLUGIN since task-013.
+SETTINGS="$TPL/plugin/hooks/hooks.json"
 CMDDOC="$TPL/plugin/skills/welcome/SKILL.md"
 for f in "$HOOK" "$AB" "$SETTINGS" "$CMDDOC"; do
   [ -f "$f" ] || { echo "banner-colour-channel.test: missing $f" >&2; exit 2; }
@@ -121,12 +122,13 @@ cat > "$INST/instance.config.json" <<'EOF'
   "roleTiers": { "software-engineer": "deep", "cataloguer": "standard" }
 }
 EOF
-# ONE DANGLING MACHINERY LINK, so §0's red alarm fires. A symlink whose target does not
-# exist is the exact test install.sh and the hook both use.
+# ONE MACHINERY LINK, so §0's red alarm fires. Since task-013 the alarm is about a bundle
+# that still carries machinery symlinks at all — a dangling one is broken and a LIVE one is
+# frozen at whatever checkout it points into — so a dangling SCHEMA.md still trips it.
 ln -s "$TMP/gone/SCHEMA.md" "$INST/SCHEMA.md"
 printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
 
-# THE COMMAND settings.json REGISTERS, read out of the file and never retyped here. A
+# THE COMMAND hooks.json REGISTERS, read out of the file and never retyped here. A
 # harness that ran `--format json` of its own accord would stay green through a
 # settings.json that dropped the flag — and a hook registered without it is a hook whose
 # human sees nothing, coloured or not.
@@ -137,10 +139,15 @@ cmds = [h["command"] for b in blocks for h in b["hooks"]]
 print(cmds[0] if len(cmds) == 1 else "")
 PY
 )"
-[ -n "$CMD" ] || { echo "banner-colour-channel.test: settings.json registers no single SessionStart command" >&2; exit 2; }
+[ -n "$CMD" ] || { echo "banner-colour-channel.test: hooks.json registers no single SessionStart command" >&2; exit 2; }
+
+# `${CLAUDE_PLUGIN_ROOT}` is what a plugin hook's command is written against, and Claude
+# Code sets it before it runs one. Setting it here is what makes "run exactly the command
+# the manifest registers" a real test rather than a `bad substitution`.
+export CLAUDE_PLUGIN_ROOT="$TPL/plugin"
 
 run_registered() { # [env assignments…] -> OUT
-  OUT="$(env "$@" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>"$TMP/stderr")"
+  OUT="$(env "$@" CLAUDE_PLUGIN_ROOT="$TPL/plugin" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>"$TMP/stderr")"
   ERR="$(cat "$TMP/stderr" 2>/dev/null || true)"
 }
 
@@ -241,9 +248,9 @@ esc_lines="$(LC_ALL=C grep -c "$ESC" <<<"$SM" | tr -d ' ')"
 all_lines="$(grep -c '' <<<"$SM" | tr -d ' ')"
 
 # The alarm and the warning, by name and on the human's channel.
-assert "the machinery alarm fired in this fixture" "$(has 'machinery is DANGLING' "$SM")"
+assert "the machinery alarm fired in this fixture" "$(has 'MACHINERY SYMLINKS' "$SM")"
 assert "…and that line is coloured" \
-  "$(has_esc "$(grep 'machinery is DANGLING' <<<"$SM")")"
+  "$(has_esc "$(grep 'MACHINERY SYMLINKS' <<<"$SM")")"
 assert "the awaiting nudge fired"                  "$(has '1 item needs you' "$SM")"
 assert "…and that line is coloured" \
   "$(has_esc "$(grep 'item needs you' <<<"$SM")")"
@@ -271,9 +278,9 @@ assert "coloured lines are a minority of the banner ($esc_lines of $all_lines)" 
 # `--banner` and `emphasise` decides the weight here.
 assert "the inlined ai-bridge check block fired"   "$(has 'ai-bridge check — state worth a look' "$SM")"
 assert "…its ⚠ line is coloured" \
-  "$(has_esc "$(grep 'NOT linked in this instance' <<<"$SM")")"
+  "$(has_esc "$(grep 'this bundle has not been converted' <<<"$SM")")"
 assert "…while its ↳ hint line, which is context, is not" \
-  "$(no_esc "$(grep -F '↳ bash' <<<"$SM")")"
+  "$(no_esc "$(grep -F '↳ /ai-bridge:init' <<<"$SM")")"
 
 # =======================================================================================
 echo "== 4. it DEGRADES, and the degradation is demonstrated rather than asserted =="

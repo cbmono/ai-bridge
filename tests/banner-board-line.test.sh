@@ -59,7 +59,9 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
-SETTINGS="$TPL/seed/.claude/settings.json"
+# The four ai-bridge hooks are registered by the PLUGIN since task-013, not by the
+# bundle's own settings.json.
+SETTINGS="$TPL/plugin/hooks/hooks.json"
 [ -f "$HOOK" ] || { echo "banner-board-line.test: hook not found at $HOOK" >&2; exit 2; }
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/banner-board-line.XXXXXX")" || {
@@ -92,7 +94,7 @@ echo "== the hook is wired up at all =="
 assert "session-banner.sh ships"      "$([ -f "$HOOK" ] && echo 0 || echo 1)"
 assert "…and is executable"           "$([ -x "$HOOK" ] && echo 0 || echo 1)"
 assert "…and parses"                  "$(bash -n "$HOOK" >/dev/null 2>&1 && echo 0 || echo 1)"
-assert "settings.json registers it at SessionStart" \
+assert "hooks.json registers it at SessionStart" \
   "$(awk '/"SessionStart"/,0' "$SETTINGS" | grep -q 'session-banner.sh' && echo 0 || echo 1)"
 
 echo "== a non-bridge project that inherits the hook: silent, exit 0 =="
@@ -165,7 +167,7 @@ assert "board enabled, nothing rendered: it SAYS SO rather than saying nothing" 
 # NAMING THE REPAIR IS HALF THE LINE. "Something is missing" without "here is what makes it"
 # leaves the reader exactly where the silence did — reaching for `ls`.
 assert "…and names a /pm-loop tick as what renders it"  "$(has '/pm-loop tick renders it' "$OUT")"
-assert "…and scripts/build-board.sh as the other route" "$(has 'scripts/build-board.sh' "$OUT")"
+assert "…and build-board.sh as the other route" "$(has 'build-board.sh' "$OUT")"
 # TEXTUALLY DISTINCT FROM THE RENDERED ROW, which is the whole property: two states that
 # print strings a human (or a grep) cannot tell apart are one state with extra steps. Keyed
 # on `Board   file://` — what the rendered row actually prints — and NOT on the deleted
