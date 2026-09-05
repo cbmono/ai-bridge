@@ -29,6 +29,10 @@
 #     Clean ⇒ portable, and the hand edits survive by construction. Conflicting ⇒ reported
 #     with the diff, the file is NOT touched, and under `--apply` the conflicted merge is
 #     saved beside it as `<file>.bak.<epoch>` so the markers are there to read.
+#   · `instance.config.json` / `instance.config.local.json` ⇒ NEVER merged, only reported.
+#     Config is the one seed file whose purpose is to diverge, and a value in it is
+#     routinely a decision somebody made minutes ago. Same reason `/ai-bridge:welcome` has
+#     no fixer for its `config-uncommitted` row.
 #   · No git history at all for the seed file (no repo, shallow clone, an uncommitted seed
 #     file, a rename this script does not follow) ⇒ no merge base, no evidence, no action.
 #     Reported for a human.
@@ -196,6 +200,23 @@ insync=0; portable=0; ported=0; conflict=0; unknown=0
 while IFS= read -r rel; do
   [ -n "$rel" ] || continue
   seed_f="$SEED_SRC/$rel"; inst_f="$TARGET/$rel"
+
+  # THE CONFIG FILES ARE NEVER MERGED, AND THAT IS A SHIP-BLOCKER, NOT AN OMISSION.
+  # `instance.config.json` is the one seed file whose entire purpose is to diverge — it
+  # carries the group's org, its reposRoot, its roster and its spend — and a value in it is
+  # routinely a decision somebody made minutes ago. `/ai-bridge:welcome` already refuses to
+  # repair an uncommitted config for exactly that reason (its `config-uncommitted` row is
+  # `ambiguous` and has no fixer at all), so a merge here would be the same write arriving
+  # by another door. It is REPORTED, with the diff to run, and never touched.
+  case "$rel" in
+    instance.config.json|instance.config.local.json)
+      if [ -e "$inst_f" ] && ! cmp -s "$seed_f" "$inst_f"; then
+        report "CONFIG" "$rel"
+        detail "config is yours to own, so it is never merged. Compare by hand:"
+        detail "  diff -u '$inst_f' '$seed_f'"
+      fi
+      continue ;;
+  esac
 
   if [ ! -e "$inst_f" ]; then
     report "absent" "$rel"

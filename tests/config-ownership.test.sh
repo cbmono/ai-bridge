@@ -172,7 +172,7 @@ ok "the fixture's extra file is reported" \
 # not see at all, and the reason this group is not decorative. `personal` is not a name
 # either repo has ever used, which is the point: the scan must be blind to tier names.
 NEWTIER="$TMP/newtier"
-mkdir -p "$NEWTIER/config/required/agents" "$NEWTIER/config/personal/commands"
+mkdir -p "$NEWTIER/config/required/agents" "$NEWTIER/config/personal/commands" "$NEWTIER/plugin/scripts"
 cp "$REPO/config/required/agents/"*.md "$NEWTIER/config/required/agents/"
 printf 'a copy of ai-setup\n' > "$NEWTIER/config/personal/commands/grill.md"
 shipped "$NEWTIER" > "$TMP/shipped-newtier"

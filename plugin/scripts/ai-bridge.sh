@@ -109,7 +109,8 @@ set -uo pipefail
 # must happen before re-stamping from it, or the stamp is taken from the stale tree — the
 # exact failure that produced this file.
 CHECKS='template-behind|idempotent|no
-bundle-stamp|idempotent|yes
+bundle-unconverted|idempotent|yes
+seed-drift|idempotent|no
 config-uncommitted|ambiguous|yes
 config-layers|ambiguous|no
 config-unknown-keys|ambiguous|yes
@@ -465,7 +466,7 @@ fix_template_behind() {
 }
 
 # =========================================================================================
-# CHECK 2 — bundle-stamp (idempotent)
+# CHECK 2 — bundle-unconverted (idempotent)
 # =========================================================================================
 # THE FACT: this bundle carries machinery symlinks into a template checkout, and/or seed
 # documents this template has changed since the bundle was stamped.
@@ -478,21 +479,19 @@ fix_template_behind() {
 # checkout that `claude plugin update` never touches, so the bundle runs machinery frozen
 # at whatever that clone last pulled, with nothing anywhere saying so.
 #
-# THE SECOND HALF IS THE ONE A CONVERSION DOES NOT FIX. `seed/` is copied only when
-# absent, so a seed edit never reaches a bundle already stamped; `refresh-seeds.sh` is the
-# 3-way merge that ports it, and asking it here is how the fact reaches a human. It is
-# consulted in REPORT mode — `fix` below is what asks it to write.
+# THE OTHER HALF — a seed document a stamp cannot deliver — is CHECK 3 below, and it is a
+# separate row on purpose: it has something to say on a healthy bundle, so it stays off the
+# banner path while this one, which does not, stays on it.
 #
-# EMPTY IS AN ANSWER, NOT SILENCE. "No links, nothing to port" is the useful half on most
-# days and it prints as a `✓` line.
-check_bundle_stamp() {
+# EMPTY IS AN ANSWER, NOT SILENCE. "No links at all" is the useful answer on most days and
+# it prints as a `✓` line.
+check_bundle_unconverted() {
   _warned=0
-
-  # THE LINK HALF. A walk of the whole bundle, not a probe list: the set of paths the old
-  # installer stamped changed across template versions, so a closed list is wrong for
-  # exactly the oldest bundles. `repos/` is excluded because it IS the derived view the
-  # stamp maintains, and `find` does not follow symlinks so it cannot descend into a
-  # linked repo. `.git` is pruned for speed.
+  # A walk of the whole bundle, not a probe list: the set of paths the old installer
+  # stamped changed across template versions, so a closed list is wrong for exactly the
+  # oldest bundles. `repos/` is excluded because it IS the derived view the stamp
+  # maintains, and `find` does not follow symlinks so it cannot descend into a linked
+  # repo. `.git` is pruned for speed.
   local l rel n=0 dead=0 shown=""
   while IFS= read -r l; do
     [ -n "$l" ] || continue
@@ -508,55 +507,88 @@ EOF
 
   if [ "$n" -eq 0 ]; then
     good "no symlinks outside repos/ — this bundle carries no machinery and no template link"
-  else
-    _warned=1
-    warn "$n symlink(s) outside repos/ — this bundle has not been converted ($dead already dead)"
-    printf '%s\n' "$shown"
-    [ "$n" -gt 12 ] && note "… and $((n - 12)) more"
-    note "the machinery ships in the plugin now; a link into a checkout is frozen there"
-    hint "/ai-bridge:init $ROOT"
+    return 0
   fi
-
-  # THE SEED HALF, delegated. Its output is multi-line and already written for a human;
-  # only the lines that name a file needing something are kept, because a full report on
-  # every session start is wallpaper.
-  if [ -f "$BIN/refresh-seeds.sh" ]; then
-    local drift
-    drift="$(bash "$BIN/refresh-seeds.sh" "$ROOT" 2>/dev/null | grep -E '^  (PORTABLE|CONFLICT|UNKNOWN) ' || true)"
-    if [ -n "$drift" ]; then
-      _warned=1
-      warn "seed documents have drifted from this template — a stamp cannot deliver a seed edit"
-      printf '%s\n' "$drift" | sed 's/^  /    /'
-      hint "/ai-bridge:welcome fix   (3-way merges the portable ones; conflicts stay yours)"
-    else
-      good "seed documents are in step with this template — nothing to port"
-    fi
-  else
-    note "cannot compare seed drift: no refresh-seeds.sh at $BIN"
-  fi
-
+  _warned=1
+  warn "$n symlink(s) outside repos/ — this bundle has not been converted ($dead already dead)"
+  printf '%s\n' "$shown"
+  [ "$n" -gt 12 ] && note "… and $((n - 12)) more"
+  note "the machinery ships in the plugin now; a link into a checkout is frozen there"
+  hint "/ai-bridge:init $ROOT"
   return "$_warned"
 }
 
-# fix_bundle_stamp — run the bundle installer this plugin ships, with the seed merge on.
+# fix_bundle_unconverted — run the bundle installer this plugin ships.
 #
-# `init-bundle.sh` converts (removes machinery links), seeds-if-absent, and — with
-# `--refresh-seeds` — 3-way merges the seed changes a bundle can accept cleanly. It never
-# removes bundle content and never overwrites a hand-diverged file: a conflict is reported
-# and the conflicted merge is left beside the file as `.bak.<epoch>`. That is what makes
-# re-running it the idempotent repair rather than a risk.
-fix_bundle_stamp() {
+# `init-bundle.sh` removes machinery links, seeds-if-absent and retires the managed
+# `.gitignore` block. It never removes bundle content and never overwrites a file the
+# bundle owns. That is what makes re-running it the idempotent repair rather than a risk.
+fix_bundle_unconverted() {
   if [ ! -f "$BIN/init-bundle.sh" ]; then
     note "NOT stamped: $BIN/init-bundle.sh is missing — re-install the plugin"
     return 0
   fi
-  note "running: bash $BIN/init-bundle.sh $ROOT --refresh-seeds"
-  bash "$BIN/init-bundle.sh" "$ROOT" --refresh-seeds 2>&1 | sed 's/^/      /'
+  note "running: bash $BIN/init-bundle.sh $ROOT"
+  bash "$BIN/init-bundle.sh" "$ROOT" 2>&1 | sed 's/^/      /'
   return 0
 }
 
 # =========================================================================================
-# CHECK 3 — config-uncommitted (AMBIGUOUS — SHIP-BLOCKER: never repaired)
+# CHECK 3 — seed-drift (idempotent, and deliberately NOT on the banner path)
+# =========================================================================================
+# THE FACT: this template has changed a seed document since this bundle was stamped, and a
+# stamp alone cannot deliver it — `seed/` is copied only where a path is ABSENT.
+#
+# `banner:no`, AND THAT IS THE WHOLE REASON IT IS ITS OWN ROW. Every bundle edits its
+# `instance.config.json` and most edit `CLAUDE.md`, so this row has something to say on a
+# perfectly healthy bundle — which on a SessionStart banner is wallpaper, and wallpaper is
+# how the lines that matter come to be skipped. It belongs in `check`, where somebody asked.
+#
+# UNKNOWN IS A NOTE, NEVER A WARNING. "No merge base, so I cannot tell" is the shape every
+# other row here reports as a fact; a plugin vendored without its git history would
+# otherwise warn about every seed document there is.
+check_seed_drift() {
+  _warned=0
+  if [ ! -f "$BIN/refresh-seeds.sh" ]; then
+    note "cannot compare seed drift: no refresh-seeds.sh at $BIN"
+    return 0
+  fi
+  local report drift unknown
+  report="$(bash "$BIN/refresh-seeds.sh" "$ROOT" 2>/dev/null || true)"
+  drift="$(printf '%s\n' "$report" | grep -E '^  (PORTABLE|CONFLICT) ' || true)"
+  unknown="$(printf '%s\n' "$report" | grep -cE '^  UNKNOWN ' || true)"
+  if [ -n "$drift" ]; then
+    _warned=1
+    warn "seed documents have drifted from this template — a stamp cannot deliver a seed edit"
+    printf '%s\n' "$drift" | sed 's/^  /    /'
+    hint "/ai-bridge:welcome fix   (3-way merges the portable ones; conflicts stay yours)"
+  else
+    good "seed documents are in step with this template — nothing to port"
+  fi
+  if [ "${unknown:-0}" -gt 0 ] 2>/dev/null; then
+    note "$unknown seed document(s) differ with no merge base to judge them by"
+  fi
+  return "$_warned"
+}
+
+# fix_seed_drift — the 3-way merge, applied.
+#
+# NEVER A COPY, AND NEVER OVER A CONFLICT. `refresh-seeds.sh --apply` writes the MERGE
+# RESULT of (bundle, old seed, new seed) and reads it back; a hand-diverged file that
+# conflicts is left exactly as it is and the conflicted merge is saved beside it as
+# `.bak.<epoch>`. That is what makes this the idempotent tier rather than the human one.
+fix_seed_drift() {
+  if [ ! -f "$BIN/refresh-seeds.sh" ]; then
+    note "NOT ported: $BIN/refresh-seeds.sh is missing — re-install the plugin"
+    return 0
+  fi
+  note "running: bash $BIN/refresh-seeds.sh $ROOT --apply"
+  bash "$BIN/refresh-seeds.sh" "$ROOT" --apply 2>&1 | sed 's/^/      /'
+  return 0
+}
+
+# =========================================================================================
+# CHECK 4 — config-uncommitted (AMBIGUOUS — SHIP-BLOCKER: never repaired)
 # =========================================================================================
 # THE FACT: `instance.config.json` / `instance.config.local.json` carry changes git has not
 # recorded. That is ALL this says. It is a QUESTION, never a defect.
@@ -621,7 +653,7 @@ check_config_uncommitted() {
 }
 
 # =========================================================================================
-# CHECK 4 — config-layers (ambiguous — nothing to repair, by construction)
+# CHECK 5 — config-layers (ambiguous — nothing to repair, by construction)
 # =========================================================================================
 # THE FACT: which of the two config files won, per resolved key. A key can be set in the
 # tracked file, read by everything, and still not be the one in force — `resolve-config.sh`
@@ -675,7 +707,7 @@ check_config_layers() {
 }
 
 # =========================================================================================
-# CHECK 5 — config-unknown-keys (ambiguous — a key nothing reads may still be somebody's intent)
+# CHECK 6 — config-unknown-keys (ambiguous — a key nothing reads may still be somebody's intent)
 # =========================================================================================
 # THE FACT: whether either config file carries a top-level key the machinery does not know.
 # Nothing else validates config keys, so a retired key sits in the file looking
@@ -759,7 +791,7 @@ EOF
 }
 
 # =========================================================================================
-# CHECK 6 — tick-lock (HUMAN — SHIP-BLOCKER: never repaired)
+# CHECK 7 — tick-lock (HUMAN — SHIP-BLOCKER: never repaired)
 # =========================================================================================
 # THE FACT: whether a `/pm-loop` tick lock is held, claimed, or past its staleness
 # threshold. The verdict is `tick-lock.sh status`'s, replayed here — this file has no
@@ -805,7 +837,7 @@ check_tick_lock() {
 }
 
 # =========================================================================================
-# CHECK 7 — orphan-processes (HUMAN — never repaired)
+# CHECK 8 — orphan-processes (HUMAN — never repaired)
 # =========================================================================================
 # THE FACT: processes of YOURS whose parent is gone (`ppid 1`) are still running out of a
 # directory under `worktreeRoot`. Nothing on this machine will ever reap them.

@@ -55,11 +55,14 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$(
 yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 
 # A copy of the template carrying the REAL config/ tree, so the tier contents under test
-# are the ones that ship. symlink/ and seed/ are minimal — this file is about the config
-# half, and the instance half has its own harnesses.
+# are the ones that ship. plugin/ and seed/ are minimal — this file is about the config
+# half, and the bundle half has its own harnesses.
 make_tpl() { # <dir>
   local d="$1"
   mkdir -p "$d/plugin/scripts" "$d/seed"
+  # `VERSION` at the root is what init-bundle.sh verifies its two-directories-up
+  # derivation against, so a fixture template without one is not a template at all.
+  cp "$REPO/VERSION" "$d/VERSION"
   cp "$REPO/plugin/scripts/init-bundle.sh" "$d/plugin/scripts/init-bundle.sh"
   cp -R "$REPO/config" "$d/config"
   printf '{}\n' > "$d/seed/instance.config.json"
@@ -242,7 +245,12 @@ I="$TMP/inst-nocfg"; mkdir -p "$I"
 bash "$T4/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1; irc=$?
 ok "a config-less checkout still stamps"  "$irc" 0
 ok "…the instance is seeded"              "$(yn test -f "$I/instance.config.json")" yes
-ok "…and the machinery is linked"         "$(yn test -L "$I/SCHEMA.md")" yes
+# THE BUNDLE HALF NO LONGER LINKS ANYTHING (task-013): SCHEMA.md is seed content copied
+# into the bundle, and a link there would be exactly the symlink-era state /ai-bridge:init
+# converts away from. Both halves are asserted so the change cannot be read as a loss.
+ok "…SCHEMA.md is a real file, not a link"  "$(yn test -f "$I/SCHEMA.md")" yes
+ok "…and nothing in the bundle is a symlink" \
+   "$([ -z "$(find "$I" -type l 2>/dev/null)" ] && echo yes || echo no)" yes
 ok "--config there says so, exit 2"       "$(run_cfg "$(newdest 7)" "$T4")" 2
 ok "…and explains what is missing"        "$(said 'no config layer')" yes
 # The other direction: a config install must not touch an instance, and an instance
@@ -277,15 +285,26 @@ ok "--help documents --instance"          "$(said '--instance')" yes
 ok "--help is not truncated"              "$(said 'Backs up any conflicting real file')" yes
 
 # =========================================================================== #
-echo "-- the worktree guard covers --config too"
+# THE GUARD IS --config's ALONE NOW. It existed because BOTH halves wrote absolute symlinks
+# pointing at this checkout; the bundle half writes none since task-013, so refusing a
+# worktree there would refuse a stamp that is perfectly safe — and it was the reason every
+# fixture in this suite had to copy the template out of the checkout first. `--config` still
+# links into ${CLAUDE_CONFIG_DIR:-~/.claude} by absolute path, so for that half nothing
+# changed. Both directions are asserted below.
+echo "-- the worktree guard covers --config, and ONLY --config"
 WM="$TMP/wtmain"; make_tpl "$WM"
 ( cd "$WM" && git init -q . && git add -A && git -c user.name=t -c user.email=t@t commit -qm init ) >/dev/null 2>&1
 git -C "$WM" worktree add -q "$TMP/wtlinked" -b wt >/dev/null 2>&1
 D9="$(newdest 9)"
 ok "--config from a worktree exits 2"     "$(run_cfg "$D9" "$TMP/wtlinked")" 2
-ok "…says why"                            "$(said 'refusing to install from a git worktree')" yes
+ok "…says why"                            "$(said 'refusing to link the config layer from a git worktree')" yes
 ok "…and linked nothing"                  "$(find "$D9" -mindepth 1 | wc -l | tr -d ' ')" 0
 ok "--config from the main tree works"    "$(run_cfg "$(newdest 10)" "$WM")" 0
+# The other direction, which is the change: a BUNDLE stamp from that same worktree works.
+IWT="$TMP/inst-from-worktree"
+bash "$TMP/wtlinked/plugin/scripts/init-bundle.sh" "$IWT" >"$TMP/out" 2>&1
+ok "a bundle stamp from a worktree is allowed" "$(yn test -f "$IWT/instance.config.json")" yes
+ok "…and it left no symlink behind"       "$([ -z "$(find "$IWT" -type l 2>/dev/null)" ] && echo yes || echo no)" yes
 
 # =========================================================================== #
 echo "-- retiring a config file sweeps its dangling link"

@@ -642,10 +642,14 @@ assert "…and never labels a row \".\""              "$(yes_if sh -c 'printf "%
 assert "the HTML board names it too"                "$(fhas '<h1>Stamped Bridge Board</h1>' "$TMP/fresh.html")"
 assert "…and never an empty name in the masthead"   "$(fhasnt '<h1> Bridge Board' "$TMP/fresh.html")"
 
-# The renderers must be linked into an instance, or nobody can run them there.
-assert "install.sh links print-board.sh"       "$(yes_if test -L "$INST/scripts/print-board.sh")"
-assert "…and watch-board.sh"                   "$(yes_if test -L "$INST/scripts/watch-board.sh")"
-assert "…and both resolve"                     "$(yes_if sh -c 'test -f "$1/scripts/print-board.sh" && test -f "$1/scripts/watch-board.sh"' _ "$INST")"
+# THE RENDERERS SHIP WITH THE PLUGIN, NOT INTO A BUNDLE (task-013). This used to assert
+# that a stamp LINKED them into `<bundle>/scripts/`; a bundle carries no machinery now, so
+# the property worth pinning is that the plugin ships both and that a stamp put no link
+# where the old ones were — the same question, asked of the design that replaced it.
+BR_TPL="$(cd "$(dirname "$BRIDGE_INSTALL")/../.." && pwd)"
+assert "the plugin ships print-board.sh"       "$(yes_if test -f "$BR_TPL/plugin/scripts/print-board.sh")"
+assert "…and watch-board.sh"                   "$(yes_if test -f "$BR_TPL/plugin/scripts/watch-board.sh")"
+assert "…and the stamped bundle links neither" "$(yes_if sh -c '! test -e "$1/scripts"' _ "$INST")"
 
 echo
 echo "pass=$pass fail=$fail skip=$skip"
