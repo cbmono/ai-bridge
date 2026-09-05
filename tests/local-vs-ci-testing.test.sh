@@ -60,7 +60,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/seed/CONVENTIONS.md"
+CONV="$REPO/plugin/seed/CONVENTIONS.md"
 CLAUDEMD="$REPO/CLAUDE.md"
 TESTRULE="$REPO/.claude/rules/tests.md"
 AGENTS="$REPO/plugin/agents"

@@ -66,15 +66,18 @@ mkdir -p "$TPL"
 mkdir -p "$TPL/plugin/scripts"
 cp -R "$TPL_SRC/plugin/scripts/init-bundle.sh" "$TPL_SRC/plugin/scripts/refresh-seeds.sh" \
       "$TPL_SRC/plugin/scripts/validate-bundle.sh" "$TPL/plugin/scripts/"
-cp -R "$TPL_SRC/seed" "$TPL/seed"
+cp -R "$TPL_SRC/plugin/seed" "$TPL/plugin/seed"
+# VERSION lives INSIDE plugin/ for the root derivation; the root copy is the mirror the
+# repo keeps for its docs and for check-template-version.sh.
+cp "$TPL_SRC/VERSION" "$TPL/plugin/VERSION"
 cp "$TPL_SRC/VERSION" "$TPL/VERSION"
 
 # Controlled seed content, so the assertions below describe this test's edits rather than
 # whatever the real seed files happen to say today.
-printf '# Index\nline A\nline B\nline C\nline D\n' > "$TPL/seed/index.md"
-printf '# Todos\nt1\nt2\nt3\nt4\nt5\nt6\nt7\nt8\n'  > "$TPL/seed/todos.md"
-printf '# Panel\nintro line\ntail line\n'           > "$TPL/seed/CLAUDE.md"
-printf '# Log\n'                                    > "$TPL/seed/log.md"
+printf '# Index\nline A\nline B\nline C\nline D\n' > "$TPL/plugin/seed/index.md"
+printf '# Todos\nt1\nt2\nt3\nt4\nt5\nt6\nt7\nt8\n'  > "$TPL/plugin/seed/todos.md"
+printf '# Panel\nintro line\ntail line\n'           > "$TPL/plugin/seed/CLAUDE.md"
+printf '# Log\n'                                    > "$TPL/plugin/seed/log.md"
 ( cd "$TPL" && git init -q -b main . && git add -A && gc "template, seed v1" )
 
 # Every run below goes through the FIXTURE's copy of the script: `upgrade.sh` derives its
@@ -110,9 +113,9 @@ cp "$INST/instance.config.json" "$TMP/config.pristine"
 cp "$INST/CLAUDE.md" "$TMP/claude.pristine"
 
 # ---------------------------------------------------------------- the template, seed v2
-printf 'line E (new in seed v2)\n' >> "$TPL/seed/index.md"
-sed 's/^# Todos$/# Todos\nTOP LINE FROM SEED V2/' "$TPL/seed/todos.md" > "$TMP/t" && mv "$TMP/t" "$TPL/seed/todos.md"
-sed 's/^intro line$/intro line — TEMPLATE V2/'    "$TPL/seed/CLAUDE.md" > "$TMP/c" && mv "$TMP/c" "$TPL/seed/CLAUDE.md"
+printf 'line E (new in seed v2)\n' >> "$TPL/plugin/seed/index.md"
+sed 's/^# Todos$/# Todos\nTOP LINE FROM SEED V2/' "$TPL/plugin/seed/todos.md" > "$TMP/t" && mv "$TMP/t" "$TPL/plugin/seed/todos.md"
+sed 's/^intro line$/intro line — TEMPLATE V2/'    "$TPL/plugin/seed/CLAUDE.md" > "$TMP/c" && mv "$TMP/c" "$TPL/plugin/seed/CLAUDE.md"
 ( cd "$TPL" && git add -A && gc "template, seed v2" )
 
 echo "== refusing anything that is not an instance root =="
@@ -169,7 +172,7 @@ assert "--apply exits 0 when every write landed" "$([[ $APPLY_RC -eq 0 ]] && ech
 assert "the mode is stated as apply"      "$(has 'mode:     APPLY' "$APPLY")"
 assert "index.md is reported PORTED"      "$(has 'PORTED    index.md' "$APPLY")"
 assert "index.md is now byte-identical to the current seed" \
-  "$(yes_if cmp -s "$TPL/seed/index.md" "$INST/index.md")"
+  "$(yes_if cmp -s "$TPL/plugin/seed/index.md" "$INST/index.md")"
 assert "todos.md is reported PORTED"      "$(has 'PORTED    todos.md' "$APPLY")"
 assert "todos.md gained the seed's new line"  "$(yes_if grep -q '^TOP LINE FROM SEED V2$' "$INST/todos.md")"
 assert "todos.md KEPT the instance's own line" "$(yes_if grep -q '^INSTANCE TODO$' "$INST/todos.md")"
@@ -216,12 +219,12 @@ assert "the conflict is still reported, not forgotten" "$(has 'CONFLICT  CLAUDE.
 echo "== a template with no git history reports rather than guesses =="
 NOGIT="$TMP/tpl-nogit"
 cp -R "$TPL" "$NOGIT" && rm -rf "$NOGIT/.git"
-printf 'a further seed change\n' >> "$NOGIT/seed/index.md"
+printf 'a further seed change\n' >> "$NOGIT/plugin/seed/index.md"
 NOGIT_OUT="$(bash "$NOGIT/plugin/scripts/refresh-seeds.sh" "$INST" --apply 2>&1)"
 assert "a drifted file with no merge base is UNKNOWN" "$(has 'UNKNOWN   index.md' "$NOGIT_OUT")"
 assert "…and is not ported"            "$(hasnt 'PORTED    index.md' "$NOGIT_OUT")"
 assert "…and index.md was not written" \
-  "$(yes_if cmp -s "$TPL/seed/index.md" "$INST/index.md")"
+  "$(yes_if cmp -s "$TPL/plugin/seed/index.md" "$INST/index.md")"
 
 echo "== the four review findings, as refusals =="
 
@@ -268,7 +271,7 @@ cp -R "$INST" "$AUT"
 rm -f "$AUT/AUTONOMY.md"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$AUT" >/dev/null 2>&1
 assert "a stamp does NOT restore AUTONOMY.md"   "$(yes_if test ! -e "$AUT/AUTONOMY.md")"
-assert "…and the seed ships none to restore"    "$(yes_if test ! -e "$TPL/seed/AUTONOMY.md")"
+assert "…and the seed ships none to restore"    "$(yes_if test ! -e "$TPL/plugin/seed/AUTONOMY.md")"
 AUT_OUT="$(bash "$TPL/plugin/scripts/refresh-seeds.sh" "$AUT" 2>&1)"
 assert "…so the refresh has nothing to warn about" "$(hasnt 'AUTONOMY' "$AUT_OUT")"
 

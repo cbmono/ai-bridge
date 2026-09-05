@@ -15,6 +15,23 @@ and converts one stamped by the retired `install.sh`.
 
 Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplaces.
 
+**What ships here, and the one thing that does not.** An installed plugin is the CONTENTS
+of this directory — `agents/ evals/ hooks/ scripts/ skills/` and, since task-022, the three
+files a stamp reads: `seed/`, `RETIRED` and a mirror of the template `VERSION`. So
+`/ai-bridge:init` needs **no clone of `cbmono/ai-bridge`**, which is the whole point of
+shipping the installer in the plugin and was not true before 0.15.0: the root detection
+looked two directories above `scripts/` for `seed/`, which is where a *checkout* keeps it
+and not where a plugin cache does, so init exited 2 on every machine that installed it the
+supported way.
+
+**`init-bundle.sh --config` is the exception, and it is the only one.** It links three
+agent files into `${CLAUDE_CONFIG_DIR:-~/.claude}` by absolute path, so it must know where
+those paths point and `config/` deliberately stays outside the plugin: it is a per-machine
+decision, not a bundle one, and `plugin/` must never *require* it. Run it from a clone;
+run it never, and a bundle stamp behaves exactly the same, because the role agents probe
+for those agents with `test -f`. From an installed plugin `--config` refuses by name and
+prints the clone command rather than reporting a missing directory.
+
 ## Skills today
 
 | Skill | What it does |

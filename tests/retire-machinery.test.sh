@@ -117,7 +117,7 @@ LEGACY="scripts/build-artifact-board.sh .claude/hooks/deny-destructive.sh
 .claude/agents/software-engineer.md
 SCHEMA.md CONVENTIONS.md agents/index.md .claude/settings.json"
 LEG="$TMP/group/_ai-bridge-legacy"; mkdir -p "$LEG"
-cp "$TPL/seed/instance.config.json" "$LEG/instance.config.json"
+cp "$TPL/plugin/seed/instance.config.json" "$LEG/instance.config.json"
 n_legacy=0
 for rel in $LEGACY; do
   mkdir -p "$LEG/$(dirname "$rel")" "$OLDTPL/symlink/$(dirname "$rel")"
@@ -167,7 +167,7 @@ assert "…and reported with its relative path" "$(yes_if grep -q 'retire DOOMED
 SEEDY="$TMP/group/_ai-bridge-seedy"; mkdir -p "$SEEDY"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" >/dev/null 2>&1
 printf 'my private notes\n' > "$SEEDY/retired-thing.md"
-printf 'retired-thing.md\tthe X feature was removed\n' > "$TPL/RETIRED"
+printf 'retired-thing.md\tthe X feature was removed\n' > "$TPL/plugin/RETIRED"
 OUT="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "retired seed content is reported"    "$(has 'stale retired-thing.md' "$OUT")"
 assert "…with its reason"                    "$(has 'the X feature was removed' "$OUT")"
@@ -178,19 +178,19 @@ assert "…and is NOT deleted"                 "$(yes_if grep -q 'my private not
 assert "an absent entry says nothing" \
   "$(hasnt 'stale ' "$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" 2>&1)")"
 # Comments, blanks and a reason-less line must all parse without noise.
-printf '# a comment\n\nretired-thing.md\n' > "$TPL/RETIRED"
+printf '# a comment\n\nretired-thing.md\n' > "$TPL/plugin/RETIRED"
 OUT2="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "a reason-less entry still reports"   "$(has 'stale retired-thing.md' "$OUT2")"
 assert "…with a default reason"              "$(has 'no longer shipped by the template' "$OUT2")"
 assert "…and comments are not reported"      "$(hasnt 'stale # a comment' "$OUT2")"
 # Absence of the manifest is silence, not an error — the AUTONOMY.md convention.
-rm -f "$TPL/RETIRED"
+rm -f "$TPL/plugin/RETIRED"
 RC=0; OUT3="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)" || RC=$?
 assert "no manifest: exits 0"                "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "no manifest: reports nothing"        "$(hasnt 'stale ' "$OUT3")"
 assert "no manifest: file still there"       "$(yes_if grep -q 'my private notes' "$SEEDY/retired-thing.md")"
 # A dangling SYMLINK at a manifested path belongs to the sweep, not to this list.
-: > "$TPL/RETIRED"; printf 'linky.md\tretired\n' >> "$TPL/RETIRED"
+: > "$TPL/plugin/RETIRED"; printf 'linky.md\tretired\n' >> "$TPL/plugin/RETIRED"
 ln -sfn "$TMP/gone-forever" "$SEEDY/linky.md"
 OUT4="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "a symlink is not reported as stale"  "$(hasnt 'stale linky.md' "$OUT4")"
@@ -199,18 +199,18 @@ assert "a symlink is not reported as stale"  "$(hasnt 'stale linky.md' "$OUT4")"
 # `../victim.md` would make the printed `rm` operate OUTSIDE the instance, and a human
 # pasting a command this script handed them has every reason to trust it.
 printf 'escapee\n' > "$TMP/group/victim.md"
-printf '../victim.md\tretired\n' > "$TPL/RETIRED"
+printf '../victim.md\tretired\n' > "$TPL/plugin/RETIRED"
 OUT5="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "an escaping entry is not reported"   "$(hasnt 'stale \.\./victim.md' "$OUT5")"
 assert "…no rm command is printed for it"    "$(hasnt 'rm .*victim.md' "$OUT5")"
 assert "…it is warned about instead"         "$(has 'escapes the instance root' "$OUT5")"
 assert "…and the outside file is untouched"  "$(yes_if grep -q 'escapee' "$TMP/group/victim.md")"
-printf '/etc/passwd\tretired\n' > "$TPL/RETIRED"
+printf '/etc/passwd\tretired\n' > "$TPL/plugin/RETIRED"
 OUT6="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "an absolute entry is refused"        "$(has 'not instance-relative' "$OUT6")"
 assert "…and prints no rm"                   "$(hasnt 'rm /etc/passwd' "$OUT6")"
 # A path merely CONTAINING dots is fine — only a `..` component escapes.
-printf 'my..notes.md\tretired\n' > "$TPL/RETIRED"
+printf 'my..notes.md\tretired\n' > "$TPL/plugin/RETIRED"
 printf 'dotty\n' > "$SEEDY/my..notes.md"
 OUT7="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "a dotted filename is NOT refused"    "$(has 'stale my\.\.notes.md' "$OUT7")"

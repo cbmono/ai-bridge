@@ -207,7 +207,7 @@ NOT_A_TOOL='SessionStart|PreToolUse|UserPromptSubmit|Makefile'
 # writes each as a `## type: <Name>` heading, so the registry is machine-readable and a new
 # type classifies itself. An empty result would un-classify 43 mentions at once, so it is
 # asserted below rather than trusted.
-OKF_TYPE_SRC="$REPO/seed/SCHEMA.md"
+OKF_TYPE_SRC="$REPO/plugin/seed/SCHEMA.md"
 OKF_TYPES="$(grep -oE '^#+[[:space:]]+type:[[:space:]]+[A-Za-z]+' "$OKF_TYPE_SRC" 2>/dev/null \
   | awk '{print $NF}' | sort -u | paste -sd'|' - )"
 [ -n "$OKF_TYPES" ] || OKF_TYPES='__no_okf_types_derived__'

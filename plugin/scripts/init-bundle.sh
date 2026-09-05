@@ -1031,7 +1031,10 @@ WS_NAME="${WS_GROUP}.code-workspace"
 # disappearing quietly is the one outcome worse than losing it.
 #
 # Idempotent: a bundle with no such links prints nothing and changes nothing.
-looks_like_template() { # <dir> — is this a template checkout?
+# The LEGACY root shape — `seed/` and `VERSION` at the top — and deliberately not the
+# current one. Every link this can classify was written by the retired install.sh, from a
+# checkout of a version that kept them there; a post-move checkout stamps no links at all.
+looks_like_template() { # <dir> — is this a template checkout a legacy stamp came from?
   [ -d "$1/seed" ] && [ -f "$1/VERSION" ]
 }
 

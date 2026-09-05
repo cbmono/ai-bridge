@@ -179,7 +179,7 @@ printf '#!/bin/sh\n' > "$OLD/symlink/.claude/hooks/push-state.sh"
 LEG="$TMP/_ai-bridge-legacy"
 mkdir -p "$LEG/scripts" "$LEG/.claude/hooks" "$LEG/agents" \
          "$LEG/projects/demo/tasks" "$LEG/knowledge/findings" "$LEG/objectives"
-cp "$REPO/seed/instance.config.json" "$LEG/instance.config.json"
+cp "$REPO/plugin/seed/instance.config.json" "$LEG/instance.config.json"
 printf 'a decision only this bundle holds\n' > "$LEG/projects/demo/index.md"
 printf -- '---\ntype: Task\ntitle: t\nstatus: draft\ntimestamp: 2026-01-01T00:00:00Z\n---\nbody\n' > "$LEG/projects/demo/tasks/task-001-x.md"
 printf -- '---\ntype: Finding\ntitle: F\nstatus: current\ntimestamp: 2026-01-01T00:00:00Z\n---\na finding\n' > "$LEG/knowledge/findings/f.md"

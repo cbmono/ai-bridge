@@ -593,7 +593,7 @@ assert "…and no child process behind it"            "$(no_if pgrep -P "$WPID" 
 
 echo
 echo "== the live page is gitignored — git's own answer, not the pattern text =="
-assert "seed/.gitignore ignores the live directory" "$(yes_if grep -qF '.board-live' "$TPL/seed/.gitignore")"
+assert "seed/.gitignore ignores the live directory" "$(yes_if grep -qF '.board-live' "$TPL/plugin/seed/.gitignore")"
 INST="$TMP/group/_ai-bridge-stamped"
 mkdir -p "$INST"
 ( cd "$INST" && git init -q . ) 2>/dev/null || true

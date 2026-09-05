@@ -1117,7 +1117,7 @@ if command -v git >/dev/null 2>&1; then
     BRIDGE_INSTALL="$INSTALL_SRC/plugin/scripts/init-bundle.sh"
   fi
 fi
-ok "seed/.gitignore carries the line"    "$(grep -qxF '/.tick-lock' "$TPL/seed/.gitignore" && echo yes || echo no)" yes
+ok "seed/.gitignore carries the line"    "$(grep -qxF '/.tick-lock' "$TPL/plugin/seed/.gitignore" && echo yes || echo no)" yes
 INST="$TMP/g/_ai-bridge-g"; mkdir -p "$INST"
 bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 ok "a fresh stamp gets the line"         "$(grep -qxF '/.tick-lock' "$INST/.gitignore" && echo yes || echo no)" yes
@@ -1145,7 +1145,7 @@ echo "== …and so is the claim beside it, under its OWN guard =="
 # carries `/.tick-lock`, which satisfies that guard, so a line added inside its heredoc
 # would reach exactly nobody who has the first one. That is the case asserted here: remove
 # ONLY the claim line, leave the lock's, and a re-stamp must still append it.
-ok "seed/.gitignore carries the claim too" "$(grep -qxF '/.tick-lock.claim' "$TPL/seed/.gitignore" && echo yes || echo no)" yes
+ok "seed/.gitignore carries the claim too" "$(grep -qxF '/.tick-lock.claim' "$TPL/plugin/seed/.gitignore" && echo yes || echo no)" yes
 ok "a fresh stamp gets it"               "$(grep -cxF '/.tick-lock.claim' "$INST/.gitignore" | tr -d ' ')" 1
 printf 'agent: x\n' > "$INST/.tick-lock.claim"
 ok "git itself ignores the claim"        "$( ( cd "$INST" && git check-ignore -q .tick-lock.claim ) && echo yes || echo no)" yes

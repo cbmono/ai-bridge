@@ -404,7 +404,7 @@ done
 
 echo
 echo "== the overridable set is documented in ONE place =="
-SCHEMA="$TPL/seed/SCHEMA.md"
+SCHEMA="$TPL/plugin/seed/SCHEMA.md"
 assert "SCHEMA.md has the override section" \
   "$(grep -q '^## Per-machine config overrides' "$SCHEMA" && echo 0 || echo 1)"
 for k in ownerGithubUser authorEmail reposRoot worktreeRoot boardInstances board \

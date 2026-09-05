@@ -75,7 +75,7 @@ echo "== 1. seed/.gitignore does not ignore board.html =="
 # git rather than by grepping the file: a `board.html` line could return in a form the
 # grep missed, and only git decides what git tracks.
 SEEDED="$TMP/seeded"; mkdir -p "$SEEDED"
-cp "$TPL/seed/.gitignore" "$SEEDED/.gitignore"
+cp "$TPL/plugin/seed/.gitignore" "$SEEDED/.gitignore"
 : > "$SEEDED/board.html"
 ok "a repo seeded from seed/ does NOT ignore board.html" "$(ignored "$SEEDED" board.html)" no
 # The neighbours must keep their ignores — dropping one line must not have dropped three.

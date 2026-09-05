@@ -48,7 +48,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)" || { echo "check-dispatch.test: cannot locate self" >&2; exit 2; }
 REPO="$(cd "$HERE/.." && pwd)" || { echo "check-dispatch.test: cannot locate repo root" >&2; exit 2; }
 SCRIPT="$REPO/plugin/scripts/check-dispatch.sh"
-CONVENTIONS="$REPO/seed/CONVENTIONS.md"
+CONVENTIONS="$REPO/plugin/seed/CONVENTIONS.md"
 PM="$REPO/plugin/agents/project-manager.md"
 
 FIXDIR="$HERE/fixtures/dispatch"

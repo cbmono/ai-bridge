@@ -70,14 +70,14 @@ echo "== the lines are NOT in seed/.gitignore, and that is deliberate =="
 # repo over a copy of seed/. So the lines live in install.sh, and this asserts the trap
 # stays closed — against git's own answer, not the pattern text.
 assert "seed/.gitignore has no /index.md line" \
-  "$(no_if grep -qxF '/index.md' "$TPL/seed/.gitignore")"
+  "$(no_if grep -qxF '/index.md' "$TPL/plugin/seed/.gitignore")"
 assert "…and the seed's own index.md is trackable" \
   "$(no_if git -C "$TPL" check-ignore --no-index -q seed/index.md)"
 assert "…and it says why, so nobody 'fixes' it" \
-  "$(yes_if grep -q 'ACTIVE .gitignore' "$TPL/seed/.gitignore")"
+  "$(yes_if grep -q 'ACTIVE .gitignore' "$TPL/plugin/seed/.gitignore")"
 # A bare `index.md` line would match at every depth, knowledge/ included.
 assert "no bare 'index.md' pattern in the seed" \
-  "$(no_if grep -qx 'index.md' "$TPL/seed/.gitignore")"
+  "$(no_if grep -qx 'index.md' "$TPL/plugin/seed/.gitignore")"
 
 echo
 echo "== a live instance: git's own answer, not the pattern text =="

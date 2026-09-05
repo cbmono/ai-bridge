@@ -59,18 +59,23 @@ yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 # half, and the bundle half has its own harnesses.
 make_tpl() { # <dir>
   local d="$1"
-  mkdir -p "$d/plugin/scripts" "$d/seed"
-  # `VERSION` at the root is what init-bundle.sh verifies its two-directories-up
-  # derivation against, so a fixture template without one is not a template at all.
+  mkdir -p "$d/plugin/scripts" "$d/plugin/seed" "$d/.claude-plugin"
+  # `VERSION` and `seed/` INSIDE plugin/ are what init-bundle.sh verifies its
+  # one-directory-up derivation against, so a fixture without them is not a template at
+  # all. `.claude-plugin/marketplace.json` is the marker that says a CHECKOUT is wrapped
+  # around the plugin — without it this fixture is an installed plugin, and `--config`
+  # (the whole subject of this file) correctly refuses for want of `config/`.
   cp "$REPO/VERSION" "$d/VERSION"
+  cp "$REPO/VERSION" "$d/plugin/VERSION"
+  printf '{ "name": "ai-bridge", "plugins": [] }\n' > "$d/.claude-plugin/marketplace.json"
   cp "$REPO/plugin/scripts/init-bundle.sh" "$d/plugin/scripts/init-bundle.sh"
   cp -R "$REPO/config" "$d/config"
-  printf '{}\n' > "$d/seed/instance.config.json"
+  printf '{}\n' > "$d/plugin/seed/instance.config.json"
   # The REAL seed CLAUDE.md, so the stale-import nudge is exercised against the content a
   # fresh instance actually gets — its replacement section quotes the old import line.
-  cp "$REPO/seed/CLAUDE.md" "$d/seed/CLAUDE.md"
+  cp "$REPO/plugin/seed/CLAUDE.md" "$d/plugin/seed/CLAUDE.md"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$d/plugin/scripts/s.sh"
-  printf 'x\n' > "$d/seed/SCHEMA.md"
+  printf 'x\n' > "$d/plugin/seed/SCHEMA.md"
 }
 newdest() { local d="$TMP/dest$1"; rm -rf "$d"; mkdir -p "$d"; printf '%s' "$d"; }
 run_cfg() {  # <dest> <tpl> [extra args…] → exit code
@@ -103,9 +108,9 @@ echo "-- the four silent dependencies are actually closed"
 # An import LINE, not the string: the replacement section quotes the old import inside a
 # comment explaining why it went, and matching that would assert the opposite of the point.
 ok "seed/CLAUDE.md no longer imports claude-defaults" \
-   "$(grep -qE '^[[:space:]]*@~/\.claude/claude-defaults\.md' "$REPO/seed/CLAUDE.md" && echo yes || echo no)" no
+   "$(grep -qE '^[[:space:]]*@~/\.claude/claude-defaults\.md' "$REPO/plugin/seed/CLAUDE.md" && echo yes || echo no)" no
 ok "…and carries the session defaults inline" \
-   "$(grep -q '^### Planning & thinking' "$REPO/seed/CLAUDE.md" && echo yes || echo no)" yes
+   "$(grep -q '^### Planning & thinking' "$REPO/plugin/seed/CLAUDE.md" && echo yes || echo no)" yes
 # Every agent the machinery probes for by absolute path must be in the REQUIRED tier.
 # Derived from the probes rather than hard-coded, so a new probe added to a role agent
 # without a matching agent file fails here instead of failing silently in a session.

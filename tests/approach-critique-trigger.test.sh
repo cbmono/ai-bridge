@@ -48,8 +48,8 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PM="$REPO/plugin/agents/project-manager.md"
-SCHEMA="$REPO/seed/SCHEMA.md"
-SEED_CFG="$REPO/seed/instance.config.json"
+SCHEMA="$REPO/plugin/seed/SCHEMA.md"
+SEED_CFG="$REPO/plugin/seed/instance.config.json"
 VALIDATOR="$REPO/plugin/scripts/validate-bundle.sh"
 WRITER="$REPO/plugin/scripts/write-snapshot.sh"
 RESOLVE="$REPO/plugin/scripts/resolve-model.sh"
@@ -106,7 +106,7 @@ ok "…and the 'Optional approach critique' heading with it" \
    "$(hasf "$PM" 'Optional approach critique')" no
 # Nothing else shipped may still describe it as optional, or the instruction and the
 # documentation disagree about whether the PM has a choice.
-stale="$(grep -rlF -- "PM's optional critique" "$REPO/symlink" "$REPO/seed" "$REPO/docs" \
+stale="$(grep -rlF -- "PM's optional critique" "$REPO/symlink" "$REPO/plugin/seed" "$REPO/docs" \
   "$REPO/README.md" "$REPO/CLAUDE.md" 2>/dev/null | wc -l | tr -d ' ')"
 ok "no shipped file still calls the critique optional" "$stale" 0
 

@@ -1155,7 +1155,7 @@ assert "…including the fragments after its commas" \
 # SCHEMA.md edit that changes the shape of the documented form fails here rather than
 # leaving this fixture quietly testing a form nothing documents.
 doc_comment() { sed -n 's/^deliverable_paths:[^#]*#/#/p' "$1" | head -1; }
-SCHEMA_DP_COMMENT="$(doc_comment "$TPL/seed/SCHEMA.md")"
+SCHEMA_DP_COMMENT="$(doc_comment "$TPL/plugin/seed/SCHEMA.md")"
 # Non-emptiness first, or the comparison below passes on two empty strings the day
 # SCHEMA.md's documented form loses its comment — which is the same failure this whole
 # assertion exists to catch, arriving from the other side.

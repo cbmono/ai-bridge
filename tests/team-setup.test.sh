@@ -69,7 +69,7 @@ said()    { grep -q -- "$1" "$TMP/out" && echo yes || echo no; }
 asked()   { grep -q 'Team roster for this instance' "$TMP/out" && echo yes || echo no; }
 owner()   { sed -n 's/.*"defaultOwner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$1/instance.config.json" | head -n1; }
 # The seeded config, byte for byte, so "unchanged" is a comparison rather than a spot check.
-SEED_CFG="$(cat "$TPL/seed/instance.config.json")"
+SEED_CFG="$(cat "$TPL/plugin/seed/instance.config.json")"
 same_as_seed() { [ "$(cat "$1/instance.config.json")" = "$SEED_CFG" ] && echo yes || echo no; }
 # WHAT "NOTHING WAS WRITTEN" MEANS FOR THE LOCAL FILE, since install.sh's step 4c now
 # seeds this machine's `models`/`roleTiers` into it on EVERY completed stamp. Its mere

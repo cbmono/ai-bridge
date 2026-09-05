@@ -53,14 +53,36 @@ yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 GIT() { git -c user.email=test@example.com -c user.name=Test -c commit.gpgsign=false "$@"; }
 
 # =======================================================================================
-echo "== 1. ONE version, one line, and nothing else claims to hold it =="
+echo "== 1. ONE version, TWO copies that are pinned equal, and nothing else claims it =="
 # =======================================================================================
 # The count is over TRACKED files, and by basename anywhere in the tree: the failure this
-# guards is a second `VERSION` arriving beside the first (a banner's copy, a sub-package's
-# copy) and quietly disagreeing with it.
+# guards is a THIRD `VERSION` arriving beside these two (a banner's copy, a sub-package's
+# copy) and quietly disagreeing with them.
+#
+# WHY THERE ARE TWO AT ALL, and why "two copies is how a version starts lying" is answered
+# rather than ignored. An INSTALLED plugin is the contents of `plugin/` and has no checkout
+# around it, so a plugin that cannot read the number without one cannot print it — measured
+# on the 0.15.0 cache, where the session banner's `$plugin_root/../VERSION` resolved to
+# nothing. The root copy stays because it is what the docs, `CLAUDE.md` and
+# `check-template-version.sh` name, and moving that was a wider change than the fix.
+# So: two copies, and the DISAGREEMENT is what is forbidden — asserted here, byte for byte,
+# which is the property "one file" was only ever a proxy for.
 n_version="$(cd "$TPL" && git ls-files | grep -cE '(^|/)VERSION$' || true)"
-ok "exactly one tracked VERSION file in the tree" "$n_version" 1
-ok "…and it is at the template root"              "$(yn test -f "$VERFILE")" yes
+ok "exactly two tracked VERSION files in the tree" "$n_version" 2
+ok "…one at the template root"                    "$(yn test -f "$VERFILE")" yes
+ok "…and one inside the plugin, where an install can reach it" \
+  "$(yn test -f "$TPL/plugin/VERSION")" yes
+ok "…and they are BYTE-IDENTICAL"                 "$(yn cmp -s "$VERFILE" "$TPL/plugin/VERSION")" yes
+# The comparison has to be able to fail, or "identical" passes on a fixture that could
+# never have differed. Same file, one byte changed, compared the same way.
+mkdir -p "$TMP/vermut"
+{ cat "$VERFILE"; printf 'x\n'; } > "$TMP/vermut/VERSION"
+ok "…and that comparison catches a planted disagreement" \
+  "$(yn cmp -s "$VERFILE" "$TMP/vermut/VERSION")" no
+# The mirror is a REGULAR FILE in the index, not a symlink: a marketplace install copies
+# the plugin directory, and a link out of it would land on nothing.
+ok "the plugin's copy is a regular file in the index, not a link" \
+  "$(cd "$TPL" && git ls-files -s plugin/VERSION | awk '{print $1}')" 100644
 
 ver="$(head -n 1 "$VERFILE" 2>/dev/null)"
 ok "it is version-shaped (MAJOR.MINOR.PATCH)" \
@@ -164,15 +186,18 @@ globs="$(printf '%s\n' "$raw_globs" | awk '
       if (keep) print g[i]
     }
   }' | LC_ALL=C sort -u | tr '\n' ' ')"
+# `plugin` alone now, and that is the shape of the fix: `seed/` and `RETIRED` moved INSIDE
+# the plugin (task-022), so their globs are `/plugin/seed/**` and `/plugin/RETIRED` and the
+# collapse above folds both under the directory glob that already covered them.
 ok "the two rule files cover exactly the core paths" \
-  "$globs" "RETIRED config install.sh plugin seed upgrade.sh "
+  "$globs" "config install.sh plugin upgrade.sh "
 
 # Each of those names must appear in the core sentence the agent reads. Anchored on the
 # CLAUDE.md bullet rather than the whole file, so an unrelated mention elsewhere cannot
 # answer for it.
 core_bullet="$(grep -F 'A change to `core` PROPOSES a version bump' "$TPL/CLAUDE.md" || true)"
 missing=0
-for p in plugin seed config install.sh upgrade.sh RETIRED; do
+for p in plugin config install.sh upgrade.sh; do
   printf '%s' "$core_bullet" | grep -qF "\`$p" || { missing=$((missing+1)); printf '        NOT NAMED IN CLAUDE.md: %s\n' "$p" >&2; }
 done
 ok "…and CLAUDE.md's core bullet names every one of them" "$missing" 0
@@ -181,11 +206,11 @@ ok "…and CLAUDE.md's core bullet names every one of them" "$missing" 0
 # CONVENTIONS.md (symlinked into every instance) before their first write in a target repo,
 # and the two rule files load on a read of the paths they govern.
 ok "CONVENTIONS.md carries the propose-don't-bump-silently rule" \
-  "$(grep -qF 'PROPOSE the bump, never make it silently' "$TPL/seed/CONVENTIONS.md" && echo yes || echo no)" yes
+  "$(grep -qF 'PROPOSE the bump, never make it silently' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
 ok "…and says the human approves by merging" \
-  "$(grep -qF 'approves it by merging' "$TPL/seed/CONVENTIONS.md" && echo yes || echo no)" yes
+  "$(grep -qF 'approves it by merging' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
 ok "…and forbids inventing a release process" \
-  "$(grep -qiE 'no changelog, no tag' "$TPL/seed/CONVENTIONS.md" && echo yes || echo no)" yes
+  "$(grep -qiE 'no changelog, no tag' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
 ok "machinery.md carries it (loads on a /symlink/** read)" \
   "$(grep -qF 'PROPOSES a version bump' "$TPL/.claude/rules/machinery.md" && echo yes || echo no)" yes
 ok "installer.md carries it (loads on install.sh, seed/, config/)" \

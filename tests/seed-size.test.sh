@@ -19,7 +19,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-SEED="$REPO/seed/CLAUDE.md"
+SEED="$REPO/plugin/seed/CLAUDE.md"
 CEILING=12800
 
 pass=0; fail=0

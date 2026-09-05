@@ -191,7 +191,7 @@ assert "…and the whole page is too"              "$(yes_if cmp -s "$A" "$B")"
 assert "a cache was written, keyed to the SHA" \
   "$(yes_if grep -qF "$(git -C "$INST" rev-parse HEAD)" "$INST/.board-others.json")"
 assert "…and it is gitignored by the seed" \
-  "$(yes_if grep -qF '.board-others.json' "$TPL/seed/.gitignore")"
+  "$(yes_if grep -qF '.board-others.json' "$TPL/plugin/seed/.gitignore")"
 assert "…and install.sh backfills that line"  \
   "$(yes_if grep -qF '.board-others.json' "$TPL/plugin/scripts/init-bundle.sh")"
 

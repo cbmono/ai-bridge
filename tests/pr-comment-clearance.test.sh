@@ -47,7 +47,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$REPO/plugin/scripts/pr-comment-clearance.sh"
-CONV="$REPO/seed/CONVENTIONS.md"
+CONV="$REPO/plugin/seed/CONVENTIONS.md"
 SELFTEST_OK="pr-comment-clearance: self-test ok"
 [ -r "$SCRIPT" ] || { echo "pr-comment-clearance.test: missing $SCRIPT" >&2; exit 2; }
 [ -r "$CONV" ]   || { echo "pr-comment-clearance.test: missing $CONV" >&2; exit 2; }
