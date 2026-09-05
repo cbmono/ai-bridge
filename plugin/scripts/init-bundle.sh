@@ -1138,6 +1138,26 @@ cfg_bool() { # <key> <default> <config-path>
 FIRST_STAMP=no
 [ -e "$TARGET/instance.config.json" ] || FIRST_STAMP=yes
 
+# THE STAMPED-SEED RECORD — the merge base a machine with no clone still has.
+#
+# `refresh-seeds.sh` 3-way merges a later seed change into a bundle, and to do that it
+# needs the version the bundle's copy was made FROM. It used to find that in git history,
+# which an INSTALLED plugin has none of: the cache is a plain copy, so on a real machine
+# every seed file a bundle had edited came back UNKNOWN (measured 2026-09-06: 8 of 12 on
+# `_ai-bridge-private`). The stamp is the one moment that knows the answer for certain, so
+# it writes it down: a pristine copy of every seed file THIS stamp actually copied.
+#
+# Only what the stamp WROTE. A `keep`d path was placed by some earlier stamp — from a seed
+# this copy may never have carried — and recording today's seed as its base would be a
+# fabricated provenance, which is worse than none: a false base merges silently.
+# The record is bundle content, not machine state, so it is tracked and travels with a
+# shared bundle's clone. ~190 KB, and it is what makes the refresh work offline.
+SEED_BASE_DIR="$TARGET/.ai-bridge/seed-base"
+record_seed_base() { # <rel> <the seed file just copied>
+  mkdir -p "$SEED_BASE_DIR/$(dirname "$1")" 2>/dev/null || return 0
+  cp "$2" "$SEED_BASE_DIR/$1" 2>/dev/null || true
+}
+
 # 1. Seed content — copy only what's absent (never clobber instance data).
 if [ -d "$SEED_SRC" ]; then
   while IFS= read -r rel; do
@@ -1181,6 +1201,7 @@ if [ -d "$SEED_SRC" ]; then
     else
       mkdir -p "$dstdir"
       cp "$src" "$dst"
+      record_seed_base "$rel" "$src"
       echo "  seed  $rel"
     fi
   done <<EOF
