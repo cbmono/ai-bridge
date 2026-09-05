@@ -675,7 +675,10 @@ existed only in the fork closed *secret-exposure* paths the public repo was stil
 `tests/config-ownership.test.sh` fails if the fork starts growing back.
 
 ```bash
-~/workspace/ai-bridge/init-bundle.sh --config
+# THE ONE THING THAT STILL WANTS A CLONE of this repo: it writes absolute symlinks INTO
+# ~/.claude that point at the source tree, so it has to know where that tree is.
+git clone git@github.com:cbmono/ai-bridge.git ~/workspace/ai-bridge   # if you have none
+bash ~/workspace/ai-bridge/plugin/scripts/init-bundle.sh --config
 ```
 
 It links **one file at a time** into `${CLAUDE_CONFIG_DIR:-~/.claude}`. A real file in the
@@ -702,12 +705,15 @@ completely unaffected (`--config` then exits 2 saying there is nothing to link).
 2. **It never writes *through* a symlinked directory.** ai-setup links `~/.claude/agents` as a whole directory, so on a machine that ran its installer every entry here has a symlinked parent. When the file already resolves through it, the requirement — *this agent exists on this machine* — is met, so `--config` reports `provided by …` and writes nothing. When it does **not** resolve, nobody ships it and writing would land inside the other checkout: `--config` skips it, names it, prints the `mv` that fixes it, and exits non-zero. Either way the two installers compose in any order.
 3. **`settings.json` is not ours at all.** This layer does not ship one, does not link one, and does not report on one. A link left over from when it did is retired by the sweep in rule 4.
 4. **A retired file's link is swept — and it says where the file went.** Delete something from `config/` and the next `--config` removes the dangling link. Delete or hide *everything* and it does the opposite: an empty source list is refused rather than acted on, loudly and non-zero, because "nothing is shipped" and "I could not read the checkout" produce the same empty list and only the first licenses a delete. Removing the tier **directory** is the way to mean the first. A dangling command still registers with Claude Code; a dangling hook exits 127 every launch. The sweep is also what performs the **handover**: this layer used to ship ~21 more paths, so an existing machine's first run on the new layer retires them all at once, and it prints that they moved to [`cbmono/ai-setup`](https://github.com/cbmono/ai-setup) rather than leaving a user told only what vanished. Steady-state runs stay quiet.
-5. **Nothing here is required.** An instance never needs the config layer, and the config layer never needs an instance. `/ai-bridge:init <dir>` behaves exactly as it always did.
+5. **Nothing here is required.** A bundle never needs the config layer, and the config layer never needs a bundle. A bundle stamp behaves exactly as it always did with `config/` deleted.
+6. **It is the one half that still refuses a git worktree.** Every link it writes points AT this checkout, so a worktree that is later removed dangles all of them — silently, later. A bundle stamp writes no such link and is allowed from anywhere.
 
 ### Uninstall
 
 ```bash
-~/workspace/ai-bridge/init-bundle.sh --config --uninstall
+# from a clone of this repo — the config layer is the one half that still needs one,
+# because it links absolute paths INTO ~/.claude and must know where they point
+bash <clone>/plugin/scripts/init-bundle.sh --config --uninstall
 ```
 
 Removes only the symlinks it created — everywhere it created them, which includes a
