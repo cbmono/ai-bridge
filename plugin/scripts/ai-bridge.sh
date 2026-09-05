@@ -180,6 +180,13 @@ fi
 
 [ -n "$ROOT" ] || ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 
+# `--since` IS READ AND THEN DROPPED, and that is stated here rather than left as an
+# unused variable somebody deletes as dead code. It asked the retired
+# `unstamped-machinery` row for the literal post-merge form; a bundle has no machinery, so
+# the question has no answer to give. Parsed for one version so a saved command line does
+# not become a fatal "unknown argument".
+[ -z "$SINCE" ] || SINCE=""
+
 # WHERE THE SIBLING MACHINERY IS. Beside this file, always — it is the plugin's own
 # `scripts/` directory and this script is executing out of it, so `dirname $0` is right by
 # construction whether the plugin came from a marketplace cache or a checkout of this repo.
