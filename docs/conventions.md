@@ -24,7 +24,7 @@ move it here intact instead.
 |---|---|---|
 | 0 | [Layout](#layout) | the whole repo |
 | 1 | [Retiring seed content is only reported](#1-retiring-content-is-asymmetric) | `/ai-bridge:init`, `/ai-bridge:welcome fix`, `RETIRED`, `plugin/seed/` |
-| 2 | [Retiring machinery sweeps the links](#2-retiring-machinery-means-deleting-the-file-and-letting-installsh-sweep-the-links) | `/ai-bridge:init`, `plugin/` |
+| 2 | [Retiring machinery sweeps the links](#2-retiring-machinery-means-deleting-the-file-and-letting-ai-bridgeinit-sweep-the-links) | `/ai-bridge:init`, `plugin/` |
 | 3 | [`AWAITING.md` is opt-in by presence](#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence) | `/ai-bridge:init`, the PM agent, `session-banner.sh` |
 | 4 | [A deletable capability is one file](#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) | `plugin-yolo/` (the `ai-bridge-yolo` companion), `resolve-autonomy.sh`, `commit-as.sh` |
 | 5 | [`build` and `research` are asymmetric](#5-build-and-research-projects-are-deliberately-asymmetric) | `/new-project` |
@@ -50,7 +50,7 @@ move it here intact instead.
 ## Layout
 
 - **This repo** — a **reusable OKF control-panel template**. `plugin/` holds generic machinery (SCHEMA, `CONVENTIONS.md` — the shared role-agent conventions, read on dispatch because they govern the target repos, which no `paths:` glob can reach, role agents, `/pm-loop`, `/new-project`, `/close-project`, `/pr-review-request`, `/answer`, `/fanout`, `/audit`, `commit-as.sh`, `required-checks.sh`, `task-owner.sh`, `prune-worktrees.sh`, `close-project-folder.sh`, `validate-bundle.sh`, `migrate-bundle.sh`, `write-snapshot.sh`, `build-board.sh`, `print-board.sh`, `watch-board.sh`, `index-kb.sh`, `link-repos.sh`, a `SessionStart` hook for tasks-awaiting-you, a `UserPromptSubmit` hook pushing current instance state) symlinked into per-group **instances**; `plugin/seed/` holds starting content copied once; `/ai-bridge:init` stamps out / refreshes an instance and manages its gitignore; `RETIRED` declares seed paths the template has stopped shipping, which are reported and never deleted. Each instance is its own repo under `~/workspace/<group>/_ai-bridge-<group>/` (leading underscore, named distinctly from this template dir). `AUTONOMY.md` is deliberately NOT in that list: it is neither machinery nor seed, and ships from the `ai-bridge-yolo` COMPANION plugin, `plugin-yolo/` (ai-bridge-v2/task-018). Keep machinery generic — org/repo/path/team/channel literals live in an instance's `instance.config.json` / `CLAUDE.md`, never in `plugin/`. <!-- This bullet was duplicated three times by conflict resolutions; it is now ONE line carrying the union of all three. If you resolve a conflict here, merge into this line — never append a second copy. -->
-- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root `/ai-bridge:init` is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery is symlinked from *this* checkout, and `ai-setup`'s installer has nothing to do with it. **`ai-setup` no longer carries that subtree at all** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69) removed it, and its last state is in git history only (`git -C ai-setup show f8b09a4:ai-bridge/`), so a path under `ai-setup/ai-bridge/` does not exist rather than being stale. This sentence used to say the subtree was still there and frozen — which contradicted `README.md` and pointed maintainers at a checkout path that is gone. That is the same "documentation describes a deleted thing as live" defect that removing the subtree was meant to end, and the third instance of it corrected in this PR. `ai-setup`'s *config* layer briefly lived here too — forked wholesale under `config/` behind a second install target (`init-bundle.sh --config`) — but that fork is what caused 24 colliding `~/.claude` paths with 14 diverged, so it has since been handed back: `config/` now ships only the three agents ai-bridge itself probes for, and `~/.claude` is `ai-setup`'s alone again — see [15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
+- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root installer is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery is symlinked from *this* checkout, and `ai-setup`'s installer has nothing to do with it. **`ai-setup` no longer carries that subtree at all** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69) removed it, and its last state is in git history only (`git -C ai-setup show f8b09a4:ai-bridge/`), so a path under `ai-setup/ai-bridge/` does not exist rather than being stale. This sentence used to say the subtree was still there and frozen — which contradicted `README.md` and pointed maintainers at a checkout path that is gone. That is the same "documentation describes a deleted thing as live" defect that removing the subtree was meant to end, and the third instance of it corrected in this PR. `ai-setup`'s *config* layer briefly lived here too — forked wholesale under `config/` behind a second install target (`init-bundle.sh --config`) — but that fork is what caused 24 colliding `~/.claude` paths with 14 diverged, so it has since been handed back: `config/` now ships only the three agents ai-bridge itself probes for, and `~/.claude` is `ai-setup`'s alone again — see [15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
 
 ---
 
@@ -787,21 +787,26 @@ the script **refuses to run at all** if one is ever added:
   2026-08-29.
 
 **Wiring `check` into the SessionStart hook is what turns a Finding into a mechanism.** The
-trap it reads for — pulling the template half-upgrades every unstamped instance, because an
-edit to an already-linked file arrives on the pull while a *new* file waits for a stamp —
+trap it was built for — pulling the template half-upgraded every unstamped instance, because
+an edit to an already-linked file arrived on the pull while a *new* file waited for a stamp —
 had no reader at all: it was prose someone had to remember to apply. On that path the
 section prints **byte-nothing** when the instance is healthy and at most two lines per
 failing check when it is not: the verdict and the one command that addresses it. The bound
 is deliberate. The banner has a measured line budget, and a section that grew with the
 number of affected files would blow it exactly when the banner most needs to be read.
 
-**What the on-disk inventory answers that the git diff cannot.** After a merge the question
-is `git diff --name-status <old>..<new> -- symlink/ | grep '^A'`, and `--since` runs
-exactly that. But **no instance records `<old>`** — there is no stamp receipt anywhere in
-this machinery — so from inside an instance that range cannot be built. The equivalent that
-can always be answered is "which of the files a stamp *would* link are not linked here",
-enumerated with the same `find` the installer walks, so the two cannot disagree about what
-a stamp covers. **Empty output is a reported answer**, never silence.
+**What the on-disk inventory answered that the git diff could not — and why that row is now
+gone.** While a stamp still delivered machinery, the post-merge question was `git diff
+--name-status <old>..<new> -- symlink/ | grep '^A'`, and `--since` ran exactly that. But
+**no instance ever recorded `<old>`** — there was no stamp receipt anywhere in this
+machinery — so from inside an instance that range could not be built. The equivalent that
+could always be answered was "which of the files a stamp *would* link are not linked here",
+enumerated with the same `find` the installer walked, so the two could not disagree about
+what a stamp covered. **A bundle has carried no machinery since the plugin replatform**, so
+the question has no answer left to give: the `unstamped-machinery` row is retired and
+`--since` is parsed and then dropped, kept for one version so a saved command line does not
+become a fatal unknown argument (`plugin/scripts/ai-bridge.sh`). What it leaves behind still
+governs every other row: **empty output is a reported answer**, never silence.
 
 ---
 

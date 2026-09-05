@@ -1,14 +1,15 @@
 # The PM loop — the reasoning behind the steps
 
-`symlink/.claude/commands/pm-loop.md` (the launcher) and
-`symlink/.claude/agents/project-manager.md` (the tick) carry the **steps**; this file
+`plugin/skills/dispatch/SKILL.md` (the launcher) and
+`plugin/agents/project-manager.md` (the tick) carry the **steps**; this file
 carries the **why** — the incidents, measurements and rejected alternatives each rule
 came from. It was split out on 2026-09-01 because the two step files had grown to
 64 KB and 35 KB, and every tick paid for all of it: an agent ingests its own definition
 before it reads any state, and the rationale changed what an editor should do, never
 what a tick should do. Per the repo's rule ("the story lives in `docs/` in exactly one
 place"), the whys were relocated intact, not shortened. Section anchors are stable —
-the step files cite them.
+the step files cite them, and they kept citing them across the plugin replatform, which
+moved both step files out of a stamped `symlink/.claude/` and into `plugin/`.
 
 ---
 
