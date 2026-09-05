@@ -220,7 +220,7 @@ N_SCOPE="$(printf '%s\n' ${IN_SCOPE+"${IN_SCOPE[@]}"} | grep -c . || true)"
 ok "the scan covers files at all"                        "$([ "$N_SCOPE" -ge 60 ] && echo yes || echo no)" yes
 n_mach=0; n_harness=0
 for f in ${IN_SCOPE+"${IN_SCOPE[@]}"}; do
-  case "$f" in symlink/*) n_mach=$((n_mach+1)) ;; tests/*) n_harness=$((n_harness+1)) ;; esac
+  case "$f" in plugin/*) n_mach=$((n_mach+1)) ;; tests/*) n_harness=$((n_harness+1)) ;; esac
 done
 ok "…including this repo's machinery"                    "$([ "$n_mach" -ge 20 ] && echo yes || echo no)" yes
 ok "…and its harnesses"                                  "$([ "$n_harness" -ge 40 ] && echo yes || echo no)" yes
@@ -645,7 +645,15 @@ ok "…in at most 2 lines for this row"               \
 ok "…and never the child's own argv"                "$(saw "$CHK" 'sleep 240')" no
 
 # NON-VACUITY: the same instance, the same live orphan, with the ROW deleted from the script.
-MUTAIB="$TMP/ai-bridge-no-row.sh"
+# THE MUTANT LIVES IN A PLUGIN-SHAPED DIRECTORY, because ai-bridge.sh resolves its sibling
+# helpers from its own location — <root>/plugin/scripts/ — and a copy dropped anywhere else
+# would find none of them, so the CONTROL assertion below ("it still reports the other
+# rows") would fail for a reason that has nothing to do with the mutation.
+mkdir -p "$TMP/mutplugin/plugin"
+ln -sfn "$REPO/plugin/scripts" "$TMP/mutplugin/plugin/scripts-real" 2>/dev/null || true
+cp -R "$REPO/plugin/scripts" "$TMP/mutplugin/plugin/scripts"
+cp "$REPO/VERSION" "$TMP/mutplugin/VERSION"
+MUTAIB="$TMP/mutplugin/plugin/scripts/ai-bridge.sh"
 # The row is the last line of the CHECKS string, so a plain line delete takes the closing
 # quote with it and the "mutant" only proves that a syntax error reports nothing. Keep
 # whatever terminated the string on that line.
@@ -670,7 +678,10 @@ mkstub() { # <dir> <tool>... — symlink each tool that exists here, so PATH can
   for t in "$@"; do p="$(command -v "$t" 2>/dev/null)" && [ -n "$p" ] && ln -sf "$p" "$d/$t"; done
   return 0
 }
-TOOLS="bash sh python3 git find sed awk tr wc sort comm grep id date basename cat readlink"
+# `dirname` is in the list because ai-bridge.sh locates its own sibling scripts with it
+# (the plugin ships them beside itself since task-013). Narrowing PATH is meant to simulate
+# a machine with no `ps`, not one with no coreutils.
+TOOLS="bash sh python3 git find sed awk tr wc sort comm grep id date basename dirname cat readlink"
 # (a) no `ps`: nothing can be enumerated, so nothing may be concluded.
 STUB_NOPS="$TMP/stub-nops"; mkstub "$STUB_NOPS" $TOOLS lsof
 NOPS="$(PATH="$STUB_NOPS" bash "$AIB" check --instance "$INST" --template "$REPO" 2>/dev/null)"

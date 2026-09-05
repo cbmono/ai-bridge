@@ -338,14 +338,18 @@ ok "settings.json is valid JSON"       "$(jq -e . "$SETTINGS" >/dev/null 2>&1 &&
 ok "…and has no PreToolUse key at all" \
    "$(jq -r 'if (.hooks | has("PreToolUse")) then "present" else "absent" end' "$SETTINGS")" "absent"
 ok "…so neither hook name appears in it" \
-   "$(grep -cE 'deny-destructive|agent-control' "$SETTINGS")" "0"
-# 4 -> 2: ai-bridge-v5/task-002 consolidated the three SessionStart hooks into one
-# `session-banner.sh`, so this event carries one command where it carried three, and
-# UserPromptSubmit's one is untouched. The pin moves with the real shape rather than being
-# loosened to `>= 1` — its job is to notice that REMOVING the PreToolUse entries did not
-# disturb the other events, and a floor would stop noticing exactly that.
-ok "…and the other hook events are unchanged" \
-   "$(jq -r '[.hooks.UserPromptSubmit[].hooks[].command, .hooks.SessionStart[].hooks[].command] | length' "$SETTINGS")" "2"
+   "$(grep -cE 'deny-destructive.sh|agent-control.sh' "$SETTINGS")" "0"
+# 4 -> 2 -> 0: ai-bridge-v5/task-002 consolidated the three SessionStart hooks into one
+# `session-banner.sh`; ai-bridge-v2/task-013 moved that one and `push-state.sh` into the
+# PLUGIN beside the two enforcement hooks, because a bundle carries no machinery for a
+# `"$CLAUDE_PROJECT_DIR"/.claude/hooks/…` command to resolve to. So the seeded
+# settings.json registers NO hook of any event, and all four are counted on the plugin
+# manifest instead. Both halves, so "we deleted the block" cannot pass by deleting the
+# feature.
+ok "…and the seeded settings.json has no hooks key at all" \
+   "$(jq -r 'if has("hooks") then "present" else "absent" end' "$SETTINGS")" "absent"
+ok "…while the plugin manifest carries all four" \
+   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "4"
 
 echo "== the permissions.deny block: unconditional shapes only"
 # This block is the SECOND layer — the harness matches it before any hook runs — and every
