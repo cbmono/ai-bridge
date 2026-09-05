@@ -1,68 +1,45 @@
 #!/usr/bin/env bash
 #
-# upgrade.sh — bring ONE already-stamped ai-bridge instance up to date with this
-# template, after a `git pull` here.
+# refresh-seeds.sh — port this repo's SEED changes into an already-stamped bundle.
 #
-#   Usage: ./upgrade.sh <instance-dir>            # report what a pull means (default)
-#          ./upgrade.sh <instance-dir> --apply    # write the safe changes
+#   Usage: refresh-seeds.sh <bundle-dir>            # report what has drifted (default)
+#          refresh-seeds.sh <bundle-dir> --apply    # 3-way merge the safe ones
 #
-# WHY THIS EXISTS.
-# docs/operations.md's four-case table says a pull reaches an instance in four
-# different ways, and two of them need a human to do something. In practice nobody
-# remembers which two, in what order, per instance — so the machinery ships instantly
-# through its symlinks while the *data* it validates, and the seed content it assumes,
-# quietly stay on the old rules. This is the one command that walks all four cases for
-# one instance, in the order that works:
-#
-#   1. `install.sh <instance>`  — links machinery files the pull ADDED (edited ones
-#      already arrived through the existing symlinks; that is the case needing nothing).
-#   2. `scripts/validate-bundle.sh` — what the (possibly new) schema says is wrong.
-#   3. `scripts/migrate-bundle.sh` — the mechanical repairs, report first.
-#   4. SEED DRIFT — the case the table calls "port the change by hand", below.
-#
-# Install BEFORE migrate, because step 3 runs the instance's *symlink*: on an instance
-# that predates those scripts, step 1 is what makes them exist at all.
-#
-# REPORT-ONLY BY DEFAULT, like `migrate-bundle.sh` and `prune-worktrees.sh`. A default
-# run mutates nothing in the instance except the symlinks `install.sh` creates — and
-# those are `install.sh`'s documented, blind-re-run-safe behaviour, not this script's.
-# Read the report, then re-run with --apply.
-#
-# SEED DRIFT, AND WHY IT NEEDS A MERGE RATHER THAN A COPY.
-# `install.sh` copies `seed/` into an instance **only if absent**, and that asymmetry is
-# deliberate: seed files are the ones an instance then OWNS and edits (`instance.config.json`
+# WHY THIS EXISTS, AND WHY IT IS A MERGE RATHER THAN A COPY.
+# `init-bundle.sh` copies `seed/` into a bundle **only if absent**, and that asymmetry is
+# deliberate: seed files are the ones a bundle then OWNS and edits (`instance.config.json`
 # gets the group's org and reposRoot, `CLAUDE.md` gets house rules, `log.md` and `index.md`
-# grow content). The cost is that a later seed edit never reaches an instance already
-# stamped. Copying the new seed over the instance's copy would deliver it — and destroy
-# whatever the instance wrote. So neither "copy" nor "leave it" is right, and the answer
+# grow content). The cost is that a later seed edit never reaches a bundle already
+# stamped. Copying the new seed over the bundle's copy would deliver it — and destroy
+# whatever the bundle wrote. So neither "copy" nor "leave it" is right, and the answer
 # has to be per-file evidence:
 #
 #   · The seed file has only ever held its CURRENT content ⇒ there is no seed change to
-#     deliver, so whatever the instance holds is entirely its own. Quiet. This is the normal
-#     state of `log.md`, `index.md` and a `.gitignore` carrying the machinery block, and
-#     naming them every run is how a report teaches people to stop reading it.
-#   · The instance's copy is byte-identical to a PRIOR version of that seed file in this
+#     deliver, so whatever the bundle holds is entirely its own. Quiet. This is the normal
+#     state of `log.md` and `index.md`, and naming them every run is how a report teaches
+#     people to stop reading it.
+#   · The bundle's copy is byte-identical to a PRIOR version of that seed file in this
 #     repo's git history ⇒ nothing was ever hand-edited. That old seed IS the merge base,
 #     provably, and the merge result is exactly the new seed. Measured: on 2026-08-22,
-#     `_ai-bridge-private/CLAUDE.md` was the pre-v2 seed verbatim, and all three instances'
+#     `_ai-bridge-private/CLAUDE.md` was the pre-v2 seed verbatim, and all three bundles'
 #     `README.md` were.
 #   · It matches no prior version ⇒ it was hand-edited. The closest prior version by diff
 #     size is used as a best-effort merge base and the seed's own change is applied ON TOP
-#     of the instance's edits (`git merge-file`, i.e. a real 3-way merge, never a copy).
+#     of the bundle's edits (`git merge-file`, i.e. a real 3-way merge, never a copy).
 #     Clean ⇒ portable, and the hand edits survive by construction. Conflicting ⇒ reported
-#     with the diff, and the file is not touched. Measured: `_ai-bridge-alteos` and
-#     `_ai-bridge-proceso` have hand-diverged `CLAUDE.md`.
+#     with the diff, the file is NOT touched, and under `--apply` the conflicted merge is
+#     saved beside it as `<file>.bak.<epoch>` so the markers are there to read.
 #   · No git history at all for the seed file (no repo, shallow clone, an uncommitted seed
 #     file, a rename this script does not follow) ⇒ no merge base, no evidence, no action.
 #     Reported for a human.
 #
 # "PRIOR" is doing real work in those rules. The current content's own blob is in the history
-# too, and for a file the instance grew past it is often the blob CLOSEST to what the instance
+# too, and for a file the bundle grew past it is often the blob CLOSEST to what the bundle
 # holds — pick it as the base and the base→seed diff is empty, the merge is a no-op, and real
 # drift reports as "nothing to port". The fixture caught exactly that: a hand-diverged
 # `CLAUDE.md` read as in sync.
 #
-# A CONFLICT IS NEVER RESOLVED BY FORCE. That is the whole point of the report: an instance's
+# A CONFLICT IS NEVER RESOLVED BY FORCE. That is the whole point of the report: a bundle's
 # hand edits are the only copy of a decision somebody made, and this script cannot know
 # whether the seed's new wording supersedes it.
 #
@@ -71,22 +48,37 @@
 # is printed only after the file on disk has been compared against the merge result and
 # checked for conflict markers; otherwise it says FAILED, on stderr, and the run exits 1.
 #
-# NOT FOLDED INTO install.sh, on purpose. `install.sh` is safe to run blindly precisely
-# because it only links and never overwrites; giving it a mutating mode would spend that
-# property. `install.sh` only gained ONE non-fatal line pointing here when the instance's
-# validator reports errors.
+# THIS WAS `upgrade.sh`, AND IT LOST THREE OF ITS FOUR STAGES ON THE WAY HERE. Stage 1 was
+# `install.sh` — machinery symlinks, which a bundle no longer has. Stages 2 and 3 ran the
+# bundle's own `validate-bundle.sh` and `migrate-bundle.sh` through symlinks that are also
+# gone; both ship in the plugin now and are reachable directly, and `/ai-bridge:welcome
+# check` is the one command that surveys a bundle. What was left is the stage nothing else
+# can do, which is this one.
 #
-# Idempotent: a second run finds nothing to do. Refuses a directory that is not already an
-# instance root — stamping a NEW instance is `install.sh`'s job, not an upgrade.
+# REPORT-ONLY BY DEFAULT, like `migrate-bundle.sh` and `prune-worktrees.sh`. A default run
+# writes nothing at all. Read the report, then re-run with --apply — or reach it as
+# `/ai-bridge:welcome fix`, or `/ai-bridge:init <dir> --refresh-seeds`.
+#
+# Idempotent: a second run finds nothing to do. Refuses a directory that is not already a
+# bundle root — creating a NEW bundle is `init-bundle.sh`'s job, not a refresh.
 #
 # Bash + awk + git only — no jq, no python.
 # Verified by tests/upgrade.test.sh.
 set -euo pipefail
 
-TEMPLATE_DIR="$(cd "$(dirname "$0")" && pwd)"
-SELF="$TEMPLATE_DIR/$(basename "$0")"
+# The template root, walked up from this script — see init-bundle.sh for why the two
+# layouts (a plugin cache and a checkout of this repo) are found rather than assumed.
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+SELF="$BIN_DIR/$(basename "$0")"
+TEMPLATE_DIR=""
+_probe="$BIN_DIR"
+while [ "$_probe" != "/" ] && [ -n "$_probe" ]; do
+  if [ -d "$_probe/seed" ] && [ -f "$_probe/VERSION" ]; then TEMPLATE_DIR="$_probe"; break; fi
+  _probe="$(dirname "$_probe")"
+done
+[ -n "$TEMPLATE_DIR" ] || {
+  echo "refresh-seeds: cannot locate the ai-bridge template root from $BIN_DIR" >&2; exit 2; }
 SEED_SRC="$TEMPLATE_DIR/seed"
-INSTALL_SH="$TEMPLATE_DIR/install.sh"
 DIFF_CAP="${UPGRADE_DIFF_LINES:-40}"   # lines of a conflicting diff to print inline
 
 APPLY=0
@@ -96,7 +88,7 @@ for arg in "$@"; do
     --apply) APPLY=1 ;;
     -h|--help)
       # Range covers the whole header block above. Extend it when you add lines
-      # there, or --help truncates silently (same trap as install.sh's --help).
+      # there, or --help truncates silently.
       sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'
       exit 0 ;;
     -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
@@ -106,38 +98,25 @@ for arg in "$@"; do
   esac
 done
 TARGET="$(cd "${TARGET:-$PWD}" 2>/dev/null && pwd || true)"
-[ -n "$TARGET" ] || { echo "upgrade: target directory does not exist" >&2; exit 2; }
-[ -d "$SEED_SRC" ] && [ -f "$INSTALL_SH" ] || {
-  echo "upgrade: template is incomplete (expected $SEED_SRC and $INSTALL_SH)" >&2; exit 2; }
+[ -n "$TARGET" ] || { echo "refresh-seeds: target directory does not exist" >&2; exit 2; }
+[ -d "$SEED_SRC" ] || {
+  echo "refresh-seeds: template is incomplete (expected $SEED_SRC)" >&2; exit 2; }
 
-# An instance root, or refuse. SCHEMA.md is a symlink into the template, so test -L too:
-# a *broken* SCHEMA.md link is exactly an instance that needs upgrading, not a stranger.
+# A bundle root, or refuse. `-L` is still tested for SCHEMA.md because a bundle that has
+# not been converted yet carries it as a symlink into a template checkout — possibly a
+# BROKEN one, which is exactly a bundle that needs this, not a stranger.
 if [ ! -e "$TARGET/instance.config.json" ] || { [ ! -e "$TARGET/SCHEMA.md" ] && [ ! -L "$TARGET/SCHEMA.md" ]; }; then
   cat >&2 <<EOF
-upgrade: $TARGET is not an ai-bridge instance root (expected SCHEMA.md + instance.config.json).
-         To stamp a NEW instance, run: $INSTALL_SH $TARGET
+refresh-seeds: $TARGET is not an ai-bridge bundle root (expected SCHEMA.md + instance.config.json).
+               To create a NEW bundle, run /ai-bridge:init $TARGET
 EOF
   exit 2
 fi
 
-TMPD="$(mktemp -d "${TMPDIR:-/tmp}/ai-bridge-upgrade.XXXXXX")"
+TMPD="$(mktemp -d "${TMPDIR:-/tmp}/ai-bridge-refresh-seeds.XXXXXX")"
 trap 'rm -rf "$TMPD"' EXIT
 
 failed=0
-
-# Echo up to <cap> findings from a sub-script's report, each as its LABEL line plus the
-# indented message line under it, then say how many were left out. `grep -A1` would do
-# it on GNU grep but interleaves `--` separators and is not portable, so: awk.
-pairs_head() { # <file> <label-regex> <cap>
-  awk -v re="$2" -v cap="$3" '
-    $0 ~ re {
-      total++
-      if (total <= cap) { print "  " $0; if ((getline nx) > 0) print "  " nx }
-      next
-    }
-    END { if (total > cap) printf "  … %d more finding(s) not shown\n", total - cap }
-  ' "$1"
-}
 
 LEFT_N=0
 left() { LEFT_N=$((LEFT_N+1)); printf '%2d. %s\n' "$LEFT_N" "$1" >> "$TMPD/left"; }
@@ -145,116 +124,17 @@ left_more() { printf '    %s\n' "$1" >> "$TMPD/left"; }
 : > "$TMPD/left"
 : > "$TMPD/conflicts"
 
-echo "ai-bridge upgrade — $TARGET"
+echo "ai-bridge seed refresh — $TARGET"
 echo "template: $TEMPLATE_DIR"
 if [ "$APPLY" -eq 1 ]; then
-  echo "mode:     APPLY — the safe changes below WILL be written."
+  echo "mode:     APPLY — the mergeable changes below WILL be written."
 else
-  # Be exact about what a report-only run still writes. install.sh links machinery AND
-  # copies any *absent* seed file back (its documented seeds-if-absent contract), so
-  # "nothing changes" would be false. Stage 4 below — the part that rewrites content the
-  # instance has edited — is the part that truly waits for --apply.
-  echo "mode:     REPORT ONLY — no instance content is rewritten."
-  echo "          (install.sh below still links machinery and restores any ABSENT seed file.)"
+  echo "mode:     REPORT ONLY — nothing is written."
 fi
 
-# ---------------------------------------------------------------- 1. machinery
+# ---------------------------------------------------------------- seed drift
 echo
-echo "== 1/4  machinery symlinks (install.sh) =============================="
-# Sampled BEFORE install.sh runs, because install.sh is about to undo it.
-#
-# `AUTONOMY.md` is the deletable delegated-autonomy capability: absent, every project is
-# `gated`, and `commit-as.sh` gates its promotion guard on the same presence check. But it
-# lives under symlink/, so it is MACHINERY — and install.sh re-links every machinery file
-# unconditionally, by design, because repairing broken links is the whole point of a
-# refresh. The two behaviours collide: `rm AUTONOMY.md` disables autonomy for one
-# instance, and the next refresh silently switches it back on. That is fail-OPEN on the
-# one capability that lets agents merge without asking, so it cannot pass unremarked.
-# Reporting it is this script's job; changing install.sh's machinery contract is not.
-autonomy_was_absent=no
-[ -e "$TARGET/AUTONOMY.md" ] || [ -L "$TARGET/AUTONOMY.md" ] || autonomy_was_absent=yes
-inst_rc=0
-bash "$INSTALL_SH" "$TARGET" > "$TMPD/install.out" 2>&1 || inst_rc=$?
-# install.sh prints one line per machinery file. Echo only the lines that mean
-# something changed or needs attention; count the rest.
-awk '
-  /^  (ok|keep|skip)  / { quiet++; next }
-  /^  (link|moved|seed|warn) / { print "  " $0; next }
-  { print "  " $0 }
-  END { printf "  (%d entries already in place)\n", quiet }
-' "$TMPD/install.out"
-if [ "$inst_rc" -ne 0 ]; then
-  echo "  install.sh exited $inst_rc — see the output above" >&2
-  # Count it, so the run exits non-zero. install.sh is the PREREQUISITE for everything
-  # below: the machinery symlinks it places are what the later stages read. Reporting a
-  # failed install through a 0 exit would let a caller (a CI step, a wrapper script, JM
-  # following the printed instructions) treat "machinery never installed" as success.
-  failed=$((failed+1))
-  left "install.sh failed (exit $inst_rc) — fix that first, then re-run this script."
-fi
-NEW_LINKS="$(awk '/^  link  /{n++} END{print n+0}' "$TMPD/install.out")"
-echo "  summary: $NEW_LINKS new machinery symlink(s)."
-if [ "$autonomy_was_absent" = yes ] && { [ -e "$TARGET/AUTONOMY.md" ] || [ -L "$TARGET/AUTONOMY.md" ]; }; then
-  echo "  WARNING  AUTONOMY.md was absent and install.sh re-linked it." >&2
-  left "DELEGATED AUTONOMY WAS RE-ENABLED. AUTONOMY.md was absent in this instance"
-  left_more "(so every project was 'gated'), and install.sh re-linked it as machinery."
-  left_more "If that was deliberate, turn it off again:  rm $TARGET/AUTONOMY.md"
-fi
-
-# ---------------------------------------------------------------- 2. validate
-echo
-echo "== 2/4  bundle validation (scripts/validate-bundle.sh) ==============="
-VAL_ERRORS=0
-if [ ! -e "$TARGET/scripts/validate-bundle.sh" ]; then
-  echo "  not present in this instance — skipped."
-else
-  val_rc=0
-  ( cd "$TARGET" && bash scripts/validate-bundle.sh ) > "$TMPD/val.out" 2>&1 || val_rc=$?
-  # Both scripts print a finding as a LABEL line plus an indented message line, so echo
-  # the pair — the label alone says nothing about what is wrong.
-  pairs_head "$TMPD/val.out" '^  (ERROR|WARN) ' 12
-  sed -n 's/^validate-bundle: /  summary: /p' "$TMPD/val.out"
-  VAL_ERRORS="$(awk '/^validate-bundle: /{for(i=1;i<=NF;i++) if ($i ~ /^errors,?$/) print $(i-1)+0}' "$TMPD/val.out" | head -1)"
-  [ -n "$VAL_ERRORS" ] || VAL_ERRORS=0
-  if [ "$val_rc" -ne 0 ] && [ "$VAL_ERRORS" -eq 0 ]; then
-    echo "  validator exited $val_rc without reporting errors — see above" >&2
-  fi
-fi
-
-# ---------------------------------------------------------------- 3. migrate
-echo
-echo "== 3/4  schema migration (scripts/migrate-bundle.sh) ================="
-MIG_HUMAN=0; MIG_FIX=0
-if [ ! -e "$TARGET/scripts/migrate-bundle.sh" ]; then
-  echo "  not present in this instance — skipped."
-else
-  mig_rc=0
-  if [ "$APPLY" -eq 1 ]; then
-    ( cd "$TARGET" && bash scripts/migrate-bundle.sh --apply ) > "$TMPD/mig.out" 2>&1 || mig_rc=$?
-  else
-    ( cd "$TARGET" && bash scripts/migrate-bundle.sh ) > "$TMPD/mig.out" 2>&1 || mig_rc=$?
-  fi
-  pairs_head "$TMPD/mig.out" '^  (WOULD FIX|FIXED|FAILED|HUMAN|SKIPPED) ' 20
-  sed -n 's/^migrate-bundle: /  summary: /p' "$TMPD/mig.out"
-  # "N would be fixed, M need a human, …" (report) and "N fixed, M left for a human, …"
-  # (apply) — parsed field-wise rather than with a sed alternation, which BSD sed's BRE
-  # does not support.
-  mig_sum="$(awk '/^migrate-bundle: /{
-      n=split($0, a, ", "); sub(/^migrate-bundle: /, "", a[1]);
-      fix=a[1]+0; hum=0;
-      for (i=1;i<=n;i++) if (a[i] ~ /human/) { h=a[i]; sub(/[^0-9]*/, "", h); hum=h+0 }
-      printf "%d %d\n", fix, hum; exit
-    }' "$TMPD/mig.out")"
-  if [ -n "$mig_sum" ]; then MIG_FIX="${mig_sum%% *}"; MIG_HUMAN="${mig_sum##* }"; fi
-  if [ "$mig_rc" -ne 0 ]; then
-    echo "  migrate-bundle exited $mig_rc — a write did not land; its FAILED lines are above" >&2
-    failed=$((failed+1))
-  fi
-fi
-
-# ---------------------------------------------------------------- 4. seed drift
-echo
-echo "== 4/4  seed drift (seed/ edits never reach a stamped instance) ======"
+echo "== seed drift (a seed edit never reaches a stamped bundle by itself) =="
 
 # Every git query below runs from the REPO ROOT with root-relative paths. `git -C <dir>`
 # makes a pathspec relative to <dir>, so querying from the template dir with the path
@@ -324,7 +204,7 @@ while IFS= read -r rel; do
 
   if [ ! -e "$inst_f" ]; then
     report "absent" "$rel"
-    detail "install.sh did not place it (a populated directory needs no placeholder)."
+    detail "the stamp did not place it (a populated directory needs no placeholder)."
     continue
   fi
   # `-e` is true for a directory, a symlink to one, a fifo. Everything below assumes a
@@ -439,6 +319,18 @@ EOF
     ' "$TMPD/sd"
     detail "port it by hand, then re-run. Full diff of what you have vs the seed:"
     detail "  diff -u '$inst_f' '$seed_f'"
+    # UNDER --apply, THE CONFLICTED MERGE IS SAVED BESIDE THE FILE — never over it.
+    # The live file stays exactly as the human left it (that is the never-clobber
+    # guarantee), and the markers they would otherwise have to reproduce by hand are
+    # there to read. Written only under --apply, because a report-only run writes
+    # nothing at all, and named with the same `.bak.<epoch>` convention every other
+    # backup in this machinery uses.
+    if [ "$APPLY" -eq 1 ]; then
+      cbak="$inst_f.bak.$(date +%s)"
+      if cp "$TMPD/merged" "$cbak" 2>/dev/null; then
+        detail "the conflicted merge (with markers) is saved as $(basename "$cbak")"
+      fi
+    fi
     printf '%s\n' "$rel" >> "$TMPD/conflicts"
     continue
   fi
@@ -494,25 +386,12 @@ printf '  summary: %d in sync or with nothing to port, %d portable, %d ported, %
 
 # ------------------------------------------------------------ what's left for you
 #
-# Assembled here rather than as the sections run, so the list reads in the order a
-# human would act: re-run with --apply first (it subsumes several items), then the
-# decisions only they can make, then the commit.
-if [ "$APPLY" -eq 0 ] && { [ "$MIG_FIX" -gt 0 ] || [ "$portable" -gt 0 ]; }; then
-  left "re-run with --apply to write the safe changes ($MIG_FIX schema repair(s), $portable seed file(s)):"
+# Assembled here rather than as the section runs, so the list reads in the order a
+# human would act: re-run with --apply first, then the decisions only they can make,
+# then the commit.
+if [ "$APPLY" -eq 0 ] && [ "$portable" -gt 0 ]; then
+  left "re-run with --apply to write the $portable mergeable seed file(s):"
   left_more "$SELF '$TARGET' --apply"
-fi
-# install.sh already printed these in stage 1; repeat them here because the numbered list
-# is what a human actually reads and acts on, and this is a decision only they can make.
-STALE_N="$(awk '/^  stale /{n++} END{print n+0}' "$TMPD/install.out")"
-if [ "$STALE_N" -gt 0 ]; then
-  left "$STALE_N retired file(s) are still in this instance — the template stopped"
-  left_more "shipping them, but the contents are yours, so nothing was deleted. Each"
-  left_more "'stale' line in stage 1 above prints the exact rm command."
-fi
-if [ "$MIG_HUMAN" -gt 0 ]; then
-  left "$MIG_HUMAN document(s) need a decision only you can make (a dangling reference,"
-  left_more "an unrecognised status). Read its HUMAN lines:"
-  left_more "cd '$TARGET' && scripts/migrate-bundle.sh"
 fi
 if [ -s "$TMPD/conflicts" ]; then
   while IFS= read -r c; do
@@ -526,27 +405,22 @@ if [ "$unknown" -gt 0 ]; then
   left "$unknown seed file(s) differ with no merge base to judge them by — compare by"
   left_more "hand using the commands printed under UNKNOWN above."
 fi
-if [ "$VAL_ERRORS" -gt 0 ] && [ "$APPLY" -eq 1 ]; then
-  left "re-check the bundle: $VAL_ERRORS error(s) were reported before the migration ran,"
-  left_more "and anything still listed needs a human:"
-  left_more "cd '$TARGET' && scripts/validate-bundle.sh"
-fi
-if [ "$ported" -gt 0 ] || { [ "$APPLY" -eq 1 ] && [ "$MIG_FIX" -gt 0 ]; }; then
-  left "review and commit what changed — the instance is its own git repo:"
+if [ "$ported" -gt 0 ]; then
+  left "review and commit what changed — the bundle is its own git repo:"
   left_more "cd '$TARGET' && git status && git diff"
 fi
 
 echo
 echo "== what's left for you ==============================================="
 if [ "$LEFT_N" -eq 0 ]; then
-  echo "  Nothing. This instance is up to date with the template."
+  echo "  Nothing. This bundle is up to date with the template seed."
 else
   cat "$TMPD/left"
 fi
 
 [ "$failed" -eq 0 ] || {
   echo
-  echo "upgrade: $failed claimed change(s) did not land — see the FAILED lines above." >&2
+  echo "refresh-seeds: $failed claimed change(s) did not land — see the FAILED lines above." >&2
   exit 1
 }
 exit 0

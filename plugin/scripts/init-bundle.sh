@@ -1,31 +1,45 @@
 #!/usr/bin/env bash
 #
-# install.sh — provision (or refresh) an ai-bridge INSTANCE, or link the CONFIG LAYER.
+# init-bundle.sh — create or refresh an ai-bridge BUNDLE, or link the CONFIG LAYER.
 #
 #   Usage:
-#     install.sh [TARGET]              # install/refresh an instance at TARGET (default: cwd)
-#     install.sh --instance [TARGET]   # the same thing, stated explicitly
-#     install.sh --config              # link config/required/ into ~/.claude (CLAUDE_CONFIG_DIR wins)
-#     install.sh --uninstall [TARGET]  # remove only the instance symlinks this created
-#     install.sh --config --uninstall  # remove only the config-layer symlinks this created
-#     install.sh --help
+#     init-bundle.sh [TARGET]           # create/refresh a bundle at TARGET (default: cwd)
+#     init-bundle.sh --instance [TARGET]  # the same thing, stated explicitly
+#     init-bundle.sh --refresh-seeds [TARGET]  # also APPLY the seed 3-way merge
+#     init-bundle.sh --config           # link config/required/ into ~/.claude (CLAUDE_CONFIG_DIR wins)
+#     init-bundle.sh --uninstall [TARGET]  # remove the repos/ view and any legacy machinery links
+#     init-bundle.sh --config --uninstall   # remove only the config-layer symlinks this created
+#     init-bundle.sh --help
 #
-# INSTANCE mode does three things:
-#   1. SYMLINKS the generic machinery in `symlink/` into TARGET (file granularity,
-#      absolute targets). Updates to the template propagate to every instance.
-#      These paths are gitignored in the instance (managed block in .gitignore).
-#   2. COPIES the `seed/` content into TARGET *only if absent* — never clobbering
-#      instance data (objectives/projects/knowledge/log/config/CLAUDE.md).
-#   3. LINKS the group's product repos into TARGET/repos/ — one symlink each, via
-#      scripts/link-repos.sh — so the peer repos are reachable from inside the
-#      instance without ever being nested in it. Gitignored, and skipped while
-#      reposRoot is still the seeded placeholder. Re-run that script on its own
-#      after cloning a repo; you don't need a full refresh for it.
-#   4. On a FIRST stamp, at a terminal, OFFERS to collect the team's GitHub logins and
+# THE ENGINE BEHIND `/ai-bridge:init`. It ships in the PLUGIN, and a human never needs a
+# clone of this repo: the skill invokes it as ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh.
+# It replaces install.sh, which now exists only as a deprecation stub.
+#
+# A BUNDLE CARRIES NO MACHINERY, AND THAT IS THE WHOLE CHANGE. install.sh stamped 37 files
+# into a bundle as symlinks into a template checkout, by absolute path. A plugin-shipped
+# installer cannot keep that design: the plugin cache path changes on every update, so
+# every link would dangle. The live-symlink design existed to propagate a template `git
+# pull` into every bundle; `claude plugin update` swaps the whole tree and gives the same
+# property, so the symlinks lost their reason to exist.
+#
+# BUNDLE mode therefore does DATA and nothing else:
+#   1. CONVERTS a symlink-era bundle in place — removes machinery links into a template
+#      checkout and every dangling link outside repos/, and retires the managed machinery
+#      block from .gitignore. Data is never touched. Idempotent: a bundle with none is
+#      silent. Runs FIRST, so the seed step below can put a real file where a link was.
+#   2. COPIES the `seed/` content into TARGET *only if absent* — never clobbering bundle
+#      data (objectives/projects/knowledge/log/config/CLAUDE.md/SCHEMA.md/CONVENTIONS.md).
+#   3. Writes the derived-ignore lines, the awaiting queue and the board snapshot.
+#   4. LINKS the group's product repos into TARGET/repos/ — one symlink each, via
+#      link-repos.sh. Gitignored, and skipped while reposRoot is still the seeded
+#      placeholder. THESE ARE THE ONLY SYMLINKS A STAMPED BUNDLE HOLDS.
+#   5. On a FIRST stamp, at a terminal, OFFERS to collect the team's GitHub logins and
 #      commit emails into `people` + `defaultOwner`, and writes this clone's
 #      `instance.config.local.json`. One batched prompt; nothing is written until you
 #      confirm it. Skipped (with the instruction printed) when stdin is not a terminal,
 #      never asked on a refresh, and it never overwrites a value already there.
+#   6. Reports seed DRIFT — a seed doc this repo has changed since the bundle was stamped
+#      — via refresh-seeds.sh, report-only unless `--refresh-seeds` is given.
 #
 # CONFIG mode links `config/required/` into the Claude Code config dir, one FILE at a
 # time — never a whole directory (see the CONFIG LAYER block below). That is the WHOLE
@@ -33,29 +47,96 @@
 # (`code-architect`, `deep-bug-scan`, `plan-architect`). Everything else under
 # `~/.claude` belongs to `cbmono/ai-setup` and is installed from there — see
 # docs/claude-config-ownership.md for why, and for what not to re-add here.
-# Absence is safe in the direction that matters: an instance stamp never needs `config/`,
-# and the config layer never needs an instance. Deleting `config/required/` leaves
+# Absence is safe in the direction that matters: a bundle stamp never needs `config/`,
+# and the config layer never needs a bundle. Deleting `config/required/` leaves
 # `--config` linking nothing, exit 0; deleting `config/` itself makes `--config` exit 2
 # saying there is nothing to link, which is a refusal to do nothing, not a breakage.
 #
-# Idempotent: re-running relinks cleanly and reports already-linked entries.
-# Backs up any conflicting real file as <name>.bak.<epoch> before linking.
+# Idempotent: re-running seeds nothing new and reports what is already in place.
+# Backs up any conflicting real file as <name>.bak.<epoch> before writing.
 set -euo pipefail
 
-TEMPLATE_DIR="$(cd "$(dirname "$0")" && pwd)"
-SRC_DIR_FOR_GUARD="$TEMPLATE_DIR"
-# Refuse to install from a git WORKTREE.
+# WHERE THIS REPO IS, walked up from this script rather than assumed. Installed as a
+# plugin the layout is <clone>/plugin/scripts/init-bundle.sh, so the seed lives two
+# directories up; run from a checkout of this repo it is the same shape. Walking for the
+# two files that define a template root (`seed/` and `VERSION`) means neither layout is
+# hardcoded and a wrong answer is impossible rather than merely unlikely.
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+TEMPLATE_DIR=""
+_probe="$BIN_DIR"
+while [ "$_probe" != "/" ] && [ -n "$_probe" ]; do
+  if [ -d "$_probe/seed" ] && [ -f "$_probe/VERSION" ]; then TEMPLATE_DIR="$_probe"; break; fi
+  _probe="$(dirname "$_probe")"
+done
+if [ -z "$TEMPLATE_DIR" ]; then
+  echo "error: cannot locate the ai-bridge template root from $BIN_DIR" >&2
+  echo "       (looked upward for a directory holding both seed/ and VERSION)" >&2
+  exit 2
+fi
+
+SEED_SRC="$TEMPLATE_DIR/seed"
+# The managed machinery block a symlink-era bundle carries. It is RETIRED, never
+# rewritten: there is no machinery in a bundle to list any more.
+BEGIN_MARK="# >>> ai-bridge machinery (symlinked) >>>"
+END_MARK="# <<< ai-bridge machinery <<<"
+
+
+MODE="install"
+# Which half of the repo this run is about. `instance` is the default because a BARE
+# directory argument has always meant "stamp an instance here" — three live instances and
+# upgrade.sh call it that way, so `--instance` is only the explicit spelling of the
+# existing behaviour, never a new requirement.
+LAYER="instance"
+LAYER_FLAG=""
+TARGET=""
+REFRESH_SEEDS=0
+for arg in "$@"; do
+  case "$arg" in
+    --uninstall) MODE="uninstall" ;;
+    # APPLY the seed 3-way merge as part of this run, instead of only reporting it.
+    # Off by default for refresh-seeds.sh's own reason: a merge writes into files the
+    # bundle OWNS, and a stamp that is safe to run blindly is one that only seeds what is
+    # absent. `/ai-bridge:welcome fix` and `/ai-bridge:init --refresh-seeds` are the two
+    # ways to ask for the write.
+    --refresh-seeds) REFRESH_SEEDS=1 ;;
+    --config|--instance)
+      # Mutually exclusive, and said so rather than letting the last flag win: the two
+      # write to completely different places, so a run that meant one and did the other
+      # is not something to guess at.
+      if [ -n "$LAYER_FLAG" ] && [ "$LAYER_FLAG" != "$arg" ]; then
+        echo "error: --config and --instance are mutually exclusive" >&2; exit 2
+      fi
+      LAYER_FLAG="$arg"; LAYER="${arg#--}" ;;
+    --help|-h)
+      # Range must cover the whole header block above (through the "Backs up…"
+      # line) — extend it when you add lines there, or --help truncates silently.
+      # tests/config-layer.test.sh asserts the flags appear in the output, which is
+      # what notices a stale range instead of leaving --help quietly truncated.
+      sed -n '3,56p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
+    *)
+      [ -z "$TARGET" ] || { echo "error: multiple target directories given" >&2; exit 2; }
+      TARGET="$arg" ;;
+  esac
+done
+if [ "$LAYER" = "config" ] && [ -n "$TARGET" ]; then
+  echo "error: --config takes no target directory (it links into" >&2
+  echo "       \${CLAUDE_CONFIG_DIR:-\$HOME/.claude}); got '$TARGET'" >&2
+  exit 2
+fi
+
+# Refuse to run the CONFIG LAYER from a git WORKTREE — and ONLY the config layer.
 #
-# This installer derives its source from `dirname $0` and then creates symlinks that
-# point AT that path — an instance's whole machinery set. (`ai-setup`'s own installer
-# carries the same guard for `~/.claude/*`.) A linked worktree is temporary by design: `ExitWorktree` or
-# `git worktree remove` deletes it, and every symlink created from it dangles the moment
-# it goes. That failure is silent — nothing errors at install time, and it surfaces later
-# as commands and hooks that have simply vanished.
+# The guard used to cover both halves, because BUNDLE mode created symlinks pointing at
+# this checkout too: an instance's whole machinery set, every one of them dangling the
+# moment `git worktree remove` ran. Bundle mode creates no such link any more (the whole
+# point of this file's rewrite), so the refusal that made a role agent's worktree unable
+# to stamp a fixture is gone with the hazard that justified it.
 #
-# Not hypothetical: this project's own convention is to work on a branch in a worktree,
-# which puts a checkout of this very script one `cd` away from the wrong answer. It was
-# recorded as a structural hazard during a plan review and went unfixed until now.
+# `--config` still writes absolute symlinks into ${CLAUDE_CONFIG_DIR:-~/.claude} that
+# point AT this source directory, so for that layer the hazard is unchanged and so is the
+# refusal. (`ai-setup`'s own installer carries the same guard.)
 #
 # The test is `--git-dir` vs `--git-common-dir`: equal in the main working tree, different
 # in a linked one (the former becomes <main>/.git/worktrees/<name>). Both are asked for in
@@ -70,68 +151,25 @@ SRC_DIR_FOR_GUARD="$TEMPLATE_DIR"
 # dir rather than the main tree in that setup — measured both. Printing a confidently
 # wrong path to paste is worse than printing none, so it names the command that always
 # knows instead of guessing. Don't "improve" this by deriving it.
-if command -v git >/dev/null 2>&1; then
-  _gd="$(git -C "$SRC_DIR_FOR_GUARD" rev-parse --absolute-git-dir 2>/dev/null || true)"
-  _gc="$(git -C "$SRC_DIR_FOR_GUARD" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+if [ "$LAYER" = "config" ] && command -v git >/dev/null 2>&1; then
+  _gd="$(git -C "$TEMPLATE_DIR" rev-parse --absolute-git-dir 2>/dev/null || true)"
+  _gc="$(git -C "$TEMPLATE_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
   if [ -n "$_gd" ] && [ -n "$_gc" ] && [ "$_gd" != "$_gc" ]; then
     cat >&2 <<GUARDEOF
-error: refusing to install from a git worktree.
+error: refusing to link the config layer from a git worktree.
 
-  source:      $SRC_DIR_FOR_GUARD
+  source:      $TEMPLATE_DIR
   git dir:     $_gd
 
 Every symlink this creates would point into the worktree, and deleting the worktree
 (ExitWorktree, or git worktree remove) would silently break all of them — nothing
-fails now, the commands and hooks just disappear later.
+fails now, the agents just disappear later.
 
 Run it from the repository's MAIN working tree instead. To find it:
-  git -C $SRC_DIR_FOR_GUARD worktree list      # the first entry is the main tree
+  git -C $TEMPLATE_DIR worktree list      # the first entry is the main tree
 GUARDEOF
     exit 2
   fi
-fi
-
-SYMLINK_SRC="$TEMPLATE_DIR/symlink"
-SEED_SRC="$TEMPLATE_DIR/seed"
-BEGIN_MARK="# >>> ai-bridge machinery (symlinked) >>>"
-END_MARK="# <<< ai-bridge machinery <<<"
-
-MODE="install"
-# Which half of the repo this run is about. `instance` is the default because a BARE
-# directory argument has always meant "stamp an instance here" — three live instances and
-# upgrade.sh call it that way, so `--instance` is only the explicit spelling of the
-# existing behaviour, never a new requirement.
-LAYER="instance"
-LAYER_FLAG=""
-TARGET=""
-for arg in "$@"; do
-  case "$arg" in
-    --uninstall) MODE="uninstall" ;;
-    --config|--instance)
-      # Mutually exclusive, and said so rather than letting the last flag win: the two
-      # write to completely different places, so a run that meant one and did the other
-      # is not something to guess at.
-      if [ -n "$LAYER_FLAG" ] && [ "$LAYER_FLAG" != "$arg" ]; then
-        echo "error: --config and --instance are mutually exclusive" >&2; exit 2
-      fi
-      LAYER_FLAG="$arg"; LAYER="${arg#--}" ;;
-    --help|-h)
-      # Range must cover the whole header block above (through the "Backs up…"
-      # line) — extend it when you add lines there, or --help truncates silently.
-      # tests/config-layer.test.sh asserts the flags appear in the output, which is
-      # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,42p' "$0" | sed 's/^# \{0,1\}//'
-      exit 0 ;;
-    -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
-    *)
-      [ -z "$TARGET" ] || { echo "error: multiple target directories given" >&2; exit 2; }
-      TARGET="$arg" ;;
-  esac
-done
-if [ "$LAYER" = "config" ] && [ -n "$TARGET" ]; then
-  echo "error: --config takes no target directory (it links into" >&2
-  echo "       \${CLAUDE_CONFIG_DIR:-\$HOME/.claude}); got '$TARGET'" >&2
-  exit 2
 fi
 
 # ===========================================================================
@@ -894,7 +932,7 @@ fi
 
 TARGET="$(cd "${TARGET:-$PWD}" 2>/dev/null && pwd || true)"
 [ -n "$TARGET" ] || { echo "error: target directory does not exist" >&2; exit 2; }
-[ -d "$SYMLINK_SRC" ] || { echo "error: template missing $SYMLINK_SRC" >&2; exit 2; }
+[ -d "$SEED_SRC" ] || { echo "error: template missing $SEED_SRC" >&2; exit 2; }
 
 # Name the seeded workspace file after the group so an open editor window is
 # identifiable (VS Code shows the .code-workspace *filename* — there's no top-level
@@ -902,34 +940,102 @@ TARGET="$(cd "${TARGET:-$PWD}" 2>/dev/null && pwd || true)"
 WS_GROUP="$(basename "$TARGET")"; WS_GROUP="${WS_GROUP#_ai-bridge-}"
 WS_NAME="${WS_GROUP}.code-workspace"
 
-# Relative paths of every machinery file to symlink.
-machinery_paths() {
-  ( cd "$SYMLINK_SRC" && find . -type f | sed 's#^\./##' | sort )
+# =========================================================================================
+# THE CONVERSION SWEEP — a symlink-era bundle becomes a plugin-native one, in place.
+# =========================================================================================
+#
+# WHAT A LEGACY LINK IS, and why the test is on the LINK rather than on a path list. Every
+# machinery file a bundle carried was an absolute symlink into a template checkout, and
+# the set of those paths changed across template versions — 37 at the last count, sixteen
+# more retired before that. A closed list of names would therefore be wrong for exactly the
+# oldest bundles, which are the ones that most need converting. So the classification is
+# structural and has three cases, in this order:
+#
+#   · the target is GONE                      => dangling. One possible meaning: remove.
+#   · the target path contains `/symlink/`    => a machinery link from any template
+#                                                version this project ever shipped.
+#   · the target resolves inside a TEMPLATE   => a link stamped by a checkout that is
+#     CHECKOUT (a directory holding both        still on disk — the live half of the same
+#     `seed/` and `VERSION`)                    design.
+#
+# ANYTHING ELSE IS REPORTED AND LEFT. A symlink a human made to their own notes directory
+# is theirs; `repos/` is skipped entirely (it IS the derived view this script maintains,
+# and its links point at reposRoot, never into a template).
+#
+# DATA IS NEVER TOUCHED. Only the link is removed — never a real file, never a directory,
+# never anything under projects/, knowledge/ or objectives/. A removed link leaves the path
+# ABSENT, which is what lets the seed step below put a real file there: that is how
+# SCHEMA.md, CONVENTIONS.md, agents/index.md and .claude/settings.json stop being links
+# into a checkout and become the bundle's own copies.
+#
+# AUTONOMY.md IS NOT REPLACED, AND THAT IS DELIBERATE. It is the "one deletable file"
+# capability, so shipping it with the plugin would arm delegated authority everywhere. A
+# bundle that had it loses it here, in the safe direction (no file = always ask), and the
+# removal is reported LOUDLY with the exact command to put it back, because a capability
+# disappearing quietly is the one outcome worse than losing it.
+#
+# Idempotent: a bundle with no such links prints nothing and changes nothing.
+looks_like_template() { # <dir> — is this a template checkout?
+  [ -d "$1/seed" ] && [ -f "$1/VERSION" ]
 }
 
-ours() {  # is TARGET/$1 a symlink we created (points into this template)?
-  local dst="$TARGET/$1"
-  [ -L "$dst" ] && case "$(readlink "$dst")" in "$SYMLINK_SRC"/*) return 0 ;; esac
-  return 1
+legacy_link_kind() { # <absolute path to a symlink> — prints a reason, or nothing
+  local dst="$1" target resolved probe
+  target="$(readlink "$dst" 2>/dev/null || true)"
+  [ -n "$target" ] || return 0
+  if [ ! -e "$dst" ]; then printf 'dangling (was -> %s)' "$target"; return 0; fi
+  case "$target" in */symlink/*) printf 'machinery link into a template checkout'; return 0 ;; esac
+  resolved="$(cd "$(dirname "$dst")" 2>/dev/null && cd "$(dirname "$target")" 2>/dev/null && pwd || true)"
+  [ -n "$resolved" ] || return 0
+  probe="$resolved"
+  while [ "$probe" != "/" ] && [ -n "$probe" ]; do
+    if looks_like_template "$probe"; then printf 'link into the template checkout at %s' "$probe"; return 0; fi
+    probe="$(dirname "$probe")"
+  done
+  return 0
+}
+
+convert_bundle() { # removes legacy machinery links; prints one line each
+  local dst rel kind n=0 autonomy_lost=0
+  while IFS= read -r dst; do
+    [ -n "$dst" ] || continue
+    # "$TARGET" must be QUOTED inside the prefix operator: unquoted it is matched as a
+    # GLOB, so a bundle path containing [ ] * or ? strips nothing and the relative path
+    # stays absolute. (SC2295.)
+    rel="${dst#"$TARGET"/}"
+    case "$rel" in repos/*|repos) continue ;; esac
+    kind="$(legacy_link_kind "$dst")"
+    [ -n "$kind" ] || { echo "  keep  $rel (a symlink of your own — left alone)"; continue; }
+    rm -f "$dst"
+    n=$((n + 1))
+    echo "  retire $rel — $kind"
+    [ "$rel" = "AUTONOMY.md" ] && autonomy_lost=1
+  done <<EOF
+$(find "$TARGET" -name .git -prune -o -type l -print 2>/dev/null | sort)
+EOF
+  if [ "$n" -gt 0 ]; then
+    echo "  Converted: $n machinery link(s) removed. The machinery runs from the plugin now."
+  fi
+  if [ "$autonomy_lost" -eq 1 ]; then
+    echo "  NOTE: AUTONOMY.md was a machinery link and is GONE, so this bundle is back to" >&2
+    echo "        ask-first for every delegated write. That is the safe end of the change," >&2
+    echo "        and it is not silent: to opt back in, copy the file in by hand —" >&2
+    echo "          cp $TEMPLATE_DIR/docs/autonomy/AUTONOMY.md $TARGET/AUTONOMY.md" >&2
+  fi
 }
 
 if [ "$MODE" = "uninstall" ]; then
-  echo "Removing ai-bridge machinery symlinks from $TARGET"
-  # The repos/ view first, and via the TEMPLATE's copy of the script rather than
-  # the installed symlink — the loop below is about to delete that symlink, and
-  # running the template copy also works if it was already removed by hand.
-  ( cd "$TARGET" && bash "$SYMLINK_SRC/scripts/link-repos.sh" --remove ) || true
-  while IFS= read -r rel; do
-    [ -n "$rel" ] || continue
-    if ours "$rel"; then rm "$TARGET/$rel"; echo "  unlinked $rel"; fi
-  done <<EOF
-$(machinery_paths)
-EOF
-  echo "Done. Seed content, instance data, and backups were left untouched."
+  echo "Removing the ai-bridge derived views from $TARGET"
+  ( cd "$TARGET" && bash "$BIN_DIR/link-repos.sh" --remove ) || true
+  convert_bundle
+  echo "Done. Seed content, bundle data, and backups were left untouched."
   exit 0
 fi
 
-echo "Installing ai-bridge instance at $TARGET"
+echo "Initialising the ai-bridge bundle at $TARGET"
+
+# STEP 0 — convert first, so the seed step can fill a path a link used to occupy.
+convert_bundle
 
 # Is this the first stamp, or a refresh of an existing instance? Decided BEFORE
 # seeding, since seeding is what creates instance.config.json. Only the awaiting
@@ -1100,80 +1206,38 @@ SNAPSHOT
   echo "  seed  SNAPSHOT.json (on the board; set \"board\": false to opt out)"
 fi
 
-# 2. Machinery — symlink each file (absolute target), backing up real conflicts.
-chmod +x "$SYMLINK_SRC"/scripts/*.sh 2>/dev/null || true
-while IFS= read -r rel; do
-  [ -n "$rel" ] || continue
-  src="$SYMLINK_SRC/$rel"; dst="$TARGET/$rel"
-  if ours "$rel"; then echo "  ok    $rel (already linked)"; continue; fi
-  mkdir -p "$(dirname "$dst")"
-  if [ -e "$dst" ] || [ -L "$dst" ]; then
-    bak="$dst.bak.$(date +%s)"; mv "$dst" "$bak"
-    echo "  moved $rel -> $(basename "$bak")"
-  fi
-  ln -s "$src" "$dst"
-  echo "  link  $rel"
-done <<EOF
-$(machinery_paths)
-EOF
-
-# 2b/2c. Retire machinery the template no longer ships, and sweep the dead backups
-# step 2 above has just made.
+# 2. RETIRE the managed machinery block from the bundle's .gitignore.
 #
-# When a capability is removed from symlink/, an instance stamped earlier keeps a symlink
-# pointing at a path that no longer exists. A dangling command or hook is worse than an
-# absent one: Claude Code registers the file that isn't there, and a SessionStart hook
-# whose script has vanished exits 127 on every launch.
+# The block used to be REWRITTEN on every stamp from the list of files this template
+# symlinked in — 37 lines on the last symlink-era bundle. There is no machinery in a
+# bundle now, so the block has nothing to list, and an empty marker pair is a place for
+# the design to grow back. It is removed entirely, once, and a bundle that never had one
+# is untouched.
 #
-# The test is deliberately narrow, and both halves are load-bearing: the link must point
-# INTO this template's symlink/ (so it is unambiguously one we created — `ours` decides
-# that, not a name match), AND its target must be gone.
-#
-# The SCAN is deliberately wide, though — the whole instance, not just .claude/ and
-# scripts/. `machinery_paths()` also places files at the instance ROOT (SCHEMA.md,
-# AUTONOMY.md, CONVENTIONS.md) and under agents/, so a narrower scan would miss exactly
-# the most load-bearing files. `ours` is what makes a wide scan safe: `repos/<name>`
-# links point at reposRoot, not into symlink/, so they are never candidates. `find` does
-# not follow symlinks, so it cannot descend into a linked repo; .git is pruned for speed. A link we made whose target we
-# deleted has exactly one possible meaning. Anything else — a real file, a link to
-# somewhere else, a link that still resolves — is left alone.
-#
-# Only removes the link. Never touches seed content or instance data: a `todos.md` left
-# behind by a retired feature is the human's own writing, so it is reported, not deleted.
-while IFS= read -r dst; do
-  [ -n "$dst" ] || continue
-  # "$TARGET" must be QUOTED inside the prefix operator: unquoted it is matched as a
-  # GLOB, so an instance path containing [ ] * or ? strips nothing, `rel` stays absolute,
-  # `ours` then tests "$TARGET/$TARGET/..." and returns false — silently skipping a
-  # genuinely dead link instead of retiring it. (SC2295.)
-  rel="${dst#"$TARGET"/}"
-  if ours "$rel" && [ ! -e "$dst" ]; then
-    rm -f "$dst"
-    echo "  retire $rel (no longer shipped by the template)"
-  elif dead_backup ours "$rel" "$dst"; then
-    # 2c. The backups step 2 itself just made. A moved template dangles every link, so
-    # step 2 moves each one aside and relinks — leaving one dead `.bak.*` symlink per
-    # machinery file, invisible to the retire test above because it points at the OLD
-    # template. dead_backup() carries the reasoning and the three conditions.
-    was="$(readlink "$dst")"; rm -f "$dst"
-    echo "  sweep  $rel (dead backup of a relinked file, was -> $was)"
-  fi
-done <<EOF
-$(find "$TARGET" -name .git -prune -o -type l -print 2>/dev/null | sort)
-EOF
-
-# 3. Rewrite the managed machinery block in the instance .gitignore.
+# EVERYTHING OUTSIDE THE MARKERS IS PRESERVED, byte for byte — a human's own rules sit in
+# the same file, and the seed's ignores (AWAITING.md, SNAPSHOT.json, the board caches) all
+# live outside it. A BEGIN with no END after it is left ALONE and reported: the awk below
+# would otherwise drop every line from BEGIN to EOF, and an interrupted stamp or a
+# hand-edit reaches exactly that state.
 gi="$TARGET/.gitignore"
-[ -f "$gi" ] || printf '%s\n%s\n' "$BEGIN_MARK" "$END_MARK" > "$gi"
-grep -qF "$BEGIN_MARK" "$gi" || printf '\n%s\n%s\n' "$BEGIN_MARK" "$END_MARK" >> "$gi"
-mlist="$(mktemp)"; machinery_paths > "$mlist"
-tmp="$gi.tmp.$$"
-awk -v b="$BEGIN_MARK" -v e="$END_MARK" -v mlist="$mlist" '
-  $0==b { print; while ((getline line < mlist) > 0) print "/" line; close(mlist); inblock=1; next }
-  $0==e { print; inblock=0; next }
-  !inblock { print }
-' "$gi" > "$tmp" && mv "$tmp" "$gi"
-rm -f "$mlist"
+[ -f "$gi" ] || : > "$gi"
+if grep -qxF "$BEGIN_MARK" "$gi"; then
+  mb="$(grep -nxF "$BEGIN_MARK" "$gi" | head -1 | cut -d: -f1)" || true
+  me="$(grep -nxF "$END_MARK" "$gi" | head -1 | cut -d: -f1)" || true
+  if [ -z "$me" ] || [ "$me" -lt "$mb" ]; then
+    echo "  warn  $gi carries a machinery BEGIN marker with no matching END after it." >&2
+    echo "        Left UNCHANGED rather than risk dropping everything after it. Delete the" >&2
+    echo "        stray line by hand, then re-run." >&2
+  else
+    tmp="$gi.tmp.$$"
+    awk -v b="$BEGIN_MARK" -v e="$END_MARK" '
+      $0==b { inblock=1; next }
+      $0==e { inblock=0; next }
+      !inblock { print }
+    ' "$gi" > "$tmp" && mv "$tmp" "$gi"
+    echo "  retire .gitignore machinery block (a bundle carries no machinery now)"
+  fi
+fi
 
 # The repos/ view is derived, so it must be ignored too — but OUTSIDE the managed
 # block, which is regenerated from the machinery file list and would drop any line
@@ -1473,8 +1537,8 @@ fi
 # Best-effort by design: a fresh instance still has the placeholder reposRoot, and
 # the script exits 0 with an explanation in that case rather than failing the
 # install. Template copy, for the same reason as in --uninstall.
-( cd "$TARGET" && bash "$SYMLINK_SRC/scripts/link-repos.sh" ) \
-  || echo "  warn  repos/ view not refreshed; run scripts/link-repos.sh by hand" >&2
+( cd "$TARGET" && bash "$BIN_DIR/link-repos.sh" ) \
+  || echo "  warn  repos/ view not refreshed; run /ai-bridge:init again" >&2
 
 # ===========================================================================
 # 4b. THE TEAM ROSTER — offered once, on a first stamp, only at a terminal.
@@ -2104,11 +2168,11 @@ PY
   # assigned to a variable outside an `if` condition kills the whole script when any stage
   # exits non-zero, and an instance with no roleTiers at all is exactly that case. Recorded
   # in this codebase once already (a `grep|head|cut` assignment beside a guard that was fine).
-  spend_roles="$(bash "$SYMLINK_SRC/scripts/resolve-config.sh" --instance "$TARGET" --dump 2>/dev/null \
+  spend_roles="$(bash "$BIN_DIR/resolve-config.sh" --instance "$TARGET" --dump 2>/dev/null \
                  | awk -F'\t' '$2=="roleTiers" && $3!="" { print $3 }')" || true
   while IFS= read -r spend_role; do
     [ -n "$spend_role" ] || continue
-    if [ -z "$(bash "$SYMLINK_SRC/scripts/resolve-model.sh" --instance "$TARGET" "$spend_role" 2>/dev/null)" ]; then
+    if [ -z "$(bash "$BIN_DIR/resolve-model.sh" --instance "$TARGET" "$spend_role" 2>/dev/null)" ]; then
       spend_unresolved="$spend_unresolved $spend_role"
     fi
   done <<EOF
@@ -2132,9 +2196,9 @@ EOF
   fi
 fi
 
-echo "Done. Machinery symlinked & gitignored; seed content in place."
+echo "Done. Seed content in place; this bundle carries no machinery and no template links."
 echo "Next: edit instance.config.json, then run /ai-bridge:dispatch from this directory."
-echo "      (Set reposRoot first, then 'scripts/link-repos.sh' fills in repos/.)"
+echo "      (Set reposRoot first, then re-run /ai-bridge:init to fill in repos/.)"
 # THE OTHER HALF, and it is not this script's to install. Every slash command ships in the
 # ai-bridge PLUGIN now, per machine rather than per instance, so a perfect stamp still
 # leaves a bundle nobody can drive if the plugin is missing — and the only symptom is
@@ -2145,21 +2209,10 @@ echo "      (The commands are the ai-bridge PLUGIN, installed once per machine:"
 echo "       /plugin marketplace add cbmono/ai-bridge, then"
 echo "       /plugin install ai-bridge@ai-bridge — then restart Claude Code.)"
 
-# 5. One nudge, and only a nudge. A pull can bring a stricter SCHEMA.md, whose validator
-# reaches the instance instantly through its symlink and starts reporting errors against
-# documents written under the old rules — and nothing repairs them until someone runs
-# the migration. So say so, once, and point at upgrade.sh.
-#
-# Deliberately NOT the migration itself: this script is safe to run blindly precisely
-# because it only links and seeds-if-absent, and spending that property to save the user
-# one command would be a bad trade. Non-fatal, and silent unless the validator says
-# exactly "there are errors" (exit 1): absent (an instance older than the validator) or
-# clean says nothing, and any other exit code — 2 is "not an instance root" — is not
-# something a user can act on from here.
-# Retired seed content — REPORT, never remove. See RETIRED for why the
-# machinery sweep (step 2b) may delete and this may not: a symlink into this template
-# whose target is gone has one possible meaning; a seed file the human has owned since it
-# was copied does not. Absence of the manifest, or an empty one, is silence — not an error.
+# Retired seed content — REPORT, never remove. See RETIRED for why the conversion sweep
+# above may delete and this may not: a machinery symlink into a template checkout has one
+# possible meaning; a seed file the human has owned since it was copied does not. Absence
+# of the manifest, or an empty one, is silence — not an error.
 RETIRED_LIST="$TEMPLATE_DIR/RETIRED"
 if [ -f "$RETIRED_LIST" ]; then
   retired_found=0
@@ -2213,11 +2266,34 @@ if [ -f "$TARGET/CLAUDE.md" ] \
   echo "        $SEED_SRC/CLAUDE.md"
 fi
 
-if [ -e "$TARGET/scripts/validate-bundle.sh" ]; then
+# 5. SEED DRIFT — the case a copy-if-absent stamp can never deliver by itself.
+#
+# `seed/` is copied ONLY when a path is absent, which is what makes this script safe to
+# run blindly on a repo full of somebody's work — and the price is that a later seed edit
+# never reaches a bundle already stamped. That was `upgrade.sh`'s whole job. It is
+# `refresh-seeds.sh` now, it ships beside this file in the plugin, and it is REPORT-ONLY
+# here unless `--refresh-seeds` was given: a 3-way merge writes into files the bundle
+# owns, and spending this script's blind-re-run safety to save one flag would be a bad
+# trade. `/ai-bridge:welcome fix` is the other way to ask for the write.
+#
+# Non-fatal on every path. A template with no git history, a bundle that is not a
+# checkout, an absent helper — all of them report and none of them fails the stamp.
+if [ -x "$BIN_DIR/refresh-seeds.sh" ] || [ -f "$BIN_DIR/refresh-seeds.sh" ]; then
+  if [ "$REFRESH_SEEDS" -eq 1 ]; then
+    bash "$BIN_DIR/refresh-seeds.sh" "$TARGET" --apply || true
+  else
+    bash "$BIN_DIR/refresh-seeds.sh" "$TARGET" || true
+  fi
+fi
+
+# 6. One nudge, and only a nudge, when the bundle's own documents do not satisfy the
+# schema. Silent unless the validator says exactly "there are errors" (exit 1): absent,
+# clean, or "not a bundle root" (exit 2) are not things a human can act on from here.
+if [ -f "$BIN_DIR/validate-bundle.sh" ]; then
   vrc=0
-  ( cd "$TARGET" && bash scripts/validate-bundle.sh ) >/dev/null 2>&1 || vrc=$?
+  ( cd "$TARGET" && bash "$BIN_DIR/validate-bundle.sh" ) >/dev/null 2>&1 || vrc=$?
   if [ "$vrc" -eq 1 ]; then
     echo "Note: this bundle has schema errors. To see and repair them, run:"
-    echo "      $TEMPLATE_DIR/upgrade.sh $TARGET"
+    echo "      /ai-bridge:welcome check   (or: bash $BIN_DIR/validate-bundle.sh from $TARGET)"
   fi
 fi
