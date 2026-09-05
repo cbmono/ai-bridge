@@ -138,8 +138,8 @@ deliberately.
 # 1. per MACHINE, in any Claude Code session
 /plugin marketplace add cbmono/ai-bridge
 /plugin install ai-bridge@ai-bridge
-#    on ai-bridge-v2 already? uninstall it from /plugin -> Manage. It ships for one
-#    more version as a stub carrying a single skill that says exactly this.
+#    on ai-bridge-v2 already? uninstall it from /plugin -> Manage. Its stub was
+#    removed in 1.0.0, so the old name no longer resolves from the marketplace.
 
 # 2. per BUNDLE — converts in place, touches no data, safe to re-run
 /ai-bridge:init ~/workspace/<group>/_ai-bridge-<group>
@@ -839,8 +839,8 @@ owner asked three times in one session, for three different instances.
 
 ```text
 
-AI-Bridge v0.36.0 · _ai-bridge-private · org: cbmono
-────────────────────────────────────────────────────
+AI-Bridge v1.0.0 · _ai-bridge-private · org: cbmono
+───────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
 owner                 example-user-007 · you@example.com  local/tracked

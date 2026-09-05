@@ -170,9 +170,11 @@ if command -v jq >/dev/null 2>&1; then
   ok "…and whose versions agree" \
      "$([ "$(jq -r .version "$REPO/${SRC#./}/.claude-plugin/plugin.json")" \
         = "$(jq -r '.plugins[] | select(.name=="ai-bridge-yolo") | .version' "$MJ")" ] && echo yes || echo no)" yes
-  # The deprecation stub is not this task's to touch, and index 0 is pinned elsewhere.
-  ok "the ai-bridge-v2 stub entry is still listed" \
-     "$(jq -r '[.plugins[].name] | index("ai-bridge-v2") | if . == null then "no" else "yes" end' "$MJ")" yes
+  # The deprecation stub was removed at 1.0.0 (ai-bridge-v2/task-019) after its one
+  # version. Asserted from this file too, because the entry sat NEXT to the companion's
+  # and a re-add would silently restore an install path for a name nothing maintains.
+  ok "the ai-bridge-v2 stub entry is gone" \
+     "$(jq -r '[.plugins[].name] | index("ai-bridge-v2") | if . == null then "no" else "yes" end' "$MJ")" no
   ok "…and ai-bridge is still plugins[0]" "$(jq -r '.plugins[0].name' "$MJ")" "ai-bridge"
 else
   echo "  SKIP  jq not installed — the manifest checks need it"

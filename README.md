@@ -33,6 +33,7 @@ repos and holds only the state of the work — never application code.
 | [docs/migrating.md](docs/migrating.md) | **you already run a pre-plugin install** — upgrade it in place, or re-home it into a fresh folder without losing `projects/` or `knowledge/` |
 | [docs/sharing.md](docs/sharing.md) | two humans will share one instance |
 | [docs/conventions.md](docs/conventions.md) | **you are changing this repo** — every design invariant and why it exists |
+| [docs/releases/v1.0.0.md](docs/releases/v1.0.0.md) | **what 1.0.0 changed** — 91 merged PRs since the last tag, grouped: install, commands, agents, gates, docs |
 | [The config layer](#the-config-layer) | you want this repo's agents, commands and hooks in `~/.claude` too |
 
 Normative contracts live in the machinery itself: [`plugin/seed/SCHEMA.md`](plugin/seed/SCHEMA.md)
@@ -67,9 +68,7 @@ the rest of the table [below](#commands); so is every role agent —
 `ai-bridge:software-engineer` and the rest — because a bare agent name does not resolve.
 See [`plugin/README.md`](plugin/README.md).
 
-**Already on `ai-bridge-v2`?** That was the transition name. Install `ai-bridge`, then
-uninstall `ai-bridge-v2` from `/plugin` → Manage, and relaunch. The old name ships for
-one more version as a stub that says exactly this.
+**Already on `ai-bridge-v2`?** That name is gone in 1.0.0 — [the swap](docs/migrating.md).
 
 ### 2. Make the bundle directory
 

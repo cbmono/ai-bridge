@@ -45,8 +45,8 @@ prints the clone command rather than reporting a missing directory.
 | `/init <dir>` | Create a bundle, refresh one, or convert one stamped by the retired `install.sh` — data only, and the only symlinks it leaves are under `repos/`. |
 
 Both also answer to their namespaced forms (`/ai-bridge:brief-me`, `/ai-bridge:capture`).
-**`ai-bridge-v2` was the transition name** — it ships for one more version as a
-deprecation stub (`plugin-deprecated/`) that carries a single skill pointing here.
+**`ai-bridge-v2` was the transition name** — its one-version deprecation stub was
+removed in 1.0.0; the swap is in [`docs/migrating.md`](../docs/migrating.md).
 Run them from a bundle root (where `SCHEMA.md` and `instance.config.json` live).
 
 ## Evals

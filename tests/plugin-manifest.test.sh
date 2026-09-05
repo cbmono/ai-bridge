@@ -35,29 +35,45 @@ ok "…whose name matches the entry" \
 ok "…and whose versions agree" \
    "$([ "$(jq -r .version "$PJ")" = "$(jq -r '.plugins[0].version' "$MJ")" ] && echo yes || echo no)" yes
 
-echo "== the deprecation stub — ai-bridge-v2, for ONE version =="
-# The transition name shipped for eight slices, so a machine that installed it finds out
-# by NAME rather than by a command that quietly stopped resolving. Three properties, and
-# the third is the one that matters: the stub must ship no agents and no hooks, because a
-# second copy of a PreToolUse enforcement hook fires in every session on the machine and a
-# second agent set would shadow the real one.
+echo "== the deprecation stub shipped for ONE version, and 1.0.0 removed it =="
+# The transition name shipped for eight slices so a machine that installed it found out by
+# NAME rather than by a command that quietly stopped resolving. It was always bounded at
+# one version, and ai-bridge-v2/task-019 spent that bound.
+#
+# THE ASSERTION IS NOW ABSENCE, AND BOTH HALVES ARE NEEDED. A directory left behind with no
+# marketplace entry is dead weight; an entry left behind with no directory is worse — the
+# `source` resolves to nothing and `/plugin install ai-bridge-v2@ai-bridge` fails at the
+# host rather than at a skill that could have explained itself. Removing one and forgetting
+# the other is the only mistake available here, so each is pinned separately.
 STUB="$REPO/plugin-deprecated"
-if [ -d "$STUB" ]; then
-  ok "the marketplace still lists ai-bridge-v2" \
-     "$(jq -r '[.plugins[].name] | index("ai-bridge-v2") | if . == null then "no" else "yes" end' "$MJ")" yes
-  ok "…its description says it is deprecated" \
-     "$(jq -r '.plugins[] | select(.name=="ai-bridge-v2") | .description' "$MJ" | grep -ci 'deprecated')" 1
-  ok "…and names the plugin that replaces it" \
-     "$(jq -r '.plugins[] | select(.name=="ai-bridge-v2") | .description' "$MJ" | grep -c 'ai-bridge@ai-bridge')" 1
-  ok "…its source resolves to the stub manifest" \
-     "$([ -f "$STUB/.claude-plugin/plugin.json" ] && echo yes || echo no)" yes
-  ok "…which carries the old name" "$(jq -r .name "$STUB/.claude-plugin/plugin.json")" "ai-bridge-v2"
-  ok "…ships no agents"            "$([ -e "$STUB/agents" ] && echo no || echo yes)" yes
-  ok "…ships no hooks"             "$([ -e "$STUB/hooks" ] && echo no || echo yes)" yes
-  ok "…and exactly one skill"      "$(ls -1 "$STUB/skills" 2>/dev/null | wc -l | tr -d ' ')" 1
-else
-  echo "  NOTE  plugin-deprecated/ is gone — the one-version stub has been removed."
-fi
+ok "plugin-deprecated/ is gone"   "$([ -e "$STUB" ] && echo no || echo yes)" yes
+ok "…and so is its marketplace entry" \
+   "$(jq -r '[.plugins[].name] | index("ai-bridge-v2") | if . == null then "no" else "yes" end' "$MJ")" no
+# Non-vacuity: the same lookup finds the entries that ARE listed, so "no" above is an
+# answer about ai-bridge-v2 and not a jq expression that can only ever say no.
+ok "…while the lookup still finds a name that IS listed" \
+   "$(jq -r '[.plugins[].name] | index("ai-bridge") | if . == null then "no" else "yes" end' "$MJ")" yes
+# Every REMAINING source must still resolve — the other thing the removal could have
+# broken, and the one a jq check on names alone cannot see. ONE SCANNER, RUN TWICE: over
+# the real manifest, and over a planted source that points at the directory just deleted.
+# A sweep that can only pass is not a sweep, and a `bad` count of 0 over an EMPTY source
+# list is the vacuous form this one would decay into, so the count is asserted too.
+unresolved() { # reads sources on stdin, prints how many resolve to no plugin manifest
+  local s n=0
+  while read -r s; do
+    [ -n "$s" ] || continue
+    [ -f "$REPO/${s#./}/.claude-plugin/plugin.json" ] || n=$((n+1))
+  done
+  printf '%s' "$n"
+}
+srcs="$(jq -r '.plugins[].source' "$MJ")"
+ok "every marketplace source resolves to a plugin manifest" \
+   "$(printf '%s\n' "$srcs" | unresolved)" 0
+ok "…over at least the two entries that are left (the sweep is not vacuous)" \
+   "$([ "$(printf '%s\n' "$srcs" | grep -c . | tr -d ' ')" -ge 2 ] && echo yes || echo no)" yes
+# The same scanner, on the source the removed entry carried. It must come back 1.
+ok "…and that same scanner flags the source the stub entry used to carry" \
+   "$(printf './plugin-deprecated\n' | unresolved)" 1
 
 echo "== every skill has the frontmatter the loader keys on =="
 n=0
@@ -80,11 +96,6 @@ if command -v claude >/dev/null 2>&1; then
   # On failure, the validator's own diagnostics are the finding — "got 1, want 0"
   # alone names no field.
   if [ "$rc" -ne 0 ]; then printf '%s\n' "$out" | sed 's/^/        | /'; fi
-  if [ -d "$STUB" ]; then
-    out="$(claude plugin validate "$STUB" --strict 2>&1)"; rc=$?
-    ok "…and the deprecation stub validates too" "$rc" 0
-    if [ "$rc" -ne 0 ]; then printf '%s\n' "$out" | sed 's/^/        | /'; fi
-  fi
 else
   echo "  SKIP  claude CLI not on PATH — jq checks above still hold"
 fi
