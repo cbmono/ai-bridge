@@ -896,10 +896,18 @@ case "$cmd" in
     # dispatch, exit 1 — and only the REPORT changes: one line, on stdout, because a clock
     # firing into a running tick is the ordinary case and not a fault. Read from the lock
     # rather than from `$verdict`, so this line cannot drift with the launcher's wording.
+    loop_ts=""; loop_ag=""; loop_age=""
     if [ "$as" = loop ] && [ "$vrc" -eq 1 ]; then
       loop_ts="$(lock_field timestamp)"
       loop_ag="$(lock_field agent)"
       loop_age="$(lock_age)" || loop_age=""
+    fi
+    # All three non-empty is implied by a verdict of 1 — `judge_existing` returns 2 when any
+    # of them is missing — but this re-reads the file, so it is asserted rather than assumed:
+    # an empty age would reach `human_age` as `[ "" -lt 60 ]`, and a shell error where a
+    # quiet line belongs is exactly the noise this mode exists to remove. Empty falls through
+    # to the launcher's block below, which is louder and never wrong.
+    if [ -n "$loop_ts" ] && [ -n "$loop_ag" ] && [ -n "$loop_age" ]; then
       echo "tick in progress since $loop_ts ($loop_ag, taken $(human_age "$loop_age") ago) — nothing to dispatch this pass."
       exit 1
     fi
