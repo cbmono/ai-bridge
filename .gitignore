@@ -18,10 +18,10 @@ tmp/
 
 # NOT ignored, and deliberately listed here so nobody "tidies" them into the block above:
 #   symlink/.claude/**   — machinery symlinked into every instance
-#   seed/.gitignore      — an active .gitignore over this template's own seed/ directory.
+#   plugin/seed/.gitignore — an active .gitignore over this template's own seed directory.
 #                          Never add an `/index.md` line THERE: it would match
-#                          seed/index.md and stop this repo tracking its own seed file.
-#                          tests/derived-indexes.test.sh holds that trap closed.
+#                          plugin/seed/index.md and stop this repo tracking its own seed
+#                          file. tests/derived-indexes.test.sh holds that trap closed.
 
 # `claude plugin eval` writes a timestamped results/ directory and an HTML report under
 # the eval dir on every run. Run artifacts, never sources — and this repo is public, so
