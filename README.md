@@ -654,7 +654,7 @@ than shortening it.
   runs and needs `claude plugin eval`, which is **early access** — where it is unavailable the
   harness prints `skipped: plugin eval unavailable — <why>` rather than passing quietly.
   [→](plugin/evals/README.md)
-- Run the suite before pushing: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. CI runs the same full suite as the required check **`harness suite`**, which `main`'s branch protection requires and is strict about — so be up to date with `main`. [→](docs/conventions.md#repo-conventions-that-are-not-invariants)
+- Run the suite before pushing: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. The required check **`harness suite`** runs that full suite by default, and for a PR whose every changed path is under `plugin/` or `.claude-plugin/` a selected set of plugin harnesses instead; `main`'s branch protection requires it and is strict about it — so be up to date with `main`. [→](docs/conventions.md#repo-conventions-that-are-not-invariants)
 - Adding to the harness itself? Measure what your diff adds under `plugin/**/*.sh`, and at or above ~150 lines ask in the PR body instead of assuming. [→](docs/conventions.md#repo-conventions-that-are-not-invariants)
 - This repo is **public**. Placeholders must be verified unclaimed: `example-user-007` / `example-user-008` and `example.com`.
 
