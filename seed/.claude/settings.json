@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude-in-chrome__*"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -fr /)",
+      "Bash(rm -rf ~)",
+      "Bash(rm -rf $HOME)",
+      "Bash(terraform destroy:*)",
+      "Bash(tofu destroy:*)"
+    ]
+  },
+  "worktree": {
+    "bgIsolation": "none"
+  },
+  "$schema": "This bundle's own Claude Code settings -- SEED content, copied once and then yours. The four ai-bridge hooks (SessionStart banner, UserPromptSubmit push-state, and the two PreToolUse enforcement hooks) are NOT registered here any more: they ship with the ai-bridge plugin and fire per machine, so one install arms every bundle instead of only the ones somebody re-stamped. `permissions.deny` stays here because a plugin manifest has no permissions block to carry it, and it is the unconditional second layer behind the deny-destructive hook."
+}

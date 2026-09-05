@@ -68,13 +68,13 @@ make_tpl() { # <dir> — a throwaway plain-directory copy of the template
     [ -n "$f" ] || continue
     mkdir -p "$d/$(dirname "$f")"; cp "$REPO/$f" "$d/$f" 2>/dev/null || true
   done
-  chmod +x "$d/install.sh" "$d"/symlink/scripts/*.sh 2>/dev/null || true
+  chmod +x "$d/plugin/scripts/init-bundle.sh" "$d"/plugin/scripts/*.sh 2>/dev/null || true
 }
 TPL="$TMP/tpl"; make_tpl "$TPL"
-SCRIPTS="$TPL/symlink/scripts"
+SCRIPTS="$TPL/plugin/scripts"
 
 newinst() { local d="$TMP/i$1"; rm -rf "$d"; mkdir -p "$d"; printf '%s' "$d"; }
-stamp()   { bash "$TPL/install.sh" "$1" >"$TMP/out" 2>&1; }
+stamp()   { bash "$TPL/plugin/scripts/init-bundle.sh" "$1" >"$TMP/out" 2>&1; }
 said()    { grep -q -- "$1" "$TMP/out" && echo yes || echo no; }
 # One key or entry out of a JSON file, as text. `-` for a key that is not there and
 # `null` for one that is there and null: the two are DIFFERENT answers here — present-and-
@@ -159,7 +159,7 @@ ok "…and for a tier"                       "$(FROM "$I" models deep)" local
 # …AND THE REAL BANNER SAYS SO, not merely the resolver the banner reads. The criterion
 # is about the column a human looks at, so it is asserted against the hook's own output:
 # `<role>  <tier>→<alias>  <from>`, whitespace-separated, last field.
-BANNER="$TPL/symlink/.claude/hooks/session-banner.sh"
+BANNER="$TPL/plugin/hooks/session-banner.sh"
 BOUT="$(CLAUDE_PROJECT_DIR="$I" bash "$BANNER" 2>&1)"
 brow() { printf '%s\n' "$BOUT" | awk -v r="$1" '$1==r { print $NF }' | head -n1; }
 ok "the banner prints a row for the role"   "$(printf '%s\n' "$BOUT" | awk '$1=="software-engineer"' | grep -c 'deep → opus' | tr -d ' ')" 1
@@ -271,7 +271,7 @@ ok "…and the alias is the tracked one"             "$(MODEL "$I" software-engi
 # hardcoded map only when the tracked file has no such key — an instance whose config
 # predates it, or one somebody trimmed. Two copies of the same map drift, and the drift is
 # invisible until a fresh install lands on the stale one, so it is asserted here.
-DEFAULTS_MODELS="$(python3 - "$TPL/install.sh" <<'PY'
+DEFAULTS_MODELS="$(python3 - "$TPL/plugin/scripts/init-bundle.sh" <<'PY'
 import json, re, sys
 src = open(sys.argv[1]).read()
 m = re.search(r'DEFAULTS = \{(.*?)\n\}\n', src, re.S)
@@ -281,7 +281,7 @@ print(json.dumps(dict(re.findall(r'"([^"]+)": "([^"]+)"', mm.group(1))), sort_ke
 PY
 )"
 ok "install.sh's default models == the seed's"  "$DEFAULTS_MODELS" "$(jget "$TPL/seed/instance.config.json" models)"
-DEFAULTS_TIERS="$(python3 - "$TPL/install.sh" <<'PY'
+DEFAULTS_TIERS="$(python3 - "$TPL/plugin/scripts/init-bundle.sh" <<'PY'
 import json, re, sys
 src = open(sys.argv[1]).read()
 m = re.search(r'DEFAULTS = \{(.*?)\n\}\n', src, re.S)
@@ -342,7 +342,7 @@ echo "-- 6. every prose caller carries the same instruction"
 # has no shell callers at all — every caller is an AGENT following a document. So the
 # document is where "report that line rather than dispatching on a guess" has to live, and
 # a caller that silently drops it is the failure this whole section is against.
-for f in symlink/CONVENTIONS.md docs/operations.md \
+for f in seed/CONVENTIONS.md docs/operations.md \
          plugin/skills/dispatch/SKILL.md plugin/skills/fanout/SKILL.md \
          plugin/skills/audit/SKILL.md plugin/agents/project-manager.md; do
   ok "$(basename "$f") names resolve-model.sh"  "$(yn grep -q 'resolve-model\.sh' "$TPL/$f")" yes
@@ -350,7 +350,7 @@ for f in symlink/CONVENTIONS.md docs/operations.md \
 done
 # SCHEMA.md is the one place the overridable set is listed, so the seeding contract and
 # the deliberate exception belong there rather than in six documents.
-SCHEMA="$TPL/symlink/SCHEMA.md"
+SCHEMA="$TPL/seed/SCHEMA.md"
 ok "SCHEMA.md says the installer seeds them"    "$(yn grep -q 'SEEDED into the local file' "$SCHEMA")" yes
 ok "…and that the tracked pair is the fallback" "$(yn grep -q 'tracked pair is the' "$SCHEMA")" yes
 ok "…and that a merge is not a stamp"           "$(yn grep -q 'a merge is not a stamp' "$SCHEMA")" yes

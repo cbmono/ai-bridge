@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exercises symlink/scripts/prune-worktrees.sh — the worktree CLASSIFIER.
+# Exercises plugin/scripts/prune-worktrees.sh — the worktree CLASSIFIER.
 # It is report-only since ai-bridge v2: it never removes, it prints commands.
 #
 # The pruner is the one script in this template that can destroy work, and it has
@@ -48,7 +48,7 @@
 # detached-HEAD handling was a false negative rather than a false positive.
 set -uo pipefail
 
-PRUNER="${PRUNER:-$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/prune-worktrees.sh}"
+PRUNER="${PRUNER:-$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts/prune-worktrees.sh}"
 SHOW_ONLY="${SHOW_ONLY:-0}"
 
 die() { printf 'prune-worktrees.test: %s\n' "$*" >&2; exit 2; }

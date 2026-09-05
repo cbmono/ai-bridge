@@ -112,7 +112,7 @@ set -uo pipefail
 unset CLAUDE_CODE_SESSION_ID TICK_CLAIMANT
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
-LOCKSH="$TPL/symlink/scripts/tick-lock.sh"
+LOCKSH="$TPL/plugin/scripts/tick-lock.sh"
 LAUNCHER="$TPL/plugin/skills/dispatch/SKILL.md"
 TICK="$TPL/plugin/agents/project-manager.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tick-lock.XXXXXX")" || {
@@ -1044,7 +1044,7 @@ echo
 echo "== the wiring: the launcher runs the acquire, and holds exactly the grant for it =="
 grants() { awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
   | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$'; }
-ok "allowed-tools grants the script"     "$(grants "$LAUNCHER" | grep -qx 'Bash(scripts/tick-lock.sh:\*)' && echo yes || echo no)" yes
+ok "allowed-tools grants the script"     "$(grants "$LAUNCHER" | grep -qx 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' && echo yes || echo no)" yes
 ok "…and grants nothing else new"        "$(grants "$LAUNCHER" | wc -l | tr -d ' ')" 7
 ok "step 1 runs the acquire"             "$(has "$LAUNCHER" 'scripts/tick-lock.sh acquire --agent project-manager')" yes
 ok "…and step 2 releases on the notification" "$(has "$LAUNCHER" 'scripts/tick-lock.sh release')" yes
@@ -1100,7 +1100,7 @@ echo "== the lock is gitignored on a freshly stamped instance =="
 # role agent's checkout of this template is one), so stamp from a filesystem copy taken
 # outside any repo — the same dance tests/derived-indexes.test.sh does, and see there for
 # the full rationale and this TMPDIR-recursion guard.
-BRIDGE_INSTALL="$TPL/install.sh"
+BRIDGE_INSTALL="$TPL/plugin/scripts/init-bundle.sh"
 if command -v git >/dev/null 2>&1; then
   _tpl_gd="$(git -C "$TPL" rev-parse --absolute-git-dir 2>/dev/null || true)"
   _tpl_gc="$(git -C "$TPL" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
@@ -1114,7 +1114,7 @@ if command -v git >/dev/null 2>&1; then
     mkdir -p "$INSTALL_SRC"
     cp -R "$TPL"/. "$INSTALL_SRC"/
     rm -rf "$INSTALL_SRC/.git"
-    BRIDGE_INSTALL="$INSTALL_SRC/install.sh"
+    BRIDGE_INSTALL="$INSTALL_SRC/plugin/scripts/init-bundle.sh"
   fi
 fi
 ok "seed/.gitignore carries the line"    "$(grep -qxF '/.tick-lock' "$TPL/seed/.gitignore" && echo yes || echo no)" yes

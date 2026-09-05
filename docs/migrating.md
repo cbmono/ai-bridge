@@ -1,13 +1,62 @@
 # Migrating an existing install
 
-For anyone running AI Bridge from **before the plugin** — an instance whose
+For anyone running AI Bridge from **before the plugin** — a bundle whose
 `.claude/commands/` still holds symlinks, and whose commands are the bare `/pm-loop`,
 `/new-project`, `/answer`, … Nothing errors. Those files simply stopped being shipped,
-and a dangling command still registers, so the instance offers `/pm-loop` and fails when
+and a dangling command still registers, so the bundle offers `/pm-loop` and fails when
 you run it.
+
+**And for anyone whose bundle still carries machinery symlinks at all** — which is every
+bundle stamped by `install.sh`. The machinery ships in the plugin now, so a link into a
+template checkout is frozen at whatever that clone last pulled and no plugin update ever
+reaches it. [§ Converting a symlink-era bundle](#converting-a-symlink-era-bundle-in-place)
+below is the one command that fixes it, in place, without touching your data.
 
 **There are two ways forward and they are not equally safe.** Pick with the table, then
 read only that section.
+
+---
+
+## Converting a symlink-era bundle, in place
+
+**One command, idempotent, and it never touches your data.**
+
+```
+/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group>
+```
+
+That is the whole migration for the machinery half. It is safe to run on a bundle full of
+somebody's work, and safe to run again.
+
+| What it does | Detail |
+|---|---|
+| **Removes every machinery symlink** outside `repos/` | dangling ones, links whose target contains `/symlink/`, and links that resolve into a template checkout. One `retire <path> — <reason>` line each |
+| **Retires the managed `.gitignore` block** | the `# >>> ai-bridge machinery (symlinked) >>>` pair and everything between it. Your own rules, outside the markers, are untouched |
+| **Seeds what the removal left absent** | `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md` and `.claude/settings.json` become the bundle's **own files**, copied once |
+| **Leaves data alone** | `projects/`, `knowledge/`, `objectives/`, `log.md`, `board.html`, your `instance.config.json` — none is read or written by the sweep |
+| **Leaves a symlink of yours alone** | anything that is not a machinery link is reported `keep <path>` and left |
+| **Removes emptied machinery directories** | `scripts/`, `.claude/hooks/` and friends, and only when `rmdir` succeeds — a directory still holding anything is kept |
+
+**Two things to know before you run it.**
+
+1. **`AUTONOMY.md` is not put back, on purpose.** It is the deletable delegated-authority
+   capability, so shipping it with the plugin would arm it everywhere. If your bundle had
+   one, the conversion removes the link and says so loudly, and the bundle is back to
+   ask-first — the safe end. To opt back in, copy the file in by hand from
+   `docs/autonomy/AUTONOMY.md`; the run prints the exact `cp`.
+2. **Seed drift is reported, never merged.** A seed document this repo changed since your
+   bundle was stamped is listed and left alone. `/ai-bridge:welcome fix` — or
+   `/ai-bridge:init <dir> --refresh-seeds` — 3-way merges the ones that merge cleanly; a
+   hand-diverged file is never forced, and its conflicted merge is saved beside it as
+   `.bak.<epoch>`. `instance.config.json` is never merged at all.
+
+**Afterwards**, `/ai-bridge:welcome` should print no machinery alarm, and
+`/ai-bridge:welcome check` should say *"no symlinks outside repos/ — this bundle carries
+no machinery and no template link"*. If it does not, it names what is left and the repair.
+
+**You no longer need a clone of `cbmono/ai-bridge` on the machine.** Once every bundle on
+it is converted, the checkout is only useful for working on this repo itself. Deleting it
+breaks nothing — that is the property this migration bought.
 
 ---
 
@@ -39,9 +88,10 @@ ships for one more version as a stub that says so. Every command is namespaced �
 **Written once, in one place, and not repeated here:**
 [operations.md § Moving a stamped instance into the plugin era](operations.md#moving-a-stamped-instance-into-the-plugin-era--run-this-once).
 
-Four steps — plugin install (per machine), `./upgrade.sh <instance>` to report,
-`--apply`, restart. It re-stamps, so the sweep below removes the dangling symlink-era
-command links for you, and `install.sh` never removes instance content.
+Three steps — plugin install (per machine), `/ai-bridge:init <bundle>`, restart. The
+stamp converts, so the sweep below removes the symlink-era command links for you, and it
+never removes bundle content. `upgrade.sh` was the old spelling of this and is now a stub
+that says so.
 
 **Nothing on the [checklist](#what-you-must-not-lose-and-what-must-not-travel) below
 applies to you**, because on path A nothing moves. It is there for path B.
@@ -93,13 +143,12 @@ if this machine already has `ai-bridge`, skip the step. If it has `ai-bridge-v2`
 
 ### 3. Stamp the new folder
 
-```bash
-mkdir -p ~/workspace/<group>/<new-folder>
-~/workspace/ai-bridge/install.sh ~/workspace/<group>/<new-folder>
+```
+/ai-bridge:init ~/workspace/<group>/<new-folder>
 ```
 
-Name it `_ai-bridge-<group>` unless you are deliberately renaming
-([README § 3](../README.md#3-make-the-instance-directory)).
+It creates the directory too. Name it `_ai-bridge-<group>` unless you are deliberately
+renaming ([README § 2](../README.md#2-make-the-bundle-directory)).
 
 **Answer the roster prompt.** A first stamp at a terminal offers to collect
 `<github-login> <commit-email>` pairs, and the same prompt writes this clone's
@@ -138,9 +187,9 @@ away from.
 Same shell as step 4 — `$old` and `$new` are still set.
 
 ```bash
-# a) the SECOND stamp: reposRoot is real now, so repos/ is linked, and the managed
-#    .gitignore block is refreshed against the content you just copied
-~/workspace/ai-bridge/install.sh "$new"
+# a) the SECOND stamp: reposRoot is real now, so repos/ is linked, and the derived
+#    ignore lines are refreshed against the content you just copied
+#      /ai-bridge:init "$new"
 
 # b) a fresh repo — the old history stayed in the backup, deliberately
 cd "$new"
@@ -158,7 +207,7 @@ Two things this step is for:
   arrived with step 4.
 - **The derived indexes come back on the first LIVE tick**, not now. Root `index.md` and
   `projects/*/index.md` are rewritten by the PM's curate step; a DRY RUN stops before it.
-  If `install.sh` reports either as *tracked*, run the `git rm --cached` line it prints —
+  If the stamp reports either as *tracked*, run the `git rm --cached` line it prints —
   they are views, and a committed view is a merge conflict every tick.
 
 ### 6. Verify
@@ -198,22 +247,24 @@ Only once this passes do you delete anything — see
 
 | Path | What it is |
 |---|---|
-| `instance.config.local.json` | **per machine**: `ownerGithubUser`, `authorEmail`, `models`/`roleTiers`. Copying it to another machine is how a bundle ends up authoring as somebody else. `install.sh` writes a fresh one |
+| `instance.config.local.json` | **per machine**: `ownerGithubUser`, `authorEmail`, `models`/`roleTiers`. Copying it to another machine is how a bundle ends up authoring as somebody else. `/ai-bridge:init` writes a fresh one |
 | `.tick-lock`, `.tick-lock.claim` | the dispatch lock, **per clone**. A copied lock is one nobody holds and nothing releases |
 | `.tick-state` | the tick delta cache, per clone |
 | `.board-live/`, `.board-others.json`, `board.html`, `SNAPSHOT.json` | the board's derived output and its caches |
 | `AWAITING.md` | the derived awaiting-you queue, rewritten every tick |
 | root `index.md`, `projects/*/index.md` | derived navigation, rewritten every tick. **One exception:** a *retained* project's `index.md` is written once at closeout and is committed |
 | `repos/` | a derived symlink view of the group's repos; `scripts/link-repos.sh` rebuilds it |
-| `scripts/`, `.claude/`, `SCHEMA.md`, `CONVENTIONS.md`, `AUTONOMY.md`, `agents/` | **absolute symlinks into the template.** Copying one gets you a link into the old folder's template, or a dangling one. The stamp re-links all of them |
-| `tmp/`, `*.bak.*` | scratch, and the files `install.sh` moved aside |
+| `scripts/`, `.claude/hooks/`, `AUTONOMY.md` | on a symlink-era bundle these are **absolute symlinks into a template checkout**. Copying one gets you a link into the old folder's template, or a dangling one. `/ai-bridge:init` removes them; the machinery runs from the plugin |
+| `tmp/`, `*.bak.*` | scratch, and the files a stamp moved aside |
 
-**`AUTONOMY.md` is a symlink, so its per-instance state is a deletion, not an edit.**
-Delegated autonomy is honoured when the file is present and every project is `gated` when
-it is absent, so an instance that had `rm`'d it was making a decision. Make it again:
-`rm <new-folder>/AUTONOMY.md` after the stamp — machinery is re-linked unconditionally,
-so it comes back on **every** stamp. On path A `upgrade.sh` samples the file first and
-reports the re-enable with the `rm` to undo it; on path B nothing will.
+**`SCHEMA.md`, `CONVENTIONS.md` and `agents/index.md` are seed content now**, not links:
+copy your bundle's own edits across if you made any, exactly as for `CLAUDE.md`.
+
+**`AUTONOMY.md` is the one file whose absence IS its setting**, and the stamp no longer
+puts it back. Delegated autonomy is honoured when the file is present and every project is
+`gated` when it is absent, so a bundle that had `rm`'d it was making a decision — and one
+that had it was making the other. On either path, decide once and copy the file in by hand
+from `docs/autonomy/AUTONOMY.md` if you want it; nothing recreates it for you.
 ([autonomy.md](autonomy.md#the-onoff-switch-is-one-file))
 
 ---
@@ -222,17 +273,18 @@ reports the re-enable with the `rm` to undo it; on path B nothing will.
 
 | Path | What removes the old command links |
 |---|---|
-| **A** | `install.sh`'s **step 2b sweep**, which `upgrade.sh` runs for you. It deletes a link only when it points into this template's `symlink/` **and** its target is gone — so exactly the retired commands, and nothing of yours. One `retire <path> (no longer shipped by the template)` line each ([operations.md § 2](operations.md#2-retiring-content-swept-vs-reported)) |
+| **A** | `/ai-bridge:init`'s **conversion sweep**. It removes a symlink outside `repos/` when it dangles, points through a `/symlink/` path, or resolves into a template checkout — so exactly the retired commands and the rest of the machinery, and nothing of yours. One `retire <path> — <reason>` line each ([operations.md § 2](operations.md#2-retiring-content-swept-vs-reported)) |
 | **B** | you delete the whole old folder, so there is nothing to sweep |
 
-**Step 2b is not cosmetic and it is not optional.** Without the re-stamp, the dangling
-files still register and the instance keeps offering commands that fail.
+**The sweep is not cosmetic and it is not optional.** Without it, the dangling files still
+register and the bundle keeps offering commands that fail — and a link that still
+*resolves* is worse, because it silently pins the bundle to one stale checkout.
 
 Deleting the old folder — last, and only once step 6 passed:
 
 ```bash
-# optional: detach the machinery first, so what is left is only your content
-~/workspace/ai-bridge/install.sh --uninstall ~/workspace/<group>/_ai-bridge-<group>
+# optional: detach the derived views first, so what is left is only your content
+#   bash <plugin>/scripts/init-bundle.sh --uninstall ~/workspace/<group>/_ai-bridge-<group>
 rm -rf ~/workspace/<group>/_ai-bridge-<group>
 ```
 
@@ -243,4 +295,4 @@ can look at what remains and confirm every last file of it is yours.
 **The plugin is not part of any of this.** It is per machine and every instance on that
 machine uses it, so do not uninstall `ai-bridge`. Uninstall `ai-bridge-v2` if it is still
 listed. The optional `~/.claude` config layer is its own separate thing:
-`install.sh --config --uninstall` ([README § Uninstall](../README.md#uninstall)).
+`init-bundle.sh --config --uninstall` ([README § Uninstall](../README.md#uninstall)).

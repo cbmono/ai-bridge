@@ -3,7 +3,7 @@ name: close-project
 disable-model-invocation: true
 description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. Human-gated; run once a project's tasks are all done/cancelled.
 argument-hint: <project-slug>  [--dry-run] [--force]
-allowed-tools: Bash(date:*), Bash(scripts/commit-as.sh:*), Bash(scripts/close-project-folder.sh:*), Bash(scripts/prune-worktrees.sh:*), Bash(scripts/validate-bundle.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
 **Close a completed Project.** This is the human-triggered form of the closeout the
@@ -39,7 +39,7 @@ candidates) and ask which to close.
 > then for steps 2–7 *report exactly what you would do* — do **not** dispatch the
 > cataloguer, edit `log.md`/`index.md`/`project.md`/objective, prune worktrees, or
 > commit/remove anything. Only a run without the flag actually changes state. Step 7's
-> `scripts/close-project-folder.sh <slug>` **without `--apply`** is the one thing you
+> `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug>` **without `--apply`** is the one thing you
 > may run: it is report-only by design and prints the exact removal or prune it would
 > perform, which is a better dry-run report than a description of one.
 
@@ -88,7 +88,7 @@ candidates) and ask which to close.
    `status: achieved` (don't flip it silently).
 
 5. **Report leftover worktrees** — **only when no role agents are in flight.** Run
-   `scripts/prune-worktrees.sh`; it classifies and prints `git worktree remove`
+   `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh`; it classifies and prints `git worktree remove`
    commands but never deletes. Include its `REMOVABLE`/`RECLAIMABLE` lines for this
    project's worktrees in the closing summary so the human can reclaim them; don't
    run the commands yourself. If agents are still working (a `--force` closeout can
@@ -132,7 +132,7 @@ candidates) and ask which to close.
 7. **Remove — or retain — then validate, then commit.** Unless `--dry-run`, run
 
    ```bash
-   scripts/close-project-folder.sh <slug> --apply
+   ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug> --apply
    ```
 
    **Do not `git rm` or `rm` the folder by hand.** That one command is the whole
@@ -158,8 +158,8 @@ candidates) and ask which to close.
      user to re-stamp: an index the tick will never regenerate and git will never
      carry exists on exactly one machine.
 
-   Commit via `scripts/commit-as.sh human "chore: close <slug> project" -- <path>...`.
-   **Run `scripts/validate-bundle.sh` after the folder step and before committing** —
+   Commit via `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human "chore: close <slug> project" -- <path>...`.
+   **Run `${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh` after the folder step and before committing** —
    validating beforehand cannot see a reference that only dangles once the folder is
    gone, which is the whole failure class step 6 exists to prevent. Zero errors is the
    gate. Print the closing commit SHA and the `log.md` entry. For a removal, remind the

@@ -55,7 +55,7 @@ of independent asks the user has already given in this turn.
 
 ## Model for each dispatched agent
 
-Resolve it with `scripts/resolve-model.sh <agent>` before spawning, never from memory.
+Resolve it with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh <agent>` before spawning, never from memory.
 Most fan-outs use `general-purpose`, which has no `roleTiers` entry — the script then
 prints nothing on stdout, exits 1, and says why on stderr, and inheriting the session model
 is the correct answer. **That line is the expected answer here, not a fault**, so there is
@@ -64,4 +64,4 @@ the human rather than dispatching on a guess. But
 when you fan out a **named role agent**, that agent has a tier, and reading it from the
 config is the difference between the instance's setting governing the dispatch and it
 not. See `CONVENTIONS.md`, "Resolve a dispatched agent's model with
-`scripts/resolve-model.sh`".
+`${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh`".

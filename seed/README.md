@@ -187,9 +187,11 @@ documents live in the **bundle** (per instance). Neither half updates the other.
 | Half | Reaches you by | Run |
 |---|---|---|
 | the slash commands (`/ai-bridge:*`) | the plugin, installed once per machine | `/plugin marketplace add cbmono/ai-bridge` then `/plugin install ai-bridge@ai-bridge` — and `/plugin` to update it later |
-| role agents, `scripts/`, `SCHEMA.md`, `CONVENTIONS.md`, the `SessionStart` hook | symlinks into the template checkout | `<ai-bridge>/install.sh <path-to-this-instance>` — after the template moves, or gains a new machinery file |
+| role agents, machinery scripts, the `SessionStart` and `UserPromptSubmit` hooks | the same plugin, per machine — this bundle holds no link into any checkout | nothing per bundle: `/plugin` updates all of it at once |
+| the bundle's own seed docs (`CLAUDE.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`) | copied once, then yours | `/ai-bridge:welcome fix` 3-way merges a later change onto your edits |
 
-`install.sh` also **retires** a symlink whose target the template no longer ships,
-so re-stamping is what clears the commands that moved into the plugin. Full
+`/ai-bridge:init` also **converts** a bundle stamped before the plugin era: it removes
+every machinery symlink into a template checkout — dangling or live — and the managed
+`.gitignore` block, and touches no data. Full
 procedure, including what a stamped instance has to run **once** to reach the
 plugin era: `docs/operations.md` in the template.

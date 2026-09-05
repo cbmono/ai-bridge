@@ -26,12 +26,14 @@ read; a bundle with no stamp has the data and no way to drive it. Do the plugin 
 | # | Step | Where | Do this |
 |---|---|---|---|
 | 1 | Install the plugin | once per **machine**, in any Claude Code session | `/plugin marketplace add cbmono/ai-bridge`, then `/plugin install ai-bridge@ai-bridge` |
-| 2 | Clone the template | once per **machine**, somewhere permanent | `git clone git@github.com:cbmono/ai-bridge.git ~/workspace/ai-bridge` |
-| 3 | Get the bundle | once per **instance** | **joining** one: `git clone <bundle-remote> ~/workspace/<group>/_ai-bridge-<group>` · **starting** one: [README § Install](../README.md#install), steps 3-6 |
-| 4 | Link the machinery | **each** clone | `~/workspace/ai-bridge/install.sh ~/workspace/<group>/_ai-bridge-<group>` |
-| 5 | Say which login this clone is | **each** clone | `{ "ownerGithubUser": "<login>" }` in `instance.config.local.json` (gitignored, per machine) |
-| 6 | Turn the nudges on — **joining only** | your clone | `touch ~/workspace/<group>/_ai-bridge-<group>/AWAITING.md`. A clone is not a first stamp, so the stamp deliberately does not create it |
-| 7 | Open a session | | `cd ~/workspace/<group>/_ai-bridge-<group>` then `claude` |
+| 2 | Get the bundle | once per **bundle** | **joining** one: `git clone <bundle-remote> ~/workspace/<group>/_ai-bridge-<group>` · **starting** one: [README § Install](../README.md#install), steps 2-5 |
+| 3 | Stamp it | **each** clone | `/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group>` — seeds what is absent and links `repos/` |
+| 4 | Say which login this clone is | **each** clone | `{ "ownerGithubUser": "<login>" }` in `instance.config.local.json` (gitignored, per machine) |
+| 5 | Turn the nudges on — **joining only** | your clone | `touch ~/workspace/<group>/_ai-bridge-<group>/AWAITING.md`. A clone is not a first stamp, so the stamp deliberately does not create it |
+| 6 | Open a session | | `cd ~/workspace/<group>/_ai-bridge-<group>` then `claude` |
+
+**There is no "clone the template" step.** The machinery ships in the plugin, so step 1 is
+the whole of what a machine needs; the bundle holds data and nothing else.
 
 **Always launch Claude from inside the instance directory.** The bundle's role agents, its
 `SessionStart` banner and its `CLAUDE.md` load from the working directory — not from what
@@ -102,7 +104,7 @@ through the same two gates.
 **Both gates hold until you deliberately delegate them**, and the delegation is one
 deletable file — delete it and every project is gated again, with no other edit. See
 [autonomy.md](autonomy.md); the two authorities themselves are in
-[`symlink/SCHEMA.md`](../symlink/SCHEMA.md).
+[`seed/SCHEMA.md`](../seed/SCHEMA.md), which the stamp copies into your bundle root.
 
 **`AWAITING.md` is where the gates queue up** — the instance's one status artifact, and
 just the items a human decision unblocks, each marked with what it needs from you

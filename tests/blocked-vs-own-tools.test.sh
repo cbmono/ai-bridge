@@ -5,7 +5,7 @@
 # `check-dispatch.sh` has to say so instead of clearing it as an honest stop.
 #
 # WHY THIS EXISTS, AND WHAT IT HONESTLY IS. The rule it backs
-# (`symlink/CONVENTIONS.md` → "Exhaust your own tools before you hand work back") is a
+# (`seed/CONVENTIONS.md` → "Exhaust your own tools before you hand work back") is a
 # BEHAVIOURAL DEFAULT, and this repo has documented six separate rules that were written,
 # read as authoritative, and enforced by nothing — the failure only visible when the thing
 # the rule forbade happened anyway. A default cannot be fully mechanised: an agent that
@@ -27,8 +27,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPT="$REPO/symlink/scripts/check-dispatch.sh"
-CONV="$REPO/symlink/CONVENTIONS.md"
+SCRIPT="$REPO/plugin/scripts/check-dispatch.sh"
+CONV="$REPO/seed/CONVENTIONS.md"
 PM="$REPO/plugin/agents/project-manager.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/blocked-vs-own-tools.XXXXXX")" || {

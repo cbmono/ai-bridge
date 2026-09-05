@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # pr-body-clearance.test.sh — exercises precondition 3 of the delegated merge gate,
-# symlink/scripts/pr-body-clearance.sh.
+# plugin/scripts/pr-body-clearance.sh.
 #
 # WHAT IT HAS TO PROVE, AND WHY EACH HALF IS HERE.
 #
@@ -45,7 +45,7 @@
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/pr-body-clearance.sh"
+SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts/pr-body-clearance.sh"
 SELFTEST_OK="pr-body-clearance: self-test ok"
 HEAD_SHA="0c2592f7bb98d3de9a7a181d1762dfcaf80785d9"
 OTHER_SHA="0123456789abcdef0123456789abcdef01234567"

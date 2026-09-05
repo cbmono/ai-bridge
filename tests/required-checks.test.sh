@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exercises the delegated merge gate's precondition 1 — symlink/scripts/required-checks.sh.
+# Exercises the delegated merge gate's precondition 1 — plugin/scripts/required-checks.sh.
 #
 # `gh` is replaced by a stub on PATH that answers from fixture files, so the whole
 # matrix runs offline: platform-required sets, the declared-list fallback, and every
@@ -20,7 +20,7 @@
 # settles it` drives exactly that.
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/required-checks.sh"
+SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts/required-checks.sh"
 TMP="$(mktemp -d)" || {
   echo "required-checks.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT

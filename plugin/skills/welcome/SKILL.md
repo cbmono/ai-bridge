@@ -2,11 +2,11 @@
 name: welcome
 description: The AI Bridge welcome screen — banner, `check` (state that could be wrong), or `fix` (repairs the idempotent tier only). Reports facts, never rules; `fix` never writes config files and never clears a tick lock.
 argument-hint: "[check|fix]  omit for the banner"
-allowed-tools: Bash(scripts/ai-bridge.sh:*), Bash(bash scripts/ai-bridge.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
+allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
 
-Run `scripts/ai-bridge.sh $ARGUMENTS` from the instance root and **relay its output
-verbatim**. `$ARGUMENTS` is empty, `check` or `fix` — nothing else; anything else is a
+Run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh $ARGUMENTS` from the bundle root and
+**relay its output verbatim**. `$ARGUMENTS` is empty, `check` or `fix` — nothing else; anything else is a
 typo and the script will say so rather than guess.
 
 That is the whole skill. Every fact, every warning and every repair lives in the
@@ -42,7 +42,7 @@ as an autolink once, and that row's `FROM` sat two columns left of every other's
   not repair it, that is the design, not an omission for you to finish. In particular:
   never revert, stage or rewrite `instance.config.json` / `instance.config.local.json`
   (an uncommitted value there is routinely a decision somebody made minutes ago), and
-  never remove or rewrite `.tick-lock` / `.tick-lock.claim` (`scripts/tick-lock.sh
+  never remove or rewrite `.tick-lock` / `.tick-lock.claim` (`${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh
   release` is the human's override — a long tick is not a dead one).
 - **Do not turn it into a rules recital.** This skill reports facts that can be false.
   It does not remind anyone of a convention, and adding a line that reads the same on a
@@ -52,7 +52,7 @@ as an autolink once, and that row's `FROM` sat two columns left of every other's
 
 - Not an instance root at all (no `instance.config.json`)? Say which directory this is,
   name any instance directories you can see nearby, and stop — never improvise a banner.
-- An instance, but `scripts/ai-bridge.sh` is missing? It is machinery, so an instance
-  stamped before it shipped has no link to it. That is itself the fact `check` reports
-  about other files: say so, and give the repair — `bash <template>/install.sh
-  <instance-root>` — rather than improvising the checks by hand.
+- A bundle, but `${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh` is missing? That is a broken
+  plugin install, not a bundle problem — say so, and give the repair (`/plugin install
+  ai-bridge@ai-bridge`, then restart Claude Code) rather than improvising the checks by
+  hand.

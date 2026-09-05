@@ -18,7 +18,7 @@
 # The two real misfires that produced this test, while ai-bridge was still a subtree of
 # the ai-setup repo: a bare `install.sh` pattern loaded the parent repo's root-config rule
 # while editing THIS repo's `install.sh`, and a bare `.claude/hooks/**` loaded the parent
-# layer's hook conventions while editing `symlink/.claude/hooks/*`. Both were real, both
+# layer's hook conventions while editing `plugin/hooks/*`. Both were real, both
 # were invisible from reading the frontmatter, and the OFFICIAL DOCS SAY THE OPPOSITE —
 # their table claims `*.md` matches "Markdown files in the project root" and their guidance
 # advises against a leading slash. A convention that contradicts the documentation will be
@@ -38,7 +38,7 @@ ok() { # <name> <actual> <expected>
 }
 
 # Every rules file anywhere in the repo — this repo's own `.claude/rules/`, and the ones
-# that ship into instances under `symlink/.claude/rules/`.
+# that ship into instances under `seed/.claude/rules/`.
 FILES="$(find "$REPO" -type d -name .git -prune -o -type f -path '*/.claude/rules/*.md' -print | sort)"
 ok "rules files found" "$([ -n "$FILES" ] && echo yes || echo no)" yes
 

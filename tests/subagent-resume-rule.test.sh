@@ -13,7 +13,7 @@
 # make it survive:
 #
 #   1. ONE STATEMENT. The full rule — the table, the reasoning, the measurement — lives in
-#      `symlink/CONVENTIONS.md` and nowhere else. Every other file cites that heading and
+#      `seed/CONVENTIONS.md` and nowhere else. Every other file cites that heading and
 #      carries at most the ONE LINE, byte for byte. A paraphrase is how the copies drift,
 #      so a copy that is not byte-identical fails here rather than in six months.
 #   2. IT REACHES THE DISPATCHERS. A convention is held by whoever holds the dispatch, so
@@ -42,12 +42,12 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONV="$REPO/symlink/CONVENTIONS.md"
+CONV="$REPO/seed/CONVENTIONS.md"
 PM="$REPO/plugin/agents/project-manager.md"
 LOOP="$REPO/plugin/skills/dispatch/SKILL.md"
 SEED="$REPO/seed/CLAUDE.md"
 OPS="$REPO/docs/operations.md"
-LOCKSH="$REPO/symlink/scripts/tick-lock.sh"
+LOCKSH="$REPO/plugin/scripts/tick-lock.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/resume-rule.XXXXXX")" || {
   echo "subagent-resume-rule.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -102,7 +102,7 @@ ok "…exactly once"                       "$(count "$CONV" "$CANON")" 1
 # the two will disagree. Every shipped tree is scanned, not a list somebody remembers.
 copies="$(grep -rlF -- 'DISPATCH FRESH.' "$REPO/symlink" "$REPO/seed" "$REPO/docs" \
   "$REPO/README.md" "$REPO/CLAUDE.md" 2>/dev/null | sort | sed "s|^$REPO/||" | tr '\n' ' ' | sed 's/ *$//')"
-ok "…and exactly one shipped file carries the table" "$copies" "symlink/CONVENTIONS.md"
+ok "…and exactly one shipped file carries the table" "$copies" "seed/CONVENTIONS.md"
 
 echo
 echo "== 2. it reaches every dispatcher, word for word, with the citation =="

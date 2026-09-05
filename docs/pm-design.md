@@ -477,7 +477,7 @@ not a format.
 [#launcher-no-publish](#launcher-no-publish). The render's three load-bearing details:
 `--standalone` is required because a file opened straight in a browser needs the
 `<!doctype>`/`<html>`/`<head>`/`<body>` wrapper no host supplies any more; the path is
-the one `watch-board.sh` already writes and `install.sh` already gitignores, so the
+the one `watch-board.sh` already writes and `/ai-bridge:init` already gitignores, so the
 tick and the watcher refresh one board rather than two; and there is no markup flag to
 pass — the kanban page was deleted and the renderer refuses the flag that used to
 select it **by name**, so a stale command exits 2 and renders nothing rather than

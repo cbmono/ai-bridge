@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # review-clearance.test.sh — exercises precondition 2 of the delegated merge gate,
-# symlink/scripts/review-clearance.sh.
+# plugin/scripts/review-clearance.sh.
 #
 # THE THREE SHAPES, and only one of them clears:
 #
@@ -35,7 +35,7 @@
 # stub delegates to the real one unless a fixture asks it to break.
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/review-clearance.sh"
+SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts/review-clearance.sh"
 FIXTURES="$(cd "$(dirname "$0")" && pwd)/fixtures/reviewer"
 CLEAN="$FIXTURES/clean-review.pr29.md"
 REFUSAL="$FIXTURES/rate-limit-refusal.pr30.md"

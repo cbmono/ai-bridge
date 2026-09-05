@@ -53,7 +53,7 @@ The two other files here are *bodies*. This one is an **answer**: for each of 15
 records what **github.com itself** does with it, fetched from the `/markdown` endpoint by
 `record-host-rendering.sh`, which is checked in beside it.
 
-It exists because the block reader in `symlink/scripts/review-clearance.sh` models GitHub's
+It exists because the block reader in `plugin/scripts/review-clearance.sh` models GitHub's
 Markdown renderer, and for five rounds it was checked against properties of *itself* — most
 recently that one of its two readings is a subset of the other, which an intersection and a
 union satisfy by construction. **Only the thing being modelled can contradict a model.**

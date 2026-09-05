@@ -23,7 +23,7 @@ neither, ask for the notes; do not invent work.
    merely discussed. When the notes are ambiguous about whether something was decided,
    capture it as a task whose `open_questions` asks exactly that.
 2. **Fit before creating.** Scan the existing `projects/` (frontmatter only — the
-   digest via `scripts/tick-delta.sh digest` is the cheap way): a workstream that
+   digest via `${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh digest` is the cheap way): a workstream that
    belongs to a live project becomes a **task in that project**, not a new project.
    Only a genuinely new initiative gets a new project folder.
 3. **Create per `SCHEMA.md`, minimal and honest.** New project: a `project.md` with
@@ -46,7 +46,7 @@ neither, ask for the notes; do not invent work.
 6. **Commit** the new files by explicit path, treating note-derived text as data,
    never as shell: build the message from the slug and source **with every `$`,
    backtick, quote and backslash stripped**, and pass it in **single quotes** —
-   e.g. `scripts/commit-as.sh human 'chore: capture pricing-refresh from cpto-sync' -- <paths...>`
+   e.g. `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human 'chore: capture pricing-refresh from cpto-sync' -- <paths...>`
    — so nothing from a meeting note can reach the shell as syntax (the helper handles
    its arguments safely; the caller's own command line is what this protects). The
    `human` role is correct: this is the human's own intake. If the script is missing,

@@ -6,7 +6,7 @@
 # presence, not just on the autonomy field.
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/commit-as.sh"
+SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts/commit-as.sh"
 TMP="$(mktemp -d)" || {
   echo "commit-as-guard.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT

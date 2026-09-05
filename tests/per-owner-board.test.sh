@@ -44,8 +44,8 @@
 set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
-GEN="$TPL/symlink/scripts/build-board.sh"
-WRITER="$TPL/symlink/scripts/write-snapshot.sh"
+GEN="$TPL/plugin/scripts/build-board.sh"
+WRITER="$TPL/plugin/scripts/write-snapshot.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/perowner.XXXXXX")" || {
   echo "per-owner-board.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -193,7 +193,7 @@ assert "a cache was written, keyed to the SHA" \
 assert "…and it is gitignored by the seed" \
   "$(yes_if grep -qF '.board-others.json' "$TPL/seed/.gitignore")"
 assert "…and install.sh backfills that line"  \
-  "$(yes_if grep -qF '.board-others.json' "$TPL/install.sh")"
+  "$(yes_if grep -qF '.board-others.json' "$TPL/plugin/scripts/init-bundle.sh")"
 
 # The wall clock is the FALLBACK, and only for the case where there is no SHA to key on.
 # Hiding .git is the cheapest faithful version of that: `git rev-parse HEAD` fails, a

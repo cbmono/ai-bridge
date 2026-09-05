@@ -49,7 +49,7 @@ TPL="$TMP/tpl"; mkdir -p "$TPL"
   [ -n "$f" ] || continue
   mkdir -p "$TPL/$(dirname "$f")"; cp "$TPLSRC/$f" "$TPL/$f" 2>/dev/null || true
 done
-chmod +x "$TPL/install.sh" "$TPL"/symlink/scripts/*.sh 2>/dev/null || true
+chmod +x "$TPL/plugin/scripts/init-bundle.sh" "$TPL"/plugin/scripts/*.sh 2>/dev/null || true
 
 git_check_ignore() { # $1 = instance dir, $2 = path relative to it -> 0 if ignored
   ( cd "$1" && git init -q . >/dev/null 2>&1 || true; git check-ignore -q "$2" )
@@ -61,7 +61,7 @@ git_check_ignore() { # $1 = instance dir, $2 = path relative to it -> 0 if ignor
 #    wrong reason).
 # ---------------------------------------------------------------------------------
 INST="$TMP/inst"; mkdir -p "$INST"
-bash "$TPL/install.sh" "$INST" >"$TMP/out1" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out1" 2>&1
 assert "a fresh instance stamps"                    "$(yes_if test -f "$INST/instance.config.json")"
 assert "…and gets the index-ignore BEGIN marker"    "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$INST/.gitignore")"
 assert "…and the END marker"                        "$(yes_if grep -qxF '# <<< ai-bridge index ignore <<<' "$INST/.gitignore")"
@@ -78,7 +78,7 @@ assert "…and a project's index.md is ignored too"   "$(yes_if git_check_ignore
 #    right now and must never be corrected by simulating them away.
 # ---------------------------------------------------------------------------------
 LEGACY="$TMP/legacy"; mkdir -p "$LEGACY/projects/retained-example" "$LEGACY/projects/other-project"
-bash "$TPL/install.sh" "$LEGACY" >"$TMP/outL1" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$LEGACY" >"$TMP/outL1" 2>&1
 cat > "$LEGACY/.gitignore" <<'GI'
 # LOCAL EDIT: restored 2026-08-23 after an install.sh run reversed it
 .DS_Store
@@ -97,7 +97,7 @@ cat > "$LEGACY/.gitignore" <<'GI'
 GI
 cp "$LEGACY/.gitignore" "$TMP/legacy.before"
 
-bash "$TPL/install.sh" "$LEGACY" >"$TMP/outL2" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$LEGACY" >"$TMP/outL2" 2>&1
 RC=$?
 assert "install.sh exits 0 on a legacy (unmarked) instance"  "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "the legacy block gets migrated to the marker pair"   "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$LEGACY/.gitignore")"
@@ -122,15 +122,15 @@ assert "…and the negation line sits after the block's END marker" \
 #    stamp cannot distinguish "works" from "only ever worked once".
 # ---------------------------------------------------------------------------------
 INST2="$TMP/inst2"; mkdir -p "$INST2"
-bash "$TPL/install.sh" "$INST2" >"$TMP/out2a" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST2" >"$TMP/out2a" 2>&1
 before="$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST2/.gitignore")"
 
 # Mutate the TEMPLATE's install.sh between runs — a new comment sentence AND a new
 # rule line, the way a future ai-bridge PR would extend this block.
-perl -0pi -e "s/surface, changes only when the KB changes, and a fresh clone needs it present\\.\n/surface, changes only when the KB changes, and a fresh clone needs it present.\n# UPDATED WORDING for the second-stamp test.\n/" "$TPL/install.sh"
-perl -0pi -e 's{^/projects/\*/index\.md\n(GI\n)}{/projects/*/index.md\n/.a-new-derived-index.json\n$1}m' "$TPL/install.sh"
+perl -0pi -e "s/surface, changes only when the KB changes, and a fresh clone needs it present\\.\n/surface, changes only when the KB changes, and a fresh clone needs it present.\n# UPDATED WORDING for the second-stamp test.\n/" "$TPL/plugin/scripts/init-bundle.sh"
+perl -0pi -e 's{^/projects/\*/index\.md\n(GI\n)}{/projects/*/index.md\n/.a-new-derived-index.json\n$1}m' "$TPL/plugin/scripts/init-bundle.sh"
 
-bash "$TPL/install.sh" "$INST2" >"$TMP/out2b" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST2" >"$TMP/out2b" 2>&1
 after="$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST2/.gitignore")"
 
 assert "a second stamp changes the block's content at all"   "$([[ "$before" != "$after" ]] && echo 0 || echo 1)"
@@ -139,7 +139,7 @@ assert "…delivers the NEW rule line"                           "$(yes_if grep 
 assert "…and the new line is actually ignored, not just present" \
   "$(yes_if git_check_ignore "$INST2" .a-new-derived-index.json)"
 assert "…a THIRD stamp with no template change is a no-op on this block" \
-  "$(bash "$TPL/install.sh" "$INST2" >"$TMP/out2c" 2>&1; cmp -s <(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST2/.gitignore") <(printf '%s\n' "$after") && echo 0 || echo 1)"
+  "$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST2" >"$TMP/out2c" 2>&1; cmp -s <(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST2/.gitignore") <(printf '%s\n' "$after") && echo 0 || echo 1)"
 
 # ---------------------------------------------------------------------------------
 # 4. A line that merely RESEMBLES the marker must not be mistaken for it (would
@@ -148,7 +148,7 @@ assert "…a THIRD stamp with no template change is a no-op on this block" \
 #    migrated) — and must not itself be corrupted.
 # ---------------------------------------------------------------------------------
 INST3="$TMP/inst3"; mkdir -p "$INST3/projects/demo"
-bash "$TPL/install.sh" "$INST3" >"$TMP/out3a" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST3" >"$TMP/out3a" 2>&1
 # Strip the real block back out (so the file has NO real marker pair)…
 awk '/# >>> ai-bridge index ignore >>>/{skip=1} /# <<< ai-bridge index ignore <<</{skip=0; next} !skip' \
   "$INST3/.gitignore" > "$INST3/.gitignore.tmp" && mv "$INST3/.gitignore.tmp" "$INST3/.gitignore"
@@ -158,7 +158,7 @@ printf '\n/index.md\n/projects/*/index.md\n' >> "$INST3/.gitignore"
 printf '# a note that mentions "# >>> ai-bridge index ignore >>>" for documentation, not a real marker\n' >> "$INST3/.gitignore"
 cp "$INST3/.gitignore" "$TMP/inst3.before"
 
-bash "$TPL/install.sh" "$INST3" >"$TMP/out3b" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST3" >"$TMP/out3b" 2>&1
 assert "a decoy resembling the marker does not block migration" \
   "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$INST3/.gitignore")"
 assert "…root index.md is ignored after migrating past the decoy" \
@@ -172,7 +172,7 @@ assert "…the decoy line itself survives untouched"  \
 #    FIRST end marker, not swallow everything up to whichever one comes last.
 # ---------------------------------------------------------------------------------
 INST4="$TMP/inst4"; mkdir -p "$INST4"
-bash "$TPL/install.sh" "$INST4" >"$TMP/out4a" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST4" >"$TMP/out4a" 2>&1
 {
   printf '\n# a later, unrelated section quoting the same text a second time:\n'
   printf '# <<< ai-bridge index ignore <<<\n'
@@ -180,7 +180,7 @@ bash "$TPL/install.sh" "$INST4" >"$TMP/out4a" 2>&1
 } >> "$INST4/.gitignore"
 cp "$INST4/.gitignore" "$TMP/inst4.before"
 
-bash "$TPL/install.sh" "$INST4" >"$TMP/out4b" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST4" >"$TMP/out4b" 2>&1
 between_markers="$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST4/.gitignore" | head -1)"
 assert "the block still closes at its OWN (first) END marker" \
   "$([[ -n "$between_markers" ]] && echo 0 || echo 1)"
@@ -201,7 +201,7 @@ assert "…and the unrelated comment line above it survives untouched" \
 #    that the run reports the problem.
 # ---------------------------------------------------------------------------------
 INST5="$TMP/inst5"; mkdir -p "$INST5"
-bash "$TPL/install.sh" "$INST5" >"$TMP/out5a" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST5" >"$TMP/out5a" 2>&1
 # Append a distinctive trailer AFTER the natural stamp — deliberately, so there is real
 # content sitting after the block regardless of where a fresh stamp happens to place it
 # (a bare "the block was already the last thing in the file" fixture would let a
@@ -220,7 +220,7 @@ assert "…and the trailer really does sit AFTER the dangling BEGIN (sanity chec
   "$([[ "$(grep -nxF '# >>> ai-bridge index ignore >>>' "$INST5/.gitignore" | cut -d: -f1)" \
         -lt "$(grep -nxF '/some/trailer/rule' "$INST5/.gitignore" | cut -d: -f1)" ]] && echo 0 || echo 1)"
 
-err5="$(bash "$TPL/install.sh" "$INST5" 2>&1 1>/dev/null)"
+err5="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST5" 2>&1 1>/dev/null)"
 rc5=$?
 assert "install.sh still exits 0 on a BEGIN-without-END .gitignore" \
   "$([[ $rc5 -eq 0 ]] && echo 0 || echo 1)"
@@ -244,7 +244,7 @@ assert "…and the run reports the malformed marker pair" \
 #    the bug. Assert with `git check-ignore`, not by grepping for the pattern.
 # ---------------------------------------------------------------------------------
 INST6="$TMP/inst6"; mkdir -p "$INST6/projects/retained-example" "$INST6/projects/other-project"
-bash "$TPL/install.sh" "$INST6" >"$TMP/out6a" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST6" >"$TMP/out6a" 2>&1
 cat > "$INST6/.gitignore" <<'GI'
 .DS_Store
 
@@ -263,7 +263,7 @@ cat > "$INST6/.gitignore" <<'GI'
 /.board-live/
 GI
 
-bash "$TPL/install.sh" "$INST6" >"$TMP/out6b" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST6" >"$TMP/out6b" 2>&1
 assert "install.sh exits 0 with an earlier unrelated /index.md line present" \
   "$([[ $? -eq 0 ]] && echo 0 || echo 1)"
 assert "the REAL index-ignore pair is migrated to the marker pair (not the decoy)" \

@@ -36,8 +36,8 @@
 # `.claude/control/` absent ⇒ this hook is a strict no-op: no read, no write, no
 # output, exit 0. That is the `AUTONOMY.md` idiom — a deployment that never arms
 # the control surface has the capability off with no edits anywhere. Note the
-# directory is RUNTIME STATE created by `scripts/control.sh`, not a file under
-# `symlink/`: machinery is re-linked unconditionally on every install, so a
+# directory is RUNTIME STATE created by `control.sh`, not a file the stamp
+# writes: seed content is copied unconditionally where absent, so a
 # deletable capability built out of a machinery file comes back by itself.
 # `SNAPSHOT.json` and `AWAITING.md` are the same shape for the same reason.
 #

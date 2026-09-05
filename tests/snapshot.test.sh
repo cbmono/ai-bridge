@@ -50,9 +50,9 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
-WRITER="$TPL/symlink/scripts/write-snapshot.sh"
-BOARD="$TPL/symlink/scripts/build-board.sh"
-BRIDGE_INSTALL="$TPL/install.sh"
+WRITER="$TPL/plugin/scripts/write-snapshot.sh"
+BOARD="$TPL/plugin/scripts/build-board.sh"
+BRIDGE_INSTALL="$TPL/plugin/scripts/init-bundle.sh"
 for f in "$WRITER" "$BOARD" "$BRIDGE_INSTALL"; do
   [[ -f "$f" ]] || { echo "snapshot.test: missing $f" >&2; exit 2; }
 done
@@ -87,7 +87,7 @@ trap 'rm -rf "$TMP"' EXIT
 # tests/derived-indexes.test.sh, verbatim: a one-time, filesystem-level copy of THIS
 # checkout into a directory outside any git repository at all, where the guard's own
 # test (`--git-dir` vs `--git-common-dir`) cannot fire for lack of a repository to ask
-# about. Skipped entirely — $BRIDGE_INSTALL stays $TPL/install.sh — when $TPL is already
+# about. Skipped entirely — $BRIDGE_INSTALL stays $TPL/plugin/scripts/init-bundle.sh — when $TPL is already
 # a main tree or no git repo at all, so a plain clone pays nothing extra here.
 if command -v git >/dev/null 2>&1; then
   _tpl_gd="$(git -C "$TPL" rev-parse --absolute-git-dir 2>/dev/null || true)"
@@ -114,7 +114,7 @@ if command -v git >/dev/null 2>&1; then
     mkdir -p "$INSTALL_SRC"
     cp -R "$TPL"/. "$INSTALL_SRC"/
     rm -rf "$INSTALL_SRC/.git"
-    BRIDGE_INSTALL="$INSTALL_SRC/install.sh"
+    BRIDGE_INSTALL="$INSTALL_SRC/plugin/scripts/init-bundle.sh"
   fi
 fi
 
@@ -1155,7 +1155,7 @@ assert "…including the fragments after its commas" \
 # SCHEMA.md edit that changes the shape of the documented form fails here rather than
 # leaving this fixture quietly testing a form nothing documents.
 doc_comment() { sed -n 's/^deliverable_paths:[^#]*#/#/p' "$1" | head -1; }
-SCHEMA_DP_COMMENT="$(doc_comment "$TPL/symlink/SCHEMA.md")"
+SCHEMA_DP_COMMENT="$(doc_comment "$TPL/seed/SCHEMA.md")"
 # Non-emptiness first, or the comparison below passes on two empty strings the day
 # SCHEMA.md's documented form loses its comment — which is the same failure this whole
 # assertion exists to catch, arriving from the other side.
@@ -1802,7 +1802,7 @@ kind: build
 status: active
 ---
 PRJ
-( cd "$INST" && bash "$TPL/symlink/scripts/write-snapshot.sh" --quiet ) || true
+( cd "$INST" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet ) || true
 assert "the writer never resurrects a deleted snapshot" "$(yes_if test ! -e "$INST/SNAPSHOT.json")"
 OFFBOARD="$( cd "$TMP" && bash "$BOARD" --out "$TMP/off.html" "$INST" 2>&1 )"
 assert "…and that instance is off the board"           "$(has 'no SNAPSHOT.json (off the board)' "$OFFBOARD")"

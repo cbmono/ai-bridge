@@ -58,7 +58,7 @@ make_tpl() { # <dir>
     [ -n "$f" ] || continue
     mkdir -p "$d/$(dirname "$f")"; cp "$REPO/$f" "$d/$f" 2>/dev/null || true
   done
-  chmod +x "$d/install.sh" "$d"/symlink/scripts/*.sh 2>/dev/null || true
+  chmod +x "$d/plugin/scripts/init-bundle.sh" "$d"/plugin/scripts/*.sh 2>/dev/null || true
 }
 TPL="$TMP/tpl"; make_tpl "$TPL"
 
@@ -92,7 +92,7 @@ y
 # =========================================================================== #
 echo "-- 1. a non-TTY first stamp: no prompt, and it still succeeds"
 I="$(newinst 1)"
-printf '%s' "$ANSWER" | bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "exits 0"                              "$?" 0
 ok "nothing was asked"                    "$(asked)" no
 ok "…it says why"                          "$(said 'stdin is not a terminal')" yes
@@ -101,13 +101,16 @@ ok "the config is byte-identical to the seed" "$(same_as_seed "$I")" yes
 ok "…so the placeholder roster survives"   "$(said 'nothing was asked')" yes
 ok "no identity in instance.config.local.json" "$(no_identity "$I")" yes
 ok "…though step 4c seeded this machine's tiers" "$(yn grep -q '"roleTiers"' "$I/instance.config.local.json")" yes
-ok "the instance is otherwise stamped"     "$(yn test -L "$I/SCHEMA.md")" yes
-ok "…machinery and all"                    "$(yn test -L "$I/scripts/commit-as.sh")" yes
+# A STAMP DELIVERS SEED CONTENT AND NO LINK (task-013). Both halves, so the change cannot
+# be read as a loss: the document arrived, and it arrived as the bundle's own file.
+ok "the bundle is otherwise stamped"       "$(yn test -f "$I/SCHEMA.md")" yes
+ok "…as a real file, not a link"           "$(yn test -L "$I/SCHEMA.md")" no
+ok "…and no machinery came with it"        "$(yn test -e "$I/scripts")" no
 
 # =========================================================================== #
 echo "-- 2. the positive path: one batched answer, at (a simulated) terminal"
 I="$(newinst 2)"
-printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "exits 0"                              "$?" 0
 ok "it asked"                             "$(asked)" yes
 ok "…and says what it wrote"              "$(said 'wrote instance.config.json')" yes
@@ -125,7 +128,7 @@ ok "…and it parses too"                   "$(yn jq -e . "$I/instance.config.lo
 ok "…and is gitignored"                   "$(yn grep -qxF 'instance.config.local.json' "$I/.gitignore")" yes
 # The property that matters is not the file's text but that the REAL consumer reads it.
 # task-owner.sh resolves "who is this clone?" from exactly these two files.
-ok "task-owner.sh --self resolves it"     "$( cd "$I" && bash scripts/task-owner.sh --self 2>&1 | head -1 )" \
+ok "task-owner.sh --self resolves it"     "$( cd "$I" && bash "$TPL/plugin/scripts/task-owner.sh" --self 2>&1 | head -1 )" \
                                           "self: example-user-007 (from instance.config.local.json)"
 # commit-as.sh looks the address up in `people` via that login, with its own awk parser —
 # a shape it cannot read would strand every agent commit.
@@ -138,20 +141,20 @@ ok "commit-as.sh can read the address"    "$( cd "$I" && awk -v who='"example-us
 # A one-person roster is the trailing-comma case: the last entry must have none.
 I="$(newinst 3)"
 printf 'example-user-007 example-user-007@example.com\n\ny\n' \
-  | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+  | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "a one-person roster parses"           "$(yn jq -e . "$I/instance.config.json")" yes
 ok "…and holds exactly one person"        "$(jq -r '.people | length' "$I/instance.config.json")" 1
 
 # =========================================================================== #
 echo "-- 3. a refresh never prompts (upgrade.sh calls this on every run)"
 BEFORE="$(cat "$I/instance.config.json")"
-printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "the second stamp exits 0"             "$?" 0
 ok "…asks nothing"                        "$(asked)" no
 ok "…and changes not one byte"            "$([ "$(cat "$I/instance.config.json")" = "$BEFORE" ] && echo yes || echo no)" yes
 # The same run through upgrade.sh, which is the flow an unguarded prompt would block: it
 # is non-interactive, and it calls install.sh with stdin wherever it happens to point.
-printf '%s' "$ANSWER" | bash "$TPL/upgrade.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | bash "$TPL/plugin/scripts/refresh-seeds.sh" "$I" >"$TMP/out" 2>&1
 ok "upgrade.sh asks nothing"              "$(asked)" no
 ok "…and the config is still untouched"   "$([ "$(cat "$I/instance.config.json")" = "$BEFORE" ] && echo yes || echo no)" yes
 # FIRST_STAMP has to be asserted on an instance that still carries the PLACEHOLDER: a
@@ -160,9 +163,9 @@ ok "…and the config is still untouched"   "$([ "$(cat "$I/instance.config.json
 # stamp was non-interactive (roster skipped, placeholder intact), so guard 1 is the only
 # thing standing between a refresh and a prompt.
 I="$(newinst 19)"
-printf '%s' "$ANSWER" | bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "a skipped roster stays the placeholder" "$(same_as_seed "$I")" yes
-printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "refreshing it still asks nothing"     "$(asked)" no
 ok "…and writes nothing"                  "$(same_as_seed "$I")" yes
 ok "…and no identity into the local file"  "$(no_identity "$I")" yes
@@ -177,7 +180,7 @@ sed 's/"defaultOwner": null,/"defaultOwner": "example-user-008",/' \
   "$T2/seed/instance.config.json" > "$T2/seed/instance.config.json.new"
 mv "$T2/seed/instance.config.json.new" "$T2/seed/instance.config.json"
 I="$(newinst 4)"
-printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$T2/install.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$T2/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "an existing defaultOwner: exits 0"    "$?" 0
 ok "…nothing is asked"                    "$(asked)" no
 ok "…it says the roster is left alone"    "$(said 'already set')" yes
@@ -191,7 +194,7 @@ sed 's/"example-user-007": "example-user-007@example.com",/"example-user-007": "
   "$T3/seed/instance.config.json" > "$T3/seed/instance.config.json.new"
 mv "$T3/seed/instance.config.json.new" "$T3/seed/instance.config.json"
 I="$(newinst 5)"
-printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$T3/install.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$T3/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "an existing people entry: exits 0"    "$?" 0
 ok "…nothing is asked"                    "$(asked)" no
 ok "…and the entry is untouched"          "$(jq -r '.people."example-user-007"' "$I/instance.config.json")" billing@example.com
@@ -199,7 +202,7 @@ ok "…and the entry is untouched"          "$(jq -r '.people."example-user-007"
 # the tracked half is still collected, since the two are separate decisions.
 I="$(newinst 6)"
 printf '{ "ownerGithubUser": "example-user-008" }\n' > "$I/instance.config.local.json"
-printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "an existing local file is kept"       "$(jq -r '.ownerGithubUser' "$I/instance.config.local.json")" example-user-008
 ok "…and it says so"                      "$(said "keep  instance.config.local.json")" yes
 ok "…while the tracked half is written"   "$(owner "$I")" example-user-007
@@ -220,7 +223,7 @@ mkfifo "$TMP/fifo"
 # wrong reason). With job control the child gets its own process group and the default
 # disposition. Measured on bash 3.2.
 set -m
-TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/int.out" 2>"$TMP/int.err" <"$TMP/fifo" &
+TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/int.out" 2>"$TMP/int.err" <"$TMP/fifo" &
 INT_PID=$!
 set +m
 # THE BOUND GOES ON THE CHILD. This installer is blocked reading a fifo nothing has written
@@ -258,7 +261,7 @@ rm -f "$TMP/fifo"
 # (b) EOF after one pair — ctrl-D, or a script whose input simply ran out.
 I="$(newinst 8)"
 printf 'example-user-007 example-user-007@example.com\n' \
-  | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+  | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "EOF mid-answer: exits 0"              "$?" 0
 ok "…it asked"                            "$(asked)" yes
 ok "…and wrote nothing"                   "$(said 'nothing written (input ended)')" yes
@@ -268,7 +271,7 @@ ok "…and no identity in the local file"   "$(no_identity "$I")" yes
 # (c) The confirmation declined. The whole reason the write is a separate step.
 I="$(newinst 9)"
 printf 'example-user-007 example-user-007@example.com\n\nn\n' \
-  | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+  | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "declined: exits 0"                    "$?" 0
 ok "…it showed what it would write"       "$(said 'About to write')" yes
 ok "…wrote nothing"                       "$(said 'nothing written (declined)')" yes
@@ -276,12 +279,12 @@ ok "…config byte-identical"               "$(same_as_seed "$I")" yes
 # Anything that is not y/yes declines — silence included.
 I="$(newinst 10)"
 printf 'example-user-007 example-user-007@example.com\n\n\n' \
-  | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+  | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "a blank confirmation declines"        "$(same_as_seed "$I")" yes
 
 # (d) An empty first line skips, which is the documented way out.
 I="$(newinst 11)"
-printf '\n' | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+printf '\n' | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "an empty list: exits 0"               "$?" 0
 ok "…wrote nothing"                       "$(said 'nothing written (declined)')" yes
 ok "…config byte-identical"               "$(same_as_seed "$I")" yes
@@ -290,26 +293,26 @@ ok "…config byte-identical"               "$(same_as_seed "$I")" yes
 # and never a value that would have to be escaped into a JSON string.
 I="$(newinst 12)"
 printf 'not a login at all\nnot a login at all\nnot a login at all\ny\n' \
-  | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+  | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "an unreadable line: exits 0"          "$?" 0
 ok "…it names the expected shape"         "$(said 'expected exactly two fields')" yes
 ok "…wrote nothing"                       "$(said 'nothing written (could not read the list)')" yes
 ok "…config byte-identical"               "$(same_as_seed "$I")" yes
 I="$(newinst 13)"
 printf 'bad"login example-user-007@example.com\nbad"login x@example.com\nbad"login x@example.com\n' \
-  | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+  | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "a quote in a login is refused"        "$(said 'is not a GitHub username')" yes
 ok "…and nothing is written"              "$(same_as_seed "$I")" yes
 ok "…the file still parses"               "$(yn jq -e . "$I/instance.config.json")" yes
 I="$(newinst 14)"
 printf 'example-user-007 not-an-address\nexample-user-007 nope\nexample-user-007 nope\n' \
-  | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+  | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "an unwritable address is refused"     "$(said 'is not an address this can write safely')" yes
 ok "…and nothing is written"              "$(same_as_seed "$I")" yes
 # A duplicate login would silently shadow itself in the map.
 I="$(newinst 15)"
 printf 'example-user-007 example-user-007@example.com\nexample-user-007 example-user-008@example.com\n' \
-  | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+  | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "a duplicate login is refused"         "$(said 'already in this roster')" yes
 ok "…and nothing is written"              "$(same_as_seed "$I")" yes
 
@@ -331,7 +334,7 @@ done
 ok "the stripped PATH still has bash+git" \
    "$(PATH="$TMP/nobin" sh -c 'command -v bash >/dev/null && command -v git >/dev/null && echo yes || echo no')" yes
 ok "…and really has no JSON parser"       "$(PATH="$TMP/nobin" sh -c 'command -v jq >/dev/null || command -v python3 >/dev/null && echo yes || echo no')" no
-printf '%s' "$ANSWER" | PATH="$TMP/nobin" TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | PATH="$TMP/nobin" TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "no verifier: exits 0"                 "$?" 0
 ok "…nothing is asked"                    "$(asked)" no
 ok "…it says a write could not be verified" "$(said 'could not be verified')" yes
@@ -343,37 +346,45 @@ echo "-- 6. --config never prompts (it has no instance at all)"
 # the same TEAM_SETUP_STDIN=1 that DO produce a prompt in instance mode (section 2) must
 # produce none here, so this cannot pass by the prompt being broken everywhere.
 D="$TMP/cfgdest"; mkdir -p "$D"
-printf '%s' "$ANSWER" | CLAUDE_CONFIG_DIR="$D" TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" --config >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | CLAUDE_CONFIG_DIR="$D" TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" --config >"$TMP/out" 2>&1
 ok "--config exits 0"                     "$?" 0
 ok "…asks nothing"                        "$(asked)" no
 ok "…and writes no instance config"       "$(yn test -e "$D/instance.config.json")" no
-printf '%s' "$ANSWER" | CLAUDE_CONFIG_DIR="$D" TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" --config --uninstall >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | CLAUDE_CONFIG_DIR="$D" TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" --config --uninstall >"$TMP/out" 2>&1
 ok "--config --uninstall asks nothing"    "$(asked)" no
 
 # =========================================================================== #
 echo "-- 7. the guards that were already here still hold"
-# The worktree guard runs before anything is written, so it must win even with a piped
-# answer waiting: a prompt answered from a temporary checkout would write a config into an
-# instance whose machinery is about to dangle.
+# THE WORKTREE GUARD IS `--config`'s ALONE NOW (task-013). It existed because a bundle
+# stamp wrote absolute symlinks into the source checkout — delete the worktree and every
+# one of them dangled. A stamp writes no such link any more, so refusing here would refuse
+# a stamp that is perfectly safe, and it was the reason every fixture in this suite had to
+# copy the template out of the checkout first. `--config` still links into
+# ${CLAUDE_CONFIG_DIR:-~/.claude} by absolute path, so for that half nothing changed.
 WM="$TMP/wtmain"; make_tpl "$WM"
 ( cd "$WM" && git init -q . && git add -A && git -c user.name=t -c user.email=t@t commit -qm init ) >/dev/null 2>&1
 git -C "$WM" worktree add -q "$TMP/wtlinked" -b wt >/dev/null 2>&1
 I="$(newinst 16)"
-printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TMP/wtlinked/install.sh" "$I" >"$TMP/out" 2>&1
-ok "from a worktree: exits 2"             "$?" 2
-ok "…asks nothing"                        "$(asked)" no
-ok "…and stamps nothing"                  "$(yn test -e "$I/instance.config.json")" no
+printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TMP/wtlinked/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
+ok "from a worktree: a bundle stamp is allowed" "$?" 0
+ok "…and it asked, like any other stamp"  "$(asked)" yes
+ok "…and it stamped"                      "$(yn test -e "$I/instance.config.json")" yes
+ok "…leaving no symlink behind"           "$([ -z "$(find "$I" -type l 2>/dev/null)" ] && echo yes || echo no)" yes
+D_WT="$TMP/dest-wt"; mkdir -p "$D_WT"
+CLAUDE_CONFIG_DIR="$D_WT" bash "$TMP/wtlinked/plugin/scripts/init-bundle.sh" --config >"$TMP/out" 2>&1
+ok "…while --config from that same worktree still exits 2" "$?" 2
+ok "…saying why"                          "$(said 'refusing to link the config layer from a git worktree')" yes
 # The bare-TARGET interface: three live instances and upgrade.sh call it that way.
 I="$(newinst 17)"
-printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1
 ok "bare TARGET still stamps"             "$(yn test -f "$I/instance.config.json")" yes
 ok "…and asks"                            "$(asked)" yes
 I="$(newinst 18)"
-printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/install.sh" --instance "$I" >"$TMP/out" 2>&1
+printf '%s' "$ANSWER" | TEAM_SETUP_STDIN=1 bash "$TPL/plugin/scripts/init-bundle.sh" --instance "$I" >"$TMP/out" 2>&1
 ok "--instance TARGET does the same"      "$(owner "$I")" example-user-007
 # --help is a line range over the header; adding the roster to that header truncates it
 # silently if the range is not extended with it.
-bash "$TPL/install.sh" --help >"$TMP/out" 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" --help >"$TMP/out" 2>&1
 ok "--help documents the roster"          "$(said 'OFFERS to collect')" yes
 ok "--help is still not truncated"        "$(said 'Backs up any conflicting real file')" yes
 

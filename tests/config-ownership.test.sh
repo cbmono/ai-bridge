@@ -107,7 +107,7 @@ tier_dirs() { # <template root>
   ( cd "$1/config" && find . -mindepth 1 -maxdepth 1 -type d -print ) | sed 's#^\./##' | sort -u
 }
 config_tiers_of() { # <template root> → install.sh's CONFIG_TIERS, one per line
-  sed -n 's/^CONFIG_TIERS="\(.*\)"$/\1/p' "$1/install.sh" | tr ' ' '\n' | grep . | sort -u
+  sed -n 's/^CONFIG_TIERS="\(.*\)"$/\1/p' "$1/plugin/scripts/init-bundle.sh" | tr ' ' '\n' | grep . | sort -u
 }
 
 # The expected set, derived from what the machinery actually probes for.
@@ -172,7 +172,7 @@ ok "the fixture's extra file is reported" \
 # not see at all, and the reason this group is not decorative. `personal` is not a name
 # either repo has ever used, which is the point: the scan must be blind to tier names.
 NEWTIER="$TMP/newtier"
-mkdir -p "$NEWTIER/config/required/agents" "$NEWTIER/config/personal/commands"
+mkdir -p "$NEWTIER/config/required/agents" "$NEWTIER/config/personal/commands" "$NEWTIER/plugin/scripts"
 cp "$REPO/config/required/agents/"*.md "$NEWTIER/config/required/agents/"
 printf 'a copy of ai-setup\n' > "$NEWTIER/config/personal/commands/grill.md"
 shipped "$NEWTIER" > "$TMP/shipped-newtier"
@@ -182,7 +182,7 @@ ok "a tier under a NEW name is reported too" \
 # The fixture writes its OWN CONFIG_TIERS line rather than copying the repo's installer, so
 # these two assertions stay meaningful no matter what the real one says — a non-vacuity
 # check that moves with the thing it is checking is not one.
-printf 'CONFIG_TIERS="required"\n' > "$NEWTIER/install.sh"
+printf 'CONFIG_TIERS="required"\n' > "$NEWTIER/plugin/scripts/init-bundle.sh"
 ok "…and the tier-dir pin reports the new dir" \
    "$(comm -3 <(tier_dirs "$NEWTIER") <(config_tiers_of "$NEWTIER") | tr -d '\t' | tr '\n' ' ' | sed 's/ *$//')" "personal"
 # The one loophole worth closing explicitly: an author who adds the tier AND updates
@@ -190,7 +190,7 @@ ok "…and the tier-dir pin reports the new dir" \
 # is what still fires — which is why it is a separate assertion and not folded into the
 # comm above. Reproduced here as the reviewer's exact repro: CONFIG_TIERS="required
 # personal" plus a re-forked commands/grill.md under it.
-printf 'CONFIG_TIERS="required personal"\n' > "$NEWTIER/install.sh"
+printf 'CONFIG_TIERS="required personal"\n' > "$NEWTIER/plugin/scripts/init-bundle.sh"
 ok "…a matching install.sh silences only the dir pin" \
    "$(comm -3 <(tier_dirs "$NEWTIER") <(config_tiers_of "$NEWTIER") | tr -d '\t' | tr '\n' ' ' | sed 's/ *$//')" ""
 ok "…and the one-tier pin still names it" \
@@ -229,7 +229,7 @@ echo "-- the decision is written down where the next reader looks"
 DOC="$REPO/docs/claude-config-ownership.md"
 ok "the ownership doc exists"            "$(yn test -f "$DOC")" yes
 ok "…it names the repo that owns ~/.claude" "$(grep -qF 'cbmono/ai-setup' "$DOC" && echo yes || echo no)" yes
-ok "…and install.sh points at it"        "$(grep -qF 'docs/claude-config-ownership.md' "$REPO/install.sh" && echo yes || echo no)" yes
+ok "…and install.sh points at it"        "$(grep -qF 'docs/claude-config-ownership.md' "$REPO/plugin/scripts/init-bundle.sh" && echo yes || echo no)" yes
 ok "…and so does the README"             "$(grep -qF 'claude-config-ownership' "$REPO/README.md" && echo yes || echo no)" yes
 
 # =========================================================================== #
@@ -239,7 +239,7 @@ echo "-- cross-repo: the two installable sets overlap only where sanctioned"
 AS=""
 for cand in "${AI_SETUP_DIR:-}" "$REPO/../ai-setup" "$HOME/workspace/ai-setup"; do
   [ -n "$cand" ] || continue
-  if [ -d "$cand/.claude" ] && [ -f "$cand/install.sh" ]; then AS="$(cd "$cand" && pwd)"; break; fi
+  if [ -d "$cand/.claude" ] && [ -f "$cand/plugin/scripts/init-bundle.sh" ]; then AS="$(cd "$cand" && pwd)"; break; fi
 done
 if [ -z "$AS" ]; then
   echo "  SKIP: no ai-setup checkout found (set AI_SETUP_DIR to enable this group)"
@@ -298,7 +298,7 @@ else
   #
   # THE INVARIANT: every root in `CONFIG_MANAGED_TOPS` — the roots this layer's sweep
   # retires links under — is either still shipped HERE, or installed by ai-setup.
-  MTOPS="$(sed -n 's/^CONFIG_MANAGED_TOPS="\(.*\)"$/\1/p' "$REPO/install.sh")"
+  MTOPS="$(sed -n 's/^CONFIG_MANAGED_TOPS="\(.*\)"$/\1/p' "$REPO/plugin/scripts/init-bundle.sh")"
   ok "this layer's managed-root list was found" "$([ -n "$MTOPS" ] && echo yes || echo no)" yes
 
   # ai-setup's EXCLUDE means "the generic link loop skips this". It does NOT mean "this is

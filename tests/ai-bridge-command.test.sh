@@ -38,8 +38,8 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
-SH="$TPL/symlink/scripts/ai-bridge.sh"
-BANNER="$TPL/symlink/.claude/hooks/session-banner.sh"
+SH="$TPL/plugin/scripts/ai-bridge.sh"
+BANNER="$TPL/plugin/hooks/session-banner.sh"
 CMD="$TPL/plugin/skills/welcome/SKILL.md"
 [ -f "$SH" ] || { echo "ai-bridge-command.test: missing $SH" >&2; exit 2; }
 
@@ -92,7 +92,7 @@ mkinstance() {
 # carries no `.git`, so that row reports "not a git checkout" and reaches nothing.
 SRC="$TMP/tplcopy"; mkdir -p "$SRC"
 ( cd "$TPL" && tar cf - --exclude .git . ) | ( cd "$SRC" && tar xf - )
-[ -f "$SRC/install.sh" ] || { echo "ai-bridge-command.test: the template copy is missing install.sh" >&2; exit 2; }
+[ -f "$SRC/plugin/scripts/init-bundle.sh" ] || { echo "ai-bridge-command.test: the template copy is missing install.sh" >&2; exit 2; }
 
 # =======================================================================================
 echo "== 1. the bare form INVOKES the banner — it does not reproduce it =="
@@ -159,42 +159,52 @@ done
 n_rows="$(bash "$SH" check --list | grep -c .)"
 n_lines="$(printf '%s\n' "$OUT" | grep -cE '^(⚠|✓)')"
 ok "every row reported a verdict line"                     "$([ "$n_lines" -ge "$n_rows" ] && echo yes || echo no)" yes
-ok "…including the 'nothing to stamp' one"                 "$(printf '%s\n' "$OUT" | grep -c 'nothing to stamp' | tr -d ' ')" 0
-# INST1 is not stamped at all, so the unstamped check must FIRE — the other direction.
-ok "an unstamped instance is reported as such"             "$(printf '%s\n' "$OUT" | grep -c 'are NOT linked in this instance' | tr -d ' ')" 1
-ok "…with the stamp command, which is the repair"          "$(printf '%s\n' "$OUT" | grep -c 'install.sh' | tr -d ' ')" 1
+ok "…including the 'nothing to convert' one"               "$(printf '%s\n' "$OUT" | grep -c 'no symlinks outside repos/' | tr -d ' ')" 1
+# THE QUESTION INVERTED WITH THE DESIGN (task-013). It used to be "which of the template's
+# symlink/ files are NOT linked here", because a stamp was how a new machinery file reached
+# a bundle. A bundle carries no machinery now, so the row asks the opposite: is anything
+# STILL linked? A live link is as wrong as a dead one — it resolves into a checkout no
+# plugin update ever reaches — so a fixture with one machinery symlink must FIRE the row.
+INSTL="$TMP/inst-legacy"; mkinstance "$INSTL"
+mkdir -p "$INSTL/scripts"
+ln -s "$SRC/plugin/scripts/commit-as.sh" "$INSTL/scripts/commit-as.sh"
+OUTL="$(bash "$SH" check --instance "$INSTL" --template "$SRC" 2>&1)"
+ok "an unconverted bundle is reported as such"             "$(printf '%s\n' "$OUTL" | grep -c 'has not been converted' | tr -d ' ')" 1
+ok "…naming the link it found"                             "$(printf '%s\n' "$OUTL" | grep -c 'scripts/commit-as.sh' | tr -d ' ')" 1
+ok "…with the repair, which is /ai-bridge:init"            "$(printf '%s\n' "$OUTL" | grep -c '/ai-bridge:init' | tr -d ' ')" 1
 
-# The literal post-merge form, and its EMPTY answer. `git diff --name-status <old>..<new>
-# -- symlink/ | grep '^A'` is what a human runs after a merge; `--since` runs exactly that,
-# and "this range added nothing" is a reported answer, not silence.
+# `--since` IS ACCEPTED AND IGNORED, and that is asserted rather than left to be
+# discovered. It asked the retired `unstamped-machinery` row for the literal post-merge
+# form — which `symlink/` files a template range ADDED, because only a stamp delivered a
+# new machinery file. A bundle has no machinery, so the question has no answer to give.
+# The flag stays parsed for one version so a saved command line does not become a fatal
+# "unknown argument"; both halves are pinned so neither can regress silently.
 RTPL="$TMP/rangetpl"
-mkdir -p "$RTPL/symlink/scripts"
-printf 'old\n' > "$RTPL/symlink/scripts/one.sh"
+mkdir -p "$RTPL/plugin/scripts"
+printf '0.0.1\n' > "$RTPL/VERSION"
+printf 'old\n' > "$RTPL/plugin/scripts/one.sh"
 GIT -C "$RTPL" init -q 2>/dev/null || GIT init -q "$RTPL"
 GIT -C "$RTPL" add -A; GIT -C "$RTPL" commit -qm base
 base="$(GIT -C "$RTPL" rev-parse HEAD)"
-printf 'edited\n' > "$RTPL/symlink/scripts/one.sh"
-GIT -C "$RTPL" commit -qam "edit an already-linked file"
-edited="$(GIT -C "$RTPL" rev-parse HEAD)"
-S1="$(bash "$SH" check --instance "$INST1" --template "$RTPL" --since "$base" 2>&1)"
-ok "--since over an edit-only range REPORTS that it added nothing" \
-  "$(printf '%s\n' "$S1" | grep -c 'added no symlink/ files' | tr -d ' ')" 1
-printf 'brand new\n' > "$RTPL/symlink/scripts/two.sh"
-GIT -C "$RTPL" add -A; GIT -C "$RTPL" commit -qm "add a new file"
-S2="$(bash "$SH" check --instance "$INST1" --template "$edited" 2>/dev/null; \
-      bash "$SH" check --instance "$INST1" --template "$RTPL" --since "$base" 2>&1)"
-ok "…and names the added file when the range has one" \
-  "$(printf '%s\n' "$S2" | grep -c 'symlink/scripts/two.sh' | tr -d ' ')" 1
-ok "…while the edited file is NOT reported as added (that is the whole distinction)" \
-  "$(printf '%s\n' "$S2" | grep -c '^      A.*one\.sh' | tr -d ' ')" 0
-# AN UNASKED QUESTION IS ALSO A FACT. $RTPL ships no check-template-version.sh, so the
-# VERSION half of the template row cannot be answered — and staying silent about that would
-# let a level commit graph print a clean row while half the question went unasked. Raised in
-# review on this branch.
+srrc=0
+S1="$(bash "$SH" check --instance "$INST1" --template "$RTPL" --since "$base" 2>&1)" || srrc=$?
+ok "--since is still accepted (exit 0, not 'unknown argument')" "$srrc" 0
+ok "…and says nothing about a range any more"              "$(printf '%s\n' "$S1" | grep -c 'added no symlink' | tr -d ' ')" 0
+
+# AN UNASKED QUESTION IS ALSO A FACT. A plugin whose `scripts/` is missing
+# `check-template-version.sh` cannot answer the VERSION half of the template row, and
+# staying silent about that would let a level commit graph print a clean row while half the
+# question went unasked. The helper is resolved BESIDE this script now (the plugin ships
+# its own), so the fixture is a plugin directory with the helper removed.
+NOVER="$TMP/nover/plugin"
+mkdir -p "$NOVER/scripts"; printf '0.0.1\n' > "$TMP/nover/VERSION"
+cp "$TPL/plugin/scripts/"*.sh "$NOVER/scripts/"
+rm -f "$NOVER/scripts/check-template-version.sh"
+SNV="$(bash "$NOVER/scripts/ai-bridge.sh" check --instance "$INST1" --template "$RTPL" 2>&1)"
 ok "an unavailable version checker is REPORTED, not skipped" \
-  "$(printf '%s\n' "$S1" | grep -c 'cannot compare VERSION drift' | tr -d ' ')" 1
+  "$(printf '%s\n' "$SNV" | grep -c 'cannot compare VERSION drift' | tr -d ' ')" 1
 ok "…as a fact, not a warning (it never reaches the banner)" \
-  "$(printf '%s\n' "$S1" | grep -c '^⚠.*cannot compare VERSION drift' | tr -d ' ')" 0
+  "$(printf '%s\n' "$SNV" | grep -c '^⚠.*cannot compare VERSION drift' | tr -d ' ')" 0
 
 # =======================================================================================
 echo "== 3. ONE list: check and fix cannot drift apart =="
@@ -255,6 +265,11 @@ json.dump(cfg, open(p, "w"), indent=2)
 PY
 rm -f "$INST2/instance.config.json.bak"
 printf '{\n  "ownerGithubUser": "example-user-007"\n}\n' > "$INST2/instance.config.local.json"
+# ONE MACHINERY LINK, so the idempotent row has something to repair. Without it `fix`
+# correctly does nothing at all, and "fix left the config alone" would be satisfied by a
+# run that could not act — the exact vacuity the assertions below exist to refuse.
+mkdir -p "$INST2/scripts"
+ln -s "$SRC/plugin/scripts/commit-as.sh" "$INST2/scripts/commit-as.sh"
 
 cfg_before="$(sha "$INST2/instance.config.json")"
 head_before="$(GIT -C "$INST2" rev-parse HEAD)"
@@ -281,7 +296,7 @@ ok "fix reported it"                                       "$(printf '%s\n' "$FI
 # that could not act at all — which is exactly how this section passed on a machine where
 # install.sh refused the template and failed on CI, where it did not.
 ok "…in a run that DID act on the idempotent tier (not a vacuous non-action)" \
-  "$(printf '%s\n' "$FIX2" | grep -c 'running: bash .*install.sh' | tr -d ' ')" 1
+  "$(printf '%s\n' "$FIX2" | grep -c 'running: bash .*init-bundle.sh' | tr -d ' ')" 1
 # Under the row it belongs to, not merely somewhere in the output: awk takes the lines
 # between this row's header and the next one. A bare count would pass with the refusal
 # attached to the wrong check, which is the confusion the tiers exist to prevent.
@@ -319,11 +334,14 @@ echo "== 5. SHIP-BLOCKER: fix never clears a tick lock, not even a stale one =="
 # legitimately run long, so "stale" is a threshold and not a death certificate — clearing
 # one on that evidence is the double-dispatch this machinery exists to prevent.
 INST3="$TMP/inst3"; mkinstance "$INST3"
-cp "$TPL/symlink/scripts/tick-lock.sh" "$INST3/scripts/tick-lock.sh"
+cp "$TPL/plugin/scripts/tick-lock.sh" "$INST3/scripts/tick-lock.sh"
 old="$(date -u -r $(( $(date +%s) - 7200 )) +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
        || date -u -d '-2 hours' +%Y-%m-%dT%H:%M:%SZ)"
 printf 'timestamp: %s\nagent: project-manager\n' "$old" > "$INST3/.tick-lock"
 printf 'timestamp: %s\nagent: project-manager\n' "$old" > "$INST3/.tick-lock.claim"
+# Same non-vacuity guard as §4: one machinery link, so `fix` really acts on the idempotent
+# tier in the same run that must leave the lock alone.
+ln -s "$SRC/plugin/scripts/commit-as.sh" "$INST3/scripts/commit-as.sh"
 
 # The fixture is only worth anything if the machinery itself calls this lock stale — a
 # two-hour-old lock that read as fresh would make the assertions below vacuous.
@@ -341,7 +359,7 @@ FIX3="$(bash "$SH" fix --instance "$INST3" --template "$SRC" 2>&1)"
 ok "fix reported it at the human tier"                     "$(printf '%s\n' "$FIX3" | grep -c 'tick-lock \[human\]' | tr -d ' ')" 1
 # Same non-vacuity guard as §4: the lock survived a run that was acting, not one that
 # happened to be unable to act.
-ok "…in a run that DID act on the idempotent tier"         "$(printf '%s\n' "$FIX3" | grep -c 'running: bash .*install.sh' | tr -d ' ')" 1
+ok "…in a run that DID act on the idempotent tier"         "$(printf '%s\n' "$FIX3" | grep -c 'running: bash .*init-bundle.sh' | tr -d ' ')" 1
 ok ".tick-lock still exists after fix"                     "$(yn test -f "$INST3/.tick-lock")" yes
 ok "…byte-identical"                                       "$(sha "$INST3/.tick-lock")" "$lock_before"
 ok ".tick-lock.claim still exists after fix"               "$(yn test -f "$INST3/.tick-lock.claim")" yes
@@ -387,47 +405,54 @@ ok "…naming the unwired row"                               "$(printf '%s\n' "$
 echo "== 7. fix ACTS on the idempotent tier — the other direction =="
 # =======================================================================================
 # A harness that only asserted the refusals would pass a `fix` that does nothing at all.
-# This one stamps a real instance from the plain-directory template copy made at the top of
-# this file and asserts the missing links arrive.
+# This one stamps a real bundle from the plain-directory template copy made at the top of
+# this file and asserts what a stamp now delivers: SEED CONTENT, and no link anywhere.
 INST4="$TMP/inst4"; mkinstance "$INST4"
-ok "before fix: SCHEMA.md is the instance's own stub, not a link" "$(yn test -L "$INST4/SCHEMA.md")" no
-ok "before fix: no commit-as.sh"                           "$(yn test -e "$INST4/scripts/commit-as.sh")" no
+mkdir -p "$INST4/scripts"
+ln -s "$SRC/plugin/scripts/commit-as.sh" "$INST4/scripts/commit-as.sh"
+ok "before fix: no CLAUDE.md"                              "$(yn test -e "$INST4/CLAUDE.md")" no
+ok "before fix: an unconverted machinery link"             "$(yn test -L "$INST4/scripts/commit-as.sh")" yes
 FIX4="$(bash "$SH" fix --instance "$INST4" --template "$SRC" 2>&1)"
-ok "fix ran the stamp"                                     "$(printf '%s\n' "$FIX4" | grep -c 'running: bash .*install.sh' | tr -d ' ')" 1
-ok "…and the machinery arrived"                            "$(yn test -e "$INST4/scripts/commit-as.sh")" yes
-ok "…as a symlink into the template"                       "$(yn test -L "$INST4/scripts/commit-as.sh")" yes
+ok "fix ran the stamp"                                     "$(printf '%s\n' "$FIX4" | grep -c 'running: bash .*init-bundle.sh' | tr -d ' ')" 1
+ok "…and the seed content arrived"                         "$(yn test -f "$INST4/CLAUDE.md")" yes
+ok "…as a real file, never a link"                         "$(yn test -L "$INST4/CLAUDE.md")" no
+ok "…and the bundle holds no symlink outside repos/" \
+  "$([ -z "$(find "$INST4" -type l -not -path "$INST4/repos/*" 2>/dev/null)" ] && echo yes || echo no)" yes
 # IDEMPOTENT means a second run is a no-op, not a second outcome.
 snap1="$(cd "$INST4" && find . -name .git -prune -o -print | sort | sed "s|^|$(echo)|")"
 bash "$SH" fix --instance "$INST4" --template "$SRC" >/dev/null 2>&1
 snap2="$(cd "$INST4" && find . -name .git -prune -o -print | sort | sed "s|^|$(echo)|")"
+diff <(printf '%s\n' "$snap1") <(printf '%s\n' "$snap2") >&2 || true
 ok "running fix twice changes nothing the second time"     "$([ "$snap1" = "$snap2" ] && echo yes || echo no)" yes
 CHK4="$(bash "$SH" check --instance "$INST4" --template "$SRC" 2>&1)"
-ok "…and check now reports nothing left to stamp"          "$(printf '%s\n' "$CHK4" | grep -c 'nothing to stamp' | tr -d ' ')" 1
+ok "…and check now reports nothing left to convert"        "$(printf '%s\n' "$CHK4" | grep -c 'no symlinks outside repos/' | tr -d ' ')" 1
+# THE SEED HALF IS A SEPARATE ROW, AND IT IS OFF THE BANNER PATH. Every bundle edits its
+# own instance.config.json, so a row that speaks about that on every session start is
+# wallpaper — it belongs in `check`, where somebody asked for it.
+ok "…and the seed-drift row is declared banner:no" \
+  "$(bash "$SH" check --list | awk -F'\t' '$1=="seed-drift" {print $3}')" no
 
-# A COPY AT A MACHINERY PATH IS NOT STAMPED, and this is the case a presence test misses.
-# `install.sh` only ever symlinks a `symlink/` path, so a real file there is detached from
-# every future template pull while reading as present — the instance keeps calling it and
-# nothing says the template moved on. Raised in review on this branch: the check tested
-# `-e` first, so a copy counted as linked and `fix` skipped the installer forever.
-cp -f "$INST4/scripts/commit-as.sh" "$TMP/copy-of-commit-as.sh"
-rm -f "$INST4/scripts/commit-as.sh"
-cp "$TMP/copy-of-commit-as.sh" "$INST4/scripts/commit-as.sh"
-ok "the fixture really is a regular file, not a link"      "$(yn test -L "$INST4/scripts/commit-as.sh")" no
+# A MACHINERY SYMLINK PLANTED BACK IS REPORTED, AND `fix` REMOVES IT. This is the case a
+# presence test misses in the new design: the link RESOLVES, so `-e` is true and nothing
+# is broken today — and it points into a checkout `claude plugin update` never touches, so
+# the bundle silently runs whatever that clone last pulled, forever.
+mkdir -p "$INST4/scripts"
+ln -sfn "$SRC/plugin/scripts/commit-as.sh" "$INST4/scripts/commit-as.sh"
+ok "the fixture link really does resolve"                  "$(yn test -f "$INST4/scripts/commit-as.sh")" yes
 CHK4C="$(bash "$SH" check --instance "$INST4" --template "$SRC" 2>&1)"
-ok "a COPIED machinery file is reported as not linked"     "$(printf '%s\n' "$CHK4C" | grep -c 'scripts/commit-as.sh' | tr -d ' ')" 1
-ok "…so the instance is no longer reported as fully stamped" "$(printf '%s\n' "$CHK4C" | grep -c 'nothing to stamp' | tr -d ' ')" 0
-# And the repair the row names actually repairs it: `install.sh` moves the copy aside and
-# links. A warning whose hint does not work would be worse than no warning.
+ok "a LIVE machinery link is reported"                     "$(printf '%s\n' "$CHK4C" | grep -c 'scripts/commit-as.sh' | tr -d ' ')" 1
+ok "…so the bundle is no longer reported as converted"     "$(printf '%s\n' "$CHK4C" | grep -c 'no symlinks outside repos/' | tr -d ' ')" 0
 bash "$SH" fix --instance "$INST4" --template "$SRC" >/dev/null 2>&1
-ok "…and fix relinks it"                                   "$(yn test -L "$INST4/scripts/commit-as.sh")" yes
-# A DANGLING link stays a different defect — the banner's machinery probes own it, and
-# double-reporting it here is how a banner becomes wallpaper.
-ln -sfn "$SRC/symlink/scripts/does-not-exist.sh" "$INST4/.claude/hooks/session-banner.sh"
+ok "…and fix removes it"                                   "$(yn test -e "$INST4/scripts/commit-as.sh")" no
+# A DANGLING link counts too, and that is the change: it used to be a DIFFERENT defect
+# owned by the banner's probes. One fact ("this bundle has not been converted"), one repair.
+mkdir -p "$INST4/.claude/hooks"
+ln -sfn "$SRC/plugin/scripts/does-not-exist.sh" "$INST4/.claude/hooks/session-banner.sh"
 CHK4D="$(bash "$SH" check --instance "$INST4" --template "$SRC" 2>&1)"
-ok "a DANGLING link is NOT counted as unstamped"           "$(printf '%s\n' "$CHK4D" | grep -c 'nothing to stamp' | tr -d ' ')" 1
-# Restored by hand, not by `fix`: the installer's retire-dangling sweep would REMOVE this
-# link rather than repoint it, and §8 below reads INST4 as the healthy instance.
-ln -sfn "$SRC/symlink/.claude/hooks/session-banner.sh" "$INST4/.claude/hooks/session-banner.sh"
+ok "a DANGLING link is counted too"                        "$(printf '%s\n' "$CHK4D" | grep -c 'no symlinks outside repos/' | tr -d ' ')" 0
+ok "…and is named as already dead"                         "$(printf '%s\n' "$CHK4D" | grep -c '1 already dead' | tr -d ' ')" 1
+# Removed by hand, not by `fix`: §8 below reads INST4 as the healthy bundle.
+rm -f "$INST4/.claude/hooks/session-banner.sh"
 
 # =======================================================================================
 echo "== 8. the SessionStart path: silent when clean, bounded when not =="
@@ -443,9 +468,11 @@ ok "a stamped instance adds BYTE-NOTHING to the banner"    "$(printf '%s' "$B4" 
 # here asserted "an unstamped instance speaks" about an instance that was no longer
 # unstamped — and it only ever passed where the stamp had silently refused to run.
 INST5="$TMP/inst5"; mkinstance "$INST5"
+mkdir -p "$INST5/scripts"
+ln -s "$SRC/plugin/scripts/commit-as.sh" "$INST5/scripts/commit-as.sh"
 B1="$(bash "$SH" check --only-problems --banner --instance "$INST5" --template "$SRC" 2>&1)"
-ok "an unstamped one does speak (not vacuous)"             "$([ -n "$B1" ] && echo yes || echo no)" yes
-ok "…and names the repair"                                 "$(printf '%s\n' "$B1" | grep -c 'install.sh' | tr -d ' ')" 1
+ok "an unconverted one does speak (not vacuous)"           "$([ -n "$B1" ] && echo yes || echo no)" yes
+ok "…and names the repair"                                 "$(printf '%s\n' "$B1" | grep -c '/ai-bridge:init' | tr -d ' ')" 1
 ok "…in at most 2 lines per failing check, plus a header"  "$([ "$(printf '%s\n' "$B1" | grep -c .)" -le 4 ] && echo yes || echo no)" yes
 # The rows that opted OUT of the banner must not appear there, or the banner says the same
 # thing twice — it already prints the VERSION drift line and the config FROM column.
@@ -542,8 +569,8 @@ ok "…and the unparseable sibling is named beside it" \
 echo "== 10. it ships like every other script here =="
 # =======================================================================================
 ok "ai-bridge.sh parses"                                   "$(yn bash -n "$SH")" yes
-ok "…and is 100755 in the index"                           "$(cd "$TPL" && git ls-files -s symlink/scripts/ai-bridge.sh | awk '{print $1}')" 100755
-ok "…and in HEAD"                                          "$(cd "$TPL" && git ls-tree HEAD symlink/scripts/ai-bridge.sh | awk '{print $1}')" 100755
+ok "…and is 100755 in the index"                           "$(cd "$TPL" && git ls-files -s plugin/scripts/ai-bridge.sh | awk '{print $1}')" 100755
+ok "…and in HEAD"                                          "$(cd "$TPL" && git ls-tree HEAD plugin/scripts/ai-bridge.sh | awk '{print $1}')" 100755
 ok "the welcome skill ships"                                "$(yn test -f "$CMD")" yes
 # `symlink/**` must carry no org, repo, path or channel literal — it is linked into every
 # instance, whoever owns it.

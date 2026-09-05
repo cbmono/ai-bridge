@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # record-host-rendering.sh — re-record `host-rendering.txt`, the ORACLE the block reader in
-# `symlink/scripts/review-clearance.sh` is measured against.
+# `plugin/scripts/review-clearance.sh` is measured against.
 #
 # WHY AN ORACLE AND NOT ANOTHER PROPERTY. That reader answers "which lines of this comment
 # does GitHub put on the page as MARKUP", and for five rounds it was checked against
@@ -221,7 +221,7 @@ TMPD="$(mktemp -d)"; trap 'rm -rf "$TMPD"' EXIT
 # Recorded from github.com's Markdown endpoint by `record-host-rendering.sh`, which is
 # checked in beside this file; re-run it to refresh or to verify. Every line below is the
 # HOST's answer, not this repository's — it is the only thing that can prove the block
-# reader in `symlink/scripts/review-clearance.sh` wrong, and `review-clearance.test.sh`
+# reader in `plugin/scripts/review-clearance.sh` wrong, and `review-clearance.test.sh`
 # asserts against it.
 #
 # Format, one case per block:

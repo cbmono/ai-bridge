@@ -1,19 +1,25 @@
 #!/usr/bin/env bash
 #
-# installer-worktree-guard.test.sh — `install.sh` may not run from a git worktree.
+# installer-worktree-guard.test.sh — the config layer may not be linked from a git
+# worktree, and a BUNDLE STAMP no longer cares.
 #
-# WHY. It derives its source from `dirname $0` and then creates symlinks pointing AT that
-# path — an instance's whole machinery set. A linked worktree is temporary by design —
-# ExitWorktree or `git worktree remove` deletes it — so every symlink made from one dangles
-# the moment it goes. Nothing fails at install time; the commands and hooks simply
-# disappear later, which is the worst shape a failure can take.
+# WHY THE GUARD EXISTS. `init-bundle.sh --config` derives its source from `dirname $0` and
+# then creates symlinks in ${CLAUDE_CONFIG_DIR:-~/.claude} pointing AT that path. A linked
+# worktree is temporary by design — ExitWorktree or `git worktree remove` deletes it — so
+# every symlink made from one dangles the moment it goes. Nothing fails at link time; the
+# agents simply disappear later, which is the worst shape a failure can take.
 #
-# It is not hypothetical: this project's convention is to work on a branch in a worktree,
-# so a checkout of the installer is routinely one `cd` away from the wrong answer. It was
-# recorded as a structural hazard during a plan review and went unfixed until then.
+# WHY IT NARROWED (ai-bridge-v2/task-013). The guard used to cover BOTH halves, because a
+# bundle stamp also wrote absolute symlinks into the source checkout — 37 of them, an
+# instance's whole machinery set. A bundle carries no machinery now: `/ai-bridge:init`
+# copies seed content and links only `repos/`, which points at reposRoot and never at this
+# checkout. So for that half the hazard is gone, and with it the refusal — which had a
+# cost of its own, since every role agent works in a worktree and every fixture in this
+# suite had to copy the template out of the checkout to dodge it.
 #
-# The load-bearing assertions are the two directions together. "It refuses in a worktree"
-# alone would pass a script that refuses everywhere.
+# THE LOAD-BEARING ASSERTIONS ARE THE TWO DIRECTIONS TOGETHER. "It refuses in a worktree"
+# alone would pass a script that refuses everywhere; "a stamp is allowed" alone would pass
+# one that never refuses at all. Both halves, from the SAME worktree, in this file.
 #
 # HISTORY. This file is the ai-bridge half of `ai-setup`'s test of the same name, ported
 # when ai-bridge became its own repo. The parent repo keeps the half that covers its own
@@ -31,14 +37,18 @@ ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-54s (%s)\n' "$1" "$2"; pass=$(
        else printf '  FAIL  %-54s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi; }
 
 # A fixture template carrying a copy of the installer, so the test never stamps a real
-# instance or touches the user's own workspace.
+# bundle, never writes into the user's own ~/.claude, and never touches this checkout.
+# `VERSION` is what the installer verifies its template-root derivation against, so a
+# fixture without one is not a template at all.
 make_template() { # <dir>
   local d="$1"
-  mkdir -p "$d/seed" "$d/symlink/scripts"
-  cp "$REPO/install.sh" "$d/install.sh"
+  mkdir -p "$d/seed" "$d/plugin/scripts" "$d/config/required/agents"
+  cp "$REPO/VERSION" "$d/VERSION"
+  cp "$REPO/plugin/scripts/init-bundle.sh" "$d/plugin/scripts/init-bundle.sh"
   printf '{}\n' > "$d/seed/instance.config.json"
-  printf '#!/usr/bin/env bash\nexit 0\n' > "$d/symlink/scripts/s.sh"
-  printf 'x\n' > "$d/symlink/SCHEMA.md"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$d/plugin/scripts/s.sh"
+  printf 'x\n' > "$d/seed/SCHEMA.md"
+  printf '# a probed agent\n' > "$d/config/required/agents/plan-architect.md"
 }
 
 M="$TMP/main"; make_template "$M"
@@ -46,19 +56,23 @@ M="$TMP/main"; make_template "$M"
 git -C "$M" worktree add -q "$TMP/linked" -b wt >/dev/null 2>&1
 L="$TMP/linked"
 
-run() { local src="$1" target="$2"; bash "$src/install.sh" "$target" >"$TMP/out" 2>&1; printf '%s' "$?"; }
+newdest() { local d="$TMP/dest$1"; rm -rf "$d"; mkdir -p "$d"; printf '%s' "$d"; }
+run_cfg()   { local src="$1" dest="$2"
+              CLAUDE_CONFIG_DIR="$dest" bash "$src/plugin/scripts/init-bundle.sh" --config >"$TMP/out" 2>&1
+              printf '%s' "$?"; }
+run_stamp() { local src="$1" target="$2"
+              bash "$src/plugin/scripts/init-bundle.sh" "$target" >"$TMP/out" 2>&1; printf '%s' "$?"; }
 
 # --- the main working tree must still work (the non-vacuity half) -----------
-i="$TMP/inst1"; mkdir -p "$i"
-ok "installer runs from the main tree"           "$(run "$M" "$i")" 0
-ok "…and it actually stamped the instance"       "$([ -e "$i/instance.config.json" ] && echo yes || echo no)" yes
-ok "…and linked the machinery"                   "$([ -L "$i/SCHEMA.md" ] && echo yes || echo no)" yes
+d1="$(newdest 1)"
+ok "--config runs from the main tree"            "$(run_cfg "$M" "$d1")" 0
+ok "…and it actually linked something"           "$([ -L "$d1/agents/plan-architect.md" ] && echo yes || echo no)" yes
 
 # --- a linked worktree must be refused, exit 2, before any write -----------
-i2="$TMP/inst2"; mkdir -p "$i2"
-rc="$(run "$L" "$i2")"
-ok "installer refuses from a worktree"           "$rc" 2
-ok "…says why"                                   "$(grep -qi 'refusing to install from a git worktree' "$TMP/out" && echo yes || echo no)" yes
+d2="$(newdest 2)"
+rc="$(run_cfg "$L" "$d2")"
+ok "--config refuses from a worktree"            "$rc" 2
+ok "…says why"                                   "$(grep -qi 'refusing to link the config layer from a git worktree' "$TMP/out" && echo yes || echo no)" yes
 # Compare nothing derived: mktemp hands back /var/... while git reports /private/var/...
 # on macOS, so an unresolved path grep fails on a correct message.
 ok "…tells you how to find the main tree"        "$(grep -q 'worktree list' "$TMP/out" && echo yes || echo no)" yes
@@ -66,20 +80,27 @@ ok "…tells you how to find the main tree"        "$(grep -q 'worktree list' "$
 # apart from the working tree, and a confidently wrong path to paste is worse than none.
 # Asserted so nobody "improves" the message by deriving one.
 ok "…and does not guess a checkout path"         "$(grep -qE '^Run it from.*/(install|ai-bridge)' "$TMP/out" && echo no || echo yes)" yes
-ok "…and stamped NOTHING"                        "$(find "$i2" -mindepth 1 | wc -l | tr -d ' ')" 0
+ok "…and linked NOTHING"                         "$(find "$d2" -mindepth 1 | wc -l | tr -d ' ')" 0
+
+# --- THE OTHER HALF, FROM THE SAME WORKTREE: a bundle stamp is allowed ------
+# This is the change task-013 made, asserted where the refusal it replaced lives, so the
+# two can never drift into agreeing.
+i2="$TMP/inst-wt"
+ok "a bundle stamp from that same worktree runs" "$(run_stamp "$L" "$i2")" 0
+ok "…and it stamped"                             "$([ -e "$i2/instance.config.json" ] && echo yes || echo no)" yes
+ok "…as real files, with no symlink at all"      "$([ -z "$(find "$i2" -type l 2>/dev/null)" ] && echo yes || echo no)" yes
+ok "…SCHEMA.md included"                         "$([ -f "$i2/SCHEMA.md" ] && [ ! -L "$i2/SCHEMA.md" ] && echo yes || echo no)" yes
 
 # --- a plain `git init` repo is a MAIN tree, so the guard must not fire there.
 # Every fixture in this suite is built that way; if the guard misread them, the whole
 # harness would break rather than this one assertion, so assert it explicitly.
 P="$TMP/plain"; make_template "$P"
 ( cd "$P" && git init -q . && git add -A && git -c user.name=t -c user.email=t@t commit -qm init )
-i3="$TMP/inst3"; mkdir -p "$i3"
-ok "a plain git repo is not treated as a worktree" "$(run "$P" "$i3")" 0
+ok "a plain git repo is not treated as a worktree" "$(run_cfg "$P" "$(newdest 3)")" 0
 
-# --- and outside git entirely: no repo, no guard, still installs -----------
+# --- and outside git entirely: no repo, no guard, still links -----------
 N="$TMP/nogit"; make_template "$N"
-i4="$TMP/inst4"; mkdir -p "$i4"
-rc="$(run "$N" "$i4")"
+rc="$(run_cfg "$N" "$(newdest 4)")"
 ok "outside a git repo it does not refuse"       "$([ "$rc" -ne 2 ] && echo yes || echo no)" yes
 
 # --- separate git metadata: the case the first version got wrong -----------
@@ -93,11 +114,10 @@ mkdir -p "$SG"; make_template "$S/main"
   && git -c user.name=t -c user.email=t@t commit -qm init )
 git -C "$S/main" worktree add -q "$S/wt" -b sepwt >/dev/null 2>&1
 
-i5="$TMP/inst5"; mkdir -p "$i5"
-ok "separate metadata, main tree: it stamps"     "$(run "$S/main" "$i5")" 0
-i6="$TMP/inst6"; mkdir -p "$i6"
-ok "separate metadata, worktree: it refuses"     "$(run "$S/wt" "$i6")" 2
-ok "…and stamped nothing"                        "$(find "$i6" -mindepth 1 | wc -l | tr -d ' ')" 0
+ok "separate metadata, main tree: it links"      "$(run_cfg "$S/main" "$(newdest 5)")" 0
+d6="$(newdest 6)"
+ok "separate metadata, worktree: it refuses"     "$(run_cfg "$S/wt" "$d6")" 2
+ok "…and linked nothing"                         "$(find "$d6" -mindepth 1 | wc -l | tr -d ' ')" 0
 ok "…and still names no derived path"            "$(grep -qE '^Run it from.*/(install|ai-bridge)' "$TMP/out" && echo no || echo yes)" yes
 git -C "$S/main" worktree remove --force "$S/wt" 2>/dev/null
 

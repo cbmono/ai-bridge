@@ -33,10 +33,10 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PM="$REPO/plugin/agents/project-manager.md"
 NP="$REPO/plugin/skills/new-project/SKILL.md"
-AUT="$REPO/symlink/AUTONOMY.md"
-CLEAR="$REPO/symlink/scripts/review-clearance.sh"
-ROUNDS="$REPO/symlink/scripts/review-rounds.sh"
-REQ="$REPO/symlink/scripts/required-checks.sh"
+AUT="$REPO/docs/autonomy/AUTONOMY.md"
+CLEAR="$REPO/plugin/scripts/review-clearance.sh"
+ROUNDS="$REPO/plugin/scripts/review-rounds.sh"
+REQ="$REPO/plugin/scripts/required-checks.sh"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/fallback-spend.XXXXXX")" || {
   echo "reviewer-fallback-spend.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -120,7 +120,7 @@ ok "…absent AUTONOMY.md means gated"      "$(saw "$PM_FLAT" '**`AUTONOMY.md` a
 
 # THE CAP, which this change must not spend. A "just dispatch the fallback" branch that
 # skipped review-rounds.sh would create the third round CONVENTIONS.md forbids.
-ok "the cap is counted before the spend"  "$(saw "$PM_FLAT" 'count with `scripts/review-rounds.sh` **before** dispatching')" yes
+ok "the cap is counted before the spend"  "$(saw "$PM_FLAT" 'count with `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh` **before** dispatching')" yes
 ok "…and nothing here creates a third round" "$(saw "$PM_FLAT" 'Nothing here creates a third')" yes
 
 # ============================================ 2. the scaffold surface: same policy, one-shot

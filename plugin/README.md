@@ -1,9 +1,10 @@
 # AI Bridge — the plugin
 
 The OKF control panel, delivered as a Claude Code plugin instead of a symlink farm.
-This is the AI Bridge 2.0 migration surface: skills land here one by one, reading and
-writing the **same bundles** (`projects/`, `knowledge/`, `instance.config.json`) the
-existing machinery uses — nothing about a bundle moves.
+Skills, agents, hooks **and the machinery itself** ship here, reading and writing bundles
+(`projects/`, `knowledge/`, `instance.config.json`) that hold data and nothing else. A
+bundle carries no machinery and no link into any checkout: `/ai-bridge:init` stamps one,
+and converts one stamped by the retired `install.sh`.
 
 ## Install
 
@@ -23,7 +24,8 @@ Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplace
 | `/work <task>` | Work one `ready` task in the current session — the solo alternative to a background dispatch, leaving the same record (worktree/branch on the task, PR in `pr:`, `in-review` at the end). The gates still hold: no merging, review still independent. |
 | `/dispatch [gap]` | The gated background loop. During the migration it delegates to the bundle's proven `/pm-loop` contract verbatim — no second implementation to drift. |
 | `/handoff <path> <login>` | Ownership transfer with the context that makes it real: `owner:` set, a dated handoff note, and a paste-ready summary (open questions, PRs, linked Findings) for the new owner. Dispatch-gating only — never a promotion. |
-| `/welcome` | The welcome screen: instance, owner, config layers, tier→model routing, board path, what awaits you. Relays the bundle's renderer verbatim. |
+| `/welcome` | The welcome screen: bundle, owner, config layers, tier→model routing, board path, what awaits you. `check` reports state that could be wrong; `fix` repairs only the idempotent tier. |
+| `/init <dir>` | Create a bundle, refresh one, or convert one stamped by the retired `install.sh` — data only, and the only symlinks it leaves are under `repos/`. |
 
 Both also answer to their namespaced forms (`/ai-bridge:brief-me`, `/ai-bridge:capture`).
 **`ai-bridge-v2` was the transition name** — it ships for one more version as a
@@ -47,17 +49,25 @@ guarantee that depends on someone remembering to run it is not a guarantee.
 | Hook | What it does |
 |---|---|
 | `hooks/deny-destructive.sh` | The destructive-action deny baseline. Refuses `terraform destroy`, irreversible `kubectl delete`s, destructive DDL against a remote host, `rm -rf` at a repo root, a force-push to a protected branch, secret exfiltration, and a dispatched agent merging a PR or pushing a product repo's default branch. Narrow on purpose, and the escape hatch is a human running the command in their own terminal. |
-| `hooks/agent-control.sh` | The live kill switch. `gate`, `steer` and `halt` against ONE dispatched agent, keyed on `agent_id` so it can never take the human's own session down with it. The operator side is the bundle's `scripts/control.sh`, which is still instance machinery — arming an instance whose plugin is not installed writes directives nothing reads. |
+| `hooks/agent-control.sh` | The live kill switch. `gate`, `steer` and `halt` against ONE dispatched agent, keyed on `agent_id` so it can never take the human's own session down with it. The operator side is `scripts/control.sh`, beside it in this plugin — arming a bundle on a machine whose plugin is not installed writes directives nothing reads. |
+| `hooks/session-banner.sh` | The `SessionStart` banner: which bundle this is, what it is configured to do, where the board is, what awaits the human — and, above all of it, an alarm if the bundle still carries machinery symlinks into a template checkout. Every line is a fact that can be false; none of it is a rules recital. |
+| `hooks/push-state.sh` | `UserPromptSubmit`. Encodes the bundle's live state — projects, tasks in flight, what is awaiting a human — into the turn's context, at one awk choke point so a filename cannot forge the fence's markers. |
 
-**Both no-op SILENTLY outside an instance root.** A plugin is installed once per user, so
+**All four no-op SILENTLY outside a bundle root.** A plugin is installed once per user, so
 these fire in every project on the machine. Each resolves `$CLAUDE_PROJECT_DIR` (never the
 payload's `cwd` — a dispatched agent's cwd is a worktree of a target repo) and exits 0 with
 no stdout, no stderr and nothing written unless `instance.config.json` is there. Zero noise
 in any other folder is the requirement, not a side effect.
 
-**`permissions.deny` stays in the instance's `settings.json`.** It is the second,
-unconditional layer behind the deny baseline, and a plugin manifest has no permissions
-block to carry it.
+**The banner and push-state moved here in ai-bridge-v2/task-013**, from a bundle's own
+`.claude/settings.json` — itself a symlink into a template checkout, so they reached only
+the bundles somebody had re-stamped, and a template that moved took the registration with
+it. A detector made of symlinks cannot see its own failure; a plugin hook is a real file
+the plugin manager replaces whole.
+
+**`permissions.deny` stays in the bundle's `settings.json`**, which `/ai-bridge:init`
+seeds. It is the second, unconditional layer behind the deny baseline, and a plugin
+manifest has no permissions block to carry it.
 
 ## During the transition — what stays an instance command, and why
 

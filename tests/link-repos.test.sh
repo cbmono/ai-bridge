@@ -10,7 +10,7 @@
 set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPT="$TPL/symlink/scripts/link-repos.sh"
+SCRIPT="$TPL/plugin/scripts/link-repos.sh"
 TMP="$(mktemp -d)" || {
   echo "link-repos.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -22,7 +22,7 @@ trap 'rm -rf "$TMP"' EXIT
 # rationale and the TMPDIR-recursion guard this carries along with it. Skipped when
 # $TPL is already a main tree or no repo at all, so a plain clone pays nothing extra.
 # ai-bridge-v4/task-030.
-BRIDGE_INSTALL="$TPL/install.sh"
+BRIDGE_INSTALL="$TPL/plugin/scripts/init-bundle.sh"
 if command -v git >/dev/null 2>&1; then
   _tpl_gd="$(git -C "$TPL" rev-parse --absolute-git-dir 2>/dev/null || true)"
   _tpl_gc="$(git -C "$TPL" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
@@ -36,7 +36,7 @@ if command -v git >/dev/null 2>&1; then
     mkdir -p "$INSTALL_SRC"
     cp -R "$TPL"/. "$INSTALL_SRC"/
     rm -rf "$INSTALL_SRC/.git"
-    BRIDGE_INSTALL="$INSTALL_SRC/install.sh"
+    BRIDGE_INSTALL="$INSTALL_SRC/plugin/scripts/init-bundle.sh"
   fi
 fi
 pass=0; fail=0

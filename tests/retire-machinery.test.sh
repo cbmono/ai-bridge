@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
 #
-# retire-machinery.test.sh — install.sh removes a machinery symlink whose target the
-# template no longer ships, and nothing else.
+# retire-machinery.test.sh — `/ai-bridge:init` removes a machinery symlink into a template
+# checkout, and nothing else.
 #
-# WHY. Removing a capability from symlink/ (the /todo feature was the first) leaves every
-# already-stamped instance with a symlink into a path that no longer exists. That is worse
+# WHY. Removing a capability from `symlink/` (the /todo feature was the first) left every
+# already-stamped bundle with a symlink into a path that no longer existed. That is worse
 # than an absent file: a dangling command still registers, and a SessionStart hook whose
-# script has vanished exits 127 on every launch. Nothing else in the template noticed —
-# the link loop only iterates files that DO exist.
+# script has vanished exits 127 on every launch.
+#
+# WHAT THE SWEEP BECAME (ai-bridge-v2/task-013). Machinery ships in the PLUGIN now, so
+# there is nothing left to retire ONE file at a time: the whole `symlink/` design is what
+# is retired, and the sweep removes EVERY machinery link a bundle carries — dangling or
+# live. A live one is the quieter half of the same defect, because it resolves into a
+# clone `claude plugin update` never touches. The old per-file cases are therefore one
+# case now, and the historical retirements are asserted as a set against it.
 #
 # The negative properties are the point, and they are what this file mostly asserts:
 #   · a real file is never removed, however dead it looks;
-#   · a symlink pointing somewhere OTHER than this template is never removed, even when
-#     it dangles — it is not ours to judge;
-#   · a link that still resolves is left alone;
+#   · a symlink pointing somewhere OTHER than a template checkout is never removed, even
+#     when it dangles — it is not ours to judge;
+#   · a bundle path containing glob metacharacters is handled (SC2295);
 #   · seed content is never removed. A `todos.md` surviving a retired feature is the
-#     human's own writing.
+#     human's own writing — that half is unchanged and is the last section of this file.
 #
 # assert(): 0 is a PASS, matching the other harnesses here.
 set -uo pipefail
@@ -23,6 +29,10 @@ set -uo pipefail
 TPLSRC="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/retire-fixture.XXXXXX")" || {
   echo "retire-machinery.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
+# PHYSICAL path: on macOS $TMPDIR lives under /var -> /private/var, and the installer
+# resolves its own location with cd+pwd, so an unresolved path would not compare equal to
+# what it prints back.
+TMP="$(cd "$TMP" && pwd -P)"
 trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
@@ -32,241 +42,122 @@ no_if()  { if "$@" >/dev/null 2>&1; then echo 1; else echo 0; fi; }
 has()    { printf '%s\n' "$2" | grep -q -- "$1" && echo 0 || echo 1; }
 hasnt()  { printf '%s\n' "$2" | grep -q -- "$1" && echo 1 || echo 0; }
 
-# A copy of the template, so removing a machinery file here cannot touch the real one.
+# A copy of the template, so mutilating it cannot touch the real one.
 TPL="$TMP/tpl"; mkdir -p "$TPL"
 ( cd "$TPLSRC" && git ls-files . ) | while IFS= read -r f; do
   [ -n "$f" ] || continue
   mkdir -p "$TPL/$(dirname "$f")"; cp "$TPLSRC/$f" "$TPL/$f" 2>/dev/null || true
 done
-chmod +x "$TPL/install.sh" "$TPL"/symlink/scripts/*.sh 2>/dev/null || true
+chmod +x "$TPL"/plugin/scripts/*.sh "$TPL"/plugin/hooks/*.sh 2>/dev/null || true
+
+# A SECOND checkout, standing in for the template a symlink-era bundle was stamped from.
+# It is a real template as far as the sweep is concerned — `seed/` and `VERSION` at its
+# root — which is exactly what makes a link into it recognisable as machinery.
+OLDTPL="$TMP/oldtpl"; mkdir -p "$OLDTPL/seed" "$OLDTPL/symlink/scripts" "$OLDTPL/symlink/.claude/hooks"
+printf '0.20.0\n' > "$OLDTPL/VERSION"; printf '{}\n' > "$OLDTPL/seed/instance.config.json"
 
 INST="$TMP/group/_ai-bridge-group"; mkdir -p "$INST"
-bash "$TPL/install.sh" "$INST" >"$TMP/out1" 2>&1
-assert "a fresh instance stamps"            "$(yes_if test -f "$INST/instance.config.json")"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out1" 2>&1
+assert "a fresh bundle stamps"              "$(yes_if test -f "$INST/instance.config.json")"
+assert "…carrying no symlink at all"        "$([ -z "$(find "$INST" -type l 2>/dev/null)" ] && echo 0 || echo 1)"
 
-# Add a machinery file, stamp it in, then retire it from the template.
-printf '#!/usr/bin/env bash\nexit 0\n' > "$TPL/symlink/scripts/doomed.sh"
-bash "$TPL/install.sh" "$INST" >"$TMP/out2" 2>&1
-assert "the new machinery file is linked"   "$(yes_if test -L "$INST/scripts/doomed.sh")"
-assert "…and it resolves"                   "$(yes_if test -e "$INST/scripts/doomed.sh")"
+# --- the sweep, and the three decoys that must survive it.
+mkdir -p "$INST/scripts"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$OLDTPL/symlink/scripts/doomed.sh"
+ln -s "$OLDTPL/symlink/scripts/doomed.sh" "$INST/scripts/doomed.sh"        # ours, RESOLVES
+ln -s "$OLDTPL/symlink/scripts/gone.sh"   "$INST/scripts/dead.sh"          # ours, DANGLES
+printf 'my own notes\n' > "$INST/scripts/mine.sh"                          # a real file
+ln -s "$TMP/nowhere-at-all"  "$INST/scripts/foreign-dangling"              # dangles, NOT ours
+mkdir -p "$TMP/elsewhere"; ln -sfn "$TMP/elsewhere" "$INST/my-own-link"    # theirs, resolves
 
-# Decoys that must survive the sweep.
-printf 'my own notes\n' > "$INST/scripts/mine.sh"                    # a real file
-ln -s "$TMP/nowhere-at-all"  "$INST/scripts/foreign-dangling"        # dangles, NOT ours
-ln -s "$TPL/symlink/scripts/commit-as.sh" "$INST/scripts/still-good" # ours, resolves
-
-rm "$TPL/symlink/scripts/doomed.sh"
-bash "$TPL/install.sh" "$INST" >"$TMP/out3" 2>&1
-RC=$?
-
-assert "install.sh still exits 0"           "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
-assert "the dangling link is removed"       "$(no_if test -L "$INST/scripts/doomed.sh")"
-assert "…and it is reported"                "$(yes_if grep -q 'retire scripts/doomed.sh' "$TMP/out3")"
+RC=0; bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out3" 2>&1 || RC=$?
+assert "the stamp still exits 0"            "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
+assert "a LIVE machinery link is removed"   "$(no_if test -L "$INST/scripts/doomed.sh")"
+assert "…and reported with its reason"      "$(yes_if grep -q 'retire scripts/doomed.sh — machinery link into a template checkout' "$TMP/out3")"
+assert "a DANGLING machinery link too"      "$(no_if test -L "$INST/scripts/dead.sh")"
+assert "…reported as dangling, with its old target" "$(yes_if grep -q 'retire scripts/dead.sh — dangling (was -> ' "$TMP/out3")"
 assert "a real file is NOT removed"         "$(yes_if grep -q 'my own notes' "$INST/scripts/mine.sh")"
-assert "a foreign dangling link survives"   "$(yes_if test -L "$INST/scripts/foreign-dangling")"
-assert "a resolving link of ours survives"  "$(yes_if test -e "$INST/scripts/still-good")"
-# Seed content outlives a retired feature: it is the human's writing, not machinery.
-printf 'a note I wrote\n' > "$INST/leftover-seed.md"
-bash "$TPL/install.sh" "$INST" >"$TMP/out4" 2>&1
-assert "seed-shaped content is untouched"   "$(yes_if grep -q 'a note I wrote' "$INST/leftover-seed.md")"
+assert "a foreign dangling link is removed" "$(no_if test -L "$INST/scripts/foreign-dangling")"
+assert "…because a dangling link in a bundle has one meaning" \
+  "$(yes_if grep -q 'retire scripts/foreign-dangling — dangling' "$TMP/out3")"
+# …EXCEPT INSIDE THE DATA DIRECTORIES, where it has the opposite meaning. No installer
+# ever stamped machinery under projects/, knowledge/ or objectives/, so a symlink there is
+# the human's — a linked spec, a shared notes folder, one they have not fixed yet — and
+# "data untouched" has to hold for a broken link as much as for a file.
+mkdir -p "$INST/projects/demo" "$INST/knowledge/findings" "$INST/objectives"
+ln -s "$TMP/nowhere-at-all" "$INST/projects/demo/spec.md"
+ln -s "$TMP/nowhere-at-all" "$INST/knowledge/findings/linked.md"
+ln -s "$TMP/nowhere-at-all" "$INST/objectives/linked.md"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out-data" 2>&1
+assert "a dangling link under projects/ survives"   "$(yes_if test -L "$INST/projects/demo/spec.md")"
+assert "…under knowledge/ too"                      "$(yes_if test -L "$INST/knowledge/findings/linked.md")"
+assert "…and under objectives/"                     "$(yes_if test -L "$INST/objectives/linked.md")"
+assert "…and none of the three is even mentioned"   "$(no_if grep -qE 'projects/demo/spec.md|knowledge/findings/linked.md|objectives/linked.md' "$TMP/out-data")"
+assert "a resolving link of the human's OWN survives" "$(yes_if test -L "$INST/my-own-link")"
+assert "…and is reported as kept, not removed" "$(yes_if grep -q 'keep  my-own-link' "$TMP/out3")"
 # Idempotent: a second sweep with nothing to do says nothing and still exits 0.
+bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out4" 2>&1
 assert "a repeat run retires nothing"       "$(no_if grep -q 'retire ' "$TMP/out4")"
 
-# --- a ROOT-level machinery file, which the first version of the sweep could not see.
-# machinery_paths() places SCHEMA.md, AUTONOMY.md and CONVENTIONS.md directly at the
-# instance root and more under agents/. The sweep originally scanned only .claude/ and
-# scripts/, so it missed exactly the most load-bearing files — and this harness mirrored
-# that scope, which is why it passed. Raised in review on PR #62.
-printf 'root machinery\n' > "$TPL/symlink/DOOMED-ROOT.md"
-mkdir -p "$TPL/symlink/agents"
-printf 'nested machinery\n' > "$TPL/symlink/agents/doomed-nested.md"
-bash "$TPL/install.sh" "$INST" >"$TMP/out5" 2>&1
-assert "a root machinery file links"        "$(yes_if test -L "$INST/DOOMED-ROOT.md")"
-assert "a nested one links too"             "$(yes_if test -L "$INST/agents/doomed-nested.md")"
-rm "$TPL/symlink/DOOMED-ROOT.md" "$TPL/symlink/agents/doomed-nested.md"
-bash "$TPL/install.sh" "$INST" >"$TMP/out6" 2>&1
-assert "a dangling ROOT link is swept"      "$(no_if test -L "$INST/DOOMED-ROOT.md")"
-assert "…and reported"                      "$(yes_if grep -q 'retire DOOMED-ROOT.md' "$TMP/out6")"
-assert "a dangling nested link is swept"    "$(no_if test -L "$INST/agents/doomed-nested.md")"
-# A repos/ link points at reposRoot, not into symlink/, so a whole-instance scan must
-# still leave it alone — this is what makes widening the scan safe.
-mkdir -p "$TMP/elsewhere" && ln -sfn "$TMP/elsewhere" "$INST/repos-decoy"
-bash "$TPL/install.sh" "$INST" >"$TMP/out7" 2>&1
-assert "a link outside symlink/ survives"   "$(yes_if test -L "$INST/repos-decoy")"
-
-# --- an instance path containing glob metacharacters (SC2295).
-# `${dst#$TARGET/}` expands TARGET as a PATTERN, so a `[` in the path strips nothing,
-# `rel` stays absolute, `ours` tests a doubled path and returns false — the dead link is
-# silently kept. Quoting it fixes that, and only this fixture can tell the difference.
-ODD="$TMP/od[d]group/_ai-bridge-odd"; mkdir -p "$ODD"
-bash "$TPL/install.sh" "$ODD" >"$TMP/out8" 2>&1
-printf 'doomed again\n' > "$TPL/symlink/DOOMED-TWICE.md"
-bash "$TPL/install.sh" "$ODD" >"$TMP/out9" 2>&1
-assert "glob-y path: the link is created"   "$(yes_if test -L "$ODD/DOOMED-TWICE.md")"
-rm "$TPL/symlink/DOOMED-TWICE.md"
-bash "$TPL/install.sh" "$ODD" >"$TMP/out10" 2>&1
-assert "glob-y path: the link is swept"     "$(no_if test -L "$ODD/DOOMED-TWICE.md")"
-
-# --- the one script this sweep has actually had to retire: build-artifact-board.sh.
-# The two HTML renderers were consolidated into `build-board.sh`, which
-# deleted the second one from the template — so every instance stamped before that carries
-# a link to a path that no longer exists. The generic case above already covers it, and
-# that is the claim worth pinning: NO installer edit was needed, so nothing in install.sh
-# names this script and nothing there would notice if the sweep regressed. The criterion
-# asked for the links to be swept; this asserts that outcome against the real name.
-#
-# The link is made by INSTALL.SH from a template that still ships the script, not by hand:
-# `ln -s "$TPL/..."` writes an unresolved path, and on macOS install.sh resolves its own
-# location through /var -> /private/var, so `ours` would not recognise the hand-made link
-# and this would pass for the wrong reason. Stamping it the way an instance really got it
-# is also the only faithful fixture — that instance was stamped before the deletion.
-printf '#!/usr/bin/env bash\nexit 0\n' > "$TPL/symlink/scripts/build-artifact-board.sh"
-bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
-assert "an instance stamped before the merge has it" "$(yes_if test -e "$INST/scripts/build-artifact-board.sh")"
-rm "$TPL/symlink/scripts/build-artifact-board.sh"
-bash "$TPL/install.sh" "$INST" >"$TMP/out-board" 2>&1
-assert "the retired renderer's link is swept"        "$(no_if test -L "$INST/scripts/build-artifact-board.sh")"
-assert "…and reported by name"                       "$(yes_if grep -q 'retire scripts/build-artifact-board.sh' "$TMP/out-board")"
-assert "…while the surviving renderer stays linked"  "$(yes_if test -e "$INST/scripts/build-board.sh")"
-# Generic on purpose: install.sh must not carry a list of retired machinery to sweep.
-assert "install.sh names no retired script"          "$(no_if grep -q 'build-artifact-board' "$TPL/install.sh")"
-
-# --- the two enforcement hooks the plugin absorbed (AI Bridge 2.0, task-003).
-# `deny-destructive.sh` and `agent-control.sh` left `symlink/.claude/hooks/` in one change,
-# and this is the retirement an instance FEELS most: `settings.json` is itself a link into
-# the template, so its `PreToolUse` block goes live the moment the template is pulled,
-# while the hook FILES stay linked-and-dangling until a stamp. Between those two clocks the
-# instance has no enforcement from either side, which is exactly the ⚠️ the PR carries.
-#
-# Asserted as a PAIR, not two singles: the failure that matters is partial. One swept and
-# one left is indistinguishable from a clean run in any assertion that looks at a single
-# name, and the surviving link is a `PreToolUse` command that exits 127 on every tool call.
-# Stamped through install.sh, for the reason given above the build-artifact-board block.
-V2_HOOKS="deny-destructive agent-control"
-mkdir -p "$TPL/symlink/.claude/hooks"
-for h in $V2_HOOKS; do printf '#!/usr/bin/env bash\nexit 0\n' \
-  > "$TPL/symlink/.claude/hooks/$h.sh"; done
-bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
-hooked=0; for h in $V2_HOOKS; do [ -e "$INST/.claude/hooks/$h.sh" ] && hooked=$((hooked+1)); done
-assert "an instance stamped before the plugin move has both hooks" \
-  "$([ "$hooked" -eq 2 ] && echo 0 || echo 1)"
-rm -f "$TPL"/symlink/.claude/hooks/deny-destructive.sh "$TPL"/symlink/.claude/hooks/agent-control.sh
-bash "$TPL/install.sh" "$INST" >"$TMP/out-hooks" 2>&1
-hleft=0; hunreported=0
-for h in $V2_HOOKS; do
-  [ -L "$INST/.claude/hooks/$h.sh" ] && hleft=$((hleft+1))
-  grep -qF "retire .claude/hooks/$h.sh" "$TMP/out-hooks" || hunreported=$((hunreported+1))
+# --- EVERY historical retirement, as ONE set, because the failure that matters is partial.
+# Seven swept and one left is indistinguishable from a clean run in any assertion that
+# looks at a single name — and a surviving `.claude/agents/<role>.md` link does not dangle
+# harmlessly, it SHADOWS the plugin's copy and silently wins. These are the real paths:
+# the retired renderer, the two enforcement hooks the plugin absorbed, the renamed agent,
+# the eight commands and the eight role agents.
+LEGACY="scripts/build-artifact-board.sh .claude/hooks/deny-destructive.sh
+.claude/hooks/agent-control.sh .claude/agents/oncall-guide.md
+.claude/commands/ai-bridge.md .claude/commands/answer.md .claude/commands/audit.md
+.claude/commands/fanout.md .claude/commands/pr-review-request.md
+.claude/commands/new-project.md .claude/commands/close-project.md
+.claude/commands/pm-loop.md
+.claude/agents/advisor.md .claude/agents/auditor.md .claude/agents/cataloguer.md
+.claude/agents/devops-engineer.md .claude/agents/failure-analyst.md
+.claude/agents/project-manager.md .claude/agents/qa-reviewer.md
+.claude/agents/software-engineer.md
+SCHEMA.md CONVENTIONS.md agents/index.md .claude/settings.json"
+LEG="$TMP/group/_ai-bridge-legacy"; mkdir -p "$LEG"
+cp "$TPL/seed/instance.config.json" "$LEG/instance.config.json"
+n_legacy=0
+for rel in $LEGACY; do
+  mkdir -p "$LEG/$(dirname "$rel")" "$OLDTPL/symlink/$(dirname "$rel")"
+  printf 'fixture\n' > "$OLDTPL/symlink/$rel"
+  ln -s "$OLDTPL/symlink/$rel" "$LEG/$rel"
+  n_legacy=$((n_legacy+1))
 done
-assert "…and one re-stamp leaves neither"          "$([ "$hleft" -eq 0 ] && echo 0 || echo 1)"
-assert "…each reported by name, both of them"      "$([ "$hunreported" -eq 0 ] && echo 0 || echo 1)"
-# The hooks that did NOT move must still be linked — a sweep that took the whole directory
-# would satisfy both assertions above and break every session's banner.
-assert "…while session-banner.sh and push-state.sh stay linked" \
-  "$([ -e "$INST/.claude/hooks/session-banner.sh" ] && [ -e "$INST/.claude/hooks/push-state.sh" ] && echo 0 || echo 1)"
-# Generic, exactly as with build-artifact-board.sh and the eight commands: the sweep must
-# not carry a list of what it retired, or the next retirement needs an installer edit
-# nobody will make. THIS IS CRITERION 3's "no install.sh edit" stated as a test.
-assert "install.sh names neither hook" \
-  "$(no_if grep -qE 'deny-destructive|agent-control' "$TPL/install.sh")"
-
-# --- the agent rename: `oncall-guide` -> `failure-analyst`.
-# An agent lives at `.claude/agents/<name>.md`, so renaming one is a machinery DELETE plus
-# a machinery ADD, and only the delete half has an owner here. The generic cases above
-# cover `scripts/`, the instance root and `agents/` — but NOT `.claude/agents/`, which is
-# where every agent actually lives, and a dangling agent file is the same class of failure
-# as a dangling command: it stays registered and resolves to nothing. Stamped the way a
-# real instance got it (install.sh writes the link, never `ln -s`) for the reason given
-# above the build-artifact-board block.
-mkdir -p "$TPL/symlink/.claude/agents"
-printf -- '---\nname: oncall-guide\ntools: Read\n---\nfixture\n' \
-  > "$TPL/symlink/.claude/agents/oncall-guide.md"
-printf -- '---\nname: keeper\ntools: Read\n---\nfixture\n' \
-  > "$TPL/symlink/.claude/agents/keeper.md"
-bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
-assert "an instance stamped before the rename has the old agent" \
-  "$(yes_if test -e "$INST/.claude/agents/oncall-guide.md")"
-rm "$TPL/symlink/.claude/agents/oncall-guide.md"
-bash "$TPL/install.sh" "$INST" >"$TMP/out-agent" 2>&1
-assert "the renamed agent's stale link is swept" \
-  "$(no_if test -L "$INST/.claude/agents/oncall-guide.md")"
-assert "…and reported by name" \
-  "$(yes_if grep -qF 'retire .claude/agents/oncall-guide.md' "$TMP/out-agent")"
-# The surviving sibling, not a real role agent: the name swap retired every
-# `symlink/.claude/agents/*.md` file this repo ships, so naming one here would assert
-# the retirement had not happened. What this half is for is that the sweep removes the
-# GONE name and leaves the one still shipped — a fixture answers that exactly.
-assert "…while a sibling the template still ships stays linked" \
-  "$(yes_if test -e "$INST/.claude/agents/keeper.md")"
-rm "$TPL/symlink/.claude/agents/keeper.md"
-rmdir "$TPL/symlink/.claude/agents" 2>/dev/null || true
-
-# --- the eight commands the plugin absorbed (AI Bridge 2.0).
-# The whole command layer left `symlink/` between #107 and #112, one command per slice, as
-# each became an `ai-bridge-v2` plugin skill. That is the largest retirement this sweep has
-# ever had to make, and it is the one an instance FEELS: a dangling command still registers,
-# so until the re-stamp the instance offers `/pm-loop` and fails when you run it.
-#
-# Asserted as a SET rather than one more single-file case, because the failure that matters
-# is partial — seven swept and one left is indistinguishable from a clean run in any
-# assertion that looks at a single name, and `docs/operations.md` promises a human that one
-# `upgrade.sh` clears all of them. Stamped through install.sh, for the reason given above
-# the build-artifact-board block.
-V2_COMMANDS="ai-bridge answer audit fanout pr-review-request new-project close-project pm-loop"
-mkdir -p "$TPL/symlink/.claude/commands"
-for c in $V2_COMMANDS; do printf -- '---\ndescription: fixture\n---\n%s\n' "$c" \
-  > "$TPL/symlink/.claude/commands/$c.md"; done
-bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
-linked=0; for c in $V2_COMMANDS; do [ -e "$INST/.claude/commands/$c.md" ] && linked=$((linked+1)); done
-assert "an instance stamped before the migration has all 8" "$([ "$linked" -eq 8 ] && echo 0 || echo 1)"
-rm -f "$TPL"/symlink/.claude/commands/*.md
-bash "$TPL/install.sh" "$INST" >"$TMP/out-v2" 2>&1
+assert "the legacy fixture really carries them all" \
+  "$([ "$(find "$LEG" -type l | wc -l | tr -d ' ')" = "$n_legacy" ] && echo 0 || echo 1)"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$LEG" >"$TMP/out-legacy" 2>&1
 left=0; unreported=0
-for c in $V2_COMMANDS; do
-  [ -L "$INST/.claude/commands/$c.md" ] && left=$((left+1))
-  grep -qF "retire .claude/commands/$c.md" "$TMP/out-v2" || unreported=$((unreported+1))
+for rel in $LEGACY; do
+  [ -L "$LEG/$rel" ] && left=$((left+1))
+  grep -qF "retire $rel" "$TMP/out-legacy" || unreported=$((unreported+1))
 done
-assert "…and one re-stamp leaves none of them"    "$([ "$left" -eq 0 ] && echo 0 || echo 1)"
-assert "…each reported by name, all 8"            "$([ "$unreported" -eq 0 ] && echo 0 || echo 1)"
-assert "…with the line docs/operations.md quotes" \
-  "$(yes_if grep -qF 'retire .claude/commands/pm-loop.md (no longer shipped by the template)' "$TMP/out-v2")"
-# Generic, exactly as with build-artifact-board.sh: the sweep must not carry a list of the
-# commands it retired, or the next retirement needs an installer edit nobody will make.
-assert "install.sh names none of the 8 commands" \
-  "$(no_if grep -qE 'pm-loop|pr-review-request|close-project' "$TPL/install.sh")"
-
-# --- the eight role agents the plugin absorbed (the name swap).
-# The second-largest retirement, and the one with the nastiest failure mode: a project
-# agent SHADOWS the plugin copy, so a single surviving link does not dangle harmlessly —
-# it silently keeps a stale agent winning over the shipped one, in the one instance that
-# missed the re-stamp. Asserted as a SET for the same reason as the commands above:
-# seven swept and one left is indistinguishable from a clean run in any single-name check.
-V2_AGENTS="advisor auditor cataloguer devops-engineer failure-analyst project-manager qa-reviewer software-engineer"
-mkdir -p "$TPL/symlink/.claude/agents"
-for a in $V2_AGENTS; do printf -- '---\nname: %s\ntools: Read\n---\nfixture\n' "$a" \
-  > "$TPL/symlink/.claude/agents/$a.md"; done
-bash "$TPL/install.sh" "$INST" >/dev/null 2>&1
-linked=0; for a in $V2_AGENTS; do [ -e "$INST/.claude/agents/$a.md" ] && linked=$((linked+1)); done
-assert "an instance stamped before the swap has all 8 agents" "$([ "$linked" -eq 8 ] && echo 0 || echo 1)"
-rm -f "$TPL"/symlink/.claude/agents/*.md
-rmdir "$TPL/symlink/.claude/agents" 2>/dev/null || true
-bash "$TPL/install.sh" "$INST" >"$TMP/out-agents8" 2>&1
-left=0; unreported=0
-for a in $V2_AGENTS; do
-  [ -L "$INST/.claude/agents/$a.md" ] && left=$((left+1))
-  grep -qF "retire .claude/agents/$a.md" "$TMP/out-agents8" || unreported=$((unreported+1))
-done
-assert "…and one re-stamp leaves none of them"     "$([ "$left" -eq 0 ] && echo 0 || echo 1)"
-assert "…each reported by name, all 8"             "$([ "$unreported" -eq 0 ] && echo 0 || echo 1)"
-# NOT asserted here, deliberately, though the commands block above asserts its twin:
-# install.sh legitimately NAMES several roles — `roleTiers` seeds `software-engineer`,
-# `qa-reviewer` and `cataloguer` by name — so "the installer mentions no retired agent"
-# would fail on the seeding block rather than on a retirement list. The generic property
-# is already pinned one block up, by the commands; what is specific to the agents is
-# below.
-# The template really does ship none of them any more — the assertions above would pass
+assert "…and one conversion leaves none of them"   "$([ "$left" -eq 0 ] && echo 0 || echo 1)"
+assert "…each reported by name, all of them"       "$([ "$unreported" -eq 0 ] && echo 0 || echo 1)"
+# GENERIC ON PURPOSE, and this is criterion 3's "no installer edit" stated as a test: the
+# sweep must not carry a list of what it retires, or the next retirement needs an edit
+# nobody will make. (Role NAMES are exempt — the installer seeds `roleTiers` and
+# legitimately names `software-engineer`, `qa-reviewer` and `cataloguer`.)
+assert "the installer names no retired path" \
+  "$(no_if grep -qE 'build-artifact-board|deny-destructive|agent-control|oncall-guide|pm-loop|pr-review-request' "$TPL/plugin/scripts/init-bundle.sh")"
+# And the template really ships none of them any more — the assertions above would pass
 # just as well against a repo that still had them, because they plant their own fixtures.
-assert "the template ships no symlink/.claude/agents at all" \
-  "$(no_if test -e "$TPL/symlink/.claude/agents")"
+assert "the template ships no symlink/ directory at all" \
+  "$(no_if test -e "$TPL/symlink")"
+
+# --- a bundle path containing glob metacharacters (SC2295).
+# `${dst#$TARGET/}` expands TARGET as a PATTERN, so a `[` in the path strips nothing, the
+# relative path stays absolute, and the dead link is silently kept. Quoting it fixes that,
+# and only this fixture can tell the difference.
+ODD="$TMP/od[d]group/_ai-bridge-odd"; mkdir -p "$ODD"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$ODD" >"$TMP/out8" 2>&1
+printf 'doomed again\n' > "$OLDTPL/symlink/DOOMED-TWICE.md"
+ln -s "$OLDTPL/symlink/DOOMED-TWICE.md" "$ODD/DOOMED-TWICE.md"
+assert "glob-y path: the fixture link exists" "$(yes_if test -L "$ODD/DOOMED-TWICE.md")"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$ODD" >"$TMP/out10" 2>&1
+assert "glob-y path: the link is swept"     "$(no_if test -L "$ODD/DOOMED-TWICE.md")"
+assert "…and reported with its relative path" "$(yes_if grep -q 'retire DOOMED-TWICE.md' "$TMP/out10")"
 
 # --- retired SEED content: reported with an rm, never removed.
 # The asymmetry with the machinery sweep above is the whole point. A symlink into this
@@ -274,10 +165,10 @@ assert "the template ships no symlink/.claude/agents at all" \
 # since it was copied does not — `todos.md` is literally their notes. install.sh's safety
 # property is that it only links and seeds-if-absent, so it may report and must not delete.
 SEEDY="$TMP/group/_ai-bridge-seedy"; mkdir -p "$SEEDY"
-bash "$TPL/install.sh" "$SEEDY" >/dev/null 2>&1
+bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" >/dev/null 2>&1
 printf 'my private notes\n' > "$SEEDY/retired-thing.md"
 printf 'retired-thing.md\tthe X feature was removed\n' > "$TPL/RETIRED"
-OUT="$(bash "$TPL/install.sh" "$SEEDY" 2>&1)"
+OUT="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "retired seed content is reported"    "$(has 'stale retired-thing.md' "$OUT")"
 assert "…with its reason"                    "$(has 'the X feature was removed' "$OUT")"
 assert "…and the exact rm command"           "$(has 'rm .*_ai-bridge-seedy/retired-thing.md' "$OUT")"
@@ -285,23 +176,23 @@ assert "…and is NOT deleted"                 "$(yes_if grep -q 'my private not
 # A manifest entry for a file the instance does not have must stay quiet — most entries
 # will be irrelevant to most instances, forever.
 assert "an absent entry says nothing" \
-  "$(hasnt 'stale ' "$(bash "$TPL/install.sh" "$INST" 2>&1)")"
+  "$(hasnt 'stale ' "$(bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" 2>&1)")"
 # Comments, blanks and a reason-less line must all parse without noise.
 printf '# a comment\n\nretired-thing.md\n' > "$TPL/RETIRED"
-OUT2="$(bash "$TPL/install.sh" "$SEEDY" 2>&1)"
+OUT2="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "a reason-less entry still reports"   "$(has 'stale retired-thing.md' "$OUT2")"
 assert "…with a default reason"              "$(has 'no longer shipped by the template' "$OUT2")"
 assert "…and comments are not reported"      "$(hasnt 'stale # a comment' "$OUT2")"
 # Absence of the manifest is silence, not an error — the AUTONOMY.md convention.
 rm -f "$TPL/RETIRED"
-RC=0; OUT3="$(bash "$TPL/install.sh" "$SEEDY" 2>&1)" || RC=$?
+RC=0; OUT3="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)" || RC=$?
 assert "no manifest: exits 0"                "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "no manifest: reports nothing"        "$(hasnt 'stale ' "$OUT3")"
 assert "no manifest: file still there"       "$(yes_if grep -q 'my private notes' "$SEEDY/retired-thing.md")"
 # A dangling SYMLINK at a manifested path belongs to the sweep, not to this list.
 : > "$TPL/RETIRED"; printf 'linky.md\tretired\n' >> "$TPL/RETIRED"
 ln -sfn "$TMP/gone-forever" "$SEEDY/linky.md"
-OUT4="$(bash "$TPL/install.sh" "$SEEDY" 2>&1)"
+OUT4="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "a symlink is not reported as stale"  "$(hasnt 'stale linky.md' "$OUT4")"
 
 # --- a manifest entry that escapes the instance root is refused, not reported.
@@ -309,19 +200,19 @@ assert "a symlink is not reported as stale"  "$(hasnt 'stale linky.md' "$OUT4")"
 # pasting a command this script handed them has every reason to trust it.
 printf 'escapee\n' > "$TMP/group/victim.md"
 printf '../victim.md\tretired\n' > "$TPL/RETIRED"
-OUT5="$(bash "$TPL/install.sh" "$SEEDY" 2>&1)"
+OUT5="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "an escaping entry is not reported"   "$(hasnt 'stale \.\./victim.md' "$OUT5")"
 assert "…no rm command is printed for it"    "$(hasnt 'rm .*victim.md' "$OUT5")"
 assert "…it is warned about instead"         "$(has 'escapes the instance root' "$OUT5")"
 assert "…and the outside file is untouched"  "$(yes_if grep -q 'escapee' "$TMP/group/victim.md")"
 printf '/etc/passwd\tretired\n' > "$TPL/RETIRED"
-OUT6="$(bash "$TPL/install.sh" "$SEEDY" 2>&1)"
+OUT6="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "an absolute entry is refused"        "$(has 'not instance-relative' "$OUT6")"
 assert "…and prints no rm"                   "$(hasnt 'rm /etc/passwd' "$OUT6")"
 # A path merely CONTAINING dots is fine — only a `..` component escapes.
 printf 'my..notes.md\tretired\n' > "$TPL/RETIRED"
 printf 'dotty\n' > "$SEEDY/my..notes.md"
-OUT7="$(bash "$TPL/install.sh" "$SEEDY" 2>&1)"
+OUT7="$(bash "$TPL/plugin/scripts/init-bundle.sh" "$SEEDY" 2>&1)"
 assert "a dotted filename is NOT refused"    "$(has 'stale my\.\.notes.md' "$OUT7")"
 
 echo

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# check-dispatch.test.sh — exercises symlink/scripts/check-dispatch.sh, the two-second
+# check-dispatch.test.sh — exercises plugin/scripts/check-dispatch.sh, the two-second
 # question a dispatch report cannot be trusted to answer about itself: **did the PR the
 # agent said it would open actually get opened?**
 #
@@ -47,8 +47,8 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)" || { echo "check-dispatch.test: cannot locate self" >&2; exit 2; }
 REPO="$(cd "$HERE/.." && pwd)" || { echo "check-dispatch.test: cannot locate repo root" >&2; exit 2; }
-SCRIPT="$REPO/symlink/scripts/check-dispatch.sh"
-CONVENTIONS="$REPO/symlink/CONVENTIONS.md"
+SCRIPT="$REPO/plugin/scripts/check-dispatch.sh"
+CONVENTIONS="$REPO/seed/CONVENTIONS.md"
 PM="$REPO/plugin/agents/project-manager.md"
 
 FIXDIR="$HERE/fixtures/dispatch"

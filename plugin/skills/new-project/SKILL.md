@@ -3,7 +3,7 @@ name: new-project
 disable-model-invocation: true
 description: Scaffold a new project under projects/<slug>/ — schema-valid files, registered in the bundle index/log and linked to its objective, with seed draft tasks. Supports build (code/PRs) and research (in-bundle deliverables) projects.
 argument-hint: <one-line project description>  [kind=build|research] [objective=<slug>] [repo=<name|owner/name>] [deliverables="a; b"] [--no-commit]
-allowed-tools: Bash(date:*), Bash(scripts/commit-as.sh:*), Bash(scripts/validate-bundle.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(git add:*), Bash(git config:*), Bash(git rev-parse:*), Bash(command -v:*), Bash(cr:*), Bash(coderabbit:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
 Scaffold a new **Project** in this bundle: the `projects/<slug>/` folder and its
@@ -183,7 +183,7 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    the per-agent helper, naming **every** path steps 5 and 6 touched — the scaffold
    and its registration belong in one commit, or the tree records a project that
    nothing links to:
-   `scripts/commit-as.sh human "feat: add <slug> project" -- projects/<slug> log.md objectives/<objective>.md`
+   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human "feat: add <slug> project" -- projects/<slug> log.md objectives/<objective>.md`
    (drop `objectives/<objective>.md` only if step 3 left it untouched). The root and
    per-project `index.md` are **not** in that list — they are derived and gitignored,
    so `git add` skips them and naming them would only produce a confusing "nothing
@@ -211,7 +211,7 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
 
    | Stage | What | When it is skipped |
    |---|---|---|
-   | **1. `scripts/validate-bundle.sh`** | Deterministic. Dangling references, unknown enum values, missing required fields, a frontmatter/body mismatch. Free, no tokens, no false positives. | never, once the chain runs at all |
+   | **1. `${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh`** | Deterministic. Dangling references, unknown enum values, missing required fields, a frontmatter/body mismatch. Free, no tokens, no false positives. | never, once the chain runs at all |
    | **2. External reviewer** — `externalReviewer` from `instance.config.json`, else the CodeRabbit CLI | Judgement on the scaffold's substance. | **none configured** ⇒ stage 3 *is* the route. **Configured but refusing** ⇒ stage 3 is a **spend**, and step e asks first |
    | **3. `qa-reviewer` scaffold mode** | The **declared fallback** where nothing is configured; a **spend the human authorises** where a reviewer is configured and refused. Never a skip, either way. | only when the human has said not to dispatch agents |
 
@@ -237,7 +237,7 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    **a. Gate on applicability, then run stage 1.** First, if `kind` is `research`, stop
    here — nothing below runs. Then, if step 7 ran with `--no-commit`, stop here too.
 
-   Now run **`scripts/validate-bundle.sh`**. Zero errors is the gate for continuing. Any
+   Now run **`${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh`**. Zero errors is the gate for continuing. Any
    error is a defect in the scaffold you just wrote: fix it, amend or add a commit, and
    re-run until clean. Errors here are never "by design" — the validator only reports
    things the schema forbids.

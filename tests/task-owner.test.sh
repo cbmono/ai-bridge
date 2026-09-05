@@ -36,7 +36,7 @@
 # `assert()` uses exit-code semantics: 0 is a PASS, matching the other harnesses.
 set -uo pipefail
 
-SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/symlink/scripts/task-owner.sh"
+SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts/task-owner.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/task-owner-fixture.XXXXXX")" || {
   echo "task-owner.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT

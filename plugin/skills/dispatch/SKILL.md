@@ -3,7 +3,7 @@ name: dispatch
 disable-model-invocation: true
 description: Start the Project Manager loop as a SERIAL, completion-driven loop (one tick at a time) in this control-panel instance repo
 argument-hint: "[gap]  pause between ticks, default 10m  (e.g. 0m for back-to-back, 30m)"
-allowed-tools: Bash(pwd), Bash(ls:*), Bash(scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronList, CronDelete
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronList, CronDelete
 ---
 
 Start the **Project Manager loop** — but as a **SERIAL, completion-driven** loop:
@@ -31,7 +31,7 @@ Three standing facts the steps below rest on:
   claimed or not, and never claims one — and the tick's **own claim** on the lock you took
   for it is not a conflict; an unclaimed lock is precisely the dispatch it is.
 - **It is a PER-CLONE lock.** Two loops from two clones of a shared bundle is the
-  *design* (each dispatches only its own human's tasks, `scripts/task-owner.sh`); two
+  *design* (each dispatches only its own human's tasks, `${CLAUDE_PLUGIN_ROOT}/scripts/task-owner.sh`); two
   loops against one clone is the bug. The lock bounds **PM ticks only** — never the role
   agents a tick dispatches (`maxAgentsInFlight` is that limit).
 
@@ -57,10 +57,10 @@ and step 1). Every byte read here lands in the main session's context — the on
 context this loop must survive on for hours — while the tick's context is disposable;
 the full argument is `docs/pm-design.md#launcher-reads-nothing`.
 
-**The one exception, named on purpose: the tick lock.** `scripts/tick-lock.sh acquire`
+**The one exception, named on purpose: the tick lock.** `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire`
 is a **write** only the launcher can make, returns an exit code rather than content,
 and prints nothing on the normal path. **No other reader may be added by analogy** —
-the list above is closed. And never call `scripts/tick-lock.sh status` before `acquire`
+the list above is closed. And never call `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` before `acquire`
 — the check and the write are deliberately one operation; looking first rebuilds the
 race this closes.
 
@@ -81,7 +81,7 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 1. **Take the lock, then dispatch — in that order, with nothing in between.**
    Resolve the tick's model first (below), then run
 
-       scripts/tick-lock.sh acquire --agent project-manager
+       ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire --agent project-manager
 
    and act on its exit code. **The check and the write are that one call** (`O_EXCL` —
    no read-then-write to interleave with): it closes a window of seconds to minutes —
@@ -95,14 +95,14 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
      `noop: true`) and skip, exactly as step 4 does.
    - **2** — stale, future-dated, or unreadable; the script printed the details. Do
      **not** dispatch and do **not** delete it: put what it printed in front of the
-     human and stop until they answer. `scripts/tick-lock.sh release` is the human's answer, not yours.
+     human and stop until they answer. `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` is the human's answer, not yours.
    - **3** — it could not write the lock at all. Report and stop; never dispatch
      unguarded.
 
    **Exit 4 cannot reach you** — it is the tick's refusal for finding no lock, and
    taking a lock where there is none is what you are for.
 
-   If the spawn itself fails to start, run `scripts/tick-lock.sh release` before you
+   If the spawn itself fails to start, run `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` before you
    report — a lock with no tick behind it is the stale case, arriving hours early.
 
    The tick itself: spawn a **fresh** `project-manager` agent
@@ -112,7 +112,7 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    step 0.5 refuses such a tick anyway. **Brief it with the gap and the guardrails, not
    with state** — it reads the bundle, `git` and `gh` itself. **Run the tick on the
    orchestrator's configured model:** resolve it with
-   `scripts/resolve-model.sh project-manager` (`roleTiers`, default `deep` → an alias
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager` (`roleTiers`, default `deep` → an alias
    via `models`, default `deep` → `opus`) and pass that as the tick's model. If
    `models`/`roleTiers` are absent the script says so on stderr — **report that line in
    the tick summary** and then inherit the session model, so an unchosen model is
@@ -129,7 +129,7 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    repo proves nothing.
 
    **When that notification arrives, release the lock** — run
-   `scripts/tick-lock.sh release` before you schedule the gap. That is the only place
+   `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` before you schedule the gap. That is the only place
    it is released in the normal path; releasing on anything weaker hands the next tick
    a dispatch the running one has not finished. A loop that dies before it releases
    leaves the lock to age out into step 1's case 2, where a human sees it — the
@@ -155,7 +155,7 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
    Dispatch it as `ai-bridge:advisor`, namespaced like every role agent.
 
-   Its model comes from `scripts/resolve-model.sh advisor`, like every role; **absent ⇒
+   Its model comes from `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh advisor`, like every role; **absent ⇒
    `light`**, the cheapest tier — the script prints why on stderr, so report that line.
 
    Dispatch it once, read-only, with the tick's summary. It replies `ADVISOR: clear`
@@ -217,7 +217,7 @@ ticks, regardless of how long a tick runs.
   `gated`** and the field is inert. When `autonomy` is unset, act as `gated`.
 - Reconcile doc `status:` against live `gh`/`git` before acting; act only on deltas.
 - **Dispatch only this clone's human's work.** On a shared instance,
-  `scripts/task-owner.sh <task-path>` decides, and **exit 0 is the only clearance** —
+  `${CLAUDE_PLUGIN_ROOT}/scripts/task-owner.sh <task-path>` decides, and **exit 0 is the only clearance** —
   exit 1 (someone else's) and exit 2 (cannot answer) both refuse. Resolution: task
   `owner:` → project `owner:` → tracked `defaultOwner` → unowned; then compare against
   this clone's `ownerGithubUser` (local file first). `defaultOwner` is **not** locally
@@ -237,7 +237,7 @@ ticks, regardless of how long a tick runs.
   (`SCHEMA.md`). `open_questions` must still empty — that is the promotion signal; an
   entry left in both lists blocks the draft forever.
 - Concurrency cap: **at most `maxAgentsInFlight` role agents in flight** — resolve
-  with `scripts/resolve-max-agents.sh` (local file first, tracked second; prints
+  with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-max-agents.sh` (local file first, tracked second; prints
   nothing and exits 1 when neither sets it — fall back to 4 then, the seeded, measured
   default per SCHEMA.md). Each agent uses its own worktree under `worktreeRoot`
   (absent, `<reposRoot>/_wt`) + a **private package store** (e.g. `pnpm install
@@ -247,19 +247,19 @@ ticks, regardless of how long a tick runs.
   reflecting merges — read-only on product repos, writes only to `knowledge/`,
   **counts toward the cap**, **throttled to one per tick**, never promotes or merges.
 - **Every role-agent dispatch is namespaced `ai-bridge:<role>`** — all eight of them.
-  The three USER-level agents `install.sh` installs (`code-architect`, `deep-bug-scan`,
+  The three USER-level agents `init-bundle.sh --config` installs (`code-architect`, `deep-bug-scan`,
   `plan-architect`) are not plugin agents and stay bare.
 - Commit hygiene in this repo: stage only your own changed files by explicit path
   (never `git add -A`); commit via
-  `scripts/commit-as.sh project-manager "<msg>" -- <path>...`; never `--no-verify` in
+  `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<msg>" -- <path>...`; never `--no-verify` in
   target repos.
-- **Worktree hygiene.** `scripts/prune-worktrees.sh` (≤ once per tick) **reports only —
+- **Worktree hygiene.** `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` (≤ once per tick) **reports only —
   it never deletes anything**; surface its `REMOVABLE`/`RECLAIMABLE` sets as a human
   job. **Run it only when your in-flight count is zero** — the `PRUNE_ACTIVE_MINUTES`
   mtime veto (default 120) is a backstop, not the guard.
 - **Project close is human-gated.** The PM only *proposes* closing (all tasks
   terminal); the human confirms (or runs `/close-project`). The folder step is always
-  `scripts/close-project-folder.sh <slug> --apply`, never a hand-written `rm`;
+  `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug> --apply`, never a hand-written `rm`;
   `retain: true` keeps the folder as the record (`SCHEMA.md`). Never close
   autonomously.
 - Return a tight summary: live-vs-docs deltas, dispatched/reflected, in-flight count,
@@ -274,7 +274,7 @@ ticks, regardless of how long a tick runs.
 - **The dispatch lock is `.tick-lock` at the instance root** — gitignored, per clone,
   written by step 1 and released in step 2 by the session that took it. The tick claims
   it (step 0.5, `--as tick`, recorded in `.tick-lock.claim`) and releases nothing.
-  `scripts/tick-lock.sh status` reads it without touching it (for a human, never this
+  `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` reads it without touching it (for a human, never this
   launcher); `TICK_LOCK_STALE_MINUTES` (default 120) sets when step 1 stops waiting
   and asks. A missing lock is never an error.
 - **Starting the loop prints a handful of lines, not a screen**: a failed
@@ -285,21 +285,21 @@ ticks, regardless of how long a tick runs.
 - Each tick refreshes `AWAITING.md` **only when that file already exists**; deleting
   it turns the queue off for good (the loop never recreates it); `touch AWAITING.md`
   turns it back on.
-- Each tick also refreshes `SNAPSHOT.json` (`scripts/write-snapshot.sh --quiet`, at
+- Each tick also refreshes `SNAPSHOT.json` (`${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet`, at
   the end of the tick) — same rule and same off switch: the writer rewrites the file
   **only when it already exists**, so `rm SNAPSHOT.json` takes this instance off the
   board and `touch SNAPSHOT.json` puts it back. `boardInstances` in
   `instance.config.json` names what a board shows; **absent or empty ⇒ just this
   instance**.
 - **The board page is re-rendered by the same tick, to a local file** —
-  `scripts/build-board.sh --standalone --out .board-live/board.html`, the gitignored
-  path `scripts/watch-board.sh` also writes. Per machine, not per account; nothing is
+  `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone --out .board-live/board.html`, the gitignored
+  path `${CLAUDE_PLUGIN_ROOT}/scripts/watch-board.sh` also writes. Per machine, not per account; nothing is
   published anywhere. `board: false` in `instance.config.json` ⇒ no render and no
   mention; absent or `true` ⇒ it renders and the tick reports the path. The page is
-  only as fresh as the last tick (its masthead timestamp says); `scripts/watch-board.sh`
+  only as fresh as the last tick (its masthead timestamp says); `${CLAUDE_PLUGIN_ROOT}/scripts/watch-board.sh`
   is the live view.
 - **A tick that changed something also commits a TRACKED `/board.html`** —
-  `scripts/build-board.sh --standalone --out board.html .` (**the trailing `.` is
+  `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone --out board.html .` (**the trailing `.` is
   load-bearing**: without it the renderer reads `boardInstances`, i.e. OTHER bundles,
   into a repo with a different permission list), committed by `commit-as.sh` and pushed
   with the rest. That commit IS the publishing step — the page is readable by this

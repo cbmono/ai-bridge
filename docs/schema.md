@@ -1,6 +1,6 @@
 # Document types (orientation)
 
-**The normative contract is [`symlink/SCHEMA.md`](../symlink/SCHEMA.md), not this page.**
+**The normative contract is [`seed/SCHEMA.md`](../seed/SCHEMA.md), not this page.**
 
 That file is machinery: it is symlinked into every instance, every role agent reads it,
 and `scripts/validate-bundle.sh` enforces it. Duplicating its field lists here would
@@ -69,7 +69,7 @@ does is decided by one optional field, `retain:` (absent = false).
 
 `retain:` governs the **folder only** — a retained project still ends `status: done` with
 every task terminal, and is not reopenable. Full rules, including exactly which working
-files are pruned: [`SCHEMA.md`](../symlink/SCHEMA.md) → "Project & objective completion".
+files are pruned: [`SCHEMA.md`](../seed/SCHEMA.md) → "Project & objective completion".
 
 ## What validation checks — and what it deliberately does not
 
