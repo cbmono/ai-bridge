@@ -34,9 +34,9 @@ repos and holds only the state of the work — never application code.
 | [docs/conventions.md](docs/conventions.md) | **you are changing this repo** — every design invariant and why it exists |
 | [The config layer](#the-config-layer) | you want this repo's agents, commands and hooks in `~/.claude` too |
 
-Normative contracts live in the machinery itself: [`symlink/SCHEMA.md`](symlink/SCHEMA.md)
+Normative contracts live in the machinery itself: [`seed/SCHEMA.md`](seed/SCHEMA.md)
 (document types, the verification predicate) and
-[`symlink/AUTONOMY.md`](symlink/AUTONOMY.md) (the delegated-autonomy modes).
+[`docs/autonomy/AUTONOMY.md`](docs/autonomy/AUTONOMY.md) (the delegated-autonomy modes).
 
 ---
 
@@ -69,19 +69,7 @@ See [`plugin/README.md`](plugin/README.md).
 uninstall `ai-bridge-v2` from `/plugin` → Manage, and relaunch. The old name ships for
 one more version as a stub that says exactly this.
 
-### 2. Clone this repo
-
-```bash
-git clone git@github.com:cbmono/ai-bridge.git ~/workspace/ai-bridge
-```
-
-Keep it somewhere permanent. Instances symlink into it by absolute path.
-
-> **Do not run the installer from a git worktree.** Every symlink it creates would point
-> into the worktree, and removing that worktree breaks all of them — silently, later. The
-> installer refuses and exits 2.
-
-### 3. Make the instance directory
+### 2. Make the bundle directory
 
 Name it **`_ai-bridge-<group>`**, inside the group folder, beside that group's repos.
 
@@ -90,25 +78,37 @@ mkdir -p ~/workspace/<group>/_ai-bridge-<group>
 ```
 
 - The leading underscore pins it to the top of the group folder and keeps it visible (unlike a dotfile).
-- The `-<group>` suffix distinguishes it from this template dir and from other groups' instances.
-- The group folder itself is **not** a repo — just a plain directory holding this instance plus the group's repos, side by side, each its own repo.
+- The `-<group>` suffix distinguishes it from other groups' bundles.
+- The group folder itself is **not** a repo — just a plain directory holding this bundle plus the group's repos, side by side, each its own repo.
 
-### 4. Stamp it
+**No clone of this repo is needed.** The installer ships in the plugin. `/ai-bridge:init`
+creates the directory too, so this step is optional — it is here because naming it right
+is the part worth doing deliberately.
 
-```bash
-~/workspace/ai-bridge/install.sh ~/workspace/<group>/_ai-bridge-<group>
+### 3. Stamp it
+
+```
+/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group>
 ```
 
-The installer does three things:
+It does three things, and **none of them is a symlink into a checkout**:
 
 | # | Action | Detail |
 |---|---|---|
-| 1 | **Symlinks** the machinery from `symlink/` | file granularity, absolute targets; gitignored in the instance via a managed block |
-| 2 | **Copies** `seed/` content — only if absent | never clobbers instance data |
-| 3 | **Links** the group's repos into `<instance>/repos/` | via `scripts/link-repos.sh`; skipped while `reposRoot` is the seeded placeholder |
+| 1 | **Copies** `seed/` content — only if absent | never clobbers bundle data |
+| 2 | **Converts** a bundle stamped by the retired `install.sh` | removes its machinery links and the managed `.gitignore` block; the data is untouched |
+| 3 | **Links** the group's repos into `<bundle>/repos/` | skipped while `reposRoot` is the seeded placeholder. **The only symlinks a stamped bundle holds.** |
 
 It is idempotent. It backs up any conflicting real file as `<name>.bak.<epoch>`.
-`install.sh --uninstall <dir>` removes only the symlinks it created.
+`--refresh-seeds` additionally 3-way merges a seed change this repo has made since the
+bundle was stamped; without it that drift is reported and nothing is written.
+
+> **This replaced `install.sh`, and the reason is structural.** A plugin-shipped installer
+> cannot stamp absolute symlinks into a plugin cache whose path changes on every update —
+> every one of them would dangle. The symlinks existed so a `git pull` of this repo
+> propagated into every bundle; `claude plugin update` gives that property for the whole
+> tree, so they lost their reason to exist. `install.sh` and `upgrade.sh` ship for one
+> version as stubs that print the command to run instead.
 
 #### It also asks who the team is — once
 
@@ -120,19 +120,19 @@ three values a shared bundle needs, which used to be hand-edited afterwards. See
 
 - **Nothing is written until you confirm it.** ctrl-C, ctrl-D and an empty first line all
   write nothing at all, and say so — a half-answered roster is never left behind.
-- **It never asks on a refresh, and never when stdin is not a terminal** (a script,
-  `upgrade.sh`, a background agent). It prints what to edit by hand instead.
+- **It never asks on a refresh, and never when stdin is not a terminal** (a script, a
+  background agent). It prints what to edit by hand instead.
 - **It never overwrites a value that is already there.**
 - Skipping costs nothing: fill the same three values in by hand whenever you like.
 
-### 5. Configure it
+### 4. Configure it
 
 ```bash
 cd ~/workspace/<group>/_ai-bridge-<group>
 $EDITOR instance.config.json      # org, reposRoot, worktreeRoot, authorEmail
 ```
 
-### 6. Give it a remote
+### 5. Give it a remote
 
 ```bash
 git init && git add -A && git commit -m "chore: bootstrap control panel"
@@ -142,7 +142,7 @@ gh repo create <user>/_ai-bridge-<group> --private --source=. --push
 Keep the leading underscore in the repo name, so a fresh `git clone` lands a
 `_ai-bridge-<group>/` directory that matches the convention.
 
-### 7. Run your first loop
+### 6. Run your first loop
 
 ```bash
 cd ~/workspace/<group>/_ai-bridge-<group>   # this matters — see below
@@ -191,7 +191,7 @@ The idea is to **steer, not watch**. Role agents run in the background and bubbl
 results and questions, not every step.
 
 Both gates can be delegated — see [docs/autonomy.md](docs/autonomy.md). That capability is
-**off unless installed**: it lives entirely in [`symlink/AUTONOMY.md`](symlink/AUTONOMY.md),
+**off unless installed**: it lives entirely in [`docs/autonomy/AUTONOMY.md`](docs/autonomy/AUTONOMY.md),
 and deleting that one file makes every project `gated` again with no other edits.
 
 ### Who runs what, end to end
@@ -212,19 +212,19 @@ instance sets its own in `roleTiers`/`models`
 > ### HUMAN GATE 1 — you promote the task `draft → ready`
 >
 > **Nothing is dispatched until you do.** The PM refines and critiques a draft but never
-> sets `ready` ([two human authorities](symlink/SCHEMA.md)).
+> sets `ready` ([two human authorities](seed/SCHEMA.md)).
 
 | # | Step | Who runs it |
 |---|---|---|
 | 6 | **Dispatch** the `ready` task — its own worktree and branch, both recorded on the task before the agent spawns | `project-manager` → the assignee [→](plugin/agents/project-manager.md) |
-| 7 | **Build it**, then **self-review your own diff** — a pre-filter, never the gate | `software-engineer` / `devops-engineer` (`deep`) [→](symlink/CONVENTIONS.md) |
+| 7 | **Build it**, then **self-review your own diff** — a pre-filter, never the gate | `software-engineer` / `devops-engineer` (`deep`) [→](seed/CONVENTIONS.md) |
 | 8 | **Open the PR** carrying the task's `acceptance_criteria` as a ✓/✗ table — the artifact `pr-body-clearance.sh` reads. The agent never merges | the same agent |
-| 9 | **Independent review** at the PR's current head: the external reviewer where one is configured, else the `qa-reviewer` fallback. The PM reads that verdict with `review-clearance.sh`, and `review-rounds.sh` stops it at two rounds | external reviewer, else `qa-reviewer` (`deep`) [→](symlink/SCHEMA.md) |
+| 9 | **Independent review** at the PR's current head: the external reviewer where one is configured, else the `qa-reviewer` fallback. The PM reads that verdict with `review-clearance.sh`, and `review-rounds.sh` stops it at two rounds | external reviewer, else `qa-reviewer` (`deep`) [→](seed/SCHEMA.md) |
 
 > ### HUMAN GATE 2 — you merge the PR
 >
 > **One `✗` in that criteria table blocks it, however green CI is**
-> ([SCHEMA.md](symlink/SCHEMA.md)).
+> ([SCHEMA.md](seed/SCHEMA.md)).
 
 The next tick reflects the merge — `status: done`, and the task's worktree is reclaimed.
 
@@ -441,7 +441,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Review gate** | `review-clearance.sh` — a **green check from a reviewer that declined to review is not verification.** It reads the reviewer's artifacts, takes evidence and pinning from the reviews **API** (`state` + `commit_id`), leaves text matching only the job of spotting a refusal, and refuses on unknown state. `required-checks.sh` asks it on **every** PR, so a check's name never settles whether anybody looked. [→](docs/autonomy.md#the-verification-gate) |
 | **Review rounds** | `review-rounds.sh` — **two rounds, then the human decides**, as a number a dispatcher reads rather than a rule it must remember. Exits non-zero at or past two, so a third verifier is refused. [→](docs/autonomy.md#two-rounds-then-the-human-decides) |
 | **Dispatch check** | `check-dispatch.sh` — an agent's "done" is not evidence that a PR exists. Did `status:` move, does `pr:` name a URL, does that PR resolve. **Report-only.** [→](docs/autonomy.md#did-the-dispatch-produce-its-pr) |
-| **Delegated autonomy** | one deletable file. `rm symlink/AUTONOMY.md` and every project is `gated`. [→](docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) |
+| **Delegated autonomy** | one deletable file. `rm docs/autonomy/AUTONOMY.md` and every project is `gated`. [→](docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) |
 | **Dispatch lock** | `tick-lock.sh` — one PM tick at a time, taken by the launcher in the same operation that checks it, **and checked again by the tick itself**, since a resumed tick never passes through the launcher. A dispatched tick does not refuse its own lock: unclaimed means it is that dispatch. A tick that finds **no** lock was not dispatched at all — it is refused (exit 4), because **a tick is never resumed**. The claim on a lock records **whose** it is and from **which source**, and the trust is asymmetric — a runtime-derived id (`CLAUDE_CODE_SESSION_ID` names the *session*, not the tick) may refuse a claim but never clears one, so a merely-matching identity is exit 2 rather than a guess in either direction. Stale, or unattributable, means **ask the human**, never silently delete and never silently adopt. Per clone, not cross-machine. [→](docs/operations.md#one-tick-at-a-time-the-dispatch-lock) |
 | **Worktrees** | `prune-worktrees.sh` **reports, never deletes.** Do not add a delete, not even behind a flag — it destroyed three running agents' worktrees once. [→](docs/conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing) |
 | **Bundle repair** | `migrate-bundle.sh` is report-only by default and fixes only what has one right answer. **A false success is worse than the error it claims to fix.** [→](docs/conventions.md#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) |
@@ -455,7 +455,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 
 `instance.config.json` (tracked) and `instance.config.local.json` (gitignored, per
 machine). The **one** authoritative list of which keys are locally overridable is
-[`SCHEMA.md` → "Per-machine config overrides"](symlink/SCHEMA.md).
+[`SCHEMA.md` → "Per-machine config overrides"](seed/SCHEMA.md).
 
 | Key | Absent means | Overridable per machine |
 |---|---|---|
@@ -481,10 +481,13 @@ override the watcher's probe).
 
 ## Scripts
 
-Run from an instance root unless noted.
+They ship in the plugin (`plugin/scripts/`) and are invoked as
+`${CLAUDE_PLUGIN_ROOT}/scripts/<name>.sh`. Run from a bundle root unless noted.
 
 | Script | Does | Writes? |
 |---|---|---|
+| `init-bundle.sh` | `<dir>` — creates or refreshes a bundle, and converts one stamped by the retired `install.sh`: seed content copied where absent, machinery links removed, `repos/` linked. `--config` links the `~/.claude` layer instead | yes, that bundle |
+| `refresh-seeds.sh` | `<dir>` — 3-way merges a seed change this repo made since the bundle was stamped; a hand-diverged file is reported, never forced, and its conflicted merge is saved as `.bak.<epoch>` | only with `--apply` |
 | `validate-bundle.sh` | schema errors + dangling frontmatter references | no |
 | `migrate-bundle.sh` | mechanical schema repairs | only with `--apply` |
 | `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
@@ -497,11 +500,11 @@ Run from an instance root unless noted.
 | `pr-comment-clearance.sh` | asserts a **reply to review findings** carries a verdict per finding, and that no element exceeds the measured ceiling. `--comment-file` decides before you post | no |
 | `check-dispatch.sh` | `<task-doc>` — did the dispatch actually produce the PR it promised | **never** |
 | `control.sh` | the live kill switch for one dispatched agent — `agents`, then `halt`, `gate` or `steer` it | yes, `.claude/control/` |
-| `resolve-model.sh` | `<agent>` — prints the model alias it should run on, from `roleTiers`/`models` (local file first; `install.sh` seeds both there). No entry ⇒ nothing on stdout, exit 1, and **a line on stderr** saying the caller would otherwise inherit the session model | no |
+| `resolve-model.sh` | `<agent>` — prints the model alias it should run on, from `roleTiers`/`models` (local file first; the bundle stamp seeds both there). No entry ⇒ nothing on stdout, exit 1, and **a line on stderr** saying the caller would otherwise inherit the session model | no |
 | `tick-lock.sh` | `acquire [--as launcher\|tick]`/`release`/`status` — the per-clone PM dispatch lock; exit 0 is the only clearance to dispatch or to run a tick | `acquire`/`release` only, `.tick-lock` + `.tick-lock.claim` (gitignored) |
 | `tick-delta.sh` | `check`/`record`/`digest` — the idle-tick fast-path probe and the tick's one-command orientation: a full tick records a fingerprint (bundle HEAD, task statuses, open-PR heads/states/decisions), the next tick compares — only a byte-for-byte match (exit 0) permits skipping the full walk, and every doubt is the full tick; `digest` prints the same walk enriched (project/task fields + PR facts) so step 1 is one read instead of N | `record` only, `.tick-state` (gitignored) |
 | `task-owner.sh` | resolves and compares a task's owner | no |
-| `check-template-version.sh` | is the template this instance links older than the remote's default branch — prints a line **only when behind**, silence on every failure | not the instance — `--fetch` (opt-in) updates the template checkout's remote-tracking refs, nothing else |
+| `check-template-version.sh` | is the plugin on this machine older than the remote's default branch — prints a line **only when behind**, silence on every failure | not the instance — `--fetch` (opt-in) updates the template checkout's remote-tracking refs, nothing else |
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) — pass `.` to render THIS instance only | yes, the output file |
@@ -511,7 +514,7 @@ Run from an instance root unless noted.
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos | yes |
 
 **Internal helpers** — the machinery calls these; you normally don't. They are listed so
-the table above accounts for **every** script in `symlink/scripts/`, which
+the table above accounts for **every** script in `plugin/scripts/`, which
 `tests/readme-scripts-table.test.sh` asserts.
 
 | Script | Does | Writes? |
@@ -525,7 +528,7 @@ the table above accounts for **every** script in `symlink/scripts/`, which
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `/ai-bridge:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine (or Claude Code has not restarted since) — never the stamp, which delivers no commands at all now | `/plugin marketplace add cbmono/ai-bridge`, `/plugin install ai-bridge@ai-bridge`, then `/exit` and relaunch |
-| A command or agent is missing after a pull | it is a **new** `symlink/` file, so no symlink exists yet | `install.sh <instance>` |
+| A command or agent is missing after a pull | it is a **new** `plugin/` file, so no symlink exists yet | `install.sh <instance>` |
 | A seed change from a pull never arrived | seed is copied only when absent, by design | `./upgrade.sh <instance>` and port what it reports |
 | Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `install.sh` from the main working tree |
 | Installer exits 2, "refusing to install from a git worktree" | working as designed | `git -C <src> worktree list` — the first entry is the main tree |
@@ -567,7 +570,7 @@ The version lives in one place — [`VERSION`](VERSION) at this root, one line, 
 and no changelog. **There is no release process here and none is wanted.**
 
 **A change to `core` proposes the bump; you approve it by merging.** `core` is a closed
-list — `symlink/`, `seed/`, `config/`, `install.sh`, `upgrade.sh`, `RETIRED` — and it is
+list — `plugin/`, `seed/`, `config/`, `install.sh`, `upgrade.sh`, `RETIRED` — and it is
 exactly what the two path-scoped rule files ([`.claude/rules/machinery.md`](.claude/rules/machinery.md),
 [`.claude/rules/installer.md`](.claude/rules/installer.md)) already govern, so an agent
 editing one of those paths meets the rule as it opens the file. A PR touching only `docs/`,
@@ -577,10 +580,10 @@ dropping one commit rather than unpicking a release.
 
 Rough scale, enough to act on without a policy document: **patch** for a fix inside
 behaviour that already shipped, **minor** for a new capability or a new file under
-`symlink/`, **major** for anything an instance has to be repaired by hand to survive.
+`plugin/`, **major** for anything an instance has to be repaired by hand to survive.
 
 **Why the number matters more than a label.** An instance consumes this template through
-per-file symlinks, so most merges reach it live — but a **new** file under `symlink/` does
+per-file symlinks, so most merges reach it live — but a **new** file under `plugin/` does
 not arrive until `install.sh` runs again, and `seed/` content is copied once, ever. That
 gap has cost real time: two hooks merged and sat inert in every instance for a week.
 
@@ -614,11 +617,11 @@ Read [docs/conventions.md](docs/conventions.md) first. It records the design inv
 what went wrong to produce each one — the reasoning is the asset, so relocate it rather
 than shortening it.
 
-- Machinery goes in `symlink/`. Keep it **generic**: no org, repo, path, team or channel literals — those belong in an instance's `instance.config.json` / `CLAUDE.md`.
+- Machinery goes in `plugin/`. Keep it **generic**: no org, repo, path, team or channel literals — those belong in an instance's `instance.config.json` / `CLAUDE.md`.
 - Starting content goes in `seed/`. Retiring a seed file needs an entry in [`RETIRED`](RETIRED) in the same commit.
-- Tests live in `tests/`, never under `symlink/` — everything there ships into every instance.
+- Tests live in `tests/`, never under `plugin/` — everything there ships into every instance.
 - Run the suite before pushing: `for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done`. CI runs the same full suite as the required check **`harness suite`**, which `main`'s branch protection requires and is strict about — so be up to date with `main`. [→](docs/conventions.md#repo-conventions-that-are-not-invariants)
-- Adding to the harness itself? Measure what your diff adds under `symlink/**/*.sh`, and at or above ~150 lines ask in the PR body instead of assuming. [→](docs/conventions.md#repo-conventions-that-are-not-invariants)
+- Adding to the harness itself? Measure what your diff adds under `plugin/**/*.sh`, and at or above ~150 lines ask in the PR body instead of assuming. [→](docs/conventions.md#repo-conventions-that-are-not-invariants)
 - This repo is **public**. Placeholders must be verified unclaimed: `example-user-007` / `example-user-008` and `example.com`.
 
 Agent-facing rules are in [`CLAUDE.md`](CLAUDE.md) and [`.claude/rules/`](.claude/rules).
@@ -687,7 +690,7 @@ commands.
 
 That is the whole list, and it is enforced rather than documented:
 `tests/config-ownership.test.sh` derives the expected set from the `test -f` probes in
-`symlink/` and fails on anything else under `config/`. Delete `config/required/` and
+`plugin/` and fails on anything else under `config/`. Delete `config/required/` and
 `--config` links nothing and exits 0; delete `config/` itself and an **instance** stamp is
 completely unaffected (`--config` then exits 2 saying there is nothing to link).
 

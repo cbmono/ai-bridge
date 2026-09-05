@@ -71,7 +71,7 @@ switches are the only ones: `board: false`, or a `board.html` line placed after 
 `!/board.html` un-ignore in the bundle's own `.gitignore`.
 
 The **one** place the overridable set is listed — with what each key means when absent —
-is [`SCHEMA.md` → "Per-machine config overrides"](../symlink/SCHEMA.md). Every reader
+is [`SCHEMA.md` → "Per-machine config overrides"](../seed/SCHEMA.md). Every reader
 must honour it.
 
 ---

@@ -151,7 +151,7 @@ in `cbmono/ai-bridge` enforces this.
   1. **The heading `## Description (TL;DR)`, first**, then **a one-sentence TL;DR** under
      it. **That exact string, character for character** — it is the shape's only greppable
      anchor, which is why the rule names a fixed heading rather than "open with a
-     sentence". `symlink/scripts/pr-body-clearance.sh` looks for it at the clearance gate,
+     sentence". `plugin/scripts/pr-body-clearance.sh` looks for it at the clearance gate,
      so a body that opens some other way is refused there rather than merged.
   2. **A `Verified:` line, immediately under the lead, and it must cite something.** One
      line: what you ran, what it said, and a **link** a reader can open — *"Verified:
@@ -533,7 +533,7 @@ in `cbmono/ai-bridge` enforces this.
   is a means, not the product. Before you open a PR, measure what you added to it:
 
   ```sh
-  git diff --numstat origin/main -- 'symlink/**/*.sh' | awk '{a+=$1} END{print a+0}'
+  git diff --numstat origin/main -- 'plugin/**/*.sh' | awk '{a+=$1} END{print a+0}'
   ```
 
   Under ~150 added lines, carry on. **At or above it, flag it in the PR body as one
@@ -546,7 +546,7 @@ in `cbmono/ai-bridge` enforces this.
   363. The whole harness is ~8,500 lines, so 150 is roughly a 2% jump in one PR.
 
   **Why a number in a rule rather than a test.** This used to be `machinery-ceiling.test.sh`
-  — 944 lines pinning two integers that every PR touching `symlink/` had to re-measure. The
+  — 944 lines pinning two integers that every PR touching `plugin/` had to re-measure. The
   measurement was free; the *coupling* was not. It put a placeholder on `main` and turned it
   red (#31, needing #32 purely to undo), it was the single conflict `git merge-tree` found
   across ten PR pairs (#34 x #35), and it forced rebases on PRs that had nothing to do with

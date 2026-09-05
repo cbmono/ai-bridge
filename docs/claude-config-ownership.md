@@ -128,7 +128,7 @@ reads ai-setup's installer for excluded paths it names as a destination of its o
 asserts both halves of that reasoning.
 
 The expected set in the first of those is **derived from the probes**, not hardcoded: add
-or delete a `test -f ~/.claude/agents/<x>.md` in `symlink/` and the expectation moves with
+or delete a `test -f ~/.claude/agents/<x>.md` in `plugin/` and the expectation moves with
 it. Both scans are exercised against a synthetic re-forked fixture, so "nothing found"
 cannot mean "the scan never fires".
 
@@ -136,7 +136,7 @@ cannot mean "the scan never fires".
 
 - **A command / hook / skill on a new machine** → run ai-setup's `install.sh`. That is the
   whole point: one repo installs it, so one repo fixes it.
-- **A new agent this repo's own machinery probes for** → add the probe in `symlink/` and the
+- **A new agent this repo's own machinery probes for** → add the probe in `plugin/` and the
   file under `config/required/agents/`. `tests/config-ownership.test.sh` expects exactly
   that pairing and will tell you if you do only one half.
 - **A fix to a shipped default** → make it in ai-setup. A fix made here would be invisible

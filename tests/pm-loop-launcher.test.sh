@@ -104,7 +104,7 @@ readers_granted() { # <file> -> count of grants that are NOT on the approved lis
     | grep -v '^$' \
     | grep -v -x -e 'Bash(pwd)' -e 'Bash(ls:\*)' -e 'Agent' \
                  -e 'ScheduleWakeup' -e 'CronList' -e 'CronDelete' \
-                 -e 'Bash(scripts/tick-lock.sh:\*)' \
+                 -e 'Bash(bash \${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:\*)' \
     | wc -l | tr -d ' '
 }
 
@@ -126,7 +126,7 @@ for probe in 'Bash(curl:*)' 'Bash(python:*)' 'Bash(node:*)' 'Read' 'Bash'; do
 done
 # …while the real launcher's exact grant list still passes, so the allowlist is not
 # simply rejecting everything.
-printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Bash(scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
+printf -- '---\nallowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh:*), Agent, ScheduleWakeup, CronList, CronDelete\n---\nbody\n' \
   > "$TMP/probe.md"
 ok "…and PASSES on the approved set alone" "$(readers_granted "$TMP/probe.md")" 0
 # The approved set is EXACTLY those seven. A near-miss — another script under the same
@@ -161,7 +161,7 @@ ok "…closing the list against analogy" "$(in_section 'No other reader may be a
 ok "…keeping the cost argument"       "$(in_section "main session's context")" yes
 # The launcher must never look before it takes it: a `status` then `acquire` would rebuild
 # the check-then-write window the lock exists to close.
-ok "…and forbids reading it separately" "$(in_section 'never call `scripts/tick-lock.sh status` before `acquire`')" yes
+ok "…and forbids reading it separately" "$(in_section 'never call `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` before `acquire`')" yes
 # And the launcher must not carry the old imperative that made it do the re-derivation.
 ok "old launcher imperative gone" \
   "$(grep -c -E '^[[:space:]]*Re-derive it from the root' "$LAUNCHER" | tr -d ' ')" 0

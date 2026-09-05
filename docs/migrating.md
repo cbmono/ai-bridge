@@ -222,7 +222,7 @@ reports the re-enable with the `rm` to undo it; on path B nothing will.
 
 | Path | What removes the old command links |
 |---|---|
-| **A** | `install.sh`'s **step 2b sweep**, which `upgrade.sh` runs for you. It deletes a link only when it points into this template's `symlink/` **and** its target is gone — so exactly the retired commands, and nothing of yours. One `retire <path> (no longer shipped by the template)` line each ([operations.md § 2](operations.md#2-retiring-content-swept-vs-reported)) |
+| **A** | `install.sh`'s **step 2b sweep**, which `upgrade.sh` runs for you. It deletes a link only when it points into this template's `plugin/` **and** its target is gone — so exactly the retired commands, and nothing of yours. One `retire <path> (no longer shipped by the template)` line each ([operations.md § 2](operations.md#2-retiring-content-swept-vs-reported)) |
 | **B** | you delete the whole old folder, so there is nothing to sweep |
 
 **Step 2b is not cosmetic and it is not optional.** Without the re-stamp, the dangling

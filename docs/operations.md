@@ -12,7 +12,7 @@ board. Procedures here; the reasoning behind each one is linked.
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
 | the **plugin** (`ai-bridge`) | every slash command — `/ai-bridge:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/ai-bridge`, then `/plugin install ai-bridge@ai-bridge`; `/plugin` to update it later |
-| the **bundle** machinery (`symlink/`) | `scripts/`, the `SessionStart` and `UserPromptSubmit` hooks, `SCHEMA.md`, `CONVENTIONS.md`, `AUTONOMY.md`, `agents/index.md`, `.claude/settings.json`, the role-agent copies the bundle still links | **per instance** | `install.sh <instance>` |
+| the **bundle** machinery (`plugin/`) | `scripts/`, the `SessionStart` and `UserPromptSubmit` hooks, `SCHEMA.md`, `CONVENTIONS.md`, `AUTONOMY.md`, `agents/index.md`, `.claude/settings.json`, the role-agent copies the bundle still links | **per instance** | `install.sh <instance>` |
 
 **Install is therefore the plugin first, the stamp second.** A machine with the plugin and
 no bundle has commands and nothing for them to read; a bundle with no plugin has the data
@@ -32,8 +32,8 @@ on *what* changed — and exactly one of the five needs nothing from you.
 | What changed in the pull | Reaches an instance how | You must |
 |---|---|---|
 | A **`plugin/`** file (a skill, a plugin agent) | Not at all — the plugin is installed from the marketplace, not from this checkout | update the plugin (`/plugin`), on **each machine** |
-| An **edited** `symlink/` file (script, agent, `SCHEMA.md`, `CONVENTIONS.md`, a `.claude/rules/` file) | Instantly, through the existing symlink | nothing |
-| A **new** `symlink/` file | Not at all until its symlink exists | `install.sh <instance>` — once per instance |
+| An **edited** `plugin/` file (script, agent, `SCHEMA.md`, `CONVENTIONS.md`, a `.claude/rules/` file) | Instantly, through the existing symlink | nothing |
+| A **new** `plugin/` file | Not at all until its symlink exists | `install.sh <instance>` — once per instance |
 | A **`seed/`** file (`CLAUDE.md`, `README.md`, `index.md`, …) | Never — seed is copied only when absent, so instance data is never clobbered | port the change by hand, per instance |
 | A **schema** change | The machinery updates, the *data* does not | `scripts/validate-bundle.sh`, then `scripts/migrate-bundle.sh` (report), then `--apply` |
 
@@ -132,7 +132,7 @@ deliberately.
 
 **Step 2 is not optional and is not cosmetic.** A dangling command file still registers,
 so without the re-stamp the instance offers `/pm-loop` and fails when you run it. The
-sweep is `install.sh`'s, it removes only links that point into this template's `symlink/`
+sweep is `install.sh`'s, it removes only links that point into this template's `plugin/`
 *and* whose target is gone, and it never touches instance content — [§2
 below](#2-retiring-content-swept-vs-reported).
 
@@ -163,9 +163,9 @@ this was that once.
 
 The command layer left, so the obvious next question is whether the installer goes with
 it. **It does not, and the reason is countable rather than a preference.** Measured
-against `symlink/`:
+against `plugin/`:
 
-| Under `symlink/` | Files | Does the plugin carry it? |
+| Under `plugin/` | Files | Does the plugin carry it? |
 |---|---|---|
 | `scripts/` | 27 | **no** — and 14 of them are named by relative path in the plugin skills' own `allowed-tools`, so the plugin *depends* on the bundle delivering them |
 | `.claude/hooks/` | 2 | **no** — `deny-destructive.sh` and `agent-control.sh` left in task-003; `session-banner.sh` and `push-state.sh` remain |
@@ -194,7 +194,7 @@ than a simplification.
 
 | What you retired | What happens to an already-stamped instance |
 |---|---|
-| a **machinery** file under `symlink/` | `install.sh` step 2b **deletes** the now-dangling symlink |
+| a **machinery** file under `plugin/` | `install.sh` step 2b **deletes** the now-dangling symlink |
 | a **seed** file | **reported**, never deleted — with the exact `rm`, in `upgrade.sh`'s "what's left for you" list |
 
 The asymmetry is deliberate: a dangling symlink into this template has exactly one
@@ -207,7 +207,7 @@ a repo full of somebody's work.
 instance stamped years ago still has the file.
 
 Step 2b's sweep is narrow on purpose: a link is removed only when it points **into this
-template's `symlink/`** *and* its target is gone. Full reasoning:
+template's `plugin/`** *and* its target is gone. Full reasoning:
 [conventions.md invariants 1 and 2](conventions.md#1-retiring-content-is-asymmetric).
 
 **The plugin migration is the worked example, and it lands entirely on the top row.** Each
@@ -229,7 +229,7 @@ instance, so a clone on another machine has the committed instance data but **da
 machinery until you re-run `install.sh` there. That is intentional — the machinery is
 sourced from this repo, not vendored into each instance.
 
-To change the machinery: edit files under `symlink/` and commit. Every instance picks the
+To change the machinery: edit files under `plugin/` and commit. Every instance picks the
 change up immediately. Re-run `install.sh` on an instance only when you **add** new
 machinery files (to refresh its symlink set and `.gitignore` block). Keep machinery
 generic: no org, repo, path, team or channel literals — those belong in each instance's
@@ -282,7 +282,7 @@ prints nothing at all and exits 0.
 > Closing it needs one real, non-symlinked file the harness reads unconditionally. The
 > obvious candidate — make `.claude/settings.json` the one machinery file `install.sh`
 > **copies** instead of links, with the check inlined in the hook command so no script file
-> can dangle — costs the property every other machinery file has: edits under `symlink/`
+> can dangle — costs the property every other machinery file has: edits under `plugin/`
 > would stop reaching already-stamped instances, and `install.sh` would have to start
 > editing a settings file it currently promises never to touch. That is a deliberate trade,
 > not a bug fix, so it is recorded here for a decision rather than made in a hook.
@@ -576,7 +576,7 @@ state has moved on, carrying context from work that is already finished. That is
 tick can no longer release anything: the case where it owned a lock no longer exists.
 
 **Which half of the resume rule has a reader, plainly.** The rule itself is stated once, in
-`symlink/CONVENTIONS.md` → "A subagent works ONE task", and this is its one line:
+`seed/CONVENTIONS.md` → "A subagent works ONE task", and this is its one line:
 
 > same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
 
@@ -1030,7 +1030,7 @@ Six properties, and the first is the one to remember:
    **stamp** time (`cfg_bool board true`) to decide whether `SNAPSHOT.json` is seeded at
    all, so one key has two readers at the two ends of the lifecycle — deliberately not two
    keys, and deliberately not the local override file, which the installer does not read.
-   (The off switch is a **config key**, not a deletable file under `symlink/` — which is
+   (The off switch is a **config key**, not a deletable file under `plugin/` — which is
    the caveat
    [conventions.md invariant 4](conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file)
    ends on: machinery is re-linked unconditionally, so a file-shaped switch gets switched
