@@ -48,6 +48,8 @@ HAVE_INDEX=0; KNOWN=" "
 if [ -n "$INDEX" ] && [ -r "$INDEX" ]; then
   HAVE_INDEX=1
   KNOWN=" $(grep -oE '[A-Za-z0-9._/-]+\.md' "$INDEX" | slugs_of | tr '\n' ' ')"
+elif [ -n "$INDEX" ]; then
+  echo "cite-check: cannot read index '$INDEX' — a dropped id stays unclassified" >&2
 fi
 
 has() { case "$1" in *" $2 "*) return 0 ;; esac; return 1; }
