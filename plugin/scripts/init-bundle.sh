@@ -1451,7 +1451,8 @@ fi
 if [ -e "$TARGET/board.html" ] && git -C "$TARGET" ls-files --error-unmatch board.html >/dev/null 2>&1; then
   if git -C "$TARGET" rm --cached --quiet board.html 2>/dev/null; then
     rm -f "$TARGET/board.html"
-    echo "  drop  board.html — the board is served locally now (/ai-bridge:board serve)."
+    echo "  drop  board.html — removed and STAGED; commit it. The board is served"
+    echo "        locally now: /ai-bridge:board serve."
   fi
 fi
 

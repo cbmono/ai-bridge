@@ -120,12 +120,17 @@ def refresh():
         pass
 
 
+# NO TRAILING `.`, deliberately, and this is the one place that choice is safe: the page
+# never leaves this machine, so a render covering `boardInstances` is a feature here where
+# it is a governance breach on anything committed or published.
 def render():
     try:
-        subprocess.run(["bash", RENDER, "--standalone", "--out", PAGE],
-                       cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+        rc = subprocess.run(["bash", RENDER, "--standalone", "--out", PAGE], cwd=ROOT,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
+        if rc.returncode != 0:
+            sys.stderr.write("board-serve: build-board failed — the page was not updated.\n")
     except Exception:
-        pass
+        sys.stderr.write("board-serve: build-board could not be run — the page was not updated.\n")
 
 
 def snap_mtime():
