@@ -73,11 +73,11 @@ race this closes.
 
 The board is a **local file** the tick
 renders as its last act (`project-manager.md` step 8, one `BOARD: rendered <path>`
-line). Publishing is a **human-typed skill**, `/ai-bridge:board`, for two independent
+line). Publishing is a **human-typed skill**, `/ai-bridge:board publish`, for two independent
 reasons: it is account-scoped, so one URL can never be written by two humans
 (`docs/pm-design.md#launcher-no-publish`), and a headless `claude -p` session holds no
 artifact tool at all — measured 2026-09-05 on Claude Code 2.1.261, inventory and tool
-search both. So the tick prints `run /ai-bridge:board to refresh` and stops there.
+search both. So the tick prints `run /ai-bridge:board publish to refresh` and stops there.
 
 ## Running it on a cadence: `/loop`, and nothing else
 

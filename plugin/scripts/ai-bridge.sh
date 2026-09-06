@@ -742,7 +742,7 @@ check_config_layers() {
 # way the tool vocabulary's hand-list entries are, and each never seeded for the same
 # reason — seeding a per-machine key writes one machine's answer into every clone:
 #   · `ownerGithubUser` — per-machine by design (docs/sharing.md); `task-owner.sh` reads it;
-#   · `boardArtifactUrl` — the page `/ai-bridge:board` published FROM THIS CLONE.
+#   · `boardArtifactUrl` — the page `/ai-bridge:board publish` published FROM THIS CLONE.
 #     **Known in `instance.config.local.json` ONLY**, which is where it differs from the
 #     entry above and why the known set is built per file. Publishing is account-scoped,
 #     so exactly one account can update a given page; `session-banner.sh` reads it from

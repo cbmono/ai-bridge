@@ -247,7 +247,7 @@ Run these inside an instance.
 | `/ai-bridge:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
 | `/ai-bridge:dispatch [gap]` | (plugin) the serial background loop: dispatch, track, report. `/ai-bridge:dispatch 10m` ticks every ten minutes |
 | `/ai-bridge:answer` | (plugin) answer the PM's open questions from inside the session |
-| `/ai-bridge:board` | (plugin) publish this instance's board as a private artifact, at the same URL every run |
+| `/ai-bridge:board` | (plugin) `serve` — the board on a local URL, one process per bundle; `publish` — the same page as a private artifact, at the same URL every run |
 | `/ai-bridge:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
 | `/ai-bridge:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/ai-bridge:fanout <task>` | (plugin) parallel work across several repos |

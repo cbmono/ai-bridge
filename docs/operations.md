@@ -360,7 +360,7 @@ classification guards:
 stand, across every instance" — instance → project → phase progress → a column per task
 status, with the same 🔴 awaiting-you queue on top.
 
-**One snapshot, three scripts, four ways to look at it.** `scripts/write-snapshot.sh`
+**One snapshot, four scripts, five ways to look at it.** `scripts/write-snapshot.sh`
 derives each instance's `SNAPSHOT.json`; every renderer reads that file and none of them
 reads the bundle. That separation is the whole reason each renderer after the first was
 cheap — see
@@ -376,34 +376,67 @@ scripts/print-board.sh                                       # the terminal boar
 scripts/build-board.sh                                       # the same page as a BODY, no <html> wrapper
 scripts/build-board.sh --standalone --out /tmp/board.html .  # ...the same page, THIS instance only, to open in a browser
 scripts/watch-board.sh                                       # a local page, re-rendered on every change
+/ai-bridge:board serve                                       # the same page, SERVED on http://localhost:<boardPort>
 ```
 
-`/ai-bridge:board` is the fifth way to look at it and the only one that leaves the machine:
-it renders the same body and publishes it as a **private artifact** at a URL that does not
-change between runs ([below](#opening-the-board-laptop-phone-published-live)).
+`/ai-bridge:board publish` is the one way that leaves the machine: it renders the same body
+and publishes it as a **private artifact** at a URL that does not change between runs
+([below](#opening-the-board-laptop-phone-published-live)).
 
 Each `/ai-bridge:dispatch` tick refreshes the snapshot at the end of the tick, so on a looping
 instance you never run the writer by hand — and unless `board` is `false`, the same tick
 re-renders the local page and reports its path ([below](#rendering-it-from-each-tick)).
+**No tick commits a board page**: `/board.html` was tracked until 2026-09-06 and is not any
+more (the migration is [below](#the-board-server-one-per-installation)).
+
+### The board server, one per installation
+
+**`/ai-bridge:board serve` is the default way to look at the board on the machine you work
+on.** It is `scripts/board-serve.sh`, a plain script — **no LLM is anywhere in its path**,
+so a page that refreshes on every file change costs nothing per refresh, which is exactly
+why the tick does not render dashboards on your behalf.
+
+| | |
+|---|---|
+| **Port** | `boardPort` in `instance.config.local.json`; absent, one derived from the bundle's own path in the **4xxxx** band. Two bundles on one machine therefore never collide, and the same bundle answers on the same port after a reboot. The port is printed when it starts and by the session banner. |
+| **Bind** | `127.0.0.1` **only**. Not the LAN, not `0.0.0.0`. A phone on the same network is deliberately **not** offered here. |
+| **Serves** | `.board-live/` and nothing else — every request is resolved against that directory and refused if it lands outside, so `../instance.config.json` is a 404. |
+| **Freshness** | it re-renders within two seconds of `SNAPSHOT.json` changing (`fswatch` when installed, a poll when not) and the page reloads itself when the render lands. |
+| **One per bundle** | a second start says the port is already served and exits 0. A port held by something that is *not* this board exits 3 and tells you to set `boardPort`. |
+| **Stopping it** | Ctrl-C. The page stays on disk; nothing is left running. |
+
+**`boardPort` is per machine and only per machine.** A port is a property of a laptop, not
+of a bundle everyone clones — a tracked value would hand two humans one number, and on one
+machine it would collide outright. A value in `instance.config.json` is ignored.
+
+### Deploying it later — the shape, not the work
+
+A later task builds the deployable variant, and this is what it will be so that nothing
+here forecloses it. **The same renderer, the same snapshot, a static site.** `build-board.sh`
+already emits a self-contained page from `SNAPSHOT.json` alone, so the deploy step is a
+push of that one file to a host the team controls and already authenticates — an internal
+static host, an S3 bucket behind SSO, a private nginx. **No server-side code travels**:
+`board-serve.sh` exists because a laptop has no host, and a host does not need it. What
+must be decided before that ships is the audience, not the mechanism — the snapshot's field
+allowlist is scoped for people who may read task titles, and a wider audience needs a
+narrower allowlist, not a wider page.
 
 ### Which renderer to reach for
 
-| | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` | `/ai-bridge:board` |
+| | `print-board.sh` | `/ai-bridge:board serve` | `build-board.sh --standalone` | `watch-board.sh` | `/ai-bridge:board publish` |
 |---|---|---|---|---|---|
-| Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, no `<html>` wrapper | the same page, kept fresh | the same body, as a **private artifact** at a fixed URL |
-| Freshness | the moment you ran it | the moment you ran it — or **every tick**, on a looping instance | the moment you ran it | live, to the second | the last time you ran it — no tick can refresh it |
-| Leaves the machine | no | no | only if you carry it somewhere | no | **yes — titles go to claude.ai** |
-| Costs | nothing | a re-run, or a looping instance | a re-run to refresh | **a resident process** | a re-run, and it must be a human typing |
-| Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue | somebody needs the board on a phone, or without a clone |
+| Output | columns in your terminal | the page at `http://localhost:<port>` | one HTML **file**, openable in a browser | the same page, kept fresh on disk | the same body, as a **private artifact** at a fixed URL |
+| Freshness | the moment you ran it | live, and the page reloads itself | the moment you ran it — or **every tick**, on a looping instance | live, to the second | the last time you ran it — no tick can refresh it |
+| Leaves the machine | no | no — `127.0.0.1` only | only if you carry it somewhere | no | **yes — titles go to claude.ai** |
+| Costs | nothing | **a resident process** | a re-run, or a looping instance | **a resident process** | a re-run, and it must be a human typing |
+| Reach for it | by default, when you are already in a terminal | you want the board in a browser while you work. **The default for a laptop.** | you want one file to open or to carry | you want the file itself kept fresh, with no browser | somebody needs the board on a phone, or without a clone |
 
-**The watcher needs a process you keep alive, and that is a real cost, not a detail.**
-ai-bridge deliberately has no resident process: its agents are ephemeral subagents inside
-one Claude Code session, nothing runs between sessions, and no daemon is installed or
-supervised. It is the same constraint that made munder-difflin's live telemetry
-unreachable for us. So the live page is a terminal tab you keep open — it stops when you
-close it, sleep the machine, or lose the session, it gives you nothing to share and no
-phone access, and it is per-machine. If any of that matters, the other two cost nothing
-and you re-run them.
+**A resident process is a real cost, not a detail.** ai-bridge deliberately has no daemon:
+its agents are ephemeral subagents inside one Claude Code session, nothing runs between
+sessions, and nothing is installed or supervised. So the server, like the watcher, is a
+terminal tab you keep open — it stops when you close it, sleep the machine, or lose the
+session. In exchange the page is live and never leaves the machine. If that matters, the
+one-shot renderers cost nothing and you re-run them.
 
 Details worth knowing before you pick one:
 
@@ -458,7 +491,8 @@ at its next stamp, with no `touch` needed.
 
 ### Before it leaves the machine, know what it carries
 
-`/ai-bridge:board` publishes this page, and a local file is copyable even when you do not.
+`/ai-bridge:board publish` publishes this page, and a local file is copyable even when you
+do not.
 Either way the board's HTML can leave the machine, so the snapshot deliberately carries
 *less* than `AWAITING.md` does — and the list below is the whole of what a published page
 can contain, because the renderer reads the snapshot and nothing else.
@@ -523,7 +557,8 @@ Full reasoning, including why one drifted instance must not blank the board for 
 | `PRUNE_ACTIVE_MINUTES` | env | the recursive mtime veto in the worktree report |
 | `worktreeRoot` | `instance.config.json` | **`<reposRoot>/_wt`** |
 | `boardInstances` | `instance.config.json` | just this instance |
-| `board` | `instance.config.json` (tracked; read by `/ai-bridge:init` **and** by each tick) | **on** — `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something commits the tracked `/board.html` |
+| `board` | `instance.config.json` (tracked; read by `/ai-bridge:init` **and** by each tick) | **on** — `SNAPSHOT.json` is seeded and each tick renders `.board-live/board.html`, which `/ai-bridge:board serve` serves |
+| `boardPort` | `instance.config.local.json` **only** — a port is a property of a machine | derived from the bundle's own path, in the 4xxxx band, and printed when the server starts |
 | `codegraphSkip` | `instance.config.json` | index every product repo |
 
 One hard rule holds regardless of `maxAgentsInFlight`: never two package installs against
@@ -1117,26 +1152,27 @@ The old `/status` command and `DASHBOARD.md` are gone. In each existing instance
 
 **How fresh does it have to be, and who has to reach it?** Two questions now, and the
 second one has exactly two answers. **Every renderer in the table below writes to the
-machine it runs on**; the two copies that travel are `/board.html`, which the tick
-*commits* — audience: this repo's permission list — and the page `/ai-bridge:board`
-publishes as a private artifact — audience: you, plus anyone you shared it with. Nothing
-is *served*: no Pages site, no host, no URL that works without one of those two grants.
+machine it runs on**; the one copy that travels is the page `/ai-bridge:board publish`
+publishes as a private artifact — audience: you, plus anyone you shared it with. The one
+thing that is *served* is served on `127.0.0.1`, so it reaches this machine and nothing
+else: no Pages site, no LAN, no URL that works without a clone or a share.
 
 | | Reach | Process | Use it when |
 |---|---|---|---|
-| `print-board.sh` | this terminal | none | you are already in the terminal. The default. |
-| `build-board.sh --standalone` | a local HTML file | none | you want to open the page — and it is what each tick renders |
+| `print-board.sh` | this terminal | none | you are already in the terminal. |
+| `/ai-bridge:board serve` | `http://localhost:<port>`, this machine | **a resident one** | you want the board in a browser while you work. The default. |
+| `build-board.sh --standalone` | a local HTML file | none | you want one file to open or to carry |
 | `build-board.sh` | a page **body**, no wrapper | none | you are embedding the markup in something else |
-| `watch-board.sh` | this machine only | **a resident one** | you want the page to follow your work *between* ticks |
-| `/ai-bridge:board` | a private artifact URL | none | somebody needs the board on a phone, or without a clone |
+| `watch-board.sh` | this machine only | **a resident one** | you want the file itself kept fresh, with no browser |
+| `/ai-bridge:board publish` | a private artifact URL | none | somebody needs the board on a phone, or without a clone |
 
 **The compliance question is a per-instance decision, and it is decided by not running one
 command.** Publishing sends every task **title** to claude.ai; the snapshot's own
 `_sensitivity` field says it is "as sensitive as the task documents it comes from", and an
 instance whose `CLAUDE.md` carries no-PII rules may not want that. This is why the publish
 step is a **human-typed skill** rather than something the tick does: no tick, no cron and
-no agent publishes anything, so an instance that never runs `/ai-bridge:board` never sends
-a byte. Every renderer in the table answers "nowhere" until you type it, `watch-board.sh`
+no agent publishes anything, so an instance that never runs `/ai-bridge:board publish` never
+sends a byte. Every renderer in the table answers "nowhere" until you type it, the server
 is the *live* one rather than the *compliant* one, and the choice stays where it was — with
 the human, per instance. (It was recorded as a Finding in the private instance that raised
 it, so it is not linkable from this public repo; the short version is the paragraph you
@@ -1158,15 +1194,10 @@ re-renders it as its last act, right after `write-snapshot.sh` refreshes the dat
 scripts/build-board.sh --standalone --out .board-live/board.html
 ```
 
-…and, **on a tick that actually changed something**, a second render to a **tracked**
-path, committed with the tick's own curation commit:
+That is the file `/ai-bridge:board serve` serves, so a tick and the server share one page.
+**The tick commits nothing** — it stages no HTML and pushes no HTML.
 
-```sh
-scripts/build-board.sh --standalone --out board.html .
-scripts/commit-as.sh project-manager "chore: refresh board.html" -- board.html
-```
-
-Six properties, and the first is the one to remember:
+Five properties, and the first is the one to remember:
 
 1. **`board` is the switch, and it is the same key the installer reads.** `board: false`
    in the tracked `instance.config.json` ⇒ the tick renders nothing and says nothing;
@@ -1190,25 +1221,17 @@ Six properties, and the first is the one to remember:
 4. **A render is not a change.** The tick still reports `noop: true` when the documents
    did not move — a board refresh alone must not wake anybody, or an idle loop starts
    scrolling and gets switched off.
-5. **`/board.html` is TRACKED, and committing it IS the publishing step.** There is no
-   second access-control system to get wrong: a file in a private repo is readable by
-   that repo's permission list and by nobody else. **GitHub Pages is not the route, and
-   not a "later" either** — access-controlled Pages is an Enterprise Cloud feature, so a
-   Pages site on a private bundle would serve the page to the WORLD at an unlisted URL,
-   which is not what the snapshot's field allowlist was ever scoped for. Measured
-   2026-09-02 on the three private bundles: `has_pages: false`, and
-   `GET /repos/<owner>/<repo>/pages` → 404 on each. `plugin/seed/.gitignore` therefore does
-   **not** ignore `board.html`, and `/ai-bridge:init` appends a `!/board.html` un-ignore to
-   instances stamped while it did.
-6. **The trailing `.` is load-bearing, and the tracked copy is why.** Given no instance
-   directory `build-board.sh` discovers instances from `boardInstances`, which on a real
-   machine names **sibling bundles** — so a bare render would commit another bundle's
-   project titles into a repo with a different permission list. That is a governance
-   breach, not a cosmetic bug. `.` renders this instance's `SNAPSHOT.json` and nothing
-   else. **And the commit is gated on `noop: false`**: the masthead timestamp moves on
-   every render, so an unconditional commit would be one content-free blob per gap — 144
-   a day at the default `10m` — and would leave the tracked tree dirty, which makes the
-   next tick defer its `git pull --rebase`.
+5. **Nothing tracked is written, and `/board.html` is gone.** It was tracked until
+   2026-09-06 on the reasoning that committing it published it to the repo's permission
+   list — true, and it cost one contended path per tick, because on a shared bundle both
+   clones render the file from their own snapshot and push it, and the tick had to carry a
+   conflict rule for a file either of them regenerates in a second. `/ai-bridge:board serve`
+   replaced it. **GitHub Pages was never the route either** — access-controlled Pages is an
+   Enterprise Cloud feature, so a Pages site on a private bundle would serve the page to
+   the WORLD at an unlisted URL (measured 2026-09-02 on the three private bundles:
+   `has_pages: false`, `GET /repos/<owner>/<repo>/pages` → 404 on each).
+   `plugin/seed/.gitignore` ignores `/board.html` again, and `/ai-bridge:init` re-appends
+   that ignore and drops the tracked file on its next run.
 
 **The tick does not publish, and that is measured rather than assumed.** Measured
 2026-09-05 on Claude Code 2.1.261: a headless `claude -p` session's tool inventory carries
@@ -1218,7 +1241,7 @@ that session. So the tick renders the two local pages exactly as before and adds
 line** when this machine has published a board:
 
 ```text
-BOARD: run /ai-bridge:board to refresh the published page
+BOARD: run /ai-bridge:board publish to refresh the published page
 ```
 
 No recorded URL ⇒ no line. Publishing stays a thing a human types.
@@ -1252,11 +1275,16 @@ at, and nothing out of a task document.
 **Three states, three distinguishable outputs**, because two of them used to print the
 same nothing:
 
-| `board` | `.board-live/board.html` | the banner says |
+| `board` | state | the banner says |
 |---|---|---|
-| `true` (or absent) | present | one line: the `file://` link |
-| `true` (or absent) | **absent** | enabled, but never rendered — and that an `/ai-bridge:dispatch` tick or `scripts/build-board.sh` renders one |
+| `true` (or absent) | the server is up | one line: `http://localhost:<port>` |
+| `true` (or absent) | page present, no server | one line: the `file://` link, and `run /ai-bridge:board serve` |
+| `true` (or absent) | no page at all | enabled, but never rendered — and what renders one |
 | `false` | either | **nothing**, in silence |
+
+The server is "up" when `.board-live/.serve` names a **live pid** — the file, not its
+presence: a SIGKILLed server leaves it behind, and a banner may never send a human to a
+port nothing is listening on.
 
 The middle row was silence until ai-bridge-v5/task-023, and on a real instance the owner
 read that silence as the Board line having been dropped in a merge; nobody looking at the
@@ -1284,50 +1312,56 @@ count and nothing else**: no title, no question text, no project slug, no queue 
 
 ### Opening the board (laptop, phone, published, live)
 
-The board is a **page in four places**, and which one you want depends on where you are
-standing. `/board.html` at the bundle root is the tracked one — the tick commits it, so
-`git pull` is how it reaches another machine. The **published artifact** is the one that
+The board is a **page in three places**, and which one you want depends on where you are
+standing. On the laptop it is a local URL; the **published artifact** is the one that
 reaches a device with no checkout on it.
 
 | Where you are | Do this | Freshness |
 |---|---|---|
-| **Laptop** (the canonical route) | `git pull`, then open `board.html` — `open board.html` on macOS | the last tick that changed something |
-| **Phone** | open the artifact URL — the session banner prints it, and it is the same URL every time | the last `/ai-bridge:board` you ran |
-| **No Claude access** (the fallback) | `git pull`, then a git client that previews HTML (e.g. Working Copy on iOS) — tap `board.html` | the last tick that changed something |
-| **Between ticks** | `scripts/watch-board.sh` → `.board-live/board.html`, on this machine | live, while the watcher runs |
+| **Laptop** (the canonical route) | `/ai-bridge:board serve`, then open `http://localhost:<port>` — the banner prints it | live; the page reloads itself |
+| **Laptop, nothing running** | `scripts/build-board.sh --standalone --out /tmp/board.html .`, then open it | the moment you ran it |
+| **Phone** | open the artifact URL — the session banner prints it, and it is the same URL every time | the last `/ai-bridge:board publish` you ran |
 
-**The phone row used to be a download**, and that is what `/ai-bridge:board` replaces:
-github.com does not render an `.html` blob as a page — it shows you the source, in the web
-UI and in the mobile app alike — so the raw file had to reach the device before a browser
-would draw it. The artifact is a page, so there is nothing to download. (`htmlpreview` and
-friends fetch through a third party and are **not** a route for a private bundle — the
-page would leave the repo's permission list to be rendered.)
+**The phone row used to be a download**, and that is what `/ai-bridge:board publish`
+replaces: github.com does not render an `.html` blob as a page — it shows you the source,
+in the web UI and in the mobile app alike — so the raw file had to reach the device before
+a browser would draw it. The artifact is a page, so there is nothing to download.
+(`htmlpreview` and friends fetch through a third party and are **not** a route for a
+private bundle — the page would leave the repo's permission list to be rendered.)
 
-**`board.html` stays, and it is the fallback on purpose.** A published artifact needs a
-Claude account; the tracked file needs a clone. Anyone who has the second and not the first
-reads the same page from the repo, which is why the tick keeps committing it and why the
-banner keeps printing its path under the URL.
+**A phone on your own LAN is deliberately not a route.** The server binds `127.0.0.1` and
+only `127.0.0.1`; serving the board to the network would put task titles on whatever else
+is on that network, and it is a decision nobody has made. The deployable variant
+([above](#deploying-it-later--the-shape-not-the-work)) is where that question gets answered
+properly, with a host that authenticates.
+
+**`/board.html` is gone.** The tick committed it until 2026-09-06, and a derived file every
+clone re-renders and pushes made one path contended on every tick. `/ai-bridge:init` drops
+it — from the index, from disk, and by re-appending the `/board.html` ignore — on its next
+run, and says so in one line. Nothing is lost: the cross-owner half of the page was always
+read from the tracked task documents at your `HEAD`, never from anybody's committed page.
 
 ### Sharing it with a second human — one step
 
 Open the artifact and share it with them, read-only, from the page's own share control.
-That is the whole step. The URL does not change, so every later `/ai-bridge:board` updates
+That is the whole step. The URL does not change, so every later `/ai-bridge:board publish` updates
 the page they already have.
 
 **What sharing does not do is let them publish.** Artifact publishing is account-scoped:
 no share level makes a second account able to update your page. On a bundle two humans
-clone, each runs `/ai-bridge:board` from their own clone and keeps their own URL in their
+clone, each runs `/ai-bridge:board publish` from their own clone and keeps their own URL in their
 own `instance.config.local.json` — which is why that key is per-machine and why a value in
 the tracked config is ignored. Neither of you is missing anything by that: the cross-owner
 half of the board is read from the tracked task documents at your git `HEAD`, not from
 anybody's published page.
 
-**Nothing is *served*.** No Pages site is enabled on any bundle repo, and there is no URL
-that works without either a clone of the repo or a share of the artifact. Those are the
-only two access-control systems in play, and both are lists you granted by hand.
+**Nothing is served off this machine.** No Pages site is enabled on any bundle repo, the
+local server binds `127.0.0.1`, and there is no URL that works without either a clone of
+the repo or a share of the artifact. Those are the only two access-control systems in play,
+and both are lists you granted by hand.
 
-**If `board.html` is missing or stale after a pull:** the tick commits it only when it
-changed something, so a quiet day leaves the file where the last real tick left it — its
-masthead timestamp says which. An instance stamped before the file was tracked also needs
-one `/ai-bridge:init` run to pick up the `!/board.html` un-ignore; until then the tick renders
-the page and stages nothing. `board: false` means it is never rendered at all.
+**If the board looks stale:** the tick re-renders `.board-live/board.html` at the end of
+every tick, so a quiet day leaves the page where the last tick left it — its masthead
+timestamp says which. `/ai-bridge:board serve` re-renders it within two seconds of the
+snapshot changing, so a running server is never staler than that. `board: false` means it
+is never rendered at all.

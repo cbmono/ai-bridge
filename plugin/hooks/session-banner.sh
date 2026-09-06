@@ -1110,7 +1110,7 @@ table() { # <header-label> <header-value> <rows>
 # clone did not own the artifact, and it survived the feature's deletion in two of three
 # live instances. Recorded per machine it says only what THIS clone published, which is the
 # one thing it can be right about — so a value that resolves from `tracked` is ignored here
-# rather than printed, and `/ai-bridge:board` writes only the local file.
+# rather than printed, and `/ai-bridge:board publish` writes only the local file.
 #
 # THE PAGE ITSELF NEVER STOPS BEING A FILE. The URL is an addition to the `file://` line,
 # never a replacement: `/board.html` is what a human without artifact access reads, and a
