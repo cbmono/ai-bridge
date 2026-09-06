@@ -219,6 +219,111 @@ ok "the reasoning is in docs/conventions.md, once" \
   "$(grep -c '^## 20\. The version is a number' "$TPL/docs/conventions.md")" 1
 
 # =======================================================================================
+echo "== 3b. every COMPANION tracks core's MAJOR, and its two manifests agree =="
+# =======================================================================================
+# THE DRIFT THIS PINS, and why it needed a test rather than a convention. The marketplace
+# listed `ai-bridge@1.0.0` beside `ai-bridge-yolo@0.15.0` for a whole release with nothing
+# anywhere saying whether that was a deliberate independent line or a companion nobody had
+# bumped — unreadable either way, which is the definition of silent drift. The rule is
+# stated in `plugin/README.md` ("How a companion is versioned"): a companion tracks core's
+# MAJOR and moves its own MINOR/PATCH on its own, because MAJOR is the only field carrying
+# a compatibility claim about the fixed `companion/<file>` contract.
+#
+# A COMPANION IS EVERY MARKETPLACE ENTRY THAT IS NOT CORE — `source: ./plugin` is core, so
+# a companion added later is covered by this section on the day it is registered, with no
+# list here to remember to extend. Core's own number is NOT asserted here; that is
+# `plugin-manifest.test.sh`'s.
+MKT="$TPL/.claude-plugin/marketplace.json"
+# In python3 (already this file's parser of record) rather than jq: the value compared is a
+# JSON string, and a companion's manifest sits at a path the marketplace entry NAMES, so
+# the reader has to follow `source` rather than assume a directory.
+companion_rows() { # <marketplace.json> <tree root> -> name<TAB>marketplace version<TAB>plugin.json version
+  python3 -c '
+import json, os, sys
+mkt, root = sys.argv[1], sys.argv[2]
+try:
+    plugins = json.load(open(mkt, encoding="utf-8")).get("plugins", [])
+except Exception as e:
+    sys.stderr.write("        UNREADABLE MARKETPLACE: %s\n" % e); sys.exit(1)
+for p in plugins:
+    src = p.get("source", "")
+    if src == "./plugin":            # core
+        continue
+    man = os.path.join(os.path.normpath(os.path.join(root, src)), ".claude-plugin", "plugin.json")
+    try:
+        own = json.load(open(man, encoding="utf-8")).get("version", "")
+    except Exception:
+        own = "<no readable plugin.json>"
+    print("\t".join([str(p.get("name", "?")), str(p.get("version", "")), str(own)]))
+' "$1" "$2"
+}
+# Prints three fault counts — shape, MAJOR, manifest pair — so each detector is asserted
+# separately and the planted case below can show all three firing.
+# A READER FAILURE IS NOT ZERO FAULTS. `companion_rows` exits non-zero on a marketplace it
+# cannot parse, and an empty row set walks this loop zero times — so without this the one
+# input that matters most (a marketplace.json someone has just broken) would report a clean
+# "0 0 0". It reports a value that can never be mistaken for clean instead.
+companion_faults() { # <marketplace.json> <tree root> <core MAJOR> -> "<shape> <major> <pair>" | "UNREADABLE"
+  local rows shape=0 major=0 pair=0 name mver pver
+  rows="$(companion_rows "$1" "$2")" || { printf 'UNREADABLE'; return; }
+  while IFS="$(printf '\t')" read -r name mver pver; do
+    [ -n "$name" ] || continue
+    if printf '%s' "$mver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+      [ "${mver%%.*}" = "$3" ] || { major=$((major+1)); printf '        %s IS %s, CORE MAJOR IS %s\n' "$name" "$mver" "$3" >&2; }
+    else
+      shape=$((shape+1)); printf '        %s VERSION NOT MAJOR.MINOR.PATCH: %s\n' "$name" "$mver" >&2
+    fi
+    [ "$mver" = "$pver" ] || { pair=$((pair+1)); printf '        %s: marketplace says %s, plugin.json says %s\n' "$name" "$mver" "$pver" >&2; }
+  done <<ROWS
+$rows
+ROWS
+  printf '%s %s %s' "$shape" "$major" "$pair"
+}
+core_major="${ver%%.*}"
+n_companions="$(companion_rows "$MKT" "$TPL" | grep -c . || true)"
+# Non-vacuity: every assertion below is a loop over this set, so an empty set passes them
+# all. If the last companion is ever removed, this is the line that says so out loud.
+ok "the marketplace registers at least one companion" \
+  "$([ "$n_companions" -ge 1 ] && echo yes || echo no)" yes
+ok "…every companion is version-shaped, tracks core's MAJOR ($core_major), and its two manifests agree" \
+  "$(companion_faults "$MKT" "$TPL" "$core_major")" "0 0 0"
+
+# THE NEGATIVE CONTROL, one planted entry per fault class: a check that cannot fail is not
+# a check, and three counters that are always 0 look identical to three that never fire.
+PL="$TMP/companions"
+mkdir -p "$PL/.claude-plugin"
+for d in bad-major bad-pair bad-shape; do mkdir -p "$PL/$d/.claude-plugin"; done
+printf '{ "version": "0.15.0" }\n' > "$PL/bad-major/.claude-plugin/plugin.json"
+printf '{ "version": "9.2.4" }\n'  > "$PL/bad-pair/.claude-plugin/plugin.json"
+printf '{ "version": "9.2" }\n'    > "$PL/bad-shape/.claude-plugin/plugin.json"
+cat > "$PL/.claude-plugin/marketplace.json" <<'JSON'
+{
+  "name": "planted",
+  "plugins": [
+    { "name": "core-is-skipped", "source": "./plugin",     "version": "9.9.9" },
+    { "name": "bad-major",       "source": "./bad-major",  "version": "0.15.0" },
+    { "name": "bad-pair",        "source": "./bad-pair",   "version": "9.2.3" },
+    { "name": "bad-shape",       "source": "./bad-shape",  "version": "9.2" }
+  ]
+}
+JSON
+ok "…and that audit flags a planted drift of each kind (core skipped)" \
+  "$(companion_faults "$PL/.claude-plugin/marketplace.json" "$PL" 9 2>/dev/null)" "1 1 1"
+
+# …and that refusal is asserted, not just written: a marketplace this reader cannot parse
+# must come back UNREADABLE, never "0 0 0".
+printf 'not json\n' > "$PL/.claude-plugin/broken.json"
+ok "…and an unparseable marketplace is never reported as clean" \
+  "$(companion_faults "$PL/.claude-plugin/broken.json" "$PL" 9 2>/dev/null)" "UNREADABLE"
+
+# THE RULE ITSELF IS A SHIPPED DOC, so it is asserted where it ships: a test pinning
+# numbers against a rule nobody wrote down is pinning a coincidence.
+ok "plugin/README.md states the rule under 'Companion plugins'" \
+  "$(grep -qF "tracks core's MAJOR" "$TPL/plugin/README.md" && echo yes || echo no)" yes
+ok "…and gives the reason (MAJOR is the compatibility claim)" \
+  "$(grep -qF 'MAJOR is the only field carrying a compatibility claim' "$TPL/plugin/README.md" && echo yes || echo no)" yes
+
+# =======================================================================================
 echo "== 4. the drift check: BEHIND speaks, equal and ahead are byte-empty =="
 # =======================================================================================
 # Every case builds a real bare repo and a real clone of it. `remote_ver` is what the

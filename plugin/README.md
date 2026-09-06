@@ -115,6 +115,17 @@ held to it too, and a companion that could remove a core gate would not be a com
 | **What core reads** | Only names it already knows. Core never executes a companion's code, and a companion ships no hook and no agent — a second copy of a `PreToolUse` hook fires in every session on the machine. |
 | **When it is absent** | The gated default, silently. Absence is never an error, and every unknown (no registry, an unreadable one, a root gone from disk) resolves to absence. |
 
+### How a companion is versioned
+
+**A companion tracks core's MAJOR and moves its own MINOR and PATCH independently.**
+`ai-bridge-yolo 1.0.x` is the companion of `ai-bridge 1.x`, and it releases a MINOR or a
+PATCH whenever its own contents change, without waiting for core to move. **The reason:**
+MAJOR is the only field carrying a compatibility claim — the fixed `companion/<file>` path
+and the names core reads out of it — so a shared MAJOR says *this companion speaks the core
+contract you have installed*, while independent MINOR/PATCH keeps a companion's own fixes
+from forcing a core release nobody needed. `tests/template-version.test.sh` asserts both
+halves for every companion entry in the marketplace, so a companion cannot drift silently.
+
 ### Today's one companion
 
 | Companion | Ships | Read by |
