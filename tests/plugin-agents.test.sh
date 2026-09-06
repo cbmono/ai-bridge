@@ -50,6 +50,7 @@ ok "plugin/agents carries exactly the eight role agents" \
 # Phase 2's whole point. A second copy under symlink/ SHADOWS the plugin one in every
 # stamped instance, so its return would silently reinstate the drift the parity section
 # used to guard — and nothing else in this repo would notice.
+# path-scan: absent — the whole point of this assertion is that the path is GONE
 ok "symlink/.claude/agents is retired — the plugin copies are the only copies" \
   "$([ -e "$TPL/symlink/.claude/agents" ] && echo no || echo yes)" yes
 

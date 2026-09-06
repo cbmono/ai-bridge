@@ -110,6 +110,15 @@ jobs:
                 #     guard's behaviour depends on plugin/scripts/resolve-autonomy.sh, which
                 #     commit-as-guard.test.sh never names, so a diff touching only that file
                 #     would derive companion-plugins and miss the guard's own harness.
+                #   harness-read-paths                               ai-bridge-v2/task-029. It reads
+                #     the WHOLE tests/ tree and resolves every literal path those harnesses name
+                #     against the plugin tree, so a plugin-only path move is exactly the diff it
+                #     answers for and exactly the diff that names none of its own subject. It is
+                #     selectable by derivation only by accident — its fixture happens to spell
+                #     `plugin/seed/...` — and an accident is not a wiring. The class it guards is
+                #     the one where derivation SUCCEEDS and the selected harness still goes green:
+                #     #125's seed move selected push-state.test.sh, whose probe of the moved path
+                #     then reported the healthy answer because the read had failed.
                 core='tests/plugin-manifest.test.sh
           tests/plugin-skills.test.sh
           tests/plugin-agents.test.sh
@@ -117,7 +126,8 @@ jobs:
           tests/deny-baseline.test.sh
           tests/agent-control.test.sh
           tests/commit-as-guard.test.sh
-          tests/companion-plugins.test.sh'
+          tests/companion-plugins.test.sh
+          tests/harness-read-paths.test.sh'
                 # The continuation lines sit at the block scalar's own base indent, which
                 # YAML strips, so the shell already sees them flush left. The sed is
                 # insurance: re-indent them to read as a list and nothing breaks.

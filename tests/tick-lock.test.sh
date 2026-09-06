@@ -816,6 +816,8 @@ echo "== the contract in prose says what the code does, in all four places =="
 # A header that still called existence the signal would be the more dangerous half of this
 # change: the code would be right and every reader of it wrong. Asserted as an ABSENCE,
 # because that sentence is the one a partial revert leaves behind.
+# path-scan: absent — $TPL/symlink is the retired directory this sweep must still cover;
+# the other two roots on the line resolve, so the grep is a scan that WAS able to act.
 ok "no file still calls existence the whole signal" \
   "$(grep -rlF 'EXISTENCE is the' "$TPL/symlink" "$TPL/docs" "$TPL/README.md" 2>/dev/null | wc -l | tr -d ' ')" 0
 ok "the header says the claim records whose it is" \
