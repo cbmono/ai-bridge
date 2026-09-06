@@ -3,8 +3,9 @@
 # native-worktrees-probe.sh — re-measures docs/spikes/native-worktrees.md.
 # Builds a fixture bundle + fixture product repo under a temp root and prints
 # one line per probe. Probes 1-3 need no auth (the worktree is created before
-# the auth check); probes 4-5 spend one haiku turn each and are skipped without
-# --live. Exit 0 always: this reports, it never gates.
+# the auth check); probes 4-5 spend one haiku turn each, use your REAL
+# CLAUDE_CONFIG_DIR because they need auth, and are skipped without --live.
+# Exit 0 always: this reports, it never gates.
 set -uo pipefail
 
 LAB="$(mktemp -d)"; LIVE="${1:-}"
@@ -67,7 +68,7 @@ say "b: hook won over .claude/worktrees" \
 CLAUDE_CONFIG_DIR="$LAB/home" run 120 "$B" --settings "$LAB/settings.json" --worktree probe-c 'x'
 say "c: worktree is of the product repo" \
   "$(git -C "$P" worktree list | grep -c 'probe-c')"
-say "c: bundle got no worktree" "$(git -C "$B" worktree list | wc -l | tr -d ' ')"
+say "c: bundle worktrees (1 = main only)" "$(git -C "$B" worktree list | wc -l | tr -d ' ')"
 say "c: payload" "$(cat "$LAB/create-payload.json" 2>/dev/null)"
 
 [ "$LIVE" = "--live" ] || { say "live probes" "skipped (pass --live)"; exit 0; }
