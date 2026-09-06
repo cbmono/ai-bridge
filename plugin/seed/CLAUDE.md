@@ -147,9 +147,8 @@ the only reader this rule has.
   working tree. It sets the author name to the role and resolves the email
   (local `authorEmail` → `people[<ownerGithubUser>]` → tracked `authorEmail` →
   `git config`), so a shared bundle's clones author as their own humans
-  (`docs/sharing.md`). **Never** use it in a target repo — a commit there is authored by
-  the repo's normal identity, never as a role. It adds no `Co-Authored-By` trailer at any
-  setting of `commitAttribution`, which governs target repos only.
+  (`docs/sharing.md`). **Never** use it in a target repo — it authors as the role, and a
+  commit there carries the repo's own identity.
 
 ## Conventions for role agents working in target repos
 **Full rules: [`CONVENTIONS.md`](CONVENTIONS.md) — read it before your first write
@@ -159,10 +158,9 @@ lives there and not here because it governs work *outside* this bundle.
 **These are invariants — hold them whether or not you have read `CONVENTIONS.md`:**
 - **Detect the default branch** — never assume `main`, and **never work on it**.
 - **Never merge.** Only the human merges; you open the PR and stop.
-- **Keep the `Co-Authored-By: Claude` trailer** on target-repo commits — Claude did
-  co-author them, so it is true by default. The dispatch brief names this installation's
-  resolved `commitAttribution`; `commitAttribution: none` is the opt-out for an
-  organisation that requires one, and then no trailer and no session URL.
+- **Keep the `Co-Authored-By: Claude` trailer** on target-repo commits — it is true. Your
+  brief names this installation's resolved `commitAttribution`; `none` is the opt-out, and
+  then no trailer and no session URL.
 - **No customer PII** in code, commits, PR text, task docs, logs, or the KB;
   **never echo, print, or log secrets or environment variables.** Describe the
   *shape* of what you saw, not the records.
