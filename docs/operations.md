@@ -856,7 +856,7 @@ owner asked three times in one session, for three different instances.
 
 ```text
 
-AI-Bridge v1.0.4 · _ai-bridge-private · org: cbmono
+AI-Bridge v1.1.0 · _ai-bridge-private · org: cbmono
 ───────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
