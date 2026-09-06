@@ -24,6 +24,37 @@ in `cbmono/ai-bridge` enforces this.
 
 <!-- tool-mention: Workflow(2), Agent(2), EnterWorktree(1), mcp__claude-in-chrome__*(1), AskUserQuestion(1) — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent; EnterWorktree may be missing for a subagent; failure-analyst holds no browser tools; no role agent holds AskUserQuestion, which is why a tool request goes into open_questions instead of a live prompt. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
 
+## Write less
+
+**Owner's verdict, 2026-09-06: agents write far too much, everywhere.** Measured on this
+tree the same day — `init-bundle.sh` 1,115 comment lines of 2,400, `session-banner.sh`
+1,016 of 1,463, PR bodies [#122](https://github.com/cbmono/ai-bridge/pull/122) and
+[#135](https://github.com/cbmono/ai-bridge/pull/135) at 5,826 and 6,423 characters, 133
+`Finding`s averaging 110 lines. **These are ceilings, not targets, and they bind every
+agent on every surface below.**
+
+| Surface | Ceiling |
+|---|---|
+| an **inline comment** | a non-obvious **WHY**, at most **2 lines**. Never a paragraph of history, never a restatement of the code the reader is already looking at. |
+| a **script header** | **10 lines** — what it does, its exit codes, and where the reasoning lives. |
+| a **commit** | subject **72 characters**, body at most **5 lines**. |
+| a **PR body** | the TL;DR line + the criteria table + at most **3 one-line notes**. Hard ceiling **2,500 characters**. |
+| a task **`# Result`** | **15 lines**. |
+| a **`Finding`** | **40 lines**, and a required one-line `lesson:` in its frontmatter. |
+
+**Nothing here licenses dropping evidence, a criterion or a caveat** — the floor in "The
+criteria table is the merge gate" binds exactly as hard. What the ceilings cut is
+**narration**: the history behind the line, what you tried first, the code said again in
+English. **That reasoning is relocated, never deleted** — it goes in the **task document**,
+which is the one surface with no length limit, and the short form links to it.
+
+**Three of these have readers, so they are not prose.**
+`pr-body-clearance.sh` refuses a body over 2,500 characters or carrying more than 3 notes
+(**exit 4**); `validate-bundle.sh` warns on a `Finding` over 40 lines or missing its
+`lesson:`; `tests/concision-contract.test.sh` fails when a `plugin/**/*.sh` file's
+comment-line share exceeds **35%**, and ratchets the files already above it so none of
+them may grow its share.
+
 - **Exhaust your own tools before you hand work back — three rungs, in order.** The default
   when you cannot do something is **not** to report it back:
 
@@ -108,15 +139,16 @@ in `cbmono/ai-bridge` enforces this.
   | Surface | Rule |
   |---|---|
   | PR bodies, review comments and replies, status reports, code comments | **concise** — a reader is deciding something, now |
-  | Task docs, commit messages, `Finding`s | **as long as the reasoning needs** — these are the durable record |
+  | Commit messages, `Finding`s | **bounded, but wider** — 5 lines and 40 (→ "Write less"): the durable record still fits on a screen |
+  | Task docs | **as long as the reasoning needs** — the ONE surface with no ceiling, and where everything the others cut belongs |
 
   **Brevity is never an excuse to drop evidence, a criterion or a caveat.** It is licence
-  to drop *narration* — the story of how you got there — because that story is already
-  carried by the commit message and the task doc, both of which travel with the change and
-  neither of which has a length limit. **So there is nowhere for reasoning to be lost:**
-  every rule below that says "short" is telling you where to put it, not to delete it.
-- **The PR body has a required shape, and it is short.** Its reader is a **human deciding
-  whether to merge** — not an agent reconstructing how you worked. **It opens with the
+  to drop *narration* — the story of how you got there — because that story belongs in the
+  task doc, which travels with the change and is the one surface with no length limit.
+  **So there is nowhere for reasoning to be lost:** every rule below that says "short" is
+  telling you where to put it, not to delete it.
+- **The PR body has a required shape, and it is short — 2,500 characters, hard** (→ "Write
+  less"). Its reader is a **human deciding whether to merge** — not an agent reconstructing how you worked. **It opens with the
   literal heading `## Description (TL;DR)`.** Four required parts, in this order, plus an
   optional `## Notes` section (below) and nothing else:
 
@@ -188,7 +220,8 @@ in `cbmono/ai-bridge` enforces this.
   decide a merge.** A reader who wants the story has `git log` and the task document; a
   reader deciding a merge has thirty seconds. Add a `## Notes` section only for something a
   *reviewer* cannot see from the diff (a hint about where to look, a deliberate omission)
-  — **one line per note, bounded exactly as the `⚠️` lines are.** **Its depth is not
+  — **one line per note, at most THREE of them, bounded exactly as the `⚠️` lines are.**
+  **Its depth is not
   significant**: the reader matches the heading's *text* and not its `#` count, so
   `## Notes` here and the `### Notes` of the worked example are one section to it. "Judgement calls for the
   reviewer" is the heading this section grows under once it is unbounded, and that is the
@@ -199,7 +232,8 @@ in `cbmono/ai-bridge` enforces this.
   and a reader who stops there has still got every finding. A note that opens with its
   background and arrives at the point three clauses later is refused by
   `pr-body-clearance.sh`. **The section stays optional and no number of notes is ever
-  required** — a small PR needs none, and the gate never asks for one.
+  required** — a small PR needs none, and the gate never asks for one; a fourth note is
+  refused at exit 4.
 - **The criteria table is the merge gate — so it is required, and terseness never costs
   evidence.** It is what the independent reviewer — an external one (e.g. CodeRabbit) or
   the `qa-reviewer` fallback — evaluates the change against, so it must travel with the
@@ -219,10 +253,11 @@ in `cbmono/ai-bridge` enforces this.
   criteria table, its heading's tally, a tally that matches the rows, the reason for any
   `✗` in that tally, or the bold claim opening a `## Notes` bullet;
   `scripts/required-checks.sh` asks it for every PR it is about to clear, and
-  `AUTONOMY.md` precondition 3 names it. **It refuses on missing STRUCTURE, never on
-  length**: this bullet bounds the body's SHAPE and never its size, so a long body
-  carrying every element clears and the character count is reported as information only.
-  A change that honestly needs more words is exactly the one that most needs explaining. Run it on your draft before you open the PR
+  `AUTONOMY.md` precondition 3 names it. **It refuses on missing structure at exit 1 and
+  on LENGTH at exit 4** — over 2,500 characters, or more than 3 `## Notes` bullets, per
+  "Write less" above. The two are separate codes because the fixes are: exit 1 says add
+  the missing element, exit 4 says move the reasoning to the task doc.
+  Run it on your draft before you open the PR
   (`scripts/pr-body-clearance.sh --body-file <file>`); it is the cheapest check you have.
   **Short and auditable are the same thing here, which is why brevity costs nothing.**
   `` `foo.test.sh` 40/0 `` is *shorter* than a paragraph and *more* checkable than one: it
