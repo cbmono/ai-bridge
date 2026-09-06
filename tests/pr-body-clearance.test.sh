@@ -31,11 +31,13 @@
 # "structure present" about a body carrying none, and being wrong in that direction is
 # the only way it can be dangerous: a false "structure missing" costs a human a glance.
 #
-# BOTH SPELLINGS OF THE TL;DR MARKER ARE PINNED, and that is coordination, not
-# thoroughness. `CONVENTIONS.md` specifies a bold `**TL;DR** —` line today;
-# `ai-bridge-v5/task-007` will require the heading `## Description (TL;DR)`. A gate that
-# accepted only one would refuse correct pull requests the day the other landed, so both
-# clear, and this file fails if either stops clearing.
+# EVERY SPELLING OF THE TL;DR MARKER IS PINNED, and that is coordination, not
+# thoroughness. `CONVENTIONS.md` requires the heading `## Description` since 2026-09-06;
+# the `(TL;DR)` suffix it carried before that clears FOR ONE MORE RELEASE, with a
+# one-line deprecation notice, so a pull request opened before the rename is told rather
+# than refused. Both spellings, and the notice, are pinned below; the notice is pinned in
+# BOTH directions, because a notice that fires on the new heading is as wrong as one that
+# never fires at all.
 #
 # `gh` is replaced by a stub on PATH, so the whole matrix runs offline. The stub answers
 # from $FIX; an absent fixture is an absent thing, exactly as in review-clearance.test.sh.
@@ -190,7 +192,7 @@ crit_head() { # <✓ rows> [<✗ rows>] -> a criteria heading whose tally matche
 
 shaped_body() { # <✓ rows> <✗ rows> <table lines...> -> a body carrying every element
   local c="$1" x="$2"; shift 2
-  body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+  body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
             "$(crit_head "$c" "$x")" '' "$@"
 }
 
@@ -235,7 +237,7 @@ ok "…while the intact file does vouch for itself" "$(selftest_contract "$SCRIP
 echo
 echo "== both elements present: it clears, at whatever length =="
 serve "$(good_body)"
-expect "the heading form (task-007's shape) -> clear" 0 42
+expect "the heading form (CONVENTIONS.md's shape) -> clear" 0 42
 says   "  ...and says both elements are there" "carries a TL;DR line and a well-formed"
 
 serve "$(body_file '**TL;DR** — adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
@@ -245,6 +247,28 @@ expect "the bold form (CONVENTIONS.md's shape today) -> clear" 0 42
 serve "$(body_file 'TL;DR: adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "the bare-token form -> clear" 0 42
+
+echo
+echo "== the heading rename: the new form, the retired one, and the notice =="
+# `## Description` is the required heading; `## Description (TL;DR)` clears for one more
+# release so a body written before the rename is not refused at the merge gate.
+serve "$(good_body)"
+expect "'## Description' -> clear" 0 42
+says_not "  ...with NO deprecation notice on the current heading" "is deprecated"
+
+serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+                   "$(crit_head 1)" '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "the retired '## Description (TL;DR)' -> still clear" 0 42
+says   "  ...carrying the one-line deprecation notice" "is deprecated"
+says   "  ...that names the heading to move to"        "use '## Description'"
+
+# The new row matches the WHOLE heading text, so a heading that merely STARTS with the
+# word is not the marker — the same fail-closed narrowing `## Is the TL;DR rule required?`
+# already gets one block down.
+serve "$(body_file '## Description of the parser' 'Adds the gate.' '' "$VERIFIED" '' \
+                   "$(crit_head 1)" '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "'## Description of the parser' is not the marker -> refuse" 1 42
+says   "  ...naming the TL;DR line as missing" "MISSING: the TL;DR line"
 
 # A `✗` row is the HONEST state of an unverified criterion, and SCHEMA.md clause 7 is what
 # refuses on it. This predicate must not double as that gate, or the repo has two answers
@@ -260,7 +284,7 @@ echo "== the BODY ceiling: the two bodies the owner measured, and one that fits 
 # here rather than quietly clearing the evidence it was set on.
 sized_body() { # <chars> -> a complete body padded to exactly that many characters
   local want="$1" f; f="$TMP/sized.$want.md"
-  { printf '%s\n' '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" ''
+  { printf '%s\n' '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" ''
     printf '%s\n' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW"
     printf '\n'
   } > "$f"
@@ -305,7 +329,7 @@ echo "== the NOTES ceiling: three is the limit, and the fourth is the essay =="
 notes_body() { # <n> -> a complete body carrying n claim-first Notes bullets
   local n="$1" i lines=()
   for i in $(seq 1 "$n"); do lines+=("- **Note $i.** A reviewer cannot see this from the diff."); done
-  body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+  body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
             "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes' '' "${lines[@]}"
 }
 serve "$(notes_body "$NOTES_CEILING")"
@@ -354,7 +378,7 @@ row_body() { # <evidence-bytes>... -> a conforming body with one criteria row pe
   local -a lines
   # The heading's tally is COMPUTED from the argument count, so a case that adds a row
   # cannot accidentally become a case about a tally that no longer matches its table.
-  lines=('## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head "$#")" '' \
+  lines=('## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head "$#")" '' \
          "$TABLE_HEAD" "$TABLE_RULE")
   local n i=0
   for n in "$@"; do
@@ -496,7 +520,7 @@ expect "no TL;DR marker -> refuse" 1 42
 says   "  ...naming the TL;DR line as the missing element" "MISSING: the TL;DR line"
 says_not "  ...and not blaming the table, which is present" "MISSING: the acceptance-criteria table"
 
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    'Some prose, and no table.')"
 expect "no criteria table -> refuse" 1 42
 says   "  ...naming the table as the missing element" "MISSING: the acceptance-criteria table"
@@ -512,18 +536,18 @@ expect "an EMPTY body -> refuse (readable, not unknown)" 1 42
 
 # A table of changed files is not the criteria table, and the `✓`/`✗` column is exactly
 # what tells them apart — the same column SCHEMA.md clause 7 and AUTONOMY.md read.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    '| File | Change |' '|---|---|' '| a.sh | new |')"
 expect "a table with no ✓/✗ in it -> refuse" 1 42
 says   "  ...saying there is nothing for the merge gate to consult" "nothing for the merge gate to consult"
 
 # GitHub renders NO TABLE when the delimiter row's cell count differs from the header's,
 # so a body like this shows the reader a wall of pipes. Refusing it is the safe direction.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    "$TABLE_HEAD" '|---|---|' "$TABLE_ROW")"
 expect "a table the host would not render -> refuse" 1 42
 
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    "$TABLE_HEAD" "$TABLE_RULE")"
 expect "a table header with no data row -> refuse" 1 42
 
@@ -552,15 +576,15 @@ serve "$(body_file '## Is the TL;DR rule required?' 'Some discussion of it.' '' 
 expect "a heading that only MENTIONS TL;DR -> refuse" 1 42
 says   "  ...naming the TL;DR line as missing" "MISSING: the TL;DR line"
 # …while the heading forms that ARE the marker still clear, so the fix is a narrowing and
-# not a break. (`## Description (TL;DR)` and `**TL;DR** —` are covered above; this is the
-# bare heading.)
+# not a break. (`## Description` and `**TL;DR** —` are covered above; this is the bare
+# heading.)
 serve "$(body_file '## TL;DR' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a bare '## TL;DR' heading -> still clear" 0 42
 
 # `|---|:|` is not a delimiter row: GitHub renders no table at all, so a marked row under
 # it is not the criteria table however much it looks like one.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    '| Criterion | ✓ |' '|---|:|' '| it works | ✓ |')"
 expect "a delimiter row with a non-delimiter cell -> refuse" 1 42
 # …and the alignment colons GFM does allow are still a delimiter row.
@@ -599,7 +623,7 @@ echo "== element 4: the Verified line, and the one thing asked of what it says =
 # #3286's lead is followed by exactly one line — "Verified: 277/0 locally, 10/10
 # non-deploy checks green on [run 33430116558](...)" — and a reader decides from that one
 # line whether to trust the eighteen rows below it. Nothing required it, so nothing had it.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$(crit_head 1)" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$(crit_head 1)" '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "no Verified line -> refuse" 1 42
 says   "  ...naming the Verified line as the missing element" "MISSING: the Verified line"
@@ -609,7 +633,7 @@ says_not "  ...nor the table, which is present"               "MISSING: the acce
 # PRESENT AND CITING NOTHING IS A DIFFERENT REFUSAL FROM ABSENT, because the fix is
 # different: one line has to be written, the other has to gain a link. Telling an author
 # who wrote the line that it is missing sends them looking for what they already did.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' \
                    'Verified: 40/0 locally, and every check is green.' '' "$(crit_head 1)" '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a Verified line citing nothing -> refuse" 1 42
@@ -622,7 +646,7 @@ says_not "  ...and not calling it missing"                   "MISSING: the Verif
 for cite in 'Verified: 40/0 on [run 1](https://example.invalid/runs/1).' \
             'Verified: 40/0, CI green — https://example.invalid/actions/runs/1' \
             '**Verified:** 40/0 on [run 1](https://example.invalid/runs/1).'; do
-  serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$cite" '' "$(crit_head 1)" '' \
+  serve "$(body_file '## Description' 'Adds the gate.' '' "$cite" '' "$(crit_head 1)" '' \
                      "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
   expect "a Verified line citing something -> clear" 0 42
 done
@@ -630,7 +654,7 @@ done
 # purpose: the element is ONE LINE carrying the counts and the link, and accepting a
 # heading would mean deciding how many lines below it the citation may sit. The author
 # whose Verified line has grown into a section still writes the one line.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' '### Verified' \
+serve "$(body_file '## Description' 'Adds the gate.' '' '### Verified' \
                    '40/0 on [run 1](https://example.invalid/runs/1).' '' "$(crit_head 1)" '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a '### Verified' SECTION is not the one line -> refuse" 1 42
@@ -638,7 +662,7 @@ says   "  ...naming the Verified line as missing" "MISSING: the Verified line"
 
 # ANCHORED, exactly as the TL;DR markers are, and failing toward refusal for the same
 # reason: a body that DISCUSSES the Verified line must not clear on the discussion.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' \
                    'Everything here was verified: see https://example.invalid/runs/1.' '' \
                    "$(crit_head 1)" '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a mid-sentence 'verified:' does not count -> refuse" 1 42
@@ -659,14 +683,14 @@ expect "no heading over the criteria table -> refuse" 1 42
 says   "  ...saying the table carries no tally" "MISSING: a heading over the criteria table"
 
 # …and with the house heading present but no `### Criteria` one, the nearest heading above
-# the table is `## Description (TL;DR)`, which is a heading carrying no tally. Same
+# the table is `## Description`, which is a heading carrying no tally. Same
 # refusal, different sentence, because the fix is different.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "the lead heading is the nearest one, and it has no tally -> refuse" 1 42
 says   "  ...asking for the tally on it" "MISSING: the tally on the criteria heading"
 
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    '### Criteria' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a heading with no tally -> refuse" 1 42
 says   "  ...naming the tally as the missing part" "MISSING: the tally on the criteria heading"
@@ -674,13 +698,13 @@ says   "  ...and quoting the heading it read"      "Criteria"
 
 # A TALLY NOBODY CHECKS IS WORSE THAN NO TALLY, because it is the one number a reader
 # takes on trust and never re-derives. Both directions, one row apart.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    '### Criteria (2 ✓ / 0 ✗)' '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a tally claiming one ✓ too many -> refuse" 1 42
 says   "  ...naming what it claims and what the table has" "claims 2 ✓ / 0 ✗"
 says   "  ...and the actual counts"                        "carries 1 ✓ / 0 ✗"
 
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    '### Criteria (1 ✓ / 1 ✗ — the ✗ needs a human)' '' \
                    "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "a tally claiming a ✗ the table does not have -> refuse" 1 42
@@ -701,7 +725,7 @@ expect "bolded and code-spanned marks still count -> clear" 0 42
 
 # THE REASON, AND ONLY WHEN THERE ARE ✗. A bare `(0 ✓ / 1 ✗)` is exactly the alarming
 # artifact this element exists to prevent.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    '### Criteria (0 ✓ / 1 ✗)' '' "$TABLE_HEAD" "$TABLE_RULE" \
                    '| works with two host accounts | ✗ | needs two accounts |')"
 expect "a ✗ tally with no reason -> refuse" 1 42
@@ -709,7 +733,7 @@ says   "  ...asking for the reason, not for the tally" "MISSING: the reason for 
 says_not "  ...and not claiming the tally is wrong"    "WRONG: the criteria heading"
 
 # A heading that closes on punctuation is still bare — the reason has to be words.
-serve "$(body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' \
+serve "$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' \
                    '### Criteria (0 ✓ / 1 ✗ —)' '' "$TABLE_HEAD" "$TABLE_RULE" \
                    '| works with two host accounts | ✗ | needs two accounts |')"
 expect "a dash where the reason should be -> refuse" 1 42
@@ -807,7 +831,7 @@ says_not "  …and its criteria table is well-formed"     "MISSING: the acceptan
 # SUBJECT, and #3286 is a pull request in ANOTHER repository with its own house style. Both
 # are pinned here so the day either moves, this goes red and somebody decides it on purpose
 # rather than discovering it:
-#   1. `CONVENTIONS.md` requires the literal heading `## Description (TL;DR)` opening every
+#   1. `CONVENTIONS.md` requires the literal heading `## Description` opening every
 #      body — "that exact string, character for character". #3286 opens with its TL;DR
 #      SENTENCE and no heading, so element 1 refuses it.
 says "  what it is refused for: the ai-bridge TL;DR heading" "MISSING: the TL;DR line"
@@ -816,7 +840,7 @@ says "  what it is refused for: the ai-bridge TL;DR heading" "MISSING: the TL;DR
 #      and `binary slice` (12). `see above` (9) is the longest thing CONVENTIONS.md names
 #      as a floor FAILURE, so this is the floor working, not the floor misfiring.
 EXEMPLAR_HOUSED="$TMP/exemplar-housed.md"
-{ printf '%s\n\n' '## Description (TL;DR)'; cat "$EXEMPLAR"; } > "$EXEMPLAR_HOUSED"
+{ printf '%s\n\n' '## Description'; cat "$EXEMPLAR"; } > "$EXEMPLAR_HOUSED"
 expect "…the same body under the ai-bridge heading -> the ROW bound, and only it" \
        3 --body-file "$EXEMPLAR_HOUSED"
 says   "  naming both cells under the floor"  "but 2 acceptance-criteria"

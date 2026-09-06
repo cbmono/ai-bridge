@@ -45,13 +45,12 @@
 #      mid-paragraph NOR a heading that merely contains the token (`## Is the TL;DR rule
 #      required?`) matches: the first cut anchored the heading row at the `#` and then
 #      allowed anything before the token, which cleared exactly that heading. The failure
-#      is toward refusal. THE MARKER IS DELIBERATELY SPELLED THREE WAYS
-#      BECAUSE THE RULE ITSELF IS MOVING: `CONVENTIONS.md` today specifies a bold
-#      `**TL;DR** —` line, and `ai-bridge-v5/task-007` will require the named heading
-#      `## Description (TL;DR)` opening every body. A gate that pinned either spelling
-#      exclusively would refuse correct pull requests the day the other landed — and a
-#      gate that refuses correct work is a gate somebody switches off. Both forms clear
-#      here, today and after that change.
+#      is toward refusal. THE MARKER IS DELIBERATELY SPELLED SEVERAL WAYS BECAUSE THE
+#      RULE ITSELF MOVES: `CONVENTIONS.md` requires the heading `## Description` today,
+#      and the `(TL;DR)` suffix it carried until 2026-09-06 still clears FOR ONE RELEASE
+#      with a one-line deprecation notice. A gate that pinned one spelling exclusively
+#      would refuse correct pull requests opened before the rename landed — and a gate
+#      that refuses correct work is a gate somebody switches off.
 #
 #   2. THE ACCEPTANCE-CRITERIA TABLE — THE SAME ARTIFACT THE MERGE GATE ALREADY READS.
 #      `SCHEMA.md` clause 7 and `AUTONOMY.md` precondition 3 consume the `✓`/`✗` table in
@@ -256,14 +255,24 @@ set -uo pipefail
 #
 # EVERY ROW IS ANCHORED AT THE START OF A LINE. That anchor is the fail-closed property:
 # without it, a body that discusses the TL;DR rule in a sentence would clear on the
-# discussion. Row 1 is the heading form `## Description (TL;DR)` that `task-007`
-# introduces; row 2 is the leading-emphasis form `**TL;DR** — …` that `CONVENTIONS.md`
-# specifies today; row 3 is the bare token followed by a separator, which is what an
-# author writes when they are not looking at either document.
+# discussion. Row 1 is the heading `CONVENTIONS.md` requires today, matched as the WHOLE
+# heading text so `## Description of the parser` does not clear; row 2 is the same heading
+# with the retired `(TL;DR)` suffix, plus the bare `## TL;DR` spelling; row 3 is the
+# leading-emphasis form `**TL;DR** — …`; row 4 is the bare token followed by a separator,
+# which is what an author writes when they are not looking at any document.
 TLDR_MARKERS='
+^[[:space:]]{0,3}#{1,6}[[:space:]]+description[[:space:]]*$
 ^[[:space:]]{0,3}#{1,6}[[:space:]]+(description[[:space:]]*)?\(?tl[;:/ ]?dr
 ^[[:space:]]{0,3}(\*\*|__|\*|_)[[:space:]]*(description[[:space:]]*)?\(?tl[;:/ ]?dr\)?[[:space:]]*(\*\*|__|\*|_)
 ^[[:space:]]{0,3}\(?tl[;:/ ]?dr\)?[[:space:]]*[]):：.,;—–-]
+'
+
+# --- table 1a: the RETIRED heading spelling, kept for one release --------------
+# A strict subset of table 1, read the same way. It decides nothing — a body matching it
+# has already cleared element 1 — it only earns the one-line deprecation notice below, so
+# an author who opened a pull request before the rename is told rather than refused.
+DEPRECATED_TLDR_MARKERS='
+^[[:space:]]{0,3}#{1,6}[[:space:]]+description[[:space:]]*\(?tl[;:/ ]?dr
 '
 
 # --- table 2: the marks that identify the ACCEPTANCE-CRITERIA table ------------
@@ -359,6 +368,7 @@ validate_tables() {
 "
   done <<EOF
 $(rows "$TLDR_MARKERS")
+$(rows "$DEPRECATED_TLDR_MARKERS")
 $(rows "$VERIFIED_MARKERS")
 $(rows "$VERIFIED_CITATIONS")
 EOF
@@ -429,6 +439,21 @@ has_tldr() { # <rendered-body>
     [ "$rc" -eq 1 ] || return 2
   done <<EOF
 $(rows "$TLDR_MARKERS")
+EOF
+  return 1
+}
+
+# --- element 1a: is that marker the RETIRED heading spelling? -----------------
+#   0 yes   1 no   2 the table will not compile (unknown; the caller refuses)
+has_deprecated_tldr() { # <rendered-body>
+  local pat rc
+  while IFS= read -r pat; do
+    [ -n "$pat" ] || continue
+    grep -Eiq "$pat" "$1" 2>/dev/null; rc=$?
+    [ "$rc" -eq 0 ] && return 0
+    [ "$rc" -eq 1 ] || return 2
+  done <<EOF
+$(rows "$DEPRECATED_TLDR_MARKERS")
 EOF
   return 1
 }
@@ -880,6 +905,9 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
   local tab; tab="$(printf '\t')"
   has_tldr "$rendered"; tldr=$?
   [ "$tldr" -eq 2 ] && return 2
+  # A notice, never a verdict: the retired spelling clears for one release.
+  has_deprecated_tldr "$rendered" \
+    && echo "note: '## Description (TL;DR)' is deprecated — use '## Description'; it clears for one more release." >&2
   has_verified "$rendered"; verified=$?
   [ "$verified" -eq 2 ] && return 2
   scan="$(table_scan "$rendered")"
@@ -915,7 +943,7 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
   rc=1
   [ "$tldr" -eq 0 ] || {
     echo "        MISSING: the TL;DR line. One sentence — what changes, and why it is" >&2
-    echo "        safe to merge — as '## Description (TL;DR)' or a leading '**TL;DR**'." >&2
+    echo "        safe to merge — as the heading '## Description' or a leading '**TL;DR**'." >&2
   }
   if [ "$verified" -eq 1 ]; then
     echo "        MISSING: the Verified line. One line under the lead carrying what you" >&2
@@ -1044,6 +1072,9 @@ if [ "${1:-}" = "--self-test" ]; then
   ST_HEADX='### Criteria (0 ✓ / 1 ✗ — it needs a human)'
 
   st_probe 0 "a conforming body (heading form)" \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
+  st_probe 0 "…and the retired heading spelling, still cleared for one release" \
     '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 0 "a conforming body (bold form)" \
@@ -1053,21 +1084,21 @@ if [ "${1:-}" = "--self-test" ]; then
     'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 1 "a body with no criteria table" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' \
     'Some prose and nothing else.'
   st_probe 1 "a body whose only table is inside a code fence" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' '```md' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' '```md' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' '```'
   st_probe 0 "a row at the largest honest evidence cell measured (#67, 377)" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' \
     "| it works | ✓ | $(st_cell 377) |"
   st_probe 3 "a row at ai-bridge#71's worst evidence cell (487)" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' \
     "| it works | ✓ | $(st_cell 487) |"
   st_probe 3 "a row whose evidence is 'see above'" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | see above |'
 
   # ELEMENTS 4, 5 AND 6, EACH DRIVEN IN BOTH DIRECTIONS. A copy whose Verified table no
@@ -1075,29 +1106,29 @@ if [ "${1:-}" = "--self-test" ]; then
   # 0 on every probe above — so each new check gets a probe that can only pass while the
   # check is really there, and its control is the clearing body at the top of this block.
   st_probe 1 "a body with no Verified line" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_HEAD1" '' \
+    '## Description' 'It does the thing.' '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 1 "a Verified line citing nothing" \
-    '## Description (TL;DR)' 'It does the thing.' '' 'Verified: 40/0 locally, all green.' \
+    '## Description' 'It does the thing.' '' 'Verified: 40/0 locally, all green.' \
     '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 1 "a criteria heading carrying no tally" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' '### Criteria' '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' '### Criteria' '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 1 "a tally that contradicts the table" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' \
     '### Criteria (2 ✓ / 0 ✗)' '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 1 "a tally whose ✗ is unexplained" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' \
     '### Criteria (0 ✓ / 1 ✗)' '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✗ | needs a human |'
   st_probe 1 "a ### Notes bullet that buries its claim" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
     '' '### Notes' '' '- the parser is in awk because grep cannot count cells.'
   st_probe 0 "…and the same note, claim first" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
     '' '### Notes' '' '- **The parser is in awk.** grep cannot count a table cell.'
 
@@ -1109,19 +1140,19 @@ if [ "${1:-}" = "--self-test" ]; then
   ST_NOTE3='- **Three.** Nor this.'
   ST_NOTE4='- **Four.** This is the essay arriving under another heading.'
   st_probe 0 "a 2,000-character body carrying every element" \
-    '## Description (TL;DR)' "It does the thing. $(st_cell 1800)" '' "$ST_VERIFIED" '' \
+    '## Description' "It does the thing. $(st_cell 1800)" '' "$ST_VERIFIED" '' \
     "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 4 "the same body past the 2,500-character ceiling" \
-    '## Description (TL;DR)' "It does the thing. $(st_cell 2600)" '' "$ST_VERIFIED" '' \
+    '## Description' "It does the thing. $(st_cell 2600)" '' "$ST_VERIFIED" '' \
     "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
   st_probe 0 "three claim-first notes" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
     '' '### Notes' '' "$ST_NOTE1" "$ST_NOTE2" "$ST_NOTE3"
   st_probe 4 "…and a fourth" \
-    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
     '' '### Notes' '' "$ST_NOTE1" "$ST_NOTE2" "$ST_NOTE3" "$ST_NOTE4"
 
