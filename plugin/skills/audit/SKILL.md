@@ -10,9 +10,9 @@ that complements `/ai-bridge:dispatch`. It is **read-only**: it surfaces drift, 
 merges, dispatches, or changes task status.
 
 ## Preconditions
-1. Run from a control-panel instance root — confirm `SCHEMA.md`, `.claude/agents`, and
+1. Run from a control-panel instance root — confirm `SCHEMA.md` and
    `instance.config.json` exist in the cwd; if not, tell the user to `cd` into the instance
-   and stop.
+   and stop. (A bundle carries no `.claude/agents`; the roles ship in the plugin.)
 2. **Stand down while a tick is in flight.** Step 3 prepends to `log.md`, and so does every
    non-idle dispatch tick, so the two must not run at once. Run
    `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` — **exit 0 (`free:`) is the only
