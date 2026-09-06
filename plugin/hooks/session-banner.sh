@@ -1122,6 +1122,16 @@ done
 
 if [ -n "$dump" ]; then
   tiers="$(printf '%s\n' "$dump" | awk -F'\t' '$2=="roleTiers" && $3!="" { print $1 "\t" $3 "\t" $4 }')"
+  # THE ARROWS ARE ONE COLUMN, so the tier is padded to the widest tier THIS banner shows —
+  # measured, never a literal: a config with only light/deep pads to 5 and a tier renamed
+  # next month pads to its own width.
+  tw=0
+  while IFS="$TAB" read -r s role tier; do
+    [ -n "$role" ] || continue
+    nchars "$tier"; [ "$NCHARS" -le "$tw" ] || tw="$NCHARS"
+  done <<EOF
+$tiers
+EOF
   while IFS="$TAB" read -r s role tier; do
     [ -n "$role" ] || continue
     al="$(leaf_value "$(leaf models "$tier")")"
@@ -1129,7 +1139,7 @@ if [ -n "$dump" ]; then
     # `${tier}` braced, not bare: `→` is not ASCII, and bash reads the following bytes as
     # part of the identifier — `$tier→` expands as an unset variable named `tier→` and,
     # under `set -u`, kills the hook.
-    add t "$role" "${tier} → ${al}" "$s"
+    add t "$role" "$(pad "${tier}" "$tw") → ${al}" "$s"
   done <<EOF
 $tiers
 EOF
