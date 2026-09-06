@@ -1246,6 +1246,9 @@ if tr '\n' ' ' < "$cfg" 2>/dev/null | grep -q '"board"[[:space:]]*:[[:space:]]*f
   board_on=0
 fi
 page="$root/.board-live/board.html"
+# THE BOARD SECTION'S LABEL COLUMN, in characters, so its rows are a table rather than a
+# sentence: `Board`, the widest label, plus the gap the dim continuation lines already use.
+BOARD_LW=8
 # IS THE LOCAL SERVER UP? `.board-live/.serve` is written by board-serve.sh (port, then
 # pid) and removed when it stops — but a SIGKILL leaves it behind, so the pid is checked
 # rather than the file's presence. A dead pid reads as "not up", which is the safe
@@ -1336,11 +1339,6 @@ if [ "$board_on" -eq 1 ]; then
     elif [ -f "$page" ]; then
       say "$C_DIM" "        file://$page — the local copy, for anyone without artifact access"
     fi
-  elif [ -n "$serve_url" ]; then
-    # THE SERVER IS THE LIVE ROUTE, so it is the row rather than the path: a `file://` a
-    # human has to reload by hand is strictly worse than a URL that reloads itself.
-    board_shown=1
-    echo "Board   $serve_url"
   elif [ -f "$page" ]; then
     board_shown=1
     # ONE PATH, PRINTED ONCE. This row used to be THREE lines for one link: the `file://`
@@ -1359,9 +1357,29 @@ if [ "$board_on" -eq 1 ]; then
     # AND THE STALENESS NOTE IS DELETED OUTRIGHT, not shortened. The masthead of the page
     # itself carries the render time, and `watch-board.sh` is documentation — a
     # banner fact is something true of THIS session, and neither of those is.
-    # ONE LINE STILL — the repair rides on the row rather than under it. A second line
-    # here is the three-line board row the owner had deleted, arriving by another name.
-    echo "Board   file://$page — run /ai-bridge:board serve for a live URL"
+    # TWO ROWS, ONE LABEL COLUMN — and that is not the deleted three-line row coming back.
+    # The repair rode on the row as `— run /ai-bridge:board serve for a live URL`, which put
+    # a path and a sentence on one line and wrapped on any normal terminal width. What
+    # returns is a second VALUE under the first, in the same column, so the block reads as a
+    # table; what stays deleted is the bare path and the staleness note, neither of which
+    # said anything the row above had not.
+    #
+    # `pad`, NOT A HAND-COUNTED RUN OF SPACES: it measures in characters, so the labels stay
+    # a column in any locale and the width is one number rather than three literals.
+    echo "$(pad Board "$BOARD_LW")file://$page"
+    if [ -n "$serve_url" ]; then
+      # THE SERVER IS THE LIVE ROUTE when it is up, so it takes the second row from the
+      # command that would start it: a `file://` a human reloads by hand is strictly worse
+      # than a URL that reloads itself, and both are worth printing.
+      echo "$(pad Live "$BOARD_LW")$serve_url"
+    else
+      echo "$(pad Run "$BOARD_LW")/ai-bridge:board serve for a live URL"
+    fi
+  elif [ -n "$serve_url" ]; then
+    # A SERVER UP WITH NO PAGE ON DISK — one row, because there is no `file://` to head the
+    # block with. Unchanged from before the split.
+    board_shown=1
+    echo "Board   $serve_url"
   else
     # IT NAMES THE STATE AND THE REPAIR, because the question this row answers is "is this
     # broken?" and half an answer leaves the human where the silence did. The path is
