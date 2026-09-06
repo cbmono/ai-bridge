@@ -26,7 +26,8 @@ build projects.
 ## Inputs
 `$ARGUMENTS` = a one-line description of the project, plus optional tokens:
 - `kind=build|research` — project kind (default `build`).
-- `objective=<slug>` — link to `objectives/<slug>.md` instead of inferring one.
+- `objective=<slug>` — link to `objectives/<slug>.md` instead of inferring one. Optional:
+  `objectives/` is an opt-in layer, and a project's own `success_criteria` are the default anchor.
 - `repo=<name|owner/name>` — **build only.** `target_repo` (bare name is qualified
   with `org` from `instance.config.json`). Omitted → `<org>/<defaultRepo>` from
   config; if there's no `defaultRepo`, ask. Ignored for research.
@@ -65,10 +66,14 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    user gave one). Confirm `projects/<slug>/` does **not** already exist — if it
    does, stop and report.
 
-3. **Resolve the objective.** List `objectives/*.md`. If `objective=` was given,
-   use it. Otherwise propose the best-fitting existing objective; if none fits,
-   **propose creating** a new `objectives/<slug>.md` and get the user's OK before
-   creating it (an objective is a strategic goal — don't mint one silently).
+3. **Resolve the goal — the project's own `success_criteria` first.** Propose 2-4
+   **measurable** lines for `success_criteria:` (name the command and today's number),
+   and get the user's OK. That is the project's anchor and `/audit` grounds against it.
+   **`objectives/` is an OPTIONAL layer** (`SCHEMA.md` → type: Objective): if the
+   directory is absent, do not create it and do not ask — the criteria are enough. If
+   `objective=` was given, use it. Otherwise, where `objectives/*.md` exists, offer the
+   best-fitting one and accept "none"; **never mint an objective silently**, and only
+   propose a new one for a goal that outlives this project.
 
 4. **Resolve capabilities & kind-specific fields (capabilities first).**
 
@@ -133,7 +138,8 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
 
 5. **Scaffold `projects/<slug>/`**, matching the schema/example exactly:
    - `project.md` — `type: Project` frontmatter (`title`, `description`, `kind`,
-     `objective: /objectives/<slug>.md`, `status: active`, `timestamp`) — plus
+     `success_criteria: [...]` from step 3, `status: active`, `timestamp`; plus
+     `objective: /objectives/<slug>.md` only where step 3 resolved one) — plus
      `target_repo` for **build**, or `deliverables: [...]` for **research**; plus the
      capabilities from step 4: `autonomy:` (always; default `gated`), and `clis:` /
      `browser:` / `owner:` only when non-default or explicitly given (omit them
@@ -171,9 +177,10 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    - Add a bullet under `## Projects` in the root `index.md`. For build:
      `[<title>](/projects/<slug>/project.md) - target: \`<target_repo>\` · <n> seed task(s)`.
      For research: `[<title>](/projects/<slug>/project.md) - research · <n> deliverable(s)`.
-   - Add the project to the objective's "Projects serving this objective" list. If
-     you created a new objective in step 3, also add it under `## Objectives` in the
-     root `index.md`.
+   - **Where the project has an `objective:`**, add it to that objective's "Projects
+     serving this objective" list; if you created a new objective in step 3, also add
+     it under `## Objectives` in the root `index.md`. A project with no objective skips
+     this bullet entirely.
    - Prepend a dated **Project added** bullet to the root `log.md` (newest-first:
      reuse today's `## <date>` heading if present, else add it at the top of the
      dated entries).

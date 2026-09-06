@@ -353,7 +353,8 @@ the extension, then grant it **per-site** permissions there.
 is actually moving the real goals. Run it on a **slow cadence** — weekly, or after a batch
 of projects close.
 
-The read-only `auditor` grounds each objective's `success_criteria` against live `gh`/`git`
+The read-only `auditor` grounds each goal's `success_criteria` — an objective's, or a
+project's own where it carries no `objective:` — against live `gh`/`git`
 reality and flags the four ways a busy control panel drifts:
 
 | Drift | What it looks like |

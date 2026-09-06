@@ -143,6 +143,8 @@ fail() { printf '  ERROR  %s\n         %s\n' "$1" "$2"; errors=$((errors+1)); }
 warn() { printf '  WARN   %s\n         %s\n' "$1" "$2"; warns=$((warns+1)); }
 
 collect_files() {
+  # objectives/ is an OPTIONAL layer (SCHEMA.md -> type: Objective): a bundle with no
+  # such directory is valid, so this find must stay silent rather than fail.
   find ./objectives -maxdepth 1 -name '*.md' 2>/dev/null || true
   find ./projects -maxdepth 2 -name 'project.md' 2>/dev/null || true
   find ./projects -path '*/phases/*.md' 2>/dev/null || true

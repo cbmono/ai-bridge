@@ -14,7 +14,7 @@ were **copied once and are yours**. The slash commands come from the same **plug
 `/ai-bridge:answer`, `/ai-bridge:audit`, `/ai-bridge:board`,
 `/ai-bridge:fanout`) and are
 installed per machine, not per instance. This repo tracks only its own
-**content**: `objectives/`, `projects/`, `knowledge/`, `log.md`, and
+**content**: `projects/`, `knowledge/`, `log.md`, an optional `objectives/`, and
 `instance.config.json`.
 
 For a unified tree (this control panel pinned on top, the group's product repos
@@ -75,7 +75,7 @@ copied once from the plugin, so an edit there becomes a conflict the next time
 
 ## How it works
 ```
-Objective ──► Project ──► Task ──► (PM refines) ──► (human approves) ──► (PM dispatches) ──► role agent ──► PR ──► you merge
+(Objective) ──► Project ──► Task ──► (PM refines) ──► (human approves) ──► (PM dispatches) ──► role agent ──► PR ──► you merge
 ```
 The spine you drive is **`/ai-bridge:new-project` → approve `draft → ready` →
 `/ai-bridge:dispatch` → merge**.
@@ -90,8 +90,10 @@ rules (two human gates, per-agent authorship, parallel-safety).
 Run **`/ai-bridge:new-project <one-line description>`** from a session in this
 instance. It
 scaffolds `projects/<slug>/` (schema-valid `project.md`, `index.md`, `log.md`, and
-seed `draft` tasks), links it to an objective, registers it in the bundle
-index/log, and commits.
+seed `draft` tasks), registers it in the bundle index/log, and commits. It links the
+project to an objective only where the bundle has one — `objectives/` is optional
+(`SCHEMA.md` → type: Objective), and a project's own `success_criteria` are the default
+anchor.
 
 Two kinds (see `SCHEMA.md`):
 - **`kind=build`** (default) — ships code to a product repo via PRs; role agents

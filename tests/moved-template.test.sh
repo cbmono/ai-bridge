@@ -113,6 +113,8 @@ INST="$TMP/group/_ai-bridge-group"; mkdir -p "$INST"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/stamp" 2>&1
 assert "a fresh bundle stamps"           "$(yes_if test -f "$INST/instance.config.json")"
 assert "…carrying no symlink at all"     "$([ -z "$(find "$INST" -type l 2>/dev/null)" ] && echo 0 || echo 1)"
+# The seed ships no objectives/ — it is an optional layer, opted into per bundle.
+assert "…and no objectives/ directory"   "$(no_if test -d "$INST/objectives")"
 
 echo "== converted bundle: silent, exit 0 =="
 RC=0; OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK_SRC" 2>&1)" || RC=$?

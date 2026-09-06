@@ -214,6 +214,32 @@ assert "a clean bundle exits 0"                   "$([[ $CRC -eq 0 ]] && echo 0 
 assert "a clean bundle reports 0 errors"          "$(printf '%s\n' "$CLEAN" | grep -q '0 errors, 0 warnings' && echo 0 || echo 1)"
 assert "--strict passes when there are no warnings" "$([[ $CLEAN_STRICT_RC -eq 0 ]] && echo 0 || echo 1)"
 
+echo "== objectives/ is optional: no directory, and a project anchored on its own criteria =="
+# SCHEMA.md makes `objectives/` an opt-in layer and `objective:` optional, so a bundle with
+# neither must be VALID — not merely unchecked. A second fixture, because the one above is
+# built around an objective and cannot answer this.
+NOOBJ="$TMP/no-objectives"
+mkdir -p "$NOOBJ/projects/solo/tasks" "$NOOBJ/knowledge/findings"
+cd "$NOOBJ"
+echo '{ "org": "x", "reposRoot": "/tmp" }' > instance.config.json
+echo '# Schema' > SCHEMA.md
+doc projects/solo/project.md '---' 'type: Project' 'title: Solo' 'kind: build' \
+  'success_criteria: [ "harness suite 277/0 (today: 277/0)", "seed CLAUDE.md under 22136 bytes" ]' \
+  'status: active' "timestamp: $TS" '---' 'body'
+doc projects/solo/tasks/task-001-solo.md '---' 'type: Task' 'title: Solo' 'status: ready' \
+  'project: /projects/solo/project.md' "timestamp: $TS" '---' 'body'
+set +e
+NOOBJ_OUT="$(bash "$VALIDATOR" 2>&1)"; NOOBJ_RC=$?
+NOOBJ_STRICT_RC=0; bash "$VALIDATOR" --strict >/dev/null 2>&1 || NOOBJ_STRICT_RC=$?
+set -e
+assert "a bundle with no objectives/ exits 0"    "$([[ $NOOBJ_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "…with 0 errors and 0 warnings"           "$(printf '%s\n' "$NOOBJ_OUT" | grep -q '0 errors, 0 warnings' && echo 0 || echo 1)"
+assert "…and --strict passes too"                "$([[ $NOOBJ_STRICT_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "a project with success_criteria and no objective: is silent" \
+  "$(printf '%s\n' "$NOOBJ_OUT" | grep -q 'projects/solo/project.md' && echo 1 || echo 0)"
+assert "…and its documents were actually checked, not skipped" \
+  "$(printf '%s\n' "$NOOBJ_OUT" | grep -q '2 documents checked' && echo 0 || echo 1)"
+
 echo "== refusing to run outside an instance root =="
 mkdir -p "$TMP/notabundle" && cd "$TMP/notabundle"
 set +e; bash "$VALIDATOR" >/dev/null 2>&1; OUTSIDE=$?; set -e

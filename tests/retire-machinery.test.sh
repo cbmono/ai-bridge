@@ -61,6 +61,18 @@ bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out1" 2>&1
 assert "a fresh bundle stamps"              "$(yes_if test -f "$INST/instance.config.json")"
 assert "…carrying no symlink at all"        "$([ -z "$(find "$INST" -type l 2>/dev/null)" ] && echo 0 || echo 1)"
 
+# `objectives/` is an OPTIONAL layer (SCHEMA.md -> type: Objective), so the seed ships none
+# and a plain stamp must create none. The opt-in flag is the only thing that makes it, and
+# it is idempotent — an existing objectives/ is DATA, so it is kept, never re-seeded.
+assert "a plain stamp creates no objectives/" "$(no_if test -d "$INST/objectives")"
+bash "$TPL/plugin/scripts/init-bundle.sh" --with-objectives "$INST" >"$TMP/out-obj" 2>&1
+assert "--with-objectives creates it"        "$(yes_if test -d "$INST/objectives")"
+assert "…and says so"                        "$(yes_if grep -q 'seed  objectives/' "$TMP/out-obj")"
+printf -- '---\ntype: Objective\ntitle: O\nstatus: active\n---\n' > "$INST/objectives/mine.md"
+bash "$TPL/plugin/scripts/init-bundle.sh" --with-objectives "$INST" >"$TMP/out-obj2" 2>&1
+assert "a second run keeps it, never re-seeds" "$(yes_if grep -q 'keep  objectives/ (exists)' "$TMP/out-obj2")"
+assert "…and the human's objective survives"   "$(yes_if grep -q 'type: Objective' "$INST/objectives/mine.md")"
+
 # --- the sweep, and the three decoys that must survive it.
 mkdir -p "$INST/scripts"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$OLDTPL/symlink/scripts/doomed.sh"

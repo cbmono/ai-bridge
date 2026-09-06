@@ -23,8 +23,8 @@ task/project/objective/agent constructs — those are producer-defined extension
 
 | `type` | Lives at | What it is |
 |---|---|---|
-| `Objective` | `objectives/<slug>.md` | a goal, with `success_criteria` that `/audit` grounds progress against |
-| `Project` | `projects/<slug>/project.md` | a `build` or `research` effort; carries `autonomy`, `owner`, `target_repo`, `clis`, `browser`, `retain` |
+| `Objective` | `objectives/<slug>.md` | **optional** — a goal that outlives one project, with `success_criteria` that `/audit` grounds progress against |
+| `Project` | `projects/<slug>/project.md` | a `build` or `research` effort; carries its own `success_criteria`, plus `autonomy`, `owner`, `target_repo`, `clis`, `browser`, `retain` |
 | `Phase` | `projects/<slug>/phases/<n>-<slug>.md` | an ordered stage of a project |
 | `Task` | `projects/<slug>/tasks/<id>.md` | the unit a role agent is dispatched on |
 | `Agent` | `agents/index.md` | the role roster |
@@ -33,6 +33,12 @@ task/project/objective/agent constructs — those are producer-defined extension
 | `Team` | `knowledge/teams/<slug>.md` | who owns what |
 | `Runbook` | `knowledge/runbooks/<slug>.md` | a procedure |
 | `Reference` | `knowledge/references/<slug>.md` | a spec or contract — the **fifth** knowledge kind |
+
+**`objectives/` is an optional layer.** A project is normally self-contained and measured
+against its own `success_criteria`; an `Objective` is for a goal that outlives one project.
+A plain `/ai-bridge:init <dir>` creates no `objectives/` directory —
+`--with-objectives` does, and an existing one is never touched. Why:
+[pm-design.md § Why `objectives/` is optional](pm-design.md#objectives-optional).
 
 `knowledge/<kind>/` is a **shape, not a list of names**: a new kind directory is validated
 the moment it exists. That is why `references/` was already covered before it was declared
