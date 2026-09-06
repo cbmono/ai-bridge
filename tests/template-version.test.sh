@@ -53,7 +53,7 @@ yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 GIT() { git -c user.email=test@example.com -c user.name=Test -c commit.gpgsign=false "$@"; }
 
 # =======================================================================================
-echo "== 1. ONE version, TWO copies that are pinned equal, and nothing else claims it =="
+echo "== 1. ONE version, FOUR files pinned equal, and nothing else claims it =="
 # =======================================================================================
 # The count is over TRACKED files, and by basename anywhere in the tree: the failure this
 # guards is a THIRD `VERSION` arriving beside these two (a banner's copy, a sub-package's
@@ -91,6 +91,74 @@ ok "…and it is exactly one line"      "$(wc -l < "$VERFILE" | tr -d ' ')" 1
 # A file with no trailing newline reads as one line to `head` and as zero to `wc -l`; both
 # spellings are pinned so the value stays trivially `cat`-able and `read`-able.
 ok "…terminated by a newline"         "$(tail -c 1 "$VERFILE" | od -An -c | tr -d ' \n')" '\n'
+
+# THE TWO MANIFESTS ARE THE OTHER TWO FILES, and they are the only copies a USER'S MACHINE
+# ever reads. `claude plugin update` compares the version in
+# `plugin/.claude-plugin/plugin.json` against the installed one and does nothing when they
+# match, so a manifest left behind is not a cosmetic mismatch — THE UPDATE IS NEVER
+# OFFERED, and a machine reports itself up to date while running older machinery.
+#
+# WHY THIS ASSERTION EXISTS RATHER THAN THE PAIR CHECK THAT ALREADY DID. The two manifests
+# were pinned to EACH OTHER (`plugin-manifest.test.sh`, "whose versions agree") and to
+# nothing else, so they drifted together and stayed green: measured at `182664d`, `VERSION`
+# and `plugin/VERSION` said 1.1.0 while both manifests said 1.0.1 — 1.0.2, 1.0.3, 1.0.4 and
+# 1.1.0 all shipped without a single machine being told. Two files agreeing is not a
+# version; four files agreeing is.
+#
+# THE CORE ENTRY IS FOUND BY `source: ./plugin`, the same key section 3b uses to SKIP it, so
+# this reads the entry the host actually resolves — an entry reordered or inserted above it
+# cannot silently redirect the assertion the way `.plugins[0]` would. python3, not jq: it is
+# this file's parser of record, the value compared is a JSON string, and a `jq`-absent
+# machine would SKIP the whole harness rather than fail this.
+core_manifest_versions() { # <tree root> -> plugin.json version<TAB>core marketplace version
+  python3 -c '
+import json, os, sys
+root = sys.argv[1]
+def load(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as e:
+        sys.stderr.write("        UNREADABLE %s: %s\n" % (path, e)); sys.exit(1)
+own = load(os.path.join(root, "plugin", ".claude-plugin", "plugin.json")).get("version", "")
+entries = [p for p in load(os.path.join(root, ".claude-plugin", "marketplace.json")).get("plugins", [])
+           if p.get("source") == "./plugin"]
+if len(entries) != 1:
+    sys.stderr.write("        %d marketplace entries with source ./plugin, expected 1\n" % len(entries))
+    sys.exit(1)
+print("\t".join([str(own), str(entries[0].get("version", ""))]))
+' "$1"
+}
+# A READER FAILURE IS NOT A MATCH: the substitution falls back to a value no VERSION can
+# ever equal, so an unparseable manifest fails these two rather than answering them.
+manifest_rows="$(core_manifest_versions "$TPL")" || manifest_rows="UNREADABLE"
+ok "plugin.json's version equals VERSION" \
+  "$(printf '%s' "$manifest_rows" | cut -f1)" "$ver"
+ok "…and so does the ai-bridge marketplace entry's (the one with source ./plugin)" \
+  "$(printf '%s' "$manifest_rows" | cut -f2)" "$ver"
+
+# THE NEGATIVE CONTROL. Two assertions comparing a reader's output to `$ver` pass just as
+# happily when the reader returns `$ver` for everything, so the reader is run once over a
+# planted tree whose two manifests carry different wrong numbers — which proves it reads
+# each file separately AND that it picks the `./plugin` entry from second position.
+MAN="$TMP/manifests"
+mkdir -p "$MAN/plugin/.claude-plugin" "$MAN/.claude-plugin"
+printf '{ "name": "ai-bridge", "version": "0.0.1" }\n' > "$MAN/plugin/.claude-plugin/plugin.json"
+cat > "$MAN/.claude-plugin/marketplace.json" <<'JSON'
+{
+  "name": "planted",
+  "plugins": [
+    { "name": "a-companion", "source": "./plugin-yolo", "version": "9.9.9" },
+    { "name": "ai-bridge",   "source": "./plugin",      "version": "0.0.2" }
+  ]
+}
+JSON
+ok "…and that reader catches a planted skew, from either manifest" \
+  "$(core_manifest_versions "$MAN" 2>/dev/null | tr '\t' ' ')" "0.0.1 0.0.2"
+# …and a manifest it cannot parse is never reported as a version.
+printf 'not json\n' > "$MAN/.claude-plugin/marketplace.json"
+ok "…while an unreadable manifest reports UNREADABLE, not a number" \
+  "$(core_manifest_versions "$MAN" 2>/dev/null || echo UNREADABLE)" "UNREADABLE"
 
 # NO RELEASE PROCESS CAME WITH IT — asserted, because this is the direction the change is
 # most likely to grow in later, and the scope decision was explicit: one consumer group and
