@@ -30,5 +30,5 @@ already reading a `knowledge/` doc.
   every row from frontmatter (summary = the doc's `lesson:`), and `--check` fails when the
   file and the documents disagree. A hand-edited row is undone by the next rebuild.
 - **Tags are a closed set: `knowledge/vocab.md`.** Ground a lookup by **longest match**
-  over its `Tag` and `Alias` columns, use the canonical tag, and **never invent one** — if
+  over its **tag** and **alias** columns, use the canonical tag, and **never invent one** — if
   nothing fits, add the row in the same change. `--check` refuses anything else.

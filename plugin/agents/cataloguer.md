@@ -38,7 +38,7 @@ data-handling, units, and where to route authoritative data questions.
    next agent needs, not the history that produced it; `validate-bundle.sh` warns on
    either, and the `lesson:` becomes the index row **verbatim**, so write it as the row you
    want an agent to scan. **`tags:` come from `knowledge/vocab.md` only** — ground your tag
-   by longest match over its `Tag` and `Alias` columns, and **never invent one**; if
+   by longest match over its **tag** and **alias** columns, and **never invent one**; if
    nothing fits, add the row to `vocab.md` in the same change.
 3. **Supersede rather than delete — it is a move, not a status edit.**
    `SCHEMA.md` → "Superseding a Finding" is the contract: on the old doc

@@ -1,12 +1,12 @@
 # Knowledge base — controlled vocabulary
 
 The **only** tags a `Finding` may carry. `build-kb-index.sh --check` refuses a `tags:`
-entry that is not a `Tag` or an `Alias` below, so the KB stays searchable by a fixed set
+entry that is not a tag or an alias below, so the KB stays searchable by a fixed set
 instead of by 133 one-off words.
 
 **How to ground a lookup:** take the phrase you were going to invent, and match it against
-the `Tag` and `Alias` columns by **longest match** — `github-actions-cache` matches
-`github-actions` before it matches `ci`. Use the canonical `Tag` in frontmatter; aliases
+the **tag** and **alias** columns by **longest match** — `github-actions-cache` matches
+`github-actions` before it matches `ci`. Use the canonical tag in frontmatter; aliases
 exist so a lookup finds it, not so a document spells it differently. **Never invent a
 tag.** If nothing fits, add a row here in the same change — extending the vocabulary is a
 deliberate edit, and `--check` is what makes it one.
