@@ -1180,6 +1180,19 @@ if [ -n "$bin" ] && [ -f "$bin/resolve-account.sh" ]; then
 fi
 
 # ---------------------------------------------------------------------------------------
+# 4c. BACKEND — read from THIS PROCESS'S ENVIRONMENT, not from an installed companion.
+# ---------------------------------------------------------------------------------------
+# Gating it on the ai-bridge-llm companion would stay silent for a hand-exported
+# substitution, which is exactly the accident it exists for.
+if [ -n "${ANTHROPIC_BASE_URL:-}" ]; then
+  backend="$(cell "$(printf '%s' "$ANTHROPIC_BASE_URL" | sed -e 's#^[A-Za-z][A-Za-z0-9+.-]*://##' -e 's#[/?].*##')")"
+  echo
+  say "$C_RED" "⚠️  NOT ANTHROPIC — this session's model backend is ${backend:-elsewhere}"
+  echo "    Every prompt, file read and tool result in this session goes there."
+  echo "    Confirm this code is cleared to leave before you work in it."
+fi
+
+# ---------------------------------------------------------------------------------------
 # 5. BOARD — a local file, and the PER-MACHINE URL of a page this human published.
 # ---------------------------------------------------------------------------------------
 # THE URL IS READ FROM THE LOCAL LAYER AND FROM NOWHERE ELSE, and that constraint is the

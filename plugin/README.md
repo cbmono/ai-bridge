@@ -132,6 +132,7 @@ halves for every companion entry in the marketplace, so a companion cannot drift
 |---|---|---|
 | [`ai-bridge-yolo`](../plugin-yolo/README.md) | `companion/AUTONOMY.md` — the delegated-autonomy capability and the `yolo` preflight | `scripts/resolve-autonomy.sh`, and through it `scripts/commit-as.sh`'s promotion guard |
 | [`ai-bridge-accounts`](../plugin-accounts/README.md) | `companion/accounts.md` — the per-bundle account capability — and `bin/ai-bridge-claude`, the launcher the **human** runs | `scripts/resolve-account.sh`, and through it the SessionStart banner's account line |
+| [`ai-bridge-llm`](../plugin-llm/README.md) | `companion/llm.md` — the alternative-LLM-backend capability — and `bin/ai-bridge-deepseek`, the launcher the **human** runs, opt-in per machine | nothing — core reads its presence nowhere. The banner's backend warning reads `ANTHROPIC_BASE_URL` from its own environment, so it fires with or without this companion |
 
 `scripts/resolve-autonomy.sh` is the **one** reader of "does delegated autonomy exist
 here": the **bundle root wins outright** (a v1-era bundle carrying its own real

@@ -1498,6 +1498,16 @@ if ! grep -qxF 'instance.config.local.json' "$gi"; then
 instance.config.local.json
 GI
 fi
+# Same shape, same reason, for `.env`: a bundle stamped before this line existed would
+# otherwise carry an API key into git the first time somebody wrote one down.
+if ! grep -qxF '.env' "$gi"; then
+  cat >> "$gi" <<'GI'
+
+# API keys — for a substituted model backend (the ai-bridge-llm companion) or anything
+# else. NEVER tracked: a key in a tracked file is a published key.
+.env
+GI
+fi
 # The derived-index ignore block, behind its own marker pair — the same mechanism the
 # machinery block above uses (BEGIN_MARK/END_MARK), and for the same reason. This used
 # to be guarded by "append only if the two literal rule lines are missing"
