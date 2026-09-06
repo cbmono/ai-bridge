@@ -150,7 +150,7 @@ echo "== a legitimately slow PR is not a stall =="
 # already would.
 reset
 worst=0
-for round in 1 2 3; do
+for _ in 1 2 3; do
   r="$(rc record "$DOC" --blocker "$BLOCKER" --progress)"
   [ "$r" -gt "$worst" ] && worst="$r"
 done
@@ -165,7 +165,7 @@ echo "== the cap is maxStallRounds, and absent means 2 =="
 
 reset 4
 OUT3=""
-for round in 1 2 3; do OUT3="$(run record "$DOC" --blocker "$BLOCKER")"; done
+for _ in 1 2 3; do OUT3="$(run record "$DOC" --blocker "$BLOCKER")"; done
 assert "maxStallRounds: 4 -> round 3 still dispatches" "$(has 'DISPATCH' "$OUT3")"
 assert "…and the verdict prints the configured cap"    "$(has 'stall 3/4' "$OUT3")"
 assert "…the two rounds that escalate by default do not here" \
