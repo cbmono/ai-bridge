@@ -535,7 +535,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos (code intelligence — **not** the knowledge base) | yes |
-| `build-kb-index.sh` | regenerates `knowledge/index.md` from document frontmatter; `--check` fails on a doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a status outside `{current, superseded, corrected}`, a tag outside `knowledge/vocab.md`, or a dangling supersession edge | yes, that index |
+| `build-kb-index.sh` | regenerates `knowledge/index.md` from document frontmatter; `--check` fails on a doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a status outside `{current, superseded, corrected}`, a tag outside `knowledge/vocab.md`, a dangling supersession edge, or (as a warning, an error under `--strict`) a bundle-relative link in `knowledge/**` that resolves to nothing | yes, that index |
 
 **Internal helpers** — the machinery calls these; you normally don't. They are listed so
 the table above accounts for **every** script in `plugin/scripts/`, which
