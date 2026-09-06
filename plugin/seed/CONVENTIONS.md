@@ -150,11 +150,11 @@ above it so none may grow its share.
 - **The PR body has a required shape, and it is short — 2,500 characters, hard** (→ "Write
   less"). Its reader is a **human deciding whether to merge** — not an agent
   reconstructing how you worked. **It opens with the
-  literal heading `## Description (TL;DR)`.** Four required parts, in this order, plus an
+  literal heading `## Description`.** Four required parts, in this order, plus an
   optional `## Notes` section (below) and nothing else:
 
   ```md
-  ## Description (TL;DR)
+  ## Description
 
   One sentence: what changes, and why it is safe to merge.
 
@@ -181,7 +181,7 @@ above it so none may grow its share.
   exemplar is followed; a rule described in the abstract is the one that produced a
   14,673-character body five hours after it shipped.
 
-  1. **The heading `## Description (TL;DR)`, first**, then **a one-sentence TL;DR** under
+  1. **The heading `## Description`, first**, then **a one-sentence TL;DR** under
      it. **That exact string, character for character** — it is the shape's only greppable
      anchor, which is why the rule names a fixed heading rather than "open with a
      sentence". `plugin/scripts/pr-body-clearance.sh` looks for it at the clearance gate,
