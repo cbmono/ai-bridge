@@ -1,70 +1,12 @@
 #!/usr/bin/env bash
-#
-# stall-counter.sh — has this task ended on the SAME blocker often enough that another
-# dispatch would just buy the same wall again?
-#
-#   Usage: stall-counter.sh record   <task-doc> --blocker <text> [--progress]
-#          stall-counter.sh escalate <task-doc>
-#          stall-counter.sh status   <task-doc>
-#
-# WHY IT EXISTS. A task whose agent keeps failing on one cause is re-dispatched every
-# tick: a fresh agent, the same wall, the same tokens, and nothing anywhere counting the
-# repeat. The loop's own escalation path is the human — `AWAITING.md` is the channel and
-# `blocked` is the state — but nothing was ever routed onto it, because "we have been
-# here before" is not a fact a fresh tick can see. This file is that memory: two
-# PM-owned fields on the task document, a cap, and a verdict.
-#
-# THE TWO FIELDS ARE PM-OWNED AND NEVER HAND-EDITED (`SCHEMA.md` → "type: Task"):
-#
-#   stall_count:  consecutive rounds that ended on the same blocker. Absent ⇒ 0.
-#   last_blocker: what the last round ended on, normalised. Absent ⇒ none.
-#
-# `last_blocker` IS TEXT A HUMAN WILL READ, in the task document and in `AWAITING.md`, and
-# it persists for the life of the repo — so it is under the same rule as every other
-# document field: **no customer PII, and never a secret or an environment value**. A caller
-# passes the failing check or the blocker sentence, not the output that failed.
-#
-# THE CAP IS `maxStallRounds` in `instance.config.json`, **absent ⇒ 2** — resolved through
-# `resolve-config.sh`, so a per-machine override behaves like every other key. Outside a
-# bundle (a fixture, an ad-hoc checkout) the fallback stands and nothing is an error.
-#
-# WHAT COUNTS AS PROGRESS, AND WHY ONE OF THE THREE COMES FROM THE CALLER. A legitimately
-# slow PR is not a stall, so three things reset the counter:
-#
-#   1. A CHANGED BLOCKER — the script decides it, by comparing `--blocker` to what it
-#      stored. A different wall is a different round, and round one starts over.
-#   2. A HUMAN EDIT — the script decides it too, structurally: a task carrying a count at
-#      or past the cap that is back in the QUEUE (`draft` or `ready`) was put there by the
-#      only party that can un-block one, so the stale count is dropped. Without this the
-#      next round would re-escalate instantly and the human's unblock would never buy a
-#      single dispatch.
-#   3. PR ACTIVITY — a new commit, a new review thread. THAT ONE THE CALLER PASSES, as
-#      `--progress`, because only the tick holds `gh` and this script must stay decidable
-#      offline. It is not a courtesy flag: it is the tick reporting an observation this
-#      file has no way to make, exactly as `review-rounds.sh` takes its commit list from
-#      the host rather than re-deriving one.
-#
-# IT WRITES, AND THAT IS THE POINT — it is not another report-only checker. `record` owns
-# the two fields; `escalate` sets `status: blocked`, records the blocker under `# Notes`
-# and prints the one `AWAITING.md` line. What it does NOT do is decide to dispatch, delete
-# anything, or touch `AWAITING.md` itself — that file is derived and rewritten wholesale
-# by the tick (`project-manager.md` step 8), so this prints the line and the tick places
-# it. Both writes are idempotent: a second `escalate` on an already-escalated task appends
-# no second note and prints the same line.
-#
-# Exit codes — `record` and `status` answer the dispatch question, `escalate` reports:
-#
-#   0  UNDER THE CAP. The count is on stdout. Dispatching this task again is fine.
-#   1  AT OR PAST THE CAP. Do NOT dispatch: run `escalate` and put its line in front of
-#      the human. (`escalate` itself exits 0 when it succeeded.)
-#   2  cannot answer — usage, no such file, unreadable frontmatter, or an `escalate`
-#      asked for a task that has not reached the cap. Unknown is never reported as fine.
-#   3  the write failed. Nothing partial is left behind: every write lands via a temp file.
-#
-# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
-# instance. It reads no org, repo or path literal.
-#
-# Verified by tests/stall-counter.test.sh.
+# stall-counter.sh — a task stuck on the same blocker for maxStallRounds (default 2) rounds
+# is escalated to the human instead of re-dispatched. PM-owned fields on the task doc:
+# stall_count (consecutive rounds on one blocker) and last_blocker. Progress resets it:
+# a changed blocker, a human edit (a capped task back in draft/ready), or --progress from
+# the tick (PR activity it observed). Usage: record <task> --blocker <text> [--progress] |
+# escalate <task> | status <task>. Exit: 0 under the cap (count on stdout), 1 at/over the
+# cap (do not dispatch; run escalate), 2 cannot answer, 3 write failed (temp-file writes,
+# nothing partial). Reasoning: ai-bridge-next/task-011 and its Finding.
 set -uo pipefail
 
 # THE SELF PATH IS RESOLVED THROUGH THE SYMLINK, the same idiom and the same reason as
