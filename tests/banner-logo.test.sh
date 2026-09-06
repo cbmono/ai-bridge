@@ -103,6 +103,10 @@ tier() { # <tier name> <water> <hull> <bridge> <env…>
   assert "$name: …and stripping the SGR gives the three lines back" \
     "$(eq "$(strip_sgr "$l1")$(strip_sgr "$l2")$(strip_sgr "$l3")" "$L1$L2$L3")"
 }
+# ONE RESET, THE BANNER'S OWN. A second escape spelling would render the same and be a
+# second thing to keep in step, so the hook is asked how many it builds: exactly one.
+assert "the reset after each run is the one the banner already builds" \
+  "$(eq "$(grep -cF -- '${esc}[0m' "$HOOK")" 1)"
 tier truecolor '38;2;95;168;211' '38;2;239;163;165' '38;2;245;215;110' COLORTERM=truecolor
 tier 24bit     '38;2;95;168;211' '38;2;239;163;165' '38;2;245;215;110' COLORTERM=24bit
 tier 256       '38;5;74' '38;5;217' '38;5;222'      COLORTERM= TERM=xterm-256color
@@ -134,6 +138,8 @@ assert "…while the same json run without it colours them" \
 # the same three lines and no escape — colour is not promised on that channel.
 MD="$(run "$HOOK" --format md)"
 assert "the md rendering /welcome relays shows the same three lines" "$(plain_logo "$MD")"
+assert "…and the hook's own header says colour is not promised there" \
+  "$(has 'colour is not promised' "$(sed -n '1,260p' "$HOOK")")"
 # AND THE EQUALITY THE TWO CHANNELS RUN ON: strip_sgr(systemMessage) is the text banner.
 JSON="$(run "$HOOK" --format json --color always)"
 SM="$(printf '%s' "$JSON" | python3 -c 'import json,sys; sys.stdout.write(json.load(sys.stdin)["systemMessage"])')"
