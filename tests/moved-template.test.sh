@@ -59,8 +59,8 @@ assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1))
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
 yes_if() { if "$@" >/dev/null 2>&1; then echo 0; else echo 1; fi; }
 no_if()  { if "$@" >/dev/null 2>&1; then echo 1; else echo 0; fi; }
-has()    { printf '%s\n' "$2" | grep -qF -- "$1" && echo 0 || echo 1; }
-hasnt()  { printf '%s\n' "$2" | grep -qF -- "$1" && echo 1 || echo 0; }
+has()    { grep -qF <<<"$2" -- "$1" && echo 0 || echo 1; }
+hasnt()  { grep -qF <<<"$2" -- "$1" && echo 1 || echo 0; }
 
 HOOK_SRC="$TPLSRC/plugin/hooks/session-banner.sh"
 # The one string that only the machinery section ever prints.

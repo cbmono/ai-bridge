@@ -41,8 +41,8 @@ trap 'rm -rf "$TMP"' EXIT
 pass=0; fail=0
 assert() { if [ "$2" = 0 ]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
-has()  { printf '%s\n' "$2" | grep -qF -e "$1" && echo 0 || echo 1; }
-hasnt(){ printf '%s\n' "$2" | grep -qF -e "$1" && echo 1 || echo 0; }
+has()  { grep -qF -e "$1" <<<"$2" && echo 0 || echo 1; }
+hasnt(){ grep -qF -e "$1" <<<"$2" && echo 1 || echo 0; }
 eq()   { [ "$1" = "$2" ] && echo 0 || echo 1; }
 
 INST="$TMP/_ai-bridge-fixture"

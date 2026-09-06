@@ -39,8 +39,8 @@ assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1))
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
 yes_if() { if "$@" >/dev/null 2>&1; then echo 0; else echo 1; fi; }
 no_if()  { if "$@" >/dev/null 2>&1; then echo 1; else echo 0; fi; }
-has()    { printf '%s\n' "$2" | grep -q -- "$1" && echo 0 || echo 1; }
-hasnt()  { printf '%s\n' "$2" | grep -q -- "$1" && echo 1 || echo 0; }
+has()    { grep -q <<<"$2" -- "$1" && echo 0 || echo 1; }
+hasnt()  { grep -q <<<"$2" -- "$1" && echo 1 || echo 0; }
 
 # A copy of the template, so mutilating it cannot touch the real one.
 TPL="$TMP/tpl"; mkdir -p "$TPL"
