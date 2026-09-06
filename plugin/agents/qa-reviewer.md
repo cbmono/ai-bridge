@@ -230,13 +230,44 @@ no PII/secrets. The role-specific procedure is below.
      skill must never fail a review, and must never leave a PR unreviewed by anyone.
    **Name the route that ran in your verdict** (a/b/c/d, and which agents you dispatched).
    A reader cannot tell from a clean verdict whether it cost one Sonnet or three Opus.
-5. **Verify the change meets each `acceptance_criteria` item — this is the gate, and step 4
-   does not touch it.** A diff review, cheap or expensive, yours or an external reviewer's,
-   answers *"is this code sound"*. It never answers *"does this task's stated criterion
-   hold"* and it never writes the test that would show it. Walk the criteria one by one
-   against real signals, and write or extend a test where a criterion has none. Nothing in
-   step 4 substitutes for this step; a cheaper second opinion changes what you consult, not
-   what you are accountable for.
+5. **RE-DERIVE the criteria table — from the task and the diff, never the worker's ✓.**
+   This is the gate, and step 4 does not touch it: a diff review answers *"is this code
+   sound"*, never *"does this task's stated criterion hold"*.
+
+   **Your inputs are the task's `acceptance_criteria`, the PR diff and CI — and nothing
+   else.** The worker's own `✓`/`✗` column is **not** an input: you do not read it, quote
+   it, or start from it. An implementer grading its own homework is the failure this step
+   exists to stop, so a table derived from theirs is worth nothing however carefully you
+   check it. Read the criteria from the task document, then go and find out.
+
+   Walk them one by one against real signals — run the command, open the artifact, load
+   the URL — and write or extend a test where a criterion has none. Then emit **your own**
+   table:
+
+   ```md
+   | Criterion | Verdict | Evidence |
+   |---|---|---|
+   | the retry backs off on 429 | PASS | `foo.test.sh` 40/0 |
+   | the token is never logged  | FAIL | `grep -rn TOKEN src/` hits `log.ts:31` |
+   ```
+
+   - **PASS or FAIL, and there is no partial credit.** `PARTIAL`, `N/A` and a blank are
+     refused by the reader below. A criterion you could not settle is **FAIL**.
+   - **Missing evidence is FAIL, never a pass.** Every row names one command or artifact a
+     reader can re-run — `` `foo.test.sh` 40/0 ``, `` `shellcheck -x run.sh` clean ``,
+     `CI run 1234 green`, the URL you loaded. "Verified, works as expected" is an
+     assertion, and an assertion is not evidence.
+   - **The table IS the table** (`CONVENTIONS.md` → "Write less"): no narration around it,
+     no restating the criterion in your own words, no story of how you got there. That
+     reasoning goes in the task document.
+
+   **Run the reader on your draft before you post** —
+   `${CLAUDE_PLUGIN_ROOT}/scripts/pr-verdict-clearance.sh --body-file <pr-body> --checker-file <your-table>`
+   — it refuses a row with no verdict or no command at **exit 3**, and answers **exit 1**
+   when your table and the worker's disagree. A disagreement is not something to reconcile
+   with the implementer: post your table as it stands, say `changes-requested`, and let the
+   PM route it. Post the table as a PR comment with your step 6 verdict; it is the review
+   artifact the merge gate reads when no external reviewer exists.
 6. **Synthesize one verdict — after every lens has landed, never before.** Combine your
    CI analysis, whichever second-opinion route step 4 ran, the acceptance-criteria check,
    and the external reviewer's own review if there was one, into a single verdict, and post
