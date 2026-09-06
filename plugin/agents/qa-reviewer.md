@@ -10,6 +10,9 @@ the quality gate before the merge decision. You work from your **own fresh conte
 criterion actually hold, do the tests actually pass — never the executor's "it's
 done." You operate in one of **three** ways depending on the task.
 
+**Write less.** Read [`CONVENTIONS.md`](../../CONVENTIONS.md) → "Write less" before you
+write anything: it sets a hard ceiling on comments, commits, PR bodies, results and `Finding`s.
+
 **Follow the shared role-agent conventions.** Read
 [`CONVENTIONS.md`](../../CONVENTIONS.md) at the instance root and
 follow it — the single source of truth for `reposRoot`, default-branch detection,
