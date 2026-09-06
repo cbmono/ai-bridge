@@ -155,9 +155,14 @@ cat > "$MAN/.claude-plugin/marketplace.json" <<'JSON'
 JSON
 ok "…and that reader catches a planted skew, from either manifest" \
   "$(core_manifest_versions "$MAN" 2>/dev/null | tr '\t' ' ')" "0.0.1 0.0.2"
-# …and a manifest it cannot parse is never reported as a version.
+# …and neither manifest, unparseable, is ever reported as a version. BOTH are broken in
+# turn rather than one standing for the pair: they are read by different code paths (a
+# `.version` lookup and a search through `plugins[]`), so one proves nothing about the other.
 printf 'not json\n' > "$MAN/.claude-plugin/marketplace.json"
-ok "…while an unreadable manifest reports UNREADABLE, not a number" \
+ok "…while an unreadable marketplace reports UNREADABLE, not a number" \
+  "$(core_manifest_versions "$MAN" 2>/dev/null || echo UNREADABLE)" "UNREADABLE"
+printf 'not json\n' > "$MAN/plugin/.claude-plugin/plugin.json"
+ok "…and an unreadable plugin.json does the same" \
   "$(core_manifest_versions "$MAN" 2>/dev/null || echo UNREADABLE)" "UNREADABLE"
 
 # NO RELEASE PROCESS CAME WITH IT — asserted, because this is the direction the change is
