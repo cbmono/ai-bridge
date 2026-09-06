@@ -126,3 +126,29 @@ nudges off for good, and `touch AWAITING.md` turns them back on.
 **And the one habit worth forming first:** when the PM asks you something, answer it in
 the task document. The answer is folded in on the next tick and kept as a permanent
 record — so the reasoning behind a task survives the session it was decided in.
+
+---
+
+## Plugins that pair well
+
+**ai-bridge bundles no third-party plugin, and cannot.** Claude Code has no plugin
+dependency mechanism — `claude plugin install --help` (2.1.263) takes one positional
+`<plugin>` and offers no dependency option — and the core is domain-agnostic: a bundle
+holds only the state of the work, never application code. So this is a list, not a bundle.
+
+| Plugin | What it adds, and to whom | Verdict | Why — with its source |
+|---|---|---|---|
+| **`ai-bridge-yolo`** — our only companion | `AUTONOMY.md`, the capability file defining the `yolo` mode. For a bundle whose loop you already trust | **optional** | Marketplace entry: *"the loop may promote fully-refined build drafts and merge on an independent clearance. Not installed = every project is gated."* [autonomy.md](autonomy.md) |
+| `superpowers` | brainstorming, TDD, systematic debugging and subagent-driven development, as skills. Best fit: a session you drive yourself | **not with ai-bridge** — *not on a machine that runs the loop* | Measured on 6.3.0: its `SessionStart` hook injects `using-superpowers` whole, which requires *"skill invocation before ANY response including clarifying questions"* and pushes a process skill on every creative ask — *"\"Let's build X\" → superpowers:brainstorming first"*, *"before entering plan mode … invoke the brainstorming skill first"*. That fights a dispatched role agent's task contract. Its `using-git-worktrees` skill sets up the isolation ai-bridge already gives every task. Its `<SUBAGENT-STOP>` clause exempts a subagent by instruction only, so the main session that runs `/ai-bridge:dispatch` still carries all of it. And if you also run [`cbmono/ai-setup`](https://github.com/cbmono/ai-setup), its `/plan` and `/verify` overlap superpowers' planning and verification skills |
+| `code-review` | multi-agent PR review with confidence scoring | **not with ai-bridge** — you already have it | Claude Code ships `/code-review` built in, and `qa-reviewer` dispatches **`/code-review low`** as its default second opinion ([`plugin/agents/qa-reviewer.md`](../plugin/agents/qa-reviewer.md)). The local levels run on your own Claude usage; only `ultra` is *"user-triggered and billed"* (string in the 2.1.263 binary). The plugin adds nothing an ai-bridge user does not have |
+| `security-guidance` | pattern warnings on edits and an LLM diff review on stop, for 25+ vulnerability classes. For repos where agents commit unread code | **optional** | Marketplace description, plus its `hooks.json` at 2.0.7: `PostToolUse` rewakes on every `git commit` and `git push`, so it fires once per dispatched agent's commit. No event collides — ai-bridge hooks `PreToolUse`, `SessionStart`, `UserPromptSubmit` |
+| `chrome-devtools-mcp` | Puppeteer control of a live Chrome — traces, network, console. For debugging a running app | **optional**, foreground only | Marketplace description. A dispatched role agent cannot reach it: the allowlists in `plugin/agents/*.md` name `mcp__claude-in-chrome__*` and nothing else, and ai-bridge's own browser route is `browser: claude-for-chrome` ([autonomy.md](autonomy.md)) |
+| `frontend-design` | *"distinctive, production-grade frontend interfaces … avoids generic AI aesthetics"*. For UI repos | **optional** | Marketplace description. Domain tooling for your product repo; the control panel neither knows nor cares |
+| `typescript-lsp` | TypeScript/JavaScript language server for code intelligence. For TS repos | **optional** | Marketplace description. The marketplace has no plugin called `typescript`; this is the nearest entry. Domain tooling, same as above |
+| `context7` | version-specific library docs pulled from source, via a hosted remote MCP | **optional** | Marketplace description. Anonymous by default; `CONTEXT7_API_KEY` raises the rate limit |
+
+**Written as unknown, deliberately:** `code-review`, `chrome-devtools-mcp` and `context7`
+were **not installed** on the machine this was measured on, so their rows are the
+marketplace description plus what ai-bridge's own files say — no interaction with a running
+loop has been measured. The other four are installed there and were read from
+`~/.claude/plugins/`; `ai-bridge-yolo` is this repo's own marketplace entry.
