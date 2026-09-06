@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# dispatch-brief.sh — the two fixed grounding/effort sections the PM pastes into a
-# dispatch brief verbatim: `## Grounding (<repo>)`, the target repo's Service-doc entry
-# points capped at 15 lines (or one line telling the agent to draft the missing doc), and
-# `## Effort`, the files/LOC/turns budget derived from the task and the instance config.
+# dispatch-brief.sh — the three fixed sections the PM pastes into a dispatch brief
+# verbatim: `## Grounding (<repo>)`, the target repo's Service-doc entry points capped at
+# 15 lines (or one line telling the agent to draft the missing doc); `## Effort`, the
+# files/LOC/turns budget; and `## Commit attribution`, this installation's resolved
+# `commitAttribution` — resolved here so no agent reads that key itself.
 # Usage: dispatch-brief.sh <task-doc> [--instance <bundle>]. Exit: 0 printed, 2 cannot
 # answer (no task doc, unreadable frontmatter). Never fails a dispatch — an absent config
 # key falls back to the documented default. Reasoning and the band measurement:
-# ai-bridge-next/task-017.
+# ai-bridge-next/task-017; attribution: ai-bridge-next/task-031.
 set -uo pipefail
 
 GROUNDING_MAX_LINES=15
@@ -15,6 +16,7 @@ GROUNDING_MAX_LINES=15
 # place only.
 GROUNDING_HEADING='## Grounding'
 EFFORT_HEADING='## Effort'
+ATTRIBUTION_HEADING='## Commit attribution'
 
 usage() { sed -n '2,9p' "$0" >&2; exit 2; }
 
@@ -127,3 +129,12 @@ printf 'LOC ceiling: %s (maxPrLoc), %s files (maxPrFiles) — past either, propo
   "$(cfg maxPrLoc 500)" "$(cfg maxPrFiles 100)"
 printf 'Turns: be making your first edit by turn ~%s. Still only reading past ~%s ⇒ say so in your report.\n' \
   "$TURNS" "$((TURNS * 2))"
+
+# Only the exact string `none` switches attribution off; every other answer, including a
+# typo and an absent key, is the documented `claude` default (seed instance.config.json).
+printf '\n%s\n\n' "$ATTRIBUTION_HEADING"
+if [ "$(cfg commitAttribution claude)" = none ]; then
+  printf 'commitAttribution: none — write NO attribution trailer and NO session URL on a target-repo commit. This installation opted out.\n'
+else
+  printf 'commitAttribution: claude — end every target-repo commit with the `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer the harness provides.\n'
+fi

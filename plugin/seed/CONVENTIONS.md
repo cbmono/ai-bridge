@@ -124,8 +124,14 @@ above it so none may grow its share.
   / `git remote show origin`) — never assume `main`. Never work on it.
 - Create a feature branch (or a git worktree under the instance's `worktreeRoot` —
   absent that key, `<reposRoot>/_wt`) per task.
-- Conventional commits; **no AI attribution / `Co-Authored-By` lines.** Push to
-  `origin` early (don't wait until the end) so an interrupted worktree loses nothing.
+- Conventional commits, and **the `Co-Authored-By: Claude` trailer stays, because it is
+  true** — Claude co-authored the commit. **You never read the config for this.** Your
+  dispatch brief carries the installation's resolved value under `## Commit attribution`:
+  **`claude`** (the default, and what an absent `commitAttribution` key means) ⇒ end the
+  commit with the `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer the
+  harness provides; **`none`** ⇒ no attribution line and no session URL, which is the
+  documented opt-out for an organisation that requires one. Push to `origin` early
+  (don't wait until the end) so an interrupted worktree loses nothing.
 - PR title format: `<type>: <subject> [<task-id>]` (OKF task id, e.g.
   `[ci-hardening/task-001]`). Target the default branch. **Never merge.**
 - **Write for a human who will not read it.** They scan. Say the thing, then stop —

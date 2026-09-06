@@ -34,8 +34,11 @@ and a `done`/`cancelled` task is finished.
 
 ## Work it — the invariants hold here exactly as they do for agents
 
-- **Never merge. Never work on the default branch. No AI attribution in target-repo
-  commits. No customer PII anywhere. Never echo or log secrets.**
+- **Never merge. Never work on the default branch. No customer PII anywhere. Never
+  echo or log secrets.** A target-repo commit keeps its `Co-Authored-By: Claude` trailer
+  — resolve this instance's setting once with
+  `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-config.sh commitAttribution` (absent ⇒ `claude`;
+  `none` ⇒ no trailer and no session URL).
 - Verify against the task's `acceptance_criteria`; the PR body carries them as a
   `✓`/`✗` table — tick only what you actually verified, and run
   `${CLAUDE_PLUGIN_ROOT}/scripts/pr-body-clearance.sh --body-file <draft>` before posting.

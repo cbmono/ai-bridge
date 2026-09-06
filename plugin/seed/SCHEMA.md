@@ -670,6 +670,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `allowSubstituteBackend` | **local ONLY** — whether this machine may launch a session on a substituted LLM backend (the `ai-bridge-llm` companion). Never in the tracked file: which backend an installation runs is a per-machine data-governance call, and a tracked `true` is one clone's decision every other clone reads | not opted in — the launcher refuses and prints its governance warning |
 | `defaultOwner` | **no, by design** | step 4 above: unowned, so every clone treats it as its own |
 | `people` | **no** — a shared directory of who is who | no lookup; the `authorEmail` chain answers |
+| `commitAttribution` | **yes** — the tracked file is where an organisation states its policy; the local file is how one machine departs from it | `claude`: a target-repo commit keeps the `Co-Authored-By: Claude` trailer, because Claude co-authored it. `none` drops the trailer and the session URL |
 | `externalReviewer` | **no, by design** — it names **where this code may be sent**. That is policy, not preference: one clone silently routing diffs to a different reviewer is precisely the disagreement that breaks it, and it breaks in the direction nobody notices | the CodeRabbit CLI |
 | everything else | no — shared facts (`org`, `maxPrLoc`, `maxPrFiles`, `defaultRepo`, `codegraphSkip`, …) | as documented per key |
 
