@@ -62,8 +62,8 @@ against the installed one and does nothing when they match, so a machine reports
 to date while running older machinery. Measured 2026-09-06 at `182664d`: `VERSION` and
 `plugin/VERSION` said 1.1.0 and both manifests still said 1.0.1, so 1.0.2, 1.0.3, 1.0.4
 and 1.1.0 reached nobody — `claude plugin update ai-bridge` reported *1.0.0 → 1.0.1*,
-installed a cache directory named 1.0.1, and the banner inside it printed
-`AI-Bridge v1.1.0`.
+installed a cache directory named 1.0.1, and the banner inside it printed the newer
+number (the one `plugin/VERSION` carried), not the one the cache directory was named for.
 
 **A companion is not part of this set.** `ai-bridge-yolo` keeps its own number and tracks
 core's MAJOR only (`plugin/README.md`, "How a companion is versioned"), so it stays at
