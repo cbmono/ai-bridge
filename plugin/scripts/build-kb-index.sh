@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # build-kb-index.sh — regenerate knowledge/index.md from document frontmatter, or
-# `--check` that the file and the documents still agree. Run from a bundle root.
+# `--check` that the file, the documents and their links agree. From a bundle root.
 #
 #   build-kb-index.sh [--check] [--strict]
 #
 # Exit: 0 clean · 1 a defect (with --strict, a warning too) · 2 usage/no KB here.
 # A row is derived, never hand-written: its summary is the doc's `lesson:` (else
 # `description:`), `|` is escaped, and superseded Findings render in their own
-# section. Reasoning and the defect list: ai-bridge-next/task-007.
+# section. Broken bundle-relative links in knowledge/** WARN.
+# Reasoning and the defect list: ai-bridge-next/task-007, task-019.
 set -uo pipefail
 
 MODE=build; STRICT=0
@@ -15,7 +16,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --check)  MODE=check ;;
     --strict) STRICT=1 ;;
-    -h|--help) sed -n '2,9p' "$0" >&2; exit 2 ;;
+    -h|--help) sed -n '2,11p' "$0" >&2; exit 2 ;;
     *) echo "build-kb-index: unknown argument '$1'" >&2; exit 2 ;;
   esac
   shift
@@ -254,9 +255,44 @@ check_docs() {
   printf 'build-kb-index: %d supersession edge(s).\n' "$edges"
 }
 
+# --- bundle-relative links --------------------------------------------------
+# A link an agent can follow: absolute `/…` from the bundle root, or a relative
+# `*.md`. Fenced blocks are skipped — theirs are illustrations, not references.
+links_in() { # <file> -> "line<TAB>target", one per markdown inline link
+  awk '
+    /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
+    fence { next }
+    { line = $0
+      while (match(line, /\]\([^()[:space:]]*/)) {
+        print NR "\t" substr(line, RSTART+2, RLENGTH-2)
+        line = substr(line, RSTART+RLENGTH)
+      } }
+  ' "$1"
+}
+
+check_links() {
+  local f n target path
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    while IFS=$'\t' read -r n target; do
+      target=${target%%#*}
+      [ -n "$target" ] || continue
+      case "$target" in *://*|mailto:*|tel:*) continue ;; esac
+      if [ "${target#/}" != "$target" ]; then
+        path=".$target"
+      else
+        case "$target" in *.md) : ;; *) continue ;; esac
+        path="$(dirname "$f")/$target"
+      fi
+      [ -e "$path" ] || warn "$f:$n" "bundle-relative link resolves to nothing: $target"
+    done <<< "$(links_in "$f")"
+  done <<< "$(find knowledge -type f -name '*.md' 2>/dev/null | LC_ALL=C sort)"
+}
+
 if [ "$MODE" = check ]; then
   check_index
   check_docs
+  check_links
   if [ -r "$INDEX" ] && ! diff -q <(generate) "$INDEX" >/dev/null 2>&1; then
     err "$INDEX" "does not match the documents — run build-kb-index.sh to regenerate it"
   fi

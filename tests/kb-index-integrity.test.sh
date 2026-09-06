@@ -54,6 +54,7 @@ seed_bundle() { # <dir>
   mkdir -p "$d/knowledge/findings" "$d/knowledge/services" "$d/knowledge/runbooks" \
            "$d/knowledge/teams" "$d/knowledge/references"
   cp "$VOCAB" "$d/knowledge/vocab.md"
+  : > "$d/knowledge/log.md"   # the generated index links it; every stamped bundle has one
   cat > "$d/knowledge/findings/pipe-in-title.md" <<'EOF'
 ---
 type: Finding
@@ -103,6 +104,7 @@ EOF
 }
 
 check_rc() { ( cd "$1" && bash "$BUILD" --check >"$TMP/out.$$" 2>&1; echo $? ); }
+strict_rc() { ( cd "$1" && bash "$BUILD" --check --strict >"$TMP/out.$$" 2>&1; echo $? ); }
 check_out() { cat "$TMP/out.$$"; }
 
 echo "== the clean fixture builds, and the checker clears it =="
@@ -193,6 +195,45 @@ ok "superseded_by: without the status: red" "$(check_rc "$D")" 1
 ok "…and validate-bundle fails it too"   "$(hasre "$VALIDATE" 'carries superseded_by: but status is not')" yes
 
 echo
+echo "== bundle-relative links in knowledge/** resolve, or WARN with file:line =="
+# One document carrying every case at a known line, so an assertion names the line it
+# expects and a shifted report is a failure rather than a silent pass.
+D="$(plant links)"
+mkdir -p "$D/projects/live/tasks"
+: > "$D/projects/live/tasks/task-001.md"
+cat >> "$D/knowledge/findings/new-rule.md" <<'EOF'
+
+Live absolute [t1](/projects/live/tasks/task-001.md) and relative [t2](old-rule.md).
+Dead absolute [t3](/projects/closed/tasks/task-009.md).
+Dead relative [t4](../runbooks/gone.md).
+External [t5](https://example.invalid/x.md) and anchor [t6](#heading) and [t7](mailto:a@b.c).
+Fragment on a live target [t8](/knowledge/vocab.md#tags).
+Not markdown, so not ours: [t9](../assets/diagram.png).
+
+```md
+Inside a fence: [t10](/projects/closed/tasks/task-fence.md)
+```
+EOF
+LINK_RC="$(check_rc "$D")"
+ok "a broken link WARNS, never errors"     "$LINK_RC" 0
+ok "…exactly the two dead links"           "$(check_out | grep -c 'link resolves to nothing')" 2
+ok "…the dead absolute one, at file:line"  "$(check_out | grep -c 'new-rule.md:13$')" 1
+ok "…and the dead relative one"            "$(check_out | grep -c 'new-rule.md:14$')" 1
+ok "…naming the target that failed"        "$(check_out | grep -c '/projects/closed/tasks/task-009.md')" 1
+ok "a live absolute link is silent"        "$(check_out | grep -c 'task-001.md')" 0
+ok "…a live relative one too"              "$(check_out | grep -c 'old-rule.md$')" 0
+ok "an external URL is not ours"           "$(check_out | grep -c 'example.invalid')" 0
+ok "…nor a bare anchor or mailto:"         "$(check_out | grep -c 'heading\|mailto')" 0
+ok "a #fragment resolves on the file"      "$(check_out | grep -c 'vocab.md')" 0
+ok "a relative non-.md link is skipped"    "$(check_out | grep -c 'diagram.png')" 0
+ok "a link inside a fence is an example"   "$(check_out | grep -c 'task-fence.md')" 0
+ok "--strict promotes the warning to red"  "$(strict_rc "$D")" 1
+ok "…saying so"                            "$(check_out | grep -c 'warnings are failures')" 1
+CLEAN_RC="$(check_rc "$CLEAN")"
+ok "the clean fixture breaks no link"      "$(check_out | grep -c 'link resolves to nothing')" 0
+ok "…and still clears"                     "$CLEAN_RC" 0
+
+echo
 echo "== a superseded Finding is never citable =="
 printf 'The rule applies [[new-rule]] and [[old-rule]].\nOnly history here [[old-rule]].\n' > "$TMP/cites.md"
 CITE_RC=$( cd "$CLEAN" && bash "$CITE" --text-file "$TMP/cites.md" --brief new-rule,old-rule >"$TMP/cite.out" 2>&1; echo $? )
@@ -223,6 +264,7 @@ ok "…and rebuilds the index"             "$(has "$CLOSE" 'scripts/build-kb-ind
 ok "seed CLAUDE.md: index first"         "$(has "$SEED_CLAUDE" 'index first, at most three, superseded rows are history')" yes
 ok "…and it drops the old 1–3 wording"   "$(has "$SEED_CLAUDE" 'open only the 1–3')" no
 ok "the KB rule repeats the three points" "$(has "$KB_RULE" 'history, not guidance')" yes
+ok "the README row names the link check" "$(has "$REPO/README.md" 'bundle-relative link in `knowledge/**`')" yes
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
