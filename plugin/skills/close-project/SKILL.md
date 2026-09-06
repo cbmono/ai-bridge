@@ -38,7 +38,8 @@ candidates) and ask which to close.
 > **`--dry-run` short-circuits every mutation.** Do step 1 (read-only checks),
 > then for steps 2–7 *report exactly what you would do* — do **not** dispatch the
 > cataloguer, run `build-kb-index.sh` without `--check`, edit
-> `log.md`/`index.md`/`project.md`/objective, prune worktrees, or commit/remove anything. Only a run without the flag actually changes state. Step 7's
+> `log.md`/`index.md`/`project.md`/objective, prune worktrees, or commit/remove anything.
+> Only a run without the flag actually changes state. Step 7's
 > `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug>` **without `--apply`** is the one thing you
 > may run: it is report-only by design and prints the exact removal or prune it would
 > perform, which is a better dry-run report than a description of one.

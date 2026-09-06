@@ -266,6 +266,10 @@ if [ "$MODE" = check ]; then
   exit 0
 fi
 
-generate > "$INDEX.tmp.$$" && mv "$INDEX.tmp.$$" "$INDEX" || {
-  rm -f "$INDEX.tmp.$$"; echo "build-kb-index: could not write $INDEX" >&2; exit 1; }
-printf 'build-kb-index: wrote %s (%d rows).\n' "$INDEX" "$(grep -cE '^\| ' "$INDEX")"
+TMP_INDEX="$INDEX.tmp.$$"
+trap 'rm -f "$TMP_INDEX"' EXIT INT TERM
+if ! generate > "$TMP_INDEX" || ! mv "$TMP_INDEX" "$INDEX"; then
+  echo "build-kb-index: could not write $INDEX" >&2; exit 1
+fi
+rows=$(grep -cE '^\| ' "$INDEX"); headers=$(grep -cE '^\|[- ]*(Service|Finding|Runbook|Reference|Team) \|' "$INDEX")
+printf 'build-kb-index: wrote %s (%d row(s)).\n' "$INDEX" "$((rows - headers))"

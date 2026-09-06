@@ -135,7 +135,7 @@ ok "…and names its replacement"          "$(sed -n "${OLDROW}p" "$CLEAN/knowle
 echo
 echo "== one fixture per defect: each measured RED, and named =="
 plant() { # <name> — a fresh copy of the clean tree, index already built
-  rm -rf "$TMP/$1"; cp -R "$CLEAN" "$TMP/$1"; printf '%s' "$TMP/$1"
+  rm -rf "${TMP:?}/${1:?}"; cp -R "$CLEAN" "$TMP/$1"; printf '%s' "$TMP/$1"
 }
 
 D="$(plant no-row)"
