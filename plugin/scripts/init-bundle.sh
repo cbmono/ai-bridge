@@ -1244,8 +1244,8 @@ if [ "$FIRST_STAMP" = yes ] && [ ! -e "$TARGET/AWAITING.md" ]; then
   cat > "$TARGET/AWAITING.md" <<'AWAITING'
 # Awaiting you
 
-Derived and gitignored — **do not hand-edit**. Rewritten each `/ai-bridge:dispatch` tick
-from `projects/*/tasks/*.md`. Delete this file to turn the queue off for good;
+Derived and gitignored — **do not hand-edit**. Rewritten from `projects/*/tasks/*.md`
+by each `/ai-bridge:dispatch` tick that changed something. Delete this file to turn the queue off for good;
 the loop never recreates it. Last refreshed: never (no tick has run yet).
 
 ## 🔴 Awaiting you (0)

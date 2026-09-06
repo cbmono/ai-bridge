@@ -354,7 +354,9 @@ ticks, regardless of how long a tick runs.
   **its whole report is one line naming the next check** (`project-manager.md` step
   0.9). Pass the gap on: the tick puts it in `tick-delta.sh check --gap <gap>` so
   that line can say when you will next hear from the loop.
-- Each tick refreshes `AWAITING.md` **only when that file already exists**; deleting
+- Each tick refreshes `AWAITING.md` **only when that file already exists, and only
+  when the tick changed something** (a `noop: true` tick leaves it alone rather than
+  restamping its `Last refreshed:` line); deleting
   it turns the queue off for good (the loop never recreates it); `touch AWAITING.md`
   turns it back on.
 - Each tick also refreshes `SNAPSHOT.json` (`${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet`, at
