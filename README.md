@@ -410,11 +410,11 @@ to commit a `/board.html` into the bundle repo instead, and no longer does.
 
 **`/ai-bridge:board publish` publishes the same page as a private artifact**, at a URL that does
 not change between runs and that the session banner prints. It is the route to a phone
-with no clone on it; `/board.html` stays the route for anyone without a Claude account. The
+with no clone on it; `serve` stays the route on the machine itself. The
 URL is recorded per machine, in `instance.config.local.json`, because artifact publishing
 is account-scoped — no share level lets a second account update your page. **A headless
 tick never publishes**: measured 2026-09-05 on Claude Code 2.1.261, a `claude -p` session
-has no artifact tool at all, so the tick prints `run /ai-bridge:board to refresh` and stops
+has no artifact tool at all, so the tick prints `run /ai-bridge:board publish to refresh` and stops
 there. Opening it, including from a phone: [docs/operations.md §
 opening-the-board](docs/operations.md#opening-the-board-laptop-phone-published-live).
 
@@ -493,7 +493,8 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
 | `boardInstances` | the board is just this instance | yes |
-| `board` | **on** — `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something also commits `/board.html` | **no** — one instance, one answer |
+| `boardPort` | derived from the bundle path, in the 4xxxx band | **per machine only** — a port belongs to a laptop, not to a bundle everyone clones |
+| `board` | **on** — `SNAPSHOT.json` is seeded and each tick renders `.board-live/board.html`, which `/ai-bridge:board serve` serves | **no** — one instance, one answer |
 | `codegraphSkip` | index every product repo | yes |
 
 Environment knobs: `PUSH_STATE_MAX` (default **12**), `PRUNE_ACTIVE_MINUTES`,

@@ -1,9 +1,35 @@
 ---
 name: board
 disable-model-invocation: true
-description: Publish this instance's board as a PRIVATE artifact at a stable URL — rendered from SNAPSHOT.json only, updating the same page in place on every run. Interactive only; a session with no artifact capability says so and stops.
-argument-hint: "(no arguments)"
+description: The board, two ways. `serve` runs the local board server on a fixed localhost port — a script, no tokens. `publish` publishes the board as a PRIVATE artifact at a stable URL. Run from the instance root.
+argument-hint: "serve | publish"
 ---
+
+**Two forms, and `$ARGUMENTS` picks one.** Anything else — including no argument — is a
+typo: say so, name the two forms, and stop. Never guess.
+
+| `$ARGUMENTS` | What it does |
+|---|---|
+| `serve` | the **local** board server, on this machine only. One command, no tokens. |
+| `publish` | the **private artifact**, at a stable URL. Interactive only, and it leaves the machine. |
+
+## `serve` — the local board server
+
+Run it from the instance root and relay what it prints:
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/board-serve.sh
+```
+
+That is the whole form. The script binds `127.0.0.1` on `boardPort`
+(`instance.config.local.json`; absent, a port derived from the bundle path in the 4xxxx
+band), renders `.board-live/board.html` from `SNAPSHOT.json`, re-renders within two seconds
+of that file changing, and serves nothing outside `.board-live/`. **No model is in that
+path** — do not render, summarise or reformat the board yourself, and do not read the page
+back into the session. It runs until the human stops it; a second start on the same bundle
+says the port is already served and exits 0. The next session's banner prints the URL.
+
+## `publish` — the private artifact
 
 Publish this instance's board as a **private artifact**, at **one URL that never
 changes**. Run it from the instance root.
@@ -91,7 +117,7 @@ its own; what it publishes is the bytes the renderer wrote.
 **A headless tick cannot, and that is measured, not assumed.** On Claude Code 2.1.261 a
 `claude -p` session's tool inventory carries no artifact tool and a tool search for one
 returns nothing, so the dispatch tick never publishes — it renders the local page, and
-says `run /ai-bridge:board to refresh` instead.
+says `run /ai-bridge:board publish to refresh` instead.
 
 So if this session has no artifact capability either: **say that in one line, name the
 rendered file, and stop.** It is not an error and not a failure of the instance —
@@ -120,7 +146,7 @@ can resolve this for you either.
 ## Sharing it with a second human
 
 Share the artifact from its own share control, read-only. The URL does not change, so
-every later run of this skill updates the page they already have.
+every later run of this form updates the page they already have.
 
 **Sharing does not grant publishing.** No share level makes a second account able to
 update your artifact; each human publishes their own board from their own clone, and the
@@ -129,8 +155,8 @@ never from anybody's published page.
 
 ## What must not happen here
 
-- **Never write `/board.html`.** That file is the tick's, rendered `--standalone` and
-  committed; this skill only ever writes under `.board-live/`.
+- **Never write `/board.html`.** No tick commits that file any more; `publish` only ever
+  writes under `.board-live/`.
 - **Never put the URL in `instance.config.json`**, and never remove or rewrite a key
   already in the local file.
 - **Never report `BOARD: published` before the URL is recorded**, and never end a session
