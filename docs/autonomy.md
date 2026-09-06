@@ -238,13 +238,27 @@ own account**. One shared login collapses the gate back to the solo case with no
 saying so.
 
 **The override is a DECISION, not a mode.** It is the human choosing, once, on one pull
-request, to merge without independent clearance — so it is recorded **on that PR**, in a
-comment naming what was not verified and why. It is emphatically not a setting: there is
-no `autonomy` value for it, no config key turns it on, `review-clearance.sh` never returns
-0 because of it, and an override on one PR grants nothing to the next. **Eleven PRs have
-now merged this way**, which is the measurement that motivated this section: an override
-that is convenient enough becomes the default route, and the exception stops being visible
-as one.
+request, to merge without independent clearance — so it is recorded **on that PR**, in the
+comment template
+[operations.md](operations.md#merging-on-the-override-the-reason-is-read-off-the-pr) gives
+the merger. It is emphatically not a setting: there is no `autonomy` value for it, no
+config key turns it on, `review-clearance.sh` never returns 0 because of it, and an
+override on one PR grants nothing to the next.
+
+**How many have merged this way is a query, not a sentence in this file.** A running total
+typed into prose has no reader: the number that stood here was stale by eight within 83
+minutes of merging. Ask the host, which counts the marker line that template opens with:
+
+```sh
+gh search prs --repo <org>/<repo> --merged --match comments \
+  '"Merged on the owner override"' --limit 100 --json number -q length
+```
+
+Comments written before that template used their own wording, so `--match comments
+override` is the wider net over the history. What the count measures is recorded in
+`knowledge/findings/nineteen-consecutive-prs-merged-on-the-override-so-the-verification-gate-is-a-report.md`:
+an override that is convenient enough becomes the default route, and the exception stops
+being visible as one.
 
 > **The full incident is one `Finding` in the operator's own bundle, and it is not copied
 > here.** `knowledge/findings/every-agent-fix-push-spends-a-shared-review-and-a-free-plan-caps-files-at-100.md`
