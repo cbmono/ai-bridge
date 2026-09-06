@@ -20,30 +20,13 @@
 # which asserts THE RULE IS NAMED IN THE DOCUMENT. That is a reader for the documentation,
 # not for the thing the rule governs. Nothing read a PR body. This file is that reader.
 #
-# IT REFUSES ON MISSING STRUCTURE AND NEVER ON LENGTH, AND THAT IS THE WHOLE DESIGN.
-# A 1,137-line change may honestly need more than a tweet, and `CONVENTIONS.md` bounds
-# the body's SHAPE and never its size — so a gate that punished size would be wrong on
-# precisely the pull requests that most need explaining, and would be switched off within
-# a week for refusing correct work. THE 14,673-CHARACTER BODY THAT MOTIVATED
-# THIS FILE PASSES HERE if it carries a TL;DR and a criteria table. That is deliberate
-# scope, not an oversight.
-#
-# SO THE BODY'S LENGTH IS INFORMATION, NEVER A VERDICT. The character count is computed
-# once, printed on stderr on every run that reads a body, and never read again: NO
-# THRESHOLD, NO CONSTANT AND NO COMPARISON ON IT EXISTS ANYWHERE BELOW.
-# `tests/pr-body-clearance.test.sh` asserts that statically (the count variable never
-# appears on a line with a comparison operator) as well as behaviourally (a body far
-# longer than the motivating one clears).
-#
-# EXACTLY ONE LENGTH IS COMPARED HERE, AND IT IS NOT THE BODY'S: the EVIDENCE CELL of a
-# single acceptance-criteria row (element 3 below). The two are opposites, not a
-# compromise. A body grows because the change is large, which is honest and is exactly
-# when a reader needs the words; a ROW grows because its author put the reasoning in the
-# table instead of the task doc, which is the defect `CONVENTIONS.md` already names and
-# the one every measured regression has landed in. Bounding the body would refuse the
-# first; bounding the cell catches the second. So the numbers this file compares are an
-# argument count, a table's cell count, a code fence's width, an exit status, and ONE
-# CELL of ONE ROW of ONE TABLE — never the prose around it, and never the sum.
+# IT NOW REFUSES ON LENGTH TOO, AND THAT REVERSES THIS FILE'S ORIGINAL DESIGN. Until
+# 2026-09-06 the body's character count was computed, printed and never compared, on the
+# argument that a large change honestly needs words. The owner's verdict that day settled
+# it the other way — bodies #122 and #135 ran 5,826 and 6,423 characters — and
+# `CONVENTIONS.md` -> "Write less" is now the rule: 2,500 characters, at most 3 `## Notes`
+# bullets. Refused at EXIT 4, its own code, because the fix is "move the reasoning to the
+# task doc", not "add the missing element" (1) or "say what to run" (3).
 #
 # THE TEXT-MATCHED ELEMENTS, AND WHICH DIRECTION EACH MATCH FAILS IN. Text matching
 # is unavoidable
@@ -122,10 +105,8 @@
 #      body would be set too tight. `tests/pr-body-clearance.test.sh` drives that exact
 #      row rather than leaving the claim in a PR body nobody can re-run.
 #
-#      TWO OF THE THREE WERE OPEN, AND ONE MOVED UNDER THE MEASUREMENT — #70's body was
-#      edited between the 16:00 and 16:24 reads (worst cell 325 then 189). A live PR body
-#      is not a fixture, so the four boundary values are pinned as FIXTURES in
-#      `tests/pr-body-clearance.test.sh` and never re-derived from the host.
+#      A LIVE PR BODY IS NOT A FIXTURE — #70's moved under the measurement (325 then 189),
+#      so the four boundary values are pinned in `tests/pr-body-clearance.test.sh`.
 #
 #      IT IS COUNTED IN BYTES, UNDER `LC_ALL=C`, ON PURPOSE. `length()` counts characters
 #      in some awks and bytes in others, so an unpinned locale would put the threshold in
@@ -223,7 +204,7 @@
 #   0  the body carries a TL;DR marker, a `Verified:` line citing at least one link, and
 #      a well-formed criteria table under a heading whose tally matches its rows and
 #      explains any `✗`, whose every row is inside the evidence bound, with `### Notes`
-#      either absent or claim-first — at whatever total length
+#      either absent or claim-first, inside the concision ceilings below
 #   1  the body is readable and a required element is MISSING, INCOMPLETE or CONTRADICTED
 #      BY THE TABLE. stderr names every one of them — the TL;DR line, the `Verified:`
 #      line (absent, or present and citing nothing), the criteria table, its heading's
@@ -237,6 +218,9 @@
 #      fix is different — 1 says "add the missing thing", 3 says "move the reasoning to
 #      the task doc" or "say what to run" — and callers that already treat any non-zero
 #      as a refusal (`required-checks.sh`) need no change to honour it
+#   4  every element is present and every row is inside its bound, but the body is over
+#      2,500 characters or carries more than 3 `## Notes` bullets. Its own code for its
+#      own fix: relocate, do not add
 #
 # FAILS CLOSED. A body this script cannot fetch is not an empty body: reading a transient
 # 5xx as "no body" would be a refusal today and a clearance the moment anything downstream
@@ -332,6 +316,26 @@ https?://[^[:space:]<>]+
 # nothing below compares them to `body_chars`; see the header.
 CRITERIA_EVIDENCE_CEILING=400
 CRITERIA_EVIDENCE_FLOOR=13
+
+# --- table 6: the concision ceilings, from CONVENTIONS.md -> "Write less" ------
+# Owner's decision 2026-09-06; that section carries the measurement. Both are refused at
+# exit 4. `tests/pr-body-clearance.test.sh` pins them and drives a body on each side.
+BODY_CEILING_CHARS=2500
+NOTES_CEILING=3
+
+# CODE POINTS, which is what the host reports as a body's length. `jq` when it is there;
+# bytes otherwise, which OVER-counts a multibyte body and so only ever refuses earlier —
+# the fail-closed direction for a ceiling. The self-test runs before the `jq` check.
+# A draft file's trailing newline counts; that is one character high, and earlier.
+char_count() { # <file>
+  local n
+  if command -v jq >/dev/null 2>&1 && n="$(jq -Rs 'length' < "$1" 2>/dev/null)" \
+     && [ -n "$n" ]; then
+    printf '%s' "$n"
+    return 0
+  fi
+  LC_ALL=C wc -c < "$1" | tr -d ' '
+}
 
 usage() {
   echo "Usage: $(basename "$0") <pr> [--repo <owner>/<name>] [--head <sha>]" >&2
@@ -477,6 +481,8 @@ EOF
 #                      the section is optional and no number of notes is ever required
 #   notes<TAB>ok       every column-zero bullet under it opens with bold
 #   notes<TAB>bare<TAB><n><TAB><excerpt>   one line per bullet that does not
+# Plus, always, `notecount<TAB><n>` — its own record type so the state reader above,
+# which takes the FIRST `notes` line, cannot pick the count up as a state.
 notes_scan() { # <rendered-body>
   LC_ALL=C awk '
     # Untrusted text leaves here, reduced and truncated exactly as the table scan does it.
@@ -509,6 +515,7 @@ notes_scan() { # <rendered-body>
       if (nth == 0)        printf "notes\tabsent\n"
       else if (bare == "") printf "notes\tok\n"
       else                 printf "%s", bare
+      printf "notecount\t%d\n", nth
     }
   ' "$1"
 }
@@ -799,12 +806,9 @@ report_rows() { # <scan> <label> -> 0 clear, 3 at least one row outside the boun
   local scan="$1" label="$2" offenders n kind idx len text tab
   tab="$(printf '\t')"
   offenders="$(printf '%s\n' "$scan" | awk -F'\t' '$1 == "row" { print }')"
-  [ -n "$offenders" ] || {
-    echo "ok: $label carries a TL;DR line and a well-formed acceptance-criteria" >&2
-    echo "    table, a Verified line that cites something, a heading tally that matches" >&2
-    echo "    the rows, and claim-first notes where it has any." >&2
-    return 0
-  }
+  # SILENT ON SUCCESS. The clearance line is printed by `decide` after the concision
+  # ceilings have also answered, so a body cannot be told "ok" and then refused.
+  [ -n "$offenders" ] || return 0
   n="$(printf '%s\n' "$offenders" | grep -c '^')"
   echo "refuse: $label carries both structural elements, but $n acceptance-criteria" >&2
   echo "        row(s) fall outside the two-sided bound CONVENTIONS.md puts on the" >&2
@@ -834,18 +838,44 @@ report_rows() { # <scan> <label> -> 0 clear, 3 at least one row outside the boun
   done <<EOF
 $offenders
 EOF
-  echo "        This bounds ONE CELL of ONE ROW, never the body: a long body whose rows" >&2
-  echo "        are inside the bound clears here, and its character count is reported as" >&2
-  echo "        information only. See CONVENTIONS.md, 'The criteria table is the merge" >&2
-  echo "        gate'." >&2
+  echo "        This bounds ONE CELL of ONE ROW. The body's own ceiling is a separate" >&2
+  echo "        check with a separate code (4). See CONVENTIONS.md, 'The criteria table" >&2
+  echo "        is the merge gate'." >&2
   return 3
+}
+
+# --- element 7: the concision ceilings, CONVENTIONS.md -> "Write less" ---------
+# LAST, and only over a body whose every element is present and whose every row is inside
+# its bound — so its advice is always "relocate", never "add". Both ceilings are reported
+# in one pass: an author over both should learn both in one run.
+report_concision() { # <raw-body> <notes-scan> <label> -> 0 clear, 4 over a ceiling
+  local raw="$1" nscan="$2" label="$3" chars notes rc=0
+  chars="$(char_count "$raw")"
+  notes="$(printf '%s\n' "$nscan" | awk -F'\t' '$1 == "notecount" { print $2; exit }')"
+  case "$chars" in ''|*[!0-9]*) return 2 ;; esac
+  case "$notes" in ''|*[!0-9]*) return 2 ;; esac
+  if [ "$chars" -gt "$BODY_CEILING_CHARS" ]; then
+    rc=4
+    echo "refuse: $label carries every required element, and it is $chars characters —" >&2
+    echo "        over the $BODY_CEILING_CHARS-character ceiling CONVENTIONS.md sets in 'Write less'." >&2
+    echo "        Keep the TL;DR line, the Verified line and the criteria table. Move the" >&2
+    echo "        design, the alternatives and the incident into the task doc and the" >&2
+    echo "        commit message, which travel with the change and have no ceiling." >&2
+  fi
+  if [ "$notes" -gt "$NOTES_CEILING" ]; then
+    rc=4
+    echo "refuse: $label carries $notes Notes bullets — over the $NOTES_CEILING CONVENTIONS.md allows." >&2
+    echo "        A note is for something a reviewer cannot see from the diff. Past three" >&2
+    echo "        it is the essay the section replaced, arriving under another heading." >&2
+  fi
+  return "$rc"
 }
 
 # --- the verdict, over a body already on disk ---------------------------------
 # The ONE place a body becomes an exit code, so both call sites (a fetched PR and a local
 # draft) answer identically. <label> only names the subject in the messages.
-decide() { # <rendered-body> <label> -> 0 clear, 1 refuse, 2 unknown, 3 a row is unbounded
-  local rendered="$1" label="$2" tldr verified scan tstate tally tkind rc
+decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too long
+  local raw="$1" rendered="$2" label="$3" tldr verified scan tstate tally tkind rc
   local nscan nstate bare_n bare_txt
   local tab; tab="$(printf '\t')"
   has_tldr "$rendered"; tldr=$?
@@ -872,7 +902,13 @@ decide() { # <rendered-body> <label> -> 0 clear, 1 refuse, 2 unknown, 3 a row is
   # trim rows of a table the gate has not agreed exists.
   if [ "$tldr" -eq 0 ] && [ "$verified" -eq 0 ] && [ "$tstate" = ok ] \
      && [ "$tkind" = ok ] && [ "$nstate" != bare ]; then
-    report_rows "$scan" "$label"; return $?
+    report_rows "$scan" "$label" || return $?
+    report_concision "$raw" "$nscan" "$label" || return $?
+    echo "ok: $label carries a TL;DR line and a well-formed acceptance-criteria" >&2
+    echo "    table, a Verified line that cites something, a heading tally that matches" >&2
+    echo "    the rows, claim-first notes where it has any, and is inside the" >&2
+    echo "    CONVENTIONS.md concision ceilings." >&2
+    return 0
   fi
 
   echo "refuse: $label does not carry the shape CONVENTIONS.md requires of a PR body." >&2
@@ -947,8 +983,8 @@ EOF
     echo "        with the explanation after it, so the section is skimmable in bold" >&2
     echo "        alone. The section is optional; a note that buries its claim is not." >&2
   fi
-  echo "        This refuses on missing STRUCTURE, never on length: a long body carrying" >&2
-  echo "        every element clears. See CONVENTIONS.md, 'The PR body has a required" >&2
+  echo "        This is the STRUCTURE refusal. Length is a separate check with a" >&2
+  echo "        separate code (4). See CONVENTIONS.md, 'The PR body has a required" >&2
   echo "        shape'." >&2
   return "$rc"
 }
@@ -993,7 +1029,7 @@ if [ "${1:-}" = "--self-test" ]; then
     local want="$1" name="$2"; shift 2
     printf '%s\n' "$@" > "$TMPD/raw"
     render_body "$TMPD/raw" "$TMPD/rendered"
-    decide "$TMPD/rendered" "self-test body" >/dev/null 2>&1
+    decide "$TMPD/raw" "$TMPD/rendered" "self-test body" >/dev/null 2>&1
     [ "$?" -eq "$want" ] || {
       echo "self-test: $name did not answer $want — refusing" >&2; exit 2; }
   }
@@ -1065,6 +1101,30 @@ if [ "${1:-}" = "--self-test" ]; then
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
     '' '### Notes' '' '- **The parser is in awk.** grep cannot count a table cell.'
 
+  # ELEMENT 7, BOTH CEILINGS, BOTH DIRECTIONS. A copy whose length check was deleted
+  # answers 0 on the over-ceiling probes; a copy that set the ceiling too low answers 4
+  # on the 2,000-character one. The controls are the two clearing probes.
+  ST_NOTE1='- **One.** A reviewer cannot see this from the diff.'
+  ST_NOTE2='- **Two.** Nor this.'
+  ST_NOTE3='- **Three.** Nor this.'
+  ST_NOTE4='- **Four.** This is the essay arriving under another heading.'
+  st_probe 0 "a 2,000-character body carrying every element" \
+    '## Description (TL;DR)' "It does the thing. $(st_cell 1800)" '' "$ST_VERIFIED" '' \
+    "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
+  st_probe 4 "the same body past the 2,500-character ceiling" \
+    '## Description (TL;DR)' "It does the thing. $(st_cell 2600)" '' "$ST_VERIFIED" '' \
+    "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
+  st_probe 0 "three claim-first notes" \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
+    '' '### Notes' '' "$ST_NOTE1" "$ST_NOTE2" "$ST_NOTE3"
+  st_probe 4 "…and a fourth" \
+    '## Description (TL;DR)' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
+    '' '### Notes' '' "$ST_NOTE1" "$ST_NOTE2" "$ST_NOTE3" "$ST_NOTE4"
+
   printf '%s\n' "$SELFTEST_OK"
   exit 0
 fi
@@ -1111,14 +1171,11 @@ if [ -n "$body_file" ]; then
     echo "       state, and unknown is never clearance. Refusing." >&2
     exit 2
   }
-  # `jq -Rs length` counts CODE POINTS, which is what the host reports as a body's
-  # length; `wc -c` would count UTF-8 bytes and disagree with the number in the incident
-  # this file exists for. INFORMATION ONLY — see the header; nothing below reads it.
-  body_chars="$(jq -Rs 'length' < "$body_file" 2>/dev/null)" || body_chars="unknown"
-  echo "pr-body-clearance: $body_file is $body_chars characters (information only —" >&2
-  echo "                   no exit code in this script is derived from that number)" >&2
+  # Reported here for the author; `decide` measures it again against the ceiling.
+  body_chars="$(char_count "$body_file")"
+  echo "pr-body-clearance: $body_file is $body_chars characters (ceiling $BODY_CEILING_CHARS)" >&2
   render_body "$body_file" "$TMPD/rendered"
-  decide "$TMPD/rendered" "'$body_file'"
+  decide "$body_file" "$TMPD/rendered" "'$body_file'"
   exit $?
 fi
 
@@ -1169,20 +1226,18 @@ printf '%s' "$raw" | jq -e 'has("body")' >/dev/null 2>&1 || {
   echo "       empty. Unknown is never clearance. Refusing (fail closed)." >&2
   exit 2
 }
-printf '%s' "$raw" | jq -r '.body // ""' > "$TMPD/body" 2>/dev/null || {
+# `-j`, not `-r`: `-r` appends a newline the body does not have, and this file is what
+# the ceiling is measured on — so the printed count and the compared count are one number.
+printf '%s' "$raw" | jq -j '.body // ""' > "$TMPD/body" 2>/dev/null || {
   echo "error: the body of PR $pr could not be extracted — refusing (fail closed)" >&2
   exit 2
 }
 
-# INFORMATION ONLY. Taken from the JSON string's own length, so it is the host's count of
-# characters rather than a byte count of a file. Nothing below reads it; see the header.
-body_chars="$(printf '%s' "$raw" | jq -r '(.body // "") | length' 2>/dev/null)" \
-  || body_chars="unknown"
-echo "pr-body-clearance: PR $pr body is $body_chars characters (information only — no" >&2
-echo "                   exit code in this script is derived from that number)" >&2
+body_chars="$(char_count "$TMPD/body")"
+echo "pr-body-clearance: PR $pr body is $body_chars characters (ceiling $BODY_CEILING_CHARS)" >&2
 
 render_body "$TMPD/body" "$TMPD/rendered"
-decide "$TMPD/rendered" "the body of PR $pr ($url)"
+decide "$TMPD/body" "$TMPD/rendered" "the body of PR $pr ($url)"
 exit $?
 
 # --- completeness sentinel — THIS MUST REMAIN THE LAST LINE OF THIS FILE -------

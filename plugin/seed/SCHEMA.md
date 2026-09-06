@@ -227,6 +227,7 @@ A durable learning or architecture decision (ADR-style).
 type: Finding
 title: <the statement / decision>
 description: <one line>
+lesson: <one line — the takeaway the next agent needs; required, and validate-bundle warns without it>
 category: decision | learning | gotcha
 status: current | superseded
 source:                           # where it came from, e.g. /projects/.../tasks/<id>.md or a PR URL
@@ -234,7 +235,8 @@ timestamp: <ISO 8601>
 ---
 ```
 Body headings: `# Context`, `# Finding` (or `# Decision`), `# Rationale`,
-`# Implications`. Link to the Services/tasks it concerns.
+`# Implications`. Link to the Services/tasks it concerns. **40 lines, whole file**
+(`CONVENTIONS.md` → "Write less"); the history that produced it lives in the task doc.
 
 ### type: Team  (`knowledge/teams/<slug>.md`)
 

@@ -64,6 +64,11 @@
 # `artifacts:` WARNS rather than fails: a research task legitimately declares a
 # deliverable before it is written.
 #
+# A `Finding` over 40 lines, or without a one-line `lesson:`, WARNS for the same reason —
+# `CONVENTIONS.md` -> "Write less" sets both, and the 133 findings that predate the rule
+# average 110 lines. A warning puts them on the cataloguer's list; an error would fail
+# every bundle that has one, which is every bundle.
+#
 # Run from a control-panel instance root. Generic: no org/repo/path literals.
 # Bash + awk only — no jq, no python — so it ships into every instance unchanged.
 #
@@ -101,6 +106,9 @@ enum_for() {
 }
 
 KNOWN_TYPES="Objective Project Phase Task Agent Service Finding Team Runbook Reference"
+
+# CONVENTIONS.md -> "Write less". Lowering it is free; raising it is a rule change.
+FINDING_MAX_LINES=40
 
 errors=0; warns=0; checked=0
 
@@ -184,6 +192,16 @@ while IFS= read -r file; do
 
   if ! printf '%s\n' "$fm" | grep -q '^timestamp:[[:space:]]*[^[:space:]]'; then
     fail "$rel" "missing required field: timestamp"
+  fi
+
+  if [[ "$type" == Finding ]]; then
+    lines="$(grep -c '' "$file" || true)"
+    if [[ -n "$lines" && "$lines" -gt $FINDING_MAX_LINES ]]; then
+      warn "$rel" "Finding is $lines lines; CONVENTIONS.md 'Write less' caps it at $FINDING_MAX_LINES — the history behind it belongs in the task doc"
+    fi
+    if ! printf '%s\n' "$fm" | grep -q '^lesson:[[:space:]]*[^[:space:]]'; then
+      warn "$rel" "Finding has no one-line 'lesson:' — the takeaway the next agent needs, required by CONVENTIONS.md 'Write less'"
+    fi
   fi
 
   structural="$(refs_for "$fm" 'objective|project|phase|depends_on' '/(objectives|projects|knowledge|agents)/[A-Za-z0-9._/-]+[.]md')"

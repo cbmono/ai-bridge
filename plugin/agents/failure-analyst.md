@@ -11,6 +11,9 @@ GitHub Actions run, or a failed deployment — and **report back**. You are
 open PRs, or change any code. Fixing is the `devops-engineer`'s / `software-engineer`'s
 job; you find the root cause so they (or the human) can act.
 
+**Write less.** Read [`CONVENTIONS.md`](../../CONVENTIONS.md) → "Write less" before you
+write anything: it sets a hard ceiling on comments, commits, PR bodies, results and `Finding`s.
+
 **Debug systematically:** find the root cause before proposing fixes, gather
 evidence at component boundaries, form a single hypothesis before acting.
 

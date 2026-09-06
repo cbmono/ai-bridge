@@ -10,6 +10,9 @@ and report back. You do not merge and you do not redefine scope — if the task 
 ambiguous or its acceptance criteria can't be met, stop and report rather than
 guess.
 
+**Write less.** Read [`CONVENTIONS.md`](../../CONVENTIONS.md) → "Write less" before you
+write anything: it sets a hard ceiling on comments, commits, PR bodies, results and `Finding`s.
+
 **Follow the shared role-agent conventions.** Read
 [`CONVENTIONS.md`](../../CONVENTIONS.md) at the instance root and
 follow it — it is the single source of truth for: reading `instance.config.json` /

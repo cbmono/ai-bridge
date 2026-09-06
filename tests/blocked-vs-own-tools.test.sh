@@ -282,7 +282,7 @@ awk '
   !drop { print }
 ' "$CONV" > "$TMP/conv-mutant.md"
 ok "the mutation removed something"        "$([ "$(wc -c < "$TMP/conv-mutant.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
-ok "CONTROL: the PR-shape bullet survives" "$(saw "$TMP/conv-mutant.md" '**The PR body has a required shape, and it is short.**')" yes
+ok "CONTROL: the PR-shape bullet survives" "$(saw "$TMP/conv-mutant.md" '**The PR body has a required shape, and it is short — 2,500 characters, hard**')" yes
 ok "CONTROL: the browser bullet survives"  "$(saw "$TMP/conv-mutant.md" '**rung 1 above applies to the browser like any other tool**')" yes
 ok "mutant: the three rungs are gone"      "$(saw "$TMP/conv-mutant.md" '**Only then hand back exact instructions**')" no
 ok "mutant: the capability scope is gone"  "$(saw "$TMP/conv-mutant.md" 'THE LADDER COVERS CAPABILITY GAPS ONLY.')" no
