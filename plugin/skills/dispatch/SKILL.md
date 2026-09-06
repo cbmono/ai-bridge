@@ -366,13 +366,9 @@ ticks, regardless of how long a tick runs.
   published anywhere. `board: false` in `instance.config.json` ⇒ no render and no
   mention; absent or `true` ⇒ it renders and the tick reports the path. The page is
   only as fresh as the last tick (its masthead timestamp says); `${CLAUDE_PLUGIN_ROOT}/scripts/watch-board.sh`
-  is the live view.
-- **A tick that changed something also commits a TRACKED `/board.html`** —
-  `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone --out board.html .` (**the trailing `.` is
-  load-bearing**: without it the renderer reads `boardInstances`, i.e. OTHER bundles,
-  into a repo with a different permission list), committed by `commit-as.sh` and pushed
-  with the rest. That commit IS the publishing step — the page is readable by this
-  repo's permission list and by nothing else, and no Pages site is ever enabled. A
-  `noop: true` tick renders and commits nothing there, so an idle loop pushes no HTML.
-  How to open it — laptop, phone, or live between ticks — is `docs/operations.md` →
-  "Opening the board".
+  is the live view, and `/ai-bridge:board serve` is the same page on a local URL.
+- **No tick commits a board page.** The tracked `/board.html` is gone: a derived file
+  every clone re-rendered and pushed made the path contended on every tick, and the local
+  route replaced it. `/ai-bridge:board serve` serves the file above on
+  `http://localhost:<boardPort>`, 127.0.0.1 only, re-rendering when the snapshot changes.
+  How to open it is `docs/operations.md` → "Opening the board".

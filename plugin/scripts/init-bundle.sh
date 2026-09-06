@@ -1425,29 +1425,34 @@ if ! grep -qE '^/?\.tick-state$' "$gi"; then
 GI
 fi
 
-# The tracked board page (/board.html) — the ONE un-ignore in this file, and it needs its
-# own guard for the .tick-lock.claim reason plus a second one: every instance in existence
-# was seeded from a seed/.gitignore that IGNORED board.html, and that line stops the tick
-# from committing the page the bundle now publishes by tracking. Purely additive, like
-# every other migration here: the old `board.html` line is never removed from a live
-# instance's .gitignore — a later `!/board.html` re-includes it, which is git's own
-# last-match-wins rule and leaves a hand-edited file intact.
+# The board page (/board.html) is DERIVED again, so it is ignored again. This block used
+# to append the opposite line — `!/board.html` — for the era when the tick committed the
+# page; a derived path every clone re-renders and pushes is contended on every tick, and
+# the local server replaced it. Purely additive as always: the old un-ignore is never
+# removed, and git's LAST-MATCH-WINS rule is what makes a trailing `/board.html` beat it.
 #
-# Both greps run in `if` CONDITION position, where `set -e` does not apply, so a
-# no-match exit 1 is a branch and not an abort.
-#
-# A freshly seeded instance has no `board.html` line at all, so the first grep fails and
-# nothing is appended — the un-ignore exists only to undo a line older instances carry.
-if grep -qE '^/?board\.html$' "$gi" && ! grep -qE '^!/?board\.html$' "$gi"; then
+# The grep runs in `if` CONDITION position, where `set -e` does not apply, so a no-match
+# exit 1 is a branch and not an abort. It asks whether the LAST board.html pattern in the
+# file is already an ignore, so re-stamping appends nothing.
+if [ "$(grep -E '^!?/?board\.html$' "$gi" | tail -1)" != "/board.html" ]; then
   cat >> "$gi" <<'GI'
 
-# The bundle's board page (build-board.sh) — TRACKED on purpose, re-rendered and
-# committed by each /ai-bridge:dispatch tick that changed something. Committing it IS how
-# the board is published: who may read it is this repo's permission list, by construction.
-# This line un-ignores it for instances stamped while board.html was ignored; git takes the
-# LAST matching pattern, so it wins over the older line above without editing it.
-!/board.html
+# The bundle's board page (build-board.sh) — DERIVED, never tracked. `/ai-bridge:board
+# serve` serves it from /.board-live/ on 127.0.0.1, so nothing about the board is pushed.
+# This line re-ignores it for instances stamped while it was tracked; git takes the LAST
+# matching pattern, so it wins over an older `!/board.html` without editing it.
+/board.html
 GI
+fi
+
+# And the file itself goes, once, for a bundle that has one tracked. It is derived output
+# — the next tick re-renders it under /.board-live/ — so this is the one removal the stamp
+# makes, and it is reported rather than silent.
+if [ -e "$TARGET/board.html" ] && git -C "$TARGET" ls-files --error-unmatch board.html >/dev/null 2>&1; then
+  if git -C "$TARGET" rm --cached --quiet board.html 2>/dev/null; then
+    rm -f "$TARGET/board.html"
+    echo "  drop  board.html — the board is served locally now (/ai-bridge:board serve)."
+  fi
 fi
 
 # 3b. Two more ignores, appended once each if missing — OUTSIDE the managed block,
