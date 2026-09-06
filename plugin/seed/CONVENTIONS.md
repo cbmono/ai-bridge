@@ -317,11 +317,22 @@ in `cbmono/ai-bridge` enforces this.
   asks nobody to trust **less** verification — it moves the verification to the only place
   the merge gate actually reads. `tests/local-vs-ci-testing.test.sh` in `cbmono/ai-bridge`
   pins the clauses above by name.
-- **PR size is a heuristic that suggests a split, never a gate.** Before opening, check
-  the diff against **`maxPrLoc`** in `instance.config.json` (**absent that key, 500**);
-  past it, say so in the PR body as one `⚠️` line — the figure and the split you would make
+- **PR size is a heuristic that suggests a split, never a gate.** **And it is TWO
+  numbers.**
+  Before opening, check the diff against **`maxPrLoc`** in `instance.config.json`
+  (**absent that key, 500**) **and against `maxPrFiles`** in the same file (**absent that
+  key, 100**);
+  past either, say so in the PR body as one `⚠️` line — the figure and the split you would make
   (by phase, by layer, or as a stack) — and put the detail in the commit message and the
-  task doc, per the PR-body shape above. Then **open the PR
+  task doc, per the PR-body shape above.
+  **`maxPrFiles` is the one the reviewer counts, and past it there is no review at all.**
+  A free-plan CodeRabbit refuses a pull request over 100 files outright, before any quota
+  question, offering only "split the PR or upgrade" (measured 2026-09-05 on a 147-file
+  PR). The two numbers disagree in both directions — a `git mv` sweep is one file per
+  rename and almost no lines, one generated lockfile is thousands of lines in one file —
+  which is why neither can be inferred from the other. Count them the way the host does:
+  `git diff --numstat origin/<default> | wc -l` for files,
+  `git diff --shortstat origin/<default>` for lines. Then **open the PR
   anyway**: generated boilerplate, codemods, lockfiles and dense logic all move the real
   number, so a line count cannot decide reviewability on its own, and a task that
   legitimately needs one large change must not be blocked by arithmetic. It is **not** a
@@ -379,13 +390,48 @@ in `cbmono/ai-bridge` enforces this.
   pre-filter does **not** replace the independent verifier: you review your own work
   leniently, so the fresh-context reviewer still runs after (see `SCHEMA.md`
   "Independent verification gate").
+- **ASK FOR THE INDEPENDENT REVIEW ONCE, AT THE HEAD YOU CONSIDER FINAL — never after a
+  fix commit.** This is the ordering rule, and it comes before the "don't re-trigger" rule
+  below because it is what makes that one cheap: **self-review your own diff first, push
+  everything it made you change, get CI green, and only then post
+  `@coderabbitai review`.** A review of a head that moves ten minutes later is a spent
+  review that clears nothing — `review-clearance.sh` answers **exit 4 (stale)** for it,
+  which looks identical on the PR page to no review at all.
+  **The quota is shared and it is per hour, not per PR.** Three agents pushing fixes into
+  three PRs in one hour is one queue, so every request an agent makes at a non-final head
+  is taken out of the request some *other* agent needs at its final one. Measured
+  2026-09-05/06: three PRs merged on the owner's override — one carried a real review at a
+  commit it does not name (exit 4), two carried *"Review limit reached"* behind a **green**
+  CodeRabbit check (exit 1). That is the ninth, tenth and eleventh instance of the same
+  pattern.
+  **So request at most once per PR, and never on a schedule.** The one exception is a
+  substantial rewrite that invalidates the review you already have — see the next bullet,
+  which is about not re-reviewing the *same* diff.
+  Repos should make the ordering hold by configuration rather than by everyone's
+  discipline: pin **`reviews.auto_review.enabled: false`** in `.coderabbit.yaml` so the
+  explicit request at the final head is the *only* thing that spends a review, and know the
+  trade-off — an unrequested PR then gets no review at all, which is caught by
+  `review-clearance.sh` exit 3 (no reviewer signal) and never by a green check.
+- **Resolve or answer every reviewer-authored thread before you re-request** —
+  `SCHEMA.md` clause 9, and it refuses a merge exactly as a stale review does. A thread you
+  leave open is an unanswered finding whatever the review object says, so the sequence at
+  the end of a round is: **fix or answer each thread → resolve it (or say in it why you
+  are not taking it) → push → then, if a rewrite genuinely invalidated the review, request
+  once at the new final head.** Resolving your own thread is not the reviewer agreeing with
+  you; it records your answer so a human can see one. **The reader is
+  `review-clearance.sh`, which exits 6 and NAMES the threads it found open** — so an
+  unresolved thread is a line you can act on, not something a reviewer has to notice.
+  **Why this bullet exists and it is not about quota.** The 2026-09-05 audit of the seven
+  1.0 PRs found **four failing on clauses 3 and 9** — a stale-head review and unresolved
+  reviewer threads. Three of the seven were quota; these four had a reviewer that answered
+  and were merged anyway.
 - **One review per PR — fix findings, don't re-trigger.** Address every review comment,
   push the fix, and reply once stating what changed (or why you disagree). Do **not** ask
   for a re-review to confirm your fixes: a re-review of addressed findings reliably finds
   nothing and costs a full session. Request one (`@coderabbitai review`) only after a
   *substantial rewrite* that invalidates the original review. Repos should pin this with
-  `.coderabbit.yaml` (`auto_incremental_review: false`, `chat.auto_reply: false`) so it
-  holds by default rather than by everyone's discipline.
+  `.coderabbit.yaml` (`auto_review.enabled: false`, `auto_incremental_review: false`,
+  `chat.auto_reply: false`) so it holds by default rather than by everyone's discipline.
   **The reply is a list, not a letter** — same discipline as the PR body, same reason:
 
   ```md

@@ -14,6 +14,8 @@
   "defaultRepo": null,
   "maxAgentsInFlight": 4,
   "maxPrLoc": 2000,
+  "maxPrFiles": 100,
+  "$maxPrFiles": "The FILE COUNT past which a PR-opening role agent proposes a split, and past which the project-manager proposes splitting a task before dispatch. Absent => 100. It sits beside maxPrLoc because the two count different things and the reviewer counts THIS one: CodeRabbit's free plan refuses a pull request over 100 files outright, before any quota question (measured 2026-09-05, ai-bridge#122 at 147 files), and a `git mv` sweep is 1 file per rename while barely moving the line count. Same status as maxPrLoc in every other respect: the agent SAYS SO and opens the PR anyway, never a gate and never a review criterion.",
   "codegraphSkip": "",
   "externalReviewer": null,
   "prReviewSlackChannel": null,

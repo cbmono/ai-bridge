@@ -486,6 +486,7 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `ownerGithubUser` | this clone has no configured human | **local file only** |
 | `maxAgentsInFlight` | **4** | yes |
 | `maxPrLoc` | **500** | yes |
+| `maxPrFiles` | **100** | yes |
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
 | `boardInstances` | the board is just this instance | yes |
@@ -565,6 +566,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | `review-rounds.sh` exits 1 | the PR has already had its two verification rounds — this is the cap doing its job, not a fault | stop reviewing: put both positions (reviewer / implementer / what the criterion asks) in front of the human and let them decide |
 | An agent reported "done" but no PR ever appeared | it parked before opening one — `check-dispatch.sh` exit 1, the parked signature | one message to that agent: open the PR on what it already committed. Never re-dispatch the task |
 | `review-clearance.sh` exits 4 on a PR that *was* reviewed | the reviewer read an earlier push and does not re-review (`auto_incremental_review: false`) — the review is **stale**, not absent | ask for a review at the current head; this is the common case here, not a bug |
+| `review-clearance.sh` exits 6 on a PR that *was* reviewed | the review is real and at the head, but a reviewer-authored thread is still unresolved — `SCHEMA.md` clause 9. The refusal names each open thread | answer or fix each thread, resolve it, push. **Do not request another review** — you already have one, and a 6 is not a 4 |
 | `review-clearance.sh` exits 4, "carries no evidence that a review was COMPLETED" | the only artifact is the reviewer's *"currently processing"* placeholder or similar — it names the head but nothing says anybody read it | wait for the real review, or ask for one; not-a-refusal is not a review, and clearing on it was a live false pass |
 | CodeRabbit: "Unable to determine base branch" | a remote-less instance has no `origin/HEAD` to infer one from | `git config coderabbit.baseBranch <branch>` |
 | Validator errors right after an upgrade | the machinery updated, the data didn't | `/ai-bridge:welcome fix` runs validate → migrate in the right order |

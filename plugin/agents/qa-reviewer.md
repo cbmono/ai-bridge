@@ -80,12 +80,15 @@ no PII/secrets. The role-specific procedure is below.
      "Actionable comments posted: N" — compare N against the number of inline comments you
      actually read, and paginate until they agree. A truncated fetch looks exactly like a
      clean review.
-     **Reconcile the THREADS as well as the count.** `SCHEMA.md` clause 9 applies to an
-     external review as much as to yours: a reviewer-authored thread still unresolved refuses
-     clearance. Read `reviewThreads { isResolved }` (GraphQL) or the Files-changed view — the
-     inline-comment count says nothing about it — and a thread the PR author resolved
-     themselves does not count unless the reviewer re-acknowledged it by re-reviewing the
-     current head without re-raising.
+     **Reconcile the THREADS as well as the count, and it now has a reader.**
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-clearance.sh` answers **exit 6** for a completed review at the head
+     that clause 9 refuses, and NAMES every unresolved thread (path, line, who opened it,
+     its URL). Run it rather than re-deriving the answer; read
+     `reviewThreads { isResolved }` (GraphQL) or the Files-changed view yourself only where
+     you need more than the list — the inline-comment count says nothing about thread
+     state. A thread the PR author resolved themselves does not count unless the reviewer
+     re-acknowledged it by re-reviewing the current head without re-raising, which is the
+     one part of clause 9 no script can settle.
    - **b. No review — is the repo nevertheless configured?** A configured repo can simply
      not have been reviewed *yet* (rate-limited, queued, or the PR is a draft). Check for a
      `.coderabbit.yaml`, and — since CodeRabbit is often configured through its **org UI**,

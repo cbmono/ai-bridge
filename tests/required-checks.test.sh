@@ -102,6 +102,18 @@ case "${1:-}" in
       *) echo "stub: unhandled pr $2" >&2; exit 99 ;;
     esac ;;
   api)
+    # GraphQL FIRST: review-clearance.sh reads review THREADS there (SCHEMA.md clause 9;
+    # `isResolved` exists on no REST endpoint), and `gh api graphql …` would otherwise fall
+    # through to the declared-list branch below and be answered with a 404 — which the
+    # sibling correctly reads as unreadable thread state and refuses at exit 2, turning
+    # every clearing case in this file red for a reason none of them is about. Default is
+    # no threads and no further page.
+    if [ "${2:-}" = "graphql" ]; then
+      [ -f "$FIX/threads_json" ] || {
+        printf '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}\n'
+        exit 0; }
+      cat "$FIX/threads_json"; exit 0
+    fi
     # Three endpoints reach this stub. review-clearance.sh reads the REVIEW OBJECTS
     # (the only place a review's state and commit_id exist) and the ISSUE COMMENTS —
     # separately and paginated, because `gh pr view --json comments` answers one page and
@@ -353,6 +365,30 @@ reviewer_pr() { # <body-file>|"" — the artifacts review-clearance.sh will read
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_CLEAN"
 expect "required reviewer check + a real review -> clear" 0
+
+# THE OTHER WAY A GREEN CHECK AND A REAL REVIEW STILL DO NOT CLEAR: SCHEMA.md clause 9.
+# The same recorded review that clears one case above, with a reviewer-authored thread left
+# unresolved — the sibling answers 6, and this gate refuses. The advice is what makes 6
+# worth its own code: exit 4 means ask for a review, exit 6 means DO NOT, you have one.
+open_thread() { # <isResolved>
+  jq -n --argjson r "$1" \
+    '{data:{repository:{pullRequest:{reviewThreads:{pageInfo:{hasNextPage:false},
+       nodes:[{isResolved:$r, path:"plugin/scripts/run.sh", line:42,
+               comments:{nodes:[{author:{login:"coderabbitai"},
+                                 url:"https://example.invalid/t/1",
+                                 body:"`$dir` is unquoted here."}]}}]}}}}}' \
+    > "$FIX/threads_json"
+}
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_CLEAN"; open_thread false
+expect "a REAL review, but a reviewer thread left unresolved -> refuse" 1
+says   "  ...naming the unresolved thread"            "plugin/scripts/run.sh:42"
+says   "  ...and telling the caller not to re-request" "do NOT request another one"
+# The control: the identical fixture with the thread resolved clears, so the case above
+# is measuring thread state and not the fixture.
+setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
+reviewer_pr "$CR_CLEAN"; open_thread true
+expect "...and the same fixture with the thread RESOLVED -> clear" 0
 
 setup; checks "pass	Build" "pass	CodeRabbit"; declared "Build" "CodeRabbit"
 reviewer_pr "$CR_REFUSAL"

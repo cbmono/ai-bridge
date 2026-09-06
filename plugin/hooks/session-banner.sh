@@ -1057,7 +1057,12 @@ else
 fi
 add s owner "$ov" "$os"
 
-for k in maxAgentsInFlight maxPrLoc; do
+# `maxPrFiles` rides beside `maxPrLoc` because they are one heuristic in two units and a
+# banner showing only the line bound is a banner that hides the bound the external
+# reviewer actually enforces. Both are absent from most configs, and `continue` above
+# means an absent key prints no row at all — the defaults (500 / 100) are documented, not
+# invented here.
+for k in maxAgentsInFlight maxPrLoc maxPrFiles; do
   hit="$(leaf "$k")"
   [ -n "$hit" ] || continue
   add s "$k" "$(leaf_value "$hit")" "$(leaf_source "$hit")"

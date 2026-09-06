@@ -368,8 +368,17 @@ while IFS= read -r sha; do
   # the `*` arm, and "the reviewer is broken" would read as "the round count is unknown" —
   # refusing the count on every PR until somebody fixes billing. This file never re-decides
   # what a review is; it only says a refusal is not a round.
+  # 6 IS A ROUND, AND IT IS THE ONE CODE ON THIS LIST THAT COUNTS AS ONE. The sibling
+  # answers 6 when a review DID complete at that commit and SCHEMA.md clause 9 then refused
+  # it — a reviewer-authored thread is still unresolved. A round happened; what is
+  # outstanding is the implementer's reply to it. Counting it as 0 would report "no review
+  # yet" for a PR that has one, and this file's callers answer that by dispatching a
+  # verifier: the exact deep-tier session the two-round cap exists to stop. And omitting 6
+  # from this list entirely is worse than either, because it lands in the `*` arm below and
+  # turns "there is an open thread" into "the round count is unknown" on every PR that has
+  # one. This is why adding an exit code to the sibling is a three-part change.
   case "$rc" in
-    0) counted=yes ;;
+    0|6) counted=yes ;;
     1|3|4|5) ;;
     *) echo "error: review-clearance.sh exited $rc for PR $pr at $sha, which is neither" >&2
        echo "       a clearance nor one of its refusals. The reviewer state is unknown," >&2
@@ -384,7 +393,7 @@ while IFS= read -r sha; do
         "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --reviewer "$login" >/dev/null 2>&1
       rc=$?
       case "$rc" in
-        0) counted=yes; break ;;
+        0|6) counted=yes; break ;;   # a completed round, clause 9 notwithstanding — above
         1|3|4|5) ;;
         # Fatal here for the same reason it is fatal above, and spelled out because the
         # temptation is to shrug it off as "that one account just did not answer": exit 2

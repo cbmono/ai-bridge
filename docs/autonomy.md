@@ -153,9 +153,19 @@ is green whether the reviewer read the diff or hit its quota. Exit 0 is the only
 clearance; 1 is a **transient** refusal or a not-yet-reviewed placeholder (quoted, with the
 reopen time), 5 is a **terminal** one that no waiting reopens (out of credits, unpaid, an
 auth failure), 3 is no reviewer signal at all, 4 is an artifact that evidences no completed
-review or does not name the current head, and 2 is a reviewer state it could not read —
-unverified, never a pass. It answers only *whether* a review happened; the clauses above
-still decide whether that review **cleared**. **1 and 5 refuse identically at this gate**
+review or does not name the current head, **6 is a completed review at the current head
+that clause 9 refuses — a reviewer-authored thread is still unresolved, and the refusal
+names every open thread** — and 2 is a reviewer state it could not read — unverified, never
+a pass. It answers *whether* a review happened and, on 6, whether the reviewer's own
+threads were answered; the other clauses above still decide whether that review **cleared**.
+
+**4 and 6 send you in opposite directions, which is why they are two codes.** Exit 4 means
+**ask for a review** — the one you have is stale or evidences nothing. Exit 6 means
+**do not**: a review completed at this exact head, and what is outstanding is your reply to
+it. Answer or fix each named thread, resolve it, and push. Requesting another review on a
+6 buys a session to be told what the threads already say — and clause 9 was the one clause
+in the predicate with no reader at all until this, which is how the 2026-09-05 audit found
+**four of seven** PRs failing on clauses 3 and 9 with a reviewer that had answered. **1 and 5 refuse identically at this gate**
 and differ only in what the loop does next: 1 is waited out, 5 is a spend decision
 `AUTONOMY.md` routes to the human under `gated`.
 
@@ -206,6 +216,42 @@ tests a mode bit, and a dead shebang, a syntax error, a zero-byte file or a copy
 truncated mid-install all carry the bit while failing every call — which would read as
 "no required check is a reviewer's" and clear an unreviewed PR. The gate would not fail;
 it would silently not be there.
+
+### Under quota starvation, the order is fixed — and the override is the last step, not the first
+
+The gate stays correct when the reviewer runs out: exit 0 is still the only clearance, so
+a starved reviewer stalls the pipeline rather than opening it. What follows is what to do
+with the stall, **in this order**, and none of the earlier steps may be skipped because a
+later one is quicker:
+
+| # | Step | When it applies | What it costs |
+|---|---|---|---|
+| 1 | **Wait for the window.** | `review-clearance.sh` exit **1** — a *transient* refusal, which quotes the reopen time the reviewer published | minutes to an hour, and nothing else. Measured 2026-08-31 on #85–#88: the reviewer came back within the hour and reviewed all four properly |
+| 2 | **A second human on the bundle reviews it.** | the wait is not acceptable, or the refusal is exit **5** — *terminal*, so no waiting reopens it | one human's attention. The `people` map in `instance.config.json` is where a bundle's second human is named; `scripts/add-second-human.sh` prepares the shared half |
+| 3 | **The owner overrides, recorded on the PR.** | steps 1 and 2 are both unavailable | the review. This is the step that costs something irreversible, which is why it is last |
+
+**Step 2 has a precondition that is easy to get wrong and fails silently.** Clause 8 is
+implemented as a string compare of each artifact's `user.login` against the PR author's,
+and it reads none of `people` / `defaultOwner` / `ownerGithubUser` — so a second human is
+a real second reviewer principal **only while their clone is `gh`-authenticated as their
+own account**. One shared login collapses the gate back to the solo case with nothing
+saying so.
+
+**The override is a DECISION, not a mode.** It is the human choosing, once, on one pull
+request, to merge without independent clearance — so it is recorded **on that PR**, in a
+comment naming what was not verified and why. It is emphatically not a setting: there is
+no `autonomy` value for it, no config key turns it on, `review-clearance.sh` never returns
+0 because of it, and an override on one PR grants nothing to the next. **Eleven PRs have
+now merged this way**, which is the measurement that motivated this section: an override
+that is convenient enough becomes the default route, and the exception stops being visible
+as one.
+
+> **The full incident is one `Finding` in the operator's own bundle, and it is not copied
+> here.** `knowledge/findings/every-agent-fix-push-spends-a-shared-review-and-a-free-plan-caps-files-at-100.md`
+> — how the hourly quota was spent by three parallel agents' fix pushes, why upgrading the
+> plan did not help (a fair-usage ceiling credits do not lift), and the 147-file PR the free
+> plan refused outright. A bundle's `knowledge/` is that operator's record and is not part
+> of this repository; duplicating it here would fork it at the first update.
 
 **Recommended:** set branch protection to require CI green + a review from that reviewer.
 GitHub only enforces *that* CI passed and a review happened — whether the reviewer

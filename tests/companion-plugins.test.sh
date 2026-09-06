@@ -230,5 +230,128 @@ ok "…and core still states the two human authorities" \
    "$(grep -c 'Two human authorities' "$REPO/plugin/seed/SCHEMA.md" | tr -d ' ')" 1
 
 echo
+echo "== 9. UNINSTALLED BUT STILL CACHED — the case the design rests on, laid out as the =="
+echo "==    real cache is. This is a security boundary, not a refactor.                  =="
+# WHY THIS SECTION EXISTS WHEN 4(c) ALREADY SAYS "no registry entry -> exit 1".
+# 4(c) models the uninstall by putting the companion's files at $TMP/companion — a path
+# that is nowhere near a cache tree. So it pins "the registry decided" and is BLIND to the
+# one regression the resolver's own header names: a fallback that globs
+# `<config>/plugins/cache/<marketplace>/*/*/` when the registry comes back empty. MEASURED
+# on this branch: with exactly that fallback spliced into the resolver, sections 1-8 above
+# report 37 PASS and 0 FAIL. A green suite over a resolver that re-arms delegated autonomy
+# after the human uninstalled the thing that armed it.
+#
+# The regression is not hypothetical-looking from the inside, which is why it needs a
+# reader rather than a comment: on a real machine the plugin IS on disk, with its
+# `companion/AUTONOMY.md` intact, in every version ever fetched (measured: 11 stale
+# version directories with the companion uninstalled). "The registry is stale, read the
+# disk" is the obvious-looking fix, and it silently delegates the human's promotion and
+# merge gates.
+#
+# So the fixture below is cache-SHAPED: the exact path the plugin manager writes, several
+# stale versions deep, under the same CLAUDE_CONFIG_DIR the resolver reads its registry
+# from. Every assertion here must answer `gated`.
+CACHE="$CFG/plugins/cache/ai-bridge/ai-bridge-yolo"
+for v in 0.13.0 0.14.0 0.15.0; do
+  mkdir -p "$CACHE/$v/companion"
+  printf '# a capability file left behind by version %s\n' "$v" > "$CACHE/$v/companion/AUTONOMY.md"
+done
+
+# write_registry_at <key> <installPath> — write_registry() above always points at
+# $COMPANION; these cases need the path under test.
+write_registry_at() {
+  cat > "$CFG/plugins/plugins.tmp" <<JSON
+{
+  "version": 2,
+  "plugins": {
+    "$1": [
+      {
+        "scope": "user",
+        "installPath": "$2",
+        "version": "0.15.0",
+        "installedAt": "2026-09-05T00:00:00.000Z"
+      }
+    ]
+  }
+}
+JSON
+  mv "$CFG/plugins/plugins.tmp" "$CFG/plugins/installed_plugins.json"
+}
+
+# (a) THE HEADLINE CASE. Three cached versions on disk, each carrying the capability file
+#     at the fixed relative path, and the registry lists somebody else entirely.
+write_registry_at "some-other-plugin@some-other-market" "$TMP/unrelated"
+resolve "$CFG"
+ok "3 cached versions on disk, none installed -> exit 1" "$rc" 1
+ok "…and it prints nothing"                              "$([ -z "$out" ] && echo yes || echo no)" yes
+ok "…while the cached file is demonstrably still there"  \
+   "$(yn test -f "$CACHE/0.15.0/companion/AUTONOMY.md")" yes
+
+# (b) NO REGISTRY AT ALL, cache intact. The shape of a machine that has never installed a
+#     companion but fetched one once, and of a config dir whose registry was deleted.
+mv "$CFG/plugins/installed_plugins.json" "$CFG/plugins/installed_plugins.json.away"
+resolve "$CFG"
+ok "cache intact, registry file absent -> exit 1"        "$rc" 1
+mv "$CFG/plugins/installed_plugins.json.away" "$CFG/plugins/installed_plugins.json"
+
+# (c) THE REGISTRY NAMES A VERSION THAT IS GONE, and another version is still cached. The
+#     answer is NOT "then use the one that is there": an entry pointing at a directory
+#     that no longer exists is a companion that is not installed, and falling through to a
+#     sibling version would resolve a capability the registry never granted. This is the
+#     half-uninstalled state a failed upgrade leaves behind.
+write_registry_at "ai-bridge-yolo@ai-bridge" "$CACHE/9.9.9"
+resolve "$CFG"
+ok "registry names a missing version, 0.15.0 cached -> exit 1" "$rc" 1
+
+# (d) NON-VACUOUS BY CONSTRUCTION, in the direction that matters. The same fixture with
+#     the registry pointing at a version that IS on disk must clear — otherwise (a)-(c)
+#     would pass on a resolver that says no to everything, and this whole section would
+#     be measuring nothing.
+write_registry_at "ai-bridge-yolo@ai-bridge" "$CACHE/0.15.0"
+resolve "$CFG"
+ok "the SAME cached tree, this time installed -> exit 0"  "$rc" 0
+ok "…and it is the registry's version that answers"       "$out" "$CACHE/0.15.0/companion/AUTONOMY.md"
+
+# (e) THE REGRESSION GUARD. Everything above is an assertion about the resolver we ship;
+#     this is the assertion about the TEST. It runs a MUTANT resolver — the cache-tree
+#     fallback, spliced in exactly where a well-meaning fix would go — and proves two
+#     things at once: the new cases KILL it, and 4(c)'s non-cache-shaped fixture does NOT.
+#     Without this, a later tidy-up could delete the cache-shaped fixture, keep the
+#     assertions, and leave the hole open with the suite still green.
+MUTANT="$TMP/resolve-autonomy.mutant.sh"
+awk '
+  /^exit 1$/ && !done {
+    print "cache_root=\"${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/plugins/cache/$marketplace\""
+    print "for d in \"$cache_root\"/*/*/; do"
+    print "  if [ -f \"$d$COMPANION_REL\" ]; then printf \"%s\\n\" \"$d$COMPANION_REL\"; exit 0; fi"
+    print "done"
+    done = 1
+  }
+  { print }
+' "$RESOLVE" > "$MUTANT"
+chmod +x "$MUTANT"
+# The splice must have landed, or the two assertions below are comparing the resolver to
+# itself and would both "pass" while proving nothing.
+ok "the mutant differs from the shipped resolver" \
+   "$(cmp -s "$MUTANT" "$RESOLVE" && echo same || echo differs)" differs
+
+mutant_rc() { # <config-dir> <companion-root-for-4c> -> the mutant's exit status
+  ( CLAUDE_CONFIG_DIR="$1" "$MUTANT" --bundle "$BUNDLE" >/dev/null 2>&1 ); echo $?
+}
+
+# The cache-shaped fixture of (a): the mutant finds a cached version and CLEARS. That is
+# the hole, and case (a) is what fails on it.
+write_registry_at "some-other-plugin@some-other-market" "$TMP/unrelated"
+ok "the new cache-shaped case KILLS the mutant (it clears where we refuse)" \
+   "$(mutant_rc "$CFG")" 0
+
+# 4(c)'s fixture: companion files at $TMP/companion, nothing in the cache tree for THIS
+# config dir. The mutant survives it untouched — which is the measured blindness this
+# section was added for, asserted rather than asserted-about-in-a-comment.
+rm -rf "$CACHE"
+ok "…while 4(c)'s non-cache fixture lets the mutant survive" \
+   "$(mutant_rc "$CFG")" 1
+
+echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

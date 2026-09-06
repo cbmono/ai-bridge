@@ -39,7 +39,16 @@
 # stale `ai-bridge-v2` version directories on a machine with it uninstalled). A cache scan
 # would therefore keep answering "yes" forever, and "uninstall the companion and every
 # project is gated again" — the whole point of the design — would be false.
-# `installed_plugins.json` is what is INSTALLED.
+# `installed_plugins.json` is what is INSTALLED. A registry entry naming a directory that
+# is GONE is likewise not a companion: the answer is `gated`, never "then use a sibling
+# version that is still cached", which is the half-uninstalled state a failed upgrade
+# leaves behind.
+# THAT PARAGRAPH HAS A READER — `tests/companion-plugins.test.sh` § 9, against a fixture
+# laid out as the real cache is (three stale version directories under
+# `<config>/plugins/cache/<marketplace>/<plugin>/<version>/`). It is there because § 4(c),
+# which already said "no registry entry -> gated", uses a fixture that is nowhere near a
+# cache tree: measured on this branch, splicing a cache-tree fallback into this file left
+# § 1-8 at 37 PASS / 0 FAIL. § 9 drives that same mutant and refuses it.
 #
 # IT FAILS CLOSED ON EVERYTHING IT CANNOT READ. No registry, an unparseable one, a
 # registry whose formatting changed under us, a companion root that no longer exists on

@@ -110,6 +110,10 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    `reviewThreads.isResolved` alone is **not** sufficient: a thread the PR
    author/executor resolved itself does not count as cleared unless the reviewer
    re-acknowledged it by re-reviewing the current head without re-raising.
+   **The unresolved half of that is checked, not trusted:** `scripts/review-clearance.sh`
+   exits **6** — never 0 — for a completed review at the head with a reviewer-authored
+   thread still open, and names each one. The re-acknowledgement half stays a judgement
+   nothing here can make, so it stays the reviewer's.
 
    **That a review happened at all is `scripts/review-clearance.sh <pr> --head
    <verified-sha>` exiting 0**, and nothing else clears it — in particular not the

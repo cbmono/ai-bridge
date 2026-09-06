@@ -203,8 +203,8 @@ never ran that repo's installer — silently, in every instance. If this group's
   `be careful with imports`.
 
 ### PR sizing
-- **Keep PRs under `maxPrLoc` (500 when the key is absent).** Past that, propose a
-  split before committing — suggest, don't block.
+- **Keep PRs under `maxPrLoc` (500 when absent) and `maxPrFiles` (100 when absent).**
+  Past either, propose a split before committing — suggest, don't block.
 
 ### Output style
 - **Number multi-item output** so the reader can reference by number.

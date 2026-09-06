@@ -36,6 +36,7 @@
 set -uo pipefail
 
 SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts/review-clearance.sh"
+SCRIPTS="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts"
 FIXTURES="$(cd "$(dirname "$0")" && pwd)/fixtures/reviewer"
 CLEAN="$FIXTURES/clean-review.pr29.md"
 REFUSAL="$FIXTURES/rate-limit-refusal.pr30.md"
@@ -72,6 +73,17 @@ case "${1:-} ${2:-}" in
     [ -f "$FIX/pr_json" ] || { echo "could not resolve to a PullRequest" >&2; exit 1; }
     cat "$FIX/pr_json"; exit 0 ;;
 esac
+# THE FOURTH SOURCE: review THREADS, which exist only in GraphQL. `isResolved` is on no
+# REST endpoint — not a review, not a review comment, not the PR — so SCHEMA.md clause 9
+# has to come through here. Routed FIRST, because `gh api graphql ...` also matches the
+# `api` arm below and would otherwise be answered with the review list: valid JSON of the
+# wrong shape, which the script reads as unreadable thread state and refuses at exit 2 —
+# every clearing case in this file going red for a reason none of them is about.
+if [ "${1:-} ${2:-}" = "api graphql" ]; then
+  [ -f "$FIX/threads_broken" ] && { echo "gh: Bad gateway (HTTP 502)" >&2; exit 1; }
+  [ -f "$FIX/threads_json" ] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+  cat "$FIX/threads_json"; exit 0
+fi
 if [ "${1:-}" = "api" ]; then
   src="$FIX/reviews_json"; broken="$FIX/reviews_broken"
   case "${2:-}" in
@@ -100,11 +112,14 @@ chmod +x "$TMP/bin/gh" "$TMP/bin/jq"
 export PATH="$TMP/bin:$PATH"
 
 # --- fixture builders ---------------------------------------------------------
-HEAD=""; AUTHOR=""; REVIEWS=""; COMMENTS=""
+HEAD=""; AUTHOR=""; REVIEWS=""; COMMENTS=""; THREADS=""; THREADS_MORE=""
 
 setup() { # start from: a readable PR at <head>, authored by "dev", with no artifacts
   rm -rf "$FIX"; mkdir -p "$FIX"
   HEAD="${1:-$CLEAN_HEAD}"; AUTHOR="dev"; REVIEWS='[]'; COMMENTS='[]'
+  # NO THREADS AND NO FURTHER PAGE is the default, so every case written before clause 9
+  # existed keeps asking exactly the question it was written to ask.
+  THREADS='[]'; THREADS_MORE=false
 }
 
 body_file() { # <text...> -> a file holding it, so every artifact arrives the same way
@@ -129,12 +144,26 @@ add_review() { # <login> <state> <commit_id> <body-file>
              '. + [{user:{login:$l}, state:$s, commit_id:$c, body:$b}]' <<<"$REVIEWS")"
 }
 
+# A review thread as GraphQL publishes one. `line` is a number or null (a file-level
+# thread), `author` may be null (a deleted account) — both shapes are real and both are
+# driven below.
+add_thread() { # <isResolved> <path> <line|null> <login|null> <url> <first-line-of-body>
+  THREADS="$("$REAL_JQ" --argjson r "$1" --arg p "$2" --argjson l "$3" \
+             --arg who "$4" --arg u "$5" --arg b "$6" \
+    '. + [{ isResolved:$r, path:$p, line:$l,
+            comments:{nodes:[{ author:(if $who=="" then null else {login:$who} end),
+                               url:$u, body:$b }]} }]' <<<"$THREADS")"
+}
+
 write_pr() {
   "$REAL_JQ" -n --arg h "$HEAD" --arg a "$AUTHOR" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
       author:{login:$a}}' > "$FIX/pr_json"
   printf '%s' "$REVIEWS"  > "$FIX/reviews_json"
   printf '%s' "$COMMENTS" > "$FIX/comments_json"
+  "$REAL_JQ" -n --argjson t "$THREADS" --argjson more "$THREADS_MORE" \
+    '{data:{repository:{pullRequest:{reviewThreads:
+       {pageInfo:{hasNextPage:$more}, nodes:$t}}}}}' > "$FIX/threads_json"
 }
 
 # --- assertions ---------------------------------------------------------------
@@ -1766,6 +1795,141 @@ setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
 expect "unknown option -> usage error" 2 --nope
 rc=0; "$SCRIPT" >/dev/null 2>&1 || rc=$?
 assert "no arguments -> usage error" "$([ "$rc" -eq 2 ] && echo 0 || echo 1)"
+
+echo
+echo "== SCHEMA.md clause 9: a review at the head does not clear over an open thread =="
+# THE CLAUSE THAT HAD NO READER. `qa-reviewer.md` and `auditor.md` state clause 9 in prose
+# and nothing checked it, so the 2026-09-05 audit of seven PRs found FOUR failing on
+# clauses 3 and 9 — three of those had a reviewer that ANSWERED and were merged anyway.
+# Not quota. Every case below starts from the recorded clean review, so the only thing
+# under test is the thread state: a resolver that refused everything would fail the
+# clearing cases here rather than passing three in four.
+CR_URL="https://github.com/acme/widgets/pull/42#discussion_r1"
+
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread false 'plugin/scripts/run.sh' 42 coderabbitai "$CR_URL" '`$dir` is unquoted here.'
+expect "a real review + one UNRESOLVED reviewer thread -> 6" 6
+says   "  ...naming the clause"                    "clause 9"
+says   "  ...naming the file and line"             "plugin/scripts/run.sh:42"
+says   "  ...naming who opened it"                 "coderabbitai"
+says   "  ...linking the thread"                   "$CR_URL"
+says   "  ...quoting its opening line"             '`$dir` is unquoted here.'
+# THE ADVICE IS THE POINT OF THE SEPARATE CODE. Exit 4 means ask for a review; exit 6 means
+# do not — you have one. Folding 6 into 4 would send an agent to buy a review session to be
+# told what the threads already say.
+says   "  ...and telling the caller NOT to re-request" "DO NOT REQUEST ANOTHER REVIEW"
+
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread true 'plugin/scripts/run.sh' 42 coderabbitai "$CR_URL" '`$dir` is unquoted here.'
+expect "the same thread, RESOLVED -> clear" 0
+
+# CLAUSE 8 STILL EXCLUDES THE AUTHOR, HERE TOO. A thread the PR author opened on its own PR
+# is a note to itself, and reading it as a reviewer finding would refuse every PR whose
+# implementer left itself a marker.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread false 'a.sh' 1 dev "$CR_URL" 'note to self'
+expect "an unresolved thread opened by the PR AUTHOR -> clear" 0
+
+# AND A TEAMMATE'S THREAD IS NOT THE INDEPENDENT GATE. Whose thread counts is decided by
+# the same REVIEWERS table that decides whose review counts — one authority, not two.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread false 'a.sh' 1 some-colleague "$CR_URL" 'drive-by question'
+expect "an unresolved thread from an account in no table -> clear" 0
+
+# ...unless that account is the one named with --reviewer, which is how a repo whose
+# reviewer has no table row uses this at all.
+setup "$CLEAN_HEAD"; add_comment some-colleague "$CLEAN"
+add_thread false 'a.sh' 1 some-colleague "$CR_URL" 'drive-by question'
+expect "...but it DOES count when named with --reviewer" 6 --reviewer some-colleague
+
+# A NULL AUTHOR (a deleted account) MUST NOT ABORT THE FILTER AND TAKE EVERY OTHER THREAD
+# WITH IT. It is skipped; the reviewer thread beside it still refuses.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread false 'a.sh' 1 "" "$CR_URL" 'from a deleted account'
+add_thread false 'b.sh' 7 coderabbitai "$CR_URL" 'and this one is the reviewer'
+expect "a null-author thread beside a reviewer's -> still 6" 6
+says   "  ...and it is the reviewer's thread that is named" "b.sh:7"
+
+# A FILE-LEVEL THREAD HAS NO LINE, and a null there used to be the shape that killed the
+# whole jq filter. It renders as `-` rather than disappearing.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread false 'c.sh' null coderabbitai "$CR_URL" 'whole-file concern'
+expect "a file-level thread (line: null) -> 6" 6
+says   "  ...rendered with no line rather than dropped" "c.sh:-"
+
+# EVERY open thread is named, not just the first: a reader fixing one and finding another
+# is a second round nobody needed.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread false 'x.sh' 3 coderabbitai "$CR_URL" 'first'
+add_thread false 'y.sh' 9 coderabbitai "$CR_URL" 'second'
+expect "two unresolved threads -> 6" 6
+says   "  ...naming the first"  "x.sh:3"
+says   "  ...and the second"    "y.sh:9"
+
+# UNTRUSTED TEXT. A thread body is written by anyone who can comment. Control characters
+# are stripped before this reaches a terminal, exactly as the refusal quotes are.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread false 'z.sh' 1 coderabbitai "$CR_URL" "$(printf 'esc\033[2Jhere')"
+expect "a thread body carrying an escape sequence -> 6" 6
+assert "  ...and the escape byte never reaches the terminal" \
+  "$(printf '%s' "$LAST_OUT" | grep -q "$(printf '\033')" && echo 1 || echo 0)"
+
+echo
+echo "== clause 9 is the LAST question, and it fails closed on what it cannot read =="
+# ORDER MATTERS. A PR with no review at all is refused for THAT, at 3. Reporting an open
+# thread on top of it would bury the answer the caller needs — ask for a review — under one
+# it cannot act on yet.
+setup "$CLEAN_HEAD"
+add_thread false 'a.sh' 1 coderabbitai "$CR_URL" 'open'
+expect "no review at all + an open thread -> 3, not 6" 3
+
+# ...and the same for a refusal: exit 1 is still exit 1.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+add_thread false 'a.sh' 1 coderabbitai "$CR_URL" 'open'
+expect "a rate-limit refusal + an open thread -> 1, not 6" 1
+
+# THE THREAD READ FAILING IS UNKNOWN STATE, NEVER A PASS. `gh pr view` and the REST reads
+# have already succeeded by this point, so a GraphQL failure is an anomaly — and a clause
+# that cannot be applied is not a clause that passes.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+write_pr; : > "$FIX/threads_broken"
+LAST_OUT="$("$SCRIPT" 42 2>&1)"; rc=$?
+assert "the thread list unreadable -> 2, not a clearance" "$([ "$rc" -eq 2 ] && echo 0 || echo 1)"
+says   "  ...saying which clause cannot be applied" "clause 9"
+
+# MORE THAN ONE PAGE OF THREADS, AND NONE OF THE FIRST 100 OPEN. "No unresolved thread in
+# the threads I could see" is not "no unresolved thread", and a 101-thread PR is exactly
+# the large PR where an unanswered finding hides. Unknown, so 2.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread true 'a.sh' 1 coderabbitai "$CR_URL" 'resolved'
+THREADS_MORE=true
+expect "a second page of threads, none of page 1 open -> 2" 2
+says   "  ...saying it is unknown rather than satisfied" "UNKNOWN"
+
+# ...but an OPEN thread on page 1 still refuses at 6: that answer does not depend on the
+# pages nobody read, so falling back to "unknown" would lose a fact already established.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_thread false 'a.sh' 1 coderabbitai "$CR_URL" 'open on page one'
+THREADS_MORE=true
+expect "a second page, but page 1 HAS an open thread -> 6" 6
+
+echo
+echo "== the third part of the three-part change: the callers know code 6 =="
+# ADDING AN EXIT CODE IS A THREE-PART CHANGE AND THE THIRD PART IS THE ONE THAT BREAKS.
+# `review-rounds.sh` lists the sibling's refusals as `1|3|4|5` over a FATAL `*` default, so
+# a new code lands in the default and turns "there is an open thread" into "the round count
+# is unknown" on every PR that has one. Asserted on the source, because driving it needs a
+# PR: these are the two arms, and both must count 6 as a ROUND — a review DID complete.
+ROUNDS="$SCRIPTS/review-rounds.sh"
+assert "review-rounds.sh has no un-updated 1|3|4|5 arm left" \
+  "$(grep -cE '^\s*1\|3\|4\|5\)' "$ROUNDS" | grep -qx 2 && echo 0 || echo 1)"
+assert "...and both of its counting arms accept 6 as a completed round" \
+  "$(grep -cE '^\s*0\|6\)' "$ROUNDS" | grep -qx 2 && echo 0 || echo 1)"
+assert "required-checks.sh tells a 6 not to request another review" \
+  "$(grep -q 'do NOT request another one' "$SCRIPTS/required-checks.sh" && echo 0 || echo 1)"
+# The code is documented where a caller reads it, not only where it is raised.
+assert "the exit-code table documents 6" \
+  "$(grep -q '^#   6  a review artifact DOES evidence' "$SCRIPT" && echo 0 || echo 1)"
 
 echo
 echo "pass=$pass fail=$fail"

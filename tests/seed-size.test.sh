@@ -20,7 +20,12 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SEED="$REPO/plugin/seed/CLAUDE.md"
-CEILING=12800
+# 12800 -> 12816 (ai-bridge-v2/task-027). The ratchet's own protocol: raise it in the same
+# commit as the growth and say why in the PR body. The growth is 26 bytes on the
+# PR-sizing bullet, which now names `maxPrFiles` beside `maxPrLoc` — a second threshold an
+# agent has to know before it opens a PR, and one it cannot infer from the first. Set to the
+# measured size and not rounded up, so the next byte is the next deliberate act.
+CEILING=12816
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

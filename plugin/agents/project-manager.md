@@ -277,6 +277,20 @@ state, and act only on deltas.
    leave it in both lists — a copy left behind silently blocks the draft forever.
    **No customer PII in `answered_questions`** — it persists for the life of the repo.
 
+   **Propose a split when the expected diff will exceed `maxPrFiles`.** Read it with
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-config.sh` (**absent, 100**), beside `maxPrLoc`
+   (**absent, 500**).
+   Where a draft's own scope already says it will be past either — a rename sweep, a
+   codemod, a generated-file refresh, "every file under `x/`" — say so in `# Notes` and
+   propose the split as concrete sibling tasks, then leave the draft where it is. **You
+   propose; the human decides**, exactly as with every other refinement, and a task the
+   human leaves whole is dispatched whole: this is the same suggest-never-block heuristic
+   role agents apply to a PR, moved one step earlier because before dispatch is the only
+   point at which the split is cheap. **`maxPrFiles` is the number the reviewer
+   enforces** — a free-plan CodeRabbit refuses a pull request over 100 files outright and
+   reviews none of it, so a task that has to land as one 147-file PR is a task whose PR
+   can never clear the merge gate.
+
    **Approach critique — MANDATORY on its trigger, advisory in what it may decide.**
    For a genuinely complex **`kind: build`** task — spans multiple files/services, or
    its `acceptance_criteria` had to be heavily inferred — you **must** dispatch the

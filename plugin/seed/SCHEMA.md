@@ -439,11 +439,34 @@ paragraph) — there is no third way for the loop to acquire either:
 **Delegated authority (optional, and off by default).** A project's `autonomy` field
 (default `gated`) can hand one or both of these gates to the loop — replacing the human
 with a **machine** anchor, never a self-report. The available modes, their anchors, and
-their preconditions live in **`AUTONOMY.md`** at the bundle root, which is also the
-capability's on/off switch: **if that file is absent, there are no other modes and every
-project is `gated` no matter what its `autonomy` field says.** Read `AUTONOMY.md` only
-when a project's `autonomy` is something other than `gated` — most ticks never need it.
-Either way the human opts in per project at creation; no agent escalates it.
+their preconditions live in **`AUTONOMY.md`**, which is also the capability's on/off
+switch: **if no such file is found, there are no other modes and every project is `gated`
+no matter what its `autonomy` field says.** Read it only when a project's `autonomy` is
+something other than `gated` — most ticks never need it. Either way the human opts in per
+project at creation; no agent escalates it.
+
+**There are exactly TWO places that file can be, and `scripts/resolve-autonomy.sh` is the
+one reader of both.** Nothing else may re-derive this; a second reader is a second answer
+to "may the loop merge without a human".
+
+| Order | Where | What makes it count |
+|---|---|---|
+| 1 | **`<bundle>/AUTONOMY.md`** — the bundle root | The file simply being there. **Root wins outright**, so a bundle that carries its own real file keeps working byte for byte, with or without any companion, and no companion can override what it says. |
+| 2 | **`<companion plugin root>/companion/AUTONOMY.md`** — an installed companion plugin | The plugin being **INSTALLED**, read from the installed-plugins registry (`installed_plugins.json`), and installed from the **same marketplace core itself came from**. |
+
+**Location 2 is decided by the registry and NEVER by the plugin cache tree, and that
+distinction is the whole of "uninstall turns it off".** The cache keeps every version ever
+fetched, uninstalled ones included — measured: 11 stale version directories on a machine
+with the companion uninstalled, its `companion/AUTONOMY.md` still sitting on disk in each
+one. A resolver that answered from the cache would therefore keep answering *installed*
+forever, and the human's promotion and merge gates would stay delegated after the human
+removed the thing that delegated them, with nothing anywhere saying so. So: **the registry
+is the only authority for location 2**, a registry entry naming a directory that is gone
+is not a companion (the answer is not "find another cached version"), and **every unknown
+resolves to `gated`** — no registry, an unparseable one, a format this reader does not
+understand. The safe end of an unknown is the end where the human keeps both gates.
+`tests/companion-plugins.test.sh` pins the uninstalled-but-cached case against a fixture
+laid out exactly as the real cache is.
 
 **Research tasks (`kind: research`) are human-driven.** Same statuses, but no PRs
 and no role-agent dispatch — the human (with Claude in-session) produces the
@@ -568,7 +591,7 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `defaultOwner` | **no, by design** | step 4 above: unowned, so every clone treats it as its own |
 | `people` | **no** — a shared directory of who is who | no lookup; the `authorEmail` chain answers |
 | `externalReviewer` | **no, by design** — it names **where this code may be sent**. That is policy, not preference: one clone silently routing diffs to a different reviewer is precisely the disagreement that breaks it, and it breaks in the direction nobody notices | the CodeRabbit CLI |
-| everything else | no — shared facts (`org`, `maxPrLoc`, `defaultRepo`, `codegraphSkip`, …) | as documented per key |
+| everything else | no — shared facts (`org`, `maxPrLoc`, `maxPrFiles`, `defaultRepo`, `codegraphSkip`, …) | as documented per key |
 
 **`models`, `roleTiers` and `maxAgentsInFlight` moved into this table on 2026-08-29.** They
 are **spend and capacity**, not shared facts: which model a human pays for, and how many
@@ -583,6 +606,30 @@ All three are read by a script rather than by whoever remembered to look:
 `scripts/resolve-model.sh <agent>` for the first two, `scripts/resolve-max-agents.sh` for
 the cap. Neither script invents a value it cannot find; both print nothing on stdout and
 exit 1 instead, and the caller applies its own documented fallback.
+
+**PR size is TWO numbers, because the reviewer counts the one nobody was counting.**
+`maxPrLoc` (**500** when the key is absent) bounds the diff in **lines**; `maxPrFiles`
+(**100** when the key is absent) bounds it in **files**. Both are shared facts in the
+tracked `instance.config.json`, and **both only ever propose** — a role agent past either
+one says so in the PR body as one `⚠️` line and opens the PR anyway, and no reviewer ever
+withholds clearance over either (`CONVENTIONS.md` → the PR-size heuristic).
+
+**Why the file count earns its own key rather than being inferred from the line count.**
+The two disagree in both directions and each direction has cost a real PR: a `git mv`
+sweep is one file per rename and almost no lines, while one generated lockfile is
+thousands of lines in a single file. And the file count is the one an external reviewer
+enforces: CodeRabbit's free plan **refuses a pull request over 100 files outright**,
+before any quota question, offering only "split the PR or upgrade" — measured 2026-09-05
+on a 147-file PR that got no review at all while its line count was unremarkable. A PR
+past `maxPrFiles` therefore does not get a slow review; it gets **none**, and the merge
+gate correctly refuses it forever.
+
+**The `project-manager` reads `maxPrFiles` one step earlier than a role agent does.** When
+a task's expected diff is already known to exceed it — a rename sweep, a codemod, a
+generated-file refresh — the PM **proposes splitting the task** in its refinement, before
+dispatch, because that is the only point at which the split is cheap. It proposes; the
+human decides, exactly as with every other refinement, and a task the human leaves whole
+is dispatched whole.
 
 **`models` and `roleTiers` are SEEDED into the local file, and the tracked pair is the
 fallback — both halves are load-bearing.** `/ai-bridge:init` writes them into

@@ -90,6 +90,17 @@ case "${1:-} ${2:-}" in
     [ -f "$FIX/pr_broken" ] && { echo "could not resolve to a PullRequest" >&2; exit 1; }
     cat "$FIX/pr_json"; exit 0 ;;
 esac
+# THE FIFTH READ: review THREADS, which the sibling asks for over GraphQL because
+# `isResolved` exists on no REST endpoint. Routed FIRST — `gh api graphql …` also matches
+# the `api` arm below, which would answer it with the COMMITS list and make the sibling
+# refuse every commit at exit 2. Default is no threads and no further page, so every case
+# written before clause 9 existed keeps asking exactly the question it was written to ask.
+if [ "${1:-} ${2:-}" = "api graphql" ]; then
+  [ -f "$FIX/threads_json" ] || {
+    printf '{"data":{"repository":{"pullRequest":{"reviewThreads":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}}\n'
+    exit 0; }
+  cat "$FIX/threads_json"; exit 0
+fi
 if [ "${1:-}" = "api" ]; then
   case "${2:-}" in
     */pulls/*/commits*)   src="$FIX/commits_json"; broken="$FIX/commits_broken" ;;
@@ -307,6 +318,43 @@ if [ -f "$ALONE/review-rounds.sh" ]; then
   out="$("$ALONE/review-rounds.sh" 7 --repo octo/demo 2>"$TMP/err2")"; rc=$?
 else rc="no-script"; fi
 ok "a review-clearance.sh that does not run refuses (exit 2)" "$rc" "2"
+
+echo
+echo "== the sibling's exit 6 is a ROUND, and this is the arm that would have been fatal =="
+# ADDING AN EXIT CODE TO THE SIBLING IS A THREE-PART CHANGE AND THIS IS THE THIRD PART.
+# `review-clearance.sh` answers 6 when a review DID complete at that commit and SCHEMA.md
+# clause 9 then refused it — a reviewer-authored thread is still unresolved. Two things had
+# to be got right here and both fail silently:
+#
+#   * 6 MUST BE ON THE LIST AT ALL. The `case` below it ends in a FATAL `*`, so an
+#     unlisted code turns "there is an open thread" into "the number of rounds is unknown"
+#     and refuses on every PR that has one.
+#   * 6 MUST COUNT AS A ROUND, not be listed beside the refusals. A round happened; what is
+#     outstanding is the implementer's reply. Counting it 0 reports "no review yet" for a
+#     PR that has one, and this file's callers answer that by dispatching a verifier — the
+#     deep-tier session the two-round cap exists to stop.
+#
+# Same fixture as the "1 round" case above, so the ONLY difference is the open thread.
+threads() { # <isResolved>
+  "$REAL_JQ" -n --argjson r "$1" \
+    '{data:{repository:{pullRequest:{reviewThreads:{pageInfo:{hasNextPage:false},
+       nodes:[{isResolved:$r, path:"a.sh", line:1,
+               comments:{nodes:[{author:{login:"coderabbitai"},
+                                 url:"https://example.invalid/t/1", body:"open"}]}}]}}}}}' \
+    > "$FIX/threads_json"
+}
+setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"
+comment "coderabbitai[bot]" "$REFUSAL_BODY"
+comment "coderabbitai[bot]" "$CLEAN_BODY"
+commit_fixtures; threads false
+ok "a completed review with an UNRESOLVED thread still counts as 1 round" "$(run)" "0 1"
+# The control: the identical fixture with the thread resolved counts the same 1. Without
+# this the assertion above would also pass on a file that ignored thread state entirely.
+setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"
+comment "coderabbitai[bot]" "$REFUSAL_BODY"
+comment "coderabbitai[bot]" "$CLEAN_BODY"
+commit_fixtures; threads true
+ok "...and the same fixture with it RESOLVED counts the same 1" "$(run)" "0 1"
 
 echo
 echo "== the wiring, so refusing is mechanical rather than remembered =="
