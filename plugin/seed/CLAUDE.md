@@ -22,6 +22,16 @@ None of them resolving means it is not installed here. Install once, then restar
 /plugin install ai-bridge@ai-bridge
 ```
 
+**A bare `scripts/<x>.sh` in this bundle means the installed plugin's scripts directory —
+`$AB` below — never a folder here.** Agents reach it as
+`${CLAUDE_PLUGIN_ROOT}/scripts/<x>.sh`; in a shell, resolve the version-scoped
+marketplace cache once:
+
+```sh
+AB="$(ls -d ~/.claude/plugins/cache/*/ai-bridge/*/scripts | sort -V | tail -1)"
+"$AB/commit-as.sh" human "<msg>" -- <path>...   # likewise "$AB/validate-bundle.sh", "$AB/pr-body-clearance.sh", "$AB/pr-comment-clearance.sh"
+```
+
 | To… | Run |
 |---|---|
 | See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/ai-bridge:dispatch`** — one safe, idempotent tick. Add `10m` to loop on an interval; say "DRY RUN" to preview without spawning agents. |
@@ -132,7 +142,7 @@ the only reader this rule has.
   rule; that rule still applies to the target product repos, where role agents
   always branch and open PRs.
 - **Per-agent authorship (this repo only):** stage by explicit path, commit via
-  `scripts/commit-as.sh <role> "<message>" -- <path>...` — naming the paths is
+  `"$AB/commit-as.sh" <role> "<message>" -- <path>...` — naming the paths is
   required for every role but `human`, because concurrent agents share this one
   working tree. It sets the author name to the role and resolves the email
   (local `authorEmail` → `people[<ownerGithubUser>]` → tracked `authorEmail` →
@@ -160,8 +170,7 @@ lives there and not here because it governs work *outside* this bundle.
   Short is the goal; cryptic is a failure. The criteria heading carries its tally
   (`### Criteria (10 ✓ / 8 ✗ — every ✗ is a later slice)`), and the gate refuses a
   tally that disagrees. **Run the reader on your draft before you post**:
-  `scripts/pr-body-clearance.sh --body-file <f>` /
-  `scripts/pr-comment-clearance.sh --comment-file <f>`.
+  `"$AB/pr-body-clearance.sh" --body-file <f>` / `"$AB/pr-comment-clearance.sh" --comment-file <f>`.
 - **Never parallel-write a shared clone or worktree** — each concurrent agent gets
   its own worktree under `worktreeRoot` (absent, `<reposRoot>/_wt`).
 - **Browser writes follow the project's `autonomy`: ask first** — the default, and

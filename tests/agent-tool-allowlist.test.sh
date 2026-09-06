@@ -251,7 +251,7 @@ mention_count() { # <file> <tool> — how many times the body names <tool>
 
 # ------------------------------------------------------- the lexicon's two classifiers
 in_vocab() { # <name> — is this a harness tool name? (echoes yes/no)
-  printf '%s\n' "$1" | grep -qxE "$VOCAB" && echo yes || echo no
+  grep -qxE <<<"$1" "$VOCAB" && echo yes || echo no
 }
 
 unclassified_names() { # <file> — backticked capitalised names no rule classifies

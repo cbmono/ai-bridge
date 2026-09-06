@@ -68,10 +68,12 @@ tick alone would re-open the window this closes. Nor does a tick refuse the lock
 for it — an unclaimed lock is precisely the dispatch it is. Its **own claim** on that
 lock is the harder half: since 2026-08-30 the claim records *whose* it is rather than
 merely that it exists, because before that a dispatched tick duly stood down on its own
-claim and dispatched nothing. What no tick can do is *prove* that identity under this
-runtime — `CLAUDE_CODE_SESSION_ID` names the **session**, so every tick one loop
-session starts carries the same one — so a merely-matching id is exit **2** and lands
-on the human's desk rather than being guessed either way.
+claim and dispatched nothing. Nothing the tick can *read* proves that identity —
+`CLAUDE_CODE_SESSION_ID` names the **session**, so every tick one loop session starts
+carries the same one — so since 2026-09-06 the launcher **declares** it: one minted
+literal per tick, recorded in `.tick-lock` and handed to the tick, which passes it back.
+Without a declared id the derived tier still answers and a merely-matching one is exit
+**2**, the human's.
 
 **And a tick that finds NO lock is refused (exit 4), not allowed to take one.** No lock
 means nobody dispatched it, because the launcher takes one in the same breath as the
