@@ -176,7 +176,7 @@ reviewed_pr() {
 # for on every pull request, so a fixture with a malformed body would make every
 # "-> clear" case below refuse for a reason none of them is about. `pr_body` overrides it
 # where the body is the point being tested.
-CONFORMING_BODY='## Description (TL;DR)
+CONFORMING_BODY='## Description
 Adds the thing, and the harness covers it.
 
 Verified: `a.test.sh` 3/0 on [run 1](https://example.invalid/actions/runs/1).
