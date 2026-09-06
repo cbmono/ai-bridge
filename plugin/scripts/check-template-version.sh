@@ -184,8 +184,8 @@ newer "$there" "$here" || exit 0
 # every file already linked, but a file that is NEW in that pull reaches this instance only
 # when the bundle is re-stamped. Someone who updates and stops is exactly the state this check
 # exists to end.
-# THE NAME IS DERIVED, NEVER A LITERAL. This file is symlinked into instances from a
-# template checkout that is not required to be called anything in particular, and
+# THE NAME IS DERIVED, NEVER A LITERAL. This file reads an instance against a template
+# checkout that is not required to be called anything in particular, and
 # `plugin/**` carries no org, repo or path literals (`.claude/rules/machinery.md`). The
 # checkout's own directory name is the honest label — it is also the name in the `git -C`
 # line below, so a fork or a renamed clone names itself instead of claiming to be some

@@ -45,7 +45,7 @@
 # (the SessionStart banner does — a hook that prints a stack trace at every session start
 # is worse than one that omits a block) tests for it first and omits the section.
 #
-# GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
 # instance. It reads no org, repo or path literal.
 #
 # Verified by tests/config-override.test.sh and tests/session-banner.test.sh.

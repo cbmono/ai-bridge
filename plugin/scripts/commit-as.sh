@@ -27,7 +27,7 @@
 # `human` is exempt: a person committing interactively can see the index.
 # Never `git add -A` in a shared instance — stage by explicit path.
 #
-# GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to
 # edit per instance. The author email is resolved, in order, from:
 #   1. $CONTROL_PLANE_AUTHOR_EMAIL                               (explicit override)
 #   2. "authorEmail" in <repo-root>/instance.config.local.json   (this machine)

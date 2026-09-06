@@ -19,7 +19,7 @@ never dispatches them). Research projects are typically the strategic **entry
 point** whose conclusions later graduate into `knowledge/` and spawn objectives +
 build projects.
 
-> **Generic template file** (symlinked from the `ai-bridge` template). It reads
+> **Generic plugin file** (ships inside the `ai-bridge` plugin, never copied into a bundle). It reads
 > the bundle's own `SCHEMA.md` and `instance.config.json` for shapes and values —
 > never hardcode org/repo/path literals here.
 

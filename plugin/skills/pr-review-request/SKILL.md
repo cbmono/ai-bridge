@@ -11,7 +11,7 @@ Build a grouped review-request message for a set of related open, green PRs.
 PRs and drafting the message; if no Slack MCP is configured it just hands you the
 final text to paste.
 
-> **Generic template file** (symlinked from the `ai-bridge` template). It
+> **Generic plugin file** (ships inside the `ai-bridge` plugin, never copied into a bundle). It
 > reads the target org, default repo, and (optional) Slack channel from this
 > instance's `instance.config.json` — never hard-code those here.
 

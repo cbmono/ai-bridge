@@ -140,7 +140,7 @@
 # each of them whatever it is reporting — which is what the rule in `CONVENTIONS.md` says,
 # and the first cut of this file exempted both.
 #
-# GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
 # instance. It takes no org, repo or vendor identity: those come from the arguments.
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:

@@ -438,7 +438,7 @@
 #      hand-started tick. End the tick. `--as launcher` never sees this: taking a lock
 #      where there is none is exactly what a launcher is for.
 #
-# GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
 # instance. It reads no org, repo or path literal.
 #
 # Verified by tests/tick-lock.test.sh.

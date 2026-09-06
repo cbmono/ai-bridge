@@ -128,7 +128,7 @@
 # shipped exactly that bug once): a report of "removed" for a directory that is
 # still there sends the next tick past a worktree nobody will look at again.
 #
-# GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
 # instance. It reads no org, repo or path literal.
 #
 # Verified by tests/reclaim-worktree.test.sh, which builds real repos and

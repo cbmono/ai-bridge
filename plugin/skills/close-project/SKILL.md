@@ -20,7 +20,7 @@ repo's history, while a research project's output *is* the folder. Everything el
 about closeout is identical, and the project still ends `status: done`. See
 `SCHEMA.md` → "Project & objective completion" for the full contract.
 
-> **Generic template file** (symlinked from the `ai-bridge` template). Reads the
+> **Generic plugin file** (ships inside the `ai-bridge` plugin, never copied into a bundle). Reads the
 > bundle's own `SCHEMA.md` (see "Project & objective completion") and
 > `instance.config.json` — never hardcode org/repo/path literals here.
 

@@ -10,7 +10,9 @@ resolve (measured 2026-09-02), and it fails with *no such agent* rather than wit
 anything that names the omission. **A task's `assignee:` field stays BARE** — it is a
 role name, not a dispatch string, and the PM adds the namespace when it spawns.
 
-> **Generic template file** (symlinked from the `ai-bridge` template).
+> **Seed file — copied once, then yours.** Copied into this bundle from the `ai-bridge`
+> plugin and owned by it since; `/ai-bridge:welcome fix` 3-way merges a later template
+> change onto your edits.
 
 ## Roles
 
