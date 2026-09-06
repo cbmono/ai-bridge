@@ -41,6 +41,7 @@ agent on every surface below.**
 | a **PR body** | the TL;DR line + the criteria table + at most **3 one-line notes**. Hard ceiling **2,500 characters**. |
 | a task **`# Result`** | **15 lines**. |
 | a **`Finding`** | **40 lines**, and a required one-line `lesson:` in its frontmatter. |
+| a **checker's criteria table** | **the table IS the table** — one row per criterion, `PASS`/`FAIL`, one command or artifact. No narration around it, ever. |
 
 **Nothing here licenses dropping evidence, a criterion or a caveat** — the floor in "The
 criteria table is the merge gate" binds exactly as hard. What the ceilings cut is
@@ -48,9 +49,10 @@ criteria table is the merge gate" binds exactly as hard. What the ceilings cut i
 English. **That reasoning is relocated, never deleted** — it goes in the **task document**,
 which is the one surface with no length limit, and the short form links to it.
 
-**Three of these have readers, so they are not prose.**
+**Four of these have readers, so they are not prose.**
 `pr-body-clearance.sh` refuses a body over 2,500 characters or carrying more than 3 notes
-(**exit 4**); `validate-bundle.sh` warns on a `Finding` over 40 lines or missing its
+(**exit 4**); `pr-verdict-clearance.sh` refuses a checker row with no `PASS`/`FAIL` or no
+command (**exit 3**); `validate-bundle.sh` warns on a `Finding` over 40 lines or missing its
 `lesson:`; and `tests/concision-contract.test.sh` in `cbmono/ai-bridge` fails when a
 `plugin/**/*.sh` file's comment-line share exceeds **35%**, ratcheting the files already
 above it so none may grow its share.
