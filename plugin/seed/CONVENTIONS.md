@@ -790,6 +790,25 @@ above it so none may grow its share.
 - **Capture knowledge:** if you discover something durable and reusable, write or
   update a `Finding` in `knowledge/findings/` (per `SCHEMA.md`) and link it from
   the task, so the next agent doesn't re-derive it.
+- **Record a papercut — ONE line, and the bar is "it hurt", not "it is durable".** A
+  `Finding` costs 40 lines and a judgement call, so the small stuff never gets written down
+  at all: a tool that failed, a doc that misled you, a step you did twice. Those go in the
+  bundle's `knowledge/papercuts.md`, one appended line each:
+
+  ```sh
+  scripts/papercuts.sh add --task <project>/task-0NN --surface script:validate-bundle.sh \
+    --note "exits 0 on an unreadable file, so a dangling ref reads as clean"
+  ```
+
+  Run it at the bundle root (where the task document lives), not in your worktree — or pass
+  `--file <bundle>/knowledge/papercuts.md`. `--surface` names the file that should CHANGE:
+  `skill:`, `agent:` or `script:`, then its name. The note is **15-160 bytes** and the tool
+  refuses anything else, which is the whole shape.
+  **Append, never edit or delete — including your own lines.** Ten entries naming one
+  surface are the evidence that surface needs work, and they only read as ten while nobody
+  tidies them; a wrong entry is corrected by a new entry. The `cataloguer` groups the
+  record by surface and proposes the concrete edit as a `draft` task, which is what makes
+  writing the line worth your ten seconds.
 - **Cite knowledge as `[[finding-slug]]`, and only ids your brief actually carried.** A
   bracketed slug is the ONLY thing that counts as a citation — a title in prose, *"as the
   worktree finding notes"*, a bare link: all references, none of them citations, and

@@ -633,6 +633,19 @@ state, and act only on deltas.
    Read-only on product repos, writes only to `knowledge/`; counts toward the
    concurrency cap.
 
+   **The papercuts pass is the other reason to dispatch one, and it runs on a cadence
+   rather than on a merge.** Ask once per tick, and only act when it says DUE:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh due   # exit 0 = due (unprocessed entries, last pass >= 7 days)
+   ```
+
+   Exit 0 ⇒ brief the cataloguer for the papercuts pass too (`cataloguer` step 5), inside
+   the same one-dispatch throttle. It returns one proposal per surface; **you** create each
+   as a `draft` task in the project that owns the surface — never `ready`, the human
+   promotes — and only then run `papercuts.sh pass` to mark the entries processed. Exit 1
+   is silence: no line in the report, no dispatch.
+
 8. **Curate.** Keep `projects/<p>/project.md`, each project's `index.md`, and the
    `log.md` files current — **for the projects you actually read this tick**; a done
    project was skipped in step 1 and is never curated. **The `index.md` files — root

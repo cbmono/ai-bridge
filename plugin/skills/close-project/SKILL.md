@@ -3,7 +3,7 @@ name: close-project
 disable-model-invocation: true
 description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. Human-gated; run once a project's tasks are all done/cancelled.
 argument-hint: <project-slug>  [--dry-run] [--force]
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
 **Close a completed Project.** This is the human-triggered form of the closeout the
@@ -70,6 +70,16 @@ candidates) and ask which to close.
    `supersedes:` on the new one. This is the moment the KB would otherwise keep a stale
    `current` row forever — closeout is when someone last knows which findings the work
    overtook.
+
+   **And brief it to run the papercuts pass** (`cataloguer` step 5): closeout is when
+   the project's papercuts are still legible. It returns one proposal per surface —
+   create each as a `draft` task (never `ready`), then mark the entries processed:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh pass
+   ```
+
+   Skip only if `papercuts.sh report` finds nothing; say so if you do.
 
    Finish with the index, which is derived rather than curated:
 
