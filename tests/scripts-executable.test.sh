@@ -500,7 +500,8 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # executable machinery file in the per-file enumeration.
 # 63 -> 64: plugin/scripts/stall-counter.sh (ai-bridge-next/task-011), same reason.
 # 64 -> 65: plugin/scripts/cite-check.sh (ai-bridge-next/task-014), same reason.
-EXPECTED_ASSERTIONS=65
+# 65 -> 66: plugin/scripts/do-not-repeat.sh (ai-bridge-next/task-012), same reason.
+EXPECTED_ASSERTIONS=66
 TOTAL=$((pass + fail))
 # EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
 # it annotates, so a merge can plausibly keep the annotations and lose the assignment —
