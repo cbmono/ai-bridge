@@ -37,8 +37,7 @@ echo "1. docs/autonomy.md hand-types no count of override merges"
 # — the shape of the sentence that went stale, not the one sentence that did.
 COUNT_RE='(\*\*)?([0-9]+|[Oo]ne|[Tt]wo|[Tt]hree|[Ff]our|[Ff]ive|[Ss]ix|[Ss]even|[Ee]ight|[Nn]ine|[Tt]en|[Ee]leven|[Tt]welve|[Nn]ineteen|[Tt]wenty)[ *]+(more +)?(PRs|pull requests)( have)?( now)? merged'
 ok "no 'N PRs have now merged' sentence"   "$(saw "$(flat "$(cat "$AUT")")" "$COUNT_RE")" no
-ok "…(the grammar can see it: control)"    "$(saw "$(flat '**Eleven PRs have
-now merged this way**')" "$COUNT_RE")" yes
+ok "…(the grammar can see it: control)"    "$(saw "$(flat $'**Eleven PRs have\nnow merged this way**')" "$COUNT_RE")" yes
 ok "…and it reads digits too"              "$(saw '47 PRs have now merged this way' "$COUNT_RE")" yes
 # A Finding's filename carries a number and is a CITATION, never a claim about today.
 ok "…but not the cited Finding's slug"     "$(saw 'nineteen-consecutive-prs-merged-on-the-override' "$COUNT_RE")" no
