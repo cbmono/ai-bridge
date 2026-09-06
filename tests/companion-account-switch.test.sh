@@ -126,8 +126,13 @@ ok "…and it labels the session for the banner"     \
 ok "…and the bundle tree is UNCHANGED"             \
    "$([ "$before" = "$(find "$BUNDLE" -type f | LC_ALL=C sort)" ] && echo yes || echo no)" yes
 
+# Refused BEFORE anything is created: the earlier version made the directory and then said
+# no, which is a directory in a git repo that nobody asked for.
+beforeall="$(find "$BUNDLE" | LC_ALL=C sort)"
 rc=0; ( cd "$BUNDLE" && AI_BRIDGE_ACCOUNTS_HOME="$BUNDLE/.accounts" bash "$LAUNCH" --print-env ) >/dev/null 2>&1 || rc=$?
 ok "an accounts home INSIDE the bundle -> exit 5"  "$rc" 5
+ok "…and it created NOTHING there first"          \
+   "$([ "$beforeall" = "$(find "$BUNDLE" | LC_ALL=C sort)" ] && echo yes || echo no)" yes
 
 GITTREE="$TMP/gittree"; mkdir -p "$GITTREE"
 git -C "$GITTREE" init -q >/dev/null 2>&1

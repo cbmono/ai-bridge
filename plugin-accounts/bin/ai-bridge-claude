@@ -53,15 +53,21 @@ esac
 
 accounts_home="${AI_BRIDGE_ACCOUNTS_HOME:-${HOME:-}/.claude-accounts}"
 dir="$accounts_home/$label"
-mkdir -p "$dir" 2>/dev/null || { echo "ai-bridge-claude: cannot create $dir" >&2; exit 5; }
-dir="$(cd "$dir" && pwd)"
+case "$dir" in /*) ;; *) dir="$PWD/$dir" ;; esac
 
-# CRITERION 4, STRUCTURALLY. A config dir inside the bundle would put whatever Claude Code
-# stores there into a git repo, so it is refused rather than documented against.
+# CRITERION 4, STRUCTURALLY, AND BEFORE ANYTHING IS CREATED. A config dir inside the bundle
+# would put whatever Claude Code stores there into a git repo, so it is refused rather than
+# documented against — and refused on the nearest EXISTING ancestor, since the account
+# directory itself may not be there yet.
 case "$dir/" in "$bundle"/*) echo "ai-bridge-claude: refusing — $dir is inside the bundle" >&2; exit 5 ;; esac
-if git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+probe="$dir"
+while [ ! -d "$probe" ] && [ "$probe" != "/" ] && [ -n "$probe" ]; do probe="$(dirname "$probe")"; done
+if git -C "$probe" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "ai-bridge-claude: refusing — $dir is inside a git work tree" >&2; exit 5
 fi
+
+mkdir -p "$dir" 2>/dev/null || { echo "ai-bridge-claude: cannot create $dir" >&2; exit 5; }
+dir="$(cd "$dir" && pwd)"
 
 if [ "$print_env" -eq 1 ]; then
   printf 'CLAUDE_CONFIG_DIR=%s\nAI_BRIDGE_ACCOUNT=%s\n' "$dir" "$label"
