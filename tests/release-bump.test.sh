@@ -64,6 +64,20 @@ import json, sys
 mkt = json.load(open(sys.argv[1] + "/.claude-plugin/marketplace.json", encoding="utf-8"))
 print([p["version"] for p in mkt["plugins"] if p.get("source") == "./plugin"][0])' "$1"
 }
+companions() { # <dir> — every non-core entry as "<marketplace version>/<plugin.json version>"
+  python3 -c '
+import json, os, sys
+root = sys.argv[1]
+mkt = json.load(open(root + "/.claude-plugin/marketplace.json", encoding="utf-8"))
+out = []
+for p in mkt["plugins"]:
+    src = p.get("source", "")
+    if src == "./plugin":
+        continue
+    man = os.path.join(root, os.path.normpath(src), ".claude-plugin", "plugin.json")
+    out.append("%s/%s" % (p["version"], json.load(open(man, encoding="utf-8"))["version"]))
+print(" ".join(out))' "$1"
+}
 five() { # <dir> — the five places, space-separated, so one assertion reads them all
   printf '%s %s %s %s %s' \
     "$(head -n 1 "$1/VERSION")" "$(head -n 1 "$1/plugin/VERSION")" \
@@ -80,7 +94,7 @@ harness() { # <dir> <harness> — run a real harness IN the fixture; its tally a
 echo
 echo "== 1. the guards: the bump lands on the default branch, on a clean tree =="
 ok "no field is a usage error"            "$(run)" 2
-ok "an unknown argument is too"           "$(run major)" 2
+ok "an unknown argument is too"           "$(run mayor)" 2
 ok "a directory with no VERSION is refused" "$(run patch --repo "$TMP")" 1
 
 fixture "$TMP/guards"
@@ -134,6 +148,32 @@ bad = [i for i, l in enumerate(lines[:-1])
        if l.startswith("AI-Bridge ") and set(lines[i+1]) == {u"─"} and len(lines[i+1]) != len(l)]
 print(len(bad))' "$TMP/five")" 0
 ok "…on a header that really did get longer"  "$(five "$TMP/five" | cut -d' ' -f1)" 2.10.0
+
+# The v2 release is the case this field was added for: 1.20.0 -> 2.0.0 zeroes BOTH lower
+# fields and SHORTENS the banner header, the direction the re-cut had never taken.
+fixture "$TMP/major"
+plant "$TMP/major" 1.20.0
+ok "major is accepted"                     "$(run major --repo "$TMP/major")" 0
+ok "…and moves 1.20.0 to 2.0.0 in all five" "$(five "$TMP/major")" "2.0.0 2.0.0 2.0.0 2.0.0 2.0.0"
+ok "…with the banner rule re-cut to the SHORTER header" \
+  "$(python3 -c '
+import io, sys
+lines = io.open(sys.argv[1] + "/docs/operations.md", encoding="utf-8").read().splitlines()
+bad = [i for i, l in enumerate(lines[:-1])
+       if l.startswith("AI-Bridge ") and set(lines[i+1]) == {u"\u2500"} and len(lines[i+1]) != len(l)]
+print(len(bad))' "$TMP/major")" 0
+# A companion tracks core's MAJOR (plugin/README.md), so the five are not the whole set on
+# a major bump — and template-version.test.sh section 3b is what goes red if they are missed.
+ok "…and every companion moved to 2.0.0 in BOTH its manifests" \
+  "$(companions "$TMP/major")" "2.0.0/2.0.0 2.0.0/2.0.0 2.0.0/2.0.0"
+ok "…while a patch bump leaves the companions alone" \
+  "$(run patch --repo "$TMP/five" >/dev/null; companions "$TMP/five")" "1.0.0/1.0.0 1.0.0/1.0.0 1.0.0/1.0.0"
+ok "…and template-version.test.sh passes on 2.0.0" \
+  "$(harness "$TMP/major" template-version.test.sh)" "fail=0 rc=0"
+ok "…in ONE commit naming the move"        \
+  "$(GIT -C "$TMP/major" log -1 --format=%s)" "chore: VERSION 1.20.0 -> 2.0.0 (bumped on main after the merge)"
+ok "…carrying the five places and the three companion manifests, nothing else" \
+  "$(GIT -C "$TMP/major" show --name-only --format= HEAD | grep -c .)" 8
 
 fixture "$TMP/dry"
 before="$(five "$TMP/dry")"
@@ -204,6 +244,9 @@ echo "== 6. the docs carry the new order: merge, bump, push =="
 saw() { grep -Fq -- "$2" "$1" && echo yes || echo no; }
 OPS="$REPO/docs/operations.md"
 ok "operations.md names the order"          "$(saw "$OPS" 'merge, bump, push')" yes
+ok "…and the three fields it takes"         "$(saw "$OPS" 'release-bump.sh <major|minor|patch>')" yes
+ok "conventions.md 20 says when major is right" \
+  "$(saw "$REPO/docs/conventions.md" '`major` when the owner declares a release')" yes
 ok "…and the script that does it"           "$(saw "$OPS" 'release-bump.sh')" yes
 ok "…and that the bump commit goes straight to main" "$(saw "$OPS" 'straight to main')" yes
 ok "…and that main's own suite on push is the check" \

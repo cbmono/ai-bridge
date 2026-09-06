@@ -895,13 +895,16 @@ before dispatch, which is the only point at which the split is cheap.
 ### Cutting a release: merge, bump, push
 
 **The version moves at merge time, on `main`, and never inside a pull request.** Merge the
-PR, pull `main`, run `plugin/scripts/release-bump.sh <minor|patch>` — it is the only writer
-of the five places the number lives in (`VERSION`, `plugin/VERSION`, both manifests, and the
+PR, pull `main`, run `plugin/scripts/release-bump.sh <major|minor|patch>` — it is the
+only writer of the five places the number lives in (`VERSION`, `plugin/VERSION`, both manifests, and the
 banner sample below, whose `─` rule it re-cuts to the new header's width) — and push the one
 commit it makes. That bump commit goes **straight to main**: the merger pushes it directly,
 bypassing the required check as an admin (`enforce_admins` is off on this repo), and
 **main's suite on the push is the check**. There is no second, trivially-green PR, and the
-script refuses to run anywhere but the default branch on a clean tree. The reason is
+script refuses to run anywhere but the default branch on a clean tree. **`major` moves the
+companions too** — every non-core marketplace entry and its own `plugin.json` go to the same
+new major, because a companion tracks core's MAJOR, and a 2.0.0 core beside a 1.x companion
+fails main's own suite. The reason is
 arithmetic: while every core PR carried the bump, any two open ones conflicted on those five
 files and had to land one at a time, each after a fresh merge-main and a full ~15-minute
 suite run — measured 2026-09-06 across seven open PRs, where the version files were the only

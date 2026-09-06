@@ -613,7 +613,7 @@ exactly what the two path-scoped rule files ([`.claude/rules/machinery.md`](.cla
 editing one of those paths meets the rule as it opens the file. A PR touching only `docs/`,
 `tests/`, `.claude/`, `.github/` or the root `scripts/` needs no bump at all. **No PR ever
 edits the five places the number lives in** — merge it, then run
-[`plugin/scripts/release-bump.sh`](plugin/scripts/release-bump.sh) `<minor|patch>` on `main`
+[`plugin/scripts/release-bump.sh`](plugin/scripts/release-bump.sh) `<major|minor|patch>` on `main`
 and push the one commit it makes. That is what lets two core PRs be open at once: while
 each carried its own bump they conflicted on the same five files and had to land one at a
 time, at a full suite run each.

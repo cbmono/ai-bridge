@@ -125,6 +125,8 @@ and the names core reads out of it — so a shared MAJOR says *this companion sp
 contract you have installed*, while independent MINOR/PATCH keeps a companion's own fixes
 from forcing a core release nobody needed. `tests/template-version.test.sh` asserts both
 halves for every companion entry in the marketplace, so a companion cannot drift silently.
+`plugin/scripts/release-bump.sh major` moves every companion to the new major alongside core;
+`minor` and `patch` leave them alone.
 
 ### Today's companions
 

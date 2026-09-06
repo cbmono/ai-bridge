@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# release-bump.sh <minor|patch> — move the version ON THE DEFAULT BRANCH, after a merge.
+# release-bump.sh <major|minor|patch> — move the version ON THE DEFAULT BRANCH, after a merge.
 # The ONLY writer of the five places that carry it: VERSION, plugin/VERSION, the two plugin
 # manifests, and every tracked doc that DISPLAYS the number (its `─` rule is resized with
 # the header). Refuses on a feature branch or a dirty tree, commits, prints the push.
-# A pull request never carries the bump, so two of them can no longer collide on it.
+# `major` ALSO moves every companion plugin to <new major>.0.0: a companion tracks core's
+# MAJOR (plugin/README.md), so a v2 core beside a 1.x companion fails main's own suite.
 # Exit: 0 bumped · 1 refused (branch, dirty tree, missing file, unverifiable result) · 2 usage.
 # Reasoning: ai-bridge-next/task-026, docs/conventions.md §20. Verified by tests/release-bump.test.sh.
 set -uo pipefail
@@ -14,7 +15,7 @@ die() { printf 'release-bump: %s\n' "$1" >&2; exit 1; }
 FIELD=""; ROOT=""; ROOT_GIVEN=0; COMMIT=1; DRY=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    minor|patch)  FIELD="$1"; shift ;;
+    major|minor|patch) FIELD="$1"; shift ;;
     --repo)       shift; ROOT="${1:-}"; ROOT_GIVEN=1; shift || true ;;
     --repo=*)     ROOT="${1#--repo=}"; ROOT_GIVEN=1; shift ;;
     --no-commit)  COMMIT=0; shift ;;
@@ -49,16 +50,19 @@ IFS=. read -r MA MI PA <<EOF
 $OLD
 EOF
 case "$FIELD" in
+  major) NEW="$((MA + 1)).0.0" ;;
   minor) NEW="$MA.$((MI + 1)).0" ;;
   patch) NEW="$MA.$MI.$((PA + 1))" ;;
 esac
 
 # One writer, one verifier: python3 PLANS every file first (in situ, no reformatting), so a
 # missing or unparseable target refuses before the first write, then re-reads all five.
-CHANGED="$(python3 - "$ROOT" "$NEW" "$DRY" <<'PY'
+CHANGED="$(python3 - "$ROOT" "$NEW" "$DRY" "$FIELD" <<'PY'
 import io, json, os, re, subprocess, sys
 
-root, new, dry = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+root, new, dry, field = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4]
+# A companion tracks the core MAJOR, so only a major bump moves one, to <new major>.0.0.
+companion_new = new.split(".")[0] + ".0.0" if field == "major" else None
 HDR = re.compile(r'(AI-Bridge v?)(\d+\.\d+\.\d+)')
 RULE = u"─"
 changed = []
@@ -81,18 +85,19 @@ def refuse(msg):
     sys.stderr.write("release-bump: %s\n" % msg)
     sys.exit(1)
 
-def set_version(text, where):
-    out, n = re.subn(r'("version"\s*:\s*)"[^"]*"', lambda m: m.group(1) + '"%s"' % new, text, count=1)
+def set_version(text, where, value=None):
+    value = new if value is None else value
+    out, n = re.subn(r'("version"\s*:\s*)"[^"]*"', lambda m: m.group(1) + '"%s"' % value, text, count=1)
     if n != 1:
         refuse("%s carries no \"version\" key" % where)
     return out
 
-def core_entry_span(text):
-    """The offsets of the marketplace object whose source is ./plugin — found by balancing
-    braces outwards, so the edit can never land on a companion sharing the number."""
-    m = re.search(r'"source"\s*:\s*"\./plugin"', text)
+def entry_span(text, source):
+    """The offsets of the marketplace object with this `source` — found by balancing braces
+    outwards, so an edit can never land on the neighbouring entry."""
+    m = re.search(r'"source"\s*:\s*"%s"' % re.escape(source), text)
     if not m:
-        refuse("marketplace.json has no entry with source ./plugin")
+        refuse("marketplace.json has no entry with source %s" % source)
     i, depth = m.start() - 1, 0
     while i >= 0:
         if text[i] == "}":
@@ -112,7 +117,7 @@ def core_entry_span(text):
                 break
         j += 1
     if i < 0 or j >= len(text):
-        refuse("marketplace.json: the ./plugin entry's braces do not balance")
+        refuse("marketplace.json: the %s entry's braces do not balance" % source)
     return i, j + 1
 
 planned = []
@@ -126,8 +131,20 @@ planned.append((rel, set_version(read(os.path.join(root, rel)), rel)))
 
 rel = ".claude-plugin/marketplace.json"
 text = read(os.path.join(root, rel))
-i, j = core_entry_span(text)
-planned.append((rel, text[:i] + set_version(text[i:j], "the ./plugin entry") + text[j:]))
+try:
+    sources = [p.get("source", "") for p in json.loads(text).get("plugins", [])]
+except ValueError as e:
+    refuse("%s is not JSON: %s" % (rel, e))
+for src in ["./plugin"] + ([s for s in sources if s != "./plugin"] if companion_new else []):
+    n = new if src == "./plugin" else companion_new
+    i, j = entry_span(text, src)
+    text = text[:i] + set_version(text[i:j], "the %s entry" % src, n) + text[j:]
+planned.append((rel, text))
+
+if companion_new:
+    for src in [s for s in sources if s != "./plugin"]:
+        rel = os.path.join(os.path.normpath(src), ".claude-plugin", "plugin.json")
+        planned.append((rel, set_version(read(os.path.join(root, rel)), rel, companion_new)))
 
 docs = [d for d in subprocess.check_output(
     ["git", "-C", root, "ls-files", "*.md"]).decode("utf-8").split() if not d.startswith("tests/")]
@@ -157,6 +174,13 @@ if not dry:
     core = [p for p in mkt.get("plugins", []) if p.get("source") == "./plugin"]
     if own.get("version") != new or len(core) != 1 or core[0].get("version") != new:
         refuse("a manifest did not take the new number — `git checkout -- .` to undo")
+    for p in (mkt.get("plugins", []) if companion_new else []):
+        src = p.get("source", "")
+        if src == "./plugin":
+            continue
+        man = os.path.join(root, os.path.normpath(src), ".claude-plugin", "plugin.json")
+        if p.get("version") != companion_new or json.load(io.open(man, encoding="utf-8")).get("version") != companion_new:
+            refuse("companion %s is not on %s — `git checkout -- .` to undo" % (p.get("name", src), companion_new))
     for rel in docs:
         lines = read(os.path.join(root, rel)).splitlines()
         for k, line in enumerate(lines):

@@ -711,11 +711,14 @@ conflicted, and each had to land alone after a fresh merge-main and a full suite
 seven PRs open that day the version files were the only conflict in **five of six merges**,
 at roughly one suite run each, and a user-owned repo cannot have a merge queue to absorb
 it. So a core PR now carries **no** version
-change at all, and `plugin/scripts/release-bump.sh <minor|patch>` — the only writer of the
-five — moves them together on `main` afterwards, in one commit the merger pushes **straight
+change at all, and `plugin/scripts/release-bump.sh <major|minor|patch>` — the only writer
+of the five — moves them together on `main` afterwards, in one commit the merger pushes **straight
 to main** (admin bypass of the required check, which is how this repo is already
 configured; main's own suite on that push is the check). **Still not automatic**: no
-workflow bumps anything, a human runs the script and decides which field moves.
+workflow bumps anything, a human runs the script and decides which field moves: `patch` for a
+fix, `minor` for an ordinary merge, and `major` when the owner declares a release — the field
+that zeroes both lower ones, so it is the owner's call and never an agent's, and the only one
+that also moves the companion plugins (they track core's MAJOR).
 There is deliberately **no release process** behind this — no changelog, no tags, no
 packaging, no publish step. This repo has one consumer group and one plugin; a
 release pipeline here would be exactly the team-scale apparatus `ai-bridge-v4` spent ten
