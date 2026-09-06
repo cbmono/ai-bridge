@@ -51,6 +51,22 @@
         "accounts",
         "okf"
       ]
+    },
+    {
+      "name": "ai-bridge-llm",
+      "source": "./plugin-llm",
+      "description": "COMPANION to ai-bridge. Ships companion/llm.md and bin/ai-bridge-deepseek — run one Claude Code session against DeepSeek instead of Anthropic. A BACKEND SUBSTITUTION: the whole session leaves for the third party, so it is opt-in per machine via allowSubstituteBackend in the gitignored instance.config.local.json and refuses without it. Not installed = no launcher. A companion ADDS behaviour and never removes a core gate.",
+      "version": "1.0.0",
+      "author": {
+        "name": "cbmono"
+      },
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "ai-bridge-companion",
+        "deepseek",
+        "llm"
+      ]
     }
   ]
 }
