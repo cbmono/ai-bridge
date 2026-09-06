@@ -42,10 +42,32 @@ no bundle has commands and nothing for them to read; a bundle with no plugin has
 and no way to drive it, and every `/ai-bridge:…` reports *unknown command*. That is the
 one symptom worth memorising, because nothing else says which half is missing.
 
-**The plugin is not on the template's `VERSION`.** `VERSION` at this repo's root numbers
-the bundle machinery and the seed; `plugin/.claude-plugin/plugin.json` numbers the plugin.
-They move in the same pull request when a change touches both, and they are not the same
-number.
+**One version, in FOUR files, and they move together.** The plugin used to run its own
+number (0.16.0 beside a template on 0.36.0); 1.0.0 put them on one line and this is where
+that line is written down:
+
+| File | What it is |
+|---|---|
+| `VERSION` | the number, at the repo root — what the docs, `CLAUDE.md` and `check-template-version.sh` read |
+| `plugin/VERSION` | a byte-identical mirror, because an installed plugin has no checkout around it to read the root copy from |
+| `plugin/.claude-plugin/plugin.json` → `.version` | the plugin manifest |
+| `.claude-plugin/marketplace.json` → the `ai-bridge` entry | the marketplace listing |
+
+A bump edits all four in one pull request. `tests/template-version.test.sh` section 1
+fails the build if any of them disagrees.
+
+**The manifest is what `claude plugin update` watches, so a manifest left behind is not
+cosmetic — the update is never offered.** The host compares the version in `plugin.json`
+against the installed one and does nothing when they match, so a machine reports itself up
+to date while running older machinery. Measured 2026-09-06 at `182664d`: `VERSION` and
+`plugin/VERSION` said 1.1.0 and both manifests still said 1.0.1, so 1.0.2, 1.0.3, 1.0.4
+and 1.1.0 reached nobody — `claude plugin update ai-bridge` reported *1.0.0 → 1.0.1*,
+installed a cache directory named 1.0.1, and the banner inside it printed
+`AI-Bridge v1.1.0`.
+
+**A companion is not part of this set.** `ai-bridge-yolo` keeps its own number and tracks
+core's MAJOR only (`plugin/README.md`, "How a companion is versioned"), so it stays at
+1.0.0 when core goes to 1.1.0.
 
 ### After you pull this repo
 
