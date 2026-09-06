@@ -36,8 +36,8 @@ the spec this bundle follows). Neither exists in any instance and neither is req
 **Concept documents live only in the schema-defined locations** — `objectives/*.md`
 (the directory is optional; a bundle with none is valid),
 `projects/*/project.md`, `projects/*/phases/*.md`, `projects/*/tasks/*.md`,
-`knowledge/<kind>/*.md`. `index.md`, `log.md`, `sources/` and `deliverables/` are
-navigation and content, and carry no frontmatter by design. (`knowledge/<kind>/` is
+`knowledge/<kind>/*.md`. `index.md`, `log.md`, `knowledge/vocab.md`, `sources/` and
+`deliverables/` are navigation and content, and carry no frontmatter by design. (`knowledge/<kind>/` is
 a shape, not a list of names — a fifth kind directory is validated the moment it
 exists, which is how `knowledge/references/` was already covered.)
 
@@ -245,9 +245,12 @@ A durable learning or architecture decision (ADR-style).
 type: Finding
 title: <the statement / decision>
 description: <one line>
-lesson: <one line — the takeaway the next agent needs; required, and validate-bundle warns without it>
+lesson: <one line — the takeaway the next agent needs; required, and it becomes the index row's summary VERBATIM>
 category: decision | learning | gotcha
-status: current | superseded
+tags: [ <tag>, ... ]              # from /knowledge/vocab.md ONLY — never a new word
+status: current | superseded | corrected
+supersedes: [ <slug>, ... ]       # Findings this one replaces
+superseded_by: <slug>             # set together with status: superseded
 source:                           # where it came from, e.g. /projects/.../tasks/<id>.md or a PR URL
 timestamp: <ISO 8601>
 ---
@@ -255,6 +258,34 @@ timestamp: <ISO 8601>
 Body headings: `# Context`, `# Finding` (or `# Decision`), `# Rationale`,
 `# Implications`. Link to the Services/tasks it concerns. **40 lines, whole file**
 (`CONVENTIONS.md` → "Write less"); the history that produced it lives in the task doc.
+
+**`lesson:` is the index row.** `build-kb-index.sh` copies it into `knowledge/index.md`
+verbatim, so a hand-written summary can no longer drift from the document. Without one the
+row falls back to `description:` and `--check` warns.
+
+**Tags are a closed set.** `/knowledge/vocab.md` lists every allowed tag with its aliases;
+ground a lookup by **longest match** over both columns and use the canonical tag.
+`build-kb-index.sh --check` refuses a tag that is in neither column — extending the
+vocabulary is an edit to that file, in the same change.
+
+#### Superseding a Finding
+
+The move when a Finding stops being true. **Never delete one** — a decision nobody can
+find the reversal of gets re-made.
+
+1. On the old Finding: `status: superseded`, `superseded_by: <new-slug>`, and a dated
+   section naming the replacement (`## Superseded 2026-09-06 — replaced by [[new-slug]]`,
+   one line saying what changed).
+2. On the new Finding: `supersedes: [ <old-slug> ]`.
+3. Rebuild: `build-kb-index.sh`. Superseded rows render in their own section **below** the
+   current ones, so the index-first read skips them.
+
+**A superseded Finding is history and is never citable.** `cite-check.sh` reports a
+`[[slug]]` naming one as `SUPERSEDED` and drops it, exactly as it drops an unread id — cite
+the replacement instead. Both directions of the edge must resolve to a real Finding, and
+`--check` counts them and fails on one that dangles.
+
+Who runs it: the `cataloguer`'s closeout pass, and `/close-project` step 2.
 
 ### type: Team  (`knowledge/teams/<slug>.md`)
 
@@ -582,9 +613,11 @@ that would be claiming a guarantee the mechanism cannot make.
 every tick from the documents, so on a shared instance it is gitignored like
 `AWAITING.md` and `SNAPSHOT.json` — a derived file two loops rewrite is a merge
 conflict on every push, and the documents it summarises are the source of truth.
-`knowledge/index.md` stays **tracked**: it is the KB's curated lookup surface, it
-changes only when the KB changes rather than every tick, and an agent told to scan
-it needs it to exist in a fresh clone.
+`knowledge/index.md` stays **tracked**: it is the KB's lookup surface, it changes only
+when the KB changes rather than every tick, and an agent told to scan it needs it to exist
+in a fresh clone. It is **derived all the same** — `build-kb-index.sh` rebuilds it from
+frontmatter and `--check` fails when the two disagree, so it is regenerated and committed,
+never hand-edited.
 
 ## Per-machine config overrides
 
