@@ -269,13 +269,13 @@ echo "== the two rows share one label column (task-029) =="
 BLK="$(section)"
 assert "row 1 is the label and the file:// link" \
   "$(eq "$(printf '%s\n' "$BLK" | sed -n 1p)" "Board   file://$PAGE")"
-assert "row 2 is Run and the command, with the words `for a live URL`" \
+assert 'row 2 is Run and the command, ending in the words: for a live URL' \
   "$(eq "$(printf '%s\n' "$BLK" | sed -n 2p)" 'Run     /ai-bridge:board serve for a live URL')"
 assert "…and row 2's value starts in the SAME column as file:// on row 1" \
   "$(eq "$(val_col "$BLK" 1)" "$(val_col "$BLK" 2)")"
 # NON-VACUOUS: the equality above holds for two empty strings too, so the column is also
 # named. 8 is `Board` plus the gap the section's dim continuation lines already use.
-assert "…and that column is 8, the one `Board` sets" "$(eq "$(val_col "$BLK" 1)" 8)"
+assert "…and that column is 8, the one the Board label sets" "$(eq "$(val_col "$BLK" 1)" 8)"
 # THE SENTENCE FORM IS GONE, not merely relocated: `— run …` on the end of the link row is
 # what wrapped, and an assertion on the two rows above would still pass if it came back on
 # row 1 as well.
