@@ -1,7 +1,7 @@
 {
   "name": "ai-bridge-accounts",
   "displayName": "AI Bridge — accounts (per-bundle Claude account)",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "COMPANION. Ships companion/accounts.md, the capability file that makes per-bundle account switching exist, and bin/ai-bridge-claude, the launcher that starts claude on the account a bundle declares. Not installed = core prints no account line and switches nothing. Adds behaviour; removes no gate.",
   "author": {
     "name": "cbmono"

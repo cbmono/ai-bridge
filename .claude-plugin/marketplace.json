@@ -8,7 +8,7 @@
       "name": "ai-bridge",
       "source": "./plugin",
       "description": "The OKF control panel as a Claude Code plugin — /brief-me, /capture, /work, /dispatch, /handoff, /welcome, /new-project, /close-project, /answer, /audit, /board, /fanout, /pr-review-request, plus the two PreToolUse enforcement hooks and the eight role agents.",
-      "version": "1.20.0",
+      "version": "2.0.0",
       "author": {
         "name": "cbmono"
       },
@@ -24,7 +24,7 @@
       "name": "ai-bridge-yolo",
       "source": "./plugin-yolo",
       "description": "COMPANION to ai-bridge. Ships AUTONOMY.md, the capability file that defines the `yolo` mode — the loop may promote fully-refined build drafts and merge on an independent clearance. Not installed = every project is gated. A companion ADDS behaviour and never removes a core gate.",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "author": {
         "name": "cbmono"
       },
@@ -40,7 +40,7 @@
       "name": "ai-bridge-accounts",
       "source": "./plugin-accounts",
       "description": "COMPANION to ai-bridge. Ships companion/accounts.md and bin/ai-bridge-claude — a bundle names its Claude account in instance.config.json, the launcher starts claude on it, and core's welcome banner says which account is active. Not installed = core prints no account line and switches nothing. A companion ADDS behaviour and never removes a core gate.",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "author": {
         "name": "cbmono"
       },
@@ -56,7 +56,7 @@
       "name": "ai-bridge-llm",
       "source": "./plugin-llm",
       "description": "COMPANION to ai-bridge. Ships companion/llm.md and bin/ai-bridge-deepseek — run one Claude Code session against DeepSeek instead of Anthropic. A BACKEND SUBSTITUTION: the whole session leaves for the third party, so it is opt-in per machine via allowSubstituteBackend in the gitignored instance.config.local.json and refuses without it. Not installed = no launcher. A companion ADDS behaviour and never removes a core gate.",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "author": {
         "name": "cbmono"
       },
