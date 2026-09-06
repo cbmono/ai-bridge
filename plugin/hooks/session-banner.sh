@@ -169,6 +169,8 @@
 # The `/welcome` path is the OPPOSITE: its output is relayed by the model into an assistant
 # message, 0 of 4 ESC bytes survived that relay, and the human is left reading a literal
 # `[1m`. One answer does not fit both channels, which is why each one is asked separately.
+# So `/welcome` shows the same three logo lines as the banner, and colour is not promised
+# there.
 #
 # SO THERE ARE THREE RENDERINGS, NOT TWO, AND THE THIRD IS `--format md`. It is the path
 # `/welcome` relays — `ai-bridge.sh` asks for it when its own stdout is a pipe —
@@ -575,7 +577,7 @@ fi
 TAB="$(printf '\t')"
 
 # ---------------------------------------------------------------------------------------
-# COLOUR — five names, all empty when it is off, so every call site is written once.
+# COLOUR — eight names, all empty when it is off, so every call site is written once.
 # ---------------------------------------------------------------------------------------
 # Empty strings rather than an `if` at each site: a banner that has to remember to be
 # colourless is a banner that will one day emit a bare `\033[1m` into a log. `NO_COLOR`'s
@@ -616,6 +618,7 @@ fi
 # drift apart.
 [ "$use_emph" -eq 1 ] && EMPH_MARK="$EMPH_MARK_BYTE"
 C_B=""; C_DIM=""; C_RED=""; C_YEL=""; C_OFF=""
+C_WATER=""; C_HULL=""; C_BRIDGE=""
 if [ "$use_color" -eq 1 ]; then
   esc="$(printf '\033')"
   # `${esc}[` braced: `"$esc[1m"` is bash's ARRAY-SUBSCRIPT spelling and shellcheck calls
@@ -623,6 +626,25 @@ if [ "$use_color" -eq 1 ]; then
   # kind of accident that stops working later.
   C_B="${esc}[1m"; C_DIM="${esc}[2m"; C_RED="${esc}[1;31m"
   C_YEL="${esc}[1;33m"; C_OFF="${esc}[0m"
+  # THE LOGO'S THREE COLOURS, AND THE ONLY PLACE THIS FILE ASKS HOW MANY COLOURS THERE ARE.
+  # Everything above is 3/4-bit and needs no tier; the ship is drawn from a palette, so it
+  # degrades in two steps rather than being dropped. `COLORTERM` is the terminal's own claim
+  # about truecolor and `tput colors` the terminfo count; neither is asked when `use_color`
+  # is 0, so the opt-outs above stay the single answer to "colour at all".
+  tc=0
+  if command -v tput >/dev/null 2>&1; then tc="$(tput colors 2>/dev/null || echo 0)"; fi
+  case "$tc" in ''|*[!0-9]*) tc=0 ;; esac
+  case "${COLORTERM:-}" in
+    truecolor|24bit)
+      C_WATER="${esc}[38;2;95;168;211m"; C_HULL="${esc}[38;2;239;163;165m"
+      C_BRIDGE="${esc}[38;2;245;215;110m" ;;
+    *)
+      if [ "$tc" -ge 256 ]; then
+        C_WATER="${esc}[38;5;74m"; C_HULL="${esc}[38;5;217m"; C_BRIDGE="${esc}[38;5;222m"
+      else
+        C_WATER="${esc}[94m"; C_HULL="${esc}[95m"; C_BRIDGE="${esc}[93m"
+      fi ;;
+  esac
 fi
 
 # say <colour> <text…> — one whole line, coloured end to end. COLOUR NEVER GOES INSIDE A
@@ -641,6 +663,33 @@ say() { local c="$1"; shift; printf '%s%s%s\n' "$c" "$*" "$C_OFF"; }
 # line for the emitter to see it; when EMPH_MARK is empty, which is every path but md, this
 # is byte-for-byte `say`.
 say_strong() { local c="$1"; shift; printf '%s%s%s%s\n' "$EMPH_MARK" "$c" "$*" "$C_OFF"; }
+
+# THE LOGO — the ship, kept ONCE and as data. Ten columns, three lines; the docs sample and
+# tests/banner-logo.test.sh are measured against this array rather than carrying a second copy.
+LOGO_LINES=(' █▀█' '▄███▄▄▄▄▄▄' '~▀▀▀▀▀▀▀~~')
+
+# logo — the three lines, coloured BY GLYPH RATHER THAN BY LINE: a `~` is water wherever it
+# appears, line 1's glyphs are the bridge, every other block is hull. With colour off every
+# name below is empty and this prints the array's bytes and nothing else.
+logo() {
+  local n=0 ln rest run block
+  for ln in "${LOGO_LINES[@]}"; do
+    n=$((n + 1))
+    if [ "$n" -eq 1 ]; then block="$C_BRIDGE"; else block="$C_HULL"; fi
+    rest="$ln"
+    while [ -n "$rest" ]; do
+      # `~` IS ASCII AND EVERY BYTE OF A BLOCK GLYPH IS >= 0x80, so splitting on it is
+      # multibyte-safe in either locale — the trap `nchars` exists for, avoided rather than
+      # counted around.
+      case "$rest" in
+        '~'*) run="${rest%%[!~]*}"; printf '%s%s%s' "$C_WATER" "$run" "$C_OFF" ;;
+        *)    run="${rest%%~*}";    printf '%s%s%s' "$block"   "$run" "$C_OFF" ;;
+      esac
+      rest="${rest#"$run"}"
+    done
+    printf '\n'
+  done
+}
 
 # emphasise — colour a block this file did NOT compose, by SIGNIFICANCE, one whole line at a
 # time. `check-template-version.sh` (§2b) and `ai-bridge.sh check` (§8) are printed verbatim
@@ -926,6 +975,9 @@ fi
 # characters of a decorative rule; in a table cell it costs a column.
 org="$(cell "$(leaf_value "$(leaf org)")")"
 head_line="AI-Bridge${ver:+ $ver} · $(basename "$root")${org:+ · org: $org}"
+# THE LOGO GOES DIRECTLY ABOVE THE HEADER, not above §0: the machinery alarm keeps its place
+# as the banner's first line whenever it fires, because it is an alarm and the ship is not.
+logo
 say_strong "$C_B" "$head_line"
 # THE RULE UNDER IT IS WHAT MAKES THIS READ AS A HEADER WITH COLOUR OFF — which is the
 # normal case for this file, whose stdout is a pipe into Claude Code rather than a terminal.
