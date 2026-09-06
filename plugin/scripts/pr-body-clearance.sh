@@ -105,10 +105,8 @@
 #      body would be set too tight. `tests/pr-body-clearance.test.sh` drives that exact
 #      row rather than leaving the claim in a PR body nobody can re-run.
 #
-#      TWO OF THE THREE WERE OPEN, AND ONE MOVED UNDER THE MEASUREMENT — #70's body was
-#      edited between the 16:00 and 16:24 reads (worst cell 325 then 189). A live PR body
-#      is not a fixture, so the four boundary values are pinned as FIXTURES in
-#      `tests/pr-body-clearance.test.sh` and never re-derived from the host.
+#      A LIVE PR BODY IS NOT A FIXTURE — #70's moved under the measurement (325 then 189),
+#      so the four boundary values are pinned in `tests/pr-body-clearance.test.sh`.
 #
 #      IT IS COUNTED IN BYTES, UNDER `LC_ALL=C`, ON PURPOSE. `length()` counts characters
 #      in some awks and bytes in others, so an unpinned locale would put the threshold in
@@ -328,6 +326,7 @@ NOTES_CEILING=3
 # CODE POINTS, which is what the host reports as a body's length. `jq` when it is there;
 # bytes otherwise, which OVER-counts a multibyte body and so only ever refuses earlier —
 # the fail-closed direction for a ceiling. The self-test runs before the `jq` check.
+# A draft file's trailing newline counts; that is one character high, and earlier.
 char_count() { # <file>
   local n
   if command -v jq >/dev/null 2>&1 && n="$(jq -Rs 'length' < "$1" 2>/dev/null)" \
