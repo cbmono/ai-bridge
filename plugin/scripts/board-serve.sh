@@ -105,6 +105,8 @@ URL      = "http://localhost:%d" % PORT
 # The auto-reload: poll a revision endpoint, reload only when the page actually changed.
 # A `<meta refresh>` would reload on a timer and collapse every expanded project card
 # while a human was reading it, which is the one thing this page is for.
+PENDING = ("<!doctype html><meta charset=utf-8><meta http-equiv=refresh content=2>"
+           "<title>rendering</title><p>Rendering the board&hellip;</p>")
 RELOAD = ("<script>(function(){var r=null;setInterval(function(){"
           "fetch('/__rev').then(function(x){return x.text()}).then(function(t){"
           "if(r!==null&&t!==r){location.reload()}r=t})},1000)})()</script>")
@@ -219,6 +221,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             with open(full, "rb") as fh:
                 body = fh.read()
         except OSError:
+            if full == PAGE:
+                return self._send(200, PENDING.encode(), "text/html; charset=utf-8")
             return self._send(404, b"not found\n")
         ctype = TYPES.get(os.path.splitext(full)[1], "application/octet-stream")
         if full == PAGE:
@@ -241,8 +245,6 @@ def already_ours():
         return False
 
 
-refresh()
-render()
 try:
     httpd = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
 except OSError as exc:
@@ -260,6 +262,12 @@ except OSError as exc:
 signal.signal(signal.SIGTERM, lambda *_a: sys.exit(0))
 with open(STATE, "w") as fh:
     fh.write("%d\n%d\n%s\n" % (PORT, os.getpid(), ROOT))
+# The port answers at once; the first render runs beside it (it can take tens of seconds
+# on a cold machine) and the page shows "rendering" until it lands.
+def first_render():
+    refresh()
+    render()
+threading.Thread(target=first_render, daemon=True).start()
 threading.Thread(target=watch, daemon=True).start()
 print("board-serve: serving %s from %s — Ctrl-C to stop." % (URL, OUT), flush=True)
 try:
