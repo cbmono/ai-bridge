@@ -603,7 +603,7 @@ each instance keeps its own git history, so work and personal stay separate.
 The version lives at this root — [`VERSION`](VERSION), one line, no extension — and is
 MIRRORED byte-for-byte into [`plugin/VERSION`](plugin/VERSION), because an installed plugin
 has no checkout around it to read the root copy from. `cat VERSION` reads it;
-`tests/template-version.test.sh` fails if the two disagree, so bump both. Nothing parses
+`tests/template-version.test.sh` fails if the two disagree, so they only ever move together. Nothing parses
 prose for it and there is no `package.json`, no tag and no changelog. **There is no release process here and none is wanted.**
 
 **A change to `core` is bumped for AFTER it merges, by you, on `main`.** `core` is a closed

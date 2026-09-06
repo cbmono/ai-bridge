@@ -158,7 +158,7 @@ if not dry:
 
 print("\n".join(changed))
 PY
-)" || die "nothing was bumped"
+)" || die "the bump did not complete — check 'git -C $ROOT status', then 'git -C $ROOT checkout -- .'"
 
 if [ "$DRY" = 1 ]; then
   printf 'release-bump: %s -> %s (dry run) would write:\n%s\n' "$OLD" "$NEW" "$CHANGED"

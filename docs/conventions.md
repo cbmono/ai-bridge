@@ -709,8 +709,8 @@ than taste. The number is **five files**, one of them the shared `docs/operation
 every open core PR proposed the same number in the same five places: any two of them
 conflicted, and each had to land alone after a fresh merge-main and a full suite run. With
 seven PRs open that day the version files were the only conflict in **five of six merges**,
-at roughly one suite run each, and a user-owned repo cannot have a merge queue to absorb it
-([finding](https://github.com/cbmono/ai-bridge)). So a core PR now carries **no** version
+at roughly one suite run each, and a user-owned repo cannot have a merge queue to absorb
+it. So a core PR now carries **no** version
 change at all, and `plugin/scripts/release-bump.sh <minor|patch>` — the only writer of the
 five — moves them together on `main` afterwards, in one commit the merger pushes **straight
 to main** (admin bypass of the required check, which is how this repo is already
