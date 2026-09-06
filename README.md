@@ -545,6 +545,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | `ai-bridge.sh` | backs the plugin's `/welcome`: reprints the SessionStart banner, `check` reports state that could be wrong, `fix` repairs only the idempotent tier | only under `fix` |
 | `resolve-config.sh` | the one implementation of the two-file config precedence — `instance.config.local.json` first, `instance.config.json` second, dicts merged entry by entry | no |
 | `resolve-max-agents.sh` | prints the concurrency cap **this machine** should honour, from the same two files | no |
+| `resolve-account.sh` | the one reader of *which Claude account is this bundle on* — prints `declared`/`active`/launcher path, exit 0 match, 3 mismatch, 4 no account on this session, 1 inert (no `ai-bridge-accounts` companion, or nothing declared). Reads no credential | no |
 | `resolve-autonomy.sh` | the one reader of *does delegated autonomy exist here* — prints the `AUTONOMY.md` in force (bundle root first, else an installed companion plugin from core's own marketplace), exit 1 when there is none, which is `gated` | no |
 
 ## Troubleshooting
