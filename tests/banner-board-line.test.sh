@@ -404,9 +404,13 @@ if command -v python3 >/dev/null 2>&1; then
   assert "…while a well-formed URL still prints (the filter is not a mute)" \
     "$(line_is "Board   $URL" "$OUT")"
   # board: false outranks a recorded URL — the off switch is still the outermost test.
+  # BOTH HALVES, like every bad() case above. `hasnt $URL` alone cannot tell "the off
+  # switch worked" from "the URL was filtered and the fallback `Board   file://` row
+  # printed anyway" — and the second is a board section on an instance whose board is off.
   printf '{ "board": false }\n' > "$INST/instance.config.json"
   run
   assert "board:false silences a published URL too"             "$(hasnt "$URL" "$OUT")"
+  assert "…and suppresses the fallback board row with it"       "$(eq "$(section)" "")"
   rm -f "$INST/instance.config.local.json"
 else
   echo "  SKIP  python3 absent — the URL row resolves through resolve-config.sh"
@@ -418,14 +422,60 @@ echo "== the key is never SEEDED, so no instance is stamped with a shared one ==
 # config, so the key appearing there would put a shared URL back in every bundle.
 assert "seed/instance.config.json does not carry it" \
   "$(grep -qF "$KEY" "$TPL/plugin/seed/instance.config.json" && echo 1 || echo 0)"
-assert "…and install.sh never writes it into the tracked config" \
-  "$(grep -qF "$KEY" "$TPL/install.sh" && echo 1 || echo 0)"
-# NON-VACUITY: the same scan must FIND a planted one, or it is checking nothing.
-mkdir -p "$TMP/scan"
-printf '{ "%s": "https://example.invalid/x" }\n' "$KEY" > "$TMP/scan/probe.json"
-assert "…and the same scan finds a planted one" \
-  "$(grep -rlF "$KEY" "$TMP/scan" >/dev/null 2>&1 && echo 0 || echo 1)"
-rm -rf "$TMP/scan"
+# …AND THE REAL INSTALLER NEVER WRITES IT EITHER — asserted against what the installer
+# PRODUCES, not against its source text. This line used to read `$TPL/install.sh`, which
+# #122 reduced to a 37-line stub that prints a message and exits 2: the assertion had
+# become a certificate that a script writing NOTHING AT ALL does not write this key. No
+# path-resolution scanner can catch that shape — install.sh exists, so its path resolves —
+# which is why the guard here is the produced artifact and a non-vacuity scan beside it.
+# Text-grepping the real installer instead would be the same mistake one file along: it is
+# 131 KB of shell, and shell can write a key it never spells literally.
+#
+# `--no-index`-free, network-free and ~1s: init-bundle.sh stamps a bundle from a template
+# and this reads the tracked config it wrote. The install source is a filesystem-level copy
+# outside any git repository, exactly as session-banner.test.sh and board-renderers.test.sh
+# do it — see there for the full rationale and the TMPDIR-recursion guard carried with it.
+BRIDGE_INSTALL="$TPL/plugin/scripts/init-bundle.sh"
+if command -v git >/dev/null 2>&1; then
+  _gd="$(git -C "$TPL" rev-parse --absolute-git-dir 2>/dev/null || true)"
+  _gc="$(git -C "$TPL" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  if [ -n "$_gd" ] && [ -n "$_gc" ] && [ "$_gd" != "$_gc" ]; then
+    _tpl_res="$(cd -- "$TPL" && pwd -P)"; _src_res="$(cd -- "$TMP" && pwd -P)"
+    case "$_src_res/" in
+      "$_tpl_res"/*) echo "banner-board-line.test: TMPDIR ($_src_res) is inside the template tree; the install-source copy would recurse. Point TMPDIR outside the checkout." >&2; exit 2 ;;
+    esac
+    mkdir -p "$TMP/install-src"; cp -R "$TPL"/. "$TMP/install-src"/; rm -rf "$TMP/install-src/.git"
+    BRIDGE_INSTALL="$TMP/install-src/plugin/scripts/init-bundle.sh"
+  fi
+fi
+STAMPED="$TMP/stamped"; mkdir -p "$STAMPED"
+bash "$BRIDGE_INSTALL" "$STAMPED" >"$TMP/stamp.log" 2>&1 </dev/null
+PRODUCED="$STAMPED/instance.config.json"
+# ONE named scan, used by the real assertion and by the non-vacuity plant below, so
+# "the same scan" is a fact about the code rather than a claim in a comment. 1 = found.
+scan_key() { grep -qF "$KEY" "$1" && echo 1 || echo 0; }
+# Assert a non-action only against a run that WAS able to act, and assert that too:
+# [[a-fixture-that-templates-off-the-repo-under-test-inherits-its-worktree-ness]].
+assert "the real installer produced a tracked config at all" \
+  "$([ -s "$PRODUCED" ] && echo 0 || echo 1)"
+assert "…and init-bundle.sh never writes the key into it" \
+  "$(scan_key "$PRODUCED")"
+# NON-VACUITY, and it is the point of the pairing: plant the key in that SAME produced
+# config and require the SAME scan to find it. Without this, "absent" and "the scan never
+# looked" are one observation — which is exactly how the install.sh line above passed for
+# four months.
+{ printf '{\n  "%s": "https://example.invalid/x",\n' "$KEY"; tail -n +2 "$PRODUCED"; } > "$TMP/planted.json"
+assert "…and the planted copy is still valid JSON, so the plant is realistic" \
+  "$( command -v python3 >/dev/null 2>&1 \
+      && { python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$TMP/planted.json" >/dev/null 2>&1 && echo 0 || echo 1; } \
+      || echo 0 )"
+assert "…and the SAME scan finds a planted one in that same produced config" \
+  "$(eq "$(scan_key "$TMP/planted.json")" 1)"
+# Cheap tripwire, alongside the assertion above and never AS it: a literal in the
+# installer's source is not the property, but it is free and it fires early.
+assert "tripwire: the installer's source does not spell the key either" \
+  "$(grep -qF "$KEY" "$BRIDGE_INSTALL" && echo 1 || echo 0)"
+rm -f "$TMP/planted.json"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
