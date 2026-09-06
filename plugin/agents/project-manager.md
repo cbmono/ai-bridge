@@ -652,7 +652,7 @@ state, and act only on deltas.
    every render, so an unconditional rewrite churns the file the SessionStart banner
    reads and makes a stale queue indistinguishable from a fresh one. The queue derives
    from documents a `noop` tick just proved unmoved, so re-deriving it can only produce
-   what is already there (same rule and same reason as the tracked `board.html` below).
+   what is already there.
 
    The queue holds **only** what a human decision unblocks — never in-flight, next, or
    blocked-but-progressing work. **On a shared instance it narrows once more: queue
