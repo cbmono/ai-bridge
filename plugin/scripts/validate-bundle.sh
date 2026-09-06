@@ -109,6 +109,9 @@ KNOWN_TYPES="Objective Project Phase Task Agent Service Finding Team Runbook Ref
 
 # CONVENTIONS.md -> "Write less". Lowering it is free; raising it is a rule change.
 FINDING_MAX_LINES=40
+# CONVENTIONS.md -> the `do_not_repeat` cap. `do-not-repeat.sh append` refuses past it;
+# this reports a list already over it, which is the PM's cue to fold the oldest into `# Notes`.
+DO_NOT_REPEAT_MAX=10
 
 errors=0; warns=0; checked=0
 
@@ -139,6 +142,21 @@ refs_for() { # <frontmatter> <key-alternation> <path-regex>
     /^[^[:space:]]/ { inblock=0 }
   ' | grep -oE "$3" | sort -u || true
 }
+# Quoted entries in an inline flow list, counted the way do-not-repeat.sh splits them:
+# a `\"` inside an entry is not a delimiter.
+flow_entries() { # <raw value>
+  printf '%s' "$1" | awk '{
+    n = length($0); inq = 0; c = 0
+    for (i = 1; i <= n; i++) {
+      ch = substr($0, i, 1)
+      if (!inq) { if (ch == "\"") inq = 1; continue }
+      if (ch == "\\") { i++; continue }
+      if (ch == "\"") { inq = 0; c++ }
+    }
+    print c
+  }'
+}
+
 fail() { printf '  ERROR  %s\n         %s\n' "$1" "$2"; errors=$((errors+1)); }
 warn() { printf '  WARN   %s\n         %s\n' "$1" "$2"; warns=$((warns+1)); }
 
@@ -207,6 +225,16 @@ while IFS= read -r file; do
     if printf '%s\n' "$fm" | grep -q '^superseded_by:[[:space:]]*[^[:space:]]' \
        && [[ "$(printf '%s\n' "$fm" | sed -n 's/^status:[[:space:]]*//p' | head -1)" != superseded ]]; then
       fail "$rel" "carries superseded_by: but status is not 'superseded' — SCHEMA.md 'Superseding a Finding' sets both"
+    fi
+  fi
+
+  if [[ "$type" == Task ]]; then
+    dnr="$(printf '%s\n' "$fm" | sed -n 's/^do_not_repeat:[[:space:]]*//p' | head -1)"
+    if [[ -n "$dnr" ]]; then
+      n="$(flow_entries "$dnr")"
+      if [[ -n "$n" && "$n" -gt $DO_NOT_REPEAT_MAX ]]; then
+        warn "$rel" "do_not_repeat carries $n entries; CONVENTIONS.md caps it at $DO_NOT_REPEAT_MAX — the project-manager folds the oldest into '# Notes'"
+      fi
     fi
   fi
 

@@ -53,7 +53,7 @@ BASELINE='577 plugin/hooks/agent-control.sh
 416 plugin/scripts/task-owner.sh
 417 plugin/scripts/tick-delta.sh
 605 plugin/scripts/tick-lock.sh
-383 plugin/scripts/validate-bundle.sh
+356 plugin/scripts/validate-bundle.sh
 466 plugin/scripts/watch-board.sh
 503 plugin/scripts/write-snapshot.sh'
 
