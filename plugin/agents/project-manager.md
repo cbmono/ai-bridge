@@ -548,7 +548,7 @@ state, and act only on deltas.
      | **4** | the checker posted under the PR author's own login | **ROUTE**, and say which limit it is: on a solo bundle this is the standing answer, because one `gh` login cannot evidence a second principal. |
      | **2** | unknown — no table, or the two cannot be aligned | **HOLD.** Unknown is not permission. |
 
-     **Every outcome not in that table HOLDS.** A disagreement is the human's: the whole
+     **Any exit code this table does not name HOLDS.** A disagreement is the human's: the whole
      point of a checker is that nobody reconciles the two tables downstream of it.
 
    **Pin verification to the head SHA.** Record which SHA passed (task `# Notes`). If
