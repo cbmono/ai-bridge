@@ -50,7 +50,25 @@ data-handling, units, and where to route authoritative data questions.
    ones, and `cite-check.sh` refuses to let anyone cite one.
 4. **Runbooks.** Write/refresh repeatable procedures as
    `knowledge/runbooks/<slug>.md`.
-5. **Rebuild `index.md` — never hand-edit it.** `knowledge/index.md` is **derived**:
+5. **Papercuts → one proposal per surface.** `knowledge/papercuts.md` is the cheap end of
+   this loop — one appended line per papercut (a tool that failed, a doc that misled, a
+   step repeated), written by every agent because it costs nothing. Run this pass at
+   `/close-project` step 2 and whenever a tick says one is due:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh report   # unprocessed entries, grouped by surface
+   ```
+
+   **One proposal per surface the report names**, in your output, for whoever dispatched
+   you to draft: the surface, its entry count, and the **concrete edit** — the file, the
+   line as it reads, and what it should say instead — as the `acceptance_criteria` a
+   `draft` task would carry. A surface whose single entry no longer reproduces gets a line
+   saying so and no proposal; two entries naming one surface are already the evidence.
+   **You never write to `projects/` and never mark the pass** — the dispatcher creates the
+   drafts and runs `papercuts.sh pass`, so a lost proposal cannot be silently marked
+   processed. **Never edit or delete an entry**: ten lines naming one surface only read as
+   ten while nobody tidies them.
+6. **Rebuild `index.md` — never hand-edit it.** `knowledge/index.md` is **derived**:
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh          # rewrite it from frontmatter
