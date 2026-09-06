@@ -11,12 +11,12 @@ set -uo pipefail
 usage() { sed -n '2,8p' "$0" >&2; exit 2; }
 die() { printf 'release-bump: %s\n' "$1" >&2; exit 1; }
 
-FIELD=""; ROOT=""; COMMIT=1; DRY=0
+FIELD=""; ROOT=""; ROOT_GIVEN=0; COMMIT=1; DRY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     minor|patch)  FIELD="$1"; shift ;;
-    --repo)       shift; ROOT="${1:-}"; shift || true ;;
-    --repo=*)     ROOT="${1#--repo=}"; shift ;;
+    --repo)       shift; ROOT="${1:-}"; ROOT_GIVEN=1; shift || true ;;
+    --repo=*)     ROOT="${1#--repo=}"; ROOT_GIVEN=1; shift ;;
     --no-commit)  COMMIT=0; shift ;;
     --dry-run)    DRY=1; COMMIT=0; shift ;;
     -h|--help)    usage ;;
@@ -24,17 +24,21 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$FIELD" ] || usage
+# An empty `--repo` must not fall back to the script's own checkout: that would bump a repo
+# the caller never named.
+[ "$ROOT_GIVEN" = 0 ] || [ -n "$ROOT" ] || usage
 
 [ -n "$ROOT" ] || ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 [ -f "$ROOT/VERSION" ] || die "no VERSION under $ROOT — pass --repo <checkout>"
 command -v python3 >/dev/null 2>&1 || die "python3 is required: the manifests are JSON, and the banner rule is counted in CHARACTERS"
 git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || die "$ROOT is not a git checkout"
 
-# The bump belongs to the merge, so it belongs to the branch the merge landed on. An
-# unresolvable default branch is a maintainer's own tree and is left alone.
+# The bump belongs to the merge, so it belongs to the branch the merge landed on. This is a
+# WRITER, so an unresolvable default branch is a refusal, never a pass.
 BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)"
 DEFAULT="$(git -C "$ROOT" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)"; DEFAULT="${DEFAULT#origin/}"
-[ -z "$DEFAULT" ] || [ "$BRANCH" = "$DEFAULT" ] \
+[ -n "$DEFAULT" ] || die "no origin/HEAD in $ROOT, so the default branch is unknown — 'git remote set-head origin -a' first"
+[ "$BRANCH" = "$DEFAULT" ] \
   || die "on '$BRANCH', not the default branch '$DEFAULT' — the bump lands after the merge, never inside a PR"
 [ -n "$(git -C "$ROOT" status --porcelain)" ] \
   && die "the working tree is dirty — the bump is its own commit and nothing else"
@@ -49,8 +53,8 @@ case "$FIELD" in
   patch) NEW="$MA.$MI.$((PA + 1))" ;;
 esac
 
-# One writer, one verifier: python3 rewrites each place in situ (no reformatting), then
-# re-reads all five and refuses rather than leaving a half-moved number behind.
+# One writer, one verifier: python3 PLANS every file first (in situ, no reformatting), so a
+# missing or unparseable target refuses before the first write, then re-reads all five.
 CHANGED="$(python3 - "$ROOT" "$NEW" "$DRY" <<'PY'
 import io, json, os, re, subprocess, sys
 
@@ -60,7 +64,10 @@ RULE = u"─"
 changed = []
 
 def read(path):
-    return io.open(path, encoding="utf-8").read()
+    try:
+        return io.open(path, encoding="utf-8").read()
+    except IOError as e:
+        refuse("cannot read %s: %s" % (path, e))
 
 def write(path, text, rel):
     changed.append(rel)
@@ -108,16 +115,19 @@ def core_entry_span(text):
         refuse("marketplace.json: the ./plugin entry's braces do not balance")
     return i, j + 1
 
+planned = []
+
 for rel in ("VERSION", "plugin/VERSION"):
-    write(os.path.join(root, rel), new + "\n", rel)
+    read(os.path.join(root, rel))
+    planned.append((rel, new + "\n"))
 
 rel = "plugin/.claude-plugin/plugin.json"
-write(os.path.join(root, rel), set_version(read(os.path.join(root, rel)), rel), rel)
+planned.append((rel, set_version(read(os.path.join(root, rel)), rel)))
 
 rel = ".claude-plugin/marketplace.json"
 text = read(os.path.join(root, rel))
 i, j = core_entry_span(text)
-write(os.path.join(root, rel), text[:i] + set_version(text[i:j], "the ./plugin entry") + text[j:], rel)
+planned.append((rel, text[:i] + set_version(text[i:j], "the ./plugin entry") + text[j:]))
 
 docs = [d for d in subprocess.check_output(
     ["git", "-C", root, "ls-files", "*.md"]).decode("utf-8").split() if not d.startswith("tests/")]
@@ -134,7 +144,10 @@ for rel in docs:
         if header.startswith("AI-Bridge") and nxt and set(nxt) == set(RULE):
             lines[k + 1] = RULE * len(header) + "\n"
     if hit:
-        write(os.path.join(root, rel), "".join(lines), rel)
+        planned.append((rel, "".join(lines)))
+
+for rel, text in planned:
+    write(os.path.join(root, rel), text, rel)
 
 if not dry:
     if read(os.path.join(root, "VERSION")).strip() != new or read(os.path.join(root, "plugin/VERSION")).strip() != new:

@@ -94,6 +94,24 @@ GIT -C "$TMP/guards" checkout -q main
 printf 'dirty\n' >> "$TMP/guards/README.md"
 ok "…and a dirty tree is refused (the bump is its own commit)" \
   "$(run patch --repo "$TMP/guards")" 1
+# Three refusals a WRITER must make rather than fall back on. An empty `--repo` used to
+# select the script's own checkout, and an unresolvable default branch used to pass.
+ok "an empty --repo value is a usage error, not a fallback" "$(run patch --repo)" 2
+ok "…and so is --repo="                    "$(run patch --repo=)" 2
+fixture "$TMP/noref"
+GIT -C "$TMP/noref" symbolic-ref -d refs/remotes/origin/HEAD
+ok "…and no origin/HEAD fails CLOSED"      "$(run patch --repo "$TMP/noref")" 1
+
+# NOTHING IS WRITTEN UNTIL EVERY TARGET IS READ AND TRANSFORMED. The two VERSION files used
+# to be written before the manifests were even parsed, so a broken marketplace.json left the
+# checkout half-moved — the one failure this script must never produce.
+fixture "$TMP/partial"
+before="$(five "$TMP/partial")"
+printf 'not json\n' > "$TMP/partial/.claude-plugin/marketplace.json"
+GIT -C "$TMP/partial" commit -q -am "break the marketplace"
+ok "an unparseable manifest is refused"    "$(run minor --repo "$TMP/partial")" 1
+ok "…having written NOTHING"               "$(head -n 1 "$TMP/partial/VERSION") $(head -n 1 "$TMP/partial/plugin/VERSION")" \
+  "$(printf '%s' "$before" | cut -d' ' -f1) $(printf '%s' "$before" | cut -d' ' -f2)"
 
 echo
 echo "== 2. one script writes all five places, and the banner rule follows =="
