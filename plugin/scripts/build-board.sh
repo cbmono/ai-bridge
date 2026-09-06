@@ -89,8 +89,8 @@
 # The rule this file keeps paying for: a second rendering path is a second place for a
 # hardening rule to be missing. Do not add one back without deleting this paragraph.
 #
-# DISCOVERY IS EXPLICIT, NEVER A GLOB. This file is symlinked into every instance,
-# so it may not know where anybody's workspace lives — no `~/workspace/*`, no
+# DISCOVERY IS EXPLICIT, NEVER A GLOB. This file ships in the plugin and serves every
+# instance, so it may not know where anybody's workspace lives — no `~/workspace/*`, no
 # guessing at sibling directories. Either you name the instances or the instance's
 # own config does, and an unnamed instance is simply not on the board.
 #
@@ -1321,7 +1321,7 @@ Q_BUTTON_CAP = 24
 # question after something it merely talks about.
 # SPELLED WITHOUT `\s` AND `\b`, AND NOT BECAUSE PYTHON MINDS. It does not — these are
 # Python `re` patterns and both escapes are portable there. The rule they obey is the
-# repo's, and it is a STATIC one: this file is symlinked into instances on machines this
+# repo's, and it is a STATIC one: this file ships in the plugin and runs on machines this
 # repo never sees, where a GNU-only escape in a `grep`/`sed` is a silent wrong ANSWER
 # rather than an error, so `tests/snapshot.test.sh` refuses either escape ANYWHERE in the
 # shipped script. A file-wide ban is the only version of that check that can be trusted —

@@ -10,10 +10,12 @@ producer-defined extensions. This document is the contract for the custom
 `type`s and frontmatter fields used in this bundle. All consumers must tolerate
 missing optional fields and unknown keys (per the OKF spec).
 
-> **Generic template file.** This file is symlinked from the `ai-bridge`
-> template and is identical across every instance. Instance-specific values
-> (`<org>`, the clone root, the author identity, team routing) live in
-> `instance.config.json` and this instance's `CLAUDE.md` — never hardcode them here.
+> **Seed file — copied once, then yours.** `/ai-bridge:init` copied this file into the
+> bundle from the `ai-bridge` plugin; the bundle owns it from then on, so your edits stay
+> and this copy drifts from the template until `/ai-bridge:welcome fix` 3-way merges a
+> later template change onto them. Instance-specific values (`<org>`, the clone root, the
+> author identity, team routing) live in `instance.config.json` and this instance's
+> `CLAUDE.md` — never hardcode them here.
 
 # Validation
 

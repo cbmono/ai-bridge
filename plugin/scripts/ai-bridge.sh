@@ -79,7 +79,7 @@
 # `**⚠ text**`, so `^⚠` keeps matching for the banner's filter and for the harness whatever
 # the style is.
 #
-# GENERIC TEMPLATE FILE — symlinked from the template; it reads no org, repo or path
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; it reads no org, repo or path
 # literal. Verified by tests/ai-bridge-command.test.sh.
 #
 # EVERY `check_*` AND `fix_*` FUNCTION IS INVOKED INDIRECTLY, by a name built from the row

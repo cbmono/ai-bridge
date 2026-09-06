@@ -133,7 +133,7 @@
 # "do not dispatch". The expensive direction is a third round nobody stopped; the cheap one
 # is a human being asked.
 #
-# GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
 # instance. It takes no org, repo or reviewer identity: those come from the arguments and
 # from the sibling's tables.
 #
