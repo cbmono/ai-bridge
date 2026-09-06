@@ -38,8 +38,9 @@ instance's `CLAUDE.md` (data-handling, units, no PII).
    changed). Spot-check a sample against the live repos (read-only). Flag stale ones for
    re-validation — a KB that checks reports against reports drifts from the world.
 3. **Green-but-not-progressing.** Flag projects closed on "all tasks terminal" whose
-   goal — its objective, or its own `success_criteria` — didn't advance, and `done` tasks whose `acceptance_criteria` you can't
-   confirm were actually met from the merged PR (spot-check — don't re-review every one).
+   goal — its objective, or its own `success_criteria` — didn't advance, and `done`
+   tasks whose `acceptance_criteria` you can't confirm were actually met from the merged
+   PR (spot-check — don't re-review every one).
 4. **Anchors intact.** Confirm the frozen anchors still hold: the two human gates and
    the independent-verification gate are present in the machinery, and no project with
    **delegated merge authority** is merging PRs an independent reviewer hasn't cleared

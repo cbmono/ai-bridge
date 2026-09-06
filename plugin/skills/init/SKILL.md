@@ -13,10 +13,10 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh $ARGUMENTS
 ```
 
 `$ARGUMENTS` is the bundle directory, optionally followed by `--refresh-seeds` or
-`--with-objectives`. No
-directory means the current one. That is the whole skill: every decision, every guard and
-every line of output lives in the script, so a human running it in a terminal and a
-session running it here get the same answer, and there is no second copy here to drift.
+`--with-objectives`. No directory means the current one. That is the whole skill: every
+decision, every guard and every line of output lives in the script, so a human running it
+in a terminal and a session running it here get the same answer, and there is no second
+copy here to drift.
 
 **The plugin carries the installer.** No clone of this template is needed on the machine,
 and a plugin update is what updates it.
