@@ -418,7 +418,9 @@ predicate is how a bad input gets accepted:
 4. **All three mandatory lenses are present**, each `done` or `skipped(<reason>)`.
 5. **`unverified_criteria: none`.**
 6. **`caveats: none`** — a self-declared caveat is disqualifying, not context.
-7. **Every acceptance-criteria row in the PR body's table is `✓`.** One `✗` refuses.
+7. **Every acceptance-criteria row in the PR body's table is `✓`.** One `✗` refuses — and
+   so does one row the implementer marked `✓` that the checker's own re-derived table
+   marks `FAIL` (see below).
 8. **`reviewer` is the independent reviewer** — never the implementing agent's own report.
 9. **No reviewer-authored review thread is still unresolved.** A thread the PR
    author/executor resolved itself does not count unless the reviewer re-acknowledged it
@@ -445,6 +447,22 @@ whatever it cannot classify as a refusal clears that too. A refusal is identifie
 cannot tell them apart. Unknown or unreadable reviewer state is **unverified**, never
 clearance. `scripts/review-clearance.sh` computes exactly this, and exit 0 is its only
 clearance.
+
+**The checker's table is the review artifact when no external reviewer exists, and it is
+NOT the implementer's.** The PR body's `✓`/`✗` table is the *worker's* claim; the
+`qa-reviewer` posts a second table as a PR comment, re-derived from the task's
+`acceptance_criteria` and the diff, one `PASS`/`FAIL` per criterion with one command or
+artifact per row and no partial credit. `scripts/pr-verdict-clearance.sh` reads the two
+and is the reader for clause 7: **exit 0** they agree, **1** the worker passed a criterion
+the checker failed, **3** the checker's table is malformed, **4** the checker posted under
+the author's own login, **2** unknown. Only exit 0 is clearance.
+
+**The identity rule is clause 8's, and on a solo bundle it is a KNOWN LIMIT rather than a
+gate.** `pr-verdict-clearance.sh` compares the checker's `login` with the PR author's,
+exactly as `review-clearance.sh` does — and where every agent shares one `gh` login, those
+are equal by construction, so exit 4 is the standing answer and the routing to a human *is*
+the gate. It is stated rather than worked around: a second principal needs a second account
+(`docs/sharing.md`), and nothing in a comment can evidence one that does not exist.
 
 **A verdict that reports a refusal must carry its trailer, or it classifies as one.** The
 fallback reviewer's job on a rate-limited PR is to *say* the hosted reviewer declined —

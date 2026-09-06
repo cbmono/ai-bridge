@@ -148,6 +148,14 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    no check covers. This is the condition that catches the class of bug deterministic checks
    cannot see.
 
+   **And a `✓` is the WORKER's claim, so it is not enough on its own.** Where no external
+   reviewer exists, the `qa-reviewer` posts its own `PASS`/`FAIL` table, re-derived from
+   the task and the diff. `scripts/pr-verdict-clearance.sh <pr> --repo <org>/<repo>`
+   compares the two and **exit 0 is the only clearance**: exit 1 is a row the worker
+   passed and the checker failed, and that is the human's — a delegated merge never
+   adjudicates one. On a solo bundle the checker shares the author's `gh` login, so exit 4
+   is the standing answer there and the merge stays the human's (`SCHEMA.md` clause 8).
+
    **And the table has to BE THERE for that to mean anything**, which is a separate
    question with a separate reader. Two halves, stated together because neither is worth
    anything without the other, and **neither can talk the loop into a merge** — which is
