@@ -892,6 +892,37 @@ withholds clearance over it. **The `project-manager` reads it one step earlier**
 task's expected diff is already known to exceed it: it proposes splitting the *task*
 before dispatch, which is the only point at which the split is cheap.
 
+### Merging on the override: the reason is read off the PR
+
+Whether to override at all is [autonomy.md](autonomy.md#under-quota-starvation-the-order-is-fixed--and-the-override-is-the-last-step-not-the-first)
+— step 3 of the starvation ladder, and the human's alone. What belongs here is the
+receipt. The comment you leave when you merge without independent clearance is the only
+trace the override leaves, so it opens with a **fixed marker line** (that is what makes
+overrides countable — the query is in `autonomy.md`) and states a reason **copied off that
+PR**:
+
+```md
+Merged on the owner override — no independent review.
+
+Reviewer said: "<paste the reviewer's own words from THIS PR — e.g. CodeRabbit's
+'Review skipped — Auto reviews are disabled on this repository … .coderabbit.yaml',
+or the rate-limit message it published>"
+Not verified: <what a review would have covered>
+Verified anyway: <suite / CI run, and the head it ran on>
+```
+
+**Never type a remembered reason.** Measured 2026-09-06: every override comment on #139–#166
+gave *"fair-usage limit reached"*, while CodeRabbit's own comment on those same PRs said
+auto reviews are disabled by `.coderabbit.yaml`. Those are different refusals with
+different fixes — a quota that reopens on a clock versus a config line and one
+`@coderabbitai review` — so the fixed phrase sent every later reader to wait out a window
+that was never closed. The line to paste is one command away:
+
+```sh
+gh pr view <n> --json comments \
+  -q '.comments[] | select(.author.login == "coderabbitai") | .body' | head -20
+```
+
 ### Cutting a release: merge, bump, push
 
 **The version moves at merge time, on `main`, and never inside a pull request.** Merge the
