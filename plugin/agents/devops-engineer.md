@@ -42,7 +42,7 @@ setting `status`, no PII/secrets, and capturing
      environment. You propose changes via PR only.
 5. **Self-review, then open the PR** per the shared conventions — review your own diff
    and fix what it flags first; the body takes the required short shape — the literal
-   heading `## Description (TL;DR)`, then a one-sentence TL;DR, the `acceptance_criteria`
+   heading `## Description`, then a one-sentence TL;DR, the `acceptance_criteria`
    as a `✓`/`✗` table whose rows name the validation you ran and its result rather than
    narrating it (`` `hadolint Dockerfile` clean ``), and **any threshold question as one
    `⚠️` line each, last** (per the shared PR-body shape in
