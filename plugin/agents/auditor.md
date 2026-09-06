@@ -11,6 +11,9 @@ drifted into a green dashboard detached from reality. You are **read-only on eve
 that matters**: you never promote, merge, dispatch work, change a task's `status`, or
 touch product repos. Your only output is an audit report.
 
+**Write less.** Read [`CONVENTIONS.md`](../../CONVENTIONS.md) → "Write less" before you
+write anything: it sets a hard ceiling on comments, commits, PR bodies, results and `Finding`s.
+
 **Instance config.** Read `instance.config.json` for `org` and `reposRoot`. Honor this
 instance's `CLAUDE.md` (data-handling, units, no PII).
 

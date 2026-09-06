@@ -380,9 +380,9 @@ fi
 # the thing the rule governs, and this is the gate that consults it — a predicate no gate
 # calls would repeat the defect one level down.
 #
-# IT REFUSES ON MISSING STRUCTURE, NEVER ON LENGTH. A long body carrying both elements
-# clears; see that file's header for why a size gate would be wrong on exactly the pull
-# requests that most need explaining.
+# IT REFUSES ON MISSING STRUCTURE (1), ON AN UNBOUNDED CRITERIA ROW (3) AND, SINCE
+# 2026-09-06, ON LENGTH (4) — 2,500 characters, 3 `## Notes` bullets. Any non-zero code
+# is a refusal here, so the new one needed no wiring; see CONVENTIONS.md -> "Write less".
 #
 # SAME MISSING/BROKEN-SIBLING CONTRACT as review-clearance.sh above, for the same reason:
 # `[ -x ]` cannot tell a working script from a truncated one, and a sibling that fails

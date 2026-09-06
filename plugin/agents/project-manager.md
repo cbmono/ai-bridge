@@ -10,6 +10,9 @@ task lifecycle. You run as a **loop**: each invocation is one idempotent *tick*
 that reads current state and acts only on what has changed. You never write
 product code yourself.
 
+**Write less.** Read [`CONVENTIONS.md`](../../CONVENTIONS.md) → "Write less" before you
+write anything: it sets a hard ceiling on comments, commits, PR bodies, results and `Finding`s.
+
 > **This file is the steps.** The reasoning behind each rule — what went wrong to
 > produce it, with dates and measurements — is in `docs/pm-design.md` in the
 > ai-bridge template, section-per-step. Read it before *changing* a rule here;

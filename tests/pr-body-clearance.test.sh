@@ -11,20 +11,18 @@
 # had the rule opened a 14,673-character description five hours after it merged. This
 # file covers the other reader: the one that takes an actual PR body and answers.
 #
-# THE ANTI-LENGTH-GATE CASE IS THE ONE THAT MUST NOT REGRESS, and it is pinned twice on
-# purpose. The obvious implementation of "stop the long PR bodies" is a character limit,
-# and it would be WRONG: a 1,137-line change may honestly need more than a tweet, and
-# `CONVENTIONS.md` bounds the body's SHAPE and never its size. A size gate would refuse
-# exactly the pull requests that most need explaining, and a gate that refuses correct
-# work gets switched off. So:
+# THE LENGTH GATE, WHICH REVERSES WHAT THIS FILE USED TO PIN. Until 2026-09-06 the
+# assertions here were the opposite: a 14,673-character body had to CLEAR, and no
+# magnitude comparison on the count was allowed to exist. The owner's verdict that day
+# set a hard ceiling instead (`CONVENTIONS.md` -> "Write less"), so the cases are inverted
+# and the numbers behind them are real bodies, not round ones:
 #
-#   * BEHAVIOURALLY — a body of EXACTLY 14,673 characters, the length of the description
-#     that motivated the whole task, clears when it carries both elements. Not "a long
-#     body"; that specific number, so a limit set anywhere at or below it goes red here.
-#   * STATICALLY — the character count is computed, printed, and never compared. No line
-#     mentioning the count variable contains a test at all, and the only magnitude
-#     comparison anywhere in the script is on `$#`, the argument count. "Does not gate on
-#     length" is not checkable; "no threshold exists in the code" is, and this is it.
+#   * ai-bridge#122 at 5,826 characters and #135 at 6,423 -> exit 4, both measured
+#     2026-09-06 off the host.
+#   * a 2,000-character body carrying every element -> clear. The ceiling has to leave a
+#     complete body room, or it is a gate somebody switches off.
+#   * the ROW bound is still not a SUM: rows at their own ceiling in a body under 2,500
+#     clear, and a body of forty such rows is refused for its LENGTH (4), not its rows (3).
 #
 # THE FALSE-POSITIVE CASE THIS FILE ALSO PINS. A body that merely QUOTES the convention's
 # example — which is a fenced TL;DR line above a fenced table — must NOT clear on the
@@ -50,9 +48,19 @@ SELFTEST_OK="pr-body-clearance: self-test ok"
 HEAD_SHA="0c2592f7bb98d3de9a7a181d1762dfcaf80785d9"
 OTHER_SHA="0123456789abcdef0123456789abcdef01234567"
 
-# The description that motivated the task, to the character. A limit set anywhere at or
-# below this number turns the `a very long body` case red.
+# The description that motivated the original task, to the character. It used to have to
+# clear; since the ceiling it is the far side of the boundary.
 INCIDENT_CHARS=14673
+
+# --- the concision ceilings, and the bodies behind them -----------------------
+# FIXTURES, measured 2026-09-06 off cbmono/ai-bridge and pinned here for the same reason
+# the row corpus is: a live PR body is not a baseline. Both are the owner's evidence for
+# the ceiling, so both must be refused, and a complete body at 2,000 must not be.
+BODY_CEILING=2500
+PR122_CHARS=5826           # -> must REFUSE at 4
+PR135_CHARS=6423           # -> must REFUSE at 4
+GOOD_BODY_CHARS=2000       # a complete body inside the ceiling -> must CLEAR
+NOTES_CEILING=3
 
 # --- the corpus behind the ROW bound ------------------------------------------
 # THESE ARE FIXTURES, NOT A LIVE READ, AND THAT IS DELIBERATE. They were measured on
@@ -247,47 +255,86 @@ serve "$(shaped_body 0 1 "$TABLE_HEAD" "$TABLE_RULE" \
 expect "a table whose row is ✗ -> still CLEAR (that is clause 7's job)" 0 42
 
 echo
-echo "== the anti-length-gate case, pinned to the incident's own number =="
-# THE BODY THAT MOTIVATED THE TASK PASSES. Built to exactly 14,673 characters so that a
-# limit introduced anywhere at or below the incident's length goes red here rather than
-# looking like success because the motivating PR would have been caught.
-LONG="$TMP/long.md"
-{ printf '%s\n' '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" ''
-  printf '%s\n' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW"
-  printf '\n'
-} > "$LONG"
-short_by=$(( INCIDENT_CHARS - $(chars "$LONG") ))
-# `printf %*s` then a translate: pad with a run of ordinary prose characters, no newline,
-# so the final count is exact.
-printf '%*s' "$short_by" '' | tr ' ' 'x' >> "$LONG"
-ok "the long fixture is exactly the incident's length" "$(chars "$LONG")" "$INCIDENT_CHARS"
-serve "$LONG"
-expect "a ${INCIDENT_CHARS}-character body with both elements -> CLEAR" 0 42
-says   "  ...and reports the count as information" "body is $INCIDENT_CHARS characters"
-says   "  ...saying plainly that no exit code comes from it" "no
-                   exit code in this script is derived from that number"
+echo "== the BODY ceiling: the two bodies the owner measured, and one that fits =="
+# Exact lengths, so a ceiling moved anywhere above 5,826 stops catching #122 and goes red
+# here rather than quietly clearing the evidence it was set on.
+sized_body() { # <chars> -> a complete body padded to exactly that many characters
+  local want="$1" f; f="$TMP/sized.$want.md"
+  { printf '%s\n' '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" ''
+    printf '%s\n' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW"
+    printf '\n'
+  } > "$f"
+  # `printf %*s` then a translate: ordinary prose characters, no newline, so the count is
+  # exact rather than approximately right.
+  printf '%*s' "$(( want - $(chars "$f") ))" '' | tr ' ' 'x' >> "$f"
+  printf '%s' "$f"
+}
+
+B122="$(sized_body "$PR122_CHARS")"
+ok "the #122 fixture is exactly its measured length" "$(chars "$B122")" "$PR122_CHARS"
+serve "$B122"
+expect "ai-bridge#122's length (${PR122_CHARS}) -> REFUSE on length" 4 42
+says   "  ...naming the ceiling it broke"          "over the ${BODY_CEILING}-character ceiling"
+says   "  ...and telling the author to relocate"   "Move the"
+
+B135="$(sized_body "$PR135_CHARS")"
+serve "$B135"
+expect "ai-bridge#135's length (${PR135_CHARS}) -> REFUSE on length" 4 42
+
+GOODSIZE="$(sized_body "$GOOD_BODY_CHARS")"
+ok "the 2,000-character fixture is exactly that"   "$(chars "$GOODSIZE")" "$GOOD_BODY_CHARS"
+serve "$GOODSIZE"
+expect "a ${GOOD_BODY_CHARS}-character complete body -> CLEAR" 0 42
+says   "  ...and reports the count against the ceiling" "body is $GOOD_BODY_CHARS characters (ceiling $BODY_CEILING)"
+
+# The boundary itself, both sides, one character apart — a ceiling nobody drove at its own
+# edge is a ceiling that can be off by one and never say so.
+serve "$(sized_body "$BODY_CEILING")"
+expect "a body AT the ceiling -> CLEAR"            0 42
+serve "$(sized_body "$(( BODY_CEILING + 1 ))")"
+expect "one character past it -> REFUSE"           4 42
+
+# The motivating body of the ORIGINAL design, which used to have to clear here. Kept as a
+# case, with its verdict reversed, so the reversal is visible in the file rather than
+# implied by a deletion.
+serve "$(sized_body "$INCIDENT_CHARS")"
+expect "the ${INCIDENT_CHARS}-character incident body -> now REFUSE" 4 42
 
 echo
-echo "== the count is INFORMATION, and the code says so structurally =="
-# "Does not gate on length" is not checkable. "No threshold exists in the code" is.
-marked="$(grep -n 'body_chars' "$SCRIPT" | grep -cE '(-gt|-lt|-ge|-le|-eq|-ne)|\(\(|\[\[|\[ ' || true)"
-ok "no line mentioning the count contains a test" "$marked" 0
-# The ONLY magnitude comparison in the whole script is the argument-count loop. Anything
-# else would be a number compared against a property of the text.
-mags="$(grep -nE -- '-gt|-lt|-ge|-le' "$SCRIPT" | grep -vc '"\$#"' || true)"
-ok "the only magnitude comparison is on \$#"       "$mags" 0
-ok "the count is printed on the clearing path"     \
-   "$(serve "$(good_body)"
-      "$SCRIPT" 42 2>&1 | grep -c 'characters (information only')" 1
-# The awk side of the same question, because the ONE length this script does compare is
-# computed there. Two comparisons read a measured length: the ceiling and the floor. A
-# third would be a bound nobody measured. And the classifier is asserted never to SEE the
-# body's character count at all — a stronger statement than "it is not compared", since a
-# body cap can only be built out of a number the comparing code can reach.
-ok "the classifier compares a length twice"        \
+echo "== the NOTES ceiling: three is the limit, and the fourth is the essay =="
+notes_body() { # <n> -> a complete body carrying n claim-first Notes bullets
+  local n="$1" i lines=()
+  for i in $(seq 1 "$n"); do lines+=("- **Note $i.** A reviewer cannot see this from the diff."); done
+  body_file '## Description (TL;DR)' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+            "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' '### Notes' '' "${lines[@]}"
+}
+serve "$(notes_body "$NOTES_CEILING")"
+expect "${NOTES_CEILING} claim-first notes -> CLEAR" 0 42
+serve "$(notes_body "$(( NOTES_CEILING + 1 ))")"
+expect "a fourth note -> REFUSE on length"         4 42
+says   "  ...naming the count and the limit"       "carries 4 Notes bullets — over the $NOTES_CEILING"
+# Bounded per SECTION, not per body: the notes ceiling must not fire on a body with none.
+serve "$(good_body)"
+expect "no Notes section at all -> still CLEAR"    0 42
+
+echo
+echo "== both ceilings are the measured ones, and they are compared =="
+# The constants are pinned HERE as well as in the script, so "somebody rounded it up" is a
+# red test and not a diff nobody reads.
+ok "the body ceiling is the stated one"            \
+   "$(grep -c "^BODY_CEILING_CHARS=$BODY_CEILING\$" "$SCRIPT" || true)" 1
+ok "the notes ceiling is the stated one"           \
+   "$(grep -c "^NOTES_CEILING=$NOTES_CEILING\$" "$SCRIPT" || true)" 1
+# The count reaches exactly ONE comparison. More than one would be a second, unmeasured
+# body bound; none would be the old design back with the constant left as decoration.
+ok "the body count is compared exactly once"       \
+   "$(grep -cE 'chars" -gt "\$BODY_CEILING_CHARS"' "$SCRIPT" || true)" 1
+# The ROW classifier still never sees the body's own length: the two bounds stay
+# independent, which is what keeps a 12-row table from being refused for its rows' sum.
+ok "the row classifier never sees the body count"  \
+   "$(sed -n '/^table_scan() {/,/^}/p' "$SCRIPT" | grep -cE 'body_chars|BODY_CEILING' || true)" 0
+ok "the classifier compares a row length twice"    \
    "$(grep -cE 'len > ceiling|len < floor' "$SCRIPT" || true)" 2
-ok "…and never sees the body's own count"          \
-   "$(sed -n '/^table_scan() {/,/^}/p' "$SCRIPT" | grep -c 'body_chars' || true)" 0
 # The two thresholds are pinned to the measured values HERE as well as in the script, so
 # "somebody rounded it up" is a red test and not a diff nobody reads.
 ok "the ceiling is the measured one"               \
@@ -411,22 +458,24 @@ expect "the ✓ column LAST -> refuse" 3 42
 says   "  ...naming that, rather than measuring the mark" "has NO evidence column"
 
 echo
-echo "== the row bound never becomes a body bound =="
-# THE ANTI-LENGTH-GATE CASE, RE-RUN THROUGH THE NEW ELEMENT. The incident body clears
-# above; this is the same statement made at the scale the row bound could have tempted
-# someone to sum: forty rows, each just inside the ceiling, is a criteria table of ~16,000
-# bytes and it clears, because nothing adds these numbers up.
+echo "== the row bound is not a SUM, and the two bounds stay separate =="
+# Four rows each AT the row ceiling, in a body under the body ceiling: it clears, because
+# nothing adds the cells up. Forty of them is refused for the BODY's length (4) and not
+# for its rows (3) — the two bounds answer separately, with separate advice.
+# shellcheck disable=SC2046
+serve "$(row_body $(for _ in $(seq 4); do printf '%s ' "$ROW_CEILING"; done))"
+expect "four rows each AT the row ceiling -> clear" 0 42
 # shellcheck disable=SC2046
 serve "$(row_body $(for _ in $(seq 40); do printf '%s ' "$ROW_CEILING"; done))"
-expect "forty rows each AT the ceiling -> clear" 0 42
-says   "  ...with the total still reported as information only" "characters (information only"
+expect "forty of them -> refused for LENGTH, not for the rows" 4 42
+says   "  ...naming the body ceiling"              "over the ${BODY_CEILING}-character ceiling"
 
 # A refusal for a missing element still carries its promise WORD FOR WORD. The row bound
 # is a different refusal with a different code, and it must not have edited this one.
 serve "$(body_file 'No shape at all here.')"
 expect "a shapeless body -> refuse on STRUCTURE" 1 42
-says   "  ...with the never-on-length promise verbatim" \
-       "This refuses on missing STRUCTURE, never on length: a long body carrying"
+says   "  ...naming length as a separate code" \
+       "This is the STRUCTURE refusal. Length is a separate check with a"
 says   "  ...and it is a DIFFERENT code from the row bound" "MISSING:"
 
 # Untrusted text: the excerpt of a criterion is the one thing from the body this script
@@ -810,7 +859,7 @@ echo "== --body-file: the same verdict, before the PR is opened =="
 GOOD="$(good_body)"
 BAD="$(body_file 'No shape at all here.')"
 expect "a conforming draft -> clear" 0 --body-file "$GOOD"
-says   "  ...and reports its length too" "characters (information only"
+says   "  ...and reports its length against the ceiling" "characters (ceiling $BODY_CEILING)"
 expect "a draft with no shape -> refuse" 1 --body-file "$BAD"
 expect "a draft that does not exist -> unknown, not clear" 2 --body-file "$TMP/nope.md"
 expect "--body-file with a PR number too -> usage error" 2 --body-file "$GOOD" 42

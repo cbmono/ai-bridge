@@ -175,12 +175,11 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    rule **is named in `CONVENTIONS.md`**, and five hours after that rule merged an agent
    that had it opened a 14,673-character description.
 
-   **It refuses on missing STRUCTURE and never on length**, and that is deliberate: a
-   1,137-line change may honestly need more than a tweet, `CONVENTIONS.md` bounds the
-   body's shape and never its size, and a gate that punished size would be wrong on
-   exactly the pull requests that most need explaining. **The 14,673-character body that
-   motivated it PASSES if it carries both elements.** The character count is printed as
-   information; no exit code is derived from it.
+   **It also refuses on LENGTH, at exit 4** — over 2,500 characters, or more than 3
+   `## Notes` bullets (`CONVENTIONS.md` → "Write less", the owner's decision 2026-09-06).
+   A separate code from the structural refusal because the fix is separate: exit 1 says
+   add the missing element, exit 4 says move the reasoning to the task doc. The
+   14,673-character body that motivated the gate is refused there now.
 
    **Whether every row is `✓` stays this clause's own job**, not the predicate's — one
    question, one reader, so the repo never ends up with two answers to it. The predicate
