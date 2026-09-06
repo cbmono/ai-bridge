@@ -259,7 +259,16 @@ ok "the browser paragraph defers to rung 1" "$(saw "$CONV" '**rung 1 above appli
 ok "…and says so, so it is not re-added"    "$(saw_flat "$CONV" 'it is the general one now, stated once, so the two cannot drift')" yes
 # The old wording, gone from the whole shared bundle rather than from one paragraph — two
 # statements of one rule is the thing criterion 5 forbids, so the assertion is tree-wide.
-ok "no browser-only restatement survives"   "$(grep -rqF 'browser-first' "$REPO/symlink" && echo no || echo yes)" yes
+#
+# IT WAS NOT TREE-WIDE, AND IT COULD NOT FAIL. The single root was `$REPO/symlink`, retired
+# in #122 — `grep -r` over a missing directory exits 2, the `&&` arm never runs, and `yes`
+# is exactly what this line expects. Found by tests/harness-read-paths.test.sh on its first
+# run over the $REPO-rooted harnesses (ai-bridge-v2/task-029); the roots below are the ones
+# approach-critique-trigger.test.sh and subagent-resume-rule.test.sh already sweep, and
+# CONVENTIONS.md itself lives under the first of them, so the scan provably can act.
+ok "the tree-wide scan can act at all"      "$([ -f "$REPO/plugin/seed/CONVENTIONS.md" ] && echo yes || echo no)" yes
+ok "no browser-only restatement survives"   \
+  "$(grep -rqF 'browser-first' "$REPO/plugin/seed" "$REPO/docs" "$REPO/README.md" "$REPO/CLAUDE.md" && echo no || echo yes)" yes
 ok "…and the missing-browser case defers too" "$(saw_flat "$CONV" 'that is a capability gap, so take the non-browser route, say so, and carry on')" yes
 
 echo

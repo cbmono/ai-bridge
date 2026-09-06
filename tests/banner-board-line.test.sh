@@ -453,7 +453,10 @@ bash "$BRIDGE_INSTALL" "$STAMPED" >"$TMP/stamp.log" 2>&1 </dev/null
 PRODUCED="$STAMPED/instance.config.json"
 # ONE named scan, used by the real assertion and by the non-vacuity plant below, so
 # "the same scan" is a fact about the code rather than a claim in a comment. 1 = found.
-scan_key() { grep -qF "$KEY" "$1" && echo 1 || echo 0; }
+# `grep -qF` exits 2 on a MISSING file and the `|| echo 0` arm then reports "absent" — the
+# exact shape this whole section is removing. So the scan answers `missing` for a file that
+# is not there, and every caller compares against 0 or 1.
+scan_key() { [ -f "$1" ] || { echo missing; return; }; grep -qF "$KEY" "$1" && echo 1 || echo 0; }
 # Assert a non-action only against a run that WAS able to act, and assert that too:
 # [[a-fixture-that-templates-off-the-repo-under-test-inherits-its-worktree-ness]].
 assert "the real installer produced a tracked config at all" \
@@ -465,16 +468,22 @@ assert "…and init-bundle.sh never writes the key into it" \
 # looked" are one observation — which is exactly how the install.sh line above passed for
 # four months.
 { printf '{\n  "%s": "https://example.invalid/x",\n' "$KEY"; tail -n +2 "$PRODUCED"; } > "$TMP/planted.json"
-assert "…and the planted copy is still valid JSON, so the plant is realistic" \
-  "$( command -v python3 >/dev/null 2>&1 \
-      && { python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$TMP/planted.json" >/dev/null 2>&1 && echo 0 || echo 1; } \
-      || echo 0 )"
+# NOT `command -v python3 && … || echo 0`: that spelling PASSES when python3 is absent,
+# which is the shape this whole file is removing. The plant assumes line 1 of the produced
+# config is `{`; if init-bundle's formatter ever changes, this is the only thing that
+# notices — so on a python3-less host it SKIPS out loud instead of reporting a pass.
+if command -v python3 >/dev/null 2>&1; then
+  assert "…and the planted copy is still valid JSON, so the plant is realistic" \
+    "$(python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$TMP/planted.json" >/dev/null 2>&1 && echo 0 || echo 1)"
+else
+  echo "  SKIP  python3 absent — the plant's JSON validity is unchecked"
+fi
 assert "…and the SAME scan finds a planted one in that same produced config" \
   "$(eq "$(scan_key "$TMP/planted.json")" 1)"
 # Cheap tripwire, alongside the assertion above and never AS it: a literal in the
 # installer's source is not the property, but it is free and it fires early.
 assert "tripwire: the installer's source does not spell the key either" \
-  "$(grep -qF "$KEY" "$BRIDGE_INSTALL" && echo 1 || echo 0)"
+  "$(scan_key "$BRIDGE_INSTALL")"
 rm -f "$TMP/planted.json"
 
 echo

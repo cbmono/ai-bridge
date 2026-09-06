@@ -207,6 +207,7 @@ ok "ships no agents"  "$(yn test -e "$YOLO/agents")"  no
 ok "ships no skills"  "$(yn test -e "$YOLO/skills")"  no
 ok "ships no scripts" "$(yn test -e "$YOLO/scripts")" no
 # The core file is gone from where the template used to keep it: one copy, never two.
+# path-scan: absent — asserted GONE; one copy, never two
 ok "core no longer carries a capability file" "$(yn test -e "$REPO/docs/autonomy")" no
 
 echo

@@ -34,6 +34,7 @@ summary() { echo; echo "pass=$pass fail=$fail skip=$skip"; [[ "$fail" == 0 ]] ||
 echo "== the existence check actually discriminates, not just today's state =="
 # Proves the assertion below is not vacuously true — a guard whose own regression test
 # never sees it fail proves nothing (the class of bug this whole task exists to close).
+# path-scan: absent — deliberately non-existent, to prove the check below discriminates
 MISSING_WF="$REPO/.github/workflows/does-not-exist-$$.yml"
 assert "a present file passes the existence check" \
   "$([ -f "$WF" ] && echo 0 || echo 1)"

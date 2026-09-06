@@ -1735,6 +1735,7 @@ assert "…and flags neither prose about the removal nor a clean call" "$(eq "$(
 rm -rf "$FIX"
 
 echo "== there is only ONE HTML renderer now =="
+# path-scan: absent — asserted GONE; a resolving path here is the regression
 assert "build-artifact-board.sh is gone"             "$(yes_if test ! -e "$REPO/plugin/scripts/build-artifact-board.sh")"
 # The runnable form, not the name: build-board.sh's own header still explains what was
 # merged into it, and a comment recording that is not a caller.
