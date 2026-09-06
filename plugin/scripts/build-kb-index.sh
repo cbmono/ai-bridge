@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+# build-kb-index.sh — regenerate knowledge/index.md from document frontmatter, or
+# `--check` that the file and the documents still agree. Run from a bundle root.
+#
+#   build-kb-index.sh [--check] [--strict]
+#
+# Exit: 0 clean · 1 a defect (with --strict, a warning too) · 2 usage/no KB here.
+# A row is derived, never hand-written: its summary is the doc's `lesson:` (else
+# `description:`), `|` is escaped, and superseded Findings render in their own
+# section. Reasoning and the defect list: ai-bridge-next/task-007.
+set -uo pipefail
+
+MODE=build; STRICT=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --check)  MODE=check ;;
+    --strict) STRICT=1 ;;
+    -h|--help) sed -n '2,9p' "$0" >&2; exit 2 ;;
+    *) echo "build-kb-index: unknown argument '$1'" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+[ -d knowledge ] || { echo "build-kb-index: run from a bundle root (no knowledge/ here)." >&2; exit 2; }
+INDEX=knowledge/index.md
+VOCAB=knowledge/vocab.md
+FINDING_STATUSES="current superseded corrected"
+FINDING_MAX_LINES=40
+SUMMARY_MAX=240
+
+errors=0; warns=0
+err()  { printf '  ERROR  %s\n         %s\n' "$1" "$2" >&2; errors=$((errors+1)); }
+warn() { printf '  WARN   %s\n         %s\n' "$1" "$2" >&2; warns=$((warns+1)); }
+
+# --- frontmatter ------------------------------------------------------------
+fm() {
+  awk 'NR==1 && $0!="---" { exit } /^---$/ { n++; if (n==2) exit; next } n==1 { print }' "$1"
+}
+field() { # <frontmatter> <key>
+  printf '%s\n' "$1" | sed -n "s/^$2:[[:space:]]*//p" | head -1 \
+    | sed 's/[[:space:]]*$//; s/^"\(.*\)"$/\1/; s/^'"'"'\(.*\)'"'"'$/\1/'
+}
+# `key: [a, b]` and the block form both flatten to one item per line.
+listfield() { # <frontmatter> <key>
+  printf '%s\n' "$1" | awk -v k="$2" '
+    $0 ~ "^" k ":" { inb=1; rest=$0; sub(/^[^:]*:/, "", rest); gsub(/[][,]/, " ", rest); print rest; next }
+    inb && /^[[:space:]]+-[[:space:]]*/ { sub(/^[[:space:]]*-[[:space:]]*/, ""); print; next }
+    inb && /^[[:space:]]*$/ { next }
+    /^[^[:space:]]/ { inb=0 }
+  ' | tr ' ' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//; s/^"\(.*\)"$/\1/' | grep -v '^$' || true
+}
+esc() { printf '%s' "$1" | sed 's/|/\\|/g'; }
+
+slug_of() { local b; b=$(basename "$1"); printf '%s' "${b%.md}"; }
+docs_in() { find "knowledge/$1" -maxdepth 1 -type f -name '*.md' 2>/dev/null | LC_ALL=C sort; }
+
+# --- controlled vocabulary --------------------------------------------------
+# Every canonical tag and every alias, space-delimited, from vocab.md's table.
+VOCAB_TERMS=" "
+HAVE_VOCAB=0
+if [ -r "$VOCAB" ]; then
+  HAVE_VOCAB=1
+  VOCAB_TERMS=" $(awk -F'|' '/^\|/ && !/^\|[[:space:]]*-/ {
+        t=$2; a=$4
+        gsub(/[`[:space:]]/, "", t); gsub(/[`[:space:]]/, "", a)
+        if (t == "" || t == "Tag") next
+        print t; n=split(a, p, ","); for (i=1;i<=n;i++) if (p[i] != "" && p[i] != "—") print p[i]
+      }' "$VOCAB" | LC_ALL=C sort -u | tr '\n' ' ')"
+fi
+in_vocab() { case "$VOCAB_TERMS" in *" $1 "*) return 0 ;; esac; return 1; }
+
+# --- document facts ---------------------------------------------------------
+title_of()   { field "$1" title; }
+status_of()  { field "$1" status | sed 's/[[:space:]]*#.*//'; }
+summary_of() { local s; s=$(field "$1" lesson); [ -n "$s" ] || s=$(field "$1" description); printf '%s' "$s"; }
+
+# --- render -----------------------------------------------------------------
+render_rows() { # <kind> <want-superseded 0|1> <last-column: status|superseded_by|none>
+  local kind=$1 want=$2 last=$3 f fmv st printed=0
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    fmv=$(fm "$f"); st=$(status_of "$fmv"); [ -n "$st" ] || st=current
+    if [ "$want" = 1 ]; then [ "$st" = superseded ] || continue
+    else [ "$st" != superseded ] || continue; fi
+    local title summary path tail
+    title=$(esc "$(title_of "$fmv")"); [ -n "$title" ] || title=$(slug_of "$f")
+    summary=$(esc "$(summary_of "$fmv")")
+    path="\`/knowledge/$kind/$(slug_of "$f").md\`"
+    case "$last" in
+      status)         tail=" $(esc "$st") |" ;;
+      superseded_by)  tail=" $(esc "$(field "$fmv" superseded_by)")" ; [ "$tail" != " " ] || tail=" —"; tail="$tail |" ;;
+      none)           tail="" ;;
+    esac
+    printf '| %s | %s | %s |%s\n' "$title" "$summary" "$path" "$tail"
+    printed=1
+  done <<< "$(docs_in "$kind")"
+  [ "$printed" = 1 ] || case "$last" in
+    none) printf '| _(none yet)_ | | |\n' ;;
+    *)    printf '| _(none yet)_ | | | |\n' ;;
+  esac
+}
+
+generate() {
+  cat <<'EOF'
+# Knowledge Base — index
+
+Compact catalog of this control panel's OKF knowledge base (`Service`s, `Finding`s,
+`Runbook`s, `Team`s, `Reference`s — types in `/SCHEMA.md`). **This index is the KB's lookup
+surface:** scan it to find prior work, then open only the specific doc(s) you need —
+**don't bulk-read `knowledge/`**.
+
+**Derived — do not hand-edit.** `build-kb-index.sh` rebuilds every row below from document
+frontmatter, and `--check` fails when this file and the documents disagree. Tags come from
+[the controlled vocabulary](/knowledge/vocab.md). Superseded rows are **history**: read
+them to understand a decision, never cite them as current guidance.
+
+## Services
+
+| Service | What it is | Path | Status |
+|---|---|---|---|
+EOF
+  render_rows services 0 status
+  cat <<'EOF'
+
+## Findings — decisions, learnings, gotchas
+
+| Finding | Summary | Path | Status |
+|---|---|---|---|
+EOF
+  render_rows findings 0 status
+  cat <<'EOF'
+
+### Superseded findings — history, not current guidance
+
+| Finding | Summary | Path | Superseded by |
+|---|---|---|---|
+EOF
+  render_rows findings 1 superseded_by
+  cat <<'EOF'
+
+## Runbooks
+
+| Runbook | When to use | Path | Status |
+|---|---|---|---|
+EOF
+  render_rows runbooks 0 status
+  cat <<'EOF'
+
+## References — durable specs & contracts
+
+| Reference | What it specifies | Path | Status |
+|---|---|---|---|
+EOF
+  render_rows references 0 status
+  cat <<'EOF'
+
+## Teams — who owns what / routing
+
+| Team | Owns | Path |
+|---|---|---|
+EOF
+  render_rows teams 0 none
+  cat <<'EOF'
+
+---
+[KB log](/knowledge/log.md) — what changed and when.
+EOF
+}
+
+# --- checks -----------------------------------------------------------------
+# Cells split on UNESCAPED `|` only, so a row that forgot the backslash shows up as
+# the wrong cell count rather than as a silently shifted column.
+check_index() {
+  [ -r "$INDEX" ] || { err "$INDEX" "no index file — run build-kb-index.sh"; return; }
+  local line n=0 section="" want body cells count path summary status
+  while IFS= read -r line; do
+    n=$((n+1))
+    case "$line" in
+      '## '*|'### '*) section="$line"; continue ;;
+      '|'*) : ;;
+      *) continue ;;
+    esac
+    case "$line" in *'---|'*) continue ;; esac
+    case "$line" in '| Service |'*|'| Finding |'*|'| Runbook |'*|'| Reference |'*|'| Team |'*) continue ;; esac
+    case "$line" in *'_(none yet)_'*) continue ;; esac
+    want=4; case "$section" in *Teams*) want=3 ;; esac
+    body=${line#|}; body=${body%|}
+    cells=${body//\\|/$'\001'}
+    count=$(printf '%s' "$cells" | tr -cd '|' | wc -c | tr -d ' ')
+    count=$((count+1))
+    if [ "$count" -ne "$want" ]; then
+      err "$INDEX:$n" "row has $count cells, expected $want — escape a literal pipe as \\| ($(printf '%.60s' "$line"))"
+      continue
+    fi
+    summary=$(printf '%s' "$cells" | cut -d'|' -f2 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    path=$(printf '%s' "$cells" | cut -d'|' -f3 | grep -oE '[A-Za-z0-9._/-]+\.md' | head -1)
+    [ -n "$summary" ] || err "$INDEX:$n" "empty summary cell — the row is the KB's whole lookup surface"
+    if [ -z "$path" ]; then
+      err "$INDEX:$n" "row names no document path"
+    else
+      local rel="${path#/}"; case "$rel" in knowledge/*) : ;; *) rel="knowledge/${rel#knowledge/}" ;; esac
+      [ -f "$rel" ] || err "$INDEX:$n" "index row points at no file: $path"
+    fi
+    case "$section" in
+      *Findings*|*findings*)
+        status=$(printf '%s' "$cells" | cut -d'|' -f4 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+        case "$section" in
+          '### Superseded'*) : ;;   # last column is the replacement, not a status
+          *) case " $FINDING_STATUSES " in
+               *" $status "*) : ;;
+               *) err "$INDEX:$n" "status '$status' is outside {${FINDING_STATUSES// /, }}" ;;
+             esac ;;
+        esac ;;
+    esac
+  done < "$INDEX"
+}
+
+check_docs() {
+  local kind f fmv slug st tag n edges=0
+  local indexed=""
+  [ -r "$INDEX" ] && indexed=" $(grep -oE '[A-Za-z0-9._/-]+\.md' "$INDEX" | sed 's#.*/##; s#\.md$##' | LC_ALL=C sort -u | tr '\n' ' ')"
+  for kind in services findings runbooks teams references; do
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      slug=$(slug_of "$f"); fmv=$(fm "$f")
+      case "$indexed" in *" $slug "*) : ;; *) err "$f" "no index row — an unindexed doc is one nobody can find or cite" ;; esac
+      [ -n "$(summary_of "$fmv")" ] || err "$f" "no lesson: and no description: — the index row would have an empty summary"
+      [ "$kind" = findings ] || continue
+      st=$(status_of "$fmv")
+      case " $FINDING_STATUSES " in
+        *" $st "*) : ;;
+        *) err "$f" "status '$st' is outside {${FINDING_STATUSES// /, }}" ;;
+      esac
+      n=$(grep -c '' "$f")
+      [ "$n" -le "$FINDING_MAX_LINES" ] || warn "$f" "Finding is $n lines; CONVENTIONS.md 'Write less' caps it at $FINDING_MAX_LINES"
+      if [ -z "$(field "$fmv" lesson)" ]; then
+        warn "$f" "no one-line 'lesson:' — the index row falls back to description:"
+      elif [ "$(printf '%s' "$(summary_of "$fmv")" | wc -c | tr -d ' ')" -gt "$SUMMARY_MAX" ]; then
+        warn "$f" "summary is over $SUMMARY_MAX characters — shorten the lesson:"
+      fi
+      for tag in $(listfield "$fmv" tags); do
+        if [ "$HAVE_VOCAB" = 0 ]; then warn "$f" "tags: '$tag' cannot be checked — no $VOCAB in this bundle"
+        elif ! in_vocab "$tag"; then err "$f" "tag '$tag' is not in $VOCAB — use a listed tag or an alias, never a new one"; fi
+      done
+      for tag in $(listfield "$fmv" superseded_by) $(listfield "$fmv" supersedes); do
+        edges=$((edges+1))
+        [ -f "knowledge/findings/$tag.md" ] || err "$f" "supersession edge names no Finding: $tag"
+      done
+      if [ -n "$(field "$fmv" superseded_by)" ] && [ "$st" != superseded ]; then
+        err "$f" "carries superseded_by: but status is '$st' — supersede sets both"
+      fi
+    done <<< "$(docs_in "$kind")"
+  done
+  printf 'build-kb-index: %d supersession edge(s).\n' "$edges"
+}
+
+if [ "$MODE" = check ]; then
+  check_index
+  check_docs
+  if [ -r "$INDEX" ] && ! diff -q <(generate) "$INDEX" >/dev/null 2>&1; then
+    err "$INDEX" "does not match the documents — run build-kb-index.sh to regenerate it"
+  fi
+  printf 'build-kb-index: %d error(s), %d warning(s).\n' "$errors" "$warns"
+  [ "$errors" -eq 0 ] || exit 1
+  [ "$STRICT" = 1 ] && [ "$warns" -gt 0 ] && { echo "(--strict: warnings are failures)"; exit 1; }
+  exit 0
+fi
+
+generate > "$INDEX.tmp.$$" && mv "$INDEX.tmp.$$" "$INDEX" || {
+  rm -f "$INDEX.tmp.$$"; echo "build-kb-index: could not write $INDEX" >&2; exit 1; }
+printf 'build-kb-index: wrote %s (%d rows).\n' "$INDEX" "$(grep -cE '^\| ' "$INDEX")"

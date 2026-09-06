@@ -3,8 +3,12 @@
 Compact catalog of this control panel's OKF knowledge base (`Service`s, `Finding`s,
 `Runbook`s, `Team`s, `Reference`s — types in `/SCHEMA.md`). **This index is the KB's lookup
 surface:** scan it to find prior work, then open only the specific doc(s) you need —
-**don't bulk-read `knowledge/`**. The `cataloguer` keeps one terse row per doc here
-(populated via the agent and as a byproduct of task work).
+**don't bulk-read `knowledge/`**.
+
+**Derived — do not hand-edit.** `build-kb-index.sh` rebuilds every row below from document
+frontmatter, and `--check` fails when this file and the documents disagree. Tags come from
+[the controlled vocabulary](/knowledge/vocab.md). Superseded rows are **history**: read
+them to understand a decision, never cite them as current guidance.
 
 ## Services
 
@@ -15,6 +19,12 @@ surface:** scan it to find prior work, then open only the specific doc(s) you ne
 ## Findings — decisions, learnings, gotchas
 
 | Finding | Summary | Path | Status |
+|---|---|---|---|
+| _(none yet)_ | | | |
+
+### Superseded findings — history, not current guidance
+
+| Finding | Summary | Path | Superseded by |
 |---|---|---|---|
 | _(none yet)_ | | | |
 

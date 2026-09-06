@@ -36,19 +36,35 @@ data-handling, units, and where to route authoritative data questions.
    `knowledge/findings/<slug>.md` (`type: Finding`), linked to the Services/tasks they
    concern. **40 lines, and a one-line `lesson:` in the frontmatter** — the takeaway the
    next agent needs, not the history that produced it; `validate-bundle.sh` warns on
-   either. Mark superseded ones `status: superseded` rather than deleting.
-3. **Runbooks.** Write/refresh repeatable procedures as
+   either, and the `lesson:` becomes the index row **verbatim**, so write it as the row you
+   want an agent to scan. **`tags:` come from `knowledge/vocab.md` only** — ground your tag
+   by longest match over its `Tag` and `Alias` columns, and **never invent one**; if
+   nothing fits, add the row to `vocab.md` in the same change.
+3. **Supersede rather than delete — it is a move, not a status edit.**
+   `SCHEMA.md` → "Superseding a Finding" is the contract: on the old doc
+   `status: superseded` + `superseded_by: <new-slug>` + a dated section naming the
+   replacement; on the new one `supersedes: [ <old-slug> ]`; then rebuild the index.
+   **Run this as a pass over every Finding you touched**, at the end of any refresh and at
+   `/close-project` step 2: a Finding contradicted by what just shipped is superseded now,
+   not left to read as current. Superseded rows land in their own section below the current
+   ones, and `cite-check.sh` refuses to let anyone cite one.
+4. **Runbooks.** Write/refresh repeatable procedures as
    `knowledge/runbooks/<slug>.md`.
-4. **Curate `index.md` as the KB's lookup surface.** `knowledge/index.md` is a
-   **compact, one-line-per-entry catalog** — a `Service` / `Finding` / `Runbook` /
-   `Team` table where each row is `title · one-line summary · path · status` (the
-   `Team` table omits `status` — its row is `team · owns · path`). It is
-   the **only** file other agents read broadly, so keep it terse (one line per
-   entry, no prose) and complete: every doc you write or update gets a row here.
-   This is what lets an agent find prior work by scanning a small index instead of
-   bulk-reading `knowledge/`. **Those rows are also the id source of truth for
-   citations** (`CONVENTIONS.md` → cite knowledge as `[[finding-slug]]`): a slug with no
-   row reads as fabricated, so a doc you write and don't index is a doc nobody may cite.
+5. **Rebuild `index.md` — never hand-edit it.** `knowledge/index.md` is **derived**:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh          # rewrite it from frontmatter
+   ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh --check   # zero errors is the gate
+   ```
+
+   One row per doc, sorted, pipes escaped, summary copied from `lesson:`. So a row you
+   would have written by hand is a row you fix **in the document**. `--check` fails on a
+   doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a
+   status outside `{current, superseded, corrected}`, a tag outside `vocab.md`, and a
+   dangling supersession edge — run it before you finish.
+   **Those rows are the id source of truth for citations**
+   (`CONVENTIONS.md` → cite knowledge as `[[finding-slug]]`): a slug with no row reads as
+   fabricated, so a doc you write and don't index is a doc nobody may cite.
    Append a dated entry to `knowledge/log.md`, and
    cross-link liberally (bundle-relative `/knowledge/...` and `/projects/...` links)
    so a Service doc points at its Findings and vice-versa.
