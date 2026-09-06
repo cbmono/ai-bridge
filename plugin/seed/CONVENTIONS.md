@@ -51,9 +51,9 @@ which is the one surface with no length limit, and the short form links to it.
 **Three of these have readers, so they are not prose.**
 `pr-body-clearance.sh` refuses a body over 2,500 characters or carrying more than 3 notes
 (**exit 4**); `validate-bundle.sh` warns on a `Finding` over 40 lines or missing its
-`lesson:`; `tests/concision-contract.test.sh` fails when a `plugin/**/*.sh` file's
-comment-line share exceeds **35%**, and ratchets the files already above it so none of
-them may grow its share.
+`lesson:`; and `tests/concision-contract.test.sh` in `cbmono/ai-bridge` fails when a
+`plugin/**/*.sh` file's comment-line share exceeds **35%**, ratcheting the files already
+above it so none may grow its share.
 
 - **Exhaust your own tools before you hand work back — three rungs, in order.** The default
   when you cannot do something is **not** to report it back:
@@ -148,7 +148,8 @@ them may grow its share.
   **So there is nowhere for reasoning to be lost:** every rule below that says "short" is
   telling you where to put it, not to delete it.
 - **The PR body has a required shape, and it is short — 2,500 characters, hard** (→ "Write
-  less"). Its reader is a **human deciding whether to merge** — not an agent reconstructing how you worked. **It opens with the
+  less"). Its reader is a **human deciding whether to merge** — not an agent
+  reconstructing how you worked. **It opens with the
   literal heading `## Description (TL;DR)`.** Four required parts, in this order, plus an
   optional `## Notes` section (below) and nothing else:
 
@@ -221,8 +222,8 @@ them may grow its share.
   reader deciding a merge has thirty seconds. Add a `## Notes` section only for something a
   *reviewer* cannot see from the diff (a hint about where to look, a deliberate omission)
   — **one line per note, at most THREE of them, bounded exactly as the `⚠️` lines are.**
-  **Its depth is not
-  significant**: the reader matches the heading's *text* and not its `#` count, so
+  **Its depth is not significant**: the reader matches the heading's *text* and not its
+  `#` count, so
   `## Notes` here and the `### Notes` of the worked example are one section to it. "Judgement calls for the
   reviewer" is the heading this section grows under once it is unbounded, and that is the
   same essay arriving by another name.
