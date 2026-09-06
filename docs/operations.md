@@ -419,15 +419,15 @@ machine it would collide outright. A value in `instance.config.json` is ignored.
 
 ### Deploying it later — the shape, not the work
 
-A later task builds the deployable variant, and this is what it will be so that nothing
-here forecloses it. **The same renderer, the same snapshot, a static site.** `build-board.sh`
-already emits a self-contained page from `SNAPSHOT.json` alone, so the deploy step is a
-push of that one file to a host the team controls and already authenticates — an internal
-static host, an S3 bucket behind SSO, a private nginx. **No server-side code travels**:
-`board-serve.sh` exists because a laptop has no host, and a host does not need it. What
-must be decided before that ships is the audience, not the mechanism — the snapshot's field
-allowlist is scoped for people who may read task titles, and a wider audience needs a
-narrower allowlist, not a wider page.
+1. **The same renderer, the same snapshot, a static site** — `build-board.sh --standalone`
+   already emits one self-contained file from `SNAPSHOT.json` alone.
+2. **The deploy step is a push of that file** to a host the team controls and already
+   authenticates: an internal static host, a bucket behind SSO, a private nginx.
+3. **No server-side code travels.** `board-serve.sh` exists because a laptop has no host.
+4. **A tick never deploys** — it is a human-typed step, exactly as `publish` is.
+5. **What must be decided first is the audience**, not the mechanism: the snapshot's field
+   allowlist is scoped for people who may read task titles, and a wider audience needs a
+   narrower allowlist, never a wider page.
 
 ### Which renderer to reach for
 

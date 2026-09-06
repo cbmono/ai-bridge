@@ -240,17 +240,26 @@ echo
 echo "== 4. it re-renders on a snapshot change, and the page reloads itself =="
 ok "the served page carries the auto-reload poller"    \
   "$(yes_if grep -qF "fetch('/__rev')" <(body_of "$PA" /board.html))" yes
+ok "the poll that bounds detection is 1s by default"   \
+  "$(yes_if grep -qxF 'INTERVAL=1' "$SERVE")" yes
+# MEASURED, not asserted from the interval: the bound the criterion names is 2 seconds from
+# the snapshot's write to the page's revision moving, and the render sits inside it.
 REV0="$(body_of "$PA" /__rev)"
 sed -i.bak 's/Do a thing/Do another thing/' "$A/projects/p/tasks/task-001.md"
 ( cd "$A" && SNAPSHOT_NOW=2026-09-06T00:05:00Z bash "$WRITER" --quiet )
-DEADLINE=$(( $(date +%s) + 5 ))
-while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+T0="$(python3 -c 'import time; print(time.time())')"
+ELAPSED=""
+for _ in $(seq 1 60); do
   REV1="$(body_of "$PA" /__rev)"
-  [ "$REV1" != "$REV0" ] && break
-  sleep 1
+  if [ "$REV1" != "$REV0" ]; then
+    ELAPSED="$(python3 -c "import sys,time; print('%.2f' % (time.time()-float(sys.argv[1])))" "$T0")"
+    break
+  fi
+  sleep 0.1
 done
-ok "the revision moved within 5s of the snapshot changing" \
-  "$([ "${REV1:-}" != "$REV0" ] && echo yes || echo no)" yes
+ok "the revision moved at all"                        "$([ -n "$ELAPSED" ] && echo yes || echo no)" yes
+ok "…within 2s of the snapshot changing (${ELAPSED:-n/a}s)" \
+  "$(python3 -c "import sys; print('yes' if sys.argv[1] not in ('','n/a') and float(sys.argv[1])<=2.0 else 'no')" "${ELAPSED:-}")" yes
 ok "…and the new title is on the page"                 \
   "$(yes_if grep -qF 'Do another thing' <(body_of "$PA" /board.html))" yes
 
