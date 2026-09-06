@@ -107,10 +107,23 @@ tier() { # <tier name> <water> <hull> <bridge> <env…>
 # second thing to keep in step, so the hook is asked how many it builds: exactly one.
 assert "the reset after each run is the one the banner already builds" \
   "$(eq "$(grep -cF -- '${esc}[0m' "$HOOK")" 1)"
+# THE COLOUR COUNT IS STUBBED, NEVER THE HOST'S. `tput colors` answers 0 wherever the
+# terminfo entry cannot be loaded, so a TERM name alone asserts the 16-colour palette as 256.
+stub_tput() { # <count|fail> -> a bin dir whose `tput colors` answers that
+  local d="$TMP/tput-$1"; mkdir -p "$d"
+  if [ "$1" = fail ]; then printf '#!/bin/sh\nexit 1\n' > "$d/tput"
+  else printf '#!/bin/sh\n[ "$1" = colors ] || exit 1\necho %s\n' "$1" > "$d/tput"; fi
+  chmod +x "$d/tput"; printf '%s' "$d"
+}
 tier truecolor '38;2;95;168;211' '38;2;239;163;165' '38;2;245;215;110' COLORTERM=truecolor
 tier 24bit     '38;2;95;168;211' '38;2;239;163;165' '38;2;245;215;110' COLORTERM=24bit
-tier 256       '38;5;74' '38;5;217' '38;5;222'      COLORTERM= TERM=xterm-256color
-tier 16        '94' '95' '93'                       COLORTERM= TERM=dumb
+tier 256 '38;5;74' '38;5;217' '38;5;222' COLORTERM= TERM=xterm-256color \
+  PATH="$(stub_tput 256):$PATH"
+tier 16  '94' '95' '93' COLORTERM= TERM=xterm PATH="$(stub_tput 8):$PATH"
+# AND THE HOST WITH NO USABLE TERMINFO: tput answers nothing, tc is 0, and the 16-colour
+# palette is the correct output — which is also what makes the tier above non-vacuous.
+tier 'no terminfo' '94' '95' '93' COLORTERM= TERM=xterm-256color \
+  PATH="$(stub_tput fail):$PATH"
 
 # =======================================================================================
 echo "== 3. the opt-outs leave the three lines with NO SGR at all =="
