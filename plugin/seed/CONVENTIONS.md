@@ -22,7 +22,7 @@ satisfied while still being unexecutable for an agent that lacks the tool, which
 how the `code-architect` clause below went unnoticed. `tests/agent-tool-allowlist.test.sh`
 in `cbmono/ai-bridge` enforces this.
 
-<!-- tool-mention: Workflow(2), Agent(2), EnterWorktree(1), mcp__claude-in-chrome__*(1), AskUserQuestion(1) — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent; EnterWorktree may be missing for a subagent; failure-analyst holds no browser tools; no role agent holds AskUserQuestion, which is why a tool request goes into open_questions instead of a live prompt. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
+<!-- tool-mention: Workflow(2), Agent(4), EnterWorktree(1), mcp__claude-in-chrome__*(1), AskUserQuestion(1) — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent, which is why the Explore rule states the route for the three that do not; EnterWorktree may be missing for a subagent; failure-analyst holds no browser tools; no role agent holds AskUserQuestion, which is why a tool request goes into open_questions instead of a live prompt. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
 
 ## Write less
 
@@ -856,9 +856,27 @@ above it so none may grow its share.
   ever reaches a task doc, PR text, `log.md`, any log or console output, or the KB.
   Describe the *shape* of what you saw, not the records. Full rules: `SCHEMA.md` →
   "Browser access".
-- **Code intelligence (if present):** if a repo has a CodeGraph index (a
-  `.codegraph/` dir) or the `codegraph` MCP is available, use it to navigate the
-  codebase before bulk-grepping — `codegraph explore "<q>" -p <repo>` for an area,
+- **Reading a product repo: a question that would take more than a few files to answer
+  goes to an `Explore` subagent; a direct `Read` is for the file you are about to edit or
+  verify.** Explore returns the conclusion instead of the file dumps and runs on the cheap
+  `explorer` tier. Measured by the owner on one monorepo, 5 real questions: Explore 5/5,
+  plain grep 4/5, CodeGraph 1/5. It is scoped to the target repos this document governs —
+  `auditor` and `advisor` read the bundle, not a product repo, and this changes nothing
+  for them.
+  **The direct read is the other half of the rule, not a fallback from it:** a summary
+  carries no reliable line numbers, so an edit never works from one. Locate with Explore,
+  then read the one file you are about to change.
+  **Which route you take is decided by your own `tools:` list, not by what is installed on
+  the machine.** Hold `Agent`? — `qa-reviewer` does — dispatch an Explore subagent on the
+  model your dispatch brief names (`scripts/resolve-model.sh explorer`; no entry ⇒ the seed
+  default `light`, and the brief says which it is). Don't hold it? — `software-engineer`,
+  `devops-engineer` and `failure-analyst` don't — then the second half is your whole route:
+  narrow with `Grep`/`Glob`, read only what you will edit or verify, and put the `Agent`
+  request in the task's `open_questions` (the middle rung above) when a question genuinely
+  needed the delegation.
+- **`codegraph` (if present) keeps exactly one job: TypeScript blast radius.**
   `codegraph node <sym>` for one symbol's callers/callees, `codegraph impact <sym>` /
-  `codegraph affected <files>` before a change. Skip silently if absent; it's an optional
-  local index (see the ai-bridge README).
+  `codegraph affected <files>` before a change. Don't reach for it first for anything else
+  — in the measurement above it placed last, it indexes no SQL, and its index is a stale
+  snapshot that reports itself current. Skip silently if absent; it's an optional local
+  index (see the ai-bridge README).

@@ -25,8 +25,10 @@ Three standing facts the steps below rest on:
   before anything is spawned, so the interval decides only how often the loop LOOKS.
 - **The guarantee is backed by `.tick-lock`, not by session memory** — memory does not
   survive a compaction. The tick runs its own acquire too (`--as tick`, its step 0.5),
-  because a resume never passes through this launcher; a merely-matching session id is
-  exit **2** and lands on the human's desk. **Never wake a completed tick with a
+  because a resume never passes through this launcher. You mint a per-tick id and hand it
+  to the tick you spawn, so that tick's own re-entry is provable (exit **0**); a bundle
+  that declares none falls back to the session's id, where a mere match is exit **2** and
+  the human's. **Never wake a completed tick with a
   message — dispatch a fresh one, every time.** The rule for every other agent is
   stated once in `CONVENTIONS.md` → "A subagent works ONE task", and this is its one
   line:
@@ -106,7 +108,8 @@ interval form when work is landing and you want a fixed heartbeat.
 **Under `/loop`, two of the steps below change, and only two:**
 
 1. **Step 1 takes the lock with `--as loop`** — `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh
-   acquire --as loop --agent project-manager`. Every decision is the launcher's; the only
+   acquire --as loop --agent project-manager --claimant <id>`. Every decision is the
+   launcher's — the id included — and the only
    difference is that a held lock is reported in **one line** instead of a block, because
    at a fixed interval most firings land while an earlier tick is still running.
 2. **Skip step 3.** `/loop` *is* the cadence, so scheduling a wakeup as well gives the
@@ -138,16 +141,27 @@ loop at all. The measurement is in `docs/operations.md` → "Running the loop on
 Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
 1. **Take the lock, then dispatch — in that order, with nothing in between.**
-   Resolve the tick's model first (below), then run
+   Resolve the tick's model first (below), **mint this tick's id** — one fresh literal per
+   tick, shaped `tick-<UTC yyyymmddThhmmssZ>-<4 random chars>` (e.g.
+   `tick-20260906T152233Z-a7f3`), characters `[A-Za-z0-9._-]` only, never reused — then run
 
-       ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire --agent project-manager
+       ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire --agent project-manager --claimant <id>
 
    (add `--as loop` when a `/loop` is driving — see "Running it on a cadence" above)
+
    and act on its exit code. **The check and the write are that one call** (`O_EXCL` —
    no read-then-write to interleave with): it closes a window of seconds to minutes —
    between your dispatch and the tick's own ledger entry — in which the ledger truthfully
    reports nothing running. And nothing may sit between the acquire and the spawn:
    no `git pull`, no state read, no other tool call.
+
+   **That literal is the tick's identity, and you hand it on.** `acquire` records it in
+   `.tick-lock` as `claimant:` — the only place it lives, and you write no file yourself —
+   and the brief you spawn the tick with carries it verbatim, because that tick's own
+   acquire passes the same id. It is what makes a second acquire *by that tick* a proved
+   re-entry (exit **0**) rather than exit **2** and a human's call. Mis-copy it and the tick
+   still runs: adopting an unclaimed lock never matches the id, and the script reports the
+   mismatch instead of refusing.
 
    - **0** — the lock is yours, and it printed nothing. **Spawn the tick now**, as the
      very next thing you do.
@@ -170,8 +184,8 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    (`subagent_type: ai-bridge:project-manager` — **namespaced**, because the role agents
    ship in the `ai-bridge` plugin and a BARE agent name does not resolve, measured
    2026-09-02) for ONE LIVE tick (background), with the standing guardrails below. **Fresh every time — never wake a completed tick with a message**;
-   step 0.5 refuses such a tick anyway. **Brief it with the gap and the guardrails, not
-   with state** — it reads the bundle, `git` and `gh` itself. **Run the tick on the
+   step 0.5 refuses such a tick anyway. **Brief it with the gap, the guardrails and the tick
+   id you minted at step 1, verbatim — and not with state** — it reads the bundle, `git` and `gh` itself. **Run the tick on the
    orchestrator's configured model:** resolve it with
    `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager` (`roleTiers`, default `deep` → an alias
    via `models`, default `deep` → `opus`) and pass that as the tick's model. If

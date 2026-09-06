@@ -29,7 +29,10 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # which the task's criterion 5 replaces: it now carries the three-at-most cap and that a
 # superseded row is history, neither of which the old wording said. Same protocol — flagged
 # in the PR body, measured not rounded.
-CEILING=12980
+# 12980 -> 13452 (ai-bridge-next/task-022). +472 bytes for the one sentence that defines
+# what a bare `scripts/<x>.sh` means, plus the shell that resolves it — 46 references in
+# the seed pointed at a directory a data-only bundle does not have. Measured, not rounded.
+CEILING=13452
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

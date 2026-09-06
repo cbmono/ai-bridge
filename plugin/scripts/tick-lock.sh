@@ -65,8 +65,10 @@
 # here). It is this: a lock the launcher took has NOT YET BEEN CLAIMED BY A TICK, and a lock
 # a tick is running under HAS.
 #
-#   .tick-lock        the lock. Taken by the LAUNCHER, and now only ever by it. Its shape,
-#                     its clock and its staleness rule are unchanged.
+#   .tick-lock        the lock. Taken by the LAUNCHER, and now only ever by it. Its clock
+#                     and its staleness rule are unchanged; since 2026-09-06 it also
+#                     records the per-tick id the launcher minted (`claimant:`), which is
+#                     the ONLY place that id lives on disk.
 #   .tick-lock.claim  the tick's claim on that lock, created with `O_EXCL` like the lock
 #                     itself the first time a tick runs under it. It records WHOSE it is —
 #                     see the next section, which is why it is no longer mere existence.
@@ -81,8 +83,8 @@
 #   --as tick, live lock, NOT yours     -> report and hold: dispatch nothing, adopt
 #                                          nothing, end.
 #   --as tick, live lock, claim that    -> exit 2. Both identities are printed and a HUMAN
-#                     MIGHT be yours      decides. See the next two sections: this is the
-#                                          normal answer under Claude Code today.
+#                     MIGHT be yours      decides. Only reachable on the DERIVED fallback:
+#                                          a launcher-supplied id makes it a 0 or a 1.
 #   --as launcher (the default)         -> unchanged in every respect: any live lock
 #                                          refuses, claimed or not, and it never claims.
 #   --as loop                           -> a launcher on a CLOCK. Identical in every
@@ -152,8 +154,10 @@
 #                       ROLE, and two ticks of one role are exactly the case to separate.
 #   NOT elapsed time.   A resume seconds after a dispatch reads identically to a fresh
 #                       intruder — the guess this file already refused once.
-#   NOT a nonce in the  Prose carried by a model across an agent boundary is the failure
-#   dispatch prompt.    class this whole design keeps being bitten by.
+#   NOT a nonce in the  Not as anything this script DERIVES: prose carried by a model
+#   dispatch prompt.    across an agent boundary is the failure class this design keeps
+#                       being bitten by. It is DECLARED instead — see the next section,
+#                       which prices what that costs.
 #   NOT the process.    `$$`/`$PPID` are a new value on every call and gone on a resume.
 #
 # So there are three sources, and they fall into TWO TIERS, which is the whole of the
@@ -191,14 +195,23 @@
 #   either side has no id          -> not yours. Hold (exit 1), as before claimants.
 #   equal, but either side DERIVED -> CANNOT TELL. Exit 2, both ids printed, a human rules.
 #
-# The last row is the normal case under Claude Code, and exit 2 is deliberately not exit 0
-# and not exit 1. Not 0, because "the ids match" does not mean "you", and proceeding on it
-# is the double-dispatch. Not 1, because "a DIFFERENT tick is already running" is a claim
-# this file cannot support and stating it anyway is precisely what sent a tick home on
-# 2026-08-30. Exit 2 is this script's existing answer for a lock it will not judge — the
-# same answer a stale lock gets, for the same reason: surface it and let a human decide.
-# It is also RARE by construction, because a claim only exists when a tick is already
-# running, which on the ordinary dispatch path never happens twice.
+# The last row was the normal case until the launcher started declaring an id (next
+# section); it is now the FALLBACK tier's answer. Exit 2 is deliberately not exit 0 and not
+# exit 1. Not 0, because "the ids match" does not mean "you", and proceeding on it is the
+# double-dispatch. Not 1, because "a DIFFERENT tick is already running" is a claim this file
+# cannot support and stating it anyway is precisely what sent a tick home on 2026-08-30.
+# Exit 2 is this script's existing answer for a lock it will not judge — the same answer a
+# stale lock gets, for the same reason: surface it and let a human decide. Note which row
+# does NOT move: two DECLARED ids that DIFFER stay exit 1, `theirs`, exactly as before.
+#
+# THE LAUNCHER SUPPLIES THE ID — DECIDED 2026-09-06; the reasoning is in docs/operations.md.
+# The launcher mints one per-tick literal, passes it to its OWN acquire (so it lands in
+# `.tick-lock` as `claimant:`, the only place on disk it lives — the launcher never writes a
+# claim), and hands the same literal to the tick, which passes it at step 0.5. Both sides are
+# then DECLARED, so a tick's second acquire is `mine` and exit 0 rather than the `maybe`
+# above. It is the twice-refused nonce, accepted knowingly and bounded: ADOPT NEVER MATCHES
+# THE ID, so a mis-copied literal costs a reported note and never a refusal. Declare nothing
+# and nothing changes — no `claimant:`, the derived tier answers, `maybe` is still exit 2.
 #
 # WHICH SOURCE ANSWERED IS RECORDED IN THE CLAIM (`claimant-source: flag|env|session`), so
 # a change of identity source is visible in the file rather than inferred from behaviour,
@@ -247,24 +260,21 @@
 # calls gets this under half a minute. The microsecond race in this file is a different one
 # — `release`'s two `rm`s, below.
 #
-# IT IS NOT CLOSED HERE, AND THE REASON IS THAT EVERY CANDIDATE REMEDY IS ALREADY-DECIDED
-# GROUND. Named, so the next reader does not spend the same afternoon on them:
-#
-#   A ONE-TIME CAPABILITY handed to the spawned tick is a NONCE CARRIED BY THE DISPATCH
-#   PROMPT under another name — prose carried across an agent boundary by a model, refused
-#   twice above and the failure class this whole file keeps being bitten by.
+# IT IS NOT CLOSED HERE, AND SINCE 2026-09-06 THAT IS A DECISION AND NOT A GAP. Closing it
+# is now one line — refuse an adopt whose declared id differs from the lock's — and that line
+# will not be written: every dispatched tick would rest on one literal surviving a copy
+# through a brief, and one mis-typed character would refuse EVERY tick, the total outage this
+# file calls strictly worse than the bug. The other two remedies are unchanged:
 #
 #   VERIFYING THE CLAIMANT BEFORE RELEASING means asking `release` who is calling, which an
 #   override must never do. `release --as tick` is exit 3 precisely so `release` cannot be
 #   scoped, and that is pinned by tests rather than left to discipline.
 #
 #   MAKING THE TICK ACQUIRE EARLIER shortens the window and cannot close it — the residue is
-#   agent-spawn latency — and it would put the guarantee back into a model following prose,
-#   which is the mechanism class this file exists to replace.
+#   agent-spawn latency — and it would put the guarantee back into a model following prose.
 #
-# What would close it is a PER-TICK identity delivered through a channel that is neither the
-# dispatch prompt nor `CLAUDE_CODE_SESSION_ID` (which names the SESSION — measured below).
-# That channel was looked for on 2026-08-30, and the next two sections are what was found:
+# A per-tick identity read from the RUNTIME would have closed it without a literal to
+# mis-copy. It was looked for on 2026-08-30, and the next two sections are what was found:
 # it EXISTS, it is not usable from here, and both halves are written down so the search is
 # not repeated.
 #
@@ -309,13 +319,14 @@
 #   window needs: a resumed tick's transcript predates the lock it is about to meet, and a
 #   dispatched tick's does not.
 #
-# AND IT IS STILL NOT USED HERE. THREE REASONS, EACH SUFFICIENT ON ITS OWN.
+# AND IT IS STILL NOT USED HERE — THIS SCRIPT CANNOT SELF-DERIVE A PER-TICK ID, AND SINCE
+# 2026-09-06 THE LAUNCHER SUPPLIES ONE INSTEAD. Three reasons, each sufficient on its own,
+# and all three are about DERIVING an identity in here; none of them touches a DECLARED one.
 #
-#   1. SELF-IDENTIFICATION NEEDS A PER-INVOCATION LITERAL, AND THIS SCRIPT'S ARGV HAS NONE.
-#      Every tick runs the same `acquire --as tick` command line, so the match above has
-#      nothing unique to match on. Supplying one means a model generating and typing a fresh
-#      value per tick — which is the nonce this design has refused twice, moved one boundary
-#      inward rather than removed. The measurement is real; the hook for it is not there.
+#   1. SELF-IDENTIFICATION NEEDS A PER-INVOCATION LITERAL, AND THIS SCRIPT'S ARGV HAS NONE
+#      OF ITS OWN. It carries one only because a CALLER typed it: the launcher mints the
+#      literal and both acquires pass it (see "THE LAUNCHER SUPPLIES THE ID" above), which
+#      is a promise made outside this file — judged as DECLARED, never as read from disk.
 #   2. WITHOUT ONE, THE FALLBACK IS AMBIGUOUS EXACTLY WHERE IT MATTERS. The remaining
 #      discriminator is "the newest-mtime `project-manager` transcript", and in the window
 #      this guard exists for there are two: the genuine tick, mid-spawn and being written,
@@ -426,12 +437,13 @@
 #   0  acquire: the lock is now yours, dispatch.   release/status: nothing is held.
 #   1  HELD — a live lock, younger than the staleness threshold. Do not dispatch. For
 #      `--as tick` this means the claim on it is NOT YOURS as far as anything on disk can
-#      show: report and hold. Never a claim proved to be yours — that is a 0 (`re-entered:`).
+#      show, INCLUDING two DECLARED ids that DIFFER: report and hold. Never a claim proved
+#      to be yours — that is a 0 (`re-entered:`).
 #      For `--as loop` it is the EXPECTED outcome of a firing that landed mid-tick: one
 #      line on stdout, and the pass ends clean. Same code, because 0 still means dispatch.
-#   2  needs a human: the lock is STALE, dated in the future, unreadable, or CLAIMED BY AN
-#      IDENTITY THAT MIGHT BE YOURS AND CANNOT BE PROVED TO BE. Do not dispatch, and do not
-#      delete it on the lock's behalf.
+#   2  needs a human, and these four only: the lock is STALE, dated in the FUTURE,
+#      UNREADABLE, or claimed by an identity that MIGHT be yours (`maybe` — equal ids, at
+#      least one DERIVED). Never a different id. Do not dispatch, do not delete it.
 #   3  cannot answer: usage, a bad `--agent`/`--claimant`/threshold, or an unwritable root.
 #      Never a silent pass — a lock nothing can write is a guarantee nothing is keeping.
 #   4  REFUSED — `--as tick` with no lock: nobody dispatched you, so you are a resumed or
@@ -633,6 +645,15 @@ identity_lines() { # <indent>
   printf '%sclaim: %s (%s)\n' "$1" "${owner:-<none>}" "${osrc:-<unrecorded>}"
 }
 
+# The launcher's minted id, written into the LOCK and nowhere else. DECLARED only: a derived
+# id names the session that RAN the launcher, never the tick it is about to spawn. Nothing
+# judges this field, but dropping a declared identity silently would leave a caller believing
+# in a record that does not exist. Returns the write's status: an unfinished lock is a failure.
+lock_claimant_line() {
+  claimant_is_declared || return 0
+  printf 'claimant: %s\nclaimant-source: %s\n' "$CLAIMANT" "$CLAIMANT_SOURCE"
+}
+
 # The tick's claim, created the same way the lock is: `O_EXCL`, so two ticks racing for one
 # unclaimed lock cannot both win. A claim made by reading then writing would re-open, one
 # layer down, the exact race `acquire` exists to close.
@@ -774,7 +795,7 @@ human_age() { # <seconds>
 # Judge an EXISTING lock. Prints the verdict and returns the exit code the caller uses, so
 # `acquire` and `status` cannot drift apart about what "stale" means.
 judge_existing() {
-  local ts ag age
+  local ts ag age minted
   ts="$(lock_field timestamp)"
   ag="$(lock_field agent)"
   age="$(lock_age)" || age=""
@@ -819,6 +840,10 @@ judge_existing() {
     identity_lines "      " >&2
   else
     echo "      No tick has claimed it yet: it was taken for a dispatch that is starting." >&2
+    # WHICH dispatch — the only readable signal inside the 41-47s window, where a lock with
+    # no claim beside it is all there is.
+    minted="$(lock_field claimant)"
+    [ -n "$minted" ] && echo "      minted for: $minted — the tick the launcher took it for." >&2
   fi
   return 1
 }
@@ -849,7 +874,9 @@ case "$cmd" in
     # there is no "between" — this is the whole reason the script exists rather than a
     # `[ -f ] && write` in the launcher's prose.
     if ( set -o noclobber
-         printf '%s\n' \
+         # The redirect stays INSIDE this subshell: `noclobber` is a shell option, so a
+         # `> $LOCK` applied by the caller truncates an existing lock instead of refusing.
+         { printf '%s\n' \
            "# ai-bridge PM tick lock. Taken by the LAUNCHER immediately before it dispatches a" \
            "# tick, and only by it: a tick that finds no lock was not dispatched — it was resumed" \
            "# — and is refused rather than allowed to take one of its own." \
@@ -859,7 +886,8 @@ case "$cmd" in
            "#   tick-lock.sh release" \
            "timestamp: $NOW_ISO" \
            "epoch: $NOW" \
-           "agent: $agent" > "$LOCK"
+           "agent: $agent" && lock_claimant_line
+         } > "$LOCK"
        ) 2>/dev/null; then
       [ "$claim_residue" = yes ] && rm -f "$CLAIM" 2>/dev/null
 
@@ -924,6 +952,13 @@ case "$cmd" in
     if claim_exclusive adopted; then
       echo "adopted: $LOCK — the dispatch lock the launcher took before spawning this tick."
       echo "         It releases that lock when this tick reports; do not release it yourself."
+      # REPORTED, NEVER REFUSED: adopting proves you are the dispatch, not who you are, and
+      # refusing here would deadlock every tick (header: "IT IS NOT CLOSED HERE").
+      minted="$(lock_field claimant)"
+      if [ -n "$minted" ] && claimant_is_declared && [ "$minted" != "$CLAIMANT" ]; then
+        echo "note: this lock was minted for $minted and you declared $CLAIMANT. Adopted anyway —"
+        echo "      an unclaimed lock proves the dispatch. Check the id your brief carried."
+      fi
       exit 0
     fi
     unwritable_claim
