@@ -171,16 +171,10 @@ lives there and not here because it governs work *outside* this bundle.
 ## Knowledge base
 `knowledge/` — `Service`s, `Finding`s, `Runbook`s, `Team`s, `Reference`s
 (`SCHEMA.md`). The `cataloguer` builds it; task agents capture `Finding`s as a
-byproduct.
-
-**Reading it: index first, at most three, superseded rows are history.** Scan
-`knowledge/index.md` — one derived row per doc — then open **at most three** that match
-and stop; **never bulk-read `knowledge/`**. Rows under a **Superseded** heading are the
-record of a decision that was reversed: read one to understand why, never cite it as
-current (`cite-check.sh` drops it). Tags come from `knowledge/vocab.md` and nowhere else
-— match a lookup by longest alias, never invent a tag. `index.md` is **derived**:
-`build-kb-index.sh` rebuilds it from frontmatter, so fix a wrong row in the document.
-Detail: `.claude/rules/knowledge-base.md`.
+byproduct. **Reading it: index first, at most three, superseded rows are history.**
+Scan `knowledge/index.md` (derived — `build-kb-index.sh` rebuilds it from frontmatter),
+open **at most three** matches, **never bulk-read `knowledge/`**; a **Superseded** row is
+history — read it, never cite it. Detail: `.claude/rules/knowledge-base.md`.
 
 ## Data handling
 - **No customer PII** in task documents, logs, or PR descriptions.

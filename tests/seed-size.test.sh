@@ -25,7 +25,11 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # PR-sizing bullet, which now names `maxPrFiles` beside `maxPrLoc` — a second threshold an
 # agent has to know before it opens a PR, and one it cannot infer from the first. Set to the
 # measured size and not rounded up, so the next byte is the next deliberate act.
-CEILING=12816
+# 12816 -> 12980 (ai-bridge-next/task-007). +164 bytes on the "reading the KB" paragraph,
+# which the task's criterion 5 replaces: it now carries the three-at-most cap and that a
+# superseded row is history, neither of which the old wording said. Same protocol — flagged
+# in the PR body, measured not rounded.
+CEILING=12980
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

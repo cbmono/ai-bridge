@@ -63,8 +63,8 @@ data-handling, units, and where to route authoritative data questions.
    status outside `{current, superseded, corrected}`, a tag outside `vocab.md`, and a
    dangling supersession edge — run it before you finish.
    **Those rows are the id source of truth for citations**
-   (`CONVENTIONS.md` → cite knowledge as `[[finding-slug]]`): a slug with no row reads as
-   fabricated, so a doc you write and don't index is a doc nobody may cite.
+   (`CONVENTIONS.md` → cite knowledge as `[[finding-slug]]`): a slug with no
+   row reads as fabricated, so a doc you write and don't index is a doc nobody may cite.
    Append a dated entry to `knowledge/log.md`, and
    cross-link liberally (bundle-relative `/knowledge/...` and `/projects/...` links)
    so a Service doc points at its Findings and vice-versa.

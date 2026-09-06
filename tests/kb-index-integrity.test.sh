@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+#
+# kb-index-integrity.test.sh — `knowledge/index.md` is DERIVED, and the five defects that
+# were repaired by hand on 2026-09-05/06 are now measured instead.
+#
+# WHY THIS SHAPE. The index was hand-curated across 133 findings: rows with empty summary
+# cells, two findings with no row at all, rows whose unescaped `|` split the table into the
+# wrong number of cells, and — in the whole life of the KB — not one finding ever
+# superseded. Every one of those is invisible to a reader and fatal to an agent that reads
+# the KB index-first, so each gets a FIXTURE CARRYING THAT DEFECT and an assertion that the
+# checker goes red naming it.
+#
+# NON-VACUOUS BY CONSTRUCTION. The same checker runs on a clean fixture first and must exit
+# 0. "It refuses" alone would pass a script that refuses everything — `.claude/rules/tests.md`.
+# Each defect is planted into a fresh copy of that same clean tree, so a red is caused by
+# the plant and nothing else.
+#
+# ok() compares actual to expected, in that order. Seeded ai-bridge-next/task-007.
+set -uo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+BUILD="$REPO/plugin/scripts/build-kb-index.sh"
+CITE="$REPO/plugin/scripts/cite-check.sh"
+VOCAB="$REPO/plugin/seed/knowledge/vocab.md"
+SEED_INDEX="$REPO/plugin/seed/knowledge/index.md"
+SCHEMA="$REPO/plugin/seed/SCHEMA.md"
+SEED_CLAUDE="$REPO/plugin/seed/CLAUDE.md"
+CATALOGUER="$REPO/plugin/agents/cataloguer.md"
+CLOSE="$REPO/plugin/skills/close-project/SKILL.md"
+KB_RULE="$REPO/plugin/seed/.claude/rules/knowledge-base.md"
+VALIDATE="$REPO/plugin/scripts/validate-bundle.sh"
+
+for f in "$BUILD" "$CITE" "$VOCAB" "$SEED_INDEX" "$SCHEMA" "$SEED_CLAUDE" "$CATALOGUER" \
+         "$CLOSE" "$KB_RULE" "$VALIDATE"; do
+  [ -r "$f" ] || { echo "kb-index-integrity.test: missing $f" >&2; exit 2; }
+done
+
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/kb-index-integrity.XXXXXX")" \
+  || { echo "kb-index-integrity.test: mktemp -d failed" >&2; exit 2; }
+trap 'rm -rf "$TMP"' EXIT
+
+pass=0; fail=0
+ok() { # <name> <actual> <expected>
+  if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
+  else printf '  FAIL  %-58s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
+}
+has()  { grep -qF -- "$2" "$1" && echo yes || echo no; }
+hasre(){ grep -qE -- "$2" "$1" && echo yes || echo no; }
+
+# A clean bundle: three findings (one with a pipe in its title, one superseded pair),
+# a runbook, and the shipped vocabulary.
+seed_bundle() { # <dir>
+  local d=$1
+  mkdir -p "$d/knowledge/findings" "$d/knowledge/services" "$d/knowledge/runbooks" \
+           "$d/knowledge/teams" "$d/knowledge/references"
+  cp "$VOCAB" "$d/knowledge/vocab.md"
+  cat > "$d/knowledge/findings/pipe-in-title.md" <<'EOF'
+---
+type: Finding
+title: A bare `grep | head | cut` assignment aborts under `set -e`
+description: unused when a lesson is present
+lesson: Assign a pipeline's result as an `if` condition, or `set -e` kills the script.
+category: gotcha
+tags: [ ci, false-green ]
+status: current
+timestamp: 2026-09-06T00:00:00Z
+---
+EOF
+  cat > "$d/knowledge/findings/old-rule.md" <<'EOF'
+---
+type: Finding
+title: The old rule
+description: d
+lesson: Replaced — see the new rule.
+tags: [ github-actions ]
+status: superseded
+superseded_by: new-rule
+timestamp: 2026-09-06T00:00:00Z
+---
+
+## Superseded 2026-09-06 — replaced by [[new-rule]]
+EOF
+  cat > "$d/knowledge/findings/new-rule.md" <<'EOF'
+---
+type: Finding
+title: The new rule
+description: d
+lesson: This is what replaced the old rule.
+tags: [ knowledge-base ]
+status: current
+supersedes: [ old-rule ]
+timestamp: 2026-09-06T00:00:00Z
+---
+EOF
+  cat > "$d/knowledge/runbooks/do-a-thing.md" <<'EOF'
+---
+type: Runbook
+title: Do a thing
+description: The steps for doing the thing.
+timestamp: 2026-09-06T00:00:00Z
+---
+EOF
+}
+
+check_rc() { ( cd "$1" && bash "$BUILD" --check >"$TMP/out.$$" 2>&1; echo $? ); }
+check_out() { cat "$TMP/out.$$"; }
+
+echo "== the clean fixture builds, and the checker clears it =="
+CLEAN="$TMP/clean"; seed_bundle "$CLEAN"
+( cd "$CLEAN" && bash "$BUILD" >/dev/null 2>&1 )
+ok "the generator wrote an index"        "$([ -f "$CLEAN/knowledge/index.md" ] && echo yes || echo no)" yes
+ok "…and --check clears it (exit 0)"     "$(check_rc "$CLEAN")" 0
+ok "…reporting the two supersession edges" "$(check_out | grep -c '2 supersession edge')" 1
+
+echo
+echo "== derived, not hand-written =="
+cp "$CLEAN/knowledge/index.md" "$TMP/pass1"
+( cd "$CLEAN" && bash "$BUILD" >/dev/null 2>&1 )
+ok "a second pass is byte-identical"     "$(cmp -s "$TMP/pass1" "$CLEAN/knowledge/index.md" && echo same || echo differs)" same
+ok "the summary is the lesson: verbatim" "$(has "$CLEAN/knowledge/index.md" 'This is what replaced the old rule.')" yes
+ok "…not the description:"               "$(has "$CLEAN/knowledge/index.md" 'unused when a lesson is present')" no
+ok "a pipe in a title is escaped"        "$(has "$CLEAN/knowledge/index.md" 'grep \| head \| cut')" yes
+ok "it says it is derived"               "$(has "$CLEAN/knowledge/index.md" 'do not hand-edit')" yes
+
+echo
+echo "== superseded rows sit in their own section, BELOW the current ones =="
+SUPHDR="$(grep -n '^### Superseded findings' "$CLEAN/knowledge/index.md" | cut -d: -f1)"
+CURROW="$(grep -n 'findings/new-rule.md' "$CLEAN/knowledge/index.md" | cut -d: -f1)"
+OLDROW="$(grep -n 'findings/old-rule.md' "$CLEAN/knowledge/index.md" | cut -d: -f1)"
+ok "there is a Superseded section"       "$([ -n "$SUPHDR" ] && echo yes || echo no)" yes
+ok "the current row is above it"         "$([ "$CURROW" -lt "$SUPHDR" ] && echo yes || echo no)" yes
+ok "the superseded row is below it"      "$([ "$OLDROW" -gt "$SUPHDR" ] && echo yes || echo no)" yes
+ok "…and names its replacement"          "$(sed -n "${OLDROW}p" "$CLEAN/knowledge/index.md" | grep -c 'new-rule |')" 1
+
+echo
+echo "== one fixture per defect: each measured RED, and named =="
+plant() { # <name> — a fresh copy of the clean tree, index already built
+  rm -rf "$TMP/$1"; cp -R "$CLEAN" "$TMP/$1"; printf '%s' "$TMP/$1"
+}
+
+D="$(plant no-row)"
+grep -v 'pipe-in-title' "$D/knowledge/index.md" > "$D/k" && mv "$D/k" "$D/knowledge/index.md"
+ok "a Finding with no index row: red"    "$(check_rc "$D")" 1
+ok "…and the message names it"           "$(check_out | grep -c 'no index row')" 1
+
+D="$(plant ghost-row)"
+sed 's#/knowledge/findings/new-rule.md#/knowledge/findings/ghost.md#' "$D/knowledge/index.md" > "$D/k" && mv "$D/k" "$D/knowledge/index.md"
+ok "a row pointing at no file: red"      "$(check_rc "$D")" 1
+ok "…and the message names it"           "$(check_out | grep -c 'points at no file')" 1
+
+D="$(plant empty-summary)"
+sed 's#| This is what replaced the old rule. |#|  |#' "$D/knowledge/index.md" > "$D/k" && mv "$D/k" "$D/knowledge/index.md"
+ok "an empty summary cell: red"          "$(check_rc "$D")" 1
+ok "…and the message names it"           "$(check_out | grep -c 'empty summary cell')" 1
+
+D="$(plant raw-pipe)"
+sed 's#grep \\| head#grep | head#' "$D/knowledge/index.md" > "$D/k" && mv "$D/k" "$D/knowledge/index.md"
+ok "an unescaped pipe in a cell: red"    "$(check_rc "$D")" 1
+ok "…and the message names the cell count" "$(check_out | grep -c 'cells, expected 4')" 1
+
+D="$(plant bad-status)"
+sed 's#/knowledge/findings/new-rule.md` | current |#/knowledge/findings/new-rule.md` | open |#' "$D/knowledge/index.md" > "$D/k" && mv "$D/k" "$D/knowledge/index.md"
+ok "a status outside the enum: red"      "$(check_rc "$D")" 1
+ok "…and the message names the enum"     "$(check_out | grep -c 'outside {current, superseded, corrected}')" 1
+
+echo
+echo "== corrected IS in the enum, on both readers =="
+D="$(plant corrected)"
+sed 's#^status: current#status: corrected#' "$D/knowledge/findings/new-rule.md" > "$D/k" && mv "$D/k" "$D/knowledge/findings/new-rule.md"
+( cd "$D" && bash "$BUILD" >/dev/null 2>&1 )
+ok "a corrected Finding clears --check"  "$(check_rc "$D")" 0
+ok "validate-bundle allows it too"       "$(hasre "$VALIDATE" 'Finding\).*current superseded corrected')" yes
+
+echo
+echo "== the controlled vocabulary is closed, and aliases resolve =="
+D="$(plant good-alias)"
+sed 's#tags: \[ ci, false-green \]#tags: [ github-actions, vacuous-pass ]#' "$D/knowledge/findings/pipe-in-title.md" > "$D/k" && mv "$D/k" "$D/knowledge/findings/pipe-in-title.md"
+ok "two ALIASES are accepted"            "$(check_rc "$D")" 0
+D="$(plant bad-tag)"
+sed 's#tags: \[ ci, false-green \]#tags: [ ci, banana ]#' "$D/knowledge/findings/pipe-in-title.md" > "$D/k" && mv "$D/k" "$D/knowledge/findings/pipe-in-title.md"
+ok "an invented tag is refused"          "$(check_rc "$D")" 1
+ok "…and the message names the vocab"    "$(check_out | grep -c "tag 'banana' is not in knowledge/vocab.md")" 1
+
+echo
+echo "== typed supersession edges must resolve, and both ends must agree =="
+D="$(plant dangling-edge)"
+sed 's#^superseded_by: new-rule#superseded_by: never-existed#' "$D/knowledge/findings/old-rule.md" > "$D/k" && mv "$D/k" "$D/knowledge/findings/old-rule.md"
+ok "a dangling edge is refused"          "$(check_rc "$D")" 1
+ok "…and the message names the slug"     "$(check_out | grep -c 'supersession edge names no Finding: never-existed')" 1
+D="$(plant half-supersede)"
+sed 's#^status: superseded#status: current#' "$D/knowledge/findings/old-rule.md" > "$D/k" && mv "$D/k" "$D/knowledge/findings/old-rule.md"
+ok "superseded_by: without the status: red" "$(check_rc "$D")" 1
+ok "…and validate-bundle fails it too"   "$(hasre "$VALIDATE" 'carries superseded_by: but status is not')" yes
+
+echo
+echo "== a superseded Finding is never citable =="
+printf 'The rule applies [[new-rule]] and [[old-rule]].\nOnly history here [[old-rule]].\n' > "$TMP/cites.md"
+CITE_RC=$( cd "$CLEAN" && bash "$CITE" --text-file "$TMP/cites.md" --brief new-rule,old-rule >"$TMP/cite.out" 2>&1; echo $? )
+ok "a line that cited only it goes EMPTY (exit 1)" "$CITE_RC" 1
+ok "…the superseded id is reported SUPERSEDED"     "$(grep -c '^SUPERSEDED old-rule' "$TMP/cite.out")" 2
+ok "…and the current one is still KEPT"            "$(grep -c '^KEPT new-rule' "$TMP/cite.out")" 1
+
+echo
+echo "== what ships is what the generator would produce =="
+EMPTY="$TMP/empty"; mkdir -p "$EMPTY"
+cp -R "$REPO/plugin/seed/knowledge" "$EMPTY/knowledge"
+cp "$VOCAB" "$EMPTY/knowledge/vocab.md"
+( cd "$EMPTY" && bash "$BUILD" >/dev/null 2>&1 )
+ok "the seed index is byte-identical to a rebuild" "$(cmp -s "$SEED_INDEX" "$EMPTY/knowledge/index.md" && echo same || echo differs)" same
+ok "the seed ships the vocabulary"       "$([ -r "$VOCAB" ] && echo yes || echo no)" yes
+ok "…with a longest-match instruction"   "$(has "$VOCAB" 'longest match')" yes
+
+echo
+echo "== the documents that tell agents to do this =="
+ok "SCHEMA documents the supersede move" "$(has "$SCHEMA" 'Superseding a Finding')" yes
+ok "…with both typed edges"              "$(hasre "$SCHEMA" '^supersedes:.*Findings this one replaces')" yes
+ok "…and the dated section it requires"  "$(has "$SCHEMA" '## Superseded 2026-09-06 — replaced by')" yes
+ok "…and tags: pointing at vocab.md"     "$(has "$SCHEMA" 'from /knowledge/vocab.md ONLY')" yes
+ok "the cataloguer rebuilds, never edits" "$(has "$CATALOGUER" 'scripts/build-kb-index.sh --check')" yes
+ok "…and runs the supersede pass"        "$(has "$CATALOGUER" 'Supersede rather than delete')" yes
+ok "close-project step 2 supersedes"     "$(has "$CLOSE" 'supersede what this project made untrue')" yes
+ok "…and rebuilds the index"             "$(has "$CLOSE" 'scripts/build-kb-index.sh')" yes
+ok "seed CLAUDE.md: index first"         "$(has "$SEED_CLAUDE" 'index first, at most three, superseded rows are history')" yes
+ok "…and it drops the old 1–3 wording"   "$(has "$SEED_CLAUDE" 'open only the 1–3')" no
+ok "the KB rule repeats the three points" "$(has "$KB_RULE" 'history, not guidance')" yes
+
+echo
+printf 'pass=%d fail=%d\n' "$pass" "$fail"
+[ "$fail" -eq 0 ]

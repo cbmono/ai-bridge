@@ -31,7 +31,7 @@ One row per system in `knowledge/services/`. Empty until this instance has some.
 | `ci` | component | github-actions, workflow, required-checks |
 | `docs` | component | readme, conventions, schema |
 | `review` | component | coderabbit, pr-review, clearance |
-| `dispatch` | component | pm-loop, tick, project-manager |
+| `dispatch` | component | tick, loop, project-manager |
 | `worktree` | component | isolation, git-worktree |
 | `knowledge-base` | component | kb, index, findings, cataloguer |
 
