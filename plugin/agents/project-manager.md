@@ -403,6 +403,16 @@ state, and act only on deltas.
    reusable, write or update a `Finding` in `knowledge/findings/` per `SCHEMA.md` and
    link it from the task."*
 
+   **Do not repeat (what the previous round already tried).** Before you spawn, run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/do-not-repeat.sh brief <task-path>` and paste its output into the brief
+   **unchanged, heading and all** — the fixed heading is
+   `## Do not repeat (earlier rounds of this task)` and the lines under it are the previous
+   agent's own words. **Never summarise or re-word them**: a paraphrase of a dead end is
+   what a cold agent walks straight back into. It prints nothing when the task has no
+   `do_not_repeat:` entries, which is every first dispatch. When a role agent's `append`
+   refused at the cap (exit 1), move the oldest entries out of the field into `# Notes`
+   yourself, so the next round has a slot to record one.
+
    **Model routing.** Read `models` (tier → alias) and `roleTiers` (role → default
    tier) from `instance.config.json`. For each dispatch: start from the assignee's
    default tier; **bump one tier up** (toward `deep`) for a genuinely complex build

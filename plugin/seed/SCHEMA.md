@@ -181,6 +181,7 @@ last_blocker: "<what the last round ended on>"   # PM-OWNED, NEVER HAND-EDITED. 
 # re-dispatching: `stall-counter.sh escalate` sets `status: blocked`, records the blocker under
 # `# Notes`, and emits the one `⛔ **unblock**` line for `AWAITING.md`. Same blocker twice ⇒ the
 # human decides, never a fresh agent at the same wall.
+do_not_repeat: [ "<approach> — <evidence it failed on>", ... ]   # AGENT-OWNED, one line per approach an earlier round of THIS task already tried, at most 200 chars each and capped at 10. Written by the role agent with `scripts/do-not-repeat.sh append` whenever its round ends without a green PR (`CONVENTIONS.md`), and read at the NEXT dispatch: `do-not-repeat.sh brief` prints the block the PM pastes into the dispatch brief verbatim, under a fixed heading. Absent ⇒ nothing has failed yet, which is every first dispatch. The counterpart of `stall_count`: that says how MANY rounds, this says what not to try again. At the cap the script refuses and the PM folds the oldest entries into `# Notes`. It is read by a human here and pasted into a brief: **no customer PII, and never a secret or an environment value** — the failing check, not the output that failed.
 artifacts: [ /projects/<slug>/deliverables/<file>, ... ]   # RESEARCH only: the deliverable file(s) this task produces
 timestamp: <ISO 8601>
 ---

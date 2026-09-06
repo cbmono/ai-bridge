@@ -767,6 +767,20 @@ above it so none may grow its share.
   **No "delete the agent" primitive exists and none is wanted** — agents complete on their
   own, so resumption is the only lever there is. That is why this rule is about resumption
   and not about how long an agent lives.
+- **A round that ends on a failed check or a reviewer refusal appends ONE line to the
+  task's `do_not_repeat:` BEFORE you stop.** Anything short of a green PR — a check you
+  could not get green, a reviewer refusal you did not take, a blocker — and the last thing
+  you do before writing `# Result` is
+  `scripts/do-not-repeat.sh append <task-doc> --line "<approach> — <evidence>"`.
+  **One line, at most 200 characters** (the script folds whitespace and truncates): the
+  approach you took and the evidence it failed on, not the story of the round —
+  `"widened the ERE to allow closed ATX — pr-body-shape.test.sh 40/2, rows 3 and 7 still refused"`.
+  **The next dispatch receives those lines verbatim in its brief**, which is the only thing
+  standing between a fresh agent and your wall: it has no memory of your round, and
+  `stall_count` says how MANY rounds, never what was tried. **The evidence is the check,
+  never its output** — no pasted log, no secrets, no PII, same rule as `last_blocker`.
+  The list caps at 10: at the cap the script refuses (exit 1) and the `project-manager`
+  folds the oldest into `# Notes`. A round that ends green appends nothing.
 - Write the PR URL and a `# Result` summary back into the task document, and set
   the task `status: in-review` (or `blocked`, with why, if you can't proceed).
 - **No customer PII** in code, commits, or PR text; **never echo, print, or log
