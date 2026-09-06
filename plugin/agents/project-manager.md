@@ -424,6 +424,15 @@ state, and act only on deltas.
    why on stderr — **report that line to the human**, then inherit the session model;
    don't guess aliases.
 
+   **Name the Explore model in every role-agent brief.** Broad reads go to an Explore
+   subagent (`CONVENTIONS.md`), which is dispatched with a model override like any other,
+   so the brief has to carry the alias: run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh explorer` and include *"Explore
+   subagents: model `<alias>`"*. **No entry ⇒ write the seeded default `light` and say
+   that is what it is** — *"Explore subagents: model `light` (this instance sets no
+   `roleTiers.explorer`; seed default)"* — so the reader can tell a chosen tier from an
+   unset one.
+
 4. **Advance in-flight work.** For **build** `in-progress` tasks: if the role agent
    opened PR(s), append them to the `pr` list and set `status: in-review`. If it
    reported a blocker or died, set `status: blocked` with a `# Notes` reason.

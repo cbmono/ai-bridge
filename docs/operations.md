@@ -134,7 +134,8 @@ to guess.
 "models":    { "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" },
 "roleTiers": { "project-manager": "deep", "software-engineer": "deep",
                "devops-engineer": "deep", "qa-reviewer": "deep",
-               "cataloguer": "standard", "auditor": "deep", "plan-architect": "apex" }
+               "cataloguer": "standard", "auditor": "deep", "plan-architect": "apex",
+               "explorer": "light" }
 ```
 
 `maxPrLoc` and `maxPrFiles` are optional in the same file — absent, the PR-size heuristic
@@ -549,6 +550,10 @@ Two knobs in `instance.config.json`:
 |---|---|
 | `models` | maps tiers to model aliases: `{ "light": "haiku", "standard": "sonnet", "deep": "opus", "apex": "fable" }`. Aliases track the latest model in each tier, so you retune per instance without editing agents |
 | `roleTiers` | each role's default tier (e.g. `project-manager` → `deep`, `qa-reviewer` → `deep`, `cataloguer` → `light`, engineers → `standard`) |
+
+**`explorer` is a role tier with no role**: it prices the Explore subagent a role agent
+sends a broad read to instead of reading ten files itself (`CONVENTIONS.md`). Seeded at
+`light`; with no entry at all the dispatch brief says `light` and says it is the default.
 
 The top **`apex`** tier (`fable`) is reserved for the **deepest, rarest reasoning** — the
 `plan-architect` critique the PM dispatches on genuinely complex tasks — where a frontier

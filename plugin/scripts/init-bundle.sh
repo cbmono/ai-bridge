@@ -2174,6 +2174,7 @@ DEFAULTS = {
         "cataloguer": "standard",
         "plan-architect": "apex",
         "auditor": "deep",
+        "explorer": "light",
     },
 }
 SCHEMA_NOTE = (
