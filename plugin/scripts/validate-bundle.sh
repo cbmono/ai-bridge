@@ -50,12 +50,12 @@
 #                        for both; the data said no.
 #
 # WHAT COUNTS AS A CONCEPT DOCUMENT. Only the schema-defined locations:
-# `objectives/*.md`, `projects/*/project.md`, `projects/*/phases/*.md`,
-# `projects/*/tasks/*.md`, and `knowledge/<kind>/*.md`. Everything else —
-# `index.md`, `log.md`, `sources/`, `deliverables/`, a doc a human dropped into a
-# project — is content or navigation. The first version of this script validated
-# those too and buried 6 real errors under 77 warnings, which is exactly how a
-# validator teaches people to ignore it.
+# `objectives/*.md` (OPTIONAL — a bundle with none is valid), `projects/*/project.md`,
+# `projects/*/phases/*.md`, `projects/*/tasks/*.md`, `knowledge/<kind>/*.md`. Everything
+# else — `index.md`, `log.md`, `sources/`, `deliverables/`, a doc a human dropped into a
+# project — is content or navigation. The first version of this script validated those
+# too and buried 6 real errors under 77 warnings, which is exactly how a validator
+# teaches people to ignore it.
 #
 # BODY PROSE IS NOT CHECKED. A body may cite a closed project's task as history —
 # that is the record working as intended. Only FRONTMATTER references, which

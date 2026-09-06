@@ -33,7 +33,8 @@ already the identifier, so a second one can only drift from it) and renaming
 `timestamp` to **`updated`** (OKF names the field `timestamp`; renaming diverges from
 the spec this bundle follows). Neither exists in any instance and neither is required.
 
-**Concept documents live only in the schema-defined locations** — `objectives/*.md`,
+**Concept documents live only in the schema-defined locations** — `objectives/*.md`
+(the directory is optional; a bundle with none is valid),
 `projects/*/project.md`, `projects/*/phases/*.md`, `projects/*/tasks/*.md`,
 `knowledge/<kind>/*.md`. `index.md`, `log.md`, `sources/` and `deliverables/` are
 navigation and content, and carry no frontmatter by design. (`knowledge/<kind>/` is
@@ -42,7 +43,14 @@ exists, which is how `knowledge/references/` was already covered.)
 
 # Schema
 
-## type: Objective  (`objectives/<slug>.md`)
+## type: Objective  (`objectives/<slug>.md`) — an OPTIONAL layer
+
+**Most projects need no objective.** A project is normally self-contained and carries its
+own `success_criteria` (below); the next iteration is the next project. An `Objective` is
+for a goal that **outlives one project** — several projects serving one measurable end. A
+bundle that has no such goal ships **no `objectives/` directory at all**, and nothing
+requires one: `/ai-bridge:init <dir> --with-objectives` creates it the day you want the
+layer, and an existing `objectives/` is never touched.
 
 ```yaml
 ---
@@ -50,7 +58,7 @@ type: Objective
 title: <short goal>
 description: <one line>
 status: active | paused | achieved | dropped
-success_criteria: [ "<measurable signal>", ... ]   # optional but expected for `active` objectives — the anchor /audit grounds progress against; the audit flags an active objective that lacks it
+success_criteria: [ "<measurable signal>", ... ]   # optional but expected for `active` objectives — the anchor /audit grounds progress against; the audit flags an active objective that lacks it. MEASURABLE: name the command and today's number, never "faster" or "better"
 timestamp: <ISO 8601>
 ---
 ```
@@ -63,7 +71,8 @@ type: Project
 title: <project name>
 description: <one line>
 kind: build | research                # build = ships code via PRs (default); research = produces in-bundle deliverables
-objective: /objectives/<slug>.md      # link up to the objective it serves
+objective: /objectives/<slug>.md      # optional: link up to the objective it serves, WHEN one exists. Omit it and this project's own `success_criteria` are its anchor — see "Where a project's success is measured" below
+success_criteria: [ "<measurable signal>", ... ]   # optional: this project's own measurable success. Same rule as an objective's — name the command and today's number. What /audit grounds against when there is no `objective:`
 target_repo: <org>/<repo>             # BUILD only: default repo for this project's tasks (<org> from instance.config.json). Omit for research.
 deliverables: [ "<artifact>", ... ]   # RESEARCH only: what this project produces, e.g. "tech landscape per domain (md)", "exec summary deck (marp)"
 autonomy: gated | <mode>              # optional (default gated). gated = the human promotes `ready` AND merges — both gates absolute. Any other value names a delegated-authority mode defined in `AUTONOMY.md`, and is INERT unless that file exists (absent ⇒ gated). See "Delegated authority" below.
@@ -95,6 +104,14 @@ folder. The rule is "retain where the artifact actually lives," and the field is
 switch. It governs the folder only: a retained project is still `status: done` with
 every task terminal, and it is not reopenable — new work starts as a new project
 seeded from the deliverables.
+
+**Where a project's success is measured.** `success_criteria` **on the project** is the
+default: self-contained work, measured against itself. `objective:` is the opt-in for a
+goal that outlives this project, and a project may carry both. `/audit` grounds against
+the **objective's** criteria where there is an `objective:`, against the **project's own**
+where there is not, and reports **"no criteria"** for a project carrying neither — never a
+silent pass, because a project with no anchor cannot be honestly audited. Same bar for the
+lines either way: **measurable — name the command and today's number.**
 
 ## type: Phase  (`projects/<slug>/phases/<n>-<slug>.md`)
 
@@ -790,7 +807,8 @@ in this order:
    `git log -- projects/<slug>/` if the full record is ever needed again.
 3. **Roll up.** Set `project.md` `status: done`; drop the project from the active
    `## Projects` list in `index.md` (derived and gitignored — rewritten, never
-   committed); update its objective's project list. When
+   committed); update its objective's project list **if it has an `objective:`**
+   (a project measured by its own `success_criteria` has nothing to roll up). When
    **all** projects serving an objective are `done`/`cancelled`, likewise
    **propose** the objective `status: achieved` (human-confirmed).
 4. **Remove the folder — or keep it, if `retain: true`.** Both outcomes are one

@@ -1,7 +1,7 @@
 ---
 name: init
 description: Create a new AI Bridge bundle, refresh an existing one, or convert a symlink-era bundle in place. Data only — a bundle it stamps carries no machinery and no link into any checkout.
-argument-hint: "<dir>  [--refresh-seeds]"
+argument-hint: "<dir>  [--refresh-seeds] [--with-objectives]"
 disable-model-invocation: true
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
@@ -12,10 +12,11 @@ Run this, from anywhere, and **relay its output verbatim**:
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh $ARGUMENTS
 ```
 
-`$ARGUMENTS` is the bundle directory, optionally followed by `--refresh-seeds`. No
-directory means the current one. That is the whole skill: every decision, every guard and
-every line of output lives in the script, so a human running it in a terminal and a
-session running it here get the same answer, and there is no second copy here to drift.
+`$ARGUMENTS` is the bundle directory, optionally followed by `--refresh-seeds` or
+`--with-objectives`. No directory means the current one. That is the whole skill: every
+decision, every guard and every line of output lives in the script, so a human running it
+in a terminal and a session running it here get the same answer, and there is no second
+copy here to drift.
 
 **The plugin carries the installer.** No clone of this template is needed on the machine,
 and a plugin update is what updates it.
@@ -27,6 +28,7 @@ and a plugin update is what updates it.
 | **Creates** | a bundle at `<dir>`: seed docs, `instance.config.json` + `.local.json`, the derived-ignore lines, `AWAITING.md` and `SNAPSHOT.json`, and `repos/` linked from `reposRoot` |
 | **Refreshes** | the same bundle again — idempotent, seeds only what is ABSENT, and never overwrites a value already there |
 | **Converts** | a bundle stamped by the old `install.sh`: every machinery symlink into a template checkout is removed, the managed `.gitignore` machinery block is retired, and the data is untouched |
+| **Creates on request** | `objectives/`, with `--with-objectives`. It is an optional layer (`SCHEMA.md` → type: Objective) — a project normally carries its own `success_criteria` — so a plain stamp makes no such directory, and an existing one is data and never touched |
 | **Reports** | seed drift — a seed doc this repo changed since the bundle was stamped. Report-only unless you passed `--refresh-seeds` |
 
 **The only symlinks a stamped bundle holds are under `repos/`**, and those point at the

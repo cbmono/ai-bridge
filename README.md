@@ -285,7 +285,7 @@ Role dispatches are routed to a cost-appropriate model per tier
 
 ```
 _ai-bridge-<group>/
-├── objectives/        what you're trying to achieve
+├── objectives/        OPTIONAL — goals that outlive one project (`/ai-bridge:init <dir> --with-objectives`)
 ├── projects/<slug>/
 │   ├── project.md     kind, status, autonomy, owner, target_repo
 │   ├── phases/        ordered stages
