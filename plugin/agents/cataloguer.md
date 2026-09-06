@@ -46,7 +46,10 @@ data-handling, units, and where to route authoritative data questions.
    the **only** file other agents read broadly, so keep it terse (one line per
    entry, no prose) and complete: every doc you write or update gets a row here.
    This is what lets an agent find prior work by scanning a small index instead of
-   bulk-reading `knowledge/`. Append a dated entry to `knowledge/log.md`, and
+   bulk-reading `knowledge/`. **Those rows are also the id source of truth for
+   citations** (`CONVENTIONS.md` → cite knowledge as `[[finding-slug]]`): a slug with no
+   row reads as fabricated, so a doc you write and don't index is a doc nobody may cite.
+   Append a dated entry to `knowledge/log.md`, and
    cross-link liberally (bundle-relative `/knowledge/...` and `/projects/...` links)
    so a Service doc points at its Findings and vice-versa.
 
