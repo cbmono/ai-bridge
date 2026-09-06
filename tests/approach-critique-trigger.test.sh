@@ -106,6 +106,7 @@ ok "…and the 'Optional approach critique' heading with it" \
    "$(hasf "$PM" 'Optional approach critique')" no
 # Nothing else shipped may still describe it as optional, or the instruction and the
 # documentation disagree about whether the PM has a choice.
+# path-scan: absent symlink — retired in #122; the four other roots on this line resolve
 stale="$(grep -rlF -- "PM's optional critique" "$REPO/symlink" "$REPO/plugin/seed" "$REPO/docs" \
   "$REPO/README.md" "$REPO/CLAUDE.md" 2>/dev/null | wc -l | tr -d ' ')"
 ok "no shipped file still calls the critique optional" "$stale" 0

@@ -168,7 +168,9 @@ ok "…and an unreadable plugin.json does the same" \
 # NO RELEASE PROCESS CAME WITH IT — asserted, because this is the direction the change is
 # most likely to grow in later, and the scope decision was explicit: one consumer group and
 # a symlinked template do not need a pipeline.
+# path-scan: absent — asserted absent; a resolving package.json is the regression
 ok "no package.json at the root"  "$(yn test -e "$TPL/package.json")" no
+# path-scan: absent — asserted absent, same as the line above
 ok "no CHANGELOG"                 "$(yn test -e "$TPL/CHANGELOG.md")" no
 ok "no publish/release step in CI" \
   "$(grep -rlEi 'npm publish|gh release|actions/create-release' "$TPL/.github" >/dev/null 2>&1 && echo yes || echo no)" no

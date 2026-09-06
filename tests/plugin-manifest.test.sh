@@ -45,6 +45,7 @@ echo "== the deprecation stub shipped for ONE version, and 1.0.0 removed it =="
 # `source` resolves to nothing and `/plugin install ai-bridge-v2@ai-bridge` fails at the
 # host rather than at a skill that could have explained itself. Removing one and forgetting
 # the other is the only mistake available here, so each is pinned separately.
+# path-scan: absent — asserted GONE on the next line
 STUB="$REPO/plugin-deprecated"
 ok "plugin-deprecated/ is gone"   "$([ -e "$STUB" ] && echo no || echo yes)" yes
 ok "…and so is its marketplace entry" \

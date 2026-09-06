@@ -105,7 +105,7 @@ check_harness_parity() { # <test-file-basename, without .test.sh>
   ok "…having actually run some assertions, not zero" "$([ "$p" -gt 0 ] && echo yes || echo no)" yes
 }
 
-for h in board-renderers awaiting-queue commit-as-identity link-repos derived-indexes snapshot; do
+for h in board-renderers awaiting-queue commit-as-identity link-repos derived-indexes snapshot banner-board-line; do
   check_harness_parity "$h"
 done
 

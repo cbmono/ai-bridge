@@ -71,8 +71,15 @@ echo "== the lines are NOT in seed/.gitignore, and that is deliberate =="
 # stays closed — against git's own answer, not the pattern text.
 assert "seed/.gitignore has no /index.md line" \
   "$(no_if grep -qxF '/index.md' "$TPL/plugin/seed/.gitignore")"
+# Line 73 above was repointed at plugin/seed/ in #125 and this one was not. `--no-index`
+# is DESIGNED to answer for a path that does not exist, so the stale `seed/index.md` still
+# exited 1 and the assertion still passed — the pattern could have matched and nothing here
+# would have said so. The marker below is what makes the path scanner check this one path:
+# a blanket must-resolve rule over `check-ignore` targets would be wrong for that same
+# reason, so the rule is opt-in per call site.
+# path-scan: must-resolve — this probe is about a path that DOES exist in the seed
 assert "…and the seed's own index.md is trackable" \
-  "$(no_if git -C "$TPL" check-ignore --no-index -q seed/index.md)"
+  "$(no_if git -C "$TPL" check-ignore --no-index -q plugin/seed/index.md)"
 assert "…and it says why, so nobody 'fixes' it" \
   "$(yes_if grep -q 'ACTIVE .gitignore' "$TPL/plugin/seed/.gitignore")"
 # A bare `index.md` line would match at every depth, knowledge/ included.

@@ -472,8 +472,12 @@ assert "  ...via the \${CLAUDE_PLUGIN_ROOT} absolute-path idiom" \
   "$( command -v python3 >/dev/null 2>&1 \
       && python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); want="${CLAUDE_PLUGIN_ROOT}/hooks/push-state.sh"; sys.exit(0 if any(h.get("command")==want for g in d["hooks"]["UserPromptSubmit"] for h in g["hooks"]) else 1)' "$SETTINGS" \
       && echo 0 || echo 1 )"
+# `seed/` moved to `plugin/seed/` in #125, and this probe was left on the old path: the
+# grep then exited 2 for a missing file, the `||` arm yielded 0, and 0 is exactly what the
+# assertion expects — so it reported the healthy answer for the unhealthiest reason.
+# tests/harness-read-paths.test.sh is the class guard that now keeps it pointing somewhere.
 assert "  ...and the seeded settings.json registers no hook of its own" \
-  "$( grep -q '"hooks"' "$HERE/../seed/.claude/settings.json" && echo 1 || echo 0 )"
+  "$( grep -q '"hooks"' "$HERE/../plugin/seed/.claude/settings.json" && echo 1 || echo 0 )"
 assert "  ...and hooks.json is still valid JSON"  \
   "$( command -v python3 >/dev/null 2>&1 && python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$SETTINGS" && echo 0 || echo 1 )"
 

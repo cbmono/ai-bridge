@@ -109,6 +109,7 @@ EOF
 ok "…and every registered hook file exists"  "${HOOKMISS:-none}" none
 
 # (f) the retired design is gone from the tree entirely.
+# path-scan: absent — asserted GONE; this line IS the assertion that it went
 ok "the repo ships no symlink/ directory"    "$(yn test -e "$REPO/symlink")" no
 ok "install.sh is a stub that refuses"       "$(bash "$REPO/install.sh" /tmp >/dev/null 2>&1; echo $?)" 2
 ok "…naming /ai-bridge:init"                 "$(bash "$REPO/install.sh" 2>&1 | grep -c '/ai-bridge:init' | tr -d ' ')" 1

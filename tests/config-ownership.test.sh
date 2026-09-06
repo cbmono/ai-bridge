@@ -118,6 +118,7 @@ config_tiers_of() { # <template root> → install.sh's CONFIG_TIERS, one per lin
 # set — which reads as "this repo ships two agents nothing probes for" rather than as a
 # broken derivation.
 probed_agents() {
+  # path-scan: absent symlink — retired in #122; "$REPO/plugin" on this line resolves
   { grep -rhoE '~/\.claude/agents/[a-z0-9-]+\.md' "$REPO/symlink" "$REPO/plugin" 2>/dev/null | sed 's#.*/##'
     printf 'plan-architect.md\n'; } | sort -u | sed 's#^#agents/#'
 }
@@ -144,6 +145,7 @@ ok "…and nothing probed for is missing"  \
 ok "the shipped set is three files"      "$(grep -c . "$TMP/shipped")" 3
 # Two structural corollaries, asserted directly because each has its own way of coming
 # back: a whole second tier, and a non-agents subtree inside the one that stays.
+# path-scan: absent — asserted GONE
 ok "config/opinionated/ is gone"         "$(yn test -d "$REPO/config/opinionated")" no
 # THE TIER NAMES ARE PINNED, in both directions, because the scan above deliberately cannot
 # see them. One tier is the decision (docs/claude-config-ownership.md); a second one under
@@ -237,6 +239,7 @@ echo "-- cross-repo: the two installable sets overlap only where sanctioned"
 # Reachable ai-setup checkout, in order of explicitness. Never cloned, never fetched —
 # this harness is offline, and a network call in a test suite is a flake waiting to happen.
 AS=""
+# path-scan: absent ../ai-setup — an OPTIONAL sibling checkout, probed and never required
 for cand in "${AI_SETUP_DIR:-}" "$REPO/../ai-setup" "$HOME/workspace/ai-setup"; do
   [ -n "$cand" ] || continue
   if [ -d "$cand/.claude" ] && [ -f "$cand/plugin/scripts/init-bundle.sh" ]; then AS="$(cd "$cand" && pwd)"; break; fi
