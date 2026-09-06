@@ -623,14 +623,15 @@ ok "…prints the drift line"                    "$(printf '%s\n' "$OUT" | grep 
 # Under the header and its rule, attached to the number it contradicts — not filed among
 # the settings rows further down.
 # COUNTED FROM THE IDENTITY LINE, NOT FROM LINE 1. The banner opens with one blank line
-# (task-027) so the harness's `SessionStart:<source> says: ` label ends the line it owns —
-# so "directly under the header rule" is the identity line, its rule, §2b's own blank
-# separator and then the line — index plus three, and it stays that whatever precedes the
-# header. The claim is unchanged; only the anchor is.
+# (task-027) so the harness's `SessionStart:<source> says: ` label ends the line it owns, and
+# the logo's three lines sit above the header (task-024) — so "directly under the header
+# rule" is found from the IDENTITY line: it, its rule, §2b's own blank separator, then the
+# line. The claim is unchanged; only the anchor is.
 HEAD_NO="$(printf '%s\n' "$OUT" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }')"
+HDR_NO="$(printf '%s\n' "$OUT" | awk '/^AI-Bridge/ { print NR; f = 1; exit } END { if (!f) print 0 }')"
 ok "…the banner opens with exactly ONE blank line"  "$HEAD_NO" 2
-ok "…and the drift line is directly under the header rule (line $((HEAD_NO + 3)))" \
-  "$(printf '%s\n' "$OUT" | sed -n "$((HEAD_NO + 3))p" | grep -qF 'UPDATE' && echo yes || echo no)" yes
+ok "…and the drift line is directly under the header rule (line $((HDR_NO + 3)))" \
+  "$(printf '%s\n' "$OUT" | sed -n "$((HDR_NO + 3))p" | grep -qF 'UPDATE' && echo yes || echo no)" yes
 ok "…and the header still carries this template's own version" \
   "$(printf '%s\n' "$OUT" | grep -qF 'AI-Bridge v0.9.1' && echo yes || echo no)" yes
 

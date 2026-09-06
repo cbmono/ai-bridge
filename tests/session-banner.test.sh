@@ -68,6 +68,10 @@ eq()     { [ "$1" = "$2" ] && echo 0 || echo 1; }
 # nothing must FAIL these assertions rather than satisfy them with an empty string on both
 # sides of an equality.
 head_no() { printf '%s\n' "$1" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+# THE LOGO SITS ABOVE THE HEADER (task-024), so every claim anchored on the identity line
+# finds it with this rather than assuming it opens the banner. `0` when there is none at all.
+hdr_no()  { printf '%s\n' "$1" | awk '/^AI-Bridge/ { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+LOGO_ABOVE=3
 nth()     { printf '%s\n' "$1" | sed -n "$2p"; }
 
 # =======================================================================================
@@ -338,11 +342,11 @@ assert "the banner opens with exactly ONE blank line" "$(eq "$(head_no "$OUT")" 
 CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" > "$TMP/banner.raw" 2>/dev/null
 assert "…and introduces no trailing blank line" \
   "$(eq "$(awk 'END { print ($0 == "" ? "blank" : "text") }' "$TMP/banner.raw")" text)"
-# WAS "on the first line" — NOW "on the first NON-EMPTY line", which is the same claim about
-# section order and not a weaker one. It is still false the moment §0's machinery alarm, or
-# any future section, prints above the header; section 12 drives that mutant, and the real §0.
-assert "…on the first NON-EMPTY line" \
-  "$(eq "$(nth "$OUT" "$(head_no "$OUT")" | cut -c1-9)" 'AI-Bridge')"
+# WAS "on the first line", THEN "on the first NON-EMPTY line" — now "three lines under it",
+# because task-024 puts the logo there. Same claim about section order: still false the moment
+# §0's machinery alarm, or any future section, prints above it. Section 12 drives that mutant.
+assert "…exactly three lines under the first NON-EMPTY one, the logo and nothing else above it" \
+  "$(eq "$(hdr_no "$OUT")" "$(( $(head_no "$OUT") + LOGO_ABOVE ))")"
 # READS AS A HEADER WITH COLOUR OFF, which is the normal case: a SessionStart hook writes
 # to a pipe, never a terminal, so the bold is gone exactly where the banner is read. The
 # rule under it is what carries the header across that degradation, and it is as wide as
@@ -352,8 +356,8 @@ assert "…on the first NON-EMPTY line" \
 # rule's DERIVATION is untouched by that: `^─+$` says it is box-drawing from column 0 with
 # nothing in front of it, so it is neither padded nor indented to line up under a label whose
 # width is not ours.
-h1="$(nth "$OUT" "$(head_no "$OUT")")"
-h2="$(nth "$OUT" "$(( $(head_no "$OUT") + 1 ))")"
+h1="$(nth "$OUT" "$(hdr_no "$OUT")")"
+h2="$(nth "$OUT" "$(( $(hdr_no "$OUT") + 1 ))")"
 assert "the line under it is a rule"         "$(printf '%s' "$h2" | grep -qE '^─+$' && echo 0 || echo 1)"
 assert "…exactly as wide as the header"      "$(eq "${#h2}" "${#h1}")"
 # AND ITS WIDTH IS DERIVED FROM THE HEADER, which one run cannot show: a constant, or a width
@@ -365,8 +369,8 @@ mkdir -p "$LONGNAME/.claude/agents"
 printf 'stub\n' > "$LONGNAME/SCHEMA.md"
 cp "$INST/instance.config.json" "$LONGNAME/instance.config.json"
 L_OUT="$(CLAUDE_PROJECT_DIR="$LONGNAME" bash "$HOOK" 2>/dev/null)"
-l1="$(nth "$L_OUT" "$(head_no "$L_OUT")")"
-l2="$(nth "$L_OUT" "$(( $(head_no "$L_OUT") + 1 ))")"
+l1="$(nth "$L_OUT" "$(hdr_no "$L_OUT")")"
+l2="$(nth "$L_OUT" "$(( $(hdr_no "$L_OUT") + 1 ))")"
 assert "a longer instance name widens the header…"       "$([ "${#l1}" -gt "${#h1}" ] && echo 0 || echo 1)"
 assert "…and the rule moves with it, still exactly as wide" "$(eq "${#l2}" "${#l1}")"
 rm -rf "$LONGNAME"
@@ -447,11 +451,12 @@ assert "no AWAITING.md ⇒ no awaiting block"   "$(hasnt '🔔' "$OUT")"
 # "currently zero".
 assert "no 'Ready to dispatch' line"          "$(hasnt 'Ready to dispatch' "$OUT")"
 assert "…and no 'Drafts' line"                "$(hasnt 'Drafts' "$OUT")"
-# SHORT: an orientation, not a report. The identity line, a header, six rows at most, the
-# roleTiers block and the blanks between them — comfortably inside one screen.
+# SHORT: an orientation, not a report. The logo, the identity line, a header, six rows at
+# most, the roleTiers block and the blanks between them — comfortably inside one screen.
+# The budget moved 20 -> 23 with task-024's three logo lines, and by exactly three.
 lines="$(printf '%s\n' "$OUT" | grep -c .)"
-assert "the healthy banner is short ($lines non-blank lines, budget 20)" \
-  "$([ "$lines" -le 20 ] && echo 0 || echo 1)"
+assert "the healthy banner is short ($lines non-blank lines, budget 23)" \
+  "$([ "$lines" -le 23 ] && echo 0 || echo 1)"
 # …AND ON A REAL ROSTER. The fixture above carries two agents; a live instance carries
 # seven, and `roleTiers` is now a row per agent rather than a wrapped line — which is the
 # edit that could quietly push this banner past a screen. Measured on the full set.
@@ -467,8 +472,8 @@ json.dump(cfg, open(p, "w"), indent=2)
 PYROLES
 run
 lines7="$(printf '%s\n' "$OUT" | grep -c .)"
-assert "…and still short with all seven agents ($lines7 lines, budget 20)" \
-  "$([ "$lines7" -le 20 ] && echo 0 || echo 1)"
+assert "…and still short with all seven agents ($lines7 lines, budget 23)" \
+  "$([ "$lines7" -le 23 ] && echo 0 || echo 1)"
 assert "…with a row per agent, not a wrapped list" \
   "$(eq "$(printf '%s\n' "$OUT" | grep -cE '^[a-z-]+ +[a-z]+ → ')" 7)"
 tracked_cfg
@@ -1077,8 +1082,8 @@ assert "…and the intact hook carries exactly ONE anchor" \
 CTL="$(mut_run control.sh)"
 assert "CONTROL: intact, the banner opens with exactly ONE blank line" \
   "$(eq "$(head_no "$CTL")" 2)"
-assert "CONTROL: intact, its first NON-EMPTY line is the identity line" \
-  "$(eq "$(nth "$CTL" "$(head_no "$CTL")" | cut -c1-9)" 'AI-Bridge')"
+assert "CONTROL: intact, the identity line sits three lines under the first NON-EMPTY one" \
+  "$(eq "$(hdr_no "$CTL")" "$(( $(head_no "$CTL") + LOGO_ABOVE ))")"
 
 # MUTANT 1 — the leading blank line deleted. Criterion 8: the assertion that says the banner
 # opens with one blank line must go RED, and the section-order assertion must NOT.
@@ -1091,10 +1096,10 @@ if mutate "mutant: the leading blank line deleted" "$HOOK" '$0 ~ anchor { next }
   assert "…and still prints a banner"  "$(has 'AI-Bridge' "$M1_OUT")"
   assert "BLANK DELETED: 'opens with exactly ONE blank line' goes RED" \
     "$([ "$(head_no "$M1_OUT")" != 2 ] && echo 0 || echo 1)"
-  assert "…and the identity line is what the label would now prefix" \
-    "$(eq "$(nth "$M1_OUT" 1 | cut -c1-9)" 'AI-Bridge')"
+  assert "…and the LOGO is what the label would now prefix" \
+    "$(eq "$(nth "$M1_OUT" 1)" ' █▀█')"
   assert "…while the section-order assertion stays GREEN, so the two claims do not overlap" \
-    "$(eq "$(nth "$M1_OUT" "$(head_no "$M1_OUT")" | cut -c1-9)" 'AI-Bridge')"
+    "$(eq "$(hdr_no "$M1_OUT")" "$(( $(head_no "$M1_OUT") + LOGO_ABOVE ))")"
 fi
 
 # MUTANT 2 — a line printed above the identity line, which is what §0's alarm does for real.
@@ -1106,10 +1111,13 @@ if mutate "mutant: a line printed above the identity line" "$HOOK" \
   assert "the mutant really printed a line above the header" \
     "$(has 'MUTANT: a section above the header' "$M2_OUT")"
   assert "…and still prints the banner under it" "$(has 'AI-Bridge' "$M2_OUT")"
-  assert "ABOVE THE HEADER: 'on the first NON-EMPTY line' goes RED" \
-    "$([ "$(nth "$M2_OUT" "$(head_no "$M2_OUT")" | cut -c1-9)" != 'AI-Bridge' ] && echo 0 || echo 1)"
-  assert "…and the rule assertions go with it — the line under the first one is not a rule" \
-    "$(printf '%s' "$(nth "$M2_OUT" "$(( $(head_no "$M2_OUT") + 1 ))")" | grep -qE '^─+$' && echo 1 || echo 0)"
+  assert "ABOVE THE HEADER: 'three lines under the first NON-EMPTY one' goes RED" \
+    "$([ "$(hdr_no "$M2_OUT")" != "$(( $(head_no "$M2_OUT") + LOGO_ABOVE ))" ] && echo 0 || echo 1)"
+  # ANCHORED ON WHERE THE RULE BELONGS, NOT ON THE FIRST LINE: with the logo above the header
+  # the line under the first non-empty one is a logo line in the intact banner too, so that
+  # spelling would pass on both and prove nothing.
+  assert "…and the rule assertions go with it — the rule is no longer where it belongs" \
+    "$(printf '%s' "$(nth "$M2_OUT" "$(( $(head_no "$M2_OUT") + LOGO_ABOVE + 1 ))")" | grep -qE '^─+$' && echo 1 || echo 0)"
   assert "…while the blank-line assertion stays GREEN, so the two claims do not overlap" \
     "$(eq "$(head_no "$M2_OUT")" 2)"
 fi
@@ -1131,8 +1139,8 @@ printf '{ "org": "example-org" }\n' > "$DANGLING/instance.config.json"
 ln -s "$TMP/never-existed/index.md" "$DANGLING/agents/index.md"
 DANG="$(CLAUDE_PROJECT_DIR="$DANGLING" bash "$HOOK" 2>/dev/null)"
 assert "a dangling probe really fires §0's alarm" "$(has 'MACHINERY SYMLINKS' "$DANG")"
-assert "§0 ABOVE THE HEADER: the first NON-EMPTY line stops being the identity line" \
-  "$([ "$(nth "$DANG" "$(head_no "$DANG")" | cut -c1-9)" != 'AI-Bridge' ] && echo 0 || echo 1)"
+assert "§0 ABOVE THE HEADER: the identity line stops sitting three lines under the first one" \
+  "$([ "$(hdr_no "$DANG")" != "$(( $(head_no "$DANG") + LOGO_ABOVE ))" ] && echo 0 || echo 1)"
 assert "…and the alarm, not the header, is what the label now prefixes — still one blank line" \
   "$(eq "$(head_no "$DANG")" 2)"
 rm -rf "$MUTTPL" "$DANGLING"

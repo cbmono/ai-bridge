@@ -83,6 +83,11 @@ eq()    { [ "$1" = "$2" ] && echo 0 || echo 1; }
 # prints above the header. `0` when there is no non-empty line at all, never the empty
 # string, so a channel that carried nothing FAILS rather than matching an empty string.
 head_no() { printf '%s\n' "$1" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+# THE LOGO SITS ABOVE THE HEADER (task-024), so "the identity line opens the banner" is now
+# "it is exactly three lines under the first non-empty one" — the same claim about section
+# ORDER, and §9's mutants prove it still goes red when anything else prints above it.
+hdr_no()  { printf '%s\n' "$1" | awk '/^AI-Bridge/ { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+LOGO_ABOVE=3
 nth()     { printf '%s\n' "$1" | sed -n "$2p"; }
 
 # Named once rather than typed inline: a literal tab, a bell and an ESC are invisible in a
@@ -403,8 +408,8 @@ assert "no arguments ⇒ the plain banner, exit 0"       "$(eq "$RC" 0)"
 # and not a weaker one: the banner opens with one blank line so the harness's label ends the
 # line it owns, and this still goes red the moment §0's machinery alarm or any future section
 # prints above the header. §9 drives both mutants that prove it.
-assert "…starting at the identity line, not at a brace" \
-  "$(eq "$(nth "$OUT" "$(head_no "$OUT")" | cut -c1-9)" 'AI-Bridge')"
+assert "…starting at the logo, with the identity line under it and not a brace" \
+  "$(eq "$(hdr_no "$OUT")" "$(( $(head_no "$OUT") + LOGO_ABOVE ))")"
 assert "…and it is not JSON"                           "$(eq "$(parses "$OUT")" 1)"
 assert "--format text says the same thing" \
   "$(eq "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format text 2>/dev/null)" "$OUT")"
@@ -904,8 +909,8 @@ if mutate "mutant: the leading blank line deleted" "$HOOK" '$0 ~ anchor { next }
   # is the one that would have caught the rejected fix.
   assert "…while strip_sgr(systemMessage) still equals the mutant's own text banner" \
     "$(eq "$(strip_sgr "$M1_SM")" "$M1_TXT")"
-  assert "…and the identity line is still the first NON-EMPTY one, so the claims differ" \
-    "$(eq "$(nth "$M1_TXT" "$(head_no "$M1_TXT")" | cut -c1-9)" 'AI-Bridge')"
+  assert "…and the identity line still sits right under the logo, so the claims differ" \
+    "$(eq "$(hdr_no "$M1_TXT")" "$(( $(head_no "$M1_TXT") + LOGO_ABOVE ))")"
   use_hook "$HOOK"
 fi
 
@@ -917,8 +922,8 @@ if mutate "mutant: a line printed above the identity line" "$HOOK" \
   assert "the mutant really printed a line above the header" \
     "$(has 'MUTANT: a section above the header' "$M2_TXT")"
   assert "…and still prints the banner under it" "$(has 'AI-Bridge' "$M2_TXT")"
-  assert "ABOVE THE HEADER: 'starting at the identity line' goes RED" \
-    "$([ "$(nth "$M2_TXT" "$(head_no "$M2_TXT")" | cut -c1-9)" != 'AI-Bridge' ] && echo 0 || echo 1)"
+  assert "ABOVE THE HEADER: 'the logo, then the identity line' goes RED" \
+    "$([ "$(hdr_no "$M2_TXT")" != "$(( $(head_no "$M2_TXT") + LOGO_ABOVE ))" ] && echo 0 || echo 1)"
   assert "…while the leading blank line is still exactly one, so the claims differ" \
     "$(eq "$(head_no "$M2_TXT")" 2)"
 fi
