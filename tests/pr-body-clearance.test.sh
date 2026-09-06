@@ -265,6 +265,10 @@ says   "  ...that names the heading to move to"        "use '## Description'"
 # The new row matches the WHOLE heading text, so a heading that merely STARTS with the
 # word is not the marker — the same fail-closed narrowing `## Is the TL;DR rule required?`
 # already gets one block down.
+serve "$(body_file '## Description ##' 'Adds the gate.' '' "$VERIFIED" '' \
+                   "$(crit_head 1)" '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
+expect "a closed ATX '## Description ##' -> clear" 0 42
+
 serve "$(body_file '## Description of the parser' 'Adds the gate.' '' "$VERIFIED" '' \
                    "$(crit_head 1)" '' "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW")"
 expect "'## Description of the parser' is not the marker -> refuse" 1 42

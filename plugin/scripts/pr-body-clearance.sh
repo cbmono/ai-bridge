@@ -256,12 +256,13 @@ set -uo pipefail
 # EVERY ROW IS ANCHORED AT THE START OF A LINE. That anchor is the fail-closed property:
 # without it, a body that discusses the TL;DR rule in a sentence would clear on the
 # discussion. Row 1 is the heading `CONVENTIONS.md` requires today, matched as the WHOLE
-# heading text so `## Description of the parser` does not clear; row 2 is the same heading
+# heading text — trailing `#`s and all, since a closed ATX heading is one the host renders
+# — so `## Description of the parser` does not clear; row 2 is the same heading
 # with the retired `(TL;DR)` suffix, plus the bare `## TL;DR` spelling; row 3 is the
 # leading-emphasis form `**TL;DR** — …`; row 4 is the bare token followed by a separator,
 # which is what an author writes when they are not looking at any document.
 TLDR_MARKERS='
-^[[:space:]]{0,3}#{1,6}[[:space:]]+description[[:space:]]*$
+^[[:space:]]{0,3}#{1,6}[[:space:]]+description[[:space:]]*(#+[[:space:]]*)?$
 ^[[:space:]]{0,3}#{1,6}[[:space:]]+(description[[:space:]]*)?\(?tl[;:/ ]?dr
 ^[[:space:]]{0,3}(\*\*|__|\*|_)[[:space:]]*(description[[:space:]]*)?\(?tl[;:/ ]?dr\)?[[:space:]]*(\*\*|__|\*|_)
 ^[[:space:]]{0,3}\(?tl[;:/ ]?dr\)?[[:space:]]*[]):：.,;—–-]
