@@ -323,6 +323,54 @@ assert "a tier that maps to no model renders →? rather than hiding" \
 rm -f "$INST/instance.config.local.json"
 
 # =======================================================================================
+echo "== 2c. the TIER → MODEL arrows are ONE column, padded to the widest tier =="
+# =======================================================================================
+# The owner read `standard → sonnet` with its arrow two columns right of `deep → opus` and
+# asked for either `strd` or padding. Padding wins, and the width is MEASURED PER BANNER:
+# a literal 8 is too wide for a table with no `standard` in it and too narrow the day a
+# tier is renamed, so the three fixtures below are one assertion at three widths.
+tiers_cfg() { # <models json> <roleTiers json> — an instance whose only tables are these
+  cat > "$INST/instance.config.json" <<EOF
+{ "org": "example-org", "models": $1, "roleTiers": $2 }
+EOF
+  rm -f "$INST/instance.config.local.json"
+}
+# The column each `→` lands in, one per AGENT row, in CHARACTERS: `→` is three bytes and one
+# column, so a byte-wise index reports a wrong number on a correctly aligned banner. The
+# header cannot answer for the rows — `AGENT (role)` is not a match for the row anchor.
+arrow_cols() { printf '%s\n' "$OUT" | python3 -c '
+import re, sys
+print(" ".join(str(l.index("\u2192")) for l in sys.stdin.read().splitlines()
+               if "\u2192" in l and re.match(r"^[a-z][a-z-]* ", l)))'; }
+arrow_col() { arrow_cols | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/ *$//'; }
+rows_seen() { arrow_cols | wc -w | tr -d ' '; }
+# The role column is 20 wide plus its two-space gutter and the space before the arrow, so
+# the arrow lands at 23 + <tier width>. Asserting the NUMBER, not just "all equal", is what
+# makes each fixture's width the claim: "all equal" is also true of a table fixed at 8.
+tiers_cfg '{ "light": "haiku", "deep": "opus" }' \
+          '{ "cataloguer": "light", "software-engineer": "deep" }'
+run
+assert "only light/deep: the tier pads to 5, so every arrow sits at 23+5" \
+  "$(eq "$(arrow_col)" 28)"
+assert "…on both rows, not one"                  "$(eq "$(rows_seen)" 2)"
+assert "…with the widest tier itself unpadded"   "$(has 'light → haiku' "$OUT")"
+tiers_cfg '{ "light": "haiku", "standard": "sonnet", "deep": "opus" }' \
+          '{ "auditor": "light", "cataloguer": "standard", "software-engineer": "deep" }'
+run
+assert "standard present: the tier pads to 8, arrows at 23+8" "$(eq "$(arrow_col)" 31)"
+assert "…on all three rows"                           "$(eq "$(rows_seen)" 3)"
+assert "…and the tier stays a full word, not strd"    "$(has 'standard → sonnet' "$OUT")"
+# A TIER WIDER THAN `standard`, which is the case a literal 8 gets wrong: the padding is
+# computed from what this banner shows, so a name nobody has coined yet aligns too.
+tiers_cfg '{ "deep": "opus", "experimental": "fable" }' \
+          '{ "software-engineer": "deep", "plan-architect": "experimental" }'
+run
+assert "a 12-character tier: the arrows move out to 23+12" "$(eq "$(arrow_col)" 35)"
+assert "…on both rows"                                     "$(eq "$(rows_seen)" 2)"
+assert "…and that tier is printed in full"                 "$(has 'experimental → fable' "$OUT")"
+tracked_cfg
+
+# =======================================================================================
 echo "== 3. the identity HEADER, and the version in it =="
 # =======================================================================================
 run
@@ -475,7 +523,7 @@ lines7="$(printf '%s\n' "$OUT" | grep -c .)"
 assert "…and still short with all seven agents ($lines7 lines, budget 23)" \
   "$([ "$lines7" -le 23 ] && echo 0 || echo 1)"
 assert "…with a row per agent, not a wrapped list" \
-  "$(eq "$(printf '%s\n' "$OUT" | grep -cE '^[a-z-]+ +[a-z]+ → ')" 7)"
+  "$(eq "$(printf '%s\n' "$OUT" | grep -cE '^[a-z-]+ +[a-z]+ +→ ')" 7)"
 tracked_cfg
 
 # NON-VACUITY, one section at a time: a hook that had simply stopped printing would pass
@@ -890,7 +938,10 @@ assert "…and the banner still prints its tables"       "$(has 'SETTING ' "$OUT
 assert "…with the hostile row present, neutralised one character for one" \
   "$(has 'user?007 · first?last@example.com' "$OUT")"
 assert "…and the role whose name began with a heading marker"  "$(has '?software-engineer' "$OUT")"
-assert "…and the tier row whose model alias carried a pipe"    "$(has 'deep → opus?x' "$OUT")"
+# Matched with a gap, not a fixed one: the tier is padded to the widest tier in the table
+# (§2c), and this row's claim is the neutralised `|`, not the width.
+assert "…and the tier row whose model alias carried a pipe" \
+  "$(printf '%s\n' "$OUT" | grep -qE 'deep +→ opus\?x' && echo 0 || echo 1)"
 # NOT ONE MARKDOWN-ACTIVE CHARACTER IN A TABLE ROW. Scoped to the rows — a path elsewhere in
 # the banner may legitimately contain a `_`, and TMPDIR on a CI runner does.
 tbl_rows() { printf '%s\n' "$1" | awk '/^(SETTING|ROLE) /{f=1} f&&/^[[:space:]]*$/{f=0} f'; }

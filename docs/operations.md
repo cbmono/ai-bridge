@@ -933,9 +933,9 @@ owner                 example-user-007 · you@example.com  local/tracked
 maxAgentsInFlight     2                                   local
 maxPrLoc              2000                                tracked
 
-ROLE                  TIER→MODEL                          FROM
-cataloguer            standard→sonnet                     tracked
-software-engineer     deep→opus                           local
+AGENT (role)          TIER → MODEL                        FROM
+cataloguer            standard → sonnet                   tracked
+software-engineer     deep     → opus                     local
 ```
 
 **The blank line above the header is deliberate, and it is the banner's.** Claude Code
