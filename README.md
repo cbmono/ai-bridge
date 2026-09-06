@@ -540,6 +540,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos (code intelligence — **not** the knowledge base) | yes |
 | `build-kb-index.sh` | regenerates `knowledge/index.md` from document frontmatter; `--check` fails on a doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a status outside `{current, superseded, corrected}`, a tag outside `knowledge/vocab.md`, a dangling supersession edge, or (as a warning, an error under `--strict`) a bundle-relative link in `knowledge/**` that resolves to nothing | yes, that index |
+| `papercuts.sh` | the cheap end of the knowledge loop — `add` appends one validated line to `knowledge/papercuts.md`, `check` refuses a malformed entry, `report` groups the unprocessed entries by surface for the cataloguer, `due` answers whether a weekly pass is owed, `pass` marks the entries processed | `add`/`pass` only, that record |
 
 **Internal helpers** — the machinery calls these; you normally don't. They are listed so
 the table above accounts for **every** script in `plugin/scripts/`, which
