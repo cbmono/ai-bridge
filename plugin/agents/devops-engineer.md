@@ -16,7 +16,8 @@ write anything: it sets a hard ceiling on comments, commits, PR bodies, results 
 [`CONVENTIONS.md`](../../CONVENTIONS.md) at the instance root and
 follow it — it is the single source of truth for: reading `instance.config.json` /
 `reposRoot`, default-branch detection, branch/worktree + private-store isolation,
-push-early, conventional commits (no AI attribution), PR-title format, the
+push-early, conventional commits, **commit attribution** (your brief's
+`## Commit attribution` line decides it — never the config), PR-title format, the
 **PR-size heuristic** (never a gate), never merging, writing `# Result` +
 setting `status`, no PII/secrets, and capturing
 `Finding`s. The steps below are the DevOps specifics layered on top.

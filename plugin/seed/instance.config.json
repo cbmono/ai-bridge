@@ -11,6 +11,8 @@
     "example-user-007": "example-user-007@example.com",
     "example-user-008": "example-user-008@example.com"
   },
+  "commitAttribution": "claude",
+  "$commitAttribution": "Whether a role agent ends a TARGET-REPO commit with the `Co-Authored-By: Claude` trailer. `claude` (the default, and what an absent key means) keeps it, because Claude did co-author the commit and the trailer is simply true; `none` is the opt-out for an organisation that requires one, and drops both the trailer and any session URL. PER-MACHINE OVERRIDABLE -- SCHEMA.md, 'Per-machine config overrides'. No agent ever reads this key: scripts/dispatch-brief.sh resolves it and the dispatch brief carries the answer, so one resolver answers for every role. It does NOT reach scripts/commit-as.sh, which authors THIS bundle's own commits as the role and adds no trailer at any setting.",
   "defaultRepo": null,
   "maxAgentsInFlight": 4,
   "maxPrLoc": 2000,

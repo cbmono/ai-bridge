@@ -32,7 +32,12 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # 12980 -> 13452 (ai-bridge-next/task-022). +472 bytes for the one sentence that defines
 # what a bare `scripts/<x>.sh` means, plus the shell that resolves it — 46 references in
 # the seed pointed at a directory a data-only bundle does not have. Measured, not rounded.
-CEILING=13452
+# 13452 -> 13650 (ai-bridge-next/task-031). +198 bytes: the "no AI attribution" invariant
+# is replaced by the rule that supersedes it — the trailer stays, the brief carries the
+# resolved `commitAttribution`, `none` is the opt-out. Trimmed twice before raising, and
+# an invariant an agent must hold before its first commit has to be always-loaded, exactly
+# as the prohibition it replaces was. Measured, not rounded; flagged in the PR body.
+CEILING=13650
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
