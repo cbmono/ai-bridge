@@ -103,8 +103,8 @@ if [[ -n "$WIDTH" ]]; then
 fi
 case "$COLOR" in auto|always|never) ;; *) echo "print-board: --color takes auto|always|never" >&2; exit 2 ;; esac
 
-# Self-detecting, and silent when it does not apply. Not an error: this script is
-# symlinked into every instance and will be run from a product repo, a worktree, or a
+# Self-detecting, and silent when it does not apply. Not an error: this script ships in
+# the plugin, serves every instance, and will be run from a product repo, a worktree, or a
 # home directory by accident, and a wall of usage text there is noise.
 [[ -f SCHEMA.md && -f instance.config.json ]] || exit 0
 

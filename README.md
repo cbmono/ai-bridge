@@ -666,8 +666,9 @@ Agent-facing rules are in [`CLAUDE.md`](CLAUDE.md) and [`.claude/rules/`](.claud
 
 ai-bridge used to live as an `ai-bridge/` subtree inside
 [`ai-setup`](https://github.com/cbmono/ai-setup), the Claude Code defaults repo. **This
-repo is now the canonical copy** — every instance's machinery is symlinked from *this*
-checkout, and `/ai-bridge:init` and `/ai-bridge:welcome fix` here are the ones to run.
+repo is now the canonical copy** — every instance's machinery ships from *this* repo as
+the `ai-bridge` plugin, and `/ai-bridge:init` and `/ai-bridge:welcome fix` here are the
+ones to run.
 
 `ai-setup` **no longer carries the subtree** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69)
 removed it, because a stale second copy that documentation still described as live was

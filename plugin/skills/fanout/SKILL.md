@@ -15,7 +15,7 @@ allowed-tools: Agent, Read, Glob, Grep, Bash(ls:*)
 Dispatch independent **ad-hoc** requests to **parallel background agents** so the
 main session stays free as a coordinator, instead of working them one at a time.
 
-> **Generic template file** (symlinked from the `ai-bridge` template). This is for
+> **Generic plugin file** (ships inside the `ai-bridge` plugin, never copied into a bundle). This is for
 > **ad-hoc chat requests** (rephrase a doc, rename a folder, research a question) —
 > **not** tracked `projects/` work. Anything that becomes a PR or a `projects/`
 > deliverable goes through `/new-project` → promote `ready` → `/ai-bridge:dispatch`, never here.

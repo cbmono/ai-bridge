@@ -14,7 +14,7 @@
 #
 # WHY THIS EXISTS — `CONVENTIONS.md` has required a short, shaped PR body since the rule
 # merged at 14:59 UTC on 2026-08-29. FIVE HOURS LATER an agent that had that rule — the
-# document is symlinked into its instance and its own agent file references it — opened a
+# document is seeded into its instance and its own agent file references it — opened a
 # 14,673-character description. The rule was present, reachable and referenced, and it was
 # not followed, because the short form's only reader was `tests/pr-body-shape.test.sh`,
 # which asserts THE RULE IS NAMED IN THE DOCUMENT. That is a reader for the documentation,
@@ -215,7 +215,7 @@
 # give the repo two answers to one question. This file closes the gap that nothing read
 # the body's SHAPE at all.
 #
-# GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
 # instance. It takes no org, repo or vendor identity: those come from the arguments.
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:

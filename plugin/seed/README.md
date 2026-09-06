@@ -4,10 +4,12 @@ An [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-cata
 (OKF) **Knowledge Bundle** that acts as a **control panel** for a team of
 background AI agents working on this group's product repositories.
 
-This is an **instance** of the `ai-bridge` template. The generic machinery
-(`SCHEMA.md`, `agents/`, `scripts/`, the role agents and the `SessionStart` hook)
-is **symlinked in** from the template and gitignored; the slash commands come from
-the `ai-bridge` **plugin** (`/ai-bridge:dispatch`, `/ai-bridge:new-project`,
+This is an **instance** of the `ai-bridge` template. The generic machinery (the role
+agents, the machinery scripts and the `SessionStart` hook) ships in the `ai-bridge`
+**plugin**, installed once per machine — this bundle holds no copy of it and no link into
+any checkout. Its seed docs (`SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, this file)
+were **copied once and are yours**. The slash commands come from the same **plugin**
+(`/ai-bridge:dispatch`, `/ai-bridge:new-project`,
 `/ai-bridge:close-project`, `/ai-bridge:pr-review-request`,
 `/ai-bridge:answer`, `/ai-bridge:audit`, `/ai-bridge:board`,
 `/ai-bridge:fanout`) and are
@@ -67,8 +69,9 @@ is — the one key a second person needs), `authorEmail`, `reposRoot`, `worktree
 - `prReviewSlackChannel` — optional; channel name or id for `/ai-bridge:pr-review-request`.
 
 Per-instance permission/env overrides go in `.claude/settings.local.json`
-(gitignored) — never edit the symlinked `.claude/settings.json`, which is shared
-across all instances.
+(gitignored) — keep them out of `.claude/settings.json` beside it, which is a seed file
+copied once from the plugin, so an edit there becomes a conflict the next time
+`/ai-bridge:welcome fix` 3-way merges a template change onto it.
 
 ## How it works
 ```

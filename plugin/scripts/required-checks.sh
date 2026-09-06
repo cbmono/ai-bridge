@@ -43,7 +43,7 @@
 #      wins, the declared file becomes dead weight, and the gate also starts applying
 #      to human merges and to anything else pushing at the branch.
 #
-# GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
 # instance. It takes no org, repo, or check names: those live in the target repo.
 #
 # A REVIEWER'S CHECK IS NOT A REVIEW, AND A CHECK'S NAME NEVER SETTLES THAT. `pass`

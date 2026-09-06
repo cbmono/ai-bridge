@@ -65,7 +65,7 @@
 # tick window on tasks they each own, or two humans pushing the control panel at
 # once. Those stay ordinary git conflicts, resolved the ordinary way.
 #
-# GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
 # instance. It reads no org, repo or path literal.
 #
 # Verified by tests/task-owner.test.sh.

@@ -55,7 +55,7 @@
 # decided from the document alone, before the host is consulted at all, so an offline
 # machine, a missing CLI or a rate limit cannot silence the one verdict this exists for.
 #
-# GENERIC TEMPLATE FILE — symlinked from the `ai-bridge` template; do not edit per
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
 # instance. It reads no org, repo or path literal.
 #
 # Verified by tests/check-dispatch.test.sh.
@@ -177,8 +177,8 @@ strip_trailing_comment() { # <text, one or more lines>
 # this an instance at all". It was a PAIR with `.claude/agents` until the name swap
 # retired that directory: the eight role agents ship in the `ai-bridge` plugin now, so the
 # pair would have stopped matching in every instance at its next re-stamp.
-# Deliberately not $CLAUDE_PROJECT_DIR and not a path literal: this script is symlinked
-# into every instance and is run from anywhere, and a task document already knows where it
+# Deliberately not $CLAUDE_PROJECT_DIR and not a path literal: this script ships in the
+# plugin, serves every instance and is run from anywhere, and a task document already knows where it
 # lives. No signature ⇒ no answer, which is how a fixture outside an instance stays quiet.
 bundle_root() { # <task-doc>
   local d
