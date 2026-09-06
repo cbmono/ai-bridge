@@ -350,7 +350,10 @@ ticks, regardless of how long a tick runs.
   precondition, one line naming the gap, and that the tick is dispatched. If a start
   scrolls the terminal, the launcher did work that belonged in the tick — move it
   there; do not quiet it in place.
-- A tick with nothing to do is a fast no-op — the gap keeps idle cycles cheap.
+- A tick with nothing to do is a fast no-op — the gap keeps idle cycles cheap — and
+  **its whole report is one line naming the next check** (`project-manager.md` step
+  0.9). Pass the gap on: the tick puts it in `tick-delta.sh check --gap <gap>` so
+  that line can say when you will next hear from the loop.
 - Each tick refreshes `AWAITING.md` **only when that file already exists**; deleting
   it turns the queue off for good (the loop never recreates it); `touch AWAITING.md`
   turns it back on.

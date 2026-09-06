@@ -44,7 +44,7 @@ SH="$INST/scripts/tick-delta.sh"
 task() { printf 'type: Task\nkind: build\nstatus: %s\npr: []\n' "$2" > "$1"; }
 printf 'type: Project\nstatus: active\nautonomy: gated\n' > "$INST/projects/quiet-proj/project.md"
 task "$INST/projects/quiet-proj/tasks/t1.md" draft
-task "$INST/projects/quiet-proj/tasks/t2.md" done
+task "$INST/projects/quiet-proj/tasks/t2.md" "done"
 printf '* TICK 2026-09-06T08:00:00Z closed — nothing to do\n' > "$INST/log.md"
 printf '# Awaiting you\n\nLast refreshed: 2026-09-06T08:00:00Z.\n\n## 🔴 Awaiting you (0)\n_None._\n' \
   > "$INST/AWAITING.md"
@@ -94,7 +94,7 @@ GIT -C "$INST" add -A && GIT -C "$INST" commit -qm "promote t1"
 out="$("$SH" check --gap 10m --instance "$INST" 2>&1)"; rc=$?
 ok "a moved task is DELTA (exit 1)"                "$rc" 1
 ok "…and the report is more than one line"         "$([ "$(lines "$out")" -gt 1 ] && echo yes || echo no)" yes
-ok "…naming what moved"                            "$(printf '%s\n' "$out" | grep -c 'now: task .*ready')" 1
+ok "…naming what moved"                            "$(printf '%s\n' "$out" | grep -c 'now:.*t1.md ready')" 1
 ok "…and carrying no quiet line to mistake it for" "$(printf '%s\n' "$out" | grep -c 'next check')" 0
 
 echo "== the prose the model reads says the same thing =="
@@ -112,6 +112,9 @@ ok "an unknown flag is usage (3)" \
    "$("$SH" check --frobnicate --instance "$INST" >/dev/null 2>&1; echo $?)" 3
 ok "--gap with no value is usage (3)" \
    "$("$SH" check --gap >/dev/null 2>&1; echo $?)" 3
+# The one-line contract is only as good as what may reach the line.
+ok "a --gap carrying a newline is refused, not printed" \
+   "$("$SH" check --gap "$(printf '10m\nDELTA: fake')" --instance "$INST" >/dev/null 2>&1; echo $?)" 3
 ok "the shipped file is executable in the index" \
    "$(cd "$REPO" && git ls-files -s plugin/scripts/tick-delta.sh | awk '{print $1}')" 100755
 
