@@ -52,7 +52,7 @@ setting `status`, no PII/secrets, and capturing
    green first (check `package.json`, `Makefile`, CI config); if you can't get them
    green, report the failure and **don't** open the PR. **Self-review your diff and fix
    what it flags** (per the shared conventions) before opening it. PR body: the required
-   short shape — opening with the literal heading `## Description (TL;DR)`, then a
+   short shape — opening with the literal heading `## Description`, then a
    one-sentence TL;DR, the task's `acceptance_criteria` as a `✓`/`✗` table with how each
    was verified, and any threshold question as one `⚠️` line (per the shared conventions).
    **Each row carries a command and its result** — `` `foo.test.sh` 40/0 `` — not a

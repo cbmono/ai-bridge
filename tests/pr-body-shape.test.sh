@@ -109,10 +109,10 @@ echo "== 1. the shape: the heading LITERAL, TL;DR, criteria table, flagged line 
 # The heading is asserted as the exact string a gate greps for, in the rule AND in the
 # example, because `pr-body-clearance.sh` matches on it: a doc that renamed the heading
 # while the predicate kept the old one would refuse every conforming PR.
-ok "the opening heading is a LITERAL"     "$(saw "$CONV_FLAT" 'It opens with the literal heading `## Description (TL;DR)`')" yes
-ok "…named first among the parts"         "$(saw "$CONV_FLAT" '**The heading `## Description (TL;DR)`, first**')" yes
+ok "the opening heading is a LITERAL"     "$(saw "$CONV_FLAT" 'It opens with the literal heading `## Description`')" yes
+ok "…named first among the parts"         "$(saw "$CONV_FLAT" '**The heading `## Description`, first**')" yes
 ok "…required character for character"    "$(saw "$CONV_FLAT" '**That exact string, character for character**')" yes
-ok "the example opens with that heading"  "$(saw "$CONV_FLAT" '```md ## Description (TL;DR)')" yes
+ok "the example opens with that heading"  "$(saw "$CONV_FLAT" '```md ## Description')" yes
 ok "a one-sentence TL;DR follows it"      "$(saw "$CONV_FLAT" 'then **a one-sentence TL;DR** under it')" yes
 ok "the gate that reads it is named"      "$(saw "$CONV_FLAT" 'pr-body-clearance.sh` looks for it at the clearance gate')" yes
 ok "the criteria go in a TABLE"           "$(saw "$CONV_FLAT" "task's \`acceptance_criteria\` as a table")" yes
@@ -272,7 +272,7 @@ ok "the criteria table invariant is here" "$(saw "$SEED_FLAT" "The PR body carri
 # The seed carries the invariants that must hold whether or not an agent reached
 # CONVENTIONS.md. The heading is now one of them — it is gated, so an agent that never
 # read the long rule still has to know the string.
-ok "the seed names the heading literal"   "$(saw "$SEED_FLAT" 'The PR body opens with the literal heading `## Description (TL;DR)`')" yes
+ok "the seed names the heading literal"   "$(saw "$SEED_FLAT" 'The PR body opens with the literal heading `## Description`')" yes
 ok "…and says the gate greps for it"      "$(saw "$SEED_FLAT" 'the clearance gate greps for it')" yes
 ok "the seed carries the row bound"       "$(saw "$SEED_FLAT" '**A row is a command and its result, not a narration**')" yes
 ok "…and the readability floor with it"   "$(saw "$SEED_FLAT" 'Short is the goal; cryptic is a failure.')" yes
@@ -284,7 +284,7 @@ echo "== 9. MUTATION: cut the gate bullet out and every gate assertion flips =="
 strip_bullet "$CONV" '**The criteria table is the merge gate' > "$TMP/conv-no-gate.md"
 MUT_FLAT="$(flatten "$TMP/conv-no-gate.md")"
 ok "the mutation removed something"       "$([ "$(wc -c < "$TMP/conv-no-gate.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
-ok "CONTROL: the heading survives it"     "$(saw "$MUT_FLAT" '**The heading `## Description (TL;DR)`, first**')" yes
+ok "CONTROL: the heading survives it"     "$(saw "$MUT_FLAT" '**The heading `## Description`, first**')" yes
 ok "CONTROL: the shape bullet survives"   "$(saw "$MUT_FLAT" '**Required, always**')" yes
 ok "mutant: ✓-only-if-verified is gone"   "$(saw "$MUT_FLAT" '**Mark `✓` only for a criterion you actually verified')" no
 ok "mutant: the merge block is gone"      "$(saw "$MUT_FLAT" 'A `✗` **blocks the PR from being merge-eligible**')" no
@@ -344,7 +344,7 @@ ok "mutant: the measurement is gone"      "$(saw "$COMMENT_FLAT" 'averaged **2,0
 echo
 echo "== 13. MUTATION: cut the shape bullet, and the heading assertions flip =="
 # The heading is the one element a machine depends on: `pr-body-clearance.sh` greps for
-# `## Description (TL;DR)` and refuses a body without it. So the assertions that pin the
+# `## Description` and refuses a body without it. So the assertions that pin the
 # literal need their own mutation — otherwise a future edit could drop the heading from
 # the document while the predicate kept refusing on it, and every PR would be refused by
 # a rule nobody could find. The gate bullet is the control, since it is a separate bullet.
@@ -353,8 +353,8 @@ SHAPE_FLAT="$(flatten "$TMP/conv-no-shape.md")"
 ok "the mutation removed something"       "$([ "$(wc -c < "$TMP/conv-no-shape.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
 ok "CONTROL: the gate bullet survives"    "$(saw "$SHAPE_FLAT" '**The criteria table is the merge gate')" yes
 ok "CONTROL: the row bound survives"      "$(saw "$SHAPE_FLAT" '**Narration is not wanted**')" yes
-ok "mutant: the heading literal is gone"  "$(saw "$SHAPE_FLAT" 'It opens with the literal heading `## Description (TL;DR)`')" no
-ok "mutant: the example heading is gone"  "$(saw "$SHAPE_FLAT" '```md ## Description (TL;DR)')" no
+ok "mutant: the heading literal is gone"  "$(saw "$SHAPE_FLAT" 'It opens with the literal heading `## Description`')" no
+ok "mutant: the example heading is gone"  "$(saw "$SHAPE_FLAT" '```md ## Description')" no
 ok "mutant: character-for-character gone" "$(saw "$SHAPE_FLAT" '**That exact string, character for character**')" no
 ok "mutant: the named gate is gone"       "$(saw "$SHAPE_FLAT" 'pr-body-clearance.sh` looks for it at the clearance gate')" no
 ok "mutant: the one-line ⚠️ bound is gone" "$(saw "$SHAPE_FLAT" '**Each `⚠️` stays one line')" no
@@ -370,7 +370,7 @@ echo "== 14. MUTATION: cut the house-style bullet, and the trim/record split goe
 strip_bullet "$CONV" '**Write for a human who will not read it.**' > "$TMP/conv-no-style.md"
 STYLE_FLAT="$(flatten "$TMP/conv-no-style.md")"
 ok "the mutation removed something"       "$([ "$(wc -c < "$TMP/conv-no-style.md")" -lt "$(wc -c < "$CONV")" ] && echo yes || echo no)" yes
-ok "CONTROL: the PR-body shape survives"  "$(saw "$STYLE_FLAT" '**The heading `## Description (TL;DR)`, first**')" yes
+ok "CONTROL: the PR-body shape survives"  "$(saw "$STYLE_FLAT" '**The heading `## Description`, first**')" yes
 ok "CONTROL: the criteria bullet survives" "$(saw "$STYLE_FLAT" '**Required, always**')" yes
 ok "mutant: the style name is gone"       "$(saw "$STYLE_FLAT" '**Write for a human who will not read it.**')" no
 ok "mutant: short sentences are gone"     "$(saw "$STYLE_FLAT" '**Short sentences.** One idea each.')" no
