@@ -45,7 +45,7 @@ doc projects/live/phases/1-a.md '---' 'type: Phase' 'title: A' \
 doc projects/live/tasks/task-001-ok.md '---' 'type: Task' 'title: Ok' 'status: ready' \
   'objective: /objectives/good.md' 'phase: /projects/live/phases/1-a.md' "timestamp: $TS" '---' 'body'
 doc knowledge/findings/good.md '---' 'type: Finding' 'title: F' 'category: learning' \
-  'status: current' "timestamp: $TS" '---' 'body'
+  'lesson: a one-line takeaway' 'status: current' "timestamp: $TS" '---' 'body'
 
 # A task carrying the free-text `answered_questions:` audit list. Asserted SILENT on
 # purpose: that key is deliberately NOT machine-read, so the validator must have no
@@ -87,6 +87,15 @@ doc projects/live/tasks/task-012-unterminated.md '---' 'type: Task' 'title: Unte
 # Service carries its own status enum, which enum_for originally omitted.
 doc knowledge/services/bad-service.md '---' 'type: Service' 'title: S' 'status: retired' "timestamp: $TS" '---' 'body'
 doc knowledge/services/good-service.md '---' 'type: Service' 'title: S2' 'status: active' "timestamp: $TS" '---' 'body'
+# CONVENTIONS.md -> "Write less" bounds a Finding at 40 lines and requires a one-line
+# `lesson:`. Both WARN rather than fail: every bundle alive has findings that predate the
+# rule, and a validator that fails on all of them is one people switch off.
+doc knowledge/findings/no-lesson.md '---' 'type: Finding' 'title: NoLesson' \
+  'category: learning' 'status: current' "timestamp: $TS" '---' 'body'
+{ printf '%s\n' '---' 'type: Finding' 'title: TooLong' 'category: learning' \
+    'lesson: it is too long' 'status: current' "timestamp: $TS" '---'
+  for i in $(seq 40); do echo "line $i"; done
+} > knowledge/findings/too-long.md
 # Below knowledge/<kind>/ is not a schema location and must be ignored.
 doc knowledge/findings/sources/raw-note.md '# a raw note a human dropped in'
 # The FIFTH knowledge kind. `knowledge/<kind>/` is a shape, not a list of four names,
@@ -168,10 +177,17 @@ assert "a Reference must HAVE a status" \
 assert "an owner field is never validated"           "$(not_seen 'task-014-owner.md')"
 assert "…not even a malformed one"                   "$(not_seen 'task-015-owner-odd.md')"
 
+echo "== a Finding is bounded, and both bounds only WARN =="
+assert "a Finding with no lesson: warns"            "$(saw "no one-line 'lesson:'")"
+assert "…and it is a WARN, not an ERROR"            "$(printf '%s\n' "$OUT" | grep -q "WARN.*no-lesson.md" && echo 0 || echo 1)"
+assert "a 48-line Finding warns"                    "$(saw 'Finding is 48 lines')"
+assert "…naming the cap"                            "$(saw "caps it at 40")"
+assert "--strict turns both into failures"          "$([[ $RC_STRICT -ne 0 ]] && echo 0 || echo 1)"
+
 echo "== valid documents are silent =="
 for f in objectives/good.md projects/live/project.md projects/live/phases/1-a.md \
          projects/live/tasks/task-001-ok.md projects/live/tasks/task-013-answered.md \
-         knowledge/findings/good.md; do
+         knowledge/findings/good.md knowledge/findings/sources/raw-note.md; do
   assert "no complaint about $f" "$(not_seen "$f")"
 done
 
@@ -188,6 +204,7 @@ assert "--strict also exits non-zero"             "$([[ $RC_STRICT -ne 0 ]] && e
 echo "== a clean bundle passes, and --strict still passes with no warnings =="
 rm -f projects/live/tasks/task-00[2-9]*.md projects/live/tasks/task-01[02]*.md \
       knowledge/services/bad-service.md \
+      knowledge/findings/no-lesson.md knowledge/findings/too-long.md \
       knowledge/references/bad-ref.md knowledge/references/no-status-ref.md
 set +e
 CLEAN="$(bash "$VALIDATOR" 2>&1)"; CRC=$?
