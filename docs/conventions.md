@@ -656,6 +656,21 @@ on the instance registration existed for the mirror image of that skew and did *
 `hooks.json` and the scripts ship in one package and cannot skew, so the wrapper would only
 hide a real packaging error.)
 
+**The 2026-08-31 audit's top finding — "`gated` is enforced by prose, not mechanism" — is
+CLOSED, and these are the names that close it.** It measured a tree whose `PreToolUse` rules
+matched no `gh` shape at all, so a dispatched agent could self-merge its own green PR, and
+whose only push rule (`force_push_protected`) let a plain push to `main` through by design.
+Both are hook rules now: **`rule_subagent_merge`** refuses `gh pr merge`,
+`gh pr review --approve` and the REST `/pulls/N/merge` and `/merges` endpoints for a caller
+carrying an `agent_id` ([#93](https://github.com/cbmono/ai-bridge/pull/93)), and
+**`rule_subagent_push_default`** refuses a dispatched agent's push to a product repo's
+default branch, exempting the bundle the tick pushes by design
+([#97](https://github.com/cbmono/ai-bridge/pull/97)). The third strand of the same finding —
+a `project-manager` tick running with no dispatch lock — is refused by
+`plugin/scripts/tick-lock.sh` at **exit 4** (no lock, no launcher), not by a hook, because
+that fact is in the lock file and not in the tool payload. The audit report is a snapshot of
+2026-08-31 and still reads as current; on this finding it is not.
+
 Covered by `tests/deny-baseline.test.sh` (135 assertions), and mutation-checked in both
 directions: neutering one rule fails 7 assertions, making one unconditional fails 6, and
 adding a rule to `RULES` with no test here fails by name.
