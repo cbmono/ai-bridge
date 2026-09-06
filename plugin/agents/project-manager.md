@@ -549,6 +549,15 @@ state, and act only on deltas.
    `PRUNE_ACTIVE_MINUTES` mtime veto (default 120) is a backstop, not the guard; your
    in-flight count is the guard.
 
+   **Check the citations you are reflecting.** For each task you move to `done`, run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/cite-check.sh --text-file <f> --brief <slugs>` over its
+   `# Result` section and over each merged PR body, with the slugs that task's brief
+   carried. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
+   **recorded as a `# Notes` line** naming the id and its verdict — `UNREAD` (a real doc
+   nobody read) or `FABRICATED` (no such doc) — and exit 1 also goes in the tick report.
+   It never changes the reflect verdict: a merged PR is merged. `CONVENTIONS.md` → cite
+   knowledge as `[[finding-slug]]`.
+
 6. **Close completed projects (propose only — human-gated).** For each project whose
    tasks are **all** terminal (`done`/`cancelled`), do **not** close it yourself —
    surface it as a 🔴 *Awaiting you* item. Only on the human's OK (in-session or via

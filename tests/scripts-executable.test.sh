@@ -498,9 +498,9 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # files, its min-count), and +1 is the new group's anchored call-site pin.
 # 62 -> 63: plugin/scripts/resolve-autonomy.sh (ai-bridge-v2/task-018), one more
 # executable machinery file in the per-file enumeration.
-# 63 -> 64: plugin/scripts/stall-counter.sh (ai-bridge-next/task-011), same reason — one
-# more file in the per-file enumeration, nothing about the checks themselves changed.
-EXPECTED_ASSERTIONS=64
+# 63 -> 64: plugin/scripts/stall-counter.sh (ai-bridge-next/task-011), same reason.
+# 64 -> 65: plugin/scripts/cite-check.sh (ai-bridge-next/task-014), same reason.
+EXPECTED_ASSERTIONS=65
 TOTAL=$((pass + fail))
 # EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
 # it annotates, so a merge can plausibly keep the annotations and lose the assignment —
