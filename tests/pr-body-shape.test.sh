@@ -133,7 +133,7 @@ ok "PR size is one ⚠️ line"               "$(saw "$CONV_FLAT" 'say so in the
 # entry — and the section is pinned under the NAME it actually grows back under.
 ok "each ⚠️ is bounded to ONE line"       "$(saw "$CONV_FLAT" '**Each `⚠️` stays one line')" yes
 ok "…a ⚠️ paragraph is not a flag"        "$(saw "$CONV_FLAT" 'has stopped being a flag')" yes
-ok "## Notes is bounded the same way"     "$(saw "$CONV_FLAT" '**one line per note, bounded exactly as the `⚠️` lines are.**')" yes
+ok "## Notes is bounded the same way"     "$(saw "$CONV_FLAT" '**one line per note, at most THREE of them, bounded exactly as the `⚠️` lines are.**')" yes
 ok "…named as the section that regrows"   "$(saw "$CONV_FLAT" '"Judgement calls for the reviewer" is the heading this section grows under')" yes
 
 echo
@@ -227,10 +227,11 @@ ok "…two of a thing makes it a table"     "$(saw "$CONV_FLAT" 'More than two o
 ok "lead with the outcome"                "$(saw "$CONV_FLAT" '**Lead with the outcome** — what happened and what it means')" yes
 ok "the split is stated as a rule"        "$(saw "$CONV_FLAT" '**Trim the transmission, never the record.**')" yes
 ok "…the CONCISE surfaces are listed"     "$(saw "$CONV_FLAT" '| PR bodies, review comments and replies, status reports, code comments | **concise**')" yes
-ok "…the RECORD surfaces are listed"      "$(saw "$CONV_FLAT" '| Task docs, commit messages, `Finding`s | **as long as the reasoning needs**')" yes
+ok "…the BOUNDED record is listed"        "$(saw "$CONV_FLAT" '| Commit messages, `Finding`s | **bounded, but wider**')" yes
+ok "…the task doc is the unbounded one"   "$(saw "$CONV_FLAT" '| Task docs | **as long as the reasoning needs**')" yes
 ok "brevity never drops evidence"         "$(saw "$CONV_FLAT" '**Brevity is never an excuse to drop evidence, a criterion or a caveat.**')" yes
 ok "…it is licence to drop NARRATION"     "$(saw "$CONV_FLAT" 'It is licence to drop *narration*')" yes
-ok "…the record has no length limit"      "$(saw "$CONV_FLAT" 'neither of which has a length limit')" yes
+ok "…the task doc has no length limit"    "$(saw "$CONV_FLAT" 'is the one surface with no length limit')" yes
 ok "…so reasoning has nowhere to be lost" "$(saw "$CONV_FLAT" '**So there is nowhere for reasoning to be lost:**')" yes
 
 echo
