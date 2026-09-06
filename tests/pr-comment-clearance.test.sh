@@ -348,6 +348,59 @@ serve "$(reply_file 'Round 1 addressed.' '' '- `run.sh:42` — already covered b
 expect "a bare 'already' is not a verdict -> refuse" 1 --comment 4242
 
 echo
+echo "== 'correct' is a verdict only where it STANDS as one, never as an adjective =="
+# THE REFUSE HALF. Measured on 1.1.x: `correct` shipped as a bare token, so an entry
+# DESCRIBING a fix it had not made cleared — every other token in the table is a
+# past-tense verdict and this was the one adjective. The probe is the measured one: entry
+# 1 states no verdict and says outright the fix was not done, and the pre-fix reader named
+# only entry 2.
+ADJ="$(reply_file 'Round 1 addressed.' '' \
+  '- Finding 1 — the correct fix would be to quote the path, but I have not done it.' \
+  '- Finding 2 — I think the reviewer is wrong about the timeout.')"
+serve "$ADJ"
+expect "the measured probe: two verdict-less entries -> refuse" 1 --comment 4242
+says   "  ...naming the ADJECTIVAL entry, which used to clear" "entry 1"
+says   "  ...and the plainly verdict-less one" "entry 2"
+# Its own control: the same reply with a verdict on entry 1 clears, so the refusal above is
+# about the missing verdict and not about the fixture.
+serve "$(reply_file 'Round 1 addressed.' '' \
+  '- Finding 1 — fixed: the path is quoted now.' \
+  '- Finding 2 — declined: the timeout is per attempt by design.')"
+expect "…the same two findings WITH verdicts -> clear" 0 --comment 4242
+# The adjective in its other ordinary shapes, each alone in a reply so nothing else can be
+# answering for the refusal.
+for adj in 'the correct approach is a retry, and I have not written one' \
+           'a correct implementation would bound the loop' \
+           'this is the correct reading of the spec, but nothing changed here'; do
+  serve "$(reply_file 'Round 1 addressed.' '' "- \`run.sh:42\` — $adj.")"
+  expect "adjectival: '${adj:0:34}…' -> refuse" 1 --comment 4242
+done
+
+# THE ALLOW HALF — the entries CONVENTIONS.md's own worked examples use. All four in one
+# reply, which is the shape the document ships, and then one per reply so a single clearing
+# verdict cannot carry the other three.
+serve "$(reply_file 'Round 1 addressed in `a1b2c3d`.' '' \
+  '1. **`run.sh:42` unquoted `$dir`** — fixed: quoted it, `harness-temp-safety.test.sh` 12/0.' \
+  '2. **`http.ts` timeout is per attempt** — already deferred: item 3 on the task list.' \
+  '3. **no test for a 200 with no token** — declined: unreachable until slice 4.' \
+  '4. **the null case is real** — valid: recorded as a follow-up.' '' \
+  'Evidence: `foo.test.sh` 41/0.')"
+expect "the four worked-example verdicts in one reply -> clear" 0 --comment 4242
+for v in fixed declined 'already deferred' valid; do
+  serve "$(reply_file 'Round 1 addressed.' '' "- \`run.sh:42\` — $v: the path is quoted now.")"
+  expect "worked example '$v' alone -> still clears" 0 --comment 4242
+done
+# …and `correct` where it IS the verdict: nothing but punctuation or the end of the entry
+# follows it, which is the whole of the narrowing.
+for c in 'correct: the path is quoted now' \
+         'the reviewer is correct. Quoted now' \
+         'correct, and quoted now' \
+         'correct'; do
+  serve "$(reply_file 'Round 1 addressed.' '' "- \`run.sh:42\` — $c")"
+  expect "standing verdict '${c:0:26}…' -> clear" 0 --comment 4242
+done
+
+echo
 echo "== a reply with no entries is ONE element =="
 # `@coderabbitai review` and "round 2 clean" are legitimate replies with no findings to
 # address; refusing them would be nonsense. A wall of prose where a list belonged is the
@@ -659,6 +712,39 @@ else
   ok "VERDICT ROW DELETED: a '- fixed: …' entry stops clearing" "$rc" 1
   "$SCRIPT" --comment-file "$(entries_reply 120)" >/dev/null 2>&1; rc=$?
   ok "CONTROL: intact, the same entry clears" "$rc" 0
+fi
+
+# And the narrowing gets it too, in the direction that matters: put the BARE token back —
+# the row exactly as it shipped on 1.1.x — and the measured probe must stop being refused.
+# This is the "assert it fails before the fix" case, kept as a mutant rather than as a
+# one-off run, so the defect cannot come back quietly.
+CROW='(^|[^[:alnum:]])correct([[:space:]]*[^[:alnum:][:space:]]|[[:space:]]*$)'
+canchors="$(grep -cF "$CROW" "$SCRIPT" || true)"
+if [ "$canchors" != 1 ]; then
+  printf '  SKIP  %-62s (narrowed row matched %s times, not once)\n' \
+    "mutant: the bare 'correct' token restored" "$canchors"
+  skipped=$((skipped+1))
+else
+  MUT_C="$TMP/mutant-correct.sh"
+  awk -v old="$CROW" -v new='(^|[^[:alnum:]])correct([^[:alnum:]]|$)' \
+      'index($0, old) { print new; next } { print }' "$SCRIPT" > "$MUT_C"
+  chmod +x "$MUT_C"
+  ok "the mutant really restored the bare token" \
+     "$(grep -cF '(^|[^[:alnum:]])correct([^[:alnum:]]|$)' "$MUT_C" || true)" 1
+  ADJ_ONE="$(reply_file 'Round 1 addressed.' '' \
+     '- Finding 1 — the correct fix would be to quote the path, but I have not done it.')"
+  "$MUT_C" --comment-file "$ADJ_ONE" >/dev/null 2>&1; rc=$?
+  ok "BARE TOKEN: the adjectival entry CLEARS — the 1.1.x defect, reproduced" "$rc" 0
+  "$SCRIPT" --comment-file "$ADJ_ONE" >/dev/null 2>&1; rc=$?
+  ok "CONTROL: intact, the same entry is refused" "$rc" 1
+  # On the two-entry probe the mutant still refuses — for entry 2 only, which is exactly
+  # what the measurement reported and why the defect was invisible behind a non-zero exit.
+  mout="$("$MUT_C" --comment-file "$ADJ" 2>&1)"
+  ok "BARE TOKEN: it names entry 2…" "$(printf '%s' "$mout" | grep -c 'entry 2 ' || true)" 1
+  ok "…and NOT entry 1"              "$(printf '%s' "$mout" | grep -c 'entry 1 ' || true)" 0
+  "$SCRIPT" --comment-file "$(reply_file 'Round 1 addressed.' '' \
+     '- `run.sh:42` — correct: the path is quoted now.')" >/dev/null 2>&1; rc=$?
+  ok "CONTROL: intact, the STANDING verdict still clears" "$rc" 0
 fi
 
 echo
