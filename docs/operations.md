@@ -967,6 +967,9 @@ maxPrLoc              2000                                tracked
 AGENT (role)          TIER → MODEL                        FROM
 cataloguer            standard → sonnet                   tracked
 software-engineer     deep     → opus                     local
+
+Board   file:///Users/you/workspace/_ai-bridge-private/.board-live/board.html
+Run     /ai-bridge:board serve for a live URL
 ```
 
 **The blank line above the header is deliberate, and it is the banner's.** Claude Code
@@ -1318,11 +1321,14 @@ cross-owner section is untouched either way: it never came from the published pa
 
 **The `SessionStart` banner surfaces the board too.** `.claude/hooks/session-banner.sh`
 prints where it is when a session starts, so the human can open it instead of digging for
-it: **one line — the label and a `file://` link, and the path exactly once**, plus the
-published URL above it on a machine that has published one (the fourth row below).
-It was three lines until ai-bridge-v5/task-023 (the URL, the same path again bare, and a
-staleness note); the owner read the duplicated path as a bug on sight, and the note said
-nothing that was true of the session — the page's own masthead carries the render time and
+it: **two rows sharing one label column — `Board` and a `file://` link, then `Run` and the
+command that serves it**, with the path exactly once, plus the published URL above them on
+a machine that has published one (the fourth row below). When a local server is already up
+the second row is `Live` and carries its `http://localhost:<port>` instead of the command.
+It was three lines until ai-bridge-v5/task-023 and one until ai-bridge-next/task-029, where
+the repair sentence riding on the end of the link row (`— run … for a live URL`) wrapped on
+every normal terminal width; what task-023 deleted stays deleted — the same path again bare
+and the staleness note, since the page's own masthead carries the render time and
 `watch-board.sh` is documentation. A non-bridge project that happens to inherit the hook
 gets no banner at all. The section prints the path and nothing more: not the page it points
 at, and nothing out of a task document.
@@ -1332,7 +1338,7 @@ same nothing:
 
 | `board` | `.board-live/board.html` | the banner says |
 |---|---|---|
-| `true` (or absent) | present | one line: the `file://` link |
+| `true` (or absent) | present | two rows: the `file://` link, then `Run` (or `Live`, when a server is up) |
 | `true` (or absent) | **absent** | enabled, but never rendered — and that an `/ai-bridge:dispatch` tick or `scripts/build-board.sh` renders one |
 | `false` | either | **nothing**, in silence |
 
