@@ -142,6 +142,14 @@ has() { # <file> <fixed-string> -> yes|no
 # Read one field back out of a lock or claim, the way a human would. Deliberately a
 # different (and dumber) reader than the script's own, so a bug in one is not hidden by the
 # same bug in the other.
+# How many of the lock's files exist. A glob rather than `ls | grep`, so a name with a
+# space could not be miscounted — and the point of the count is that there are only ever two.
+lock_files() { # <instance-dir>
+  local n=0 f
+  for f in "$1"/.tick-lock*; do [ -e "$f" ] && n=$((n + 1)); done
+  printf '%s' "$n"
+}
+
 lock_field_of() { # <file> <key>
   sed -n "s/^$2: *//p" "$1" 2>/dev/null | head -1
 }
@@ -530,7 +538,7 @@ ok "…still in silence"                     "$ATTEMPT_OUT" ""
 ok "…the LOCK records the claimant"        "$(lock_field_of "$MINT/.tick-lock" claimant)" "$ID"
 ok "…and the source that declared it"      "$(lock_field_of "$MINT/.tick-lock" claimant-source)" flag
 ok "…the launcher writes NO claim"         "$(yn test -e "$MINT/.tick-lock.claim")" no
-ok "…and there is exactly one lock file"   "$(ls -A "$MINT" | grep -c '^\.tick-lock')" 1
+ok "…and there is exactly one lock file"   "$(lock_files "$MINT")" 1
 # The dispatch window is 41-47s wide, and inside it the lock is the only thing on disk that
 # can say which tick is coming. `status` reads it out rather than making a human cat the file.
 SOUT="$(bash "$LOCKSH" status --instance "$MINT" 2>&1)"
@@ -556,7 +564,7 @@ ok "…and never as CANNOT ATTRIBUTE"      "$(said 'CANNOT ATTRIBUTE')" no
 ok "…and it did not run"                 "$(ran "$MINT")" 2
 # Released with the lock, and outliving nothing: the id is a field in a file `release` removes.
 bash "$LOCKSH" release --instance "$MINT" >/dev/null 2>&1
-ok "release takes the id with the lock"  "$(ls -A "$MINT" | grep -c '^\.tick-lock')" 0
+ok "release takes the id with the lock"  "$(lock_files "$MINT")" 0
 
 echo
 echo "== adopting proves RE-ENTRY ONLY: a mis-copied id still runs, and is told so =="

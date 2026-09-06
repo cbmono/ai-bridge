@@ -795,7 +795,7 @@ human_age() { # <seconds>
 # Judge an EXISTING lock. Prints the verdict and returns the exit code the caller uses, so
 # `acquire` and `status` cannot drift apart about what "stale" means.
 judge_existing() {
-  local ts ag age
+  local ts ag age minted
   ts="$(lock_field timestamp)"
   ag="$(lock_field agent)"
   age="$(lock_age)" || age=""
