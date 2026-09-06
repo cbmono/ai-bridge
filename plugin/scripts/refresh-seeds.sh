@@ -2,8 +2,9 @@
 #
 # refresh-seeds.sh — port this repo's SEED changes into an already-stamped bundle.
 #
-#   Usage: refresh-seeds.sh <bundle-dir>            # report what has drifted (default)
-#          refresh-seeds.sh <bundle-dir> --apply    # 3-way merge the safe ones
+#   Usage: refresh-seeds.sh <bundle-dir>              # report what has drifted (default)
+#          refresh-seeds.sh <bundle-dir> --apply      # 3-way merge the safe ones
+#          refresh-seeds.sh <bundle-dir> --no-deepen  # never fetch, even a shallow source
 #
 # WHY THIS EXISTS, AND WHY IT IS A MERGE RATHER THAN A COPY.
 # `init-bundle.sh` copies `seed/` into a bundle **only if absent**, and that asymmetry is
@@ -41,6 +42,39 @@
 #     — so the base every bundle was stamped from became unreachable and the drift read as
 #     UNKNOWN where there was no history to fall back on and, worse, as a silent "in sync"
 #     where there was. Follow renames, or the next move repeats it.
+#
+# WHERE THE HISTORY COMES FROM WHEN THE PLUGIN IS INSTALLED RATHER THAN CHECKED OUT.
+# `--follow` fixed the lookup; it could not fix having nothing to look at. An installed
+# plugin lives in `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`, a plain
+# copy with NO `.git` — so on a real machine every seed file a bundle had edited came back
+# UNKNOWN (measured 2026-09-06: 8 of 12 on `_ai-bridge-private`, 7 on alteos) and the
+# script was useless exactly where people run it. Three sources are tried, in this order,
+# and the run SAYS which one it got on its `history:` line:
+#
+#   1. THIS CHECKOUT — the plugin root is inside a git work tree (a developer running
+#      from the repo). Unchanged behaviour, and still the best source.
+#   2. THE MARKETPLACE CLONE — `~/.claude/plugins/marketplaces/<marketplace>/`, derived
+#      from the cache path's own `<marketplace>` segment rather than searched for, is a
+#      real git clone of the repo the plugin was built from. It is accepted ONLY if its
+#      `seed` tree at HEAD is byte-for-byte the seed this plugin ships (same paths, same
+#      blobs): a clone that has moved on, or belongs to another plugin, is a stranger's
+#      history and would compute merge bases for content this copy never had. Rejected
+#      with the reason printed, never silently.
+#   3. THE BUNDLE'S OWN STAMPED-SEED RECORD — `.ai-bridge/seed-base/`, pristine copies
+#      `init-bundle.sh` writes of every seed file IT stamped. That is the merge base by
+#      construction (it is what the bundle's copy was made from), it needs no git at all,
+#      and it is the only source that still works offline on a machine with no clone.
+#      A bundle stamped before this existed has no record — hence source 2.
+#   4. Nothing ⇒ UNKNOWN, and the message names both fixes rather than just the symptom.
+#
+# A SHALLOW CLONE IS NOT A HISTORY SOURCE UNTIL IT IS DEEPENED. `claude` clones a
+# marketplace shallow (measured: 26 commits, `.git/shallow` present), and a truncated walk
+# is the dangerous shape rather than the loud one — the seed's older versions are simply
+# absent, so "the seed has only ever held its current content" reads TRUE and the drift
+# goes silently unreported, which is the #125 failure by a second route. So: detect it,
+# `git fetch --unshallow` once, and say so; and if that cannot be done (`--no-deepen`, or
+# no network) treat the truncated history as evidence for what it DOES contain — a
+# verbatim match is still proof — while refusing to infer ABSENCE from it.
 #
 # "PRIOR" is doing real work in those rules. The current content's own blob is in the history
 # too, and for a file the bundle grew past it is often the blob CLOSEST to what the bundle
@@ -88,10 +122,12 @@ SEED_SRC="$PLUGIN_ROOT/seed"
 DIFF_CAP="${UPGRADE_DIFF_LINES:-40}"   # lines of a conflicting diff to print inline
 
 APPLY=0
+DEEPEN=1
 TARGET=""
 for arg in "$@"; do
   case "$arg" in
     --apply) APPLY=1 ;;
+    --no-deepen) DEEPEN=0 ;;
     -h|--help)
       # Range covers the whole header block above. Extend it when you add lines
       # there, or --help truncates silently.
@@ -130,6 +166,130 @@ left_more() { printf '    %s\n' "$1" >> "$TMPD/left"; }
 : > "$TMPD/left"
 : > "$TMPD/conflicts"
 
+blob_of() { git -C "$PLUGIN_ROOT" hash-object --no-filters -- "$1"; }
+
+# ------------------------------------------------------ where the merge base comes from
+#
+# Every git query below runs from the REPO ROOT with root-relative paths. `git -C <dir>`
+# makes a pathspec relative to <dir>, so querying from the plugin dir with the path
+# git reports for it ("seed/…") silently matched nothing — and "no history"
+# is indistinguishable from "no evidence", which downgraded every drifted file to
+# UNKNOWN. Resolve the root once, and prefix paths with the template's own prefix.
+HIST_KIND=none        # git | record | none — which shape the per-file lookup takes
+HIST_LABEL=""         # what the `history:` line says
+HIST_SHALLOW=0        # the source's history is truncated; absence proves nothing
+REPO_ROOT=""; PREFIX=""
+BASE_DIR="$TARGET/.ai-bridge/seed-base"
+MKT_DIR=""            # the marketplace clone we derived, whether or not we accepted it
+MKT_WHY=""            # why it was rejected, so the report can say
+
+# The marketplace clone for THIS plugin, derived from the install path's own shape:
+# `<…>/plugins/cache/<marketplace>/<plugin>/<version>` ⇒ `<…>/plugins/marketplaces/<marketplace>`.
+# Derived, never searched for: `~/.claude/plugins/marketplaces/` holds every marketplace
+# the machine has ever added, and picking the wrong one gives a stranger's history.
+marketplace_clone() {
+  local mkt cache plugins
+  mkt="$(cd "$PLUGIN_ROOT/../.." 2>/dev/null && pwd)" || return 0
+  [ -n "$mkt" ] || return 0
+  cache="$(dirname "$mkt")"; plugins="$(dirname "$cache")"
+  [ "$(basename "$cache")" = "cache" ] || return 0
+  [ "$(basename "$plugins")" = "plugins" ] || return 0
+  printf '%s\n' "$plugins/marketplaces/$(basename "$mkt")"
+}
+
+# The seed tree a repo carries at HEAD under <prefix>, as "<blob> <path-under-seed>" lines.
+# `ls-tree`'s own output is "<mode> <type> <blob>\t<path>"; --format is git ≥2.36 only.
+tree_seed_list() { # <repo> <prefix>
+  git -C "$1" -c core.quotePath=false ls-tree -r HEAD -- "${2}seed" 2>/dev/null \
+    | awk -v pre="${2}seed/" '{ sha=$3; sub(/^[^\t]*\t/, ""); p=$0;
+                                if (index(p, pre) == 1) { print sha " " substr(p, length(pre)+1) } }' \
+    | sort
+}
+
+# The same shape for the seed this plugin actually ships. Compared as a WHOLE TREE — every
+# path and every blob — because a clone that has moved even one seed file on has content
+# this copy never carried, and a merge base taken from it is a base for somebody else's
+# plugin. Cheap: the seed is 20 files.
+plugin_seed_list() {
+  # `.DS_Store` is excluded because the Finder writes one into any directory it visits and
+  # a cache copy is a directory like any other; it is in `seed/.gitignore`, so it can never
+  # be on the git side of this comparison and would reject a clone that is in fact correct.
+  ( cd "$SEED_SRC" && find . -type f ! -name .DS_Store | sed 's#^\./##' | sort ) \
+    | while IFS= read -r f; do [ -n "$f" ] && printf '%s %s\n' "$(blob_of "$SEED_SRC/$f")" "$f"; done \
+    | sort
+}
+
+# Shallow by the file the criterion names, and by git's own answer — a linked work tree
+# keeps `shallow` in the common git dir, which the literal `$1/.git/shallow` would miss.
+is_shallow() { # <repo>
+  local gd
+  gd="$(git -C "$1" rev-parse --git-common-dir 2>/dev/null)" || return 1
+  case "$gd" in /*) ;; *) gd="$1/$gd" ;; esac
+  [ -f "$gd/shallow" ] && return 0
+  [ "$(git -C "$1" rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]
+}
+
+# Bounded, non-interactive, and it never asks for a credential: a refresh must not hang on
+# a password prompt in a background tick. `timeout` is coreutils and absent from a stock
+# macOS, so the transport's own deadlines are the fallback bound rather than nothing.
+deepen() { # <repo>
+  local t=""
+  command -v timeout  >/dev/null 2>&1 && t=timeout
+  [ -n "$t" ] || { command -v gtimeout >/dev/null 2>&1 && t=gtimeout; }
+  ${t:+$t 180} env GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/echo \
+      GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes -o ConnectTimeout=15}" \
+      GIT_HTTP_LOW_SPEED_LIMIT=1000 GIT_HTTP_LOW_SPEED_TIME=30 \
+      git -C "$1" fetch --quiet --unshallow >/dev/null 2>&1
+}
+
+use_git_source() { # <repo> <prefix> <label>
+  REPO_ROOT="$1"; PREFIX="$2"; HIST_KIND=git; HIST_LABEL="$3"
+}
+
+resolve_history() {
+  # 1. This checkout.
+  if git -C "$PLUGIN_ROOT" rev-parse --show-toplevel >/dev/null 2>&1; then
+    use_git_source "$(git -C "$PLUGIN_ROOT" rev-parse --show-toplevel)" \
+                   "$(git -C "$PLUGIN_ROOT" rev-parse --show-prefix)" \
+                   "this checkout — $(git -C "$PLUGIN_ROOT" rev-parse --show-toplevel)"
+    return 0
+  fi
+
+  # 2. The marketplace clone this install came from.
+  MKT_DIR="$(marketplace_clone)"
+  if [ -z "$MKT_DIR" ]; then
+    MKT_WHY="the install path is not a plugin cache, so no marketplace clone can be derived"
+  elif [ ! -d "$MKT_DIR" ]; then
+    MKT_WHY="no marketplace clone at $MKT_DIR"
+  elif ! git -C "$MKT_DIR" rev-parse --verify -q HEAD >/dev/null 2>&1; then
+    MKT_WHY="$MKT_DIR is not a git repository with a commit"
+  else
+    plugin_seed_list > "$TMPD/seed.mine"
+    local p found=""
+    for p in "plugin/" ""; do
+      git -C "$MKT_DIR" rev-parse --verify -q "HEAD:${p}seed" >/dev/null 2>&1 || continue
+      tree_seed_list "$MKT_DIR" "$p" > "$TMPD/seed.theirs"
+      if cmp -s "$TMPD/seed.mine" "$TMPD/seed.theirs"; then found="$p"; break; fi
+    done
+    if [ -z "$found" ]; then
+      MKT_WHY="$MKT_DIR carries a different seed tree at HEAD than this plugin copy"
+    else
+      use_git_source "$MKT_DIR" "$found" "marketplace clone — $MKT_DIR @ $(git -C "$MKT_DIR" rev-parse --short HEAD)"
+      is_shallow "$MKT_DIR" && HIST_SHALLOW=1
+      return 0
+    fi
+  fi
+
+  # 3. The bundle's own record of what it was stamped from.
+  if [ -d "$BASE_DIR" ]; then
+    HIST_KIND=record
+    HIST_LABEL="this bundle's stamped-seed record — $BASE_DIR"
+    return 0
+  fi
+  HIST_KIND=none
+  HIST_LABEL="none — an installed plugin is a plain copy and carries no git history"
+}
+
 echo "ai-bridge seed refresh — $TARGET"
 echo "plugin:   $PLUGIN_ROOT"
 if [ "$APPLY" -eq 1 ]; then
@@ -137,26 +297,29 @@ if [ "$APPLY" -eq 1 ]; then
 else
   echo "mode:     REPORT ONLY — nothing is written."
 fi
+resolve_history
+echo "history:  $HIST_LABEL"
+
+# A SHALLOW CLONE IS NEVER TREATED AS A FULL HISTORY. Deepening is a fetch into the
+# plugin manager's own clone — it adds objects and touches no bundle and no working tree —
+# so it runs in report mode too; `--no-deepen` declines it. Whichever way it goes, the
+# run says so, and an un-deepened source stops proving ABSENCE (see the loop below).
+if [ "$HIST_SHALLOW" -eq 1 ]; then
+  if [ "$DEEPEN" -eq 1 ] && deepen "$REPO_ROOT" && ! is_shallow "$REPO_ROOT"; then
+    HIST_SHALLOW=0
+    echo "          (it was a shallow clone — deepened with git fetch --unshallow)"
+  else
+    echo "          SHALLOW clone: its history is truncated, so a seed file with no older"
+    echo "          version found is reported rather than assumed unchanged. Deepen it with:"
+    echo "            git -C '$REPO_ROOT' fetch --unshallow"
+  fi
+fi
 
 # ---------------------------------------------------------------- seed drift
 echo
 echo "== seed drift (a seed edit never reaches a stamped bundle by itself) =="
-
-# Every git query below runs from the REPO ROOT with root-relative paths. `git -C <dir>`
-# makes a pathspec relative to <dir>, so querying from the plugin dir with the path
-# git reports for it ("seed/…") silently matched nothing — and "no history"
-# is indistinguishable from "no evidence", which downgraded every drifted file to
-# UNKNOWN. Resolve the root once, and prefix paths with the template's own prefix.
-GIT_OK=1
-REPO_ROOT=""; PREFIX=""
-if git -C "$PLUGIN_ROOT" rev-parse --show-toplevel >/dev/null 2>&1; then
-  REPO_ROOT="$(git -C "$PLUGIN_ROOT" rev-parse --show-toplevel)"
-  PREFIX="$(git -C "$PLUGIN_ROOT" rev-parse --show-prefix)"
-else
-  GIT_OK=0
-fi
-[ "$GIT_OK" -eq 1 ] || echo "  note: the template is not a git checkout, so no merge base can be"
-[ "$GIT_OK" -eq 1 ] || echo "        established — differing files can only be reported, never ported."
+[ "$HIST_KIND" != none ] || echo "  note: no merge base source is reachable, so differing files can only be"
+[ "$HIST_KIND" != none ] || echo "        reported, never ported. The fix is under \"what's left for you\" below."
 
 # Every historical blob of a seed path, newest first, deduplicated — ACROSS RENAMES.
 #
@@ -172,18 +335,35 @@ fi
 # empty answer by a longer route. A 40-hex line is the commit, anything else is the path —
 # a seed path can never look like a SHA. `core.quotePath=false` keeps a non-ASCII name
 # readable; a name with a newline in it is still beyond this parse, and is not a seed path.
-hist_blobs() { # <repo-relative path>
-  [ "$GIT_OK" -eq 1 ] || return 0
-  git -C "$REPO_ROOT" -c core.quotePath=false \
-      log --follow --format=%H --name-only -- "$1" 2>/dev/null \
-  | awk '/^[0-9a-f]+$/ && length($0) == 40 { c = $0; next }
-         NF && c != "" { print c " " $0 }' \
-  | while IFS=' ' read -r c p; do
-      git -C "$REPO_ROOT" ls-tree "$c" -- "$p" 2>/dev/null | awk '{print $3}'
-    done | awk 'NF && !seen[$0]++'
+#
+# THE RECORD SOURCE ANSWERS THE SAME QUESTION WITH ONE CANDIDATE. `.ai-bridge/seed-base/`
+# holds the seed file the stamp actually copied, so it is not a candidate base — it IS the
+# base, with no history to search. Both shapes hand back blob ids so the loop below is one
+# piece of code; `cat_base` is what knows where the bytes come from.
+hist_blobs() { # <seed-relative path>
+  case "$HIST_KIND" in
+    git)
+      git -C "$REPO_ROOT" -c core.quotePath=false \
+          log --follow --format=%H --name-only -- "${PREFIX}seed/$1" 2>/dev/null \
+      | awk '/^[0-9a-f]+$/ && length($0) == 40 { c = $0; next }
+             NF && c != "" { print c " " $0 }' \
+      | while IFS=' ' read -r c p; do
+          git -C "$REPO_ROOT" ls-tree "$c" -- "$p" 2>/dev/null | awk '{print $3}'
+        done | awk 'NF && !seen[$0]++' ;;
+    record)
+      [ -f "$BASE_DIR/$1" ] && blob_of "$BASE_DIR/$1"
+      return 0 ;;
+    *) return 0 ;;
+  esac
 }
 
-blob_of() { git -C "$PLUGIN_ROOT" hash-object --no-filters -- "$1"; }
+cat_base() { # <blob> <seed-relative path> <dest>
+  case "$HIST_KIND" in
+    git)    git -C "$REPO_ROOT" cat-file blob "$1" > "$3" 2>/dev/null ;;
+    record) cat "$BASE_DIR/$2" > "$3" 2>/dev/null ;;
+    *) return 1 ;;
+  esac
+}
 
 # Changed-line count between two files. awk rather than `grep -c`, because grep exits 1
 # on zero matches and `set -o pipefail` would turn "identical" into a script failure.
@@ -281,25 +461,35 @@ while IFS= read -r rel; do
     any_history=1
     [ "$b" = "$seed_hash" ] || printf '%s\n' "$b" >> "$TMPD/prior"
   done <<EOF
-$(hist_blobs "${PREFIX}seed/$rel")
+$(hist_blobs "$rel")
 EOF
 
   if [ ! -s "$TMPD/prior" ]; then
-    if [ "$any_history" -eq 1 ]; then
+    if [ "$any_history" -eq 1 ] && [ "$HIST_SHALLOW" -eq 0 ]; then
       # The seed file has only ever held its current content, so there is no seed change
       # to deliver: the difference is entirely the instance's own. Quiet on purpose — this
       # is the normal state of `log.md`, `index.md` and a managed `.gitignore`, and naming
       # them every run is how a report teaches people to stop reading it.
       # THAT INFERENCE IS ONLY AS GOOD AS `hist_blobs`. Read a partial history — the walk
-      # stopping at a rename, as it did after #125 — and "the seed never changed" is false
-      # while looking identical here, which is why this is the quietest branch in the
-      # script and the one a path move breaks first.
+      # stopping at a rename, as it did after #125, or a shallow clone's graft point — and
+      # "the seed never changed" is false while looking identical here, which is why this
+      # is the quietest branch in the script and the one a truncated history breaks first.
+      # Hence the `$HIST_SHALLOW` guard: an un-deepened clone may prove a match, never an
+      # absence, so it falls through to UNKNOWN instead of to silence.
       insync=$((insync+1)); continue
     fi
     unknown=$((unknown+1))
     report "UNKNOWN" "$rel"
-    detail "differs from the seed, and this template has no git history for it — so"
-    detail "there is no merge base and no evidence. Compare by hand:"
+    if [ "$any_history" -eq 1 ]; then
+      detail "differs from the seed, and the only history available is a SHALLOW clone —"
+      detail "which cannot show that the seed never changed. Deepen it and re-run:"
+      detail "  git -C '$REPO_ROOT' fetch --unshallow"
+    else
+      detail "differs from the seed, and no merge base is reachable for it. Fix: give the"
+      detail "refresh a history source — the marketplace clone, or a re-stamp that records"
+      detail "the stamped seed (both spelled out under \"what's left for you\" below)."
+    fi
+    detail "Compare by hand:"
     detail "  diff '$inst_f' '$seed_f'"
     continue
   fi
@@ -314,7 +504,7 @@ EOF
   if [ "$base_kind" != "verbatim" ]; then
     best=""; bestn=""
     while IFS= read -r b; do
-      git -C "$REPO_ROOT" cat-file blob "$b" > "$TMPD/cand" 2>/dev/null || continue
+      cat_base "$b" "$rel" "$TMPD/cand" || continue
       n="$(diffcount "$TMPD/cand" "$inst_f")"
       if [ -z "$bestn" ] || [ "$n" -lt "$bestn" ]; then bestn="$n"; best="$b"; fi
     done < "$TMPD/prior"
@@ -330,7 +520,7 @@ EOF
     continue
   fi
 
-  git -C "$REPO_ROOT" cat-file blob "$base_blob" > "$TMPD/base"
+  cat_base "$base_blob" "$rel" "$TMPD/base"
   cp "$inst_f" "$TMPD/ours"
   merge_rc=0
   git merge-file -q -p \
@@ -418,6 +608,11 @@ EOF
      && cmp -s "$TMPD/merged" "$inst_f" \
      && ! grep -qE '^(<<<<<<< |>>>>>>> )' "$inst_f"; then
     ported=$((ported+1))
+    # The bundle's stamped-seed record, if it has one, now has a stale base: the copy on
+    # disk is the merge result, and the version it should next be judged against is the
+    # seed we just merged in. Updated, never CREATED — `init-bundle.sh` owns writing the
+    # record, so a bundle without one keeps a predictable --apply footprint.
+    if [ -f "$BASE_DIR/$rel" ]; then cp "$seed_f" "$BASE_DIR/$rel" 2>/dev/null || true; fi
     report "PORTED" "$rel"
     if [ "$base_kind" = "verbatim" ]; then
       detail "was the seed verbatim as of $short; now the current seed (verified)."
@@ -459,6 +654,22 @@ fi
 if [ "$unknown" -gt 0 ]; then
   left "$unknown seed file(s) differ with no merge base to judge them by — compare by"
   left_more "hand using the commands printed under UNKNOWN above."
+fi
+# NAME THE FIX, NOT JUST THE SYMPTOM. "no git history" is a true sentence a reader can do
+# nothing with; both of these are one command each.
+if [ "$HIST_KIND" != git ] && [ "$unknown" -gt 0 ]; then
+  left "give the refresh a history source — either one is enough:"
+  left_more "· the marketplace clone this plugin came from (a git checkout of the same"
+  left_more "  content). ${MKT_WHY:-not derivable from this install path}."
+  [ -z "$MKT_DIR" ] || left_more "  claude plugin marketplace add <the marketplace> re-creates it at $MKT_DIR"
+  left_more "· or record the base in the bundle itself, so no clone is needed at all:"
+  left_more "  /ai-bridge:init '$TARGET'  — a stamp writes .ai-bridge/seed-base/ for every"
+  left_more "  seed file IT copies, which is the merge base by construction."
+fi
+if [ "$HIST_SHALLOW" -eq 1 ]; then
+  left "deepen the marketplace clone — its history is truncated, so this run could not"
+  left_more "tell an unchanged seed from an unreachable one:"
+  left_more "git -C '$REPO_ROOT' fetch --unshallow"
 fi
 if [ "$ported" -gt 0 ]; then
   left "review and commit what changed — the bundle is its own git repo:"

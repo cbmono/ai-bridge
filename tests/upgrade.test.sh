@@ -17,7 +17,13 @@
 #     somebody made, and no merge this script can compute is worth losing them;
 #   · a claimed port is verified on disk, so PORTED can never be printed for a write that
 #     did not land (the bug migrate-bundle.sh once shipped);
-#   · a non-instance directory is refused, non-zero, rather than stamped.
+#   · a non-instance directory is refused, non-zero, rather than stamped;
+#   · run from an INSTALLED plugin — a cache copy with no `.git`, which is where people
+#     actually run it — a merge base is still found, and the run SAYS which source gave
+#     it: the marketplace clone, else the bundle's stamped-seed record, else UNKNOWN. Each
+#     is proved by taking the source away and watching the same run go back to UNKNOWN;
+#   · a SHALLOW marketplace clone is deepened, or reported and refused the one inference
+#     it cannot support ("this seed never changed"), which is the quiet failure again.
 #
 # The `log.md` and `CLAUDE.md` cases together are a regression test, not decoration: the seed
 # file's CURRENT blob is in its git history too, and while it was allowed as a merge-base
@@ -216,15 +222,34 @@ assert "a repeated --apply writes nothing either" \
 assert "…and reports 0 ported"          "$(has '0 ported' "$THIRD")"
 assert "the conflict is still reported, not forgotten" "$(has 'CONFLICT  CLAUDE.md' "$THIRD")"
 
-echo "== a template with no git history reports rather than guesses =="
+echo "== a template with no git history falls back to the bundle's stamped-seed record =="
+# The bundle carries `.ai-bridge/seed-base/` — what the stamp copied — so a template with
+# no history of its own can still judge the drift. Report-only here: the write path is
+# covered above, and what is under test is which SOURCE answered.
 NOGIT="$TMP/tpl-nogit"
 cp -R "$TPL" "$NOGIT" && rm -rf "$NOGIT/.git"
 printf 'a further seed change\n' >> "$NOGIT/plugin/seed/index.md"
-NOGIT_OUT="$(bash "$NOGIT/plugin/scripts/refresh-seeds.sh" "$INST" --apply 2>&1)"
-assert "a drifted file with no merge base is UNKNOWN" "$(has 'UNKNOWN   index.md' "$NOGIT_OUT")"
-assert "…and is not ported"            "$(hasnt 'PORTED    index.md' "$NOGIT_OUT")"
-assert "…and index.md was not written" \
+assert "the stamp recorded what it seeded"  "$(yes_if test -f "$INST/.ai-bridge/seed-base/index.md")"
+NOGIT_OUT="$(bash "$NOGIT/plugin/scripts/refresh-seeds.sh" "$INST" 2>&1)"
+assert "the run names the record as its source" "$(has "history:  this bundle's stamped-seed record" "$NOGIT_OUT")"
+assert "…and the drifted file is judged, not UNKNOWN" "$(hasnt 'UNKNOWN   index.md' "$NOGIT_OUT")"
+assert "…and the seed change is portable on that base" "$(has 'PORTABLE  index.md' "$NOGIT_OUT")"
+assert "…and a report run still wrote nothing"  \
   "$(yes_if cmp -s "$TPL/plugin/seed/index.md" "$INST/index.md")"
+
+echo "== no history AND no record: UNKNOWN, naming the fix rather than the symptom =="
+NOREC="$TMP/group/_ai-bridge-norecord"
+cp -R "$INST" "$NOREC" && rm -rf "$NOREC/.ai-bridge"
+NOREC_OUT="$(bash "$NOGIT/plugin/scripts/refresh-seeds.sh" "$NOREC" --apply 2>&1)"
+assert "the history line says there is none"   "$(has 'history:  none' "$NOREC_OUT")"
+assert "a drifted file with no merge base is UNKNOWN" "$(has 'UNKNOWN   index.md' "$NOREC_OUT")"
+assert "…and is not ported"            "$(hasnt 'PORTED    index.md' "$NOREC_OUT")"
+assert "…and index.md was not written" \
+  "$(yes_if cmp -s "$TPL/plugin/seed/index.md" "$NOREC/index.md")"
+# Criterion 5: the explanation has to be actionable, not just true.
+assert "…and the UNKNOWN names the marketplace clone as a fix" \
+  "$(has 'marketplace clone' "$NOREC_OUT")"
+assert "…and names the re-stamp that records a base"  "$(has 'ai-bridge:init' "$NOREC_OUT")"
 
 echo "== the four review findings, as refusals =="
 
@@ -324,6 +349,97 @@ assert "--apply delivers the pre-move seed change"  "$(has 'PORTED    index.md' 
 assert "…so the bundle now matches the moved seed" \
   "$(yes_if cmp -s "$MTPL/plugin/seed/index.md" "$MINST/index.md")"
 assert "…and the hand-diverged file was not forced" "$(yes_if grep -q 'HOUSE EDIT' "$MINST/CLAUDE.md")"
+
+echo "== the INSTALL layout: a cache copy with no .git, beside the marketplace clone =="
+# ai-bridge-v2/task-035. The fixture is shaped like the INSTALL and not like the repo —
+# `source: ./plugin` means an installed plugin is the CONTENTS of `plugin/`, so the cache
+# carries `scripts/ seed/ VERSION` at its top and no `.git` at all. A fixture shaped like
+# the checkout cannot see this bug: the checkout has history and the install has none.
+CTPL="$TMP/tpl-cache-src"
+mkdir -p "$CTPL/plugin/scripts"
+cp -R "$TPL_SRC/plugin/seed" "$CTPL/plugin/seed"
+cp "$TPL_SRC/plugin/scripts/init-bundle.sh" "$TPL_SRC/plugin/scripts/refresh-seeds.sh" \
+   "$TPL_SRC/plugin/scripts/validate-bundle.sh" "$CTPL/plugin/scripts/"
+cp "$TPL_SRC/VERSION" "$CTPL/plugin/VERSION"
+cp "$TPL_SRC/VERSION" "$CTPL/VERSION"
+printf '# Index\nline A\nline B\n'        > "$CTPL/plugin/seed/index.md"
+printf '# Panel\nintro line\ntail line\n' > "$CTPL/plugin/seed/CLAUDE.md"
+( cd "$CTPL" && git init -q -b main . && git add -A && gc "cache fixture, seed v1" )
+
+CINST="$TMP/group/_ai-bridge-cache"
+mkdir -p "$CINST"
+bash "$CTPL/plugin/scripts/init-bundle.sh" "$CINST" > "$TMP/cache-stamp.out" 2>&1
+sed 's/^intro line$/intro line — HOUSE EDIT/' "$CINST/CLAUDE.md" > "$TMP/cc" && mv "$TMP/cc" "$CINST/CLAUDE.md"
+
+printf 'line C (new in seed v2)\n' >> "$CTPL/plugin/seed/index.md"
+sed 's/^intro line$/intro line — TEMPLATE V2/' "$CTPL/plugin/seed/CLAUDE.md" > "$TMP/cc" && mv "$TMP/cc" "$CTPL/plugin/seed/CLAUDE.md"
+( cd "$CTPL" && git add -A && gc "cache fixture, seed v2" )
+
+# <home>/plugins/cache/<marketplace>/<plugin>/<version>/  +  <home>/plugins/marketplaces/<marketplace>/
+HOMEP="$TMP/claude-home/plugins"
+CACHE="$HOMEP/cache/fixture-market/ai-bridge/9.9.9"
+mkdir -p "$CACHE" "$HOMEP/marketplaces"
+cp -R "$CTPL/plugin/." "$CACHE/"
+git clone -q "$CTPL" "$HOMEP/marketplaces/fixture-market"
+# ASSERT THE FIXTURE'S SHAPE BEFORE ASSERTING ON THE BEHAVIOUR. A cache that accidentally
+# carried a .git would make every assertion below pass for the wrong reason.
+assert "the fixture cache is a plain copy with no .git" "$(yes_if test ! -e "$CACHE/.git")"
+assert "…and carries the contents of plugin/ (seed + VERSION beside scripts/)" \
+  "$(yes_if test -f "$CACHE/seed/index.md")"
+assert "…and the marketplace clone beside it is a real git repo" \
+  "$(yes_if git -C "$HOMEP/marketplaces/fixture-market" rev-parse HEAD)"
+
+# The bundle's own stamped record would answer too, so remove it: this block measures the
+# marketplace path and nothing else.
+rm -rf "$CINST/.ai-bridge"
+CACHE_OUT="$(bash "$CACHE/scripts/refresh-seeds.sh" "$CINST" 2>&1)"
+assert "the run names the marketplace clone as its source" "$(has 'history:  marketplace clone' "$CACHE_OUT")"
+assert "…and a diverged seed file reports 0 unknown"  "$(has 'summary: .* 0 unknown' "$CACHE_OUT")"
+assert "…the copy stamped from v1 is PORTABLE"        "$(has 'PORTABLE  index.md' "$CACHE_OUT")"
+assert "…on a base the clone supplied, verbatim"      "$(has 'seed verbatim' "$CACHE_OUT")"
+assert "…and the hand-diverged copy CONFLICTS"        "$(has 'CONFLICT  CLAUDE.md' "$CACHE_OUT")"
+assert "…and the report still wrote nothing"          "$(yes_if grep -q 'HOUSE EDIT' "$CINST/CLAUDE.md")"
+
+# NON-VACUITY: take the clone away and the same run must go back to UNKNOWN.
+mv "$HOMEP/marketplaces/fixture-market" "$HOMEP/marketplaces/somebody-elses-market"
+NOMKT_OUT="$(bash "$CACHE/scripts/refresh-seeds.sh" "$CINST" 2>&1)"
+assert "without the clone the same run is UNKNOWN again" "$(has 'UNKNOWN   index.md' "$NOMKT_OUT")"
+assert "…and another marketplace's clone is not adopted" "$(has 'history:  none' "$NOMKT_OUT")"
+mv "$HOMEP/marketplaces/somebody-elses-market" "$HOMEP/marketplaces/fixture-market"
+
+# …and a clone that has MOVED ON is a stranger's history, so it is refused with a reason.
+( cd "$HOMEP/marketplaces/fixture-market" && printf 'a clone-only seed edit\n' >> plugin/seed/index.md \
+  && git add -A && gc "the clone moves past the installed copy" )
+DRIFT_OUT="$(bash "$CACHE/scripts/refresh-seeds.sh" "$CINST" 2>&1)"
+assert "a clone whose seed tree differs at HEAD is refused" "$(has 'history:  none' "$DRIFT_OUT")"
+assert "…and the reason is printed, not swallowed"         "$(has 'different seed tree at HEAD' "$DRIFT_OUT")"
+git -C "$HOMEP/marketplaces/fixture-market" reset -q --hard HEAD~1
+
+echo "== a shallow marketplace clone is never silently treated as full history =="
+# `claude` clones a marketplace shallow (measured on this machine: 26 commits). A
+# truncated walk fails QUIETLY — the older seed versions are simply absent, so "this seed
+# never changed" reads true and real drift is reported as in sync.
+SHOME="$TMP/claude-home-shallow/plugins"
+SCACHE="$SHOME/cache/fixture-market/ai-bridge/9.9.9"
+mkdir -p "$SCACHE" "$SHOME/marketplaces"
+cp -R "$CTPL/plugin/." "$SCACHE/"
+# `file://` because git ignores --depth on a plain local clone.
+git clone -q --depth 1 "file://$CTPL" "$SHOME/marketplaces/fixture-market"
+assert "the fixture clone really is shallow (.git/shallow)" \
+  "$(yes_if test -f "$SHOME/marketplaces/fixture-market/.git/shallow")"
+SHALLOW_OUT="$(bash "$SCACHE/scripts/refresh-seeds.sh" "$CINST" --no-deepen 2>&1)"
+assert "--no-deepen reports the shallow clone"      "$(has 'SHALLOW clone' "$SHALLOW_OUT")"
+assert "…and prints the command that deepens it"    "$(has 'fetch --unshallow' "$SHALLOW_OUT")"
+assert "…and a file it cannot judge is UNKNOWN, not silently in sync" \
+  "$(has 'UNKNOWN   index.md' "$SHALLOW_OUT")"
+assert "…naming shallowness as the reason"          "$(has 'SHALLOW clone' "$SHALLOW_OUT")"
+assert "…and it stayed shallow"                     "$(yes_if test -f "$SHOME/marketplaces/fixture-market/.git/shallow")"
+DEEP_OUT="$(bash "$SCACHE/scripts/refresh-seeds.sh" "$CINST" 2>&1)"
+assert "a default run deepens it instead"           "$(has 'deepened with git fetch --unshallow' "$DEEP_OUT")"
+assert "…and the clone is no longer shallow on disk" \
+  "$(test ! -f "$SHOME/marketplaces/fixture-market/.git/shallow" && echo 0 || echo 1)"
+assert "…so the same file is judged on a real base" "$(has 'PORTABLE  index.md' "$DEEP_OUT")"
+assert "…and the run reports 0 unknown"             "$(has 'summary: .* 0 unknown' "$DEEP_OUT")"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
