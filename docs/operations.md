@@ -878,8 +878,8 @@ owner asked three times in one session, for three different instances.
 
 ```text
 
-AI-Bridge v1.9.0 · _ai-bridge-private · org: cbmono
-───────────────────────────────────────────────────
+AI-Bridge v1.12.0 · _ai-bridge-private · org: cbmono
+────────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
 owner                 example-user-007 · you@example.com  local/tracked

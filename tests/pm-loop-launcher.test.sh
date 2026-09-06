@@ -274,7 +274,7 @@ ok "tick: a render is not a change"      "$(has "$TICK" 'A render is not a state
 ok "tick asks the resolver which layer holds the URL key" \
   "$(has "$TICK" "scripts/resolve-config.sh --source $URL_KEY")" yes
 ok "…and prints the refresh line instead of publishing" \
-  "$(has "$TICK" 'BOARD: run /ai-bridge:board to refresh the published page')" yes
+  "$(has "$TICK" 'BOARD: run /ai-bridge:board publish to refresh the published page')" yes
 ok "…and is told not to attempt one"     "$(has "$TICK" 'not attempt a publish')" yes
 # A `tracked` value is the deleted shape and the banner drops it; the two readers of this
 # key must agree, or one of them is publishing a promise the other silently breaks.

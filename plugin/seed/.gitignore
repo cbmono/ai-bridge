@@ -17,22 +17,12 @@ AWAITING.md
 # writer never recreates it).
 SNAPSHOT.json
 
-# `/board.html` IS TRACKED, ON PURPOSE — which is why no line here ignores it.
-#
-# It is the bundle's board, and committing it IS how the board is published: a file
-# inside a private repo is readable by exactly the repo's permission list, with no
-# second access-control system to get wrong. GitHub Pages is NOT the route and is not
-# a "later" either — access-controlled Pages is an Enterprise Cloud feature, so a Pages
-# site on a private bundle would serve this page to the WORLD at an unlisted URL, which
-# is not what the snapshot's field allowlist was scoped for.
-#
-# Each /ai-bridge:dispatch tick that actually changed something re-renders it with
-# `scripts/build-board.sh --standalone --out board.html .` — the trailing `.` is
-# load-bearing — and commits it alongside the tick's own curation commit. An idle tick
-# renders and commits nothing here.
-#
-# `/.board-live/board.html` is a DIFFERENT file and is still ignored (its own block
-# below): same markup, written continuously by scripts/watch-board.sh, per-machine.
+# The board page is DERIVED and never tracked. It used to be committed on every tick that
+# changed something — which made one path contended by every clone of a shared bundle, for
+# a file both of them regenerate in a second. The board is served locally instead:
+# `/ai-bridge:board serve` binds 127.0.0.1 on a port derived from this bundle's path and
+# serves /.board-live/ (ignored below). Nothing about the board is pushed.
+/board.html
 
 # The other-owners cache (scripts/build-board.sh) — the board's second half, read from
 # the tracked documents at HEAD and stored against the SHA it was computed for, because
@@ -41,7 +31,7 @@ SNAPSHOT.json
 # instances stamped before the cache existed.
 /.board-others.json
 
-# The local live board page (scripts/watch-board.sh) — the same HTML as board.html,
+# The local live board page (scripts/watch-board.sh, scripts/board-serve.sh) — the page
 # regenerated on every task-document change by a watcher you keep running. Derived,
 # per-machine, and safe to delete. /ai-bridge:init appends this line too, so it reaches
 # instances stamped before the directory existed.

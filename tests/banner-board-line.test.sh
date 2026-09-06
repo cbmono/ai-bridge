@@ -190,7 +190,7 @@ render
 run
 RENDERED_SECTION="$(section)"
 assert "board enabled and rendered: the section is ONE line, the label and the link" \
-  "$(eq "$RENDERED_SECTION" "$(printf 'Board   file://%s' "$PAGE")")"
+  "$(eq "$RENDERED_SECTION" "$(printf 'Board   file://%s — run /ai-bridge:board serve for a live URL' "$PAGE")")"
 assert "…and the two states really do print different text" \
   "$([ "$OUT" != "$UNRENDERED" ] && echo 0 || echo 1)"
 assert "…with no never-rendered line once a page exists" \
@@ -250,6 +250,29 @@ assert "…and it is NOT the bare path on a line of its own" \
   "$([ "$(line_is "$PAGE" "$OUT")" = 0 ] && echo 1 || echo 0)"
 assert "the board section is exactly one line" \
   "$(eq "$(section | grep -c .)" 1)"
+
+echo "== the local server: its URL when it is up, the way to start it when it is not =="
+# THE STATE FILE IS NOT THE ANSWER — THE PID IS. board-serve.sh removes `.board-live/.serve`
+# when it stops, but a SIGKILL leaves it behind, so a file-presence check would send a human
+# to a dead port. Both directions are asserted from ONE fixture file, differing only in the
+# pid it names, which is what makes the live case non-vacuous.
+STATE="$INST/.board-live/.serve"
+printf '43210\n%s\n%s\n' "$$" "$INST" > "$STATE"
+run
+assert "a live pid prints the localhost URL"  "$(line_is 'Board   http://localhost:43210' "$OUT")"
+assert "…and the section is still one line"  "$(eq "$(section | grep -c .)" 1)"
+assert "…and the file:// row gives way to it" "$(hasnt 'Board   file://' "$OUT")"
+
+# A pid nothing is running under. `awk` picks one above this machine's live range rather
+# than a literal, so the case cannot silently become "a pid that happens to exist".
+DEADPID="$(awk 'BEGIN{print 2147480000}')"
+printf '43210\n%s\n%s\n' "$DEADPID" "$INST" > "$STATE"
+run
+assert "a DEAD pid does not print a URL"      "$(hasnt 'http://localhost:43210' "$OUT")"
+assert "…it falls back to the file:// row"    "$(has "Board   file://$PAGE" "$OUT")"
+assert "…which names the way to start one"    "$(has 'run /ai-bridge:board serve' "$OUT")"
+rm -f "$STATE"
+run
 
 echo "== the third line is deleted, and nothing wearing its clothes replaced it =="
 # THE OWNER'S WORDS: it is not helping. The page's own masthead carries the render time and
@@ -378,7 +401,7 @@ if command -v python3 >/dev/null 2>&1; then
   run
   assert "the SAME URL in the TRACKED file does not print"     "$(hasnt "$URL" "$OUT")"
   assert "…and the board section falls back to the file:// row" \
-    "$(eq "$(section)" "$(printf 'Board   file://%s' "$PAGE")")"
+    "$(eq "$(section)" "$(printf 'Board   file://%s — run /ai-bridge:board serve for a live URL' "$PAGE")")"
 
   # FILTERED. The value is file-derived text reaching a terminal and a markdown renderer,
   # and each of these would do something the section is not allowed to do: a second line
@@ -390,7 +413,7 @@ if command -v python3 >/dev/null 2>&1; then
     run
     assert "$1 is dropped"                                      "$(hasnt 'ZZBADZZ' "$OUT")"
     assert "…and the file:// row prints instead"                \
-      "$(eq "$(section)" "$(printf 'Board   file://%s' "$PAGE")")"
+      "$(eq "$(section)" "$(printf 'Board   file://%s — run /ai-bridge:board serve for a live URL' "$PAGE")")"
   }
   bad "a newline inside the URL"  '"https://example.com/aZZBADZZ\nBoard   forged"'
   bad "an ESC sequence"           '"https://example.com/\u001b[31mZZBADZZ"'

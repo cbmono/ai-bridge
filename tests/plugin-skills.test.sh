@@ -172,7 +172,7 @@ ok "…and updating the SAME artifact rather than making a second one" \
 # The measured limit, carried where the human running the skill reads it. A skill that
 # silently did nothing headless would be indistinguishable from one that was broken.
 ok "…and states the measured headless limit" \
-  "$(ge1 "$(grep -c 'run /ai-bridge:board to refresh' "$SK/board/SKILL.md")")" yes
+  "$(ge1 "$(grep -c 'run /ai-bridge:board publish to refresh' "$SK/board/SKILL.md")")" yes
 # Publishing is irreversible and recording the URL is not, so the gap between them is the
 # one place this skill can strand an artifact nobody can name. Three pins, one per half of
 # the fix: the ordering, the failure report that carries the URL out of the session, and
