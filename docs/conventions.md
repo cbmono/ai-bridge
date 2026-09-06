@@ -42,7 +42,7 @@ move it here intact instead.
 | 17 | [An instruction is executable only if the agent *holds* the tool](#17-an-instruction-addressed-to-an-agent-is-executable-only-if-that-agent-holds-the-tool) | every agent body, `plugin/seed/CONVENTIONS.md`, `plugin/seed/CLAUDE.md` |
 | 18 | [The allowlist check is pinned from both sides](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure) | `agent-tool-allowlist.test.sh` |
 | 19 | [The destructive-action baseline is a hook, and it is narrow on purpose](#19-the-destructive-action-baseline-is-a-hook-and-it-is-narrow-on-purpose) | `plugin/hooks/deny-destructive.sh`, `permissions.deny` |
-| 20 | [The version is a number a change PROPOSES](#20-the-version-is-a-number-a-change-proposes-and-the-drift-check-speaks-only-when-behind) | `VERSION`, `check-template-version.sh`, `core` paths |
+| 20 | [The version is a number the MERGE moves](#20-the-version-is-a-number-the-merge-moves-and-the-drift-check-speaks-only-when-behind) | `VERSION`, `release-bump.sh`, `check-template-version.sh`, `core` paths |
 | 21 | [`/ai-bridge` reports facts that can be false, and `fix` is tiered in code](#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) | `ai-bridge.sh`, `/ai-bridge`, `session-banner.sh` |
 
 ---
@@ -675,7 +675,7 @@ Covered by `tests/deny-baseline.test.sh` (135 assertions), and mutation-checked 
 directions: neutering one rule fails 7 assertions, making one unconditional fails 6, and
 adding a rule to `RULES` with no test here fails by name.
 
-## 20. The version is a number a change PROPOSES, and the drift check speaks only when behind
+## 20. The version is a number the MERGE moves, and the drift check speaks only when behind
 
 **There was no version anywhere in this repo until 0.9.1** — no `VERSION` file, no
 `package.json`, no string in `README.md` or `/ai-bridge:init`. That was survivable while one
@@ -703,11 +703,20 @@ where a doc *displays* the number, `tests/template-version.test.sh` asserts the 
 because a version that lies is worse than no version, and this repo has already shipped docs
 claiming behaviour the code did not have.
 
-**The bump is PROPOSED by the change and APPROVED by the owner. Not automatic, not
-silent.** Automatic-on-merge makes the number noise; "remember to bump" is forgotten by the
-third PR. So a change to the **core** arrives with the bump already in its diff and stated
-in its PR body, and the owner accepts it by merging or rejects it by asking for the commit
-to go. There is deliberately **no release process** behind this — no changelog, no tags, no
+**The bump is made ON MAIN, by the merger, right after the merge — never inside the PR.**
+It was the other way round until 2026-09-06, and the reason it changed is arithmetic rather
+than taste. The number is **five files**, one of them the shared `docs/operations.md`, so
+every open core PR proposed the same number in the same five places: any two of them
+conflicted, and each had to land alone after a fresh merge-main and a full suite run. With
+seven PRs open that day the version files were the only conflict in **five of six merges**,
+at roughly one suite run each, and a user-owned repo cannot have a merge queue to absorb it
+([finding](https://github.com/cbmono/ai-bridge)). So a core PR now carries **no** version
+change at all, and `plugin/scripts/release-bump.sh <minor|patch>` — the only writer of the
+five — moves them together on `main` afterwards, in one commit the merger pushes **straight
+to main** (admin bypass of the required check, which is how this repo is already
+configured; main's own suite on that push is the check). **Still not automatic**: no
+workflow bumps anything, a human runs the script and decides which field moves.
+There is deliberately **no release process** behind this — no changelog, no tags, no
 packaging, no publish step. This repo has one consumer group and one plugin; a
 release pipeline here would be exactly the team-scale apparatus `ai-bridge-v4` spent ten
 cancellations removing.
@@ -721,7 +730,7 @@ installer ships or runs — `plugin/` (which carries `seed/`, `RETIRED` and the 
 when an agent opens a file it governs. `tests/template-version.test.sh` asserts that
 equality, so the list cannot rot away from the globs that deliver it. Everything else —
 `docs/`, `tests/`, this repo's own `.claude/`, `.github/`, the root `scripts/` — is not
-core, and a PR touching only those proposes nothing.
+core. The list still decides one thing: whether a merge is one the **merger** bumps for.
 
 **The drift check speaks ONLY when behind, and a failure is never "behind".** Equal or ahead
 is byte-empty; a line at every session start is wallpaper, and wallpaper is how `AWAITING.md`

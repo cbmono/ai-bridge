@@ -392,6 +392,13 @@ above it so none may grow its share.
   step, unless the task's `acceptance_criteria` asks for one. The repo names its own
   consumed paths in its `CLAUDE.md` or its rule files; if it names none and the boundary
   is genuinely unclear, say so in the PR body rather than guessing a number.
+  **UNLESS THE REPO SAYS THE BUMP HAPPENS ON THE DEFAULT BRANCH AT MERGE TIME — then your PR
+  carries no version change at all.** `cbmono/ai-bridge` says exactly that: leave every place
+  the number lives alone, propose nothing, and let the merger run the repo's bump script on
+  the default branch afterwards. The reason is one a big repo hits too — the number is
+  usually several files, so while each PR carries it, any two open PRs conflict on all of
+  them and must merge one at a time, at a full CI run each. Read the repo before you reach
+  for this bullet: its own rule wins, and this one applies when it has none.
 - **Run the shape reader on your draft, fix what it refuses, then post — every role
   agent, both surfaces, every time.** This is a step, not a suggestion, and it is the
   cheapest check any of you has: it needs no network, no reviewer session and no PR.

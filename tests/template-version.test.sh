@@ -270,7 +270,7 @@ ok "the two rule files cover exactly the core paths" \
 # Each of those names must appear in the core sentence the agent reads. Anchored on the
 # CLAUDE.md bullet rather than the whole file, so an unrelated mention elsewhere cannot
 # answer for it.
-core_bullet="$(grep -F 'A change to `core` PROPOSES a version bump' "$TPL/CLAUDE.md" || true)"
+core_bullet="$(grep -F 'A change to `core` carries NO version bump' "$TPL/CLAUDE.md" || true)"
 missing=0
 for p in plugin plugin-yolo plugin-accounts config install.sh upgrade.sh; do
   printf '%s' "$core_bullet" | grep -qF "\`$p" || { missing=$((missing+1)); printf '        NOT NAMED IN CLAUDE.md: %s\n' "$p" >&2; }
@@ -286,10 +286,14 @@ ok "…and says the human approves by merging" \
   "$(grep -qF 'approves it by merging' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
 ok "…and forbids inventing a release process" \
   "$(grep -qiE 'no changelog, no tag' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
+# THIS repo is the carve-out the rule above names: the bump is not in the PR at all, it is
+# made on main after the merge (ai-bridge-next/task-026, pinned by release-bump.test.sh).
+ok "…and carves out a repo that bumps at MERGE time" \
+  "$(grep -qF 'THE BUMP HAPPENS ON THE DEFAULT BRANCH AT MERGE TIME' "$TPL/plugin/seed/CONVENTIONS.md" && echo yes || echo no)" yes
 ok "machinery.md carries it (loads on a /symlink/** read)" \
-  "$(grep -qF 'PROPOSES a version bump' "$TPL/.claude/rules/machinery.md" && echo yes || echo no)" yes
+  "$(grep -qF 'carries NO version bump' "$TPL/.claude/rules/machinery.md" && echo yes || echo no)" yes
 ok "installer.md carries it (loads on install.sh, seed/, config/)" \
-  "$(grep -qF 'PROPOSES a version bump' "$TPL/.claude/rules/installer.md" && echo yes || echo no)" yes
+  "$(grep -qF 'carries NO version bump' "$TPL/.claude/rules/installer.md" && echo yes || echo no)" yes
 ok "the reasoning is in docs/conventions.md, once" \
   "$(grep -c '^## 20\. The version is a number' "$TPL/docs/conventions.md")" 1
 

@@ -144,7 +144,7 @@ GIT -C "$TMP/pr" merge -q --no-ff -m "merge: the plugin change" feat/a-plugin-ch
 ok "release-bump.sh runs on the merged main" "$(run minor --repo "$TMP/pr")" 0
 ok "…template-version.test.sh passes there too" "$(harness "$TMP/pr" template-version.test.sh)" "fail=0 rc=0"
 ok "…in ONE commit carrying exactly the five places" \
-  "$(GIT -C "$TMP/pr" show --name-only --format= HEAD | grep . | sort | tr '\n' ' ')" \
+  "$(GIT -C "$TMP/pr" show --name-only --format= HEAD | grep . | LC_ALL=C sort | tr '\n' ' ')" \
   ".claude-plugin/marketplace.json VERSION docs/operations.md plugin/.claude-plugin/plugin.json plugin/VERSION "
 # `claude plugin update` compares the installed version against plugin.json and does
 # nothing when they match, so a bump that misses that file is a release nobody is offered.
@@ -155,15 +155,18 @@ ok "…and the commit names the move"        \
 
 echo
 echo "== 5. it is the ONLY writer — nothing else moves a version place =="
-# A line that NAMES one of the five and carries a write shape. `>&2` is dropped first:
-# an error message quoting the word VERSION is not a writer.
-writers() { # <dir…> -> the basenames that write a version place
+# A WRITE is a redirection, a `sed -i` or a `tee` whose TARGET is one of the five — not a
+# line that merely names one, which is why the place has to follow the operator with no
+# space between. Comment lines are dropped first: `<root>/…` in prose carries a `>`.
+WRITE='(>[[:space:]]*"?[^[:space:]|&]*(VERSION|plugin\.json|marketplace\.json)'
+WRITE="$WRITE"'|sed -i[^|]*(VERSION|plugin\.json|marketplace\.json)'
+WRITE="$WRITE"'|tee[[:space:]][^|]*(VERSION|plugin\.json|marketplace\.json))'
+writers() { # <file…> -> the basenames that write a version place
   local f
   for f in "$@"; do
     [ -f "$f" ] || continue
     [ "$(basename "$f")" = release-bump.sh ] && continue
-    grep -E '(VERSION|plugin\.json|marketplace\.json)' "$f" | grep -v '>&2' \
-      | grep -qE '(>[^&]|sed -i|os\.replace|tee )' && printf '%s\n' "${f##*/}"
+    grep -vE '^[[:space:]]*#' "$f" | grep -qE "$WRITE" && printf '%s\n' "${f##*/}"
   done
   return 0
 }
