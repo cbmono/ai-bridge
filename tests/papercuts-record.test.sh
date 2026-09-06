@@ -62,7 +62,8 @@ ok "a surface with no kind is refused"      "$(add 'a note that is comfortably l
 ok "a missing task is usage, not a silent entry" \
    "$(bash "$PC" add --file "$REC" --surface agent:x --note 'a note comfortably long enough' >/dev/null 2>&1; echo $?)" 2
 ok "a whitespace-only task is refused"      "$(add 'a note that is comfortably long enough' 'agent:x' ' ')" 1
-ok "a non-ISO date is refused"              "$(add 'a note that is comfortably long enough' 'agent:x' 'p/t' '06-09-2026')" 1
+ok "a non-ISO --date never reaches the record" \
+   "$(add 'a note that is comfortably long enough' 'agent:x' 'p/t' '06-09-2026')" 2
 
 echo
 echo "== the concision ceiling: ONE line, and the note's two measured bounds =="
@@ -97,6 +98,9 @@ printf '2026-09-03 | p/t-3 | doc:CONVENTIONS.md | a surface kind nobody defined\
 ok "…a planted bad surface makes check exit 1"    "$(yn bash "$PC" check --file "$REC")" no
 ok "…and check NAMES the offending line" \
    "$(bash "$PC" check --file "$REC" 2>&1 >/dev/null | grep -c 'doc:CONVENTIONS.md')" 1
+printf '06-09-2026 | p/t-4 | agent:cataloguer | a hand-written line with a non-ISO date\n' >> "$REC"
+ok "…and a hand-written non-ISO date too" \
+   "$(bash "$PC" check --file "$REC" 2>&1 >/dev/null | grep -c 'not an ISO date')" 1
 ok "check on a record with no ## Entries is unknown, not clean" \
    "$(printf '# nope\n' > "$TMP/nh.md"; bash "$PC" check --file "$TMP/nh.md" >/dev/null 2>&1; echo $?)" 2
 ok "the SEEDED record checks clean"               "$(yn bash "$PC" check --file "$SEED")" yes

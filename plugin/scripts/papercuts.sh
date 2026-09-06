@@ -34,6 +34,8 @@ done
 [ -n "$FILE" ] || FILE="knowledge/papercuts.md"
 [ -n "$DATE" ] || DATE="$(date -u +%Y-%m-%d)"
 printf '%s' "$EVERY" | grep -qE '^[0-9]+$' || { echo "papercuts: --every wants days" >&2; exit 2; }
+printf '%s' "$DATE" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' \
+  || { echo "papercuts: --date wants YYYY-MM-DD" >&2; exit 2; }
 
 trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
 bytes() { printf '%s' "$1" | LC_ALL=C wc -c | tr -d ' '; }
@@ -115,13 +117,16 @@ case "$CMD" in
     surfaces="$(printf '%s\n' "$src" | awk -F'|' '{ gsub(/[ \t]/, "", $3); print $3 }' | sort | uniq -c | sort -rn | awk '{ print $2 }')"
     printf '== %s entries · %s surfaces · %s\n' \
       "$(printf '%s\n' "$src" | wc -l | tr -d ' ')" "$(printf '%s\n' "$surfaces" | wc -l | tr -d ' ')" "$scope"
-    for s in $surfaces; do
+    while IFS= read -r s; do
+      [ -n "$s" ] || continue
       printf '\n%s  (%s)\n' "$s" \
         "$(printf '%s\n' "$src" | awk -F'|' -v s="$s" '{ k=$3; gsub(/[ \t]/, "", k); if (k == s) n++ } END { print n+0 }')"
       printf '%s\n' "$src" | awk -F'|' -v s="$s" '
         function t(x) { gsub(/^[ \t]+|[ \t]+$/, "", x); return x }
         { k = $3; gsub(/[ \t]/, "", k); if (k == s) printf "  %s  %s  %s\n", t($1), t($2), t($4) }'
-    done
+    done <<EOF
+$surfaces
+EOF
     ;;
   due)
     [ -r "$FILE" ] || { echo "papercuts: no record at '$FILE' — nothing to group"; exit 1; }
