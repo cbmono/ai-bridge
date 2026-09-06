@@ -197,11 +197,23 @@ set -uo pipefail
 # scope` and `duplicate`. Refusing those would refuse correct work. `already` is NOT a
 # verdict on its own — the corpus has nine uses of it as an ordinary adverb ("already
 # landed", "already rare") — so it only counts in the fixed phrases below.
+#
+# AND `correct` IS NARROWED FOR THE SAME REASON, ONE CLASS DOWN. It shipped as a bare
+# token, and it is the only ADJECTIVE in this table — every other row is a past-tense
+# verdict (`fixed`, `declined`, `deferred`, `applied`), which is a word an entry cannot
+# carry by accident. Measured on 1.1.x: "the correct fix would be to quote the path, but I
+# have not done it" CLEARED — an entry describing a fix it explicitly had not made, which
+# makes the verdict optional exactly where a reader needs it most. So `correct` counts only
+# where it STANDS as the verdict: nothing but punctuation or the end of the element may
+# follow it (`correct:`, `correct.`, `— correct`, `correct` last). The corpus use is the
+# colon form, so the narrowing keeps it. KNOWN LIMIT, stated rather than implied: an
+# adjective followed by punctuation ("the correct — and only — fix") still matches; the
+# common shape is `correct` + noun, and that is the one this refuses.
 VERDICTS='
 (^|[^[:alnum:]])(in)?valid([^[:alnum:]]|$)
 (^|[^[:alnum:]])fixed([^[:alnum:]]|$)
 (^|[^[:alnum:]])confirmed([^[:alnum:]]|$)
-(^|[^[:alnum:]])correct([^[:alnum:]]|$)
+(^|[^[:alnum:]])correct([[:space:]]*[^[:alnum:][:space:]]|[[:space:]]*$)
 (^|[^[:alnum:]])addressed([^[:alnum:]]|$)
 (^|[^[:alnum:]])agreed([^[:alnum:]]|$)
 (^|[^[:alnum:]])applied([^[:alnum:]]|$)
