@@ -295,6 +295,12 @@ ticks, regardless of how long a tick runs.
   does neither, silently. A pull conflict **stops the tick**: it aborts the rebase, writes nothing,
   and reports the contested paths — a tick never resolves contested state between two
   humans on its own. And nothing here ever force-pushes a shared bundle.
+- **The same blocker twice ESCALATES — it is never re-dispatched.** After each round run
+  `${CLAUDE_PLUGIN_ROOT}/scripts/stall-counter.sh record <task-doc> --blocker "<blocker>"`
+  (add `--progress` when the PR moved — a new commit or a new review thread — which resets
+  the counter); its **exit 1** means the cap is reached, so run `… escalate <task-doc>`
+  instead of dispatching and put the line it prints in `AWAITING.md`. The cap is
+  `maxStallRounds` in `instance.config.json` (**absent ⇒ 2**).
 - **An answered question is MOVED, never deleted** — from `open_questions` into
   `answered_questions`, one flat line `<ISO 8601> · <the entry verbatim>`
   (`SCHEMA.md`). `open_questions` must still empty — that is the promotion signal; an
