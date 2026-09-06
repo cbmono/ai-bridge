@@ -3,7 +3,7 @@ name: close-project
 disable-model-invocation: true
 description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. Human-gated; run once a project's tasks are all done/cancelled.
 argument-hint: <project-slug>  [--dry-run] [--force]
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
 **Close a completed Project.** This is the human-triggered form of the closeout the
@@ -37,8 +37,9 @@ candidates) and ask which to close.
 
 > **`--dry-run` short-circuits every mutation.** Do step 1 (read-only checks),
 > then for steps 2–7 *report exactly what you would do* — do **not** dispatch the
-> cataloguer, edit `log.md`/`index.md`/`project.md`/objective, prune worktrees, or
-> commit/remove anything. Only a run without the flag actually changes state. Step 7's
+> cataloguer, run `build-kb-index.sh` without `--check`, edit
+> `log.md`/`index.md`/`project.md`/objective, prune worktrees, or commit/remove anything.
+> Only a run without the flag actually changes state. Step 7's
 > `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug>` **without `--apply`** is the one thing you
 > may run: it is report-only by design and prints the exact removal or prune it would
 > perform, which is a better dry-run report than a description of one.
@@ -56,12 +57,29 @@ candidates) and ask which to close.
    not close leaving tasks in a live status: the folder either goes away or stays as a
    record, and both are lies if a task still reads `in-progress`.
 
-2. **Consolidate knowledge.** Dispatch the `cataloguer` (subagent) for a final pass:
-   capture/link any remaining durable `Finding`s from this project, refresh the
-   `Service`/`Runbook` docs it touched, and cross-link them. For a **research**
-   project, decide with the user which `deliverables` graduate into `knowledge/` and
-   have the cataloguer fold them in. Skip only if the project produced nothing
-   durable (trivial/superseded) — say so.
+2. **Consolidate knowledge — including the supersede pass.** Dispatch the `cataloguer`
+   (subagent) for a final pass: capture/link any remaining durable `Finding`s from this
+   project, refresh the `Service`/`Runbook` docs it touched, and cross-link them. For a
+   **research** project, decide with the user which `deliverables` graduate into
+   `knowledge/` and have the cataloguer fold them in. Skip only if the project produced
+   nothing durable (trivial/superseded) — say so.
+
+   **Then supersede what this project made untrue** — brief the cataloguer to run it, per
+   `SCHEMA.md` → "Superseding a Finding": every `Finding` the project contradicted gets
+   `status: superseded`, `superseded_by:`, a dated section naming the replacement, and
+   `supersedes:` on the new one. This is the moment the KB would otherwise keep a stale
+   `current` row forever — closeout is when someone last knows which findings the work
+   overtook.
+
+   Finish with the index, which is derived rather than curated:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh
+   ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh --check
+   ```
+
+   Zero errors before step 7 commits, and `knowledge/index.md` goes in that commit by
+   explicit path.
 
 3. **Record the closeout.** Get a timestamp (`date -u +%Y-%m-%dT%H:%M:%SZ`). Prepend
    a dated **Project closed** entry to the root `log.md` (newest-first) naming the

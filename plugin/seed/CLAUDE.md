@@ -171,9 +171,10 @@ lives there and not here because it governs work *outside* this bundle.
 ## Knowledge base
 `knowledge/` — `Service`s, `Finding`s, `Runbook`s, `Team`s, `Reference`s
 (`SCHEMA.md`). The `cataloguer` builds it; task agents capture `Finding`s as a
-byproduct. **Use it index-first:** scan `knowledge/index.md`, open only the 1–3
-docs that match — **never bulk-read `knowledge/`.** Detail:
-`.claude/rules/knowledge-base.md`.
+byproduct. **Reading it: index first, at most three, superseded rows are history.**
+Scan `knowledge/index.md` (derived — `build-kb-index.sh` rebuilds it from frontmatter),
+open **at most three** matches, **never bulk-read `knowledge/`**; a **Superseded** row is
+history — read it, never cite it. Detail: `.claude/rules/knowledge-base.md`.
 
 ## Data handling
 - **No customer PII** in task documents, logs, or PR descriptions.
