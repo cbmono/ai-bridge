@@ -317,7 +317,8 @@ in `cbmono/ai-bridge` enforces this.
   asks nobody to trust **less** verification — it moves the verification to the only place
   the merge gate actually reads. `tests/local-vs-ci-testing.test.sh` in `cbmono/ai-bridge`
   pins the clauses above by name.
-- **PR size is a heuristic that suggests a split, never a gate — and it is TWO numbers.**
+- **PR size is a heuristic that suggests a split, never a gate.** **And it is TWO
+  numbers.**
   Before opening, check the diff against **`maxPrLoc`** in `instance.config.json`
   (**absent that key, 500**) **and against `maxPrFiles`** in the same file (**absent that
   key, 100**);

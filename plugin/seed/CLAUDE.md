@@ -203,10 +203,8 @@ never ran that repo's installer — silently, in every instance. If this group's
   `be careful with imports`.
 
 ### PR sizing
-- **Keep PRs under `maxPrLoc` (500 when the key is absent) AND under `maxPrFiles`
-  (100 when the key is absent).** Past either, propose a split before committing —
-  suggest, don't block. The file count is the one the external reviewer enforces: a
-  free-plan CodeRabbit refuses a PR over 100 files outright and reviews none of it.
+- **Keep PRs under `maxPrLoc` (500 when absent) and `maxPrFiles` (100 when absent).**
+  Past either, propose a split before committing — suggest, don't block.
 
 ### Output style
 - **Number multi-item output** so the reader can reference by number.

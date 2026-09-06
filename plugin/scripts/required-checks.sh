@@ -335,6 +335,18 @@ refuse_clearance() { # <the whole first clause> <exit code of the sibling>
     echo "        This refusal is TERMINAL: the reviewer needs fixing (credits, billing," >&2
     echo "        the token or the app installation). Re-running this will not change it." >&2
   fi
+  # THE SIBLING'S EXIT 6 IS THE ONE REFUSAL THAT MEANS "STOP ASKING FOR A REVIEW", and it
+  # is said out loud for the same reason exit 5 is: the merge gate is unmoved (0 is still
+  # the only clearance) and the human's next move is the opposite of the usual one. 6 means
+  # a review DID complete at this head and SCHEMA.md clause 9 refused it — a
+  # reviewer-authored thread is still unresolved, and the sibling has already NAMED each
+  # one in the block above. Requesting another review here spends a session to be told the
+  # same thing. It stays folded into this function's exit 1 (a refusal is a refusal); only
+  # the advice differs.
+  if [ "$2" -eq 6 ]; then
+    echo "        A review EXISTS at this head — do NOT request another one. The threads" >&2
+    echo "        named above are unanswered: reply to or fix each, resolve it, and push." >&2
+  fi
   # An unreadable reviewer state (exit 2) is a different refusal from a reviewer that
   # answered and declined — keep the caller's two codes distinguishable. Spelled as an
   # `if` rather than `[ … ] && exit 2`, whose fall-through under `set -e` is a subtlety

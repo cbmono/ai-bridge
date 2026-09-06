@@ -278,7 +278,8 @@ state, and act only on deltas.
    **No customer PII in `answered_questions`** — it persists for the life of the repo.
 
    **Propose a split when the expected diff will exceed `maxPrFiles`.** Read it with
-   `scripts/resolve-config.sh` (**absent, 100**), beside `maxPrLoc` (**absent, 500**).
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-config.sh` (**absent, 100**), beside `maxPrLoc`
+   (**absent, 500**).
    Where a draft's own scope already says it will be past either — a rename sweep, a
    codemod, a generated-file refresh, "every file under `x/`" — say so in `# Notes` and
    propose the split as concrete sibling tasks, then leave the draft where it is. **You
