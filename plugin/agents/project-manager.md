@@ -539,6 +539,22 @@ state, and act only on deltas.
      `head_sha` as the verified SHA, read the verdict **only** from the trailer and
      criteria coverage **only** from the `✓`/`✗` column; free prose is never an input.
      When you refuse, name the clause that failed.
+   - **Compare the two tables — the worker's and the checker's — and never merge on one.**
+     The PR body carries the implementer's `✓`/`✗` table; the `qa-reviewer` posts its own
+     PASS/FAIL table, re-derived from the task and the diff (its mode B step 5). Run
+     `${CLAUDE_PLUGIN_ROOT}/scripts/pr-verdict-clearance.sh <pr> --repo <org>/<repo>` and
+     read its exit code, never the tables by eye:
+
+     | Exit | What it found | What you do |
+     |---|---|---|
+     | **0** | both tables agree | Record it: post one comment on the PR naming the criteria count and the checker's login. Clearance continues on the trailer as usual. |
+     | **1** | a row the worker marked `✓` and the checker marked `FAIL` | **ROUTE.** Surface the PR as a 🔴 item and quote **both rows** the script printed, verbatim. Do not adjudicate it and do not re-dispatch either agent. |
+     | **3** | the checker's table is malformed — a row with no verdict, or no command | Re-dispatch the `qa-reviewer` for that PR (its round, not a new one). |
+     | **4** | the checker posted under the PR author's own login | **ROUTE**, and say which limit it is: on a solo bundle this is the standing answer, because one `gh` login cannot evidence a second principal. |
+     | **2** | unknown — no table, or the two cannot be aligned | **HOLD.** Unknown is not permission. |
+
+     **Any exit code this table does not name HOLDS.** A disagreement is the human's: the whole
+     point of a checker is that nobody reconciles the two tables downstream of it.
 
    **Pin verification to the head SHA.** Record which SHA passed (task `# Notes`). If
    a PR's head advances, its prior pass is stale — invalidate and re-verify. Surface
@@ -621,6 +637,19 @@ state, and act only on deltas.
    brief. Two cataloguers write `knowledge/` concurrently and take two slots off the cap.
    Read-only on product repos, writes only to `knowledge/`; counts toward the
    concurrency cap.
+
+   **The papercuts pass is the other reason to dispatch one, and it runs on a cadence
+   rather than on a merge.** Ask once per tick, and only act when it says DUE:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh due   # exit 0 = due (unprocessed entries, last pass >= 7 days)
+   ```
+
+   Exit 0 ⇒ brief the cataloguer for the papercuts pass too (`cataloguer` step 5), inside
+   the same one-dispatch throttle. It returns one proposal per surface; **you** create each
+   as a `draft` task in the project that owns the surface — never `ready`, the human
+   promotes — and only then run `papercuts.sh pass` to mark the entries processed. Exit 1
+   is silence: no line in the report, no dispatch.
 
 8. **Curate.** Keep `projects/<p>/project.md`, each project's `index.md`, and the
    `log.md` files current — **for the projects you actually read this tick**; a done

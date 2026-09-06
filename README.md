@@ -521,6 +521,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `review-rounds.sh` | counts a PR's completed verification **rounds**; exit non-zero at or past **two** | no |
 | `pr-body-clearance.sh` | asserts a PR **body** carries the required shape — the TL;DR heading, a `Verified:` line that cites something, and a criteria table whose heading tally matches its rows. `--body-file` decides on a draft before you open it | no |
 | `pr-comment-clearance.sh` | asserts a **reply to review findings** carries a verdict per finding, and that no element exceeds the measured ceiling. `--comment-file` decides before you post | no |
+| `pr-verdict-clearance.sh` | compares the **worker's** `✓`/`✗` criteria table (the PR body) with the **checker's** re-derived `PASS`/`FAIL` one (a PR comment). 0 agree · 1 the worker passed what the checker failed · 3 a checker row with no verdict or no command · 4 the checker is the PR author · 2 unknown | no |
 | `cite-check.sh` | keeps the `[[finding-slug]]` citations a brief actually carried, drops the rest, and exits 1 when a citing line ends up with none. Reports a dropped id as `UNREAD` (in `knowledge/index.md`, not in the brief) or `FABRICATED` (in no row) | no |
 | `check-dispatch.sh` | `<task-doc>` — did the dispatch actually produce the PR it promised | **never** |
 | `control.sh` | the live kill switch for one dispatched agent — `agents`, then `halt`, `gate` or `steer` it | yes, `.claude/control/` |
@@ -540,6 +541,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos (code intelligence — **not** the knowledge base) | yes |
 | `build-kb-index.sh` | regenerates `knowledge/index.md` from document frontmatter; `--check` fails on a doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a status outside `{current, superseded, corrected}`, a tag outside `knowledge/vocab.md`, a dangling supersession edge, or (as a warning, an error under `--strict`) a bundle-relative link in `knowledge/**` that resolves to nothing | yes, that index |
+| `papercuts.sh` | the cheap end of the knowledge loop — `add` appends one validated line to `knowledge/papercuts.md`, `check` refuses a malformed entry, `report` groups the unprocessed entries by surface for the cataloguer, `due` answers whether a weekly pass is owed, `pass` marks the entries processed | `add`/`pass` only, that record |
 
 **Internal helpers** — the machinery calls these; you normally don't. They are listed so
 the table above accounts for **every** script in `plugin/scripts/`, which
