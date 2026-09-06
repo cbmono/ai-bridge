@@ -532,6 +532,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `stall-counter.sh` | `record`/`escalate`/`status` — the per-task stall memory: `record <task-doc> --blocker <text>` after each round (`--progress` when the PR moved) counts consecutive rounds on the same blocker and **exits 1 at or past `maxStallRounds`** (absent ⇒ **2**); `escalate` then sets `status: blocked`, notes the blocker and prints the one `⛔ **unblock**` line for `AWAITING.md` | `record`/`escalate` only, that task document |
 | `do-not-repeat.sh` | `append`/`brief` — the per-task memory of DEAD ENDS: `append <task-doc> --line <text>` records one approach an ended round already tried and the evidence it failed on (folded to one line, 200 chars, deduped, **capped at 10** — exit 1 past it, fold the oldest into `# Notes`); `brief` prints those lines verbatim under a fixed heading for the next dispatch's brief, and nothing at all when there are none | `append` only, that task document |
 | `dispatch-brief.sh` | `<task-doc>` — the two fixed sections the PM pastes into a dispatch brief verbatim: `## Grounding (<target_repo>)`, the target repo's `knowledge/services/<repo>.md` entry points capped at **15 lines** (absent that doc, one line telling the agent to draft it for the `cataloguer`), and `## Effort`, the files/LOC/turns budget derived from the task's criteria count and the instance's `maxPrLoc`/`maxPrFiles` | no |
+| `release-bump.sh` | `<minor\|patch>` — moves the version in the **five** places that carry it (`VERSION`, `plugin/VERSION`, both manifests, and the banner sample, whose `─` rule is re-cut to the new header's width), on the **default branch, after a merge**. Refuses on a feature branch or a dirty tree; commits and prints the push, never pushes | yes, those five |
 | `check-template-version.sh` | is the plugin on this machine older than the remote's default branch — prints a line **only when behind**, silence on every failure | not the instance — `--fetch` (opt-in) updates the template checkout's remote-tracking refs, nothing else |
 | `close-project-folder.sh` | closeout's folder step — `git rm -r` the project, or freeze and keep it on `retain: true` | only with `--apply` |
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
@@ -602,17 +603,20 @@ each instance keeps its own git history, so work and personal stay separate.
 The version lives at this root — [`VERSION`](VERSION), one line, no extension — and is
 MIRRORED byte-for-byte into [`plugin/VERSION`](plugin/VERSION), because an installed plugin
 has no checkout around it to read the root copy from. `cat VERSION` reads it;
-`tests/template-version.test.sh` fails if the two disagree, so bump both. Nothing parses
+`tests/template-version.test.sh` fails if the two disagree, so they only ever move together. Nothing parses
 prose for it and there is no `package.json`, no tag and no changelog. **There is no release process here and none is wanted.**
 
-**A change to `core` proposes the bump; you approve it by merging.** `core` is a closed
+**A change to `core` is bumped for AFTER it merges, by you, on `main`.** `core` is a closed
 list — `plugin/` (which carries `seed/`, `RETIRED` and the shipped `VERSION`) and `config/` — and it is
 exactly what the two path-scoped rule files ([`.claude/rules/machinery.md`](.claude/rules/machinery.md),
 [`.claude/rules/installer.md`](.claude/rules/installer.md)) already govern, so an agent
 editing one of those paths meets the rule as it opens the file. A PR touching only `docs/`,
-`tests/`, `.claude/`, `.github/` or the root `scripts/` proposes nothing. The bump arrives
-as its own commit with a line in the PR body saying `old → new` and why, so rejecting it is
-dropping one commit rather than unpicking a release.
+`tests/`, `.claude/`, `.github/` or the root `scripts/` needs no bump at all. **No PR ever
+edits the five places the number lives in** — merge it, then run
+[`plugin/scripts/release-bump.sh`](plugin/scripts/release-bump.sh) `<minor|patch>` on `main`
+and push the one commit it makes. That is what lets two core PRs be open at once: while
+each carried its own bump they conflicted on the same five files and had to land one at a
+time, at a full suite run each.
 
 Rough scale, enough to act on without a policy document: **patch** for a fix inside
 behaviour that already shipped, **minor** for a new capability or a new file under

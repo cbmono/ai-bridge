@@ -892,6 +892,23 @@ withholds clearance over it. **The `project-manager` reads it one step earlier**
 task's expected diff is already known to exceed it: it proposes splitting the *task*
 before dispatch, which is the only point at which the split is cheap.
 
+### Cutting a release: merge, bump, push
+
+**The version moves at merge time, on `main`, and never inside a pull request.** Merge the
+PR, pull `main`, run `plugin/scripts/release-bump.sh <minor|patch>` — it is the only writer
+of the five places the number lives in (`VERSION`, `plugin/VERSION`, both manifests, and the
+banner sample below, whose `─` rule it re-cuts to the new header's width) — and push the one
+commit it makes. That bump commit goes **straight to main**: the merger pushes it directly,
+bypassing the required check as an admin (`enforce_admins` is off on this repo), and
+**main's suite on the push is the check**. There is no second, trivially-green PR, and the
+script refuses to run anywhere but the default branch on a clean tree. The reason is
+arithmetic: while every core PR carried the bump, any two open ones conflicted on those five
+files and had to land one at a time, each after a fresh merge-main and a full ~15-minute
+suite run — measured 2026-09-06 across seven open PRs, where the version files were the only
+conflict in five of six merges. `tests/release-bump.test.sh` pins both halves: a PR touching
+`plugin/` with no bump passes, and `main` after the script passes
+`tests/template-version.test.sh`.
+
 ### The session banner
 
 One `SessionStart` hook, `.claude/hooks/session-banner.sh`, prints the whole orientation:
@@ -942,8 +959,8 @@ behind" would train you to ignore the true one, and this is the one line in the 
 would otherwise fire on every session on a laptop with no network. Nothing is fetched at
 session start either: the comparison reads the `origin/HEAD` ref already on disk, and only
 `scripts/check-template-version.sh --fetch`, run by hand, touches the network. The
-convention that keeps the number worth comparing — a core change *proposes* a bump, the
-owner approves it by merging — is [invariant 20](conventions.md#20-the-version-is-a-number-a-change-proposes-and-the-drift-check-speaks-only-when-behind). It is bold on a terminal and underlined with a rule
+convention that keeps the number worth comparing — the merge moves the number, on `main`,
+never the PR — is [invariant 20](conventions.md#20-the-version-is-a-number-the-merge-moves-and-the-drift-check-speaks-only-when-behind). It is bold on a terminal and underlined with a rule
 either way — a `SessionStart` hook writes to a **pipe**, not a terminal, so `[ -t 1 ]` is
 false whenever the banner is doing its actual job, and everything below degrades to plain
 text there. `NO_COLOR` turns colour off on a terminal too; `--color always|never` overrides
