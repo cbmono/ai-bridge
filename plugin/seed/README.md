@@ -5,7 +5,7 @@ An [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-cata
 background AI agents working on this group's product repositories.
 
 This is an **instance** of the `ai-bridge` template. The generic machinery (the role
-agents, the machinery scripts and the `SessionStart` hook) ships in the `ai-bridge`
+agents, the scripts and the `SessionStart` hook) ships in the `ai-bridge`
 **plugin**, installed once per machine — this bundle holds no copy of it and no link into
 any checkout. Its seed docs (`SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, this file)
 were **copied once and are yours**. The slash commands come from the same **plugin**
