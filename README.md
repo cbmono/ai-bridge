@@ -373,15 +373,16 @@ A cross-instance board is available too, on the same off-by-deletion rule
 
 ## Three ways to see the board
 
-One snapshot, three renderers. `scripts/write-snapshot.sh` derives each instance's
-`SNAPSHOT.json`; all three read it and none of them reads the bundle. Pick by what you
+One snapshot, four renderers. `scripts/write-snapshot.sh` derives each instance's
+`SNAPSHOT.json`; all four read it and none of them reads the bundle. Pick by what you
 are doing, not by which is newest.
 
 | You want | Run | Costs |
 |---|---|---|
 | a look right now, in the terminal you are in | `scripts/print-board.sh` | nothing |
-| a page to open locally — the one each tick renders and commits | `scripts/build-board.sh --standalone .` | a re-run, or a looping instance |
-| a page that updates itself as you work | `scripts/watch-board.sh` | **a process you keep running** |
+| a page to open locally — the one each tick renders | `scripts/build-board.sh --standalone .` | a re-run, or a looping instance |
+| **a live page in the browser, on a fixed local URL** | `/ai-bridge:board serve` | **a process you keep running** |
+| a page that updates itself as you work, no browser | `scripts/watch-board.sh` | **a process you keep running** |
 
 ```bash
 scripts/print-board.sh                      # columns: instance, project, phases, tasks, awaiting
@@ -389,6 +390,7 @@ scripts/build-board.sh --standalone .       # ./board.html — THIS instance onl
 scripts/build-board.sh --standalone         # the same, but every instance in boardInstances (see below)
 scripts/build-board.sh                      # the same page as a BODY — no <html> wrapper, for embedding
 scripts/watch-board.sh                      # ./.board-live/board.html, re-rendered on every change
+scripts/board-serve.sh                      # http://localhost:<boardPort> — the same page, served and auto-reloading
 ```
 
 **The page keeps itself current, locally.** Every `/ai-bridge:dispatch` tick re-renders it to
@@ -400,13 +402,13 @@ tick](docs/operations.md#rendering-it-from-each-tick)). It
 is only as fresh as the last tick — the page's masthead says when that was, and
 `watch-board.sh` is the view that follows your work in between.
 
-**And a tick that changed something commits a second copy, `/board.html`, into the bundle
-repo.** That page is readable by the repo's permission list and by nothing else, no Pages
-site is enabled anywhere, and an idle tick commits nothing. It is why the render above
-passes an explicit `.` — without it the renderer reads `boardInstances`, and a bundle must
-not commit another bundle's project titles.
+**`/ai-bridge:board serve` is the local web app**: one process per bundle, on a port
+derived from the bundle path (`boardPort` in `instance.config.local.json` overrides it),
+serving `.board-live/` on `127.0.0.1` and nothing else. It re-renders within two seconds of
+`SNAPSHOT.json` changing and the page reloads itself. No LLM is in that path — a tick used
+to commit a `/board.html` into the bundle repo instead, and no longer does.
 
-**`/ai-bridge:board` publishes the same page as a private artifact**, at a URL that does
+**`/ai-bridge:board publish` publishes the same page as a private artifact**, at a URL that does
 not change between runs and that the session banner prints. It is the route to a phone
 with no clone on it; `/board.html` stays the route for anyone without a Claude account. The
 URL is recorded per machine, in `instance.config.local.json`, because artifact publishing
@@ -532,6 +534,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) — pass `.` to render THIS instance only | yes, the output file |
 | `print-board.sh` | prints the board in the terminal | no |
 | `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
+| `board-serve.sh` | serves `.board-live/` on `127.0.0.1:<boardPort>` and re-renders it when `SNAPSHOT.json` changes — one process per bundle | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos | yes |
 

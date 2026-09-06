@@ -36,7 +36,9 @@ case "$INTERVAL" in ''|*[!0-9]*|0) echo "board-serve: --interval takes a positiv
 # ships into every bundle and will be run from the wrong directory.
 [[ -f SCHEMA.md && -f instance.config.json ]] || exit 0
 
-ROOT="$PWD"
+# The PHYSICAL path, so a bundle reached through a symlink (or a `//` in TMPDIR) derives
+# ONE port rather than one per route.
+ROOT="$(pwd -P)"
 
 # THE PORT IS DERIVED FROM THE BUNDLE PATH, so two bundles on one machine never collide
 # and the same bundle answers on the same port across reboots. 4xxxx is above the
