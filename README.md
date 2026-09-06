@@ -247,7 +247,7 @@ Run these inside an instance.
 | `/ai-bridge:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
 | `/ai-bridge:dispatch [gap]` | (plugin) the serial background loop: dispatch, track, report. `/ai-bridge:dispatch 10m` ticks every ten minutes |
 | `/ai-bridge:answer` | (plugin) answer the PM's open questions from inside the session |
-| `/ai-bridge:board` | (plugin) publish this instance's board as a private artifact, at the same URL every run |
+| `/ai-bridge:board` | (plugin) `serve` — the board on a local URL, one process per bundle; `publish` — the same page as a private artifact, at the same URL every run |
 | `/ai-bridge:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
 | `/ai-bridge:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/ai-bridge:fanout <task>` | (plugin) parallel work across several repos |
@@ -373,15 +373,16 @@ A cross-instance board is available too, on the same off-by-deletion rule
 
 ## Three ways to see the board
 
-One snapshot, three renderers. `scripts/write-snapshot.sh` derives each instance's
-`SNAPSHOT.json`; all three read it and none of them reads the bundle. Pick by what you
+One snapshot, four renderers. `scripts/write-snapshot.sh` derives each instance's
+`SNAPSHOT.json`; all four read it and none of them reads the bundle. Pick by what you
 are doing, not by which is newest.
 
 | You want | Run | Costs |
 |---|---|---|
 | a look right now, in the terminal you are in | `scripts/print-board.sh` | nothing |
-| a page to open locally — the one each tick renders and commits | `scripts/build-board.sh --standalone .` | a re-run, or a looping instance |
-| a page that updates itself as you work | `scripts/watch-board.sh` | **a process you keep running** |
+| a page to open locally — the one each tick renders | `scripts/build-board.sh --standalone .` | a re-run, or a looping instance |
+| **a live page in the browser, on a fixed local URL** | `/ai-bridge:board serve` | **a process you keep running** |
+| a page that updates itself as you work, no browser | `scripts/watch-board.sh` | **a process you keep running** |
 
 ```bash
 scripts/print-board.sh                      # columns: instance, project, phases, tasks, awaiting
@@ -389,6 +390,7 @@ scripts/build-board.sh --standalone .       # ./board.html — THIS instance onl
 scripts/build-board.sh --standalone         # the same, but every instance in boardInstances (see below)
 scripts/build-board.sh                      # the same page as a BODY — no <html> wrapper, for embedding
 scripts/watch-board.sh                      # ./.board-live/board.html, re-rendered on every change
+scripts/board-serve.sh                      # http://localhost:<boardPort> — the same page, served and auto-reloading
 ```
 
 **The page keeps itself current, locally.** Every `/ai-bridge:dispatch` tick re-renders it to
@@ -400,19 +402,19 @@ tick](docs/operations.md#rendering-it-from-each-tick)). It
 is only as fresh as the last tick — the page's masthead says when that was, and
 `watch-board.sh` is the view that follows your work in between.
 
-**And a tick that changed something commits a second copy, `/board.html`, into the bundle
-repo.** That page is readable by the repo's permission list and by nothing else, no Pages
-site is enabled anywhere, and an idle tick commits nothing. It is why the render above
-passes an explicit `.` — without it the renderer reads `boardInstances`, and a bundle must
-not commit another bundle's project titles.
+**`/ai-bridge:board serve` is the local web app**: one process per bundle, on a port
+derived from the bundle path (`boardPort` in `instance.config.local.json` overrides it),
+serving `.board-live/` on `127.0.0.1` and nothing else. It re-renders within two seconds of
+`SNAPSHOT.json` changing and the page reloads itself. No LLM is in that path — a tick used
+to commit a `/board.html` into the bundle repo instead, and no longer does.
 
-**`/ai-bridge:board` publishes the same page as a private artifact**, at a URL that does
+**`/ai-bridge:board publish` publishes the same page as a private artifact**, at a URL that does
 not change between runs and that the session banner prints. It is the route to a phone
-with no clone on it; `/board.html` stays the route for anyone without a Claude account. The
+with no clone on it; `serve` stays the route on the machine itself. The
 URL is recorded per machine, in `instance.config.local.json`, because artifact publishing
 is account-scoped — no share level lets a second account update your page. **A headless
 tick never publishes**: measured 2026-09-05 on Claude Code 2.1.261, a `claude -p` session
-has no artifact tool at all, so the tick prints `run /ai-bridge:board to refresh` and stops
+has no artifact tool at all, so the tick prints `run /ai-bridge:board publish to refresh` and stops
 there. Opening it, including from a phone: [docs/operations.md §
 opening-the-board](docs/operations.md#opening-the-board-laptop-phone-published-live).
 
@@ -491,7 +493,8 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `models` / `roleTiers` | everything inherits the session model | yes |
 | `externalReviewer` | the CodeRabbit CLI | yes |
 | `boardInstances` | the board is just this instance | yes |
-| `board` | **on** — `SNAPSHOT.json` is seeded, each tick renders `.board-live/board.html`, and a tick that changed something also commits `/board.html` | **no** — one instance, one answer |
+| `boardPort` | derived from the bundle path, in the 4xxxx band | **per machine only** — a port belongs to a laptop, not to a bundle everyone clones |
+| `board` | **on** — `SNAPSHOT.json` is seeded and each tick renders `.board-live/board.html`, which `/ai-bridge:board serve` serves | **no** — one instance, one answer |
 | `codegraphSkip` | index every product repo | yes |
 
 Environment knobs: `PUSH_STATE_MAX` (default **12**), `PRUNE_ACTIVE_MINUTES`,
@@ -533,6 +536,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) — pass `.` to render THIS instance only | yes, the output file |
 | `print-board.sh` | prints the board in the terminal | no |
 | `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
+| `board-serve.sh` | serves `.board-live/` on `127.0.0.1:<boardPort>` and re-renders it when `SNAPSHOT.json` changes — one process per bundle | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos (code intelligence — **not** the knowledge base) | yes |
 | `build-kb-index.sh` | regenerates `knowledge/index.md` from document frontmatter; `--check` fails on a doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a status outside `{current, superseded, corrected}`, a tag outside `knowledge/vocab.md`, a dangling supersession edge, or (as a warning, an error under `--strict`) a bundle-relative link in `knowledge/**` that resolves to nothing | yes, that index |
@@ -546,6 +550,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | `ai-bridge.sh` | backs the plugin's `/welcome`: reprints the SessionStart banner, `check` reports state that could be wrong, `fix` repairs only the idempotent tier | only under `fix` |
 | `resolve-config.sh` | the one implementation of the two-file config precedence — `instance.config.local.json` first, `instance.config.json` second, dicts merged entry by entry | no |
 | `resolve-max-agents.sh` | prints the concurrency cap **this machine** should honour, from the same two files | no |
+| `resolve-account.sh` | the one reader of *which Claude account is this bundle on* — prints `declared`/`active`/launcher path, exit 0 match, 3 mismatch, 4 no account on this session, 1 inert (no `ai-bridge-accounts` companion, or nothing declared). Reads no credential | no |
 | `resolve-autonomy.sh` | the one reader of *does delegated autonomy exist here* — prints the `AUTONOMY.md` in force (bundle root first, else an installed companion plugin from core's own marketplace), exit 1 when there is none, which is `gated` | no |
 
 ## Troubleshooting

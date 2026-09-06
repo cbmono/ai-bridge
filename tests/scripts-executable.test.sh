@@ -502,7 +502,9 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # 64 -> 65: plugin/scripts/cite-check.sh (ai-bridge-next/task-014), same reason.
 # 65 -> 66: plugin/scripts/build-kb-index.sh (ai-bridge-next/task-007), same reason.
 # 66 -> 67: plugin/scripts/do-not-repeat.sh (ai-bridge-next/task-012), same reason.
-EXPECTED_ASSERTIONS=67
+# 67 -> 68: plugin/scripts/board-serve.sh (ai-bridge-next/task-021), same reason.
+# 68 -> 69: plugin/scripts/resolve-account.sh (ai-bridge-next/task-002), same reason.
+EXPECTED_ASSERTIONS=69
 TOTAL=$((pass + fail))
 # EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
 # it annotates, so a merge can plausibly keep the annotations and lose the assignment —
