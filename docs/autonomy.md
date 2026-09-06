@@ -255,8 +255,7 @@ gh search prs --repo <org>/<repo> --merged --match comments \
 ```
 
 Comments written before that template used their own wording, so `--match comments
-override` is the wider net over the history. What the count measures is the pattern
-recorded as one `Finding` in the operator's own bundle —
+override` is the wider net over the history. What the count measures is recorded in
 `knowledge/findings/nineteen-consecutive-prs-merged-on-the-override-so-the-verification-gate-is-a-report.md`:
 an override that is convenient enough becomes the default route, and the exception stops
 being visible as one.
