@@ -408,6 +408,17 @@ state, and act only on deltas.
    reusable, write or update a `Finding` in `knowledge/findings/` per `SCHEMA.md` and
    link it from the task."*
 
+   **Grounding and Effort (where to start reading, and how big this is).** Before you
+   spawn, run `${CLAUDE_PLUGIN_ROOT}/scripts/dispatch-brief.sh <task-path>` and paste its
+   output into the brief **unchanged, both headings and all** — the fixed headings are
+   `## Grounding (<target_repo>)` and `## Effort`. Grounding is the target repo's
+   `knowledge/services/<repo>.md` entry points, capped at 15 lines, or — when that Service
+   doc does not exist — one line telling the agent to draft it alongside the task for the
+   `cataloguer` to review. Effort is the files/LOC/turns budget derived from the task's
+   criteria count and the instance's `maxPrLoc`/`maxPrFiles`. **Never re-derive either
+   yourself**: an agent that has to find its own entry points spends its first turns
+   searching, which is the whole cost this block exists to remove.
+
    **Do not repeat (what the previous round already tried).** Before you spawn, run
    `${CLAUDE_PLUGIN_ROOT}/scripts/do-not-repeat.sh brief <task-path>` and paste its output into the brief
    **unchanged, heading and all** — the fixed heading is
