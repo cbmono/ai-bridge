@@ -1110,7 +1110,7 @@ table() { # <header-label> <header-value> <rows>
 # clone did not own the artifact, and it survived the feature's deletion in two of three
 # live instances. Recorded per machine it says only what THIS clone published, which is the
 # one thing it can be right about — so a value that resolves from `tracked` is ignored here
-# rather than printed, and `/ai-bridge:board` writes only the local file.
+# rather than printed, and `/ai-bridge:board publish` writes only the local file.
 #
 # THE PAGE ITSELF NEVER STOPS BEING A FILE. The URL is an addition to the `file://` line,
 # never a replacement: `/board.html` is what a human without artifact access reads, and a
@@ -1143,6 +1143,20 @@ if tr '\n' ' ' < "$cfg" 2>/dev/null | grep -q '"board"[[:space:]]*:[[:space:]]*f
   board_on=0
 fi
 page="$root/.board-live/board.html"
+# IS THE LOCAL SERVER UP? `.board-live/.serve` is written by board-serve.sh (port, then
+# pid) and removed when it stops — but a SIGKILL leaves it behind, so the pid is checked
+# rather than the file's presence. A dead pid reads as "not up", which is the safe
+# direction: a banner may never send a human to a port nothing is listening on.
+serve_url=""
+_state="$root/.board-live/.serve"
+if [ -f "$_state" ]; then
+  _sport="$(sed -n 1p "$_state" 2>/dev/null)"
+  _spid="$(sed -n 2p "$_state" 2>/dev/null)"
+  case "$_sport$_spid" in
+    ''|*[!0-9]*) ;;
+    *) kill -0 "$_spid" 2>/dev/null && serve_url="http://localhost:$_sport" ;;
+  esac
+fi
 # THREE STATES, THREE DISTINGUISHABLE OUTPUTS — and the middle one used to be silence.
 # `board: true` with nothing rendered printed exactly what `board: false` printed: nothing.
 # Measured on a real instance, the owner read that absence as the Board line having been
@@ -1214,9 +1228,16 @@ if [ "$board_on" -eq 1 ]; then
     # as the route for a reader with no access to the published page.
     board_shown=1
     echo "Board   $art"
-    if [ -f "$page" ]; then
+    if [ -n "$serve_url" ]; then
+      say "$C_DIM" "        $serve_url — this machine's live copy"
+    elif [ -f "$page" ]; then
       say "$C_DIM" "        file://$page — the local copy, for anyone without artifact access"
     fi
+  elif [ -n "$serve_url" ]; then
+    # THE SERVER IS THE LIVE ROUTE, so it is the row rather than the path: a `file://` a
+    # human has to reload by hand is strictly worse than a URL that reloads itself.
+    board_shown=1
+    echo "Board   $serve_url"
   elif [ -f "$page" ]; then
     board_shown=1
     # ONE PATH, PRINTED ONCE. This row used to be THREE lines for one link: the `file://`
@@ -1235,7 +1256,9 @@ if [ "$board_on" -eq 1 ]; then
     # AND THE STALENESS NOTE IS DELETED OUTRIGHT, not shortened. The masthead of the page
     # itself carries the render time, and `watch-board.sh` is documentation — a
     # banner fact is something true of THIS session, and neither of those is.
-    echo "Board   file://$page"
+    # ONE LINE STILL — the repair rides on the row rather than under it. A second line
+    # here is the three-line board row the owner had deleted, arriving by another name.
+    echo "Board   file://$page — run /ai-bridge:board serve for a live URL"
   else
     # IT NAMES THE STATE AND THE REPAIR, because the question this row answers is "is this
     # broken?" and half an answer leaves the human where the silence did. The path is
@@ -1243,7 +1266,7 @@ if [ "$board_on" -eq 1 ]; then
     # it here would make every `has "$page"` assertion in the harnesses pass on an instance
     # with no board — a vacuous check bought for a few characters of prose.
     echo "Board   enabled, but never rendered — no .board-live/board.html here yet"
-    say "$C_DIM" "        an /ai-bridge:dispatch tick renders it, or run build-board.sh"
+    say "$C_DIM" "        run /ai-bridge:board serve; otherwise an /ai-bridge:dispatch tick renders it, or build-board.sh"
   fi
 fi
 

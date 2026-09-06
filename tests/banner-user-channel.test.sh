@@ -652,7 +652,7 @@ assert "…which took the masthead and watch-board.sh with it" \
 # from its `Board   ` line to the blank that ends it: `grep -A2` would drag the NEXT section
 # in, and a plain grep for the link line would leave a re-added line outside the comparison
 # entirely, which is the version of this assertion that cannot fail.
-BOARD_FIXTURE="$(printf 'Board   file://%s' "$BOARD_DIR/board.html")"
+BOARD_FIXTURE="$(printf 'Board   file://%s — run /ai-bridge:board serve for a live URL' "$BOARD_DIR/board.html")"
 BOARD_SECTION="$(printf '%s\n' "$(strip_sgr "$SM")" | awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exit} f')"
 assert "…and the section is byte for byte the one line it now owes" \
   "$(eq "$BOARD_SECTION" "$BOARD_FIXTURE")"

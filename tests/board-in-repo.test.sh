@@ -1,42 +1,28 @@
 #!/usr/bin/env bash
 #
-# board-in-repo.test.sh — `/board.html` is TRACKED, and the two rules that make that
-# safe are asserted behaviourally rather than by grepping for prose.
+# board-in-repo.test.sh — `/board.html` is NOT tracked, and the migration that took it
+# out of the bundles is asserted behaviourally rather than by grepping for prose.
 #
-# WHY THE PAGE IS IN THE REPO AT ALL. The board had to become visible to a teammate on a
-# phone, and the serving routes were measured and rejected: access-controlled GitHub
-# Pages is an Enterprise Cloud feature, so a Pages site on a private bundle serves the
-# page to the WORLD at an unlisted URL (measured 2026-09-02: `has_pages: false` and
-# `GET /repos/<owner>/<repo>/pages` -> 404 on all three private bundles). Committing
-# the file into the private bundle needs no second access-control system: who may read it
-# IS the repo's permission list.
+# WHY THE PAGE LEFT THE REPO. Committing it bought visibility for free — who may read the
+# page IS the repo's permission list — and cost one contended path per tick: on a bundle
+# two humans clone, both ticks render the file from their own snapshot and push it, for
+# output either of them regenerates in a second. `/ai-bridge:board serve` replaced it with
+# a local server on 127.0.0.1, so nothing about the board is pushed at all.
 #
-# AND THE ARTIFACT PATH IS BACK ALONGSIDE IT, per machine — `/ai-bridge:board`, sections 5
-# and 6 below. It was deleted in 2026-08 because the URL was TRACKED and publishing is
-# account-scoped; recorded per machine it is a second route to the same page rather than a
-# replacement for this one, and `/board.html` stays what a reader without artifact access
-# opens. The tracked page's rules are unchanged and every assertion about them below is the
-# one it already made. A GitHub Actions workflow cannot render it either — a
-# runner's checkout has neither the machinery (all of an instance's scripts/ are absolute
-# symlinks into a machine-local template clone, and gitignored) nor the input
-# (SNAPSHOT.json is gitignored) — so "each tick" means the LOCAL tick.
+# THE MIGRATION IS STILL ADDITIVE, WHICH IS WHY SECTION 2 IS BEHAVIOURAL. Instances exist
+# carrying the `!/board.html` un-ignore this era appended, and init-bundle.sh never removes
+# a line from a live instance's .gitignore — so it appends `/board.html` and leans on git's
+# own last-match-wins rule. Asserted with `git check-ignore`, not by grepping for the
+# pattern text, because the ORDERING is the mechanism. The tracked FILE is a different
+# question and gets its own assertions: it is derived output, so the stamp drops it from
+# the index and from disk, once, and says so.
 #
-# THE ONE THAT MATTERS IS SECTION 3. Given no instance directory, build-board.sh
+# SECTION 3 OUTLIVED THE TRACKED PAGE. Given no instance directory, build-board.sh
 # discovers instances from `boardInstances`, which on a real machine names SIBLING
-# BUNDLES. That was harmless while every render went to a gitignored path. It is not
-# harmless now: a bare render writes another bundle's project titles into a repo with a
-# different permission list, and the tick would commit it. So the trailing `.` in
-# `--out board.html .` is a data-governance boundary, and nothing asserted it before this
-# file. The section renders BOTH ways from one fixture, so it fails if the scoping breaks
-# AND fails if the fixture stopped being able to leak (a one-sided assertion here would
-# go green on a fixture whose second instance had quietly stopped rendering at all).
-#
-# WHY install.sh MIGRATES RATHER THAN REWRITES (section 2). Every instance in existence
-# was seeded from a seed/.gitignore that IGNORED board.html. install.sh never removes a
-# line from a live instance's .gitignore — that is what makes it safe to run blindly on a
-# repo full of someone's work — so the migration APPENDS `!/board.html` and leans on
-# git's own last-match-wins rule. Asserted with `git check-ignore`, not by grepping for
-# the pattern text, because the ORDERING is the mechanism.
+# BUNDLES — so the trailing `.` is a data-governance boundary wherever the output travels,
+# and `/ai-bridge:board publish` is now the path it travels on. The section renders BOTH
+# ways from one fixture, so it fails if the scoping breaks AND fails if the fixture stopped
+# being able to leak.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
@@ -69,52 +55,72 @@ ignored() { # <dir> <path> -> yes if git says the path is ignored there
 }
 
 # =======================================================================================
-echo "== 1. seed/.gitignore does not ignore board.html =="
+echo "== 1. seed/.gitignore ignores board.html =="
 # =======================================================================================
 # The seed file is the contract for every instance stamped from now on. Checked through
-# git rather than by grepping the file: a `board.html` line could return in a form the
-# grep missed, and only git decides what git tracks.
+# git rather than by grepping the file: a `!/board.html` un-ignore could return in a form
+# the grep missed, and only git decides what git tracks.
 SEEDED="$TMP/seeded"; mkdir -p "$SEEDED"
 cp "$TPL/plugin/seed/.gitignore" "$SEEDED/.gitignore"
 : > "$SEEDED/board.html"
-ok "a repo seeded from seed/ does NOT ignore board.html" "$(ignored "$SEEDED" board.html)" no
-# The neighbours must keep their ignores — dropping one line must not have dropped three.
+ok "a repo seeded from seed/ ignores board.html"        "$(ignored "$SEEDED" board.html)" yes
+# The neighbours must keep their ignores — flipping one line must not have flipped three.
 : > "$SEEDED/SNAPSHOT.json"; mkdir -p "$SEEDED/.board-live"; : > "$SEEDED/.board-live/board.html"
 ok "…SNAPSHOT.json is still ignored"                     "$(ignored "$SEEDED" SNAPSHOT.json)" yes
 ok "…and .board-live/board.html still is too"            "$(ignored "$SEEDED" .board-live/board.html)" yes
 
 # =======================================================================================
-echo "== 2. install.sh migrates an instance stamped while board.html was ignored =="
+echo "== 2. a re-stamp re-ignores board.html and drops the tracked file =="
 # =======================================================================================
-# A stamp, then the OLD ignore line put back by hand — this is the shape every existing
-# instance is in right now, and it must not be simulated away.
+# A stamp, then the PREVIOUS era's shape put back by hand — an `!/board.html` un-ignore and
+# a committed page. This is the shape every existing instance is in right now, and it must
+# not be simulated away.
 LEGACY="$TMP/legacy"; mkdir -p "$LEGACY"
+git -C "$LEGACY" init -q . >/dev/null 2>&1
+git -C "$LEGACY" config user.email fixture@example.invalid
+git -C "$LEGACY" config user.name fixture
 bash "$TPL/plugin/scripts/init-bundle.sh" "$LEGACY" >"$TMP/outL1" 2>&1
-printf '\n# derived board snapshot (legacy comment)\nSNAPSHOT.json\nboard.html\n' >> "$LEGACY/.gitignore"
-: > "$LEGACY/board.html"
-ok "the legacy shape really does ignore board.html first" "$(ignored "$LEGACY" board.html)" yes
+printf '\nboard.html\n!/board.html\n' >> "$LEGACY/.gitignore"
+printf '<!doctype html>\n' > "$LEGACY/board.html"
+git -C "$LEGACY" add -f .gitignore board.html >/dev/null 2>&1
+git -C "$LEGACY" commit -qm fixture >/dev/null 2>&1
+ok "the legacy shape really does track board.html" \
+  "$(yes_if git -C "$LEGACY" ls-files --error-unmatch board.html)" yes
+ok "…and git does NOT ignore it there yet"               "$(ignored "$LEGACY" board.html)" no
 
 bash "$TPL/plugin/scripts/init-bundle.sh" "$LEGACY" >"$TMP/outL2" 2>&1
-ok "a re-stamp appends the un-ignore"        "$(yes_if grep -qxF '!/board.html' "$LEGACY/.gitignore")" yes
-ok "…and git now reports board.html as NOT ignored"      "$(ignored "$LEGACY" board.html)" no
+ok "a re-stamp appends the ignore"           "$(yes_if grep -qxF '/board.html' "$LEGACY/.gitignore")" yes
+ok "…and git now reports board.html as ignored"          "$(ignored "$LEGACY" board.html)" yes
 # The migration must never remove a line from a live instance's .gitignore.
-ok "…the human's old line is left in place"  "$(yes_if grep -qxF 'board.html' "$LEGACY/.gitignore")" yes
+ok "…the old un-ignore is left in place"     "$(yes_if grep -qxF '!/board.html' "$LEGACY/.gitignore")" yes
+# The FILE is a separate question from the PATTERN, and both directions are asserted:
+# untracked in the index, and gone from disk, with a line saying so.
+ok "…the tracked file is dropped from the index" \
+  "$(yes_if sh -c '! git -C "$1" ls-files --error-unmatch board.html >/dev/null 2>&1' _ "$LEGACY")" yes
+ok "…and removed from disk"                  "$(yes_if sh -c '! test -e "$1/board.html"' _ "$LEGACY")" yes
+ok "…and the stamp said so"                  "$(yes_if grep -qF 'drop  board.html' "$TMP/outL2")" yes
 
+# Counted as a DELTA, not against a literal: this fixture's .gitignore already carries the
+# seed's own `/board.html`, so the absolute count is 2 and only "did it grow" is the
+# idempotency question.
+BEFORE3="$(grep -cxF '/board.html' "$LEGACY/.gitignore")"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$LEGACY" >"$TMP/outL3" 2>&1
 ok "a THIRD stamp appends nothing (idempotent)" \
-  "$(grep -cxF '!/board.html' "$LEGACY/.gitignore")" 1
-ok "…and board.html is still not ignored"                "$(ignored "$LEGACY" board.html)" no
+  "$(grep -cxF '/board.html' "$LEGACY/.gitignore")" "$BEFORE3"
+ok "…and board.html is still ignored"                    "$(ignored "$LEGACY" board.html)" yes
+ok "…and says nothing about dropping a file it no longer has" \
+  "$(grep -cF 'drop  board.html' "$TMP/outL3")" 0
 
-# A freshly seeded instance has no `board.html` line, so there is nothing to un-ignore
-# and the migration must stay quiet — an unconditional append would put a negation into
-# every new instance for no reason.
+# A freshly seeded instance already carries the seed's own ignore, so the migration must
+# stay quiet — an unconditional append would put a duplicate into every new instance.
 FRESH="$TMP/fresh"; mkdir -p "$FRESH"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$FRESH" >"$TMP/outF1" 2>&1
-ok "a fresh stamp appends NO un-ignore"      "$(grep -cxF '!/board.html' "$FRESH/.gitignore")" 0
-ok "…and board.html is not ignored there either"         "$(ignored "$FRESH" board.html)" no
+ok "a fresh stamp appends NO second ignore"  "$(grep -cxF '/board.html' "$FRESH/.gitignore")" 1
+ok "…no un-ignore anywhere in it"            "$(grep -cxF '!/board.html' "$FRESH/.gitignore")" 0
+ok "…and board.html is ignored there too"                "$(ignored "$FRESH" board.html)" yes
 
 # =======================================================================================
-echo "== 3. THE CROSS-BUNDLE LEAK: --out board.html . renders THIS instance only =="
+echo "== 3. THE CROSS-BUNDLE LEAK: a trailing . renders THIS instance only =="
 # =======================================================================================
 BB="$TPL/plugin/scripts/build-board.sh"
 snap() { # <dir> <slug> <unique title>
@@ -163,21 +169,25 @@ ok "a BARE render still reaches boardInstances (fixture is live)" \
   "$(yes_if grep -q ZZOTHERPROJECTZZ "$MINE/bare.html")" yes
 
 # =======================================================================================
-echo "== 4. the tick's own instructions carry both rules =="
+echo "== 4. the tick's own instructions no longer commit a page =="
 # =======================================================================================
 # Text checks, because the tick is a document an agent reads and there is nothing else to
-# execute. Kept to the two strings that are load-bearing: the scoped render (a missing `.`
-# is the leak above) and the commit (without it nothing is ever published).
+# execute. Kept to what is load-bearing: the live render it still does, and the two strings
+# whose ABSENCE is this change — a tracked render and a board commit.
 PM="$TPL/plugin/agents/project-manager.md"
 ok "project-manager.md exists"                          "$(yes_if test -f "$PM")" yes
-ok "…names the SCOPED render"    "$(yes_if grep -qF -- '--standalone --out board.html .' "$PM")" yes
-ok "…names the commit step"      "$(yes_if grep -qF -- 'commit-as.sh project-manager "chore: refresh board.html" -- board.html' "$PM")" yes
-ok "…and still names the live render it does NOT commit" \
+ok "…still names the LIVE render" \
   "$(yes_if grep -qF -- '--out .board-live/board.html' "$PM")" yes
+ok "…names no tracked render"    "$(yes_if grep -qF -- '--standalone --out board.html .' "$PM")" no
+ok "…and no board commit"        "$(grep -cF -- 'chore: refresh board.html' "$PM")" 0
+ok "…and points a human at the local server" \
+  "$(yes_if grep -qF -- '/ai-bridge:board serve' "$PM")" yes
 # The launcher's standing facts are what a human reads to know what the loop does.
 SK="$TPL/plugin/skills/dispatch/SKILL.md"
-ok "the dispatch skill names the tracked board" \
-  "$(yes_if grep -qF -- '--standalone --out board.html .' "$SK")" yes
+ok "the dispatch skill names no tracked board" \
+  "$(yes_if grep -qF -- '--standalone --out board.html .' "$SK")" no
+ok "…and names the local server instead" \
+  "$(yes_if grep -qF -- '/ai-bridge:board serve' "$SK")" yes
 
 # =======================================================================================
 echo "== 5. THE SAME BOUNDARY ON THE ARTIFACT PATH: /ai-bridge:board publishes =="
@@ -270,7 +280,7 @@ ok "…and names the SCOPED artifact render" \
 ok "…and never writes the tracked board.html" \
   "$(yes_if grep -qF -- '--out board.html' "$SK_BOARD")" no
 ok "the tick tells the human what refreshes the published page" \
-  "$(yes_if grep -qF -- 'run /ai-bridge:board to refresh' "$PM")" yes
+  "$(yes_if grep -qF -- 'run /ai-bridge:board publish to refresh' "$PM")" yes
 
 printf '\nboard-in-repo.test: pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
