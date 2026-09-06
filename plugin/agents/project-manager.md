@@ -128,13 +128,14 @@ state, and act only on deltas.
    **The lock comes first — before you re-derive anything, and whatever woke you:**
 
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire --as tick --agent project-manager
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire --as tick --agent project-manager --claimant <the tick id from your brief>
    ```
 
    - **0** — the lock is yours; carry on. It printed `adopted:`: that lock is the
      launcher's dispatch lock and **the launcher** releases it when you report — you
      never do (step 8). A preceding `re-entered:` line means a second acquire in this
-     tick and changes nothing.
+     tick and changes nothing. A `note:` line means the id in your brief does not match the
+     one the lock was minted for — you still ran; report that in one line.
    - **1** — the claim on that lock is **not yours** as far as disk can show; read it as
      somebody else. **Report and hold**: dispatch nothing, adopt nothing as your in-flight set,
      open no ledger entry, release nothing, end the tick.
@@ -152,11 +153,15 @@ state, and act only on deltas.
      shipped — is none of those: carry on with the tick, and say so in one line:
      `TICK LOCK: absent — re-stamp this instance`. Never silently.
 
-   **Run that command ONCE per tick, and never guess about the answer.** A matching
-   session-derived id proves nothing (one id per *session*, not per tick) — that case is
-   exit **2**, the human's. There is nothing to remember between calls and nothing to
-   pass along. You run the acquire too because a resume never passes through the
-   launcher; why, and why a tick never takes a lock of its own:
+   **Run that command ONCE per tick, and never guess about the answer.** **The id is
+   your brief's, not yours to invent**: the launcher minted it, took the lock with it and
+   recorded it in `.tick-lock`, so passing it back verbatim is what makes a second acquire
+   in this tick a proved re-entry (exit **0**). **No id in your brief** — an older
+   launcher — ⇒ drop the flag entirely and run the rest of the command unchanged; the
+   fallback is the session's id, which is one per *session* and not per tick, so a match
+   there proves nothing and is exit **2**, the human's. Nothing else is carried between
+   calls and nothing else is passed along. You run the acquire too because a resume never
+   passes through the launcher; why, and why a tick never takes a lock of its own:
    `docs/pm-design.md#step-0-5`.
 
    **Read the in-flight set from disk, never from your brief and never from anyone's

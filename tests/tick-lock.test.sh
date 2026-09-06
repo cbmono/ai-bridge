@@ -98,6 +98,17 @@
 #      dispatch window meets an unclaimed lock and is indistinguishable from the tick that
 #      lock was taken for.
 #
+# AND A TENTH, WHICH IS THE FIRST TIME EITHER ACQUIRE SITE ACTUALLY DECLARES AN ID:
+#
+#  10. THE LAUNCHER MINTS THE ID AND BOTH SITES PASS IT. Property 8 made a DECLARED match
+#      the only proof, and then nobody declared: both callers ran with `--agent` alone, so
+#      the derived tier answered and a tick meeting its own claim reached exit 2 on the
+#      ordinary path. The launcher now mints one literal per tick, records it in the LOCK
+#      (the only place it lives — it writes no claim), and hands it to the tick. What must
+#      NOT come with it: an id checked on ADOPT. Adopting proves you are the dispatch, not
+#      who you are, so a mismatch there is reported and never refused — matching it would
+#      close the 41-47s window at the price of one mis-typed literal refusing EVERY tick.
+#
 # EVERY TICK IN THIS FILE STATES ITS IDENTITY, AND THE ENVIRONMENT'S IS UNSET ON PURPOSE.
 # `--claimant` is the explicit source; absent one the script falls back to `TICK_CLAIMANT`
 # and then to the runtime's `CLAUDE_CODE_SESSION_ID`. A harness that inherited either would
@@ -154,6 +165,16 @@ attempt() { # <instance-dir> [agent-id]
   ATTEMPT_OUT="$(bash "$LOCKSH" acquire --instance "$inst" --agent "$agent" 2>&1)"
   ATTEMPT_RC=$?
   [ "$ATTEMPT_RC" -eq 0 ] && printf 'tick dispatched: %s\n' "$agent" >> "$inst/dispatched.log"
+  return 0
+}
+# The same launcher, declaring the per-tick id it minted — `/ai-bridge:dispatch` step 1
+# since 2026-09-06. Separate from attempt() so the un-declared path above stays driven too:
+# a bundle whose launcher declares nothing must behave exactly as it did before.
+attempt_as() { # <instance-dir> <minted-id>
+  ATTEMPT_OUT="$(bash "$LOCKSH" acquire --instance "$1" --agent project-manager \
+    --claimant "$2" 2>&1)"
+  ATTEMPT_RC=$?
+  [ "$ATTEMPT_RC" -eq 0 ] && printf 'tick dispatched: %s\n' "$2" >> "$1/dispatched.log"
   return 0
 }
 dispatches() { # <instance-dir> -> how many ticks the launcher actually spawned
@@ -496,6 +517,75 @@ ok "…and still did not run"              "$(ran "$RE")" 1
 ok "…leaving no lock of its own behind"  "$(yn test -e "$RE/.tick-lock")" no
 
 echo
+echo "== THE LAUNCHER MINTS THE ID: it lives in the lock, and in no second file =="
+# 2026-09-06 (ai-bridge-next/task-009). Property 8 made a DECLARED match the only proof and
+# then neither caller declared, so the derived tier answered and a tick meeting its own claim
+# was exit 2 on the ORDINARY path. The launcher now mints one literal per tick and passes it
+# to its own acquire; `.tick-lock` records it and nothing else on disk does.
+ID=tick-20260906T152233Z-a7f3
+MINT="$TMP/minted"; mkdir -p "$MINT"
+attempt_as "$MINT" "$ID"
+ok "the launcher takes the lock with an id" "$ATTEMPT_RC" 0
+ok "…still in silence"                     "$ATTEMPT_OUT" ""
+ok "…the LOCK records the claimant"        "$(lock_field_of "$MINT/.tick-lock" claimant)" "$ID"
+ok "…and the source that declared it"      "$(lock_field_of "$MINT/.tick-lock" claimant-source)" flag
+ok "…the launcher writes NO claim"         "$(yn test -e "$MINT/.tick-lock.claim")" no
+ok "…and there is exactly one lock file"   "$(ls -A "$MINT" | grep -c '^\.tick-lock')" 1
+# The dispatch window is 41-47s wide, and inside it the lock is the only thing on disk that
+# can say which tick is coming. `status` reads it out rather than making a human cat the file.
+SOUT="$(bash "$LOCKSH" status --instance "$MINT" 2>&1)"
+ok "status names the tick it was minted for" "$(printf '%s' "$SOUT" | grep -qF "minted for: $ID" && echo yes || echo no)" yes
+ok "…and still says nobody has claimed it"   "$(printf '%s' "$SOUT" | grep -qF 'No tick has claimed it yet' && echo yes || echo no)" yes
+
+echo
+echo "== …so the tick that carries it RE-ENTERS (0) where it used to reach a human (2) =="
+tick "$MINT" project-manager "$ID"
+ok "the dispatched tick adopts"          "$TICK_RC" 0
+ok "…and says nothing about a mismatch"  "$(said 'note:')" no
+tick "$MINT" project-manager "$ID"        # the same tick, acquiring a second time
+ok "its second acquire is exit 0"        "$TICK_RC" 0
+ok "…as a proved re-entry"               "$(said 're-entered:')" yes
+ok "…and never as a human'\''s call"       "$(said 'CANNOT ATTRIBUTE')" no
+# THE ROW THAT DOES NOT MOVE. Two DECLARED ids that differ are `theirs` — exit 1, today's
+# answer — and exit 2 keeps maybe/stale/future/unreadable and nothing else. Routing this to
+# 2 would send the resumed-tick case this whole mechanism exists for to a human every time.
+tick "$MINT" project-manager tick-20260906T152233Z-b9c1
+ok "a DIFFERENT declared id is exit 1"   "$TICK_RC" 1
+ok "…reported as another tick'\''s"        "$(said 'HELD BY ANOTHER TICK')" yes
+ok "…and never as CANNOT ATTRIBUTE"      "$(said 'CANNOT ATTRIBUTE')" no
+ok "…and it did not run"                 "$(ran "$MINT")" 2
+# Released with the lock, and outliving nothing: the id is a field in a file `release` removes.
+bash "$LOCKSH" release --instance "$MINT" >/dev/null 2>&1
+ok "release takes the id with the lock"  "$(ls -A "$MINT" | grep -c '^\.tick-lock')" 0
+
+echo
+echo "== adopting proves RE-ENTRY ONLY: a mis-copied id still runs, and is told so =="
+# THE PROPERTY TO REFUSE A CHANGE ON, and the inverse of the one above. Matching the id on
+# ADOPT would close the 41-47s dispatch window — and one mis-typed literal would then refuse
+# every dispatched tick, the total outage this design calls strictly worse than the bug. So a
+# mismatch here is REPORTED and the tick runs.
+WIN="$TMP/mint-typo"; mkdir -p "$WIN"
+attempt_as "$WIN" tick-A
+tick "$WIN" project-manager tick-typo
+ok "a tick whose id differs still adopts" "$TICK_RC" 0
+ok "…and actually ran"                    "$(ran "$WIN")" 1
+ok "…adopting, not taking a lock"         "$(said 'adopted:')" yes
+ok "…and is told which id the lock carries" "$(said 'was minted for tick-A')" yes
+ok "…without being refused"               "$(said 'HELD BY ANOTHER TICK')" no
+
+echo
+echo "== declare nothing and NOTHING changes: the derived tier is still the fallback =="
+# Criterion 4, and the direction that must never invert: a bundle that never adopts the
+# launcher path behaves exactly as it did before any of this. A session-derived id names the
+# session that ran the LAUNCHER, not the tick it is about to spawn, so it is not recorded.
+OLDW="$TMP/undeclared"; mkdir -p "$OLDW"
+CLAUDE_CODE_SESSION_ID=aaf01a1c-fc30-4e96-99e9-a2c43733c10f \
+  bash "$LOCKSH" acquire --instance "$OLDW" --agent project-manager >/dev/null 2>&1
+ok "an undeclared launcher writes no claimant" "$(grep -c '^claimant:' "$OLDW/.tick-lock" | tr -d ' ')" 0
+ok "…nor a source for one"                     "$(grep -c '^claimant-source:' "$OLDW/.tick-lock" | tr -d ' ')" 0
+ok "…and the lock is the same three fields"    "$(grep -cE '^(timestamp|epoch|agent):' "$OLDW/.tick-lock" | tr -d ' ')" 3
+
+echo
 echo "== the claimant is checked LAST: a stale lock is stale even to its own claimant =="
 # The claim must never become a second clock, and "recognise yourself" is the tempting way
 # to build one by accident. Staleness is computed from `.tick-lock` alone, before identity
@@ -836,6 +926,17 @@ ok "…and saying why --agent cannot be the identity" "$(has "$LOCKSH" 'NOT `--a
 ok "…and which way it degrades"          "$(has "$LOCKSH" 'DEGRADES TOWARDS THE OLD BEHAVIOUR')" yes
 ok "…and that the claimant is judged after staleness" \
   "$(has "$LOCKSH" 'checked LAST')" yes
+# CRITERION 6. The header used to say the derived tier was the normal case and that supplying
+# a literal was refused; both are false since the launcher supplies one, and a header that
+# still said them would be the more dangerous half of this change.
+ok "…that the launcher now supplies the id" "$(has "$LOCKSH" 'THE LAUNCHER SUPPLIES THE ID')" yes
+ok "…while the script still cannot derive one" \
+  "$(has "$LOCKSH" 'CANNOT SELF-DERIVE A PER-TICK ID')" yes
+ok "…exit 2 documenting four cases only"    "$(has "$LOCKSH" 'needs a human, and these four only')" yes
+ok "…and a differing DECLARED id reading exit 1" \
+  "$(has "$LOCKSH" 'INCLUDING two DECLARED ids that DIFFER')" yes
+ok "…the window left open as a decision"    "$(has "$LOCKSH" 'THAT IS A DECISION AND NOT A GAP')" yes
+ok "…because adopt must never match the id" "$(has "$LOCKSH" 'ADOPT NEVER MATCHES')" yes
 # THE MEASUREMENT AND THE RULE IT FORCED. Both are pinned because both were re-derived the
 # expensive way once: the first implementation of this claimant reasoned that the session id
 # "names that agent's own transcript", and the two ids above are what that reasoning cost.
@@ -989,10 +1090,17 @@ ok "…documenting the re-entry line on exit 0" \
 ok "…saying a re-entry changed nothing"  "$(step05 | grep -qF 'nothing' && echo yes || echo no)" yes
 ok "…and that exit 1 therefore means somebody else" \
   "$(step05 | grep -qF 'somebody else' && echo yes || echo no)" yes
-# The identity must not become something the tick carries: the command line is fixed, and a
-# step that told a tick to remember a token would be the nonce this design already refused.
-ok "…with nothing to remember between calls" \
-  "$(step05 | grep -qF 'nothing to remember between calls' && echo yes || echo no)" yes
+# The one value the tick carries is its BRIEF's, passed verbatim on a fixed command line —
+# never one it invents, and never one it remembers between ticks.
+ok "…passing the brief's id and inventing none" \
+  "$(step05 | grep -qF 'not yours to invent' && echo yes || echo no)" yes
+ok "…and running unchanged when the brief has none" \
+  "$(step05 | grep -qF 'drop the flag entirely' && echo yes || echo no)" yes
+ok "…with nothing else carried between calls" \
+  "$(step05 | grep -qF 'Nothing else is carried between' && echo yes || echo no)" yes
+# Criterion 1's second call site, in the file that is the whole of what a tick knows.
+ok "…and step 0.5 declares the id" \
+  "$(step05 | grep -qF -- '--claimant <the tick id from your brief>' && echo yes || echo no)" yes
 ok "…and the command line unchanged from the one acquire above" \
   "$(step05 | grep -c 'scripts/tick-lock.sh acquire --as tick --agent project-manager' | tr -d ' ')" 1
 ok "…naming the path the launcher is not on" \
@@ -1059,6 +1167,16 @@ step1() { awk '/^1\. \*\*Take the lock/{p=1;next} p&&/^2\. /{p=0} p' "$LAUNCHER"
 for code in 0 1 2 3; do
   ok "step 1 handles exit $code"         "$(step1 | grep -qE "^   - \*\*$code\*\*" && echo yes || echo no)" yes
 done
+# CRITERION 1, THE LAUNCHER HALF. It mints the literal, passes it to its OWN acquire, and
+# hands the same one to the tick — writing no file itself, because its allowed-tools cannot
+# and because `.tick-lock.claim` is the TICK's O_EXCL adopt record, not a launcher's to touch.
+ok "step 1 mints a per-tick id"          "$(step1 | grep -qF "mint this tick's id" && echo yes || echo no)" yes
+ok "…passing it to its own acquire"      "$(has "$LAUNCHER" 'acquire --agent project-manager --claimant <id>')" yes
+ok "…handing the same literal to the tick" "$(has "$LAUNCHER" 'tick id you minted at step 1 — verbatim')" yes
+ok "…recorded in the lock and nowhere else" "$(step1 | grep -qF 'the only place it lives' && echo yes || echo no)" yes
+ok "…and it writes no file of its own"   "$(step1 | grep -qF 'you write no file yourself' && echo yes || echo no)" yes
+ok "…nor is a mis-copy allowed to refuse the tick" "$(step1 | grep -qF 'never matches the id' && echo yes || echo no)" yes
+ok "…and /loop declares one too"         "$(has "$LAUNCHER" 'acquire --as loop --agent project-manager --claimant <id>')" yes
 ok "step 1 forbids anything in between"  "$(step1 | grep -qF 'nothing may sit between the acquire and the spawn' && echo yes || echo no)" yes
 ok "…and names the window it closes"     "$(step1 | grep -qF 'seconds to minutes' && echo yes || echo no)" yes
 ok "…refusing to delete a stale lock itself" \
