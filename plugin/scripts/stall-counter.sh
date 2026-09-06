@@ -19,6 +19,11 @@
 #   stall_count:  consecutive rounds that ended on the same blocker. Absent ⇒ 0.
 #   last_blocker: what the last round ended on, normalised. Absent ⇒ none.
 #
+# `last_blocker` IS TEXT A HUMAN WILL READ, in the task document and in `AWAITING.md`, and
+# it persists for the life of the repo — so it is under the same rule as every other
+# document field: **no customer PII, and never a secret or an environment value**. A caller
+# passes the failing check or the blocker sentence, not the output that failed.
+#
 # THE CAP IS `maxStallRounds` in `instance.config.json`, **absent ⇒ 2** — resolved through
 # `resolve-config.sh`, so a per-machine override behaves like every other key. Outside a
 # bundle (a fixture, an ad-hoc checkout) the fallback stands and nothing is an error.
@@ -62,7 +67,14 @@
 # Verified by tests/stall-counter.test.sh.
 set -uo pipefail
 
-HERE="$(cd -- "$(dirname -- "$0")" && pwd -P)"
+# THE SELF PATH IS RESOLVED THROUGH THE SYMLINK, the same idiom and the same reason as
+# resolve-model.sh: an instance stamped before `resolve-config.sh` shipped has no such file
+# in its own `scripts/`, so a plain `dirname "$0"` would look there and miss it. Here that
+# would not error — it would silently answer with the fallback cap while a configured one
+# sat in the file — which is the class of silent wrong answer this repo refuses.
+SELF="${BASH_SOURCE[0]:-$0}"
+[ -L "$SELF" ] && SELF="$(readlink "$SELF" 2>/dev/null || printf '%s' "$SELF")"
+HERE="$(cd -- "$(dirname -- "$SELF")" 2>/dev/null && pwd -P)" || HERE=""
 DEFAULT_MAX=2
 
 usage() {
@@ -145,6 +157,13 @@ bundle_root() { # <task-doc>
 resolve_max() { # <task-doc>
   local root max
   root="$(bundle_root "$1")" || { printf '%s\n' "$DEFAULT_MAX"; return 0; }
+  # A MISSING SIBLING IS SAID OUT LOUD, then falls back. Silence here would answer 2 for a
+  # bundle that had configured 5, and nothing anywhere would say which number was used.
+  if [ -z "$HERE" ] || [ ! -f "$HERE/resolve-config.sh" ]; then
+    echo "stall-counter: resolve-config.sh not found beside this script — using the" >&2
+    echo "               documented fallback of $DEFAULT_MAX, not this bundle's maxStallRounds." >&2
+    printf '%s\n' "$DEFAULT_MAX"; return 0
+  fi
   max="$("$HERE/resolve-config.sh" --instance "$root" maxStallRounds 2>/dev/null)" || max=""
   case "$max" in
     ''|*[!0-9]*) printf '%s\n' "$DEFAULT_MAX" ;;

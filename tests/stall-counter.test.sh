@@ -182,6 +182,29 @@ assert "instance.config.local.json wins over tracked"  "$(has 'max=1' "$(run sta
 assert "…and at a cap of 1 the FIRST round escalates"  "$(eq "$(rc record "$DOC" --blocker "$BLOCKER")" 1)"
 
 echo
+echo "== the resolver is found through a symlink, and its absence is LOUD =="
+
+# TWO SHAPES, and they are opposite verdicts on purpose. A bundle stamped before
+# `resolve-config.sh` shipped reaches this script through a SYMLINK, and a plain
+# `dirname "$0"` would look in that bundle's own `scripts/`, miss the sibling, and answer
+# with the fallback while a configured cap sat in the file — silently. `readlink` lands in
+# the template where the helper is guaranteed to sit, so the symlink still reads 5.
+reset 5
+mkdir -p "$TMP/lonely" && ln -sf "$SCRIPT" "$TMP/lonely/stall-counter.sh"
+assert "reached via a symlink, it still reads the configured 5" \
+       "$(has 'max=5' "$(bash "$TMP/lonely/stall-counter.sh" status "$DOC" 2>&1)")"
+
+# A detached COPY genuinely has no sibling. The fallback is then correct — the cap has a
+# documented default and stopping a tick over it would be worse — but it is SAID, because
+# answering 2 in silence for a bundle that configured 5 is the silent wrong answer this
+# repo refuses.
+cp "$SCRIPT" "$TMP/lonely/detached.sh"
+DETACHED="$(bash "$TMP/lonely/detached.sh" status "$DOC" 2>&1)"
+assert "a detached copy falls back to the documented 2" "$(has 'max=2' "$DETACHED")"
+assert "…and says so, naming the key it could not read" "$(has 'maxStallRounds' "$DETACHED")"
+assert "…and names the sibling it went looking for"     "$(has 'resolve-config.sh' "$DETACHED")"
+
+echo
 echo "== refusals: unknown is never reported as fine =="
 
 reset
