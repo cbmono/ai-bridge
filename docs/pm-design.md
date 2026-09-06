@@ -507,3 +507,33 @@ re-opens the double-dispatch the lock exists to close. There is no longer a case
 a tick created its own lock — creating one is exactly what Step 0.5 refuses.
 `scripts/tick-lock.sh release` stays unconditional and holds no identity, because it is
 **the human's override**; it is not the tick's to run at the end of a tick.
+
+---
+
+## The objective layer
+
+<a id="objectives-optional"></a>
+### Why `objectives/` is optional, and how to opt in
+
+The 2026-09-01 strategy promised objectives would be "simplified — optional". This is
+that, and the reasoning is the owner's, 2026-09-06: *"most of the cases, projects are
+kind of self-contained and the objectives of the projects are part of the project MD.
+Then we create the next version of a project or the next iteration, so having this
+overarching objective seems useless."*
+
+The 2026-09-05 audit agrees from the other side. The one live objective sat `achieved`
+on criteria nothing could ground, and the replatform project — nineteen merged PRs —
+was linked to no objective at all. A required field that is either unsupportable or
+skipped is not measuring anything; it is a form.
+
+So the anchor moved down one level. A project carries its own `success_criteria`
+(`SCHEMA.md` → "Where a project's success is measured"), `objective:` stays optional,
+and `objectives/` is the **opt-in layer for a goal that outlives one project** — several
+projects serving one measurable end. `/ai-bridge:init <dir> --with-objectives` creates
+the directory; a plain stamp ships none, and an existing `objectives/` is data the
+stamp never touches.
+
+**What did not get weaker is the measurement.** `/audit` grounds the objective's
+criteria where there is one, the project's own where there is not, and reports **"no
+criteria"** for a project carrying neither — a mandatory finding, never a silent pass.
+Deleting the layer without that clause would have deleted the counter-metric with it.

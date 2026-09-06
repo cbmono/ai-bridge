@@ -1,7 +1,7 @@
 ---
 name: audit
 disable-model-invocation: true
-description: Run the slow-cadence audit loop — the counter-metric that grounds objectives against reality and flags Goodhart drift, stale knowledge, and green-but-not-progressing work. The audit agent is read-only; the command's only write is prepending its report to log.md; never promotes, merges, or dispatches.
+description: Run the slow-cadence audit loop — the counter-metric that grounds each goal (an objective's success_criteria, or a project's own where it carries no objective) against reality and flags Goodhart drift, stale knowledge, and green-but-not-progressing work. The audit agent is read-only; the command's only write is prepending its report to log.md; never promotes, merges, or dispatches.
 allowed-tools: Bash(pwd), Bash(ls:*), Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status:*), Read, Edit, Agent
 ---
 
@@ -33,10 +33,12 @@ merges, dispatches, or changes task status.
    then inherit the session model rather than dispatching on a guess.
 2. Dispatch the **`auditor`** agent (`subagent_type: ai-bridge:auditor` — the plugin
    namespace, because a BARE agent name does not resolve) for one pass, passing the
-   resolved model. It's read-only — it grounds each objective's `success_criteria`
-   against live `gh`/`git` reality, flags the four drift modes (Goodhart · measurement
-   decay · green-but-not-progressing · weakened anchors), and **returns** a dated audit
-   report (it writes nothing itself).
+   resolved model. It's read-only — it grounds each goal's `success_criteria` against
+   live `gh`/`git` reality (an **objective**'s, or a **project's own** where it carries
+   no `objective:` — `objectives/` is optional), reports **"no criteria"** for anything
+   carrying neither, flags the four drift modes (Goodhart · measurement decay ·
+   green-but-not-progressing · weakened anchors), and **returns** a dated audit report
+   (it writes nothing itself).
 3. **Persist it.** Prepend the returned report as a dated `## Audit — <date>` entry to
    the root `log.md` (date via `date -u +%Y-%m-%d`).
 4. Relay its verdict + findings. These are **advisory** — acting on them (adjusting

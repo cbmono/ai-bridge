@@ -6,6 +6,7 @@
 #     init-bundle.sh [TARGET]           # create/refresh a bundle at TARGET (default: cwd)
 #     init-bundle.sh --instance [TARGET]  # the same thing, stated explicitly
 #     init-bundle.sh --refresh-seeds [TARGET]  # also APPLY the seed 3-way merge
+#     init-bundle.sh --with-objectives [TARGET]  # also create the OPTIONAL objectives/ dir
 #     init-bundle.sh --config           # link config/required/ into ~/.claude (CLAUDE_CONFIG_DIR wins)
 #     init-bundle.sh --uninstall [TARGET]  # remove the repos/ view and any legacy machinery links
 #     init-bundle.sh --config --uninstall   # remove only the config-layer symlinks this created
@@ -29,6 +30,8 @@
 #      silent. Runs FIRST, so the seed step below can put a real file where a link was.
 #   2. COPIES the `seed/` content into TARGET *only if absent* — never clobbering bundle
 #      data (objectives/projects/knowledge/log/config/CLAUDE.md/SCHEMA.md/CONVENTIONS.md).
+#      `objectives/` is NOT seeded: SCHEMA.md makes it an optional layer, so only
+#      `--with-objectives` creates it. An existing one is data and is never touched.
 #   3. Writes the derived-ignore lines, the awaiting queue and the board snapshot.
 #   4. LINKS the group's product repos into TARGET/repos/ — one symlink each, via
 #      link-repos.sh. Gitignored, and skipped while reposRoot is still the seeded
@@ -116,6 +119,7 @@ LAYER="instance"
 LAYER_FLAG=""
 TARGET=""
 REFRESH_SEEDS=0
+WITH_OBJECTIVES=0
 for arg in "$@"; do
   case "$arg" in
     --uninstall) MODE="uninstall" ;;
@@ -125,6 +129,9 @@ for arg in "$@"; do
     # absent. `/ai-bridge:welcome fix` and `/ai-bridge:init --refresh-seeds` are the two
     # ways to ask for the write.
     --refresh-seeds) REFRESH_SEEDS=1 ;;
+    # `objectives/` is the OPTIONAL layer (SCHEMA.md -> type: Objective), so the seed
+    # ships none and this flag is how a bundle that wants one asks for it.
+    --with-objectives) WITH_OBJECTIVES=1 ;;
     --config|--instance)
       # Mutually exclusive, and said so rather than letting the last flag win: the two
       # write to completely different places, so a run that meant one and did the other
@@ -138,7 +145,7 @@ for arg in "$@"; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/config-layer.test.sh asserts the flags appear in the output, which is
       # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,56p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,59p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
     *)
@@ -1207,6 +1214,16 @@ if [ -d "$SEED_SRC" ]; then
   done <<EOF
 $(cd "$SEED_SRC" && find . -type f | sed 's#^\./##' | sort)
 EOF
+fi
+
+# 1a. objectives/ — created ONLY when asked. Absence is the default, not a gap.
+if [ "$WITH_OBJECTIVES" = 1 ] && [ "$LAYER" = instance ]; then
+  if [ -d "$TARGET/objectives" ]; then
+    echo "  keep  objectives/ (exists)"
+  else
+    mkdir -p "$TARGET/objectives" && : > "$TARGET/objectives/.gitkeep"
+    echo "  seed  objectives/ (optional layer: goals that outlive one project)"
+  fi
 fi
 
 # 1b. The awaiting-you queue, created ONLY on the first stamp.
