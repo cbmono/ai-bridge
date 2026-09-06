@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # dispatch-brief.sh — the three fixed sections the PM pastes into a dispatch brief
-# verbatim: `## Grounding (<repo>)`, the target repo's Service-doc entry points capped at
-# 15 lines (or one line telling the agent to draft the missing doc); `## Effort`, the
-# files/LOC/turns budget; and `## Commit attribution`, this installation's resolved
-# `commitAttribution` — resolved here so no agent reads that key itself.
+# verbatim: `## Grounding (<repo>)`, the Service-doc entry points capped at 15 lines (or
+# one line telling the agent to draft the missing doc); `## Effort`, the files/LOC/turns
+# budget; and `## Commit attribution`, the resolved `commitAttribution` — answered here
+# so no agent reads that key itself.
 # Usage: dispatch-brief.sh <task-doc> [--instance <bundle>]. Exit: 0 printed, 2 cannot
 # answer (no task doc, unreadable frontmatter). Never fails a dispatch — an absent config
-# key falls back to the documented default. Reasoning and the band measurement:
-# ai-bridge-next/task-017; attribution: ai-bridge-next/task-031.
+# key falls back to the documented default. Reasoning: ai-bridge-next/task-017 (bands),
+# task-031 (attribution).
 set -uo pipefail
 
 GROUNDING_MAX_LINES=15
@@ -18,7 +18,7 @@ GROUNDING_HEADING='## Grounding'
 EFFORT_HEADING='## Effort'
 ATTRIBUTION_HEADING='## Commit attribution'
 
-usage() { sed -n '2,9p' "$0" >&2; exit 2; }
+usage() { sed -n '2,10p' "$0" >&2; exit 2; }
 
 fm_block() { # <file> — the frontmatter, or exit 3/4 for a shape we will not read
   awk '
