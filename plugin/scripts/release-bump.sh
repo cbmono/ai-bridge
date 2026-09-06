@@ -6,10 +6,10 @@
 # `major` ALSO moves every companion plugin to <new major>.0.0: a companion tracks core's
 # MAJOR (plugin/README.md), so a v2 core beside a 1.x companion fails main's own suite.
 # Exit: 0 bumped · 1 refused (branch, dirty tree, missing file, unverifiable result) · 2 usage.
-# Reasoning: ai-bridge-next/task-026, docs/conventions.md §20. Verified by tests/release-bump.test.sh.
+# Reasoning: ai-bridge-next/task-026 and task-028, docs/conventions.md §20. Verified by tests/release-bump.test.sh.
 set -uo pipefail
 
-usage() { sed -n '2,8p' "$0" >&2; exit 2; }
+usage() { sed -n '2,9p' "$0" >&2; exit 2; }
 die() { printf 'release-bump: %s\n' "$1" >&2; exit 1; }
 
 FIELD=""; ROOT=""; ROOT_GIVEN=0; COMMIT=1; DRY=0
@@ -136,9 +136,9 @@ try:
 except ValueError as e:
     refuse("%s is not JSON: %s" % (rel, e))
 for src in ["./plugin"] + ([s for s in sources if s != "./plugin"] if companion_new else []):
-    n = new if src == "./plugin" else companion_new
+    want = new if src == "./plugin" else companion_new
     i, j = entry_span(text, src)
-    text = text[:i] + set_version(text[i:j], "the %s entry" % src, n) + text[j:]
+    text = text[:i] + set_version(text[i:j], "the %s entry" % src, want) + text[j:]
 planned.append((rel, text))
 
 if companion_new:
@@ -179,7 +179,7 @@ if not dry:
         if src == "./plugin":
             continue
         man = os.path.join(root, os.path.normpath(src), ".claude-plugin", "plugin.json")
-        if p.get("version") != companion_new or json.load(io.open(man, encoding="utf-8")).get("version") != companion_new:
+        if p.get("version") != companion_new or json.loads(read(man)).get("version") != companion_new:
             refuse("companion %s is not on %s — `git checkout -- .` to undo" % (p.get("name", src), companion_new))
     for rel in docs:
         lines = read(os.path.join(root, rel)).splitlines()
