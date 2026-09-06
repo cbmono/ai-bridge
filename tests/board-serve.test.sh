@@ -265,6 +265,13 @@ ok "board-serve.sh invokes no model"                   \
   "$(grep -cE '(^|[^a-z-])claude( |$)|anthropic|--model' "$SERVE")" 0
 ok "…and reads SNAPSHOT.json through build-board.sh only" \
   "$(yes_if grep -qF 'build-board.sh' "$SERVE")" yes
+# THE ALLOWLIST IS THE SPEC. The server may not reach past the snapshot to a task document,
+# a project document or the config — the renderer's input is one file and that is what the
+# field allowlist is scoped for.
+ok "…and opens no task or project document"           \
+  "$(grep -cE 'projects/|/tasks/' "$SERVE")" 0
+ok "…and only TESTS for the tracked config, never reads it" \
+  "$(grep -n 'instance\.config\.json' "$SERVE" | grep -cv -- '-f instance\.config\.json')" 0
 
 echo
 echo "pass=$pass fail=$fail skip=$skip"

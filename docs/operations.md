@@ -405,6 +405,14 @@ why the tick does not render dashboards on your behalf.
 | **One per bundle** | a second start says the port is already served and exits 0. A port held by something that is *not* this board exits 3 and tells you to set `boardPort`. |
 | **Stopping it** | Ctrl-C. The page stays on disk; nothing is left running. |
 
+**Its input is `SNAPSHOT.json`, and only that.** "The snapshot", "snapshot.md" and "the
+board data" all name that one file: `write-snapshot.sh` writes it and every renderer reads
+it, so the server never opens a task document, a project document or the config. That is
+not an implementation detail — the snapshot's **field allowlist is the data-governance
+boundary** ([below](#before-it-leaves-the-machine-know-what-it-carries)), and a renderer
+reaching past it would put fields on a page that nobody cleared. Serving the board locally
+does not license widening it.
+
 **`boardPort` is per machine and only per machine.** A port is a property of a laptop, not
 of a bundle everyone clones — a tracked value would hand two humans one number, and on one
 machine it would collide outright. A value in `instance.config.json` is ignored.
