@@ -45,8 +45,9 @@ Three standing facts the steps below rest on:
 **Two checks, and the list is closed** — see "The launcher reads nothing else".
 
 1. Must run from a **control-panel instance root**: confirm `SCHEMA.md` +
-   `.claude/agents` + `instance.config.json` exist in the cwd; if not, tell the user to
-   `cd` into the instance and stop. (Never hardcode a path.)
+   `instance.config.json` exist in the cwd; if not, tell the user to `cd` into the
+   instance and stop. (Never hardcode a path. The role agents ship in the plugin, so a
+   bundle has no `.claude/agents` and the check must not look for one.)
 2. **Kill any fixed-interval PM cron** from an older approach: `CronList`, and if a
    job's prompt is `run the project-manager agent for one LIVE tick`, `CronDelete` it.
    Do **not** create a cron here.
