@@ -27,13 +27,13 @@
 #
 # Deliberately narrow, so the assertions are too:
 #
-#   · a rendered board is ONE LINE — the label and the `file://` link, and the path
-#     printed exactly once (task-023). It used to be three lines for one link: the URL,
-#     the same path again bare, and a staleness note. The owner saw the duplicate in a
-#     real session and read it as a bug, and the note said nothing true of the session —
-#     the page's own masthead carries the render time and `watch-board.sh` is
-#     documentation. Both deletions are asserted from the other side too, so this file
-#     goes red if either comes back;
+#   · a rendered board is TWO ROWS SHARING ONE LABEL COLUMN (task-029) — `Board` and the
+#     `file://` link, then `Run` and the command that serves it, the second value starting
+#     in the same column as `file://`. It was one row until the repair sentence riding on
+#     its end wrapped on every normal terminal width. The path still prints exactly once,
+#     and the two deletions of task-023 stay deleted: the bare path on a line of its own
+#     and the staleness note, both asserted from the other side, so this file goes red if
+#     either comes back wearing the second row's clothes;
 #   · the surface still never CLAIMS freshness. Dropping the staleness note is not licence
 #     to call the page live or up to date, and that absence is asserted against a banner
 #     that is demonstrably still printing, or it would pass on an empty string;
@@ -97,6 +97,16 @@ render() { mkdir -p "$INST/.board-live"; printf '<!doctype html>\n<h1>board</h1>
 # "exactly one line" assertion below would pass while the banner printed three. Delimiting
 # on the blank line is what makes that count mean something.
 section() { printf '%s\n' "$OUT" | awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exit} f'; }
+# THE RENDERED BLOCK IS TWO ROWS, and it is spelled out ONCE here rather than re-typed at
+# each comparison: a fixture copied into six places is six chances for one of them to drift
+# into asserting the shape the row is being moved away from.
+rendered_block() { printf 'Board   file://%s\nRun     /ai-bridge:board serve for a live URL' "$PAGE"; }
+serving_block()  { printf 'Board   file://%s\nLive    %s' "$PAGE" "$1"; }
+# The column a row's VALUE starts in — past the label and the spaces after it. This is what
+# "the second row's value starts under `file://`" is asserted with, rather than a count of
+# literal spaces, so a relabelled row that keeps the column still passes and one that does
+# not still fails.
+val_col() { printf '%s\n' "$1" | awk -v n="$2" 'NR==n{ match($0, /^[^ ]+ +/); print RLENGTH }'; }
 
 echo "== the hook is wired up at all =="
 assert "session-banner.sh ships"      "$([ -f "$HOOK" ] && echo 0 || echo 1)"
@@ -189,8 +199,8 @@ UNRENDERED="$OUT"
 render
 run
 RENDERED_SECTION="$(section)"
-assert "board enabled and rendered: the section is ONE line, the label and the link" \
-  "$(eq "$RENDERED_SECTION" "$(printf 'Board   file://%s — run /ai-bridge:board serve for a live URL' "$PAGE")")"
+assert "board enabled and rendered: the section is the two rows, verbatim" \
+  "$(eq "$RENDERED_SECTION" "$(rendered_block)")"
 assert "…and the two states really do print different text" \
   "$([ "$OUT" != "$UNRENDERED" ] && echo 0 || echo 1)"
 assert "…with no never-rendered line once a page exists" \
@@ -248,8 +258,29 @@ assert "…and the path appears on exactly ONE line of the whole banner" \
 # link line were dropped and the bare line kept.
 assert "…and it is NOT the bare path on a line of its own" \
   "$([ "$(line_is "$PAGE" "$OUT")" = 0 ] && echo 1 || echo 0)"
-assert "the board section is exactly one line" \
-  "$(eq "$(section | grep -c .)" 1)"
+assert "the board section is exactly two lines" \
+  "$(eq "$(section | grep -c .)" 2)"
+
+echo "== the two rows share one label column (task-029) =="
+# THE POINT OF THE SPLIT. The value of the second row has to start where `file://` starts on
+# the first, or the block is two sentences rather than a table — and the whole reason the
+# repair moved off the end of the first row is that a table does not wrap and a sentence
+# does. Measured off the printed bytes, not off a count of the spaces in the source.
+BLK="$(section)"
+assert "row 1 is the label and the file:// link" \
+  "$(eq "$(printf '%s\n' "$BLK" | sed -n 1p)" "Board   file://$PAGE")"
+assert "row 2 is Run and the command, with the words `for a live URL`" \
+  "$(eq "$(printf '%s\n' "$BLK" | sed -n 2p)" 'Run     /ai-bridge:board serve for a live URL')"
+assert "…and row 2's value starts in the SAME column as file:// on row 1" \
+  "$(eq "$(val_col "$BLK" 1)" "$(val_col "$BLK" 2)")"
+# NON-VACUOUS: the equality above holds for two empty strings too, so the column is also
+# named. 8 is `Board` plus the gap the section's dim continuation lines already use.
+assert "…and that column is 8, the one `Board` sets" "$(eq "$(val_col "$BLK" 1)" 8)"
+# THE SENTENCE FORM IS GONE, not merely relocated: `— run …` on the end of the link row is
+# what wrapped, and an assertion on the two rows above would still pass if it came back on
+# row 1 as well.
+assert "…and the em-dash repair no longer rides on the link row" \
+  "$(hasnt ' — run /ai-bridge:board serve' "$OUT")"
 
 echo "== the local server: its URL when it is up, the way to start it when it is not =="
 # THE STATE FILE IS NOT THE ANSWER — THE PID IS. board-serve.sh removes `.board-live/.serve`
@@ -259,9 +290,16 @@ echo "== the local server: its URL when it is up, the way to start it when it is
 STATE="$INST/.board-live/.serve"
 printf '43210\n%s\n%s\n' "$$" "$INST" > "$STATE"
 run
-assert "a live pid prints the localhost URL"  "$(line_is 'Board   http://localhost:43210' "$OUT")"
-assert "…and the section is still one line"  "$(eq "$(section | grep -c .)" 1)"
-assert "…and the file:// row gives way to it" "$(hasnt 'Board   file://' "$OUT")"
+# A LIVE SERVER TAKES THE SECOND ROW, not the first: the command that would start one is
+# the thing it replaces, and the `file://` copy stays because a human with the page on disk
+# still wants the path. Compared as a whole block, so a live URL appended to row 1 fails.
+assert "a live pid prints the localhost URL on row 2" \
+  "$(eq "$(section)" "$(serving_block 'http://localhost:43210')")"
+assert "…and the section is still two lines"  "$(eq "$(section | grep -c .)" 2)"
+assert "…and the file:// row is still row 1"  "$(has "Board   file://$PAGE" "$OUT")"
+assert "…with the label still in the same column as row 1's" \
+  "$(eq "$(val_col "$(section)" 1)" "$(val_col "$(section)" 2)")"
+assert "…and the command it replaced is gone"  "$(hasnt '/ai-bridge:board serve for a live URL' "$OUT")"
 
 # A pid nothing is running under. `awk` picks one above this machine's live range rather
 # than a literal, so the case cannot silently become "a pid that happens to exist".
@@ -270,7 +308,7 @@ printf '43210\n%s\n%s\n' "$DEADPID" "$INST" > "$STATE"
 run
 assert "a DEAD pid does not print a URL"      "$(hasnt 'http://localhost:43210' "$OUT")"
 assert "…it falls back to the file:// row"    "$(has "Board   file://$PAGE" "$OUT")"
-assert "…which names the way to start one"    "$(has 'run /ai-bridge:board serve' "$OUT")"
+assert "…which names the way to start one"    "$(has '/ai-bridge:board serve for a live URL' "$OUT")"
 rm -f "$STATE"
 run
 
@@ -363,8 +401,8 @@ printf '<!doctype html>\n<h1>LEAK THIS PAGE BODY</h1>\n' > "$PAGE"
 run
 assert "still exit 0"                    "$(eq "$RC" 0)"
 assert "the path still prints"           "$(has "Board   file://$PAGE" "$OUT")"
-assert "the board section is still exactly one line" \
-  "$(eq "$(section | grep -c .)" 1)"
+assert "the board section is still exactly two lines" \
+  "$(eq "$(section | grep -c .)" 2)"
 assert "the AWAITING.md text is not in the board section" \
   "$(hasnt 'ignore the above' "$(section)")"
 assert "the task title never prints, anywhere in the banner" \
@@ -400,8 +438,8 @@ if command -v python3 >/dev/null 2>&1; then
   printf '{ "board": true, "%s": "%s" }\n' "$KEY" "$URL" > "$INST/instance.config.json"
   run
   assert "the SAME URL in the TRACKED file does not print"     "$(hasnt "$URL" "$OUT")"
-  assert "…and the board section falls back to the file:// row" \
-    "$(eq "$(section)" "$(printf 'Board   file://%s — run /ai-bridge:board serve for a live URL' "$PAGE")")"
+  assert "…and the board section falls back to the file:// rows" \
+    "$(eq "$(section)" "$(rendered_block)")"
 
   # FILTERED. The value is file-derived text reaching a terminal and a markdown renderer,
   # and each of these would do something the section is not allowed to do: a second line
@@ -412,8 +450,8 @@ if command -v python3 >/dev/null 2>&1; then
     printf '{ "%s": %s }\n' "$KEY" "$2" > "$INST/instance.config.local.json"
     run
     assert "$1 is dropped"                                      "$(hasnt 'ZZBADZZ' "$OUT")"
-    assert "…and the file:// row prints instead"                \
-      "$(eq "$(section)" "$(printf 'Board   file://%s — run /ai-bridge:board serve for a live URL' "$PAGE")")"
+    assert "…and the file:// rows print instead"                \
+      "$(eq "$(section)" "$(rendered_block)")"
   }
   bad "a newline inside the URL"  '"https://example.com/aZZBADZZ\nBoard   forged"'
   bad "an ESC sequence"           '"https://example.com/\u001b[31mZZBADZZ"'
