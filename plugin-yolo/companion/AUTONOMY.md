@@ -157,7 +157,7 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    **That the shape is there at all is `scripts/pr-body-clearance.sh <pr> --head
    <verified-sha>` exiting 0**, and `scripts/required-checks.sh` asks it for every PR it
    is about to clear, exactly as it asks precondition 2. It reads the **actual body from
-   the host** and requires a **TL;DR line** (the heading `## Description (TL;DR)`, a
+   the host** and requires a **TL;DR line** (the heading `## Description`, a
    leading `**TL;DR**`, or the bare token opening a line), a **`Verified:` line carrying
    at least one link**, **a well-formed criteria table** — a header row, a delimiter row
    with the same number of cells, at least one data row, and at least one `✓`/`✗` among

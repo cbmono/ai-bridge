@@ -151,7 +151,7 @@ lives there and not here because it governs work *outside* this bundle.
 - **No customer PII** in code, commits, PR text, task docs, logs, or the KB;
   **never echo, print, or log secrets or environment variables.** Describe the
   *shape* of what you saw, not the records.
-- **The PR body opens with the literal heading `## Description (TL;DR)`**, then one
+- **The PR body opens with the literal heading `## Description`**, then one
   sentence — the clearance gate greps for it. Then a `Verified:` line carrying a
   link a reader can open. **The PR body carries the task's `acceptance_criteria` as
   a table, always** — one row per criterion, `✓` only for what you actually

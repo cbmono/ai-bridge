@@ -187,15 +187,24 @@ state, and act only on deltas.
 0.9. **Probe the idle fast-path — one command decides whether the full walk is owed.**
 
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh check
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh check --gap <the gap from your brief>
    ```
+
+   `--gap` is what lets the IDLE line name the next check; omit it and the line says
+   "on the next tick", which is still a whole report.
 
    - **0 (IDLE)** — the recorded fingerprint matches: bundle HEAD unchanged, tree
      clean, nothing untracked under `projects/`, no task `in-progress`, and every
      open PR's head, state and review decision exactly as the last full tick recorded
      them. **Skip steps 1–7.** Append ONE already-closed line to the root `log.md` —
      `* TICK <ISO-8601> idle — fingerprint unchanged (tick-delta)` — then go to step 8
-     to commit and sync it as usual, reporting `noop: true`. There is no open entry to
+     to commit and sync it as usual, reporting `noop: true`.
+     **Then stop — your entire report is that one line, the probe's own, verbatim:**
+     no sections, no counts, no "nothing to report" preamble, and nothing from the
+     Output section below, which describes a tick that DID something. Consecutive
+     zero-delta ticks each handing back a multi-section report carrying no new
+     information is how a human stops reading the loop meant to be telling them things;
+     one line is what keeps the next real report visible. There is no open entry to
      rewrite, and that is correct: nothing was dispatched, so nothing could die
      mid-dispatch, which is the only thing an open entry is for. Rewrite no queue, no
      snapshot, no board — each derives from documents the probe just proved unchanged
@@ -634,9 +643,16 @@ state, and act only on deltas.
    step 0 — including re-checking `git status --porcelain` rather than trusting the
    exit code. **Never force-push a shared bundle.**
 
-   **Refresh the awaiting-you queue — only if it already exists.** If `AWAITING.md` is
-   present at the bundle root, rewrite it with the layout below. If **absent, skip
-   this step entirely and never create it** — absence is the off switch.
+   **Refresh the awaiting-you queue — only if it already exists,
+   and only on a tick that changed something.** If `AWAITING.md` is present at the
+   bundle root **and this tick will report `noop: false`**, rewrite it with the layout
+   below. If **absent, skip this step entirely and never create it** — absence is the
+   off switch. A `noop: true` tick leaves `AWAITING.md` exactly as it is — not
+   rewritten with the same items, not restamped: the `Last refreshed:` line moves on
+   every render, so an unconditional rewrite churns the file the SessionStart banner
+   reads and makes a stale queue indistinguishable from a fresh one. The queue derives
+   from documents a `noop` tick just proved unmoved, so re-deriving it can only produce
+   what is already there (same rule and same reason as the tracked `board.html` below).
 
    The queue holds **only** what a human decision unblocks — never in-flight, next, or
    blocked-but-progressing work. **On a shared instance it narrows once more: queue
@@ -647,8 +663,8 @@ state, and act only on deltas.
    ```markdown
    # Awaiting you
 
-   Derived and gitignored — **do not hand-edit**. Rewritten each `/ai-bridge:dispatch` tick
-   from `projects/*/tasks/*.md`. Delete this file to turn the queue off for good.
+   Derived and gitignored — **do not hand-edit**. Rewritten from `projects/*/tasks/*.md`
+   by each `/ai-bridge:dispatch` tick that changed something. Delete this file to turn the queue off for good.
    Last refreshed: <ISO 8601, from `date -u +%Y-%m-%dT%H:%M:%SZ`>.
 
    ## 🔴 Awaiting you (<n>)
@@ -777,6 +793,10 @@ state, and act only on deltas.
 - **LIVE** (default in the loop): perform all steps.
 
 ## Output
+
+**A tick that changed nothing reports ONE line and nothing else** — the probe's own
+`IDLE:` line from step 0.9, verbatim, naming the next check. Everything below describes
+the report of a tick that did something.
 
 End each tick with a concise report: drafts refined (and which have open questions),
 tasks dispatched (with PR links once open), PRs awaiting the human's merge, tasks

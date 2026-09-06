@@ -333,6 +333,16 @@ dispatched on the strength of an idle verdict; the verdict only ends a tick that
 have ended with the same report at higher cost. The lock and the ledger are untouched:
 steps 0 and 0.5 run before the probe is consulted, every tick.
 
+**And the saving has to reach the human, or it is only a saving in tokens.** A
+zero-delta tick that skips the walk and still hands back a multi-section report is the
+"repeat notification, no new information" the loop's readers stop reading — so the
+probe's `IDLE:` line IS the quiet tick's whole report, verbatim, and it names the next
+check (`--gap`) because a human otherwise cannot tell a quiet loop from a stopped one.
+The same rule reaches `AWAITING.md`: a `noop: true` tick does not rewrite it, since the
+`Last refreshed:` line moves on every render and would make a stale queue look fresh.
+Both directions are pinned by `tests/quiet-tick.test.sh` on a fixture with no
+dispatchable work.
+
 The record is written by a FULL tick as its last derived act (after the commit, the
 sync, the queue and the board), through a temp-file rename so a crash cannot leave a
 torn record for the next check to "match" — and `record` refuses to write at all when
