@@ -2,7 +2,7 @@
 #
 # tick-delta.sh — the idle-tick fast-path probe: can this tick skip the full walk?
 #
-#   Usage: tick-delta.sh check  [--instance DIR]
+#   Usage: tick-delta.sh check  [--instance DIR] [--gap TEXT]
 #          tick-delta.sh record [--instance DIR]
 #          tick-delta.sh digest [--instance DIR]
 #
@@ -57,7 +57,8 @@
 # already skip it — nothing in a done project can need a tick.
 #
 # Exit codes — only 0 permits the fast path, and it is never the default:
-#   0  IDLE — the fingerprint matches the record; prints one `IDLE:` line.
+#   0  IDLE — matches the record; prints ONE `IDLE:` line, which IS the quiet tick's
+#      whole report, so it names the next check (`--gap`, else "the next tick").
 #   1  DELTA — something moved; prints `DELTA:` lines naming what. Full tick.
 #   2  cannot answer — no record, no `gh`, not a git repo, probe error. Full tick.
 #   3  usage.
@@ -73,7 +74,7 @@ set -uo pipefail
 STATE_NAME=".tick-state"
 
 usage() {
-  echo "Usage: $(basename "$0") check|record|digest [--instance DIR]" >&2
+  echo "Usage: $(basename "$0") check|record|digest [--instance DIR] [--gap TEXT]" >&2
   exit 3
 }
 
@@ -81,14 +82,22 @@ cmd="${1:-}"; [ "$#" -gt 0 ] && shift
 case "$cmd" in check|record|digest) ;; *) usage ;; esac
 
 inst="."
+gap=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --instance)
       [ $# -ge 2 ] || { echo "tick-delta: --instance needs a directory" >&2; exit 3; }
       inst="$2"; shift 2 ;;
+    --gap)
+      [ $# -ge 2 ] || { echo "tick-delta: --gap needs an interval, e.g. 10m" >&2; exit 3; }
+      # Alnum only: the IDLE line is the whole report, so nothing may add a line to it.
+      case "$2" in *[![:alnum:]]*|"") echo "tick-delta: --gap takes an interval like 10m" >&2; exit 3 ;; esac
+      gap="$2"; shift 2 ;;
     *) usage ;;
   esac
 done
+next_check="on the next tick"
+[ -n "$gap" ] && next_check="in $gap"
 [ -d "$inst" ] || { echo "tick-delta: no such instance directory: $inst" >&2; exit 2; }
 STATE="$inst/$STATE_NAME"
 
@@ -229,7 +238,9 @@ case "$cmd" in
     OLD="$(grep -v '^#' "$STATE" | grep -v '^recorded:' || true)"
     [ -n "$OLD" ] || fail2 "$STATE_NAME is empty or unreadable"
     if [ "$FP" = "$OLD" ]; then
-      echo "IDLE: fingerprint unchanged since $(sed -n 's/^recorded: //p' "$STATE" | head -n1) — bundle HEAD, task statuses, open-PR heads/states/decisions all match."
+      # Reported verbatim as the whole tick, so it names the next check — else a human
+      # cannot tell a quiet loop from a stopped one.
+      echo "IDLE: fingerprint unchanged since $(sed -n 's/^recorded: //p' "$STATE" | head -n1) — nothing moved; next check $next_check."
       exit 0
     fi
     echo "DELTA: the fingerprint moved —"
