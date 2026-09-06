@@ -98,7 +98,7 @@ enum_for() {
     Project)   echo "active paused done" ;;
     Phase)     echo "not-started active done" ;;
     Task)      echo "draft ready in-progress in-review blocked cancelled done" ;;
-    Finding)   echo "current superseded" ;;
+    Finding)   echo "current superseded corrected" ;;
     Service)   echo "active deprecated" ;;
     Reference) echo "current superseded" ;;
     *)         echo "" ;;
@@ -201,6 +201,12 @@ while IFS= read -r file; do
     fi
     if ! printf '%s\n' "$fm" | grep -q '^lesson:[[:space:]]*[^[:space:]]'; then
       warn "$rel" "Finding has no one-line 'lesson:' — the takeaway the next agent needs, required by CONVENTIONS.md 'Write less'"
+    fi
+    # The index row, the tags and the supersession edges are build-kb-index.sh's half of
+    # the contract; it reads knowledge/index.md, which is not a concept document.
+    if printf '%s\n' "$fm" | grep -q '^superseded_by:[[:space:]]*[^[:space:]]' \
+       && [[ "$(printf '%s\n' "$fm" | sed -n 's/^status:[[:space:]]*//p' | head -1)" != superseded ]]; then
+      fail "$rel" "carries superseded_by: but status is not 'superseded' — SCHEMA.md 'Superseding a Finding' sets both"
     fi
   fi
 
