@@ -734,7 +734,7 @@ Every obvious remedy is ground this bundle has already decided:
 
 | remedy | why not |
 |---|---|
-| a one-time capability handed to the spawned tick | it is the **nonce carried by the dispatch prompt**, refused in the lock's own design and again in the claimant's — a value a model carries as prose is this project's recurring failure class |
+| match the tick's id on adopt | the tick **has** a launcher-minted id since 2026-09-06, so this is one line — and it would make one mis-typed literal refuse **every** dispatched tick, the total outage this design calls strictly worse than the bug. Adopt proves you are the dispatch, never who you are |
 | verify the claimant before releasing | `release` is **deliberately unconditional** — it is the human's override, and `release --as tick` is exit 3 so it cannot be scoped |
 | make the tick acquire earlier | shortens the window, cannot close it (the residue is spawn latency), and puts the guarantee back into a model following prose |
 | refuse unless *some* `project-manager` agent was spawned after the lock | needs no identity and is sound, but the table above prices it: the transcript appears 26-27s in, so it shrinks 41s to about **15s** and cannot close it — the same verdict as the row above, earned a second way |
@@ -757,11 +757,10 @@ dispatched agent, on CLI 2.1.251:
   transcripts, and the right one. **And the id survives a resume** — 4 of the 15 here were
   resumed and each appended to its existing transcript, so the first record's timestamp
   stays the original dispatch.
-- **It is still not wired in**, for three reasons each sufficient alone: this script's argv
-  carries no per-invocation literal to match on, and adding one means a model typing a fresh
-  value per tick — the refused nonce, one boundary inward; without one the fallback ties in
-  exactly the window it exists for; and it would couple a **generic template** to one CLI
-  version's undocumented private layout.
+- **It is still not wired in**, for three reasons each sufficient alone: `tick-lock.sh` has
+  no per-invocation literal *of its own* to match on (the one it has was typed by a caller,
+  below); without one the fallback ties in exactly the window it exists for; and it would
+  couple a **generic template** to one CLI version's undocumented private layout.
 
 The channel is **derived**, not declared, so even wired in it could only ever refuse and
 never clear — see the asymmetric rule below. Note also that the exit-4 refusal above
@@ -802,11 +801,31 @@ trust is asymmetric: **a derived id may refuse a claim, but may never clear one.
 | either side has no id | not yours — hold (1), exactly as before claimants |
 | equal, but either side **derived** | `CANNOT ATTRIBUTE` — **exit 2, a human decides** |
 
-The last row is the ordinary case under Claude Code, and it is deliberately neither 0 (that
+The last row was the ordinary case until the launcher began declaring an id (below); it is
+now the **fallback tier's** answer. It is deliberately neither 0 (that
 is the 2026-08-29 double-dispatch) nor 1 ("a different tick is running" is a statement the
 file cannot support, and stating it anyway is the 2026-08-30 stand-down). It is the same
-answer a stale lock gets, for the same reason, and it is rare by construction: a claim only
-exists while a tick is already running. **Both ids and the source of each are printed on
+answer a stale lock gets, for the same reason. Note the row that does **not** move: two
+declared ids that **differ** are exit 1, `theirs`, and exit 2 stays reserved for `maybe`
+plus stale, future-dated and unreadable.
+
+**The launcher mints the id, and that is what makes the last row rare — decided 2026-09-06.**
+`--claimant` shipped in [#71](https://github.com/cbmono/ai-bridge/pull/71) and neither
+acquire site passed one, so both fell to the derived tier and a dispatched tick meeting its
+own claim reached exit 2 on the *ordinary* path. Now `/ai-bridge:dispatch` step 1 mints one
+literal per tick (`tick-<UTC>-<4 chars>`), passes it to its **own** acquire — which records
+it in `.tick-lock` as `claimant:`, the only place on disk it lives, and the launcher writes
+no claim — and hands the same literal to the tick, whose own acquire passes it too. Both sides
+are then **declared**, so a tick's second acquire is a proved re-entry.
+
+Two things that are deliberately *not* part of it. **The id is never matched on adopt**: an
+unclaimed lock proves you are the dispatch, which is a stage question, and matching would
+close the 41-47s window at the price above. So a tick carrying a mis-copied literal still
+runs, and `acquire` prints a `note:` naming the id the lock was minted for instead of
+refusing. And **nothing changes for a bundle that declares nothing** — no `claimant:` in
+the lock, the derived tier answers, `maybe` is still exit 2 — which is why the tiers survive
+rather than being replaced. It is the nonce this design refused twice, taken knowingly: one
+literal, one agent boundary, and a mis-copy that costs a note. **Both ids and the source of each are printed on
 every refusal and by `status`**, and `claimant-source: flag|env|session` is recorded in the
 claim, so "is that a sibling, or did my own id move?" is read rather than deduced. The two
 mechanisms already known wrong here — elapsed time, and a nonce passed down the dispatch —
@@ -878,7 +897,7 @@ owner asked three times in one session, for three different instances.
 
 ```text
 
-AI-Bridge v1.13.0 · _ai-bridge-private · org: cbmono
+AI-Bridge v1.14.0 · _ai-bridge-private · org: cbmono
 ────────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
