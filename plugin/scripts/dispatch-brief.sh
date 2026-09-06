@@ -16,7 +16,7 @@ GROUNDING_MAX_LINES=15
 GROUNDING_HEADING='## Grounding'
 EFFORT_HEADING='## Effort'
 
-usage() { sed -n '2,8p' "$0" >&2; exit 2; }
+usage() { sed -n '2,9p' "$0" >&2; exit 2; }
 
 fm_block() { # <file> — the frontmatter, or exit 3/4 for a shape we will not read
   awk '
@@ -35,9 +35,10 @@ field() { # <key> <frontmatter> — only the FIRST occurrence counts
     }'
 }
 
-count_entries() { # <`[ "a", "b" ]` value>
-  printf '%s' "$1" | awk '
-    { n = split($0, a, "\""); print (n > 1) ? int(n / 2) : 0 }'
+count_entries() { # <`[ "a", "b" ]` value> — always a number, so an absent field bands as 0
+  printf '%s\n' "$1" | awk '
+    { n = split($0, a, "\""); c = (n > 1) ? int(n / 2) : 0 }
+    END { print c + 0 }'
 }
 
 cfg() { # <key> <default>
@@ -100,7 +101,8 @@ if [ -n "$SERVICE" ] && [ -f "$SERVICE" ]; then
       for k in path stack runtime; do
         v="$(field "$k" "$SFM")"; [ -n "$v" ] && printf '%s: %s\n' "$k" "$v"
       done
-      printf 'Sections: %s\n' "$(grep '^#\+ ' "$SERVICE" | sed 's/^#* *//' | paste -sd '·' - | sed 's/·/ · /g')"
+      # `paste -d` takes a single BYTE, so the separator is joined as ASCII and widened after.
+      printf 'Sections: %s\n' "$(grep '^##* ' "$SERVICE" | sed 's/^#* *//' | paste -sd '|' - | sed 's/|/ · /g')"
     fi
   } | awk -v max="$GROUNDING_MAX_LINES" '
       NR < max { print; next }

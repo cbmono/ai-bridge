@@ -153,6 +153,14 @@ for probe in "3 small ~6" "4 standard ~14" "6 standard ~14" "7 large ~20"; do
   assert "$1 criteria ⇒ band $2, files $3" "$(has "Files expected: $3 (band $2 — $1 acceptance criteria)" "$(run "$DOC")")"
 done
 
+# A task with NO acceptance_criteria at all: the band arithmetic must see a number, not an
+# empty string — it printed `band large —  acceptance criteria` beside two `[: integer
+# expression expected` lines before `count_entries` was made to always emit one.
+printf -- '---\ntype: Task\ntarget_repo: acme/widget\n---\n\nx\n' > "$TMP/nocrit.md"
+OUT3="$(run "$TMP/nocrit.md" --instance "$TMP" 2>&1)"
+assert "no acceptance_criteria ⇒ 0, band small" "$(has "Files expected: ~6 (band small — 0 acceptance criteria)" "$OUT3")"
+assert "…and no shell error leaks into the brief" "$(hasnt "integer expression expected" "$OUT3")"
+
 echo "== it refuses rather than guessing =="
 
 assert "a missing task document exits 2"  "$(eq "$(rc "$TMP/nope.md")" 2)"
