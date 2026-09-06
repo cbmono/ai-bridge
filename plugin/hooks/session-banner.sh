@@ -1100,6 +1100,34 @@ table() { # <header-label> <header-value> <rows>
 [ -n "$trows" ] && table 'AGENT (role)' 'TIER → MODEL' "$trows"
 
 # ---------------------------------------------------------------------------------------
+# 4b. ACCOUNT — three renderings, because two states that print nothing are one state.
+# ---------------------------------------------------------------------------------------
+# Speak (on the declared account), speak differently (wrong account, or none), stay silent
+# (no `ai-bridge-accounts` companion, or nothing declared). resolve-account.sh decides; the
+# banner never reads a credential and never runs the companion's launcher.
+if [ -n "$bin" ] && [ -f "$bin/resolve-account.sh" ]; then
+  acct_line="$(bash "$bin/resolve-account.sh" --bundle "$root" 2>/dev/null)"; acct_rc=$?
+  acct_declared="$(cell "$(printf '%s' "$acct_line" | cut -f1)")"
+  acct_active="$(cell "$(printf '%s' "$acct_line" | cut -f2)")"
+  acct_launcher="$(printf '%s' "$acct_line" | cut -f3)"
+  case "$acct_rc" in
+    0) echo
+       echo "Account ${acct_declared} — active"
+       ;;
+    3) echo
+       say "$C_RED" "⚠️  WRONG CLAUDE ACCOUNT — this bundle is ${acct_declared}, the session is ${acct_active}"
+       echo "    Everything you run here bills and reads as the wrong organisation. Restart:"
+       printf '        %s\n' "$acct_launcher"
+       ;;
+    4) echo
+       say "$C_YEL" "⚠️  NO CLAUDE ACCOUNT SELECTED — this bundle declares ${acct_declared}"
+       echo "    The session was not started by the account launcher. Restart:"
+       printf '        %s\n' "$acct_launcher"
+       ;;
+  esac
+fi
+
+# ---------------------------------------------------------------------------------------
 # 5. BOARD — a local file, and the PER-MACHINE URL of a page this human published.
 # ---------------------------------------------------------------------------------------
 # THE URL IS READ FROM THE LOCAL LAYER AND FROM NOWHERE ELSE, and that constraint is the
