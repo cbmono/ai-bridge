@@ -1180,7 +1180,7 @@ done
 # and because `.tick-lock.claim` is the TICK's O_EXCL adopt record, not a launcher's to touch.
 ok "step 1 mints a per-tick id"          "$(step1 | grep -qF "mint this tick's id" && echo yes || echo no)" yes
 ok "…passing it to its own acquire"      "$(has "$LAUNCHER" 'acquire --agent project-manager --claimant <id>')" yes
-ok "…handing the same literal to the tick" "$(has "$LAUNCHER" 'tick id you minted at step 1 — verbatim')" yes
+ok "…handing the same literal to the tick" "$(has "$LAUNCHER" 'id you minted at step 1, verbatim')" yes
 ok "…recorded in the lock and nowhere else" "$(step1 | grep -qF 'the only place it lives' && echo yes || echo no)" yes
 ok "…and it writes no file of its own"   "$(step1 | grep -qF 'you write no file yourself' && echo yes || echo no)" yes
 ok "…nor is a mis-copy allowed to refuse the tick" "$(step1 | grep -qF 'never matches the id' && echo yes || echo no)" yes

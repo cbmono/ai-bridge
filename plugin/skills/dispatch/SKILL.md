@@ -149,18 +149,19 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
    (add `--as loop` when a `/loop` is driving — see "Running it on a cadence" above)
 
-   **That literal is the tick's identity, and you hand it on.** `acquire` records it in
-   `.tick-lock` as `claimant:` — the only place it lives, and you write no file yourself —
-   and the brief you spawn the tick with carries it verbatim, because that tick's step 0.5
-   passes the same id. It is what makes a second acquire *by that tick* a proved re-entry
-   (exit **0**) rather than exit **2** and a human's call. Mis-copy it and the tick still
-   runs: adopting an unclaimed lock never matches the id, and the script reports the
-   mismatch instead of refusing.
    and act on its exit code. **The check and the write are that one call** (`O_EXCL` —
    no read-then-write to interleave with): it closes a window of seconds to minutes —
    between your dispatch and the tick's own ledger entry — in which the ledger truthfully
    reports nothing running. And nothing may sit between the acquire and the spawn:
    no `git pull`, no state read, no other tool call.
+
+   **That literal is the tick's identity, and you hand it on.** `acquire` records it in
+   `.tick-lock` as `claimant:` — the only place it lives, and you write no file yourself —
+   and the brief you spawn the tick with carries it verbatim, because that tick's own
+   acquire passes the same id. It is what makes a second acquire *by that tick* a proved
+   re-entry (exit **0**) rather than exit **2** and a human's call. Mis-copy it and the tick
+   still runs: adopting an unclaimed lock never matches the id, and the script reports the
+   mismatch instead of refusing.
 
    - **0** — the lock is yours, and it printed nothing. **Spawn the tick now**, as the
      very next thing you do.
@@ -183,9 +184,8 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    (`subagent_type: ai-bridge:project-manager` — **namespaced**, because the role agents
    ship in the `ai-bridge` plugin and a BARE agent name does not resolve, measured
    2026-09-02) for ONE LIVE tick (background), with the standing guardrails below. **Fresh every time — never wake a completed tick with a message**;
-   step 0.5 refuses such a tick anyway. **Brief it with the gap, the guardrails and the
-   tick id you minted at step 1 — verbatim — and not
-   with state** — it reads the bundle, `git` and `gh` itself. **Run the tick on the
+   step 0.5 refuses such a tick anyway. **Brief it with the gap, the guardrails and the tick
+   id you minted at step 1, verbatim — and not with state** — it reads the bundle, `git` and `gh` itself. **Run the tick on the
    orchestrator's configured model:** resolve it with
    `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager` (`roleTiers`, default `deep` → an alias
    via `models`, default `deep` → `opus`) and pass that as the tick's model. If
