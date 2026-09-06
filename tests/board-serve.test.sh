@@ -124,11 +124,15 @@ start_server() { # <instance dir> <logfile> — starts, watchdogs, waits for the
   ( sleep 120; kill -TERM "$p" 2>/dev/null ) >/dev/null 2>&1 &
   local port deadline
   port="$(cd "$1" && bash "$SERVE" --print-port)"
-  deadline=$(( $(date +%s) + 20 ))
+  # READINESS, not behaviour: the port answering AND the first render on disk. Sampling
+  # before either landed turned one late server into eight failures with no cause in the
+  # log (CI run 34032940065), so a timeout prints what the server said.
+  deadline=$(( $(date +%s) + 30 ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    [ "$(raw_get "$port" /__bundle)" = "200" ] && break
+    [ "$(raw_get "$port" /__bundle)" = "200" ] && [ -f "$1/.board-live/board.html" ] && break
     sleep 1
   done
+  [ -f "$1/.board-live/board.html" ] || { echo "  ---- $2 ----"; sed -n '1,20p' "$2"; }
   printf '%s' "$p"
 }
 
@@ -269,7 +273,37 @@ ok "stopping it removes the state file the banner reads" \
   "$(yes_if sh -c '! test -e "$1"' _ "$A/.board-live/.serve")" yes
 
 echo
-echo "== 5. no LLM anywhere in the path =="
+echo "== 5. the bind waits for nothing on the network =="
+# THE REGRESSION THIS FILE WENT RED FOR. ThreadingHTTPServer's stock server_bind resolves
+# the bind address by REVERSE DNS between bind() and listen(); on the CI runner that PTR
+# query stalled ~20 s, so the port was taken, refused every connection and wrote no state
+# file. The stall is INJECTED rather than described — sitecustomize.py is imported by the
+# served python — so the old code cannot come up inside the deadline below.
+STALL="$TMP/stall"
+mkdir -p "$STALL"
+cat > "$STALL/sitecustomize.py" <<'SITE'
+import socket, time
+socket.getfqdn = lambda *_a: (time.sleep(60), "stalled")[1]
+SITE
+C="$TMP/group/_ai-bridge-gamma"
+new_instance "$C"
+PC="$(cd "$C" && bash "$SERVE" --print-port)"
+( cd "$C" && export PYTHONPATH="$STALL" && exec bash "$SERVE" ) > "$TMP/c.log" 2>&1 &
+SRV_C=$!
+PIDS="$PIDS $SRV_C"
+( sleep 60; kill -TERM "$SRV_C" 2>/dev/null ) >/dev/null 2>&1 &
+UP=no
+DEADLINE=$(( $(date +%s) + 10 ))
+while [ "$(date +%s)" -lt "$DEADLINE" ]; do
+  if [ "$(raw_get "$PC" /__bundle)" = "200" ]; then UP=yes; break; fi
+  sleep 1
+done
+ok "a stalled reverse-DNS lookup does not delay the bind" "$UP" yes
+ok "…and the state file still lands"                     "$(yes_if test -f "$C/.board-live/.serve")" yes
+kill -TERM "$SRV_C" 2>/dev/null
+
+echo
+echo "== 6. no LLM anywhere in the path =="
 ok "board-serve.sh invokes no model"                   \
   "$(grep -cE '(^|[^a-z-])claude( |$)|anthropic|--model' "$SERVE")" 0
 ok "…and reads SNAPSHOT.json through build-board.sh only" \

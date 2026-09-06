@@ -89,7 +89,7 @@ OUT_ABS="$(cd "$OUT_DIR" && pwd)"
 BOARD_ROOT="$ROOT" BOARD_OUT="$OUT_ABS" BOARD_PORT="$PORT" BOARD_INTERVAL="$INTERVAL" \
 BOARD_RENDER="$BOARD" BOARD_WRITER="$WRITER" \
 exec python3 - <<'PY'
-import errno, http.server, os, signal, subprocess, sys, threading, time, urllib.parse, urllib.request
+import errno, http.server, os, signal, socketserver, subprocess, sys, threading, time, urllib.parse, urllib.request
 
 ROOT     = os.environ["BOARD_ROOT"]
 OUT      = os.path.realpath(os.environ["BOARD_OUT"])
@@ -216,6 +216,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             path = "/board.html"
         full = resolve(path)
         if full is None:
+            # Not yet rendered is not "not found": the placeholder reloads itself.
+            if path == "/board.html":
+                return self._send(200, PENDING.encode(), "text/html; charset=utf-8")
             return self._send(404, b"not found\n")
         try:
             with open(full, "rb") as fh:
@@ -245,8 +248,17 @@ def already_ours():
         return False
 
 
+# ThreadingHTTPServer's own server_bind does a REVERSE DNS lookup to fill in a
+# `server_name` nothing here reads — between bind() and listen(), so a runner whose PTR
+# query stalls leaves the port taken and answering nothing (measured: ~20 s on CI).
+class Server(http.server.ThreadingHTTPServer):
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
 try:
-    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    httpd = Server(("127.0.0.1", PORT), Handler)
 except OSError as exc:
     if exc.errno not in (errno.EADDRINUSE, errno.EACCES):
         raise
