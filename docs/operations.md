@@ -1007,7 +1007,7 @@ software-engineer     deep     → opus                     local
 
 Board   file:///Users/you/workspace/_ai-bridge-private/.board-live/board.html
 Run     /ai-bridge:board serve for a live URL
-Update  claude plugin update ai-bridge  (2.0.2 → 2.0.3) — restart to apply it
+Update  claude plugin update ai-bridge  (2.0.3 → 2.0.4) — restart to apply it
 ```
 
 **The `Update` row is the third row of the board block, and it is one command.** It names
@@ -1017,8 +1017,8 @@ illustrative):
 
 | The check found | The row reads |
 |---|---|
-| the marketplace is ahead | `claude plugin update ai-bridge  (2.0.2 → 2.0.3) — restart to apply it` |
-| nothing newer | `up to date (2.0.2)` |
+| the marketplace is ahead | `claude plugin update ai-bridge  (2.0.3 → 2.0.4) — restart to apply it` |
+| nothing newer | `up to date (2.0.3)` |
 | no answer — offline, no clone, no git | `unknown (offline)` |
 
 The verdict is `scripts/check-template-version.sh --state`, which is also what

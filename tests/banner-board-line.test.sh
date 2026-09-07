@@ -536,6 +536,10 @@ if command -v git >/dev/null 2>&1; then
   assert "…and the restart is not a second line"  \
     "$(eq "$(printf '%s\n' "$OUT" | grep -cF 'restart to apply it')" 1)"
   assert "…and the section is still three rows" "$(eq "$(section | grep -c .)" 3)"
+  # ONE SURFACE, NOT TWO. §2b's `TEMPLATE UPDATE` block is the CHECKOUT's rendering of the
+  # same fact; on a plugin install it would put two spellings of one command in one banner.
+  assert "…and it is the only update surface — no TEMPLATE UPDATE block above it" \
+    "$(hasnt 'TEMPLATE UPDATE' "$OUT")"
   assert "…with the Update value in the SAME column as the Board row's" \
     "$(eq "$(val_col "$(section)" 1)" "$(val_col "$(section)" 3)")"
 

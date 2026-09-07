@@ -1020,12 +1020,13 @@ say "$C_DIM" "$rule"
 # ABSENT ⇒ NOTHING, like every other optional section. An instance stamped before this
 # script shipped has no file to run — and that is exactly the state the line reports, so it
 # stays silent about itself rather than erroring about its own absence.
-if [ -f "$bin/check-template-version.sh" ]; then
-  if [ -n "$tmpl" ]; then
-    drift="$(bash "$bin/check-template-version.sh" --instance "$root" --template "$tmpl" 2>/dev/null)"
-  else
-    drift="$(bash "$bin/check-template-version.sh" --instance "$root" 2>/dev/null)"
-  fi
+#
+# A TEMPLATE CHECKOUT ONLY, and that is what `$tmpl` gates. On a PLUGIN INSTALL the same
+# fact is the board block's `Update` row, and printing it in both places would put two
+# spellings of one command five lines apart — the duplicate the board rows were split to
+# remove. The helper answers for both subjects; this section is the checkout's surface.
+if [ -n "$tmpl" ] && [ -f "$bin/check-template-version.sh" ]; then
+  drift="$(bash "$bin/check-template-version.sh" --instance "$root" --template "$tmpl" 2>/dev/null)"
   if [ -n "$drift" ]; then
     echo
     printf '%s\n' "$drift" | emphasise
