@@ -234,6 +234,13 @@ fi
 # rendering, whose only difference from the plain text one is `**…**` on the identity line
 # and the two table headers. A terminal gets the bare form and its SGR, exactly as before.
 #
+# AND IT ASKS FOR `--no-logo` ON EVERY BRANCH, WHICH IS THE ONE THING IT SUBTRACTS. The ship
+# renders as designed on the SessionStart channel and nowhere else: relayed, markdown drops
+# the leading space of its first line and carries no colour, so the human got a second,
+# shifted copy of it under the Bash tool's own. This form therefore starts at the identity
+# line. It is not a rendering flag a caller may want back — any argument at all leaves this
+# whole decision alone, exactly as it leaves `--format`.
+#
 # THE LADDER IS THE SAME ONE `--style` RESOLVES BELOW, and deliberately: `NO_COLOR` first,
 # because it is the READER's opt-out and emphasis on a channel that draws `**bold**` as bold
 # is that reader's colour. `--style` has no counterpart here — a caller that wants a specific
@@ -256,8 +263,11 @@ if [ "$FORM" = banner ]; then
     exit 2
   fi
   export CLAUDE_PROJECT_DIR="$ROOT"
-  if [ $# -eq 0 ] && [ -z "${NO_COLOR:-}" ] && [ ! -t 1 ]; then
-    exec bash "$hook" --format md
+  if [ $# -eq 0 ]; then
+    if [ -z "${NO_COLOR:-}" ] && [ ! -t 1 ]; then
+      exec bash "$hook" --format md --no-logo
+    fi
+    exec bash "$hook" --no-logo
   fi
   exec bash "$hook" "$@"
 fi
