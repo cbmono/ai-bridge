@@ -23,10 +23,13 @@
 # checkout, no remote-tracking ref, no VERSION on either side, a version this cannot parse
 # — every one of those exits 0 with nothing printed. A false "you are behind" trains the
 # human to ignore the true one, and absence is never an error anywhere else in this
-# machinery. It is also why `--fetch` is OPT-IN: on the session path there is no network
-# call at all, so there is no failure to misread and no banner blocked on a socket. Without
-# it the comparison reads the remote-tracking ref already on disk, which can only ever
-# under-report.
+# machinery.
+#
+# TWO SUBJECTS, TWO NETWORK POLICIES. Against a TEMPLATE CHECKOUT nothing is fetched unless
+# `--fetch` says so, so the comparison reads the ref already on disk and can only ever
+# under-report. Against a PLUGIN INSTALL — no checkout above it — the marketplace clone is
+# fetched with a two-second cap and the result cached for six hours, so a session is never
+# blocked on a socket and most sessions make no call at all; `--fetch` forces past the cache.
 #
 # WHAT IT CANNOT SEE, stated because a checker that overclaims is worse than none: a
 # template checkout parked on an old commit or a stale branch whose VERSION happens to
@@ -37,16 +40,23 @@
 # re-stamps. Exit status is 0 on every path, including "behind": the caller is a
 # SessionStart banner, and a non-zero exit there is a failed hook, not a message.
 #
-#   check-template-version.sh [--template <dir>] [--instance <dir>] [--ref <ref>] [--fetch]
+#   check-template-version.sh [--template <dir>] [--plugin <dir>] [--instance <dir>]
+#                             [--ref <ref>] [--fetch] [--state]
 #
 # Verified by tests/template-version.test.sh.
 set -uo pipefail
 
-TEMPLATE=""; INSTANCE=""; REF=""; FETCH=0
+TEMPLATE=""; PLUGIN=""; PLUGIN_SET=0; INSTANCE=""; REF=""; FETCH=0; STATE=0
+# Six hours, and a two-second cap: the SessionStart banner may not wait on a socket, and a
+# fetch per session would be one per session for an answer that moves a few times a month.
+CACHE_TTL=21600; FETCH_SECS=2; CACHE_FILE=version-check
 while [ $# -gt 0 ]; do
   case "$1" in
     --template)   shift; TEMPLATE="${1:-}"; shift || true ;;
     --template=*) TEMPLATE="${1#--template=}"; shift ;;
+    --plugin)     shift; PLUGIN="${1:-}"; PLUGIN_SET=1; shift || true ;;
+    --plugin=*)   PLUGIN="${1#--plugin=}"; PLUGIN_SET=1; shift ;;
+    --state)      STATE=1; shift ;;
     --instance)   shift; INSTANCE="${1:-}"; shift || true ;;
     --instance=*) INSTANCE="${1#--instance=}"; shift ;;
     --ref)        shift; REF="${1:-}"; shift || true ;;
@@ -65,25 +75,34 @@ done
 # instance's copy of this file IS a symlink into the template, so resolving it is the one
 # lookup that cannot be wrong, because it is executing. Callers that already
 # know (the banner, the tests) pass `--template` and skip this.
-if [ -z "$TEMPLATE" ]; then
-  self="${BASH_SOURCE[0]:-$0}"
-  # ABSOLUTE BEFORE ANYTHING ELSE: a relative invocation would make the walk below start
-  # from a path that means nothing outside this process's cwd, and a symlink is allowed to
-  # hold a relative target that only means anything beside the link itself.
-  case "$self" in /*) ;; *) self="$PWD/$self" ;; esac
-  if [ -L "$self" ]; then
-    target="$(readlink "$self" 2>/dev/null || printf '%s' "$self")"
-    case "$target" in /*) self="$target" ;; *) self="$(dirname "$self")/$target" ;; esac
-  fi
+self="${BASH_SOURCE[0]:-$0}"
+# ABSOLUTE BEFORE ANYTHING ELSE: a relative invocation would make the walk below start
+# from a path that means nothing outside this process's cwd, and a symlink is allowed to
+# hold a relative target that only means anything beside the link itself.
+case "$self" in /*) ;; *) self="$PWD/$self" ;; esac
+if [ -L "$self" ]; then
+  target="$(readlink "$self" 2>/dev/null || printf '%s' "$self")"
+  case "$target" in /*) self="$target" ;; *) self="$(dirname "$self")/$target" ;; esac
+fi
+selfdir="$(cd "$(dirname "$self")" 2>/dev/null && pwd || true)"
+
+if [ -z "$TEMPLATE" ] && [ "$PLUGIN_SET" -eq 0 ] && [ -n "$selfdir" ]; then
   # The layout is fixed by the marketplace manifest (`source: ./plugin`): this file sits at
   # <root>/plugin/scripts/, so the template root is exactly two directories up. Derived and
   # then VERIFIED against `VERSION`, never searched for — a walk that keeps climbing finds
   # SOME ancestor with a VERSION file eventually, and comparing against an unrelated repo
   # is the one answer worse than silence.
-  guess="$(cd "$(dirname "$self")/../.." 2>/dev/null && pwd || true)"
+  guess="$(cd "$selfdir/../.." 2>/dev/null && pwd || true)"
   [ -n "$guess" ] && [ -f "$guess/VERSION" ] && TEMPLATE="$guess"
 fi
-[ -n "$TEMPLATE" ] && [ -d "$TEMPLATE" ] || exit 0
+[ -n "$TEMPLATE" ] && [ -d "$TEMPLATE" ] || TEMPLATE=""
+# THE PLUGIN INSTALL IS THE OTHER SUBJECT, and on a marketplace install it is the only one:
+# what lands on a machine is the CONTENTS of `plugin/` under a version directory, so there
+# is no checkout above it and `$selfdir/..` is the installed copy carrying its own VERSION.
+if [ -z "$PLUGIN" ] && [ -n "$selfdir" ]; then
+  PLUGIN="$(cd "$selfdir/.." 2>/dev/null && pwd || true)"
+fi
+[ -n "$PLUGIN" ] && [ -f "$PLUGIN/VERSION" ] || PLUGIN=""
 
 # ---------------------------------------------------------------------------------------
 # READING A VERSION — strict, because the two values are compared AND printed.
@@ -126,52 +145,116 @@ newer() { # <a> <b>
 }
 
 # ---------------------------------------------------------------------------------------
-# THE TWO SIDES.
+# THE TWO SIDES — a template checkout when there is one, otherwise the plugin install.
 # ---------------------------------------------------------------------------------------
+HERE=""; THERE=""; REF_NAME=""; LABEL=""; PNAME=""
+
+# A BOUND THAT SURVIVES THIS SHELL, because `timeout` is not on a stock macOS: the watchdog
+# is a detached SIBLING, so it still fires if we are killed, and `sleep` bounds it in turn.
+bounded() { # <seconds> <command…>
+  local secs="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@" >/dev/null 2>&1; return; fi
+  # ONE SUBSHELL, ITS STDERR DISCARDED: a killed background job otherwise prints the
+  # shell's own `Terminated` notice, which is not this file's output.
+  ( "$@" >/dev/null 2>&1 &
+    local child=$! dog rc=0
+    # The watchdog's stdio is redirected too, because killing the subshell leaves the
+    # `sleep` holding a pipe a caller reading us with `$( … )` would block on.
+    ( sleep "$secs"; kill "$child" ) >/dev/null 2>&1 &
+    dog=$!
+    wait "$child" || rc=1
+    kill "$dog" >/dev/null 2>&1 || true
+    exit "$rc" ) 2>/dev/null
+}
+
+# DERIVED FROM THE INSTALL PATH'S OWN SHAPE, never searched for: `plugins/marketplaces/`
+# holds every marketplace this machine has added, and the wrong one is a stranger's version.
+plugin_paths() { # -> "<marketplace clone>\t<data dir>\t<plugin name>"
+  local ver name mkt cache plugins
+  ver="$(cd "$PLUGIN" 2>/dev/null && pwd)" || return 1
+  mkt="$(cd "$ver/../.." 2>/dev/null && pwd)" || return 1
+  cache="$(dirname "$mkt")"; plugins="$(dirname "$cache")"
+  [ "$(basename "$cache")" = cache ] && [ "$(basename "$plugins")" = plugins ] || return 1
+  # Filtered, not trusted: it is a directory name and it reaches a banner.
+  name="$(basename "$(dirname "$ver")" | tr -cd 'A-Za-z0-9._-')"
+  [ -n "$name" ] || return 1
+  printf '%s\t%s\t%s' "$plugins/marketplaces/$(basename "$mkt")" "$plugins/data/$name-$(basename "$mkt")" "$name"
+}
+
 # HERE is the WORKING TREE, not HEAD: the working tree is what the instance's symlinks
 # actually resolve into and what the banner prints, so it is what "this instance links"
 # means. A checkout with an uncommitted VERSION is answered about as it is on disk.
-here="$(read_version "$(cat -- "$TEMPLATE/VERSION" 2>/dev/null || true)")"
-[ -n "$here" ] || exit 0
-
-command -v git >/dev/null 2>&1 || exit 0
-git -C "$TEMPLATE" rev-parse --git-dir >/dev/null 2>&1 || exit 0
-
-# THE ONLY NETWORK CALL IN THE FILE, and it is opt-in. A failed fetch ends the run in
-# silence rather than falling through to the on-disk ref: the caller asked for a fresh
-# answer, could not have one, and inventing a verdict out of stale data is the shape of
-# false alarm this whole file is written to avoid.
-# `GIT_TERMINAL_PROMPT=0` because the failure to survive here is not an error, it is a
-# HANG: a remote whose credentials expired asks for a username on the terminal, and a check
-# that stops a human's shell to ask them to log in is worse than the silence it was written
-# to prefer. With the prompt off, that case fails immediately and exits like every other
-# unreachable remote.
-if [ "$FETCH" -eq 1 ]; then
-  GIT_TERMINAL_PROMPT=0 git -C "$TEMPLATE" fetch --quiet origin >/dev/null 2>&1 || exit 0
-fi
-
-# NEVER ASSUME `main` — NOT EVEN AS A FALLBACK. `origin/HEAD` is what the remote itself
-# says its default branch is, and it is the only source consulted here. The previous
-# fallback to the literal `origin/main` was defended as "a wrong name resolves to nothing
-# and is therefore silent", which is true only on a remote that has no `main` at all: a
-# template on a `master`, `next` or `trunk` remote that ALSO carries a stale `main` would
-# have been compared against a branch this file invented, reporting an update that does not
-# exist or missing one that does. A hardcoded branch name in the one script whose whole job
-# is detecting drift is the sharpest available version of that mistake, and it contradicts
-# the standing rule every other script here follows.
 #
-# UNRESOLVABLE ⇒ SILENCE, like every other thing this file cannot know. `--ref` stays the
-# way a caller that DOES know which branch to compare says so.
-if [ -z "$REF" ]; then
-  REF="$(git -C "$TEMPLATE" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)"
-  [ -n "$REF" ] || exit 0
+# THE ONLY NETWORK CALL ON THIS PATH IS OPT-IN, and a failed fetch ends the run rather than
+# falling through to the on-disk ref: the caller asked for a fresh answer and could not have
+# one. `GIT_TERMINAL_PROMPT=0` because the failure to survive here is not an error but a
+# HANG — a remote whose credentials expired otherwise asks for a username on the terminal.
+resolve_checkout() {
+  HERE="$(read_version "$(cat -- "$TEMPLATE/VERSION" 2>/dev/null || true)")"
+  [ -n "$HERE" ] || return 0
+  command -v git >/dev/null 2>&1 || return 0
+  git -C "$TEMPLATE" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  if [ "$FETCH" -eq 1 ]; then
+    GIT_TERMINAL_PROMPT=0 git -C "$TEMPLATE" fetch --quiet origin >/dev/null 2>&1 || return 0
+  fi
+  local ref="$REF"
+  # NEVER ASSUME `main` — NOT EVEN AS A FALLBACK. `origin/HEAD` is what the remote itself
+  # says its default branch is, and unresolvable ⇒ silence like everything else here.
+  [ -n "$ref" ] || ref="$(git -C "$TEMPLATE" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)"
+  [ -n "$ref" ] || return 0
+  THERE="$(read_version "$(git -C "$TEMPLATE" show "$ref:VERSION" 2>/dev/null || true)")"
+  [ -n "$THERE" ] || return 0
+  REF_NAME="$ref"
+  LABEL="$(basename -- "$TEMPLATE" 2>/dev/null | tr -d '[:cntrl:]')"
+}
+
+# THE INSTALLED PLUGIN against the marketplace clone `claude plugin update` pulls from.
+# The fetch is BOUNDED and its result cached for six hours, so most sessions make no network
+# call at all — and a failure or a timeout leaves THERE empty, which is unknown, never behind.
+resolve_plugin() {
+  HERE="$(read_version "$(cat -- "$PLUGIN/VERSION" 2>/dev/null || true)")"
+  [ -n "$HERE" ] || return 0
+  command -v git >/dev/null 2>&1 || return 0
+  local paths mkt data ref now stamp
+  paths="$(plugin_paths)" || return 0
+  IFS="$(printf '\t')" read -r mkt data PNAME <<<"$paths"
+  [ -d "$mkt" ] && git -C "$mkt" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  now="$(date +%s 2>/dev/null || echo 0)"; stamp=0
+  if [ "$FETCH" -eq 0 ] && [ -r "$data/$CACHE_FILE" ]; then
+    stamp="$(sed -n 1p "$data/$CACHE_FILE" 2>/dev/null)"
+    case "$stamp" in ''|*[!0-9]*) stamp=0 ;; esac
+  fi
+  if [ "$((now - stamp))" -ge "$CACHE_TTL" ]; then
+    bounded "$FETCH_SECS" env GIT_TERMINAL_PROMPT=0 git -C "$mkt" fetch --quiet origin || return 0
+    mkdir -p "$data" 2>/dev/null && printf '%s\n' "$now" > "$data/$CACHE_FILE" 2>/dev/null || true
+  fi
+  ref="$REF"
+  [ -n "$ref" ] || ref="$(git -C "$mkt" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)"
+  [ -n "$ref" ] || return 0
+  THERE="$(read_version "$(git -C "$mkt" show "$ref:VERSION" 2>/dev/null || true)")"
+  [ -n "$THERE" ] || return 0
+  REF_NAME="$ref"
+  LABEL="$(basename -- "$mkt" 2>/dev/null | tr -d '[:cntrl:]')"
+}
+
+if [ -n "$TEMPLATE" ]; then resolve_checkout
+elif [ -n "$PLUGIN" ]; then resolve_plugin
 fi
 
-remote_raw="$(git -C "$TEMPLATE" show "$REF:VERSION" 2>/dev/null)" || exit 0
-there="$(read_version "$remote_raw")"
-[ -n "$there" ] || exit 0
+# ---------------------------------------------------------------------------------------
+# THE ANSWER. `--state` is the machine-readable one, and it is the only mode that speaks
+# when the answer is unavailable — its caller has a row to fill either way.
+# ---------------------------------------------------------------------------------------
+if [ "$STATE" -eq 1 ]; then
+  if [ -z "$HERE" ] || [ -z "$THERE" ]; then printf 'unknown\t%s\t\t%s\n' "$HERE" "$PNAME"
+  elif newer "$THERE" "$HERE"; then printf 'behind\t%s\t%s\t%s\n' "$HERE" "$THERE" "$PNAME"
+  else printf 'current\t%s\t%s\t%s\n' "$HERE" "$THERE" "$PNAME"
+  fi
+  exit 0
+fi
 
-newer "$there" "$here" || exit 0
+[ -n "$HERE" ] && [ -n "$THERE" ] || exit 0
+newer "$THERE" "$HERE" || exit 0
 
 # ---------------------------------------------------------------------------------------
 # THE LINE. Reached only when the remote is strictly newer.
@@ -184,18 +267,12 @@ newer "$there" "$here" || exit 0
 # every file already linked, but a file that is NEW in that pull reaches this instance only
 # when the bundle is re-stamped. Someone who updates and stops is exactly the state this check
 # exists to end.
-# THE NAME IS DERIVED, NEVER A LITERAL. This file reads an instance against a template
-# checkout that is not required to be called anything in particular, and
-# `plugin/**` carries no org, repo or path literals (`.claude/rules/machinery.md`). The
-# checkout's own directory name is the honest label — it is also the name in the `git -C`
-# line below, so a fork or a renamed clone names itself instead of claiming to be some
-# other project. Control characters are stripped because the value comes from the
-# filesystem and this string is printed; an unnameable path drops the parenthetical rather
-# than printing an empty one.
-name="$(basename -- "$TEMPLATE" 2>/dev/null | tr -d '[:cntrl:]')"
+#
+# THE NAME IS DERIVED, NEVER A LITERAL — `plugin/**` carries no org, repo or path literals
+# (`.claude/rules/machinery.md`), so a fork or a renamed clone names itself.
 label="TEMPLATE UPDATE"
-[ -n "$name" ] && label="TEMPLATE UPDATE ($name)"
-printf '%s\n' "⬆️  $label — this machine runs ${here}, ${REF} has ${there}"
+[ -n "$LABEL" ] && label="TEMPLATE UPDATE ($LABEL)"
+printf '%s\n' "⬆️  $label — this machine runs ${HERE}, ${REF_NAME} has ${THERE}"
 echo "    Update the plugin, then re-stamp this bundle (a seed change reaches a bundle"
 echo "    only through a stamp, and only that way):"
 echo "        /plugin update ai-bridge@ai-bridge      (then restart Claude Code)"

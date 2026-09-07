@@ -400,10 +400,29 @@ git_ok() {
 # command that waits on a socket.
 check_template_behind() {
   _warned=0
+  local st here there pname state
   if [ -z "$TEMPLATE" ]; then
-    good "plugin version: no checkout around this plugin, so drift cannot be judged"
-    note "a plugin installed from a marketplace has one; a vendored copy may not"
-    return 0
+    # NO CHECKOUT ⇒ THE PLUGIN INSTALL IS THE SUBJECT, and it is judged by the very helper
+    # the banner's Update row reads, so this row and that one can never disagree.
+    if [ ! -f "$BIN/check-template-version.sh" ]; then
+      good "plugin version: no checkout around this plugin, so drift cannot be judged"
+      note "cannot compare VERSION drift: no check-template-version.sh at $BIN"
+      return 0
+    fi
+    if [ "$FETCH" -eq 1 ]; then
+      state="$(bash "$BIN/check-template-version.sh" --plugin "$PLUGIN_ROOT" --instance "$ROOT" --state --fetch 2>/dev/null)"
+    else
+      state="$(bash "$BIN/check-template-version.sh" --plugin "$PLUGIN_ROOT" --instance "$ROOT" --state 2>/dev/null)"
+    fi
+    IFS="$(printf '\t')" read -r st here there pname <<<"$state"
+    case "${st:-}" in
+      behind)  warn "plugin ${here} is behind the marketplace, which carries ${there}"
+               hint "claude plugin update ${pname:-ai-bridge}   (then restart Claude Code)" ;;
+      current) good "plugin version: ${here} is what the marketplace's default branch carries" ;;
+      *)       good "plugin version: the marketplace could not be read, so drift is not judged"
+               note "a plugin installed from a marketplace has one; a vendored copy may not" ;;
+    esac
+    return "$_warned"
   fi
   if ! git_ok "$TEMPLATE"; then
     good "template clone at $TEMPLATE is not a git checkout — nothing to compare it to"

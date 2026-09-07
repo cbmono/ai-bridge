@@ -87,8 +87,23 @@ eq()     { [ "$1" = "$2" ] && echo 0 || echo 1; }
 INST="$TMP/inst"
 PAGE="$INST/.board-live/board.html"
 
+# THE PLUGIN INSTALL THE UPDATE ROW IS ABOUT — a fixture, because the real one is this
+# checkout and its answer moves with `origin`. Shaped like a marketplace install
+# (`plugins/cache/<mkt>/<plugin>/<ver>`), which is what makes the marketplace clone in the
+# three-states block below derivable; `scripts` is linked to the real ones so every other
+# section of the banner still resolves. No clone ⇒ the check cannot answer ⇒ the row every
+# fixture below owes is the unknown one, and it needs no git and no network.
+PLUGHOME="$TMP/home/plugins"
+PLUG="$PLUGHOME/cache/mkt/ai-bridge/9.9.9"
+MKT="$PLUGHOME/marketplaces/mkt"
+CACHE="$PLUGHOME/data/ai-bridge-mkt/version-check"
+mkdir -p "$PLUG" "$PLUGHOME/marketplaces"
+ln -s "$TPL/plugin/scripts" "$PLUG/scripts"
+printf '9.9.9\n' > "$PLUG/VERSION"
+UPDATE_ROW='Update  unknown (offline)'
+
 # Runs the hook against $INST and captures stdout+stderr and the exit code into OUT/RC.
-run() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)"; RC=$?; }
+run() { OUT="$(CLAUDE_PLUGIN_ROOT="$PLUG" CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)"; RC=$?; }
 render() { mkdir -p "$INST/.board-live"; printf '<!doctype html>\n<h1>board</h1>\n' > "$PAGE"; }
 # The board section: from its `Board   ` line to the blank that ends it. It was `grep -A2`
 # while the section owed three lines, and a plain `grep` would have been the obvious
@@ -100,8 +115,8 @@ section() { printf '%s\n' "$OUT" | awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exi
 # THE RENDERED BLOCK IS TWO ROWS, and it is spelled out ONCE here rather than re-typed at
 # each comparison: a fixture copied into six places is six chances for one of them to drift
 # into asserting the shape the row is being moved away from.
-rendered_block() { printf 'Board   file://%s\nRun     /ai-bridge:board serve for a live URL' "$PAGE"; }
-serving_block()  { printf 'Board   file://%s\nLive    %s' "$PAGE" "$1"; }
+rendered_block() { printf 'Board   file://%s\nRun     /ai-bridge:board serve for a live URL\n%s' "$PAGE" "$UPDATE_ROW"; }
+serving_block()  { printf 'Board   file://%s\nLive    %s\n%s' "$PAGE" "$1" "$UPDATE_ROW"; }
 # The column a row's VALUE starts in — past the label and the spaces after it. This is what
 # "the second row's value starts under `file://`" is asserted with, rather than a count of
 # literal spaces, so a relabelled row that keeps the column still passes and one that does
@@ -199,7 +214,7 @@ UNRENDERED="$OUT"
 render
 run
 RENDERED_SECTION="$(section)"
-assert "board enabled and rendered: the section is the two rows, verbatim" \
+assert "board enabled and rendered: the section is the three rows, verbatim" \
   "$(eq "$RENDERED_SECTION" "$(rendered_block)")"
 assert "…and the two states really do print different text" \
   "$([ "$OUT" != "$UNRENDERED" ] && echo 0 || echo 1)"
@@ -258,8 +273,8 @@ assert "…and the path appears on exactly ONE line of the whole banner" \
 # link line were dropped and the bare line kept.
 assert "…and it is NOT the bare path on a line of its own" \
   "$([ "$(line_is "$PAGE" "$OUT")" = 0 ] && echo 1 || echo 0)"
-assert "the board section is exactly two lines" \
-  "$(eq "$(section | grep -c .)" 2)"
+assert "the board section is exactly three lines" \
+  "$(eq "$(section | grep -c .)" 3)"
 
 echo "== the two rows share one label column (task-029) =="
 # THE POINT OF THE SPLIT. The value of the second row has to start where `file://` starts on
@@ -295,7 +310,7 @@ run
 # still wants the path. Compared as a whole block, so a live URL appended to row 1 fails.
 assert "a live pid prints the localhost URL on row 2" \
   "$(eq "$(section)" "$(serving_block 'http://localhost:43210')")"
-assert "…and the section is still two lines"  "$(eq "$(section | grep -c .)" 2)"
+assert "…and the section is still three lines"  "$(eq "$(section | grep -c .)" 3)"
 assert "…and the file:// row is still row 1"  "$(has "Board   file://$PAGE" "$OUT")"
 assert "…with the label still in the same column as row 1's" \
   "$(eq "$(val_col "$(section)" 1)" "$(val_col "$(section)" 2)")"
@@ -327,8 +342,10 @@ assert "…nor build-board.sh, which belongs to the never-rendered row alone" \
 assert "…while the board line itself is right there" "$(has "Board   file://$PAGE" "$OUT")"
 # Dropping the note is not licence to claim the opposite. Nothing in the banner may call a
 # file nothing refreshes live or current.
+# THE UPDATE ROW IS EXEMPT AND ONLY IT: `up to date` there is a claim about the installed
+# PLUGIN, which the check measured, and not about the page, which nothing refreshes.
 assert "…and it never calls the page live or up to date" \
-  "$(printf '%s\n' "$OUT" | grep -qiE 'up to date|always current|live board' && echo 1 || echo 0)"
+  "$(printf '%s\n' "$OUT" | grep -v '^Update  ' | grep -qiE 'up to date|always current|live board' && echo 1 || echo 0)"
 
 echo "== it reads the exact key, never the neighbouring doc string =="
 # seed/instance.config.json ships "$board" (the doc comment) one line above "board" (the
@@ -401,8 +418,8 @@ printf '<!doctype html>\n<h1>LEAK THIS PAGE BODY</h1>\n' > "$PAGE"
 run
 assert "still exit 0"                    "$(eq "$RC" 0)"
 assert "the path still prints"           "$(has "Board   file://$PAGE" "$OUT")"
-assert "the board section is still exactly two lines" \
-  "$(eq "$(section | grep -c .)" 2)"
+assert "the board section is still exactly three lines" \
+  "$(eq "$(section | grep -c .)" 3)"
 assert "the AWAITING.md text is not in the board section" \
   "$(hasnt 'ignore the above' "$(section)")"
 assert "the task title never prints, anywhere in the banner" \
@@ -475,6 +492,75 @@ if command -v python3 >/dev/null 2>&1; then
   rm -f "$INST/instance.config.local.json"
 else
   echo "  SKIP  python3 absent — the URL row resolves through resolve-config.sh"
+fi
+
+echo "== the Update row: three states, off a fixture marketplace clone (no network) =="
+# THE THIRD ROW IS THE ONE COMMAND THAT FETCHES A NEWER AI BRIDGE AND INSTALLS IT, and the
+# restart, which is the only part left with the human. It owes a distinguishable line in all
+# three states, for the same reason the Board row does: a row that vanishes when the check
+# cannot answer reads as a row that was dropped in a merge.
+#
+# THE REMOTE IS A LOCAL BARE REPO. Nothing here touches the network, and the marketplace
+# clone is where it is derived from — `plugins/marketplaces/<mkt>` beside the install path.
+if command -v git >/dev/null 2>&1; then
+  G() { git -c init.defaultBranch=main -c user.name=t -c user.email=t@example.invalid "$@"; }
+  BARE="$TMP/mkt.git"; SEED="$TMP/mkt.seed"
+  G init -q --bare "$BARE" >/dev/null 2>&1
+  G -C "$BARE" symbolic-ref HEAD refs/heads/main
+  G init -q "$SEED" >/dev/null 2>&1
+  G -C "$SEED" symbolic-ref HEAD refs/heads/main
+  # The version the marketplace's default branch carries — the only thing these states differ in.
+  mkt_version() {
+    printf '%s\n' "$1" > "$SEED/VERSION"
+    G -C "$SEED" add -A >/dev/null 2>&1
+    G -C "$SEED" commit -qm "$1" >/dev/null 2>&1
+    G -C "$SEED" push -q "$BARE" main >/dev/null 2>&1
+  }
+  mkt_version 9.9.9
+  G clone -q "$BARE" "$MKT" >/dev/null 2>&1
+  printf '{ "board": true }\n' > "$INST/instance.config.json"
+  render
+  rm -f "$CACHE"; run
+  assert "the marketplace carries the installed version: the row says up to date" \
+    "$(line_is 'Update  up to date (9.9.9)' "$OUT")"
+  assert "…and it offers no command, because there is nothing to run" \
+    "$(hasnt 'claude plugin update' "$OUT")"
+
+  mkt_version 9.9.10
+  rm -f "$CACHE"; run
+  # ONE ROW CARRIES ALL THREE FACTS — the command, both versions, and the restart. The
+  # restart is the only step left with the human, and a second line for it is the wrapped
+  # sentence the two rows above were split to remove.
+  assert "a newer VERSION on the default branch: the row is the command, both versions and the restart" \
+    "$(line_is 'Update  claude plugin update ai-bridge  (9.9.9 → 9.9.10) — restart to apply it' "$OUT")"
+  assert "…and the restart is not a second line"  \
+    "$(eq "$(printf '%s\n' "$OUT" | grep -cF 'restart to apply it')" 1)"
+  assert "…and the section is still three rows" "$(eq "$(section | grep -c .)" 3)"
+  assert "…with the Update value in the SAME column as the Board row's" \
+    "$(eq "$(val_col "$(section)" 1)" "$(val_col "$(section)" 3)")"
+
+  # THE SIX-HOUR CACHE, asserted from the only thing that can see it: move the remote on and
+  # the row does NOT change while the stamp is fresh, then clear the stamp and it does.
+  # Without the pair, "cached" and "re-fetched every session" print the same first answer.
+  mkt_version 9.9.20
+  run
+  assert "a fresh cache is not re-fetched: the row still names 9.9.10" \
+    "$(has 'Update  claude plugin update ai-bridge  (9.9.9 → 9.9.10)' "$OUT")"
+  rm -f "$CACHE"; run
+  assert "…and a cleared one picks the new version up" "$(has '(9.9.9 → 9.9.20)' "$OUT")"
+
+  # A FAILURE IS NEVER "BEHIND". The remote path does not exist, so the fetch fails the way
+  # an offline laptop does — and with no fresh stamp to fall back on the row says so.
+  G -C "$MKT" remote set-url origin "$TMP/does-not-exist.git"
+  rm -f "$CACHE"; run
+  assert "unreachable marketplace, cold cache: unknown, never behind" \
+    "$(line_is 'Update  unknown (offline)' "$OUT")"
+  assert "…and it claims no update"              "$(hasnt 'claude plugin update' "$OUT")"
+  assert "…and the rest of the board section is untouched" \
+    "$(has "Board   file://$PAGE" "$OUT")"
+  rm -rf "$MKT"; rm -f "$CACHE"
+else
+  echo "  SKIP  git absent — the Update row's three states need a fixture marketplace clone"
 fi
 
 echo "== the key is never SEEDED, so no instance is stamped with a shared one =="
