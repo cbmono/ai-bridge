@@ -652,12 +652,13 @@ state, and act only on deltas.
    task reached `done`) whose work produced durable, reusable knowledge, dispatch the
    `cataloguer` (subagent) to capture `Finding`s / update the `Service` catalog / add
    or update a `Runbook` (`ai-bridge:cataloguer`), and link the `Finding`s from the
-   relevant task doc. **Skip**
-   if neither a merge nor a `done` task happened this tick, or the work is trivial.
+   relevant task doc. **Skip this refresh**
+   if neither a merge nor a `done` task happened this tick, or the work is trivial —
+   the sweep below has its own trigger and is not skipped with it.
    **Throttle: at most one `cataloguer` dispatch per TICK, across every step that can
-   dispatch one** — step 6(a)'s closeout pass, this refresh and the KB sweep below are
-   the three, and a tick
-   that reflects the final merge *and* receives a close approval satisfies both. If step
+   dispatch one** — step 6(a)'s closeout pass, this refresh and the KB sweep below are the
+   three, and a tick that reflects the final merge *and* receives a close approval
+   satisfies both. If step
    6 already dispatched one, dispatch none here and fold this refresh into that one's
    brief. Two cataloguers write `knowledge/` concurrently and take two slots off the cap.
    Read-only on product repos, writes only to `knowledge/`; counts toward the
@@ -692,7 +693,8 @@ state, and act only on deltas.
    throttle. Exit 1 is silence: no line in the report, no dispatch. Exit 2 could not answer
    — report its line and dispatch nothing. Never re-derive the answer by running
    `build-kb-index.sh --check` yourself: the script is the one place the four conditions
-   (idle, errors, no cataloguer in flight, a slot under `maxAgentsInFlight`) are decided.
+   (idle, errors, no cataloguer in flight, a slot under `maxAgentsInFlight`) are decided
+   (`docs/pm-design.md#step-7`).
    A zero-delta IDLE tick (step 0.9) skips steps 1-7 and therefore skips this too — which
    is correct: the errors arrived by a change, and a change is a `DELTA`.
 

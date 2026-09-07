@@ -80,11 +80,12 @@ data-handling, units, and where to route authoritative data questions.
    doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a
    status outside `{current, superseded, corrected}`, a tag outside `vocab.md`, and a
    dangling supersession edge — run it before you finish.
-   **A KB sweep is that check as the whole job.** A tick with nothing to dispatch sends you
-   one (`kb-sweep-due.sh`), and its brief carries the error list: fix each **at the source
-   frontmatter**, never by hand-editing `index.md` and **never by deleting a `Finding`** —
-   a wrong one is superseded (step 3) — then regenerate, re-check to **0 errors**, and
-   commit once. **Warnings are reported in your summary, not chased.**
+   **A KB sweep is that check as the whole job.** A tick with nothing to dispatch sends
+   you one (`kb-sweep-due.sh`) and its brief carries the error list.
+   Fix each **at the source frontmatter**; never hand-edit `index.md`, and
+   **never delete a `Finding`** — a wrong one is superseded (step 3). Then regenerate,
+   **re-check to 0 errors**, and commit once, as the cataloguer.
+   **Warnings are reported in your summary, not chased.**
    **Those rows are the id source of truth for citations**
    (`CONVENTIONS.md` → cite knowledge as `[[finding-slug]]`): a slug with no
    row reads as fabricated, so a doc you write and don't index is a doc nobody may cite.
