@@ -1020,12 +1020,13 @@ say "$C_DIM" "$rule"
 # ABSENT ⇒ NOTHING, like every other optional section. An instance stamped before this
 # script shipped has no file to run — and that is exactly the state the line reports, so it
 # stays silent about itself rather than erroring about its own absence.
-if [ -f "$bin/check-template-version.sh" ]; then
-  if [ -n "$tmpl" ]; then
-    drift="$(bash "$bin/check-template-version.sh" --instance "$root" --template "$tmpl" 2>/dev/null)"
-  else
-    drift="$(bash "$bin/check-template-version.sh" --instance "$root" 2>/dev/null)"
-  fi
+#
+# A TEMPLATE CHECKOUT ONLY, and that is what `$tmpl` gates. On a PLUGIN INSTALL the same
+# fact is the board block's `Update` row, and printing it in both places would put two
+# spellings of one command five lines apart — the duplicate the board rows were split to
+# remove. The helper answers for both subjects; this section is the checkout's surface.
+if [ -n "$tmpl" ] && [ -f "$bin/check-template-version.sh" ]; then
+  drift="$(bash "$bin/check-template-version.sh" --instance "$root" --template "$tmpl" 2>/dev/null)"
   if [ -n "$drift" ]; then
     echo
     printf '%s\n' "$drift" | emphasise
@@ -1398,6 +1399,32 @@ if [ "$board_on" -eq 1 ]; then
     # with no board — a vacuous check bought for a few characters of prose.
     echo "Board   enabled, but never rendered — no .board-live/board.html here yet"
     say "$C_DIM" "        run /ai-bridge:board serve; otherwise an /ai-bridge:dispatch tick renders it, or build-board.sh"
+  fi
+  # THE UPDATE ROW — the one command that fetches a newer AI Bridge and installs it, and
+  # the restart, which is the only part left with the human.
+  #
+  # THE VERDICT IS NOT COMPUTED HERE, exactly as §2b does not compute its own: the same
+  # `check-template-version.sh` answers both, so this row and `/ai-bridge:welcome check`
+  # cannot disagree. It bounds and caches its own network call — see that file.
+  #
+  # THREE STATES, THREE DISTINGUISHABLE OUTPUTS, like the three above it: an answer of
+  # "unknown" is printed rather than swallowed, because a row that vanishes when the
+  # check cannot answer reads as a row that was dropped.
+  #
+  # `${u_here}` IS BRACED and so is every value below: bash reads the UTF-8 bytes of a `→`
+  # straight after `$var` as part of the NAME, and under `set -u` that kills the hook.
+  if [ -n "$bin" ] && [ -f "$bin/check-template-version.sh" ]; then
+    if [ -n "$tmpl" ]; then
+      _upd="$(bash "$bin/check-template-version.sh" --state --instance "$root" --template "$tmpl" 2>/dev/null)"
+    else
+      _upd="$(bash "$bin/check-template-version.sh" --state --instance "$root" 2>/dev/null)"
+    fi
+    IFS="$TAB" read -r u_state u_here u_there u_name <<<"${_upd:-}"
+    case "${u_state:-}" in
+      behind)  echo "$(pad Update "$BOARD_LW")claude plugin update ${u_name:-ai-bridge}  (${u_here} → ${u_there}) — restart to apply it" ;;
+      current) echo "$(pad Update "$BOARD_LW")up to date (${u_here})" ;;
+      *)       echo "$(pad Update "$BOARD_LW")unknown (offline)" ;;
+    esac
   fi
 fi
 

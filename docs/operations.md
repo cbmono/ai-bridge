@@ -1007,7 +1007,27 @@ software-engineer     deep     → opus                     local
 
 Board   file:///Users/you/workspace/_ai-bridge-private/.board-live/board.html
 Run     /ai-bridge:board serve for a live URL
+Update  claude plugin update ai-bridge  (2.0.3 → 2.0.4) — restart to apply it
 ```
+
+**The `Update` row is the third row of the board block, and it is one command.** It names
+what fetches a newer AI Bridge and installs it — `claude plugin update <plugin>` — plus the
+restart, which is the only step left with you. Three states, one row (the numbers above are
+illustrative):
+
+| The check found | The row reads |
+|---|---|
+| the marketplace is ahead | `claude plugin update ai-bridge  (2.0.3 → 2.0.4) — restart to apply it` |
+| nothing newer | `up to date (2.0.3)` |
+| no answer — offline, no clone, no git | `unknown (offline)` |
+
+The verdict is `scripts/check-template-version.sh --state`, which is also what
+`/ai-bridge:welcome check` reads, so the row and that check can never disagree. On a
+**plugin install** — no checkout above the plugin — it compares the installed `VERSION`
+against the one on the marketplace clone's default branch, fetching with a **two-second cap**
+and caching the result for **six hours** under the plugin's data dir, so a session is never
+blocked on a socket and most make no network call at all. A failed or timed-out fetch is
+`unknown`, never "behind".
 
 **The blank line above the header is deliberate, and it is the banner's.** Claude Code
 renders a `SessionStart` hook's `systemMessage` as `SessionStart:<source> says: <content>`,
@@ -1030,9 +1050,10 @@ checkout this instance links carries an older `VERSION` than the remote's defaul
 time it prints nothing at all. Equal, ahead, offline, unauthenticated, no checkout, no
 remote-tracking ref and a version it cannot parse are **all** silence — a false "you are
 behind" would train you to ignore the true one, and this is the one line in the banner that
-would otherwise fire on every session on a laptop with no network. Nothing is fetched at
-session start either: the comparison reads the `origin/HEAD` ref already on disk, and only
-`scripts/check-template-version.sh --fetch`, run by hand, touches the network. The
+would otherwise fire on every session on a laptop with no network. Against a template
+**checkout** nothing is fetched at session start: the comparison reads the `origin/HEAD` ref
+already on disk, and only `scripts/check-template-version.sh --fetch`, run by hand, touches
+the network. The
 convention that keeps the number worth comparing — the merge moves the number, on `main`,
 never the PR — is [invariant 20](conventions.md#20-the-version-is-a-number-the-merge-moves-and-the-drift-check-speaks-only-when-behind). It is bold on a terminal and underlined with a rule
 either way — a `SessionStart` hook writes to a **pipe**, not a terminal, so `[ -t 1 ]` is
