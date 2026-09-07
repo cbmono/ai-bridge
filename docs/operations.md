@@ -77,7 +77,7 @@ on *what* changed — and exactly one of the five needs nothing from you.
 | What changed in the pull | Reaches a bundle how | You must |
 |---|---|---|
 | **Any** `plugin/` file — a skill, an agent, a script, a hook, new or edited | Not at all from this checkout. The plugin is installed from the marketplace | update the plugin, on **each machine**, then restart Claude Code |
-| A **`plugin/seed/`** file (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `index.md`, …) | Never by itself — seed is copied only when absent, so bundle data is never clobbered | `/ai-bridge:welcome fix`, which 3-way merges what merges cleanly and reports the rest |
+| A **`plugin/seed/`** file (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `index.md`, …) | Never by itself — seed is copied only when absent, so bundle data is never clobbered | `/ai-bridge:init <dir>`, which 3-way merges what merges cleanly, resolves the decidable conflicts and reports the rest |
 | A **schema** change | The validator updates with the plugin; the *data* does not | `/ai-bridge:welcome check`, then `migrate-bundle.sh` (report), then `--apply` |
 
 **Three rows, not five, and that is the point of the migration:** the two rows that used
@@ -85,27 +85,46 @@ to exist for "an edited machinery file arrives instantly, a new one needs a stam
 gone, because a bundle no longer links machinery at all. One plugin update moves the whole
 tree at once, and there is no per-bundle step for any of it.
 
-### One command walks the seed row
+### `/ai-bridge:init` is the one command to run after every plugin update
 
 The plugin row is the one no script here can touch: it is per machine and installed by
-Claude Code.
+Claude Code. Everything downstream of it is one command.
 
 ```
-/ai-bridge:welcome fix
+/ai-bridge:init <dir>
 ```
 
-It converts a bundle that still carries machinery symlinks, and 3-way merges the seed
-changes this repo has made since the bundle was stamped — verifying every write on disk,
-never forcing a hand-diverged file, and leaving a conflicted merge beside it as
-`.bak.<epoch>`. `/ai-bridge:welcome check` is the report-only half. Re-run either any
-time; a second run finds nothing to do.
+It stamps the bundle, converts one that still carries machinery symlinks, and then runs
+the **welcome check-and-fix pass itself** — the idempotent tier only, with the same
+refusals as ever: config files and tick locks are reported, never written. The seed pass
+inside it 3-way merges the changes this repo has made since the bundle was stamped,
+verifying every write on disk, never forcing a hand-diverged file, and resolving the
+**decidable** conflict classes on the rule that decides them (below). Nothing carrying
+conflict markers is left in the bundle tree: every copy it keeps goes under the gitignored
+`.ai-bridge/refresh/`, and the report names the path. Re-run it any time; a second run
+finds nothing to do.
 
-`/ai-bridge:init <dir> --refresh-seeds` is the same seed pass, reached from the installer
-instead — useful when you are converting a bundle and porting its seed drift in one go.
+**What `/ai-bridge:welcome` is for, now that it does not fix anything:** the banner, and
+`check` — the report-only survey of state that could be wrong. `welcome fix` prints one
+line pointing here and exits 0 for one release, then it is removed.
+
+`/ai-bridge:init <dir> --refresh-seeds` is accepted and ignored for the same release: the
+seed pass runs on every refresh now.
+
+#### The decidable conflict classes
+
+A conflict that recurs on every bundle with the same answer is a rule, not a question.
+`refresh-seeds.sh --list-decidable` prints the table; a class not in it is still a
+`CONFLICT` for you.
+
+| Seed path | Rule that resolves it |
+|---|---|
+| `knowledge/index.md` | derived from frontmatter — regenerated with `build-kb-index.sh`, never merged |
+| `.gitignore` | conflicting hunks that touch only seed-managed lines (`board.html`, `.board-live/`, `AWAITING.md`, `.tick-lock`, `.ai-bridge/`) take the seed side; every bundle-added line is kept |
 
 ### The two config files, on the same stamp
 
-Config is the one seed file that is *meant* to diverge, so `--refresh-seeds` never touches
+Config is the one seed file that is *meant* to diverge, so the seed pass never touches
 it — and that is how three bundles ended up with absolute paths in the tracked
 `instance.config.json`, `defaultOwner` duplicated into a per-machine file, every key added
 since 1.x absent, and three different key orders, with nothing anywhere calling it an
@@ -128,8 +147,9 @@ file on evidence from this repo's git history.
 | Verdict | What it means | What `--apply` does |
 |---|---|---|
 | prior version of the seed, **verbatim** | nothing was hand-edited | ports it exactly |
-| **hand-edited**, change lands elsewhere in the file | your edits and the seed's don't overlap | 3-way merges on top of your edits (backing the file up first) and verifies the result on disk |
-| **`CONFLICT`** | your edits and the seed's collide | **nothing.** Your wording is the only copy of a decision somebody made — port it by hand |
+| **hand-edited**, change lands elsewhere in the file | your edits and the seed's don't overlap | 3-way merges on top of your edits (keeping the copy it replaced under `.ai-bridge/refresh/`) and verifies the result on disk |
+| **`RESOLVED`** | the conflict is a **decidable class** (table above) | applies the rule that decides it, and names the rule |
+| **`CONFLICT`** | your edits and the seed's collide, and no rule decides it | **nothing.** Your wording is the only copy of a decision somebody made — port it by hand |
 | seed file **never changed** since your instance was stamped | nothing to deliver | stays quiet even though your copy has grown (`log.md`, `index.md`, a `.gitignore` with the machinery block) |
 | **`UNKNOWN`** | no usable history to judge against | **nothing.** `diff` the two paths it names and port by hand |
 | **`CONFIG`** | it is `instance.config.json` or `instance.config.local.json` | **nothing, ever.** Config is the one seed file whose purpose is to diverge, and a value in it is routinely a decision somebody made minutes ago — the same reason `/ai-bridge:welcome` has no fixer for its `config-uncommitted` row |
@@ -203,7 +223,7 @@ reports a symlink of your own as `keep` — [§2
 below](#2-retiring-content-swept-vs-reported).
 
 **The seed documents are the part that can decline.** Seed content has been yours to edit
-since the day it was copied, so `/ai-bridge:welcome fix` 3-way merges what merges cleanly
+since the day it was copied, so `/ai-bridge:init` 3-way merges what merges cleanly
 and reports a `CONFLICT` without writing — port the command names by hand there. The
 conflicted merge is saved beside the file as `.bak.<epoch>` so the markers are available
 to read.

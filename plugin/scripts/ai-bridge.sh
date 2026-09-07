@@ -4,7 +4,10 @@
 #
 #   ai-bridge.sh                      reprint the SessionStart banner
 #   ai-bridge.sh check  [flags]       report the state of this instance
-#   ai-bridge.sh fix    [flags]       act on the idempotent tier ONLY, print the rest
+#   ai-bridge.sh fix    [flags]       RETIRED — points at /ai-bridge:init and exits 0
+#
+# `fix` MOVED INTO `/ai-bridge:init` — it stamps the bundle, then runs this file's pass
+# (`AI_BRIDGE_INIT_PASS=1`, same tiers, same refusals). This form is a pointer for one release.
 #
 # WHAT THIS IS NOT, because the rejected shape is the one that keeps getting proposed. It
 # does NOT load rules into context. `CLAUDE.md` is injected into every turn and the banner
@@ -546,6 +549,7 @@ fix_bundle_unconverted() {
     note "NOT stamped: $BIN/init-bundle.sh is missing — re-install the plugin"
     return 0
   fi
+  # The stamp inherits AI_BRIDGE_INIT_PASS and runs no pass — one extra stamp, never a loop.
   note "running: bash $BIN/init-bundle.sh $ROOT"
   bash "$BIN/init-bundle.sh" "$ROOT" 2>&1 | sed 's/^/      /'
   return 0
@@ -573,13 +577,13 @@ check_seed_drift() {
   fi
   local report drift unknown
   report="$(bash "$BIN/refresh-seeds.sh" "$ROOT" 2>/dev/null || true)"
-  drift="$(printf '%s\n' "$report" | grep -E '^  (PORTABLE|CONFLICT) ' || true)"
+  drift="$(printf '%s\n' "$report" | grep -E '^  (PORTABLE|DECIDABLE|CONFLICT) ' || true)"
   unknown="$(printf '%s\n' "$report" | grep -cE '^  UNKNOWN ' || true)"
   if [ -n "$drift" ]; then
     _warned=1
     warn "seed documents have drifted from this template — a stamp cannot deliver a seed edit"
     printf '%s\n' "$drift" | sed 's/^  /    /'
-    hint "/ai-bridge:welcome fix   (3-way merges the portable ones; conflicts stay yours)"
+    hint "/ai-bridge:init $ROOT   (3-way merges what it can; conflicts stay yours)"
   else
     good "seed documents are in step with this template — nothing to port"
   fi
@@ -1174,6 +1178,10 @@ fi
 # `config-uncommitted` is; it reads the tier the row declares and dispatches on that alone.
 # The two ship-blockers therefore hold by construction rather than by care: there is no
 # branch here that could be pointed at a config file or a lock file.
+if [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
+  echo "ai-bridge fix has moved into /ai-bridge:init — run that instead; it stamps the bundle and then runs this same pass."
+  exit 0
+fi
 echo "ai-bridge fix — acting ONLY on the idempotent tier."
 echo "                Config files and tick locks are NEVER written, reverted, staged,"
 echo "                cleared or rewritten by this command. They are reported."

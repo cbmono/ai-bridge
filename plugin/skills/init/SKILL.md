@@ -29,7 +29,7 @@ and a plugin update is what updates it.
 | **Refreshes** | the same bundle again — idempotent, seeds only what is ABSENT, and never overwrites a value already there |
 | **Converts** | a bundle stamped by the old `install.sh`: every machinery symlink into a template checkout is removed, the managed `.gitignore` machinery block is retired, and the data is untouched |
 | **Creates on request** | `objectives/`, with `--with-objectives`. It is an optional layer (`SCHEMA.md` → type: Objective) — a project normally carries its own `success_criteria` — so a plain stamp makes no such directory, and an existing one is data and never touched |
-| **Reports** | seed drift — a seed doc this repo changed since the bundle was stamped. Report-only unless you passed `--refresh-seeds` |
+| **Brings up to date** | an existing bundle, by running the welcome check-and-fix pass after the stamp — the idempotent tier only, and the same refusals: config files and tick locks are reported, never written. Seed drift is 3-way merged, decidable conflicts are resolved on the rule that decides them, and anything else is reported for you |
 | **Reports** | config findings across `instance.config.json` and `instance.config.local.json` — a key in the wrong file, a seed key missing, keys out of order. Report-only unless you say yes at the prompt or pass `--normalise-config`, and then it moves, adds and reorders without ever changing a value, and leaves the tracked file **staged** |
 
 **The only symlinks a stamped bundle holds are under `repos/`**, and those point at the
@@ -48,8 +48,8 @@ refresh, and never over a value already there.
 - **Do not act on a line it declined to act on.** A `stale` line names retired content
   that is the human's to keep or delete; the script prints the exact `rm` and does not
   run it. A `keep` line names a symlink of the human's own.
-- **Do not re-run it with `--refresh-seeds` because it reported drift.** A 3-way merge
-  writes into files the bundle owns. Report the drift, and let the human ask.
+- **Do not act on a `CONFLICT` yourself.** A hand-diverged seed file is the only copy of
+  a decision somebody made; the script reports it, names the diff, and stops. So do you.
 - **`AUTONOMY.md` disappearing is a real change, not noise.** If the conversion removed
   it, delegated authority is off and the bundle is back to ask-first. Relay that line and
   the opt-back-in it prints (`/plugin install ai-bridge-yolo@ai-bridge` — the companion
@@ -60,6 +60,8 @@ refresh, and never over a value already there.
 `instance.config.json` needs the group's `org`, and `instance.config.local.json` needs
 this machine's `reposRoot`, before anything else works.
 Then `/ai-bridge:welcome` for the banner, and `/ai-bridge:dispatch` for the loop.
+**Run this command again after every plugin update** — it is the one that brings a
+bundle up to the installed plugin.
 
 If the directory is not a bundle and was not meant to be one, say which directory it is
 and stop — never stamp somewhere on a guess.

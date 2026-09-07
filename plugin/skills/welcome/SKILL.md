@@ -1,6 +1,6 @@
 ---
 name: welcome
-description: The AI Bridge welcome screen — banner, `check` (state that could be wrong), or `fix` (repairs the idempotent tier only). Reports facts, never rules; `fix` never writes config files and never clears a tick lock.
+description: The AI Bridge welcome screen — banner, or `check` (state that could be wrong). Reports facts, never rules; it repairs nothing (`fix` moved into /ai-bridge:init).
 argument-hint: "[check|fix]  omit for the banner"
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/ai-bridge.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
@@ -37,7 +37,7 @@ as an autolink once, and that row's `FROM` sat two columns left of every other's
 |---|---|
 | `/welcome` | `exec`s the SessionStart hook, so you get **that** banner minus its ship, not a copy of it |
 | `/welcome check` | reports state that could be wrong, each line a fact with its evidence |
-| `/welcome fix` | repairs the **idempotent** tier only, and prints every other tier without acting |
+| `/welcome fix` | **retired** — prints one line pointing at `/ai-bridge:init`, which runs that pass itself, and exits 0. Relay the line; do not run the repairs by hand |
 
 ## What you must not do with the output
 

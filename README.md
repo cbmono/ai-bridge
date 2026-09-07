@@ -564,7 +564,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 |---|---|---|
 | `/ai-bridge:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine (or Claude Code has not restarted since) — never the stamp, which delivers no commands at all now | `/plugin marketplace add cbmono/ai-bridge`, `/plugin install ai-bridge@ai-bridge`, then `/exit` and relaunch |
 | A command or agent is missing after a pull | it is a **new** `plugin/` file, so no symlink exists yet | `/ai-bridge:init <bundle>` |
-| A seed change from a pull never arrived | seed is copied only when absent, by design | `/ai-bridge:welcome fix` and port what it reports |
+| A seed change from a pull never arrived | seed is copied only when absent, by design | `/ai-bridge:init` and port what it reports |
 | Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `/ai-bridge:init` from the main working tree |
 | Installer exits 2, "refusing to install from a git worktree" | working as designed | `git -C <src> worktree list` — the first entry is the main tree |
 | The startup nudge is empty | `AWAITING.md` was deleted, or the PM reshaped its layout | `touch AWAITING.md`; `session-banner.sh` greps the heading and bullets **literally** |
@@ -584,7 +584,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | `review-clearance.sh` exits 6 on a PR that *was* reviewed | the review is real and at the head, but a reviewer-authored thread is still unresolved — `SCHEMA.md` clause 9. The refusal names each open thread | answer or fix each thread, resolve it, push. **Do not request another review** — you already have one, and a 6 is not a 4 |
 | `review-clearance.sh` exits 4, "carries no evidence that a review was COMPLETED" | the only artifact is the reviewer's *"currently processing"* placeholder or similar — it names the head but nothing says anybody read it | wait for the real review, or ask for one; not-a-refusal is not a review, and clearing on it was a live false pass |
 | CodeRabbit: "Unable to determine base branch" | a remote-less instance has no `origin/HEAD` to infer one from | `git config coderabbit.baseBranch <branch>` |
-| Validator errors right after an upgrade | the machinery updated, the data didn't | `/ai-bridge:welcome fix` runs validate → migrate in the right order |
+| Validator errors right after an upgrade | the machinery updated, the data didn't | `/ai-bridge:init` runs the stamp and the check-and-fix pass in the right order |
 | Two loops dispatched the same task | `defaultOwner` is not set on a shared bundle | [docs/sharing.md](docs/sharing.md) |
 | Machinery symlinks all dangle on a second machine | intentional — machinery is machine-local | re-run `/ai-bridge:init` there |
 
@@ -626,7 +626,7 @@ behaviour that already shipped, **minor** for a new capability or a new file und
 **Why the number matters more than a label.** A bundle consumes nothing from this checkout
 any more — the machinery ships in the plugin, replaced whole on every update — but
 `plugin/seed/` content is copied into a bundle once, ever, so a seed edit reaches a stamped
-bundle only through `/ai-bridge:welcome fix`. That gap has cost real time: two hooks
+bundle only through `/ai-bridge:init`. That gap has cost real time: two hooks
 merged and sat inert in every instance for a week, back when a stamp was the only route.
 
 So the session banner prints one line — and only one, and only sometimes. The two numbers

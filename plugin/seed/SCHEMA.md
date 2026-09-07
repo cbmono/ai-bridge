@@ -12,7 +12,7 @@ missing optional fields and unknown keys (per the OKF spec).
 
 > **Seed file — copied once, then yours.** `/ai-bridge:init` copied this file into the
 > bundle from the `ai-bridge` plugin; the bundle owns it from then on, so your edits stay
-> and this copy drifts from the template until `/ai-bridge:welcome fix` 3-way merges a
+> and this copy drifts from the template until `/ai-bridge:init` 3-way merges a
 > later template change onto them. Instance-specific values (`<org>`, the clone root, the
 > author identity, team routing) live in `instance.config.json` and this instance's
 > `CLAUDE.md` — never hardcode them here.
