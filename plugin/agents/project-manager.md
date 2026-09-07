@@ -652,11 +652,13 @@ state, and act only on deltas.
    task reached `done`) whose work produced durable, reusable knowledge, dispatch the
    `cataloguer` (subagent) to capture `Finding`s / update the `Service` catalog / add
    or update a `Runbook` (`ai-bridge:cataloguer`), and link the `Finding`s from the
-   relevant task doc. **Skip**
-   if neither a merge nor a `done` task happened this tick, or the work is trivial.
+   relevant task doc. **Skip this refresh**
+   if neither a merge nor a `done` task happened this tick, or the work is trivial —
+   the sweep below has its own trigger and is not skipped with it.
    **Throttle: at most one `cataloguer` dispatch per TICK, across every step that can
-   dispatch one** — step 6(a)'s closeout pass and this refresh are the two, and a tick
-   that reflects the final merge *and* receives a close approval satisfies both. If step
+   dispatch one** — step 6(a)'s closeout pass, this refresh and the KB sweep below are the
+   three, and a tick that reflects the final merge *and* receives a close approval
+   satisfies both. If step
    6 already dispatched one, dispatch none here and fold this refresh into that one's
    brief. Two cataloguers write `knowledge/` concurrently and take two slots off the cap.
    Read-only on product repos, writes only to `knowledge/`; counts toward the
@@ -675,6 +677,34 @@ state, and act only on deltas.
    promotes — and only then run `papercuts.sh pass` to mark the entries processed. Exit 1
    is silence: no line in the report, no dispatch.
 
+   **The KB sweep is the third reason, and the only one that fires when NOTHING merged.**
+   A tick that dispatched no role agent is the cheapest session there is to spend on a
+   `knowledge/` that no longer checks out — defects arriving by hand or by an old seed port
+   are on nobody's reflect path, so without this they wait for a human to notice. Ask once,
+   **after step 3 has finished dispatching**, so the counts are final:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-sweep-due.sh --dispatched <spawned this tick> \
+     --in-flight <still running> [--cataloguer-in-flight]   # exit 0 = due
+   ```
+
+   Exit 0 ⇒ it prints the trigger line and the ERROR list; dispatch `ai-bridge:cataloguer`
+   with **that output pasted into the brief verbatim**, inside the same one-dispatch
+   throttle. Exit 1 is silence: no line in the report, no dispatch. Exit 2 could not answer
+   — report its line and dispatch nothing. Never re-derive the answer by running
+   `build-kb-index.sh --check` yourself: the script is the one place the four conditions
+   (idle, errors, no cataloguer in flight, a slot under `maxAgentsInFlight`) are decided
+   (`docs/pm-design.md#step-7`).
+   A zero-delta IDLE tick (step 0.9) skips steps 1-7 and therefore skips this too — which
+   is correct: the errors arrived by a change, and a change is a `DELTA`.
+
+   **The brief for this trigger is fixed, and every clause of it is load-bearing:**
+
+   > Fix each error **at the source frontmatter**. Never hand-edit `knowledge/index.md` —
+   > it is derived — and **never delete a `Finding`**: one that is wrong is superseded
+   > (`cataloguer` step 3), not removed. Then regenerate the index and re-check to **0
+   > errors**. **Warnings are reported, not chased.** One commit, as the `cataloguer`.
+
 8. **Curate.** Keep `projects/<p>/project.md`, each project's `index.md`, and the
    `log.md` files current — **for the projects you actually read this tick**; a done
    project was skipped in step 1 and is never curated. **The `index.md` files — root
@@ -688,7 +718,12 @@ state, and act only on deltas.
    one-line summary. **Make it reconstructible, not descriptive:** name every task id
    you dispatched and every one whose completion you reflected — "dispatched task-004,
    task-007; reflected task-002 merged" is what a successor reads instead of its own
-   memory. Commit your changes under your own author identity:
+   memory. **A KB sweep (step 7) is named the same way — its trigger and its result, both
+   as numbers**: "idle + 35 KB errors → cataloguer; errors 35 → 0". The trigger says why a
+   tick that dispatched nothing spent a session, and the before/after is the only evidence
+   the sweep worked; a sweep that ended above 0 is reported with the number it reached.
+   **It puts nothing in `AWAITING.md`** — no human decision unblocks it, and the queue
+   holds only what one does. Commit your changes under your own author identity:
    `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<conventional message>" -- <path>...`
    (stage by explicit path, then name those same paths). Never use the helper in
    target product repos.

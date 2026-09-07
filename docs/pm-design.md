@@ -464,6 +464,31 @@ best-effort backstop: an agent that is thinking, waiting on review, or running a
 command writes nothing for longer than the window and then looks idle. The tick's own
 in-flight count is the primary guard, which is why the prune waits for it to be zero.
 
+<a id="step-7"></a>
+### Step 7 — why an idle tick sweeps the knowledge base
+
+Measured 2026-09-07 across three bundles on one machine: `build-kb-index.sh --check`
+reported **35**, **54** and **640** errors. None was on anybody's path. The two existing
+cataloguer triggers both hang off work landing — a reflect, or a closeout — so a
+`knowledge/` broken by a hand edit or an old seed port stays broken until a human runs the
+checker, and nobody runs a checker they have no reason to suspect. The tick that dispatched
+nothing is exactly the session with capacity to spend, so the trigger is *idleness*, not a
+cadence: no timer to drift, and no cost on a tick that had real work.
+
+**Why a script and not four sentences.** The decision has four conditions (idle, at least
+one ERROR, no cataloguer in flight, a slot under `maxAgentsInFlight`) and the loop is
+idempotent — a tick re-reads the bundle and has no memory, so a condition it evaluates from
+its own reading is one it can evaluate differently next tick. `kb-sweep-due.sh` makes the
+answer a single exit code, and `tests/kb-sweep-trigger.test.sh` drives it against fixtures
+in all four directions. The alternative shape — the PM running `--check` itself and judging
+— is the one this repo has already paid for under "a rule with no reader is not a rule".
+
+**Warnings are deliberately outside the trigger.** The same measurement found 285 warnings
+against 35 errors; most are bundle-relative links that resolve to nothing, and chasing them
+is a task with its own scope. Errors mean the index and the documents disagree, which is a
+defect with one correct fix. A trigger that also fired on warnings would fire on every
+bundle, permanently, which is a trigger that means nothing.
+
 <a id="step-8"></a>
 ### Step 8 — curation, the queue, the board, and the lock
 
