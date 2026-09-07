@@ -36,10 +36,6 @@ commands but *not* the panel's agents.
 ## Configure
 Edit `instance.config.json`:
 - `org` — the GitHub org for `target_repo` values.
-- `reposRoot` — where this group's product repos are cloned locally.
-- `worktreeRoot` — where agent build worktrees live. Keep it **outside** any synced
-  folder (Dropbox/iCloud rewrite files inside a worktree mid-run). Absent this key,
-  worktrees fall back to `<reposRoot>/_wt`, which is also still swept as the legacy root.
 - `authorEmail` — commit email for per-agent authorship. Used when `people` (below)
   has no entry for this clone.
 - `people` — optional; a map of **GitHub login → commit email** for everyone who works
@@ -64,6 +60,14 @@ Per-machine values go in **`instance.config.local.json`** beside this file
 is — the one key a second person needs), `authorEmail`, `reposRoot`, `worktreeRoot`,
 `boardInstances`. The full set, and what each means when absent, is listed in one place:
 `SCHEMA.md` → "Per-machine config overrides".
+
+**Set `reposRoot` there first** — it is where this group's product repos are cloned, and
+nothing links `repos/` until it resolves. `worktreeRoot` is where agent build worktrees
+live; keep it **outside** any synced folder (Dropbox/iCloud rewrite files inside a
+worktree mid-run), and absent it worktrees fall back to `<reposRoot>/_wt`, which is also
+still swept as the legacy root. Neither belongs in the tracked file — an absolute path on
+one machine cannot be right on the other — and `/ai-bridge:init` reports one that is
+there (`normalise-config.sh`) rather than leaving it to be noticed.
 - `defaultRepo` — optional; default repo for `/ai-bridge:pr-review-request` (bare name is
   qualified with `org`, or give `owner/name`).
 - `prReviewSlackChannel` — optional; channel name or id for `/ai-bridge:pr-review-request`.

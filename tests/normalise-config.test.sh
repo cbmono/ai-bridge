@@ -152,6 +152,21 @@ norm "$I" --apply >/dev/null
 ok "the local value stands"                   "$(jget "$I/$LCFG" worktreeRoot)" /local/one
 ok "…and the tracked copy is dropped"         "$(jget "$I/$TCFG" worktreeRoot)" -
 
+echo
+echo "-- 1c. a move with no finding of its own on the DESTINATION still writes it"
+# The regression: whether a file gets written is asked of its BYTES, not of its finding
+# list. A key moved out of one file lands in the other carrying no finding there, and an
+# unknown key anchors to its neighbour so it triggers no ORDER finding either — deriving
+# the write from findings dropped it on the floor.
+I="$(newinst 10)"
+jedit "$I/$LCFG" <<'PY'
+d["zzCustom"] = "a setting no seed ships"
+PY
+norm "$I" --apply >/dev/null
+ok "the tracked file has no finding of its own" "$(grep -c '^  instance.config.json$' "$TMP/out")" 0
+ok "…and the value still arrived there"       "$(jget "$I/$TCFG" zzCustom)" "a setting no seed ships"
+ok "…and left the local file"                 "$(jget "$I/$LCFG" zzCustom)" -
+
 # =========================================================================== #
 echo
 echo "-- 2. MISSING adds seed keys; \$doc keys are never added, and a bundle's own is kept"

@@ -164,6 +164,11 @@ for name, was in before.items():
                   file=sys.stderr)
             raise SystemExit(3)
 
+# WHAT WAS WRITTEN IS ASKED OF THE BYTES, not of the finding list. A key moved OUT of one
+# file lands in the other with no finding of its own, and deriving "write it" from that
+# file's findings would drop the value on the floor.
+changed = {name: list(after[name].items()) != list(before[name].items())
+           for name in (TRACKED, LOCAL)}
 total = len(findings[TRACKED]) + len(findings[LOCAL])
 if total and not quiet:
     print("Config findings (normalise-config.sh):")
@@ -175,7 +180,7 @@ if total and not quiet:
             print("    %-10s %-22s %s" % (kind, what, note))
 
 with open(status_path, "w") as fh:
-    fh.write("%d %d %d\n" % (total, len(findings[TRACKED]), len(findings[LOCAL])))
+    fh.write("%d %d %d\n" % (total, int(changed[TRACKED]), int(changed[LOCAL])))
 
 if not total:
     raise SystemExit(0)
@@ -202,21 +207,20 @@ def write(name, data):
     os.replace(tmp, path)
 
 
-if findings[TRACKED]:
-    write(TRACKED, new_tracked)
-if findings[LOCAL]:
-    write(LOCAL, new_local)
+for name, data in ((TRACKED, new_tracked), (LOCAL, new_local)):
+    if changed[name]:
+        write(name, data)
 print("  applied %d finding(s); no value was changed." % total)
 PY
 
-findings=0; tracked_findings=0
+tracked_written=0
 if [ -f "$STATUS" ]; then
-  read -r findings tracked_findings _rest < "$STATUS" || true
+  read -r _total tracked_written _local < "$STATUS" || true
 fi
 
 # Criterion 5: STAGED, never committed. Whether these keys belong in a commit at all is
 # the human's call, and it is the only reason a stamp may not just write and forget.
-if [ "$APPLY" = 1 ] && [ "$rc" = 0 ] && [ "${tracked_findings:-0}" != 0 ]; then
+if [ "$APPLY" = 1 ] && [ "$rc" = 0 ] && [ "${tracked_written:-0}" != 0 ]; then
   if command -v git >/dev/null 2>&1 \
      && git -C "$TARGET" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
      && git -C "$TARGET" add -- instance.config.json 2>/dev/null; then
