@@ -738,10 +738,14 @@ check_config_layers() {
 # the two that exists on a machine that installed the plugin and never cloned this repo:
 # resolving it from `$TEMPLATE` degraded this row to a non-answer on exactly those
 # machines, which is every ordinary install. Keys beginning `$` are
-# comments by convention, on both sides. TWO additions, each justified by its reader the
+# comments by convention, on both sides. FIVE additions, each justified by its reader the
 # way the tool vocabulary's hand-list entries are, and each never seeded for the same
 # reason — seeding a per-machine key writes one machine's answer into every clone:
 #   · `ownerGithubUser` — per-machine by design (docs/sharing.md); `task-owner.sh` reads it;
+#   · `reposRoot`, `worktreeRoot`, `boardInstances` — per-machine paths, read by
+#     `link-repos.sh`, `prune-worktrees.sh` and `build-board.sh` from EITHER file, so they
+#     are known in both. `normalise-config.sh` is what reports a tracked copy, because
+#     that is misplacement rather than a key nothing reads;
 #   · `boardArtifactUrl` — the page `/ai-bridge:board publish` published FROM THIS CLONE.
 #     **Known in `instance.config.local.json` ONLY**, which is where it differs from the
 #     entry above and why the known set is built per file. Publishing is account-scoped,
@@ -773,7 +777,10 @@ check_config_unknown_keys() {
     return 0
   fi
   known="$known
-ownerGithubUser"
+ownerGithubUser
+reposRoot
+worktreeRoot
+boardInstances"
 
   # A file jq cannot parse yields NO keys, and no keys reads exactly like no unknown keys —
   # a false healthy about a corrupt config, the false-zero class this file's own header

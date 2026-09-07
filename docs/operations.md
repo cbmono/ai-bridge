@@ -103,6 +103,23 @@ time; a second run finds nothing to do.
 `/ai-bridge:init <dir> --refresh-seeds` is the same seed pass, reached from the installer
 instead — useful when you are converting a bundle and porting its seed drift in one go.
 
+### The two config files, on the same stamp
+
+Config is the one seed file that is *meant* to diverge, so `--refresh-seeds` never touches
+it — and that is how three bundles ended up with absolute paths in the tracked
+`instance.config.json`, `defaultOwner` duplicated into a per-machine file, every key added
+since 1.x absent, and three different key orders, with nothing anywhere calling it an
+error. So every stamp now runs `normalise-config.sh` in **report** mode over both files
+and prints what is out of place: **MISPLACED** (a per-machine key in the tracked file, or
+a tracked-only key such as `defaultOwner` or `people` in the local one), **MISSING** (a
+seed key the tracked file lacks) and **ORDER**. It writes only when you ask — a yes at the
+prompt, or `/ai-bridge:init <dir> --normalise-config` — and then it moves, adds and
+reorders but **never changes a value**: a move carries the value across, a duplicate is
+dropped in favour of the one already in the destination file, and a seed default is only
+ever used for a key that is absent. The tracked file is left **staged**, never committed,
+because whether those keys belong in a commit is yours to decide; the gitignored
+`instance.config.local.json` is written in place. A clean pair prints nothing at all.
+
 ### The `plugin/seed/` row: the five seed verdicts
 
 The `plugin/seed/` row is the one you cannot automate blindly, so the script judges each seed

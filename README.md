@@ -512,6 +512,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `init-bundle.sh` | `<dir>` — creates or refreshes a bundle, and converts one stamped by the retired `/ai-bridge:init`: seed content copied where absent, machinery links removed, `repos/` linked. `--config` links the `~/.claude` layer instead | yes, that bundle |
 | `refresh-seeds.sh` | `<dir>` — 3-way merges a seed change this repo made since the bundle was stamped; a hand-diverged file is reported, never forced, and its conflicted merge is saved as `.bak.<epoch>` | only with `--apply` |
 | `validate-bundle.sh` | schema errors + dangling frontmatter references | no |
+| `normalise-config.sh` | `<dir>` — reports what is out of place across the two config files: MISPLACED (a per-machine key in the tracked `instance.config.json`, or a tracked-only key such as `defaultOwner` in `instance.config.local.json`), MISSING (a seed key the tracked file lacks) and ORDER. Values are never changed — only placed, ordered, or added when absent — and the tracked file is left **staged**, never committed. Run by every `/ai-bridge:init` stamp | only with `--apply` |
 | `migrate-bundle.sh` | mechanical schema repairs | only with `--apply` |
 | `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
 | `reclaim-worktree.sh` | removes **one** task's worktree, named by the task itself; refuses unless every guard passes | yes, that one path |
