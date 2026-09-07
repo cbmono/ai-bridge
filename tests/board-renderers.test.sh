@@ -834,6 +834,50 @@ need = ['thead{display:none}', 'tr{display:flex;flex-wrap:wrap',
         '.tabwrap{flex-wrap:nowrap']
 sys.exit(0 if body and all(n in body for n in need) else 1)")"
 
+echo "== the handoff's measurements, one assertion per number =="
+# EVERY SIZE IN README §1–§2, read back off the sheet. A redesign whose numbers live
+# only in a source document is a redesign that drifts on the first edit; these are the
+# values the artboards were drawn at, so a changed one has to be changed here too.
+sized() { # <label> <literal css>
+  assert "$1" "$(fhas "$2" "$SLATE")"
+}
+sized "header title 23px/700"            'h1{font-size:23px;font-weight:700;'
+sized "snapshot line 14px"               '.sub{color:var(--muted);margin:6px 0 0;font-size:14px}'
+sized "stat number 21px/700"             '.tally dd{order:1;margin:0;font:700 21px/1.25'
+sized "stat label 12px"                  '.tally dt{order:2;font-size:12px;'
+sized "tab pill 13px, 6px 16px, 999px"   'font:500 13px/1 "IBM Plex Sans",sans-serif;padding:6px 16px;border-radius:999px;'
+sized "toggle 999px with 3px padding"    'border-radius:999px;padding:3px;flex-shrink:0}'
+sized "project card 14px radius"         '.proj{background:var(--surface);border:1px solid var(--line);border-radius:14px}'
+sized "collapsed row 15px 20px padding"  'padding:15px 20px;list-style:none;border-radius:14px}'
+sized "project title 15px/600"           '.ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto;min-width:0;font-size:15px;'
+sized "project date 13px"                '.pdate{font-size:13px;color:var(--dim);'
+sized "count summary 13px"               '.counts{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;align-items:center;
+  font-size:13px;'
+sized "needs-you pill 6px 14px, 999px"   'padding:6px 14px;border-radius:999px;margin-left:8px}'
+sized "finished divider 12px/600 .08em"  '.sep{font-size:12px;text-transform:uppercase;letter-spacing:.08em;'
+sized "decision rail 12px radius, 16px"  'border-left:4px solid var(--signal);border-radius:12px;padding:16px;'
+sized "rail label 11px/700 uppercase"    '.rail h2{margin:0;font:700 11px/1.4 "IBM Plex Sans",sans-serif;text-transform:uppercase;
+  letter-spacing:.1em;'
+sized "decision card 10px radius"        'border:1px solid var(--line);border-radius:10px}'
+sized "decision card 14px 16px padding"  '.ask{display:flex;flex-direction:column;padding:14px 16px;'
+sized "verb mono 11px/600 uppercase"     '.verb{font:600 11px/1.5 "IBM Plex Mono",ui-monospace,monospace;text-transform:uppercase;'
+sized "card title 15px/600, 1.45 lh"     '.what{width:100%;font-size:15px;font-weight:600;line-height:1.45;'
+sized "breadcrumb 13px"                  '.where{width:100%;font-size:13px;color:var(--muted);'
+sized "action button 9px 16px, 9px"      'border-radius:9px;
+  padding:9px 16px;'
+sized "task id mono 11px"                '.tid{color:var(--dim);font-size:11px;'
+sized "task title 14px"                  '.tbtn{background:none;border:0;padding:0;font:400 14px/1.4'
+sized "state 12px/600"                   '.state{font-size:12px;font-weight:600;'
+sized "depends-on mono 12px"             'button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;'
+sized "Q chip 5px radius"                'border:0;border-radius:5px;padding:2px 8px;'
+sized "PR ref 13px in the activity blue" 'td a{color:var(--accent);text-decoration:none;'
+sized "row 18px column gap, 12px rows"   'gap:0 18px;
+  align-items:center;padding:12px 4px;border-top:1px solid var(--line)}'
+# EVERY ACTION IS VISIBLE ON DESKTOP — no overflow menu, stated as the absence of one
+# and as the presence of the wrap that replaces it.
+assert "the action row wraps rather than collapsing" "$(fhas '.acts{display:flex;flex-wrap:wrap;gap:8px;' "$SLATE")"
+assert "…and no overflow control is rendered"        "$(fhasnt 'data-what="More"' "$SLATE")"
+
 echo "== the page still renders from SNAPSHOT.json alone, and stays escaped =="
 # The hostile instance renders through the SAME new markup: a title carrying ESC, a
 # newline, a tab and a bidi override reaches the tab row's neighbours and the pill, and
