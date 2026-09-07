@@ -23,6 +23,12 @@ push-early, conventional commits, **commit attribution** (your brief's
 setting `status`, no PII/secrets, and capturing
 `Finding`s. The steps below are the software-engineering specifics layered on top.
 
+**`git push --force-with-lease` always names its remote and branch — never bare.**
+A bare form has no refspec, so `deny-destructive.sh` falls back to inferring the
+destination from `$CWD`, which is wrong when you are not cd'ed into your own
+worktree and gets the push refused. Run `git push --force-with-lease origin
+<branch>`.
+
 ## Procedure
 
 1. **Read the task** (frontmatter + `# Context` + `acceptance_criteria`). Set its
