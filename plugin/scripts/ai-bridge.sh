@@ -549,8 +549,8 @@ fix_bundle_unconverted() {
     note "NOT stamped: $BIN/init-bundle.sh is missing — re-install the plugin"
     return 0
   fi
+  # The stamp inherits AI_BRIDGE_INIT_PASS and runs no pass — one extra stamp, never a loop.
   note "running: bash $BIN/init-bundle.sh $ROOT"
-  # The stamp INHERITS AI_BRIDGE_INIT_PASS and runs no second pass — that is the anti-loop.
   bash "$BIN/init-bundle.sh" "$ROOT" 2>&1 | sed 's/^/      /'
   return 0
 }
