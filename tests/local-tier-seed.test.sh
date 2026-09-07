@@ -171,9 +171,14 @@ ok "…for a second role on another tier too" "$(brow cataloguer)" local
 # Not moved, and deliberately so — the owner did not ask for it.
 ok "maxAgentsInFlight is NOT in the local file" "$(jget "$LC" maxAgentsInFlight)" -
 ok "…and still resolves from the tracked one"  "$(FROM "$I" maxAgentsInFlight)" tracked
-# A first non-TTY stamp asks no roster, so the file this created holds spend and nothing
-# else — no identity was invented for a human who was never asked.
-ok "no ownerGithubUser was invented"       "$(jget "$LC" ownerGithubUser)" -
+# A first non-TTY stamp asks no roster, so any identity in the file was DERIVED on this
+# machine and never invented — the same value the derivation itself answers with, or the
+# key absent when nothing here answers. The rest of that contract is
+# tests/init-local-config.test.sh; this row only keeps the spend seed honest about it.
+want="$( { command -v gh >/dev/null 2>&1 && gh api user --jq .login 2>/dev/null; } || true )"
+[ -n "$want" ] || want="$(git config --get github.user 2>/dev/null || true)"
+[ -n "$want" ] || want="-"
+ok "ownerGithubUser is derived, not invented" "$(jget "$LC" ownerGithubUser)" "$want"
 ok "…and the file is gitignored"           "$(yn grep -qxF 'instance.config.local.json' "$I/.gitignore")" yes
 
 # =========================================================================== #

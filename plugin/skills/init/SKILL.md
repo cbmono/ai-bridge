@@ -1,7 +1,7 @@
 ---
 name: init
 description: Create a new AI Bridge bundle, refresh an existing one, or convert a symlink-era bundle in place. Data only — a bundle it stamps carries no machinery and no link into any checkout.
-argument-hint: "<dir>  [--refresh-seeds] [--with-objectives] [--normalise-config]"
+argument-hint: "<dir>  [--refresh-seeds] [--with-objectives] [--normalise-config] [--owner L] [--email A] [--repos-root D]"
 disable-model-invocation: true
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
@@ -13,7 +13,9 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh $ARGUMENTS
 ```
 
 `$ARGUMENTS` is the bundle directory, optionally followed by `--refresh-seeds`,
-`--with-objectives` or `--normalise-config`. No directory means the current one. That is the whole skill: every
+`--with-objectives`, `--normalise-config`, or one of `--owner <login>` / `--email
+<address>` / `--repos-root <dir>` (see "When it says `needs`"). No directory means the
+current one. That is the whole skill: every
 decision, every guard and every line of output lives in the script, so a human running it
 in a terminal and a session running it here get the same answer, and there is no second
 copy here to drift.
@@ -43,6 +45,19 @@ batched prompt, nothing written until it is confirmed. **Not at a terminal — a
 tick, a script — it skips and prints how to set the three values by hand.** Never on a
 refresh, and never over a value already there.
 
+## When it says `needs`, ask once and re-run
+
+A clone with no `instance.config.local.json` gets one written: the script **derives**
+`ownerGithubUser`, `authorEmail` and `reposRoot` and prints what it wrote. Anything it
+could not derive it prints as a `needs` line naming the key and its flag.
+
+- **Ask the human only for the keys on `needs` lines — one batched question, all of them
+  at once.** Never ask for a value the script derived and printed; it already has it.
+- Then re-run the same command with the flags for exactly those keys, e.g.
+  `bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh <dir> --owner <login> --email <address>`.
+- **No `needs` line means nothing to ask.** A bundle whose local file already exists is
+  left alone — the script says so — and the flags do not apply to it.
+
 ## What you must not do with the output
 
 - **Do not act on a line it declined to act on.** A `stale` line names retired content
@@ -57,8 +72,8 @@ refresh, and never over a value already there.
 
 ## Afterwards
 
-`instance.config.json` needs the group's `org`, and `instance.config.local.json` needs
-this machine's `reposRoot`, before anything else works.
+`instance.config.json` needs the group's `org` before anything else works;
+`instance.config.local.json` is written for you, from what the machine already knows.
 Then `/ai-bridge:welcome` for the banner, and `/ai-bridge:dispatch` for the loop.
 **Run this command again after every plugin update** — it is the one that brings a
 bundle up to the installed plugin.

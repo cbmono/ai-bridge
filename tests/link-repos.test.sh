@@ -186,8 +186,11 @@ for r in repoA repoB; do mkdir -p "$TMP/group/$r/.git"; done
 inst="$TMP/group/_ai-bridge-grp"; mkdir -p "$inst"
 ( cd "$inst" && git init -q . ) 2>/dev/null
 bash "$BRIDGE_INSTALL" "$inst" >/dev/null 2>&1
-ok "first stamp: no view yet (config is a placeholder)" \
-  "$([ -e "$inst/repos" ] && echo created || echo none)" none
+# The stamp DERIVES reposRoot from the bundle's parent (init-bundle.sh 4c), and this
+# fixture's bundle sits beside the group's repos — which is the documented layout — so the
+# view is built on the FIRST stamp now, with nothing configured by hand.
+ok "first stamp derives reposRoot and links the view" \
+  "$( ( cd "$inst/repos" && ls -A | sort | paste -sd, - ) )" "repoA,repoB"
 ok "first stamp gitignores the view up front" \
   "$(grep -cE '^/repos/$' "$inst/.gitignore")" "1"
 

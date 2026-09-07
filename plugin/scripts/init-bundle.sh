@@ -8,6 +8,9 @@
 #     init-bundle.sh --refresh-seeds [TARGET]  # accepted and ignored — always applied now
 #     init-bundle.sh --with-objectives [TARGET]  # also create the OPTIONAL objectives/ dir
 #     init-bundle.sh --normalise-config [TARGET]  # also APPLY the config findings it reports
+#     init-bundle.sh --owner LOGIN --email ADDR --repos-root DIR [TARGET]
+#                                       # supply any of this clone's three per-machine
+#                                       # identity values instead of deriving them (4c)
 #     init-bundle.sh --config           # link config/required/ into ~/.claude (CLAUDE_CONFIG_DIR wins)
 #     init-bundle.sh --uninstall [TARGET]  # remove the repos/ view and any legacy machinery links
 #     init-bundle.sh --config --uninstall   # remove only the config-layer symlinks this created
@@ -42,6 +45,10 @@
 #      `instance.config.local.json`. One batched prompt; nothing is written until you
 #      confirm it. Skipped (with the instruction printed) when stdin is not a terminal,
 #      never asked on a refresh, and it never overwrites a value already there.
+#   5b. WRITES `instance.config.local.json` when it is ABSENT — this clone's identity,
+#      DERIVED (`gh api user`, the tracked `people` map, the bundle's parent directory)
+#      and never guessed: what it cannot derive it names, and --owner/--email/--repos-root
+#      supply it without a terminal. An existing local file is never rewritten here.
 #   6. Reports seed DRIFT — a seed doc this repo has changed since the bundle was stamped
 #      — via refresh-seeds.sh, report-only unless `--refresh-seeds` is given.
 #
@@ -122,7 +129,16 @@ TARGET=""
 REFRESH_SEEDS=0
 WITH_OBJECTIVES=0
 NORMALISE_CONFIG=0
-for arg in "$@"; do
+# This clone's three per-machine identity values, when the caller supplies them instead of
+# letting step 4c derive them. Empty means "derive it"; the values are validated there,
+# where the validators live, and a rejected one is REPORTED rather than silently derived.
+ID_OWNER_FLAG=""
+ID_EMAIL_FLAG=""
+ID_REPOS_FLAG=""
+# A while/shift loop rather than `for arg in "$@"`, because three of these flags take a
+# value. Both spellings are accepted: `--owner x` and `--owner=x`.
+while [ "$#" -gt 0 ]; do
+  arg="$1"
   case "$arg" in
     --uninstall) MODE="uninstall" ;;
     # ACCEPTED AND IGNORED, for one release. The seed merge is part of every refresh now
@@ -147,13 +163,25 @@ for arg in "$@"; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/config-layer.test.sh asserts the flags appear in the output, which is
       # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,60p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,67p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
+    --owner|--email|--repos-root)
+      [ "$#" -ge 2 ] || { echo "error: $arg needs a value" >&2; exit 2; }
+      case "$arg" in
+        --owner)      ID_OWNER_FLAG="$2" ;;
+        --email)      ID_EMAIL_FLAG="$2" ;;
+        --repos-root) ID_REPOS_FLAG="$2" ;;
+      esac
+      shift ;;
+    --owner=*)      ID_OWNER_FLAG="${arg#*=}" ;;
+    --email=*)      ID_EMAIL_FLAG="${arg#*=}" ;;
+    --repos-root=*) ID_REPOS_FLAG="${arg#*=}" ;;
     -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
     *)
       [ -z "$TARGET" ] || { echo "error: multiple target directories given" >&2; exit 2; }
       TARGET="$arg" ;;
   esac
+  shift
 done
 if [ "$LAYER" = "config" ] && [ -n "$TARGET" ]; then
   echo "error: --config takes no target directory (it links into" >&2
@@ -2148,7 +2176,203 @@ if [ "${team_state:-}" = write ]; then
 fi
 
 # ===========================================================================
-# 4c. PER-MACHINE SPEND — seed `models` and `roleTiers` into the local file.
+# 4c. THIS CLONE'S IDENTITY — write instance.config.local.json when it is ABSENT.
+# ===========================================================================
+#
+# WHY A SECOND BLOCK AND NOT 4b. A clone of a shared bundle is not a FIRST stamp, so 4b's
+# roster prompt never runs there and every second human hand-wrote the same three keys
+# (docs/sharing.md). All three are knowable on the machine running this, so they are
+# DERIVED — and a value that cannot be derived is NAMED on a `needs` line, never guessed.
+# `--owner/--email/--repos-root` supply one without a terminal, which is how
+# /ai-bridge:init hands a human's answer back to this script.
+#
+# ABSENT ONLY, and that is the whole guard: an existing local file is somebody's config,
+# 4e's normaliser owns its shape, and a file already carrying the three keys makes this
+# step print nothing at all.
+ID_LCFG="$TARGET/instance.config.local.json"
+ID_NOTE="Per-machine overrides for THIS clone -- gitignored, never committed. Which GitHub login this clone is, what each model tier costs THIS human, plus any absolute path or address that cannot be right on both machines. See SCHEMA.md, 'Per-machine config overrides'."
+
+id_manual_note() {
+  echo "        Set them by hand instead (SCHEMA.md → 'Per-machine config overrides'):"
+  echo "          instance.config.local.json  { \"ownerGithubUser\": \"<login>\","
+  echo "                                        \"authorEmail\": \"<address>\","
+  echo "                                        \"reposRoot\": \"<absolute path>\" }"
+}
+# One string value out of a flat JSON file.
+id_read() { # <key> <file>
+  sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$2" | head -n1
+}
+# What the TRACKED config already answers for one of the three keys. A value a human put
+# there is never shadowed by a derived one — local wins over tracked, so writing a guess
+# here would silently override their answer and leave 4e's normaliser nothing to move.
+# The seed's own example.com address is a placeholder, not an answer.
+id_tracked() { # <key>
+  [ -f "$TEAM_CFG" ] || return 0
+  local v; v="$(id_read "$1" "$TEAM_CFG")"
+  case "$v" in *@example.com) v="" ;; esac
+  printf '%s' "$v"
+}
+# A path this can write into a JSON string, and that the readers will accept: absolute,
+# and free of the three characters that would need escaping.
+id_valid_path() { # <value>
+  case "$1" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  case "$1" in
+    *'"'*|*'\'*|*'
+'*) return 1 ;;
+  esac
+  return 0
+}
+
+if [ -e "$ID_LCFG" ]; then
+  # Never rewritten. Only ever reported, so a clone that already has the file but not the
+  # keys still learns which ones are missing.
+  id_absent=""
+  for id_k in ownerGithubUser authorEmail reposRoot; do
+    grep -q "\"$id_k\"[[:space:]]*:" "$ID_LCFG" 2>/dev/null || id_absent="$id_absent $id_k"
+  done
+  if [ -n "$id_absent" ]; then
+    echo "  keep  instance.config.local.json (exists — left alone; it has no$id_absent)"
+    if [ -n "$ID_OWNER_FLAG$ID_EMAIL_FLAG$ID_REPOS_FLAG" ]; then
+      echo "        --owner/--email/--repos-root only apply when that file is absent."
+    fi
+  fi
+else
+  # ------------------------------------------------------------- derive, or report
+  # A flag wins over everything (the human said it), then a value the tracked file already
+  # answers with is left alone, and only what is left is derived.
+  id_answered=""
+  id_owner=""
+  if [ -n "$ID_OWNER_FLAG" ]; then
+    if team_valid_login "$ID_OWNER_FLAG"; then id_owner="$ID_OWNER_FLAG"
+    else echo "  warn  --owner '$ID_OWNER_FLAG' is not a GitHub username; not written." >&2
+    fi
+  elif [ -n "$(id_tracked ownerGithubUser)" ]; then
+    id_answered="$id_answered ownerGithubUser"
+  else
+    # gh first (it knows which account is authenticated), then the git config key a human
+    # may have set for the same purpose. Both are best-effort and neither may hang the
+    # stamp, so a failure of either is just an empty answer.
+    if command -v gh >/dev/null 2>&1; then
+      id_owner="$(gh api user --jq .login 2>/dev/null || true)"
+    fi
+    [ -n "$id_owner" ] || id_owner="$(git -C "$TARGET" config --get github.user 2>/dev/null || true)"
+    team_valid_login "$id_owner" || id_owner=""
+  fi
+
+  id_email=""
+  if [ -n "$ID_EMAIL_FLAG" ]; then
+    if team_valid_email "$ID_EMAIL_FLAG"; then id_email="$ID_EMAIL_FLAG"
+    else echo "  warn  --email '$ID_EMAIL_FLAG' is not an address this can write safely; not written." >&2
+    fi
+  elif [ -n "$(id_tracked authorEmail)" ]; then
+    id_answered="$id_answered authorEmail"
+  else
+    # The tracked `people` map first: that address says which ENTITY this instance's work
+    # belongs to, and is never derived from the login (docs/sharing.md).
+    if [ -n "$id_owner" ] && [ -f "$TEAM_CFG" ]; then
+      id_seg="$(team_people_segment "$TEAM_CFG")"
+      id_email="$(printf '%s' "$id_seg" \
+        | sed -n "s/.*\"$id_owner\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n1)"
+    fi
+    [ -n "$id_email" ] || id_email="$(git -C "$TARGET" config --get user.email 2>/dev/null || true)"
+    team_valid_email "$id_email" || id_email=""
+  fi
+
+  id_repos=""
+  if [ -n "$ID_REPOS_FLAG" ]; then
+    if id_valid_path "$ID_REPOS_FLAG"; then id_repos="$ID_REPOS_FLAG"
+    else echo "  warn  --repos-root '$ID_REPOS_FLAG' is not an absolute path; not written." >&2
+    fi
+  elif [ -n "$(id_tracked reposRoot)" ]; then
+    id_answered="$id_answered reposRoot"
+  else
+    # The bundle's PARENT: the instance and the product repos are physical peers on disk
+    # (link-repos.sh), so the directory holding this bundle is reposRoot on every machine
+    # that follows the documented layout.
+    id_repos="$(cd "$TARGET/.." 2>/dev/null && pwd || true)"
+    id_valid_path "$id_repos" || id_repos=""
+    [ "$id_repos" != "$TARGET" ] || id_repos=""
+  fi
+
+  # ------------------------------------------------------------- no verifier, no write
+  id_write=yes
+  id_vrc=0
+  team_json_ok "$TEAM_CFG" >/dev/null 2>&1 || id_vrc=$?
+  if [ "$id_vrc" = 2 ]; then
+    id_write=no
+    echo "  skip  instance.config.local.json (neither jq nor python3 here, so a write"
+    echo "        could not be verified)."
+    id_manual_note
+  elif [ -z "$id_owner$id_email$id_repos" ]; then
+    id_write=no
+    # Silent when the tracked file answers all three: there is nothing to derive and
+    # nothing missing, which is not a skip worth a line.
+    if [ "$(printf '%s\n' $id_answered | grep -c . || true)" != 3 ]; then
+      echo "  skip  instance.config.local.json (none of the three values could be derived here)."
+      id_manual_note
+    fi
+  fi
+
+  if [ "$id_write" = yes ]; then
+    id_pairs="$(mktemp "${TMPDIR:-/tmp}/ai-bridge-local.XXXXXX")"
+    [ -z "$id_owner" ] || printf '  "ownerGithubUser": "%s"\n' "$id_owner" >> "$id_pairs"
+    [ -z "$id_email" ] || printf '  "authorEmail": "%s"\n' "$id_email" >> "$id_pairs"
+    [ -z "$id_repos" ] || printf '  "reposRoot": "%s"\n' "$id_repos" >> "$id_pairs"
+    # Temp file BESIDE the target, for the reason 4b states: a rename out of $TMPDIR
+    # carries mktemp's 0600, and a cross-filesystem mv is copy-and-remove.
+    id_tmp="$ID_LCFG.tmp.$$"
+    {
+      echo "{"
+      printf '  "$schema": "%s",\n' "$ID_NOTE"
+      awk 'NR > 1 { print prev "," } { prev = $0 } END { if (NR) print prev }' "$id_pairs"
+      echo "}"
+    } > "$id_tmp"
+    rm -f "$id_pairs"
+
+    # Parsed back and read back BEFORE it lands: a file can parse perfectly and still be
+    # missing the pair we claim to have written (migrate-bundle.sh's recorded incident).
+    id_ok=yes
+    team_json_ok "$id_tmp" || id_ok=no
+    for id_k in ownerGithubUser:"$id_owner" authorEmail:"$id_email" reposRoot:"$id_repos"; do
+      id_want="${id_k#*:}"; [ -n "$id_want" ] || continue
+      [ "$(id_read "${id_k%%:*}" "$id_tmp")" = "$id_want" ] || id_ok=no
+    done
+    if [ "$id_ok" != yes ] || ! mv "$id_tmp" "$ID_LCFG"; then
+      rm -f "$id_tmp"
+      echo "error: instance.config.local.json did not verify, so nothing was written." >&2
+      id_manual_note >&2
+    else
+      id_said=""
+      [ -z "$id_owner" ] || id_said="ownerGithubUser: $id_owner"
+      [ -z "$id_email" ] || id_said="${id_said:+$id_said, }authorEmail: $id_email"
+      [ -z "$id_repos" ] || id_said="${id_said:+$id_said, }reposRoot: $id_repos"
+      echo "  wrote instance.config.local.json ($id_said)"
+      # reposRoot only became readable now, so step 4 above had nothing to link.
+      if [ -n "$id_repos" ]; then
+        ( cd "$TARGET" && bash "$BIN_DIR/link-repos.sh" ) \
+          || echo "  warn  repos/ view not refreshed; run /ai-bridge:init again" >&2
+      fi
+    fi
+  fi
+
+  # What it could NOT derive, named one key at a time. `needs` is the marker
+  # /ai-bridge:init reads: one batched question for exactly these, then re-run with the
+  # flags. Never a guess, and never a question about a value that was derived.
+  id_needs() { # <key> <value> <flag>
+    [ -z "$2" ] || return 0
+    case " $id_answered " in *" $1 "*) return 0 ;; esac
+    echo "  needs  $1 — re-run with: $3"
+  }
+  id_needs ownerGithubUser "$id_owner" "--owner <github-login>"
+  id_needs authorEmail     "$id_email" "--email <commit-address>"
+  id_needs reposRoot       "$id_repos" "--repos-root <absolute path>"
+fi
+
+# ===========================================================================
+# 4d. PER-MACHINE SPEND — seed `models` and `roleTiers` into the local file.
 # ===========================================================================
 #
 # WHY THE INSTALLER WRITES THEM AT ALL. These two keys decide what every dispatched
@@ -2366,7 +2590,7 @@ EOF
 fi
 
 # ===========================================================================
-# 4d. THE TWO CONFIG FILES — report what is out of place, apply when asked.
+# 4e. THE TWO CONFIG FILES — report what is out of place, apply when asked.
 # ===========================================================================
 #
 # Nothing else looks at both files together: the validator sees no error here, and a

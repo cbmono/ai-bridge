@@ -140,7 +140,13 @@ BANNER="$(CLAUDE_PROJECT_DIR="$FRESH" bash "$REPO/plugin/hooks/session-banner.sh
 ok "the welcome banner prints"           "$([ -n "$BANNER" ] && echo yes || echo no)" yes
 ok "…and raises no machinery alarm"      "$(printf '%s' "$BANNER" | grep -c 'MACHINERY SYMLINKS' | tr -d ' ')" 0
 ok "the roster prompt is skipped with no tty" "$(grep -c 'stdin is not a terminal' "$TMP/fresh.out" | tr -d ' ')" 1
-ok "…and says how to set the three values by hand" "$(grep -c 'ownerGithubUser' "$TMP/fresh.out" | tr -d ' ')" 1
+# The roster note's own placeholder, not a bare `ownerGithubUser`: step 4c now reports the
+# identity it DERIVED, and that line names the key too.
+ok "…and says how to set the three values by hand" "$(grep -c '<your-login>' "$TMP/fresh.out" | tr -d ' ')" 1
+# …and the clone's own per-machine file is written for it, with the one value that is
+# derivable on any machine (the bundle's parent). Login and address depend on the host.
+ok "…while this clone's local config is written" "$(yn test -f "$FRESH/instance.config.local.json")" yes
+ok "…carrying the derived reposRoot"     "$(grep -c '"reposRoot"' "$FRESH/instance.config.local.json" | tr -d ' ')" 1
 # IDEMPOTENT, and the queue's off switch survives it: AWAITING.md is created on a FIRST
 # stamp only, so a deletion must be permanent.
 rm -f "$FRESH/AWAITING.md"
