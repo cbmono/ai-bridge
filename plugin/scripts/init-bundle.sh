@@ -5,7 +5,7 @@
 #   Usage:
 #     init-bundle.sh [TARGET]           # create/refresh a bundle at TARGET (default: cwd)
 #     init-bundle.sh --instance [TARGET]  # the same thing, stated explicitly
-#     init-bundle.sh --refresh-seeds [TARGET]  # also APPLY the seed 3-way merge
+#     init-bundle.sh --refresh-seeds [TARGET]  # accepted and ignored — always applied now
 #     init-bundle.sh --with-objectives [TARGET]  # also create the OPTIONAL objectives/ dir
 #     init-bundle.sh --normalise-config [TARGET]  # also APPLY the config findings it reports
 #     init-bundle.sh --config           # link config/required/ into ~/.claude (CLAUDE_CONFIG_DIR wins)
@@ -125,11 +125,8 @@ NORMALISE_CONFIG=0
 for arg in "$@"; do
   case "$arg" in
     --uninstall) MODE="uninstall" ;;
-    # APPLY the seed 3-way merge as part of this run, instead of only reporting it.
-    # Off by default for refresh-seeds.sh's own reason: a merge writes into files the
-    # bundle OWNS, and a stamp that is safe to run blindly is one that only seeds what is
-    # absent. `/ai-bridge:welcome fix` and `/ai-bridge:init --refresh-seeds` are the two
-    # ways to ask for the write.
+    # ACCEPTED AND IGNORED, for one release. The seed merge is part of every refresh now
+    # (step 5), so a saved command line does not become a fatal "unknown argument".
     --refresh-seeds) REFRESH_SEEDS=1 ;;
     # `objectives/` is the OPTIONAL layer (SCHEMA.md -> type: Objective), so the seed
     # ships none and this flag is how a bundle that wants one asks for it.
@@ -1447,6 +1444,20 @@ if ! grep -qE '^/?\.tick-state$' "$gi"; then
 GI
 fi
 
+# The copies refresh-seeds.sh keeps — its own guard, the .tick-lock.claim lesson again:
+# every bundle in existence satisfies the guards above, so a line added to one of their
+# heredocs reaches nobody.
+if ! grep -qE '^/?\.ai-bridge/refresh/?$' "$gi"; then
+  cat >> "$gi" <<'GI'
+
+# Copies refresh-seeds.sh keeps when it merges a seed change in — the file it replaced,
+# and any merge it could not resolve, with its conflict markers. Derived and per-machine;
+# delete it freely. (`.ai-bridge/seed-base/` beside it IS tracked — it is the merge base
+# this bundle was stamped from, and it is the same on every clone.)
+/.ai-bridge/refresh/
+GI
+fi
+
 # The board page (/board.html) is DERIVED again, so it is ignored again. This block used
 # to append the opposite line — `!/board.html` — for the era when the tick committed the
 # page; a derived path every clone re-renders and pushes is contended on every tick, and
@@ -2440,20 +2451,27 @@ fi
 # `seed/` is copied ONLY when a path is absent, which is what makes this script safe to
 # run blindly on a repo full of somebody's work — and the price is that a later seed edit
 # never reaches a bundle already stamped. That was `upgrade.sh`'s whole job. It is
-# `refresh-seeds.sh` now, it ships beside this file in the plugin, and it is REPORT-ONLY
-# here unless `--refresh-seeds` was given: a 3-way merge writes into files the bundle
-# owns, and spending this script's blind-re-run safety to save one flag would be a bad
-# trade. `/ai-bridge:welcome fix` is the other way to ask for the write.
+# `refresh-seeds.sh` now, it ships beside this file in the plugin, and it APPLIES: it
+# never resolves a conflict by force, it keeps every copy it makes out of the bundle tree,
+# and the classes it decides for itself have one right answer on every bundle.
 #
 # Non-fatal on every path. A template with no git history, a bundle that is not a
 # checkout, an absent helper — all of them report and none of them fails the stamp.
-# Skipped on a FIRST stamp: everything was just copied, so nothing can have drifted, and a
-# full "0 portable, 0 conflicting" report is the wallpaper this machinery is written against.
-if [ "$FIRST_STAMP" = no ] && [ -f "$BIN_DIR/refresh-seeds.sh" ]; then
-  if [ "$REFRESH_SEEDS" -eq 1 ]; then
+# Skipped on a FIRST stamp: everything was just copied, so nothing can have drifted.
+#
+# AND IT IS THE WELCOME CHECK-AND-FIX PASS, NOT THE SEED REFRESH ALONE. A bundle used to
+# be brought up to the installed plugin by two commands in an order nobody could derive —
+# this stamp, then `/ai-bridge:welcome fix`. One command does it now: the pass runs the
+# same rows, the same tiers and the same refusals (config files and tick locks are
+# reported, never written), and `AI_BRIDGE_INIT_PASS=1` is what tells it not to answer an
+# unconverted bundle by re-entering this script.
+[ "$REFRESH_SEEDS" -eq 0 ] || REFRESH_SEEDS=0   # read and dropped — see the flag above
+if [ "$FIRST_STAMP" = no ]; then
+  if [ -f "$BIN_DIR/ai-bridge.sh" ]; then
+    echo
+    AI_BRIDGE_INIT_PASS=1 bash "$BIN_DIR/ai-bridge.sh" fix --instance "$TARGET" || true
+  elif [ -f "$BIN_DIR/refresh-seeds.sh" ]; then
     bash "$BIN_DIR/refresh-seeds.sh" "$TARGET" --apply || true
-  else
-    bash "$BIN_DIR/refresh-seeds.sh" "$TARGET" || true
   fi
 fi
 

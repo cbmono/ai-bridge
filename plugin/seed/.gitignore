@@ -87,3 +87,10 @@ instance.config.local.json
 # stamp. The machinery ships in the ai-bridge PLUGIN now — per machine, not per
 # bundle — so there is nothing here to ignore. A bundle stamped under the old design
 # still has the block; /ai-bridge:init RETIRES it, markers and all, on the next stamp.
+
+# Copies refresh-seeds.sh keeps when it merges a seed change in — the file it replaced,
+# and any merge it could not resolve, with its conflict markers. Derived and per-machine:
+# nothing in the bundle tree ever carries a conflict marker, and nothing here needs
+# committing. Delete it freely. (`.ai-bridge/seed-base/` beside it IS tracked — it is the
+# merge base this bundle was stamped from, and it is the same on every clone.)
+/.ai-bridge/refresh/

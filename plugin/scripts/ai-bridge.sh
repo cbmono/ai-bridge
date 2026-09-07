@@ -4,7 +4,13 @@
 #
 #   ai-bridge.sh                      reprint the SessionStart banner
 #   ai-bridge.sh check  [flags]       report the state of this instance
-#   ai-bridge.sh fix    [flags]       act on the idempotent tier ONLY, print the rest
+#   ai-bridge.sh fix    [flags]       RETIRED — points at /ai-bridge:init and exits 0
+#
+# `fix` MOVED TO `/ai-bridge:init`, WHICH IS NOW THE ONE COMMAND AFTER A PLUGIN UPDATE.
+# A bundle was brought up to date by two commands in an order nobody could derive: init
+# stamped the seed, welcome fix repaired the rest. init runs this file's check-and-fix
+# pass itself now (`AI_BRIDGE_INIT_PASS=1`, same tiers, same refusals), so this form
+# prints where to go and exits 0 for one release before it is removed.
 #
 # WHAT THIS IS NOT, because the rejected shape is the one that keeps getting proposed. It
 # does NOT load rules into context. `CLAUDE.md` is injected into every turn and the banner
@@ -542,6 +548,12 @@ EOF
 # `.gitignore` block. It never removes bundle content and never overwrites a file the
 # bundle owns. That is what makes re-running it the idempotent repair rather than a risk.
 fix_bundle_unconverted() {
+  # NEVER FROM INSIDE A STAMP. init runs this pass itself, and a stamp that answered a
+  # still-unconverted bundle by stamping again would not terminate.
+  if [ "${AI_BRIDGE_INIT_PASS:-}" = 1 ]; then
+    note "NOT re-stamped: this pass is running inside /ai-bridge:init already."
+    return 0
+  fi
   if [ ! -f "$BIN/init-bundle.sh" ]; then
     note "NOT stamped: $BIN/init-bundle.sh is missing — re-install the plugin"
     return 0
@@ -573,13 +585,13 @@ check_seed_drift() {
   fi
   local report drift unknown
   report="$(bash "$BIN/refresh-seeds.sh" "$ROOT" 2>/dev/null || true)"
-  drift="$(printf '%s\n' "$report" | grep -E '^  (PORTABLE|CONFLICT) ' || true)"
+  drift="$(printf '%s\n' "$report" | grep -E '^  (PORTABLE|DECIDABLE|CONFLICT) ' || true)"
   unknown="$(printf '%s\n' "$report" | grep -cE '^  UNKNOWN ' || true)"
   if [ -n "$drift" ]; then
     _warned=1
     warn "seed documents have drifted from this template — a stamp cannot deliver a seed edit"
     printf '%s\n' "$drift" | sed 's/^  /    /'
-    hint "/ai-bridge:welcome fix   (3-way merges the portable ones; conflicts stay yours)"
+    hint "/ai-bridge:init $ROOT   (3-way merges what it can; conflicts stay yours)"
   else
     good "seed documents are in step with this template — nothing to port"
   fi
@@ -1174,6 +1186,13 @@ fi
 # `config-uncommitted` is; it reads the tier the row declares and dispatches on that alone.
 # The two ship-blockers therefore hold by construction rather than by care: there is no
 # branch here that could be pointed at a config file or a lock file.
+#
+# ONE CALLER LEFT: `/ai-bridge:init`, which sets AI_BRIDGE_INIT_PASS=1. Typed by a human
+# it prints where the command went and exits 0 — a pointer for one release, not a failure.
+if [ "${AI_BRIDGE_INIT_PASS:-}" != 1 ]; then
+  echo "ai-bridge fix has moved into /ai-bridge:init — run that instead; it stamps the bundle and then runs this same pass."
+  exit 0
+fi
 echo "ai-bridge fix — acting ONLY on the idempotent tier."
 echo "                Config files and tick locks are NEVER written, reverted, staged,"
 echo "                cleared or rewritten by this command. They are reported."

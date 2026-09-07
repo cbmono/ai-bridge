@@ -5,6 +5,7 @@
 #   Usage: refresh-seeds.sh <bundle-dir>              # report what has drifted (default)
 #          refresh-seeds.sh <bundle-dir> --apply      # 3-way merge the safe ones
 #          refresh-seeds.sh <bundle-dir> --no-deepen  # never fetch, even a shallow source
+#          refresh-seeds.sh --list-decidable          # the decidable conflict classes
 #
 # WHY THIS EXISTS, AND WHY IT IS A MERGE RATHER THAN A COPY.
 # `init-bundle.sh` copies `seed/` into a bundle **only if absent**, and that asymmetry is
@@ -28,8 +29,14 @@
 #     size is used as a best-effort merge base and the seed's own change is applied ON TOP
 #     of the bundle's edits (`git merge-file`, i.e. a real 3-way merge, never a copy).
 #     Clean ⇒ portable, and the hand edits survive by construction. Conflicting ⇒ reported
-#     with the diff, the file is NOT touched, and under `--apply` the conflicted merge is
-#     saved beside it as `<file>.bak.<epoch>` so the markers are there to read.
+#     with the diff and NOT touched, unless it is one of the DECIDABLE classes below.
+#   · A DECIDABLE conflict — one that recurs on every bundle with the same answer — is a
+#     rule, not a question. The `DECIDABLE` table below is one row per class and the rule
+#     that resolves it; `--apply` applies it and reports RESOLVED, naming the rule. A class
+#     not in the table is still a CONFLICT for the human.
+#   · NOTHING WITH CONFLICT MARKERS IS EVER WRITTEN INTO THE BUNDLE TREE. Every copy this
+#     script keeps goes under `.ai-bridge/refresh/<file>.<epoch>` — gitignored, out of the
+#     way of the bundle's own git status — and the report names the path.
 #   · `instance.config.json` / `instance.config.local.json` ⇒ NEVER merged, only reported.
 #     Config is the one seed file whose purpose is to diverge, and a value in it is
 #     routinely a decision somebody made minutes ago. Same reason `/ai-bridge:welcome` has
@@ -100,13 +107,13 @@
 #
 # REPORT-ONLY BY DEFAULT, like `migrate-bundle.sh` and `prune-worktrees.sh`. A default run
 # writes nothing at all. Read the report, then re-run with --apply — or reach it as
-# `/ai-bridge:welcome fix`, or `/ai-bridge:init <dir> --refresh-seeds`.
+# `/ai-bridge:init <dir>`, which runs the whole check-and-fix pass.
 #
 # Idempotent: a second run finds nothing to do. Refuses a directory that is not already a
 # bundle root — creating a NEW bundle is `init-bundle.sh`'s job, not a refresh.
 #
 # Bash + awk + git only — no jq, no python.
-# Verified by tests/upgrade.test.sh.
+# Verified by tests/upgrade.test.sh and tests/seed-conflict-resolution.test.sh.
 set -euo pipefail
 
 # The plugin root — ONE directory up from this script and then verified. Same rule as
@@ -121,6 +128,19 @@ PLUGIN_ROOT="$(cd "$BIN_DIR/.." 2>/dev/null && pwd || true)"
 SEED_SRC="$PLUGIN_ROOT/seed"
 DIFF_CAP="${UPGRADE_DIFF_LINES:-40}"   # lines of a conflicting diff to print inline
 
+# ------------------------------------------------------ the DECIDABLE conflict classes
+#
+# `<seed path>|<class>|<the rule that resolves it>`. One row per class of conflict that has
+# the same right answer on every bundle. Anything not named here stays a CONFLICT.
+DECIDABLE='knowledge/index.md|derived|derived from frontmatter — regenerated with build-kb-index.sh, never merged
+.gitignore|seed-managed-lines|conflicting hunks that touch only seed-managed lines take the seed side; every bundle-added line is kept'
+
+# The seed-managed .gitignore paths: derived files this machinery itself writes, so which
+# side ignores them is the plugin's answer and never the bundle's.
+SEED_MANAGED_IGNORE='board\.html|\.board-live/|AWAITING\.md|\.tick-lock|\.ai-bridge/'
+
+rule_for() { printf '%s\n' "$DECIDABLE" | awk -F'|' -v p="$1" '$1==p {print $3; exit}'; }
+
 APPLY=0
 DEEPEN=1
 TARGET=""
@@ -128,6 +148,9 @@ for arg in "$@"; do
   case "$arg" in
     --apply) APPLY=1 ;;
     --no-deepen) DEEPEN=0 ;;
+    --list-decidable)
+      printf '%s\n' "$DECIDABLE" | awk -F'|' '{printf "%s\t%s\t%s\n", $1, $2, $3}'
+      exit 0 ;;
     -h|--help)
       # Range covers the whole header block above. Extend it when you add lines
       # there, or --help truncates silently.
@@ -385,6 +408,45 @@ write_beside() { # <merged> <target-file>
   cat "$src" > "$t" && mv "$t" "$f"
 }
 
+# Keep a copy OUT of the bundle tree. A `.bak` beside the file — worse, one carrying
+# conflict markers — is something the human then has to notice, read and delete.
+KEEP_DIR="$TARGET/.ai-bridge/refresh"
+keep_aside() { # <file-to-copy> <seed-relative path> -> prints the kept path
+  local dest="$KEEP_DIR/$2.$(date +%s)"
+  mkdir -p "$(dirname "$dest")" 2>/dev/null || return 1
+  cp "$1" "$dest" 2>/dev/null || return 1
+  printf '%s\n' "$dest"
+}
+kept_already() { # <candidate content> <seed-relative path>
+  local k
+  for k in "$KEEP_DIR/$2".*; do
+    [ -f "$k" ] || continue
+    cmp -s "$1" "$k" && return 0
+  done
+  return 1
+}
+
+# `.gitignore`, class `seed-managed-lines`. Every conflicting hunk whose lines are all
+# blank, comment or a seed-managed path resolves to the seed's side; anything else makes
+# the whole file undecidable. Lines outside a hunk are the merge's own, so a bundle-added
+# ignore is kept by construction. Exit 1 ⇒ not decidable, and nothing is written.
+resolve_gitignore() { # <merged-with-markers> <out>
+  awk -v pat="$SEED_MANAGED_IGNORE" '
+    function managed(l) { return (l ~ /^[[:space:]]*$/ || l ~ /^[[:space:]]*#/ || l ~ pat) }
+    /^<<<<<<< / { blk=1; side=1; no=0; nt=0; next }
+    blk && /^=======$/ { side=2; next }
+    blk && /^>>>>>>> / {
+      for (i=1;i<=no;i++) if (!managed(o[i])) bad=1
+      for (i=1;i<=nt;i++) if (!managed(t[i])) bad=1
+      for (i=1;i<=nt;i++) print t[i]
+      blk=0; next
+    }
+    blk { if (side==1) o[++no]=$0; else t[++nt]=$0; next }
+    { print }
+    END { exit bad ? 1 : 0 }
+  ' "$1" > "$2"
+}
+
 report() { printf '  %-9s %s\n' "$1" "$2"; }
 detail() { printf '            %s\n' "$1"; }
 
@@ -398,7 +460,7 @@ seed_paths() {
     | grep -v '^bridge\.code-workspace$' | grep -v '\.gitkeep$'
 }
 
-insync=0; portable=0; ported=0; conflict=0; unknown=0
+insync=0; portable=0; ported=0; resolved=0; conflict=0; unknown=0
 while IFS= read -r rel; do
   [ -n "$rel" ] || continue
   seed_f="$SEED_SRC/$rel"; inst_f="$TARGET/$rel"
@@ -412,13 +474,27 @@ while IFS= read -r rel; do
   # by another door. It is REPORTED, with the diff to run, and never touched.
   case "$rel" in
     knowledge/index.md)
-      # DERIVED, NEVER PORTED. The KB index is regenerated from frontmatter (build-kb-index.sh,
-      # the tick), so the seed's stub is only the shape of an empty bundle: merging it onto a
-      # populated instance re-appends the stub on every run (measured 2026-09-07, proceso).
+      # DECIDABLE, class `derived`. The KB index is regenerated from frontmatter, so the
+      # seed's stub is only the shape of an empty bundle and merging it onto a populated
+      # one re-appends the stub every run (measured 2026-09-07, proceso). Regenerating is
+      # the answer, and it is the same answer on every bundle — so --apply takes it.
       # The bundle-root index.md is NOT in this class: nothing generates it, it is a seed doc.
-      if [ -e "$inst_f" ] && ! cmp -s "$seed_f" "$inst_f"; then
-        report "DERIVED" "$rel"
-        detail "regenerated, never merged: build-kb-index.sh rewrites it from frontmatter."
+      builder="$BIN_DIR/build-kb-index.sh"
+      if [ ! -e "$inst_f" ] || [ ! -f "$builder" ] || [ ! -d "$TARGET/knowledge" ]; then
+        continue
+      fi
+      if [ "$APPLY" -eq 1 ]; then
+        before="$(blob_of "$inst_f")"
+        ( cd "$TARGET" && bash "$builder" ) >/dev/null 2>&1 || true
+        if [ "$(blob_of "$inst_f")" != "$before" ]; then
+          resolved=$((resolved+1))
+          report "RESOLVED" "$rel"
+          detail "rule: $(rule_for knowledge/index.md)"
+        fi
+      elif ! ( cd "$TARGET" && bash "$builder" --check ) >/dev/null 2>&1; then
+        resolved=$((resolved+1))
+        report "DECIDABLE" "$rel"
+        detail "rule: $(rule_for knowledge/index.md)"
       fi
       continue ;;
     instance.config.json|instance.config.local.json)
@@ -546,6 +622,35 @@ EOF
     continue
   fi
 
+  # DECIDABLE FIRST — the conflict classes in the table above have one right answer, so
+  # they never reach the human's list. `.gitignore` is resolved from the merge markers
+  # themselves; anything the rule cannot account for falls through to CONFLICT below.
+  if [ "$merge_rc" -gt 0 ] && [ "$rel" = .gitignore ] \
+     && resolve_gitignore "$TMPD/merged" "$TMPD/resolved"; then
+    if [ "$APPLY" -eq 0 ]; then
+      resolved=$((resolved+1))
+      report "DECIDABLE" "$rel"
+      detail "rule: $(rule_for .gitignore)"
+      continue
+    fi
+    kept="$(keep_aside "$inst_f" "$rel" || true)"
+    if write_beside "$TMPD/resolved" "$inst_f" \
+       && cmp -s "$TMPD/resolved" "$inst_f" \
+       && ! grep -qE '^(<<<<<<< |>>>>>>> )' "$inst_f"; then
+      resolved=$((resolved+1))
+      [ -f "$BASE_DIR/$rel" ] && cp "$seed_f" "$BASE_DIR/$rel" 2>/dev/null || true
+      report "RESOLVED" "$rel"
+      detail "rule: $(rule_for .gitignore)"
+      [ -z "$kept" ] || detail "the copy it replaced is kept at $kept"
+      continue
+    fi
+    failed=$((failed+1))
+    report "FAILED" "$rel" >&2
+    printf '            %s\n' "the resolution did not land — the file was left as it was." >&2
+    [ -z "$kept" ] || printf '            %s\n' "kept: $kept" >&2
+    continue
+  fi
+
   if [ "$merge_rc" -gt 0 ]; then
     conflict=$((conflict+1))
     report "CONFLICT" "$rel"
@@ -561,29 +666,17 @@ EOF
     ' "$TMPD/sd"
     detail "port it by hand, then re-run. Full diff of what you have vs the seed:"
     detail "  diff -u '$inst_f' '$seed_f'"
-    # UNDER --apply, THE CONFLICTED MERGE IS SAVED BESIDE THE FILE — never over it.
-    # The live file stays exactly as the human left it (that is the never-clobber
-    # guarantee), and the markers they would otherwise have to reproduce by hand are
-    # there to read. Written only under --apply, because a report-only run writes
-    # nothing at all, and named with the same `.bak.<epoch>` convention every other
-    # backup in this machinery uses.
-    # IDEMPOTENT: written once, not once per run. A conflict is not repaired by running
-    # this again, so a second --apply would otherwise drop a second identical backup
-    # beside the first, and a tenth a tenth — which is how a directory of `.bak.<epoch>`
-    # files nobody can tell apart gets built.
+    # UNDER --apply, THE CONFLICTED MERGE IS KEPT UNDER `.ai-bridge/refresh/` — never
+    # over the file and never beside it. The live file stays exactly as the human left it
+    # (that is the never-clobber guarantee) and the markers are there to read, but a
+    # marker-carrying `.bak` in the bundle tree is a second thing the human has to notice
+    # and delete. IDEMPOTENT: kept once, not once per run.
     if [ "$APPLY" -eq 1 ]; then
-      have_bak=0
-      for cb in "$inst_f".bak.*; do
-        [ -f "$cb" ] || continue
-        if cmp -s "$TMPD/merged" "$cb"; then have_bak=1; break; fi
-      done
-      if [ "$have_bak" -eq 1 ]; then
-        detail "the conflicted merge is already saved beside it (an earlier run wrote it)"
+      if kept_already "$TMPD/merged" "$rel"; then
+        detail "the conflicted merge is already kept under .ai-bridge/refresh/"
       else
-        cbak="$inst_f.bak.$(date +%s)"
-        if cp "$TMPD/merged" "$cbak" 2>/dev/null; then
-          detail "the conflicted merge (with markers) is saved as $(basename "$cbak")"
-        fi
+        cbak="$(keep_aside "$TMPD/merged" "$rel" || true)"
+        [ -z "$cbak" ] || detail "the conflicted merge (with markers) is kept at $cbak"
       fi
     fi
     printf '%s\n' "$rel" >> "$TMPD/conflicts"
@@ -606,13 +699,11 @@ EOF
   fi
 
   # --apply: write the MERGE RESULT, never a copy of the seed, then read it back.
-  # A hand-edited file is backed up first; a verbatim old seed is not, because its
-  # content is recoverable from this template's git history and the backup would be
-  # clutter a later run has to explain.
+  # A hand-edited file is kept first, under `.ai-bridge/refresh/`; a verbatim old seed is
+  # not, because its content is recoverable from this template's git history.
   bak=""
   if [ "$base_kind" != "verbatim" ]; then
-    bak="$inst_f.bak.$(date +%s)"
-    cp "$inst_f" "$bak"
+    bak="$(keep_aside "$inst_f" "$rel" || true)"
   fi
   if write_beside "$TMPD/merged" "$inst_f" \
      && cmp -s "$TMPD/merged" "$inst_f" \
@@ -628,29 +719,33 @@ EOF
       detail "was the seed verbatim as of $short; now the current seed (verified)."
     else
       detail "seed change merged onto this instance's edits (base $short, verified)."
-      detail "backup: $(basename "$bak")"
+      [ -z "$bak" ] || detail "the copy it replaced is kept at $bak"
     fi
   else
     failed=$((failed+1))
     report "FAILED" "$rel" >&2
     printf '            %s\n' "the port did not land — the file was left as it was." >&2
-    [ -z "$bak" ] || printf '            %s\n' "backup: $bak" >&2
+    [ -z "$bak" ] || printf '            %s\n' "kept: $bak" >&2
   fi
 done <<EOF
 $(seed_paths)
 EOF
 
-printf '  summary: %d in sync or with nothing to port, %d portable, %d ported, %d conflicting, %d unknown.\n' \
-  "$insync" "$portable" "$ported" "$conflict" "$unknown"
-[ "$APPLY" -eq 1 ] || [ "$portable" -eq 0 ] || echo "  (report only — nothing was written)"
+# RESOLVED IS COUNTED APART FROM PORTED AND CONFLICTING. A decidable class is neither: it
+# is not a clean 3-way merge, and it is not work left for anyone.
+res_word=resolved; [ "$APPLY" -eq 1 ] || res_word=decidable
+printf '  summary: %d in sync or with nothing to port, %d portable, %d ported, %d %s, %d conflicting, %d unknown.\n' \
+  "$insync" "$portable" "$ported" "$resolved" "$res_word" "$conflict" "$unknown"
+[ "$APPLY" -eq 1 ] || [ $((portable + resolved)) -eq 0 ] || echo "  (report only — nothing was written)"
 
 # ------------------------------------------------------------ what's left for you
 #
-# Assembled here rather than as the section runs, so the list reads in the order a
-# human would act: re-run with --apply first, then the decisions only they can make,
-# then the commit.
-if [ "$APPLY" -eq 0 ] && [ "$portable" -gt 0 ]; then
-  left "re-run with --apply to write the $portable mergeable seed file(s):"
+# ONLY WHAT A HUMAN MUST DECIDE, and the section is omitted when that is nothing. A list
+# that also carries the mechanical follow-ups — "now commit what changed" — is non-empty
+# after every successful run, which is how a section nobody has to read gets printed on a
+# bundle that is entirely up to date.
+if [ "$APPLY" -eq 0 ] && [ $((portable + resolved)) -gt 0 ]; then
+  left "re-run with --apply to write the $((portable + resolved)) seed change(s) above:"
   left_more "$SELF '$TARGET' --apply"
 fi
 if [ -s "$TMPD/conflicts" ]; then
@@ -681,16 +776,9 @@ if [ "$HIST_SHALLOW" -eq 1 ]; then
   left_more "tell an unchanged seed from an unreachable one:"
   left_more "git -C '$REPO_ROOT' fetch --unshallow"
 fi
-if [ "$ported" -gt 0 ]; then
-  left "review and commit what changed — the bundle is its own git repo:"
-  left_more "cd '$TARGET' && git status && git diff"
-fi
-
-echo
-echo "== what's left for you ==============================================="
-if [ "$LEFT_N" -eq 0 ]; then
-  echo "  Nothing. This bundle is up to date with the template seed."
-else
+if [ "$LEFT_N" -gt 0 ]; then
+  echo
+  echo "== what's left for you ==============================================="
   cat "$TMPD/left"
 fi
 

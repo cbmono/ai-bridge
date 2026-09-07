@@ -182,16 +182,21 @@ assert "index.md is now byte-identical to the current seed" \
 assert "todos.md is reported PORTED"      "$(has 'PORTED    todos.md' "$APPLY")"
 assert "todos.md gained the seed's new line"  "$(yes_if grep -q '^TOP LINE FROM SEED V2$' "$INST/todos.md")"
 assert "todos.md KEPT the instance's own line" "$(yes_if grep -q '^INSTANCE TODO$' "$INST/todos.md")"
-assert "a merged file is backed up first" \
-  "$(yes_if sh -c 'ls "$1".bak.* >/dev/null 2>&1' _ "$INST/todos.md")"
-assert "a verbatim-seed file needs no backup" \
-  "$(sh -c 'ls "$1".bak.* >/dev/null 2>&1' _ "$INST/index.md" && echo 1 || echo 0)"
-# The conflicted merge is saved BESIDE the file, never over it — the never-clobber
-# guarantee with the markers still available to read.
-assert "a conflict leaves a .bak beside the file" \
-  "$(yes_if sh -c 'ls "$1".bak.* >/dev/null 2>&1' _ "$INST/CLAUDE.md")"
-assert "…and that .bak carries the conflict markers" \
-  "$(yes_if sh -c 'grep -qE "^(<<<<<<< |>>>>>>> )" "$1".bak.*' _ "$INST/CLAUDE.md")"
+# EVERY COPY THIS SCRIPT KEEPS GOES UNDER .ai-bridge/refresh/, never beside the file:
+# a `.bak` in the bundle tree is one more thing the human has to notice and delete, and
+# one carrying conflict markers is worse.
+assert "a merged file's old copy is kept under .ai-bridge/refresh/" \
+  "$(yes_if sh -c 'ls "$1"/todos.md.* >/dev/null 2>&1' _ "$INST/.ai-bridge/refresh")"
+assert "a verbatim-seed file needs no copy kept" \
+  "$(sh -c 'ls "$1"/index.md.* >/dev/null 2>&1' _ "$INST/.ai-bridge/refresh" && echo 1 || echo 0)"
+assert "the conflicted merge is kept there too" \
+  "$(yes_if sh -c 'ls "$1"/CLAUDE.md.* >/dev/null 2>&1' _ "$INST/.ai-bridge/refresh")"
+assert "…and it carries the conflict markers" \
+  "$(yes_if sh -c 'grep -qE "^(<<<<<<< |>>>>>>> )" "$1"/CLAUDE.md.*' _ "$INST/.ai-bridge/refresh")"
+assert "…and no .bak file was written into the bundle tree at all" \
+  "$(find "$INST" -name '*.bak.*' -not -path '*/.ai-bridge/*' | grep -q . && echo 1 || echo 0)"
+assert "the report names the path it kept the conflicted merge at" \
+  "$(has '.ai-bridge/refresh/CLAUDE.md' "$APPLY")"
 assert "instance.config.json was NOT written"        "$(hasnt 'PORTED    instance.config.json' "$APPLY")"
 assert "…and is byte-identical after --apply"        "$(yes_if cmp -s "$TMP/config.pristine" "$INST/instance.config.json")"
 
