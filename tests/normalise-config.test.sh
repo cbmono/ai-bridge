@@ -172,7 +172,7 @@ echo
 echo "-- 2. MISSING adds seed keys; \$doc keys are never added, and a bundle's own is kept"
 I="$(newinst 3)"
 jedit "$I/$TCFG" <<'PY'
-for k in ("maxPrFiles", "maxStallRounds", "commitAttribution", "$commitAttribution"):
+for k in ("maxPrFiles", "maxStallRounds", "commitAttribution", "$commitAttribution", "authorEmail", "people"):
     d.pop(k, None)
 d["$mine"] = "a note this bundle wrote itself"
 PY
@@ -181,6 +181,8 @@ ok "a key added since 1.x is MISSING"         "$(finding MISSING maxPrFiles)" ye
 ok "…and so is maxStallRounds"                "$(finding MISSING maxStallRounds)" yes
 ok "…and commitAttribution"                   "$(finding MISSING commitAttribution)" yes
 ok "the seed's \$doc key is NOT reported"      "$(grep -c 'MISSING *\$' "$TMP/out")" 0
+ok "a placeholder-valued key (authorEmail) is NOT added" "$(finding MISSING authorEmail)" no
+ok "…nor the example people map"             "$(finding MISSING people)" no
 norm "$I" --apply >/dev/null
 ok "maxPrFiles arrived with the seed default" "$(jget "$I/$TCFG" maxPrFiles)" "$(jget "$SEED" maxPrFiles)"
 ok "maxStallRounds too"                       "$(jget "$I/$TCFG" maxStallRounds)" "$(jget "$SEED" maxStallRounds)"
