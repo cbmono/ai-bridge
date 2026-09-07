@@ -665,8 +665,10 @@ PHOME="$TMP/phome/plugins"
 PINST="$PHOME/cache/mkt/ai-bridge/1.0.0"
 PMKT="$PHOME/marketplaces/mkt"
 PCACHE="$PHOME/data/ai-bridge-mkt/version-check"
-mkdir -p "$PINST/scripts" "$PHOME/marketplaces"
-cp "$CHECK" "$PINST/scripts/"
+# THE WHOLE PLUGIN, not just this one script: `ai-bridge.sh check` is asserted against the
+# same fixture below, and it resolves its own root from where it is executing.
+mkdir -p "$PINST" "$PHOME/marketplaces"
+cp -R "$TPL/plugin/." "$PINST/"
 printf '1.0.0\n' > "$PINST/VERSION"
 PBARE="$TMP/pmkt.git"; PSEED="$TMP/pmkt.seed"
 GIT init -q --bare "$PBARE"; GIT -C "$PBARE" symbolic-ref HEAD refs/heads/main
@@ -686,10 +688,24 @@ ok "…and the plugin, so a caller need not spell it" "$(printf '%s' "$OUT" | cu
 pcheck
 ok "…and the human line stays byte-empty"          "$(printf '%s' "$OUT" | wc -c | tr -d ' ')" 0
 
+# THE SAME HELPER ANSWERS `/ai-bridge:welcome check`, which is what stops that row and the
+# banner's from ever disagreeing — asserted on both verdicts, against this same install.
+abcheck() { AOUT="$(CLAUDE_PLUGIN_ROOT="$PINST" bash "$PINST/scripts/ai-bridge.sh" check --instance "$TMP/inst" 2>/dev/null)"; }
+abcheck
+ok "welcome check agrees it is current" \
+  "$(printf '%s\n' "$AOUT" | grep -qF 'plugin version: 1.0.0 is what the marketplace' && echo yes || echo no)" yes
+ok "…and does not claim an update is waiting" \
+  "$(printf '%s\n' "$AOUT" | grep -qF 'is behind the marketplace' && echo yes || echo no)" no
+
 mkt_at 1.0.1
 rm -f "$PCACHE"; pcheck --state
 ok "the marketplace moved ahead: state is behind"  "$(printf '%s' "$OUT" | cut -f1)" behind
 ok "…naming the version it would install"          "$(printf '%s' "$OUT" | cut -f3)" 1.0.1
+rm -f "$PCACHE"; abcheck
+ok "welcome check agrees it is behind, with both versions" \
+  "$(printf '%s\n' "$AOUT" | grep -qF 'plugin 1.0.0 is behind the marketplace, which carries 1.0.1' && echo yes || echo no)" yes
+ok "…and names the one command that fixes it"       \
+  "$(printf '%s\n' "$AOUT" | grep -qF 'claude plugin update ai-bridge' && echo yes || echo no)" yes
 
 # THE CACHE IS THE REASON A SESSION MAKES NO NETWORK CALL. With a fresh stamp the remote may
 # move as far as it likes and the answer does not — and `--fetch` is what forces past it.
