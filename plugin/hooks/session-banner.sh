@@ -1066,7 +1066,7 @@ fi
 # else: a key added to the config next month, a role name, a tier, a model alias, all of them
 # arrive filtered without anybody remembering to filter them. See `cell` for what it removes
 # and why respelling beats escaping.
-rows=""; trows=""; vw=10
+rows=""; trows=""; thead=""; vw=10
 add() {
   [ -n "$3" ] || return 0
   local k v s
@@ -1143,6 +1143,11 @@ EOF
   done <<EOF
 $tiers
 EOF
+  # THE HEADER IS A CELL OF THE SAME TABLE, padded from the same `$tw` so its `→` and its
+  # `MODEL` sit over the rows' — and measured like a row, or a header wider than every row
+  # would push its own FROM out alone.
+  thead="$(pad TIER "$tw") → MODEL"
+  nchars "$thead"; [ "$NCHARS" -le "$vw" ] || vw="$NCHARS"
 fi
 
 # Clamped so one long value cannot push FROM off the screen for every other row.
@@ -1159,7 +1164,7 @@ table() { # <header-label> <header-value> <rows>
   done
 }
 [ -n "$rows" ]  && table SETTING VALUE "$rows"
-[ -n "$trows" ] && table 'AGENT (role)' 'TIER → MODEL' "$trows"
+[ -n "$trows" ] && table 'AGENT (role)' "$thead" "$trows"
 
 # ---------------------------------------------------------------------------------------
 # 4b. ACCOUNT — three renderings, because two states that print nothing are one state.
