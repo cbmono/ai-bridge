@@ -412,7 +412,8 @@ write_beside() { # <merged> <target-file>
 # conflict markers — is something the human then has to notice, read and delete.
 KEEP_DIR="$TARGET/.ai-bridge/refresh"
 keep_aside() { # <file-to-copy> <seed-relative path> -> prints the kept path
-  local dest="$KEEP_DIR/$2.$(date +%s)"
+  local dest
+  dest="$KEEP_DIR/$2.$(date +%s)"
   mkdir -p "$(dirname "$dest")" 2>/dev/null || return 1
   cp "$1" "$dest" 2>/dev/null || return 1
   printf '%s\n' "$dest"

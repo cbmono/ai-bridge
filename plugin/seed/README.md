@@ -75,7 +75,7 @@ there (`normalise-config.sh`) rather than leaving it to be noticed.
 Per-instance permission/env overrides go in `.claude/settings.local.json`
 (gitignored) — keep them out of `.claude/settings.json` beside it, which is a seed file
 copied once from the plugin, so an edit there becomes a conflict the next time
-`/ai-bridge:welcome fix` 3-way merges a template change onto it.
+`/ai-bridge:init` 3-way merges a template change onto it.
 
 ## How it works
 ```
@@ -197,7 +197,7 @@ documents live in the **bundle** (per instance). Neither half updates the other.
 |---|---|---|
 | the slash commands (`/ai-bridge:*`) | the plugin, installed once per machine | `/plugin marketplace add cbmono/ai-bridge` then `/plugin install ai-bridge@ai-bridge` — and `/plugin` to update it later |
 | role agents, machinery scripts, the `SessionStart` and `UserPromptSubmit` hooks | the same plugin, per machine — this bundle holds no link into any checkout | nothing per bundle: `/plugin` updates all of it at once |
-| the bundle's own seed docs (`CLAUDE.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`) | copied once, then yours | `/ai-bridge:welcome fix` 3-way merges a later change onto your edits |
+| the bundle's own seed docs (`CLAUDE.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`) | copied once, then yours | `/ai-bridge:init` 3-way merges a later change onto your edits |
 
 `/ai-bridge:init` also **converts** a bundle stamped before the plugin era: it removes
 every machinery symlink into a template checkout — dangling or live — and the managed

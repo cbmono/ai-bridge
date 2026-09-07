@@ -6,11 +6,9 @@
 #   ai-bridge.sh check  [flags]       report the state of this instance
 #   ai-bridge.sh fix    [flags]       RETIRED — points at /ai-bridge:init and exits 0
 #
-# `fix` MOVED TO `/ai-bridge:init`, WHICH IS NOW THE ONE COMMAND AFTER A PLUGIN UPDATE.
-# A bundle was brought up to date by two commands in an order nobody could derive: init
-# stamped the seed, welcome fix repaired the rest. init runs this file's check-and-fix
-# pass itself now (`AI_BRIDGE_INIT_PASS=1`, same tiers, same refusals), so this form
-# prints where to go and exits 0 for one release before it is removed.
+# `fix` MOVED INTO `/ai-bridge:init`, the one command after a plugin update: it stamps the
+# bundle and then runs this file's pass itself (`AI_BRIDGE_INIT_PASS=1`, same tiers, same
+# refusals). This form prints where it went, for one release, before it is removed.
 #
 # WHAT THIS IS NOT, because the rejected shape is the one that keeps getting proposed. It
 # does NOT load rules into context. `CLAUDE.md` is injected into every turn and the banner
@@ -548,8 +546,7 @@ EOF
 # `.gitignore` block. It never removes bundle content and never overwrites a file the
 # bundle owns. That is what makes re-running it the idempotent repair rather than a risk.
 fix_bundle_unconverted() {
-  # NEVER FROM INSIDE A STAMP. init runs this pass itself, and a stamp that answered a
-  # still-unconverted bundle by stamping again would not terminate.
+  # NEVER FROM INSIDE A STAMP: answering an unconverted bundle by stamping never ends.
   if [ "${AI_BRIDGE_INIT_PASS:-}" = 1 ]; then
     note "NOT re-stamped: this pass is running inside /ai-bridge:init already."
     return 0
@@ -1187,8 +1184,7 @@ fi
 # The two ship-blockers therefore hold by construction rather than by care: there is no
 # branch here that could be pointed at a config file or a lock file.
 #
-# ONE CALLER LEFT: `/ai-bridge:init`, which sets AI_BRIDGE_INIT_PASS=1. Typed by a human
-# it prints where the command went and exits 0 — a pointer for one release, not a failure.
+# ONE CALLER LEFT: `/ai-bridge:init` (AI_BRIDGE_INIT_PASS=1). A human gets the pointer.
 if [ "${AI_BRIDGE_INIT_PASS:-}" != 1 ]; then
   echo "ai-bridge fix has moved into /ai-bridge:init — run that instead; it stamps the bundle and then runs this same pass."
   exit 0

@@ -22,6 +22,12 @@ None of them resolving means it is not installed here. Install once, then restar
 /plugin install ai-bridge@ai-bridge
 ```
 
+**After every plugin update, run `/ai-bridge:init` in this bundle.** A plugin update moves
+the machinery; it cannot reach this bundle's own data. One command closes that gap: it
+stamps the seed, then runs the check-and-fix pass — idempotent repairs only, and config
+files and tick locks are reported, never written. **`/ai-bridge:welcome` is the banner and
+`check`**, a report-only survey of state that could be wrong; it fixes nothing.
+
 **A bare `scripts/<x>.sh` in this bundle means the installed plugin's scripts directory —
 `$AB` below — never a folder here.** Agents reach it as
 `${CLAUDE_PLUGIN_ROOT}/scripts/<x>.sh`; in a shell, resolve the version-scoped
