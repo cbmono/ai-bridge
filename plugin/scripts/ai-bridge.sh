@@ -6,9 +6,8 @@
 #   ai-bridge.sh check  [flags]       report the state of this instance
 #   ai-bridge.sh fix    [flags]       RETIRED — points at /ai-bridge:init and exits 0
 #
-# `fix` MOVED INTO `/ai-bridge:init`, the one command after a plugin update: it stamps the
-# bundle and then runs this file's pass itself (`AI_BRIDGE_INIT_PASS=1`, same tiers, same
-# refusals). This form prints where it went, for one release, before it is removed.
+# `fix` MOVED INTO `/ai-bridge:init` — it stamps the bundle, then runs this file's pass
+# (`AI_BRIDGE_INIT_PASS=1`, same tiers, same refusals). This form is a pointer for one release.
 #
 # WHAT THIS IS NOT, because the rejected shape is the one that keeps getting proposed. It
 # does NOT load rules into context. `CLAUDE.md` is injected into every turn and the banner
@@ -546,16 +545,12 @@ EOF
 # `.gitignore` block. It never removes bundle content and never overwrites a file the
 # bundle owns. That is what makes re-running it the idempotent repair rather than a risk.
 fix_bundle_unconverted() {
-  # NEVER FROM INSIDE A STAMP: answering an unconverted bundle by stamping never ends.
-  if [ "${AI_BRIDGE_INIT_PASS:-}" = 1 ]; then
-    note "NOT re-stamped: this pass is running inside /ai-bridge:init already."
-    return 0
-  fi
   if [ ! -f "$BIN/init-bundle.sh" ]; then
     note "NOT stamped: $BIN/init-bundle.sh is missing — re-install the plugin"
     return 0
   fi
   note "running: bash $BIN/init-bundle.sh $ROOT"
+  # The stamp INHERITS AI_BRIDGE_INIT_PASS and runs no second pass — that is the anti-loop.
   bash "$BIN/init-bundle.sh" "$ROOT" 2>&1 | sed 's/^/      /'
   return 0
 }
@@ -1183,9 +1178,7 @@ fi
 # `config-uncommitted` is; it reads the tier the row declares and dispatches on that alone.
 # The two ship-blockers therefore hold by construction rather than by care: there is no
 # branch here that could be pointed at a config file or a lock file.
-#
-# ONE CALLER LEFT: `/ai-bridge:init` (AI_BRIDGE_INIT_PASS=1). A human gets the pointer.
-if [ "${AI_BRIDGE_INIT_PASS:-}" != 1 ]; then
+if [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
   echo "ai-bridge fix has moved into /ai-bridge:init — run that instead; it stamps the bundle and then runs this same pass."
   exit 0
 fi

@@ -2463,10 +2463,14 @@ fi
 # be brought up to the installed plugin by two commands in an order nobody could derive —
 # this stamp, then `/ai-bridge:welcome fix`. One command does it now: the pass runs the
 # same rows, the same tiers and the same refusals (config files and tick locks are
-# reported, never written), and `AI_BRIDGE_INIT_PASS=1` is what tells it not to answer an
-# unconverted bundle by re-entering this script.
+# reported, never written).
+#
+# SKIPPED WHEN `AI_BRIDGE_INIT_PASS` IS ALREADY SET, which is what makes it terminate: the
+# pass's own `bundle-unconverted` repair re-stamps this bundle, and that stamp inherits the
+# variable and runs no second pass. Without it, a symlink the sweep KEEPS (a human's own)
+# and that row still counts would loop forever.
 [ "$REFRESH_SEEDS" -eq 0 ] || REFRESH_SEEDS=0   # read and dropped — see the flag above
-if [ "$FIRST_STAMP" = no ]; then
+if [ "$FIRST_STAMP" = no ] && [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
   if [ -f "$BIN_DIR/ai-bridge.sh" ]; then
     echo
     AI_BRIDGE_INIT_PASS=1 bash "$BIN_DIR/ai-bridge.sh" fix --instance "$TARGET" || true

@@ -176,7 +176,7 @@ ln -s "$SRC/plugin/scripts/commit-as.sh" "$INSTL/scripts/commit-as.sh"
 OUTL="$(bash "$SH" check --instance "$INSTL" --template "$SRC" 2>&1)"
 ok "an unconverted bundle is reported as such"             "$(printf '%s\n' "$OUTL" | grep -c 'has not been converted' | tr -d ' ')" 1
 ok "…naming the link it found"                             "$(printf '%s\n' "$OUTL" | grep -c 'scripts/commit-as.sh' | tr -d ' ')" 1
-ok "…with the repair, which is /ai-bridge:init"            "$(printf '%s\n' "$OUTL" | grep -c '/ai-bridge:init' | tr -d ' ')" 1
+ok "…with the repair, which is /ai-bridge:init"            "$(printf '%s\n' "$OUTL" | grep -A3 'has not been converted' | grep -c '/ai-bridge:init' | tr -d ' ')" 1
 
 # `--since` IS ACCEPTED AND IGNORED, and that is asserted rather than left to be
 # discovered. It asked the retired `unstamped-machinery` row for the literal post-merge
@@ -225,7 +225,11 @@ ok "every row declares one of the three tiers" \
 ok "…and every row declares whether it may speak on the banner path" \
   "$(printf '%s\n' "$LIST" | awk -F'\t' '$3!="yes" && $3!="no"' | grep -c . | tr -d ' ')" 0
 
-FIXOUT="$(bash "$SH" fix --instance "$INST1" --template "$SRC" 2>&1)"
+# `fix` IS INTERNAL NOW: typed by a human it prints one line pointing at
+# `/ai-bridge:init` and exits 0, and init is its one caller (AI_BRIDGE_INIT_PASS=1).
+# The pass itself is unchanged, so these sections still test it — through the door
+# init uses. tests/seed-conflict-resolution.test.sh pins the pointer.
+FIXOUT="$(AI_BRIDGE_INIT_PASS=1 bash "$SH" fix --instance "$INST1" --template "$SRC" 2>&1)"
 missing_fix=""
 for id in $ids; do
   printf '%s\n' "$FIXOUT" | grep -q -- "── $id \[" || missing_fix="${missing_fix:+$missing_fix }$id"
@@ -294,7 +298,7 @@ ok "…and names the key that moved, not its value" \
 ok "…without printing the value anywhere"                  "$(printf '%s\n' "$CHK2" | grep -c '500' | tr -d ' ')" 0
 ok "…and frames it as a question, not a defect"            "$(printf '%s\n' "$CHK2" | grep -c 'QUESTION, NOT A DEFECT' | tr -d ' ')" 1
 
-FIX2="$(bash "$SH" fix --instance "$INST2" --template "$SRC" 2>&1)"
+FIX2="$(AI_BRIDGE_INIT_PASS=1 bash "$SH" fix --instance "$INST2" --template "$SRC" 2>&1)"
 ok "fix reported it"                                       "$(printf '%s\n' "$FIX2" | grep -c 'config-uncommitted \[ambiguous\]' | tr -d ' ')" 1
 # THE ASSERTION THAT MAKES THE REST OF THIS SECTION MEAN ANYTHING: the same run DID act on
 # the idempotent tier. Without it, "fix left the config alone" is also satisfied by a `fix`
@@ -360,7 +364,7 @@ CHK3="$(bash "$SH" check --instance "$INST3" --template "$SRC" 2>&1)"
 ok "check SEES the stale lock"                             "$(printf '%s\n' "$CHK3" | grep -c 'tick lock needs YOUR decision' | tr -d ' ')" 1
 ok "…and names release as the human's override"            "$(printf '%s\n' "$CHK3" | grep -c 'release --instance' | tr -d ' ')" 1
 
-FIX3="$(bash "$SH" fix --instance "$INST3" --template "$SRC" 2>&1)"
+FIX3="$(AI_BRIDGE_INIT_PASS=1 bash "$SH" fix --instance "$INST3" --template "$SRC" 2>&1)"
 ok "fix reported it at the human tier"                     "$(printf '%s\n' "$FIX3" | grep -c 'tick-lock \[human\]' | tr -d ' ')" 1
 # Same non-vacuity guard as §4: the lock survived a run that was acting, not one that
 # happened to be unable to act.
@@ -417,7 +421,7 @@ mkdir -p "$INST4/scripts"
 ln -s "$SRC/plugin/scripts/commit-as.sh" "$INST4/scripts/commit-as.sh"
 ok "before fix: no CLAUDE.md"                              "$(yn test -e "$INST4/CLAUDE.md")" no
 ok "before fix: an unconverted machinery link"             "$(yn test -L "$INST4/scripts/commit-as.sh")" yes
-FIX4="$(bash "$SH" fix --instance "$INST4" --template "$SRC" 2>&1)"
+FIX4="$(AI_BRIDGE_INIT_PASS=1 bash "$SH" fix --instance "$INST4" --template "$SRC" 2>&1)"
 ok "fix ran the stamp"                                     "$(printf '%s\n' "$FIX4" | grep -c 'running: bash .*init-bundle.sh' | tr -d ' ')" 1
 ok "…and the seed content arrived"                         "$(yn test -f "$INST4/CLAUDE.md")" yes
 ok "…as a real file, never a link"                         "$(yn test -L "$INST4/CLAUDE.md")" no
@@ -425,7 +429,7 @@ ok "…and the bundle holds no symlink outside repos/" \
   "$([ -z "$(find "$INST4" -type l -not -path "$INST4/repos/*" 2>/dev/null)" ] && echo yes || echo no)" yes
 # IDEMPOTENT means a second run is a no-op, not a second outcome.
 snap1="$(cd "$INST4" && find . -name .git -prune -o -print | sort | sed "s|^|$(echo)|")"
-bash "$SH" fix --instance "$INST4" --template "$SRC" >/dev/null 2>&1
+AI_BRIDGE_INIT_PASS=1 bash "$SH" fix --instance "$INST4" --template "$SRC" >/dev/null 2>&1
 snap2="$(cd "$INST4" && find . -name .git -prune -o -print | sort | sed "s|^|$(echo)|")"
 diff <(printf '%s\n' "$snap1") <(printf '%s\n' "$snap2") >&2 || true
 ok "running fix twice changes nothing the second time"     "$([ "$snap1" = "$snap2" ] && echo yes || echo no)" yes
@@ -447,7 +451,7 @@ ok "the fixture link really does resolve"                  "$(yn test -f "$INST4
 CHK4C="$(bash "$SH" check --instance "$INST4" --template "$SRC" 2>&1)"
 ok "a LIVE machinery link is reported"                     "$(printf '%s\n' "$CHK4C" | grep -c 'scripts/commit-as.sh' | tr -d ' ')" 1
 ok "…so the bundle is no longer reported as converted"     "$(printf '%s\n' "$CHK4C" | grep -c 'no symlinks outside repos/' | tr -d ' ')" 0
-bash "$SH" fix --instance "$INST4" --template "$SRC" >/dev/null 2>&1
+AI_BRIDGE_INIT_PASS=1 bash "$SH" fix --instance "$INST4" --template "$SRC" >/dev/null 2>&1
 ok "…and fix removes it"                                   "$(yn test -e "$INST4/scripts/commit-as.sh")" no
 # A DANGLING link counts too, and that is the change: it used to be a DIFFERENT defect
 # owned by the banner's probes. One fact ("this bundle has not been converted"), one repair.
