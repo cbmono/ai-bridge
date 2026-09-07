@@ -94,3 +94,8 @@ instance.config.local.json
 # committing. Delete it freely. (`.ai-bridge/seed-base/` beside it IS tracked — it is the
 # merge base this bundle was stamped from, and it is the same on every clone.)
 /.ai-bridge/refresh/
+
+# Instance additions (kept across seed refreshes)
+# Everything from the heading above to end of file is THIS bundle's own. refresh-seeds.sh
+# compares the seed against the file with this block removed and re-appends it unchanged,
+# so a pattern you add here never reads as seed drift. /ai-bridge:init appends here too.
