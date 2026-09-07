@@ -71,16 +71,16 @@ owner()   { sed -n 's/.*"defaultOwner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/
 # The seeded config, byte for byte, so "unchanged" is a comparison rather than a spot check.
 SEED_CFG="$(cat "$TPL/plugin/seed/instance.config.json")"
 same_as_seed() { [ "$(cat "$1/instance.config.json")" = "$SEED_CFG" ] && echo yes || echo no; }
-# WHAT "NOTHING WAS WRITTEN" MEANS FOR THE LOCAL FILE, since install.sh's step 4c now
-# seeds this machine's `models`/`roleTiers` into it on EVERY completed stamp. Its mere
-# existence therefore says nothing about the roster, and asserting `test -e` == no would
-# be asserting the seeder off rather than the prompt refused. The property these cases
-# were always about is narrower and still exact: NO IDENTITY was invented for a human who
-# was never asked. (The interrupt case is the exception and keeps the file-absent form —
-# it exits 130 from inside the roster block, so step 4c never runs at all.)
+# WHAT "NOTHING WAS WRITTEN" MEANS FOR THE LOCAL FILE. A completed stamp now writes two
+# things into it that have nothing to do with the roster: this machine's `models`/
+# `roleTiers` (step 4d) and this clone's DERIVED identity (step 4c). Neither its existence
+# nor a `ownerGithubUser` in it says anything about the prompt, so the property these cases
+# are about is asked exactly: NOTHING FROM THE ANSWER BELOW reached the file — no login and
+# no address the refused block contained. (The interrupt case is the exception and keeps
+# the file-absent form — it exits 130 from inside the roster block, so 4c never runs.)
 no_identity() { # <instance>
   [ -e "$1/instance.config.local.json" ] || { echo yes; return 0; }
-  grep -q '"ownerGithubUser"' "$1/instance.config.local.json" && echo no || echo yes
+  grep -qE 'example-user-00[78]' "$1/instance.config.local.json" && echo no || echo yes
 }
 # Two complete pairs and a confirmation — the answer the positive path expects.
 ANSWER='example-user-007 example-user-007@example.com

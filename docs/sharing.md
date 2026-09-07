@@ -34,21 +34,46 @@ writing, parses the config back before claiming success, and refuses if `python3
 absent rather than editing JSON line-wise.
 
 It cannot do their half: their `ownerGithubUser` and their absolute paths live in a
-gitignored file on their machine.
+gitignored file on their machine, which `/ai-bridge:init` writes there.
 
 ## Do it in this order
 
+**The second human's own machine is three commands**, and the last one writes their
+per-machine config for them:
+
+```sh
+git clone <bundle-remote> _ai-bridge-<group>
+# in Claude Code, once per machine:
+#   /plugin marketplace add cbmono/ai-bridge
+#   /plugin install ai-bridge@ai-bridge
+/ai-bridge:init .
+```
+
+`/ai-bridge:init` writes the gitignored `instance.config.local.json` itself when the clone
+has none — deriving what the machine already knows, naming what it cannot, and guessing
+nothing:
+
+| Value | Derived from | When it cannot |
+|---|---|---|
+| `ownerGithubUser` | `gh api user`, else `git config github.user` | it prints `needs ownerGithubUser`; re-run with `--owner <login>` |
+| `authorEmail` | the tracked `people[<login>]`, else `git config user.email` | `--email <address>` |
+| `reposRoot` | the bundle's parent directory | `--repos-root <absolute path>` |
+
+Two properties to keep in mind. A value the **tracked** config already carries is left
+exactly where it is — a derived value never shadows an answer somebody gave — and an
+**existing** local file is never rewritten by that step (the normaliser owns its shape).
+`worktreeRoot` and `boardInstances` stay optional: absent, they mean `<reposRoot>/_wt` and
+this instance alone.
+
+**The shared, tracked half is done once, from either clone:**
+
 | # | Step | Where | Command / value |
 |---|---|---|---|
-| 1 | Clone the bundle repo | second machine | `git clone <bundle-remote> _ai-bridge-<group>` |
-| 2 | Stamp the bundle | second machine | `/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group>` — seeds what is absent and links `repos/`; no clone of this repo needed |
-| 3 | Record who is who — **once**, tracked | either clone | `people` map in `instance.config.json` |
-| 4 | Name who owns unowned work — **tracked** | either clone | `defaultOwner` in `instance.config.json` |
-| 5 | Say which login this clone is | **each** clone | `{ "ownerGithubUser": "<login>" }` in `instance.config.local.json` |
-| 6 | Put this machine's paths in the local file | **each** clone | `reposRoot`, `worktreeRoot`, `boardInstances` |
-| 7 | Turn the nudges on (a clone is not a first stamp) | second clone | `touch AWAITING.md` — `SNAPSHOT.json` is seeded by the stamp itself |
-| 8 | Untrack the derived indexes if already committed | either clone | run the `git rm --cached` that `/ai-bridge:init` prints |
-| 9 | Assign work | either clone | `owner: <github-login>` on a `project.md` or one `tasks/<id>.md` |
+| 1 | Record who is who | either clone | `people` map in `instance.config.json` |
+| 2 | Name who owns unowned work | either clone | `defaultOwner` in `instance.config.json` |
+| 3 | Turn the nudges on (a clone is not a first stamp) | second clone | `touch AWAITING.md` — `SNAPSHOT.json` is seeded by the stamp itself |
+| 4 | Untrack the derived indexes if already committed | either clone | run the `git rm --cached` that `/ai-bridge:init` prints |
+| 5 | Assign work | either clone | `owner: <github-login>` on a `project.md` or one `tasks/<id>.md` |
 
 ## The config split at a glance
 
@@ -107,7 +132,7 @@ The value is a **GitHub username, never an email**: public, stable, and it keeps
 
 A derived `<login>@users.noreply.github.com` was **rejected, not skipped**: GitHub requires the ID-prefixed `<id>+<login>@…` form for accounts created after 2017-07-18, so a derived plain address silently fails to link — and the linking behaviour cannot be verified from here without pushing as that account. Real addresses in a private instance repo are fine; **this template is public, so `plugin/seed/instance.config.json` ships placeholder logins VERIFIED UNCLAIMED on github.com (`example-user-007`/`008`, both 404) and addresses at `example.com` (RFC 2606, cannot receive mail), and says so in a `$people` note** — the real map belongs in the instance. **Verify any new placeholder the same way**: `alice`, `bob` and `jane-doe` are all real accounts, so a plausible-looking example names a stranger, and an example is the thing people copy verbatim. Test fixtures follow the same rule, and `commit-as-identity.test.sh` asserts the seed carries no live-account name and no address outside `example.com`.
 
-`/ai-bridge:init` **does** ask for the map on a first stamp now — steps 3 to 5 of the table above, collected at install time instead of hand-edited afterwards. The three things that would have broken existing flows are the three guards it carries; they, and the failure the prompt's shape is designed around, are written up in ["The installer asks, once"](#the-installer-asks-once) at the end of this page.
+`/ai-bridge:init` **does** ask for the map on a first stamp now — the tracked table's steps 1 and 2, collected at install time instead of hand-edited afterwards — and on a **clone**, where no first stamp ever happens, it derives this clone's own three values rather than leaving them to be hand-written. The three things that would have broken existing flows are the three guards it carries; they, and the failure the prompt's shape is designed around, are written up in ["The installer asks, once"](#the-installer-asks-once) at the end of this page.
 
 ### (c) The derived `index.md` files become gitignored
 
@@ -153,7 +178,7 @@ dispatching the same task; it was never a lock on pushing.
 
 ## The installer asks, once
 
-Steps 3 to 5 of the table above used to be an eight-step checklist somebody performed
+The tracked roster used to be an eight-step checklist somebody performed
 after the stamp. On a **first stamp**, at a terminal, `/ai-bridge:init` now offers to collect
 them instead: one line per person (`<github-login> <commit-email>`), yourself first, and
 it writes the tracked `people` map, the tracked `defaultOwner`, and this clone's

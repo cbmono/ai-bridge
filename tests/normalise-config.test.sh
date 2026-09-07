@@ -111,6 +111,13 @@ LCFG=instance.config.local.json
 # =========================================================================== #
 echo "-- 1. MISPLACED, in both directions, and the destination always wins"
 I="$(newinst 1)"
+# The stamp DERIVES this clone's identity into the local file (init-bundle.sh 4c). This
+# case is about a key misplaced in the TRACKED one, so the destination starts empty —
+# exactly the state it was in before that step existed.
+jedit "$I/$LCFG" <<'PY'
+for k in ("reposRoot", "ownerGithubUser", "authorEmail"):
+    d.pop(k, None)
+PY
 jedit "$I/$TCFG" <<'PY'
 d["reposRoot"] = "/abs/path/on/one/machine"
 d["ownerGithubUser"] = "example-user-007"
@@ -216,6 +223,9 @@ ok "the seed ships no per-machine path"       "$(jget "$SEED" reposRoot)$(jget "
 echo
 echo "-- 4. no value is ever changed"
 I="$(newinst 5)"
+jedit "$I/$LCFG" <<'PY'
+d.pop("reposRoot", None)          # derived by the stamp; this case moves the tracked one
+PY
 jedit "$I/$TCFG" <<'PY'
 d["reposRoot"] = "/moved/away"
 d["maxPrLoc"] = 7777
@@ -295,9 +305,11 @@ I="$(newinst 8)"
 ok "the tracked file has no reposRoot"        "$(jget "$I/$TCFG" reposRoot)" -
 ok "…and no worktreeRoot"                     "$(jget "$I/$LCFG" worktreeRoot)" -
 # Nor is a path INVENTED in the local file. The measured harm was a seeded worktreeRoot
-# that existed on no disk while 17 tasks used the documented `<reposRoot>/_wt` fallback.
-ok "…and neither is invented in the local one" \
-   "$(jget "$I/$LCFG" reposRoot)$(jget "$I/$LCFG" worktreeRoot)" --
+# that existed on no disk while 17 tasks used the documented `<reposRoot>/_wt` fallback —
+# so worktreeRoot is still written nowhere, while reposRoot is DERIVED from the bundle's
+# own parent (init-bundle.sh 4c), a directory that exists by construction.
+ok "…and worktreeRoot is invented nowhere"    "$(jget "$I/$LCFG" worktreeRoot)" -
+ok "…while reposRoot is the bundle's parent"  "$(jget "$I/$LCFG" reposRoot)" "$(cd "$I/.." && pwd)"
 ok "and the stamp is still clean"             "$(grep -ci 'config findings' "$TMP/stamp.8" | tr -d ' ')" 0
 # A bundle that already carries a real path keeps it: the seeder must not plant a
 # placeholder over a value the normaliser is about to move.

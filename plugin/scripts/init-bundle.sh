@@ -2202,6 +2202,16 @@ id_manual_note() {
 id_read() { # <key> <file>
   sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$2" | head -n1
 }
+# What the TRACKED config already answers for one of the three keys. A value a human put
+# there is never shadowed by a derived one — local wins over tracked, so writing a guess
+# here would silently override their answer and leave 4e's normaliser nothing to move.
+# The seed's own example.com address is a placeholder, not an answer.
+id_tracked() { # <key>
+  [ -f "$TEAM_CFG" ] || return 0
+  local v; v="$(id_read "$1" "$TEAM_CFG")"
+  case "$v" in *@example.com) v="" ;; esac
+  printf '%s' "$v"
+}
 # A path this can write into a JSON string, and that the readers will accept: absolute,
 # and free of the three characters that would need escaping.
 id_valid_path() { # <value>
@@ -2232,11 +2242,16 @@ if [ -e "$ID_LCFG" ]; then
   fi
 else
   # ------------------------------------------------------------- derive, or report
+  # A flag wins over everything (the human said it), then a value the tracked file already
+  # answers with is left alone, and only what is left is derived.
+  id_answered=""
   id_owner=""
   if [ -n "$ID_OWNER_FLAG" ]; then
     if team_valid_login "$ID_OWNER_FLAG"; then id_owner="$ID_OWNER_FLAG"
     else echo "  warn  --owner '$ID_OWNER_FLAG' is not a GitHub username; not written." >&2
     fi
+  elif [ -n "$(id_tracked ownerGithubUser)" ]; then
+    id_answered="$id_answered ownerGithubUser"
   else
     # gh first (it knows which account is authenticated), then the git config key a human
     # may have set for the same purpose. Both are best-effort and neither may hang the
@@ -2253,6 +2268,8 @@ else
     if team_valid_email "$ID_EMAIL_FLAG"; then id_email="$ID_EMAIL_FLAG"
     else echo "  warn  --email '$ID_EMAIL_FLAG' is not an address this can write safely; not written." >&2
     fi
+  elif [ -n "$(id_tracked authorEmail)" ]; then
+    id_answered="$id_answered authorEmail"
   else
     # The tracked `people` map first: that address says which ENTITY this instance's work
     # belongs to, and is never derived from the login (docs/sharing.md).
@@ -2270,6 +2287,8 @@ else
     if id_valid_path "$ID_REPOS_FLAG"; then id_repos="$ID_REPOS_FLAG"
     else echo "  warn  --repos-root '$ID_REPOS_FLAG' is not an absolute path; not written." >&2
     fi
+  elif [ -n "$(id_tracked reposRoot)" ]; then
+    id_answered="$id_answered reposRoot"
   else
     # The bundle's PARENT: the instance and the product repos are physical peers on disk
     # (link-repos.sh), so the directory holding this bundle is reposRoot on every machine
@@ -2290,8 +2309,12 @@ else
     id_manual_note
   elif [ -z "$id_owner$id_email$id_repos" ]; then
     id_write=no
-    echo "  skip  instance.config.local.json (none of the three values could be derived here)."
-    id_manual_note
+    # Silent when the tracked file answers all three: there is nothing to derive and
+    # nothing missing, which is not a skip worth a line.
+    if [ "$(printf '%s\n' $id_answered | grep -c . || true)" != 3 ]; then
+      echo "  skip  instance.config.local.json (none of the three values could be derived here)."
+      id_manual_note
+    fi
   fi
 
   if [ "$id_write" = yes ]; then
@@ -2339,9 +2362,14 @@ else
   # What it could NOT derive, named one key at a time. `needs` is the marker
   # /ai-bridge:init reads: one batched question for exactly these, then re-run with the
   # flags. Never a guess, and never a question about a value that was derived.
-  [ -n "$id_owner" ] || echo "  needs  ownerGithubUser — re-run with: --owner <github-login>"
-  [ -n "$id_email" ] || echo "  needs  authorEmail — re-run with: --email <commit-address>"
-  [ -n "$id_repos" ] || echo "  needs  reposRoot — re-run with: --repos-root <absolute path>"
+  id_needs() { # <key> <value> <flag>
+    [ -z "$2" ] || return 0
+    case " $id_answered " in *" $1 "*) return 0 ;; esac
+    echo "  needs  $1 — re-run with: $3"
+  }
+  id_needs ownerGithubUser "$id_owner" "--owner <github-login>"
+  id_needs authorEmail     "$id_email" "--email <commit-address>"
+  id_needs reposRoot       "$id_repos" "--repos-root <absolute path>"
 fi
 
 # ===========================================================================
