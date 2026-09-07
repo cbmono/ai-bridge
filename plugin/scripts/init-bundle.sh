@@ -1339,6 +1339,25 @@ fi
 # hand-edit reaches exactly that state.
 gi="$TARGET/.gitignore"
 [ -f "$gi" ] || : > "$gi"
+
+# EVERY PATTERN THIS SECTION APPENDS GOES INTO THE BUNDLE'S OWN `# Instance additions`
+# BLOCK, AND THAT BLOCK STAYS LAST. refresh-seeds.sh treats the heading through end of
+# file as bundle-owned, so a pattern written there never reads as seed drift — appending
+# after the seed's managed blocks instead is what made `.gitignore` conflict on every
+# bundle forever (2x/task-008). The marker-wrapped blocks go AHEAD of the heading, so the
+# layout is: seed, then the managed markers, then the instance block.
+GI_ADDITIONS="# Instance additions (kept across seed refreshes)"
+gi_add() {          # stdin -> the end of the instance block, creating its heading if absent
+  grep -qxF "$GI_ADDITIONS" "$gi" || printf '\n%s\n' "$GI_ADDITIONS" >> "$gi"
+  cat >> "$gi"
+}
+gi_add_before() {   # stdin -> immediately before that heading; at EOF when there is none
+  local ln tmp
+  ln="$(grep -nxF "$GI_ADDITIONS" "$gi" | head -1 | cut -d: -f1)" || true
+  if [ -z "$ln" ]; then { printf '\n'; cat; } >> "$gi"; return 0; fi
+  tmp="$gi.tmp.$$"
+  { sed -n "1,$((ln-1))p" "$gi"; cat; sed -n "$ln,\$p" "$gi"; } > "$tmp" && mv "$tmp" "$gi"
+}
 if grep -qxF "$BEGIN_MARK" "$gi"; then
   mb="$(grep -nxF "$BEGIN_MARK" "$gi" | head -1 | cut -d: -f1)" || true
   me="$(grep -nxF "$END_MARK" "$gi" | head -1 | cut -d: -f1)" || true
@@ -1361,7 +1380,7 @@ fi
 # block, which is regenerated from the machinery file list and would drop any line
 # that isn't a machinery path. Appended once; a hand-written `repos/` also counts.
 if ! grep -qE '^/?repos/?$' "$gi"; then
-  cat >> "$gi" <<'GI'
+  gi_add <<'GI'
 
 # Derived view of the group's product repos (link-repos.sh) — symlinks
 # into reposRoot, never content, and machine-local like the rest. Delete it
@@ -1375,7 +1394,7 @@ fi
 # only when ABSENT, so an instance stamped before this directory existed — which is
 # every instance in existence — would otherwise commit a generated HTML page.
 if ! grep -qE '^/?\.board-live/?$' "$gi"; then
-  cat >> "$gi" <<'GI'
+  gi_add <<'GI'
 
 # The local live board page (watch-board.sh). Derived output, regenerated on
 # every task-document change, and per-machine. Delete it freely.
@@ -1387,7 +1406,7 @@ fi
 # reason: every instance in existence was stamped before this file existed, and a derived
 # cache of committed state has no business being committed back.
 if ! grep -qE '^/?\.board-others\.json$' "$gi"; then
-  cat >> "$gi" <<'GI'
+  gi_add <<'GI'
 
 # The board's other-owners cache (build-board.sh) — the second half of the page,
 # read from the tracked documents at HEAD and stored against the SHA it was computed for.
@@ -1400,7 +1419,7 @@ fi
 # same reason: every instance in existence was stamped before this file existed, and a lock
 # that got committed would stop being per-clone — which is the one property it has.
 if ! grep -qE '^/?\.tick-lock$' "$gi"; then
-  cat >> "$gi" <<'GI'
+  gi_add <<'GI'
 
 # The PM dispatch lock (tick-lock.sh) — written by /ai-bridge:dispatch
 # immediately before it dispatches a tick and released when that tick reports, so the
@@ -1418,7 +1437,7 @@ fi
 # satisfied and would never append a line added to its heredoc. A second file needs a second
 # guard, or the ignore silently reaches nobody who has the first one.
 if ! grep -qE '^/?\.tick-lock\.claim$' "$gi"; then
-  cat >> "$gi" <<'GI'
+  gi_add <<'GI'
 
 # The tick's claim on the dispatch lock (tick-lock.sh) — the tick checks the lock on
 # entry too, because a resumed tick never passes through the launcher, and this file is what
@@ -1435,7 +1454,7 @@ fi
 # tick records it, the next tick's probe compares against it, and deleting it costs one
 # full tick, never correctness.
 if ! grep -qE '^/?\.tick-state$' "$gi"; then
-  cat >> "$gi" <<'GI'
+  gi_add <<'GI'
 
 # The idle-tick fingerprint (tick-delta.sh) — written at the end of a FULL tick,
 # compared by the next tick's fast-path probe. PER CLONE and never committed; delete
@@ -1448,7 +1467,7 @@ fi
 # every bundle in existence satisfies the guards above, so a line added to one of their
 # heredocs reaches nobody.
 if ! grep -qE '^/?\.ai-bridge/refresh/?$' "$gi"; then
-  cat >> "$gi" <<'GI'
+  gi_add <<'GI'
 
 # Copies refresh-seeds.sh keeps when it merges a seed change in — the file it replaced,
 # and any merge it could not resolve, with its conflict markers. Derived and per-machine;
@@ -1468,7 +1487,7 @@ fi
 # exit 1 is a branch and not an abort. It asks whether the LAST board.html pattern in the
 # file is already an ignore, so re-stamping appends nothing.
 if [ "$(grep -E '^!?/?board\.html$' "$gi" | tail -1)" != "/board.html" ]; then
-  cat >> "$gi" <<'GI'
+  gi_add <<'GI'
 
 # The bundle's board page (build-board.sh) — DERIVED, never tracked. `/ai-bridge:board
 # serve` serves it from /.board-live/ on 127.0.0.1, so nothing about the board is pushed.
@@ -1506,7 +1525,7 @@ fi
 # re-inits a repo over a copy of seed/. `instance.config.local.json` has no such
 # collision (no seed file is named that), so it is in both places, harmlessly.
 if ! grep -qxF 'instance.config.local.json' "$gi"; then
-  cat >> "$gi" <<'GI'
+  gi_add <<'GI'
 
 # Per-machine identity overrides (authorEmail, ownerGithubUser), winning over the
 # TRACKED instance.config.json for those keys only. Never commit it: a shared bundle
@@ -1517,7 +1536,7 @@ fi
 # Same shape, same reason, for `.env`: a bundle stamped before this line existed would
 # otherwise carry an API key into git the first time somebody wrote one down.
 if ! grep -qxF '.env' "$gi"; then
-  cat >> "$gi" <<'GI'
+  gi_add <<'GI'
 
 # API keys — for a substituted model backend (the ai-bridge-llm companion) or anything
 # else. NEVER tracked: a key in a tracked file is a published key.
@@ -1651,10 +1670,11 @@ EOF
     # adjacent shape (or one reordered enough that guessing at it risks a bad splice —
     # left alone rather than guessed at). Append a new marker-wrapped block.
     {
-      printf '\n%s\n' "$IDX_BEGIN_MARK"
+      printf '%s\n' "$IDX_BEGIN_MARK"
       cat "$idxbody"
       printf '%s\n' "$IDX_END_MARK"
-    } >> "$gi"
+      printf '\n'
+    } | gi_add_before
   fi
 fi
 rm -f "$idxbody"
