@@ -2238,7 +2238,6 @@ if [ -e "$ID_LCFG" ]; then
     if [ -n "$ID_OWNER_FLAG$ID_EMAIL_FLAG$ID_REPOS_FLAG" ]; then
       echo "        --owner/--email/--repos-root only apply when that file is absent."
     fi
-    id_manual_note
   fi
 else
   # ------------------------------------------------------------- derive, or report
