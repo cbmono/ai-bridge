@@ -7,6 +7,7 @@
 #     init-bundle.sh --instance [TARGET]  # the same thing, stated explicitly
 #     init-bundle.sh --refresh-seeds [TARGET]  # also APPLY the seed 3-way merge
 #     init-bundle.sh --with-objectives [TARGET]  # also create the OPTIONAL objectives/ dir
+#     init-bundle.sh --normalise-config [TARGET]  # also APPLY the config findings it reports
 #     init-bundle.sh --config           # link config/required/ into ~/.claude (CLAUDE_CONFIG_DIR wins)
 #     init-bundle.sh --uninstall [TARGET]  # remove the repos/ view and any legacy machinery links
 #     init-bundle.sh --config --uninstall   # remove only the config-layer symlinks this created
@@ -120,6 +121,7 @@ LAYER_FLAG=""
 TARGET=""
 REFRESH_SEEDS=0
 WITH_OBJECTIVES=0
+NORMALISE_CONFIG=0
 for arg in "$@"; do
   case "$arg" in
     --uninstall) MODE="uninstall" ;;
@@ -132,6 +134,9 @@ for arg in "$@"; do
     # `objectives/` is the OPTIONAL layer (SCHEMA.md -> type: Objective), so the seed
     # ships none and this flag is how a bundle that wants one asks for it.
     --with-objectives) WITH_OBJECTIVES=1 ;;
+    # APPLY the config findings step 4d reports, instead of only printing them. Off by
+    # default for the same reason --refresh-seeds is: this one rewrites a TRACKED file.
+    --normalise-config) NORMALISE_CONFIG=1 ;;
     --config|--instance)
       # Mutually exclusive, and said so rather than letting the last flag win: the two
       # write to completely different places, so a run that meant one and did the other
@@ -145,7 +150,7 @@ for arg in "$@"; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/config-layer.test.sh asserts the flags appear in the output, which is
       # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,59p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,60p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
     *)
@@ -2329,9 +2334,40 @@ EOF
   fi
 fi
 
+# ===========================================================================
+# 4d. THE TWO CONFIG FILES — report what is out of place, apply when asked.
+# ===========================================================================
+#
+# Nothing else looks at both files together: the validator sees no error here, and a
+# plugin update cannot reach a bundle's data at all. So keys drift into the file they do
+# not belong in, keys added since the bundle was stamped stay absent, and three bundles
+# end up in three key orders. The stamp is the moment to say so. REPORTING is the default
+# because the fix rewrites a TRACKED file, which is the human's call to make;
+# `--normalise-config`, or a yes at a terminal, is that call. Silent on a clean pair.
+NORMALISER="$BIN_DIR/normalise-config.sh"
+if [ -f "$NORMALISER" ]; then
+  norm_rc=0
+  bash "$NORMALISER" "$TARGET" || norm_rc=$?
+  if [ "$norm_rc" = 1 ]; then
+    norm_apply="$NORMALISE_CONFIG"
+    # NORMALISE_CONFIG_STDIN=1 is the one way past the TTY test, and it exists so this
+    # prompt can be tested — the same role TEAM_SETUP_STDIN plays for the roster block.
+    if [ "$norm_apply" = 0 ] && { [ -t 0 ] || [ "${NORMALISE_CONFIG_STDIN:-}" = 1 ]; }; then
+      printf '  Apply them now? [y/N] ' >&2
+      norm_reply=""
+      IFS= read -r -t 30 norm_reply || norm_reply=""
+      case "$norm_reply" in [Yy]|[Yy][Ee][Ss]) norm_apply=1 ;; esac
+    fi
+    if [ "$norm_apply" = 1 ]; then
+      bash "$NORMALISER" "$TARGET" --apply --quiet || true
+    fi
+  fi
+fi
+
 echo "Done. Seed content in place; this bundle carries no machinery and no template links."
 echo "Next: edit instance.config.json, then run /ai-bridge:dispatch from this directory."
-echo "      (Set reposRoot first, then re-run /ai-bridge:init to fill in repos/.)"
+echo "      (Set reposRoot in instance.config.local.json — it is per-machine — then"
+echo "       re-run /ai-bridge:init to fill in repos/.)"
 # THE OTHER HALF, and it is not this script's to install. Every slash command ships in the
 # ai-bridge PLUGIN now, per machine rather than per instance, so a perfect stamp still
 # leaves a bundle nobody can drive if the plugin is missing — and the only symptom is
