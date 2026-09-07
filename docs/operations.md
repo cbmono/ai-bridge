@@ -964,7 +964,7 @@ owner                 example-user-007 · you@example.com  local/tracked
 maxAgentsInFlight     2                                   local
 maxPrLoc              2000                                tracked
 
-AGENT (role)          TIER → MODEL                        FROM
+AGENT (role)          TIER     → MODEL                    FROM
 cataloguer            standard → sonnet                   tracked
 software-engineer     deep     → opus                     local
 

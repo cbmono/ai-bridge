@@ -297,7 +297,8 @@ assert "an agent's tier AND the alias it maps to are printed" \
 assert "…for a second agent on a different tier too" \
   "$(eq "$(value cataloguer)" 'standard → sonnet')"
 assert "…under a header matching the settings table's" "$(has 'AGENT (role)' "$OUT")"
-assert "…whose value column is TIER → MODEL"           "$(has 'TIER → MODEL' "$OUT")"
+assert "…whose value column is TIER → MODEL, padded to the widest tier (§2c)" \
+  "$(has 'TIER     → MODEL' "$OUT")"
 se_alias="$( cd "$INST" && bash "$SCRIPTS/resolve-model.sh" software-engineer 2>/dev/null )"
 assert "…and the alias is the one resolve-model.sh would dispatch on ($se_alias)" \
   "$(eq "$(value software-engineer)" "deep → $se_alias")"
@@ -344,6 +345,13 @@ print(" ".join(str(l.index("\u2192")) for l in sys.stdin.read().splitlines()
                if "\u2192" in l and re.match(r"^[a-z][a-z-]* ", l)))'; }
 arrow_col() { arrow_cols | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/ *$//'; }
 rows_seen() { arrow_cols | wc -w | tr -d ' '; }
+# The HEADER's arrow, which `arrow_cols` excludes by design: `TIER` is padded from the same
+# measured width as the rows, so the header's `→` and its `MODEL` label sit over the column
+# they name. Unpadded it sat two to eight columns left of every row it headed (task-001).
+head_arrow_col() { printf '%s\n' "$OUT" | python3 -c '
+import sys
+print(" ".join(str(l.index("\u2192")) for l in sys.stdin.read().splitlines()
+               if l.startswith("AGENT (role)") and "\u2192" in l))'; }
 # The role column is 20 wide plus its two-space gutter and the space before the arrow, so
 # the arrow lands at 23 + <tier width>. Asserting the NUMBER, not just "all equal", is what
 # makes each fixture's width the claim: "all equal" is also true of a table fixed at 8.
@@ -354,12 +362,16 @@ assert "only light/deep: the tier pads to 5, so every arrow sits at 23+5" \
   "$(eq "$(arrow_col)" 28)"
 assert "…on both rows, not one"                  "$(eq "$(rows_seen)" 2)"
 assert "…with the widest tier itself unpadded"   "$(has 'light → haiku' "$OUT")"
+assert "…and the header's arrow sits in that same column" "$(eq "$(head_arrow_col)" 28)"
+assert "…so MODEL starts over the model names"            "$(has 'TIER  → MODEL' "$OUT")"
 tiers_cfg '{ "light": "haiku", "standard": "sonnet", "deep": "opus" }' \
           '{ "auditor": "light", "cataloguer": "standard", "software-engineer": "deep" }'
 run
 assert "standard present: the tier pads to 8, arrows at 23+8" "$(eq "$(arrow_col)" 31)"
 assert "…on all three rows"                           "$(eq "$(rows_seen)" 3)"
 assert "…and the tier stays a full word, not strd"    "$(has 'standard → sonnet' "$OUT")"
+assert "…and the header's arrow moves out with them"  "$(eq "$(head_arrow_col)" 31)"
+assert "…so MODEL starts over the model names"        "$(has 'TIER     → MODEL' "$OUT")"
 # A TIER WIDER THAN `standard`, which is the case a literal 8 gets wrong: the padding is
 # computed from what this banner shows, so a name nobody has coined yet aligns too.
 tiers_cfg '{ "deep": "opus", "experimental": "fable" }' \
@@ -368,6 +380,8 @@ run
 assert "a 12-character tier: the arrows move out to 23+12" "$(eq "$(arrow_col)" 35)"
 assert "…on both rows"                                     "$(eq "$(rows_seen)" 2)"
 assert "…and that tier is printed in full"                 "$(has 'experimental → fable' "$OUT")"
+assert "…and the header's arrow with them"                 "$(eq "$(head_arrow_col)" 35)"
+assert "…so MODEL starts over the model names"             "$(has 'TIER         → MODEL' "$OUT")"
 tracked_cfg
 
 # =======================================================================================
