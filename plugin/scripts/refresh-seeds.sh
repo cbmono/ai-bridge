@@ -411,10 +411,11 @@ while IFS= read -r rel; do
   # `ambiguous` and has no fixer at all), so a merge here would be the same write arriving
   # by another door. It is REPORTED, with the diff to run, and never touched.
   case "$rel" in
-    index.md|knowledge/index.md)
-      # DERIVED, NEVER PORTED. Both indexes are regenerated from frontmatter (build-kb-index.sh,
+    knowledge/index.md)
+      # DERIVED, NEVER PORTED. The KB index is regenerated from frontmatter (build-kb-index.sh,
       # the tick), so the seed's stub is only the shape of an empty bundle: merging it onto a
       # populated instance re-appends the stub on every run (measured 2026-09-07, proceso).
+      # The bundle-root index.md is NOT in this class: nothing generates it, it is a seed doc.
       if [ -e "$inst_f" ] && ! cmp -s "$seed_f" "$inst_f"; then
         report "DERIVED" "$rel"
         detail "regenerated, never merged: build-kb-index.sh rewrites it from frontmatter."
