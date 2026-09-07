@@ -84,6 +84,9 @@ printf '# Index\nline A\nline B\nline C\nline D\n' > "$TPL/plugin/seed/index.md"
 printf '# Todos\nt1\nt2\nt3\nt4\nt5\nt6\nt7\nt8\n'  > "$TPL/plugin/seed/todos.md"
 printf '# Panel\nintro line\ntail line\n'           > "$TPL/plugin/seed/CLAUDE.md"
 printf '# Log\n'                                    > "$TPL/plugin/seed/log.md"
+# No `# Instance additions` heading in seed v1 — that is a bundle stamped before the slot
+# existed, so the stamp has to create it (2x/task-008).
+printf 'node_modules/\ntmp/\n'                     > "$TPL/plugin/seed/.gitignore"
 ( cd "$TPL" && git init -q -b main . && git add -A && gc "template, seed v1" )
 
 # Every run below goes through the FIXTURE's copy of the script: `upgrade.sh` derives its
@@ -445,6 +448,59 @@ assert "…and the clone is no longer shallow on disk" \
   "$(test ! -f "$SHOME/marketplaces/fixture-market/.git/shallow" && echo 0 || echo 1)"
 assert "…so the same file is judged on a real base" "$(has 'PORTABLE  index.md' "$DEEP_OUT")"
 assert "…and the run reports 0 unknown"             "$(has 'summary: .* 0 unknown' "$DEEP_OUT")"
+
+echo "== .gitignore's instance-additions block is the bundle's own (2x/task-008) =="
+# The one file every bundle customises was the one file that could never read clean: the
+# seed's lines were all present, in seed order, and the trailing block of bundle patterns
+# made every run a CONFLICT. The block — the `# Instance additions` heading through EOF,
+# plus the managed marker block init puts directly above it — is split off both sides
+# before the merge and re-appended verbatim after it.
+GI_HEAD='# Instance additions (kept across seed refreshes)'
+gi_line()  { grep -nxF "$2" "$1" | head -1 | cut -d: -f1 || true; }
+gi_where() { # <file> <pattern> <before|after> the heading
+  local h p; h="$(gi_line "$1" "$GI_HEAD")"; p="$(gi_line "$1" "$2")"
+  [[ -n "$h" && -n "$p" ]] || { echo 1; return; }
+  if [[ "$3" == before ]]; then [[ "$p" -lt "$h" ]] && echo 0 || echo 1
+  else [[ "$p" -gt "$h" ]] && echo 0 || echo 1; fi
+}
+gi_labels() { printf '%s\n' "$1" | awk '$1 ~ /^[A-Z]+$/ && $2 == ".gitignore" { print $1 }' | tr '\n' ' '; }
+
+assert "the shipped seed .gitignore ends with the empty slot" \
+  "$(yes_if grep -qxF "$GI_HEAD" "$TPL_SRC/plugin/seed/.gitignore")"
+assert "…and no pattern line follows it in the seed" \
+  "$(awk -v h="$GI_HEAD" '$0==h{f=1;next} f && $0 !~ /^[[:space:]]*(#.*)?$/{n++} END{exit n>0}' \
+       "$TPL_SRC/plugin/seed/.gitignore" && echo 0 || echo 1)"
+
+GINST="$TMP/group/_ai-bridge-gitignore"
+mkdir -p "$GINST"
+bash "$TPL/plugin/scripts/init-bundle.sh" "$GINST" > "$TMP/gi-stamp.out" 2>&1
+assert "the stamp gives a bundle without the slot one"  "$(yes_if grep -qxF "$GI_HEAD" "$GINST/.gitignore")"
+assert "…and writes its own patterns INTO that block"   "$(gi_where "$GINST/.gitignore" '/.tick-state' after)"
+assert "…with the managed index markers ahead of it"    "$(gi_where "$GINST/.gitignore" '# >>> ai-bridge index ignore >>>' before)"
+assert "…so the instance block is last"                 "$(gi_where "$GINST/.gitignore" '# <<< ai-bridge index ignore <<<' before)"
+
+# IN SYNC WITH ADDITIONS: a bundle pattern in the block, the seed unchanged.
+printf '/MY-OWN-PATTERN\n' >> "$GINST/.gitignore"
+GI_REPORT="$(bash "$UPGRADE" "$GINST" 2>&1)"
+assert "a bundle pattern in the block leaves .gitignore IN SYNC" \
+  "$([[ -z "$(gi_labels "$GI_REPORT")" ]] && echo 0 || echo 1)"
+
+# PORTED WITH ADDITIONS: now the seed changes, above its own heading.
+printf 'SEED-V3-ONLY\n' >> "$TPL/plugin/seed/.gitignore"
+( cd "$TPL" && git add -A && gc "template, seed v3 — a new .gitignore line" )
+GI_REPORT="$(bash "$UPGRADE" "$GINST" 2>&1)"
+assert "a seed .gitignore change is PORTABLE, not a CONFLICT" "$(has 'PORTABLE  .gitignore' "$GI_REPORT")"
+GI_APPLY="$(bash "$UPGRADE" "$GINST" --apply 2>&1)"
+assert "--apply ports it"                        "$(has 'PORTED    .gitignore' "$GI_APPLY")"
+assert "…the seed's new line landed"             "$(yes_if grep -qxF 'SEED-V3-ONLY' "$GINST/.gitignore")"
+assert "…above the instance block"               "$(gi_where "$GINST/.gitignore" 'SEED-V3-ONLY' before)"
+assert "…the bundle's own pattern survived"      "$(yes_if grep -qxF '/MY-OWN-PATTERN' "$GINST/.gitignore")"
+assert "…still inside the block"                 "$(gi_where "$GINST/.gitignore" '/MY-OWN-PATTERN' after)"
+assert "…and no conflict marker was written"     "$(hasnt '<<<<<<<' "$(cat "$GINST/.gitignore")")"
+GI_REPORT="$(bash "$UPGRADE" "$GINST" 2>&1)"
+assert "the ported bundle reads IN SYNC again" \
+  "$([[ -z "$(gi_labels "$GI_REPORT")" ]] && echo 0 || echo 1)"
+
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

@@ -144,13 +144,23 @@ SEED_MANAGED_IGNORE='board\.html|\.board-live/|AWAITING\.md|\.tick-lock|\.ai-bri
 # before the merge and re-appended unchanged after it — otherwise the one file every bundle
 # customises is the one file that can never read clean (2x/task-008).
 GI_ADDITIONS_RE='^# Instance additions'
+# …and the index-ignore marker block rides with it when init has put it directly above.
+# Those two lines are written by this machinery and appear in no seed, so leaving them in
+# the body puts a bundle-side insertion exactly where a seed append lands — a CONFLICT on
+# the next seed edit, which is the bug this whole split exists to remove.
+GI_IDX_BEGIN='# >>> ai-bridge index ignore >>>'
+GI_IDX_END='# <<< ai-bridge index ignore <<<'
 gi_split() { # <file> <body-out> <block-out>; no heading ⇒ the whole file is body
-  awk -v re="$GI_ADDITIONS_RE" -v body="$2" -v block="$3" '
+  awk -v re="$GI_ADDITIONS_RE" -v bm="$GI_IDX_BEGIN" -v em="$GI_IDX_END" \
+      -v body="$2" -v block="$3" '
+    function back(i) { while (i > 1 && l[i-1] ~ /^[[:space:]]*$/) i--; return i }
     { l[NR] = $0 } $0 ~ re && !h { h = NR }
     END {
       printf "" > body; printf "" > block
-      s = h ? h : NR + 1
-      while (h && s > 1 && l[s-1] ~ /^[[:space:]]*$/) s--
+      if (!h) { for (i = 1; i <= NR; i++) print l[i] > body; exit }
+      s = back(h)
+      if (s > 1 && l[s-1] == em)
+        for (j = s - 1; j >= 1; j--) if (l[j] == bm) { s = back(j); break }
       for (i = 1; i < s; i++)  print l[i] > body
       for (i = s; i <= NR; i++) print l[i] > block
     }' "$1"
