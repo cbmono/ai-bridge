@@ -108,8 +108,10 @@ assert "group becomes the title"                     "$(fhas '<title>Alpha Bridg
 
 echo "== projects are collapsed, and finished ones sink =="
 assert "three <details>, none open"                  "$(fhasnt '<details class="proj" open' "$OUT")"
-assert "a finished project is marked"                "$(fhas 'done-tag' "$OUT")"
-assert "…under a Finished divider"                   "$(fhas 'class="sep"' "$OUT")"
+# The ✓ is the CARET on a finished row now (`.proj.fin .phead::before`), so the marker
+# is the card's own class rather than a chip repeating what the divider already says.
+assert "a finished project is marked"                "$(fhas 'class="proj fin' "$OUT")"
+assert "…under a Finished divider"                   "$(fhas 'class="sep fin"' "$OUT")"
 assert "…and it sorts AFTER the live one"            "$(yes_if python3 -c "
 import sys; h=open('$OUT').read()
 sys.exit(0 if h.index('Live work') < h.index('Finished work') else 1)")"
@@ -221,7 +223,7 @@ assert "the fixture renders and exits 0"             "$(eq "$brc" 0)"
 # (1) THE COUNT. Two awaiting items on that project, so the chip says two — the same
 # number the pooled list used to contribute for it.
 assert "a project with items carries a weighted count" \
-  "$(fhas '<span class="c you"><b>2</b> awaiting you</span>' "$BOUT")"
+  "$(fhas '<span class="c you"><b>2</b> need you</span>' "$BOUT")"
 assert "…and only the project that has items carries one" \
   "$(eq "$(grep -oF 'class="c you"' "$BOUT" | wc -l | tr -d ' ')" 1)"
 # (2) THE MARKED CARD. Not the same fact as the chip: the chip is one pill among six in
@@ -256,7 +258,7 @@ import sys
 t = open('$BOUT').read()
 sys.exit(0 if t.index('<details class=\"proj') < t.index('class=\"rail\"') else 1)")"
 assert "…replaced by one line saying where to look" \
-  "$(fhas '2 waiting on you, in 1 project — marked and sorted to the top below.' "$BOUT")"
+  "$(fhas '<span class="sig">2 items need you</span> across 1 project' "$BOUT")"
 
 echo "== the creation date comes from project.md, and ONLY a date does =="
 assert "the date renders on the collapsed line" \
@@ -287,7 +289,7 @@ assert "…and the chips still follow it"              \
   "$(card "$BOUT" 'Two decisions' | before_in '<span class="pdate"' 'class="c you"')"
 assert "…still ahead of the ✕"                       \
   "$(card "$BOUT" 'Two decisions' | before_in 'class="c you"' 'class="pclose"')"
-assert "…and .counts holds its own end of the line"  "$(fhas '.counts{display:flex;gap:.35rem;flex-wrap:wrap;margin-left:auto}' "$BOUT")"
+assert "…and .counts holds its own end of the line"  "$(fhas '.counts{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;align-items:center;' "$BOUT")"
 assert "…which needs .ptitle to stop growing"        "$(fhas '.ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto' "$BOUT")"
 
 echo "== the ✕ copies a command and can never close anything =="
@@ -802,20 +804,21 @@ echo "== the collapsed line carries ONE pill, and it is the awaiting one =="
 # row and an outlined `N questions` at the end. The questions counter is gone and the
 # surviving pill took its slot and its treatment.
 assert "the awaiting pill is there, with the awaiting count" \
-  "$(card "$HB" 'One handle' | fhas_in '<span class="c you"><b>2</b> awaiting you</span>')"
+  "$(card "$HB" 'One handle' | fhas_in '<span class="c you"><b>2</b> need you</span>')"
 assert "…and no questions counter survives anywhere" "$(fhasnt 'question</span>' "$HB")"
 assert "…nor its plural"                             "$(fhasnt 'questions</span>' "$HB")"
 assert "…nor the class it was drawn with"            "$(fhasnt 'class="c q"' "$HB")"
 assert "…nor the CSS rule behind that class"         "$(fhasnt '.c.q{' "$HB")"
 # THE SLOT IS THE QUESTIONS PILL'S: last of the count chips, after `pending`, where the
 # questions counter used to sit — not first in the row, where it used to sit itself.
-assert "…and it sits where the questions pill sat"   "$(card "$HB" 'One handle' | before_in 'pending</span>' 'awaiting you</span>')"
+assert "…and it sits where the questions pill sat"   "$(card "$HB" 'One handle' | before_in 'pending</span>' 'need you</span>')"
 assert "…after the done chip too"                    "$(card "$HB" 'One handle' | before_in 'class="c ok"' 'class="c you"')"
-# THE TREATMENT IS THE QUESTIONS PILL'S TOO: outlined and signal-coloured, not the
-# filled ground-on-signal chip it used to be. Both directions, so a rule that only
-# added the outline would not pass.
-assert "…drawn outlined in the signal colour"        "$(fhas '.c.you{color:var(--signal);border-color:color-mix(in srgb,var(--signal) 40%,var(--line));' "$HB")"
-assert "…and no longer filled"                       "$(fhasnt '.c.you{background:var(--signal)' "$HB")"
+# THE FILL IS BACK, and the outline is what went. The soft-slate redesign makes every
+# other count a plain run of text, so the amber pill is now the ONLY box on the line —
+# a stronger channel than the outlined chip it replaces, not a weaker one. Both
+# directions, so a rule that only filled the pill would not pass.
+assert "…drawn as the one filled pill on the line"   "$(fhas '.c.you{background:var(--signal);color:var(--signal-ink);font-weight:700;' "$HB")"
+assert "…and every other count carries no box at all" "$(fhas '.c,.tag{font-size:13px;color:var(--muted);border:0;background:none;padding:0;' "$HB")"
 # #74'S QUESTION STILL HAS TO HOLD: from the collapsed view alone, which projects need
 # me? The pill lost its fill, so the two channels that never depended on it are what
 # carry it — and they are asserted here rather than assumed.
@@ -907,7 +910,7 @@ assert "…exactly one item in the rail"               \
 # `fhasnt_in` above is green because the helper hands back an empty string.
 assert "…and rail_of really returns that project's rail" \
   "$(rail_of "$TM" 'Terminal and live' | fhas_in '<section class="rail"')"
-assert "…and the collapsed count agrees"             "$(card "$TM" 'Terminal and live' | fhas_in '<b>1</b> awaiting you')"
+assert "…and the collapsed count agrees"             "$(card "$TM" 'Terminal and live' | fhas_in '<b>1</b> needs you')"
 # THE TASK TABLE IS UNTOUCHED: the question is still visible where the task lives. The
 # guard removes it from the queue of things blocking you, not from the record.
 assert "the terminal task still renders in the table" "$(card "$TM" 'Terminal and live' | fhas_in 'Shipped already')"
@@ -1062,24 +1065,25 @@ assert "…a longer name wraps rather than overflowing" "$(fhas '.tfile>.tid{mar
 # VERTICALLY CENTRED. Against a two-line title every other cell in the row — the state,
 # the dependencies, the PR link — sat pinned to the first line and read as though it
 # belonged to that line rather than to the row.
-assert "cells are centred, not baselined"            "$(fhas 'td{padding:.4rem .45rem;vertical-align:middle;' "$RW")"
-assert "…and no baseline rule survives on td"        "$(fhasnt 'td{padding:.4rem .45rem;vertical-align:baseline' "$RW")"
+# The row is a grid now, so the padding is the ROW's; the cell keeps the alignment.
+assert "cells are centred, not baselined"            "$(fhas 'td{padding:0;vertical-align:middle;' "$RW")"
+assert "…and no baseline rule survives on td"        "$(fhasnt 'vertical-align:baseline' "$RW")"
 
-echo "== the promote control shares the filename's line, and looks like a control at rest =="
-# ON THE FILENAME'S LINE, IMMEDIATELY AFTER IT — inside `.tfile`, which is that line.
-# It was a sibling of the title inside `.tmain`, i.e. a THIRD line on the narrow layout
-# (filename, control, title) while every other row was two: the one row asking for an
-# action was also the only row taller than its neighbours.
-assert "it sits on the filename's own line, right after it" \
-  "$(flat < "$RW" | fhas_in '</span><button class="promote"')"
-assert "…inside the filename column, not the title one" "$(flat < "$RW" | fhas_in '<span class="tfile"><span class="tid">001-local-board</span><button class="promote"')"
-# THE THIRD LINE IS GONE, stated as the absence that would bring it back: a promote
+echo "== the promote chip sits in the PR column, on the rows that have no PR =="
+# IT MOVED OUT OF THE TASK CELL. It used to ride on the filename's own line, which cost
+# the task column width on every draft row; the PR cell is empty on exactly those rows,
+# so the chip is free there. The task cell is back to filename over title, nothing else.
+assert "it sits in the PR cell"                      \
+  "$(flat < "$RW" | fhas_in '<td class="prs"><button class="promote"')"
+assert "…and the filename line carries only the filename" \
+  "$(flat < "$RW" | fhasnt_in '<span class="tid">001-local-board</span><button class="promote"')"
+# THE THIRD LINE IS STILL GONE, stated as the absence that would bring it back: a promote
 # control opening `.tmain` is exactly the markup that stacked it above the title.
 assert "…and never opens the title column"           "$(flat < "$RW" | fhasnt_in '<div class="tmain"><button class="promote"')"
-assert "…before the title button, not after it"      "$(python3 -c "
+assert "…after the title it belongs to, in its own row" "$(python3 -c "
 import sys
 t = open('$RW').read()
-sys.exit(0 if t.index('class=\"promote\"') < t.index('Short name, long title') else 1)" && echo 0 || echo 1)"
+sys.exit(0 if t.index('Short name, long title') < t.index('class=\"promote\"') else 1)" && echo 0 || echo 1)"
 assert "…only on a draft row"                        "$(eq "$(grep -oF 'class="promote"' "$RW" | wc -l | tr -d ' ')" 1)"
 # THE PAYLOAD IS THE HANDLE AND THE VERB, and nothing else. It was three sentences —
 # `In the ai-bridge instance, promote <handle> from draft to ready: review its acceptance
@@ -1090,17 +1094,16 @@ assert "…only on a draft row"                        "$(eq "$(grep -oF 'class=
 assert "…still only COPYING, and now handle + verb"  "$(fhas 'class="promote" data-copy="jitter/task-001: promote to ready"' "$RW")"
 assert "…and the three-sentence prompt is gone"      "$(fhasnt 'In the ai-bridge instance, promote' "$RW")"
 assert "…from every rendered page"                   "$(fhasnt 'tighten any that are not testable' "$HB")"
-# THE STATES ARE INVERTED. The accent outline is the RESTING appearance — a control that
-# only looks like one under a pointer is invisible to a touch screen — and hover drops
-# the accent for a filled neutral, so hovering says "you are on this one" instead of
-# "this is a button". Both halves are asserted: a rule that adds the accent at rest and
-# leaves it on hover would pass the first alone.
-assert "the accent is the resting appearance"        "$(fhas 'border-color:var(--accent);color:var(--accent);background:transparent}' "$RW")"
-assert "…and hover drops it for a neutral fill"      "$(fhas '.promote:hover,.promote:focus-visible{border-color:var(--ink);color:var(--ink);' "$RW")"
-assert "…so no greenish fill arrives on hover"       "$(yes_if python3 -c "
+# IT LOOKS LIKE A CONTROL AT REST, which is the property the old outline bought and the
+# soft-green fill keeps: a chip only visible under a pointer is invisible to a touch
+# screen. Filled at rest, brighter on hover — hover is a state change, not the moment
+# the control appears. Both halves, so a fill with no hover state would not pass.
+assert "the chip is filled at rest, in the soft green" "$(fhas 'border-radius:5px;background:var(--ok-soft);color:var(--ok);' "$RW")"
+assert "…and hover only brightens what is already there" "$(fhas '.promote:hover,.promote:focus-visible{filter:brightness(1.15)}' "$RW")"
+assert "…so nothing appears on hover that was not there" "$(yes_if python3 -c "
 import re, sys
 m = re.search(r'\.promote:hover[^{]*\{([^}]*)\}', open('$RW').read())
-sys.exit(0 if m and 'accent' not in m.group(1) and 'var(--ok)' not in m.group(1) else 1)")"
+sys.exit(0 if m and 'background' not in m.group(1) and 'color:' not in m.group(1) else 1)")"
 
 # ---------------------------------------------------------------------------
 # THE PR AND DEPENDS-ON CELLS WRAP, AND BOTH WIDTHS ARE DERIVED RATHER THAN CHOSEN.
@@ -1160,56 +1163,40 @@ page = open('$CE', encoding='utf-8').read()
 cells = re.findall(r'<td class=\"prs\">(.*?)</td>', page, re.S)
 sys.exit(0 if cells and max(len(re.findall(r'<a href', c)) for c in cells) == 9 else 1)")"
 assert "the cell carries its own class"              "$(fhas '<td class="prs">' "$CE")"
-assert "…which overrides the table-wide nowrap"      "$(fhas 'td.prs{white-space:normal!important;' "$CE")"
-assert "…and gives the cell one monospace context"   "$(fhas 'td.prs{white-space:normal!important;
-  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.8rem}' "$CE")"
+assert "…which lets it wrap inside its track"        "$(fhas 'td.prs{white-space:normal;' "$CE")"
+assert "…and gives the cell one monospace context"   "$(fhas 'td.prs{white-space:normal;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:13px;overflow-wrap:anywhere}' "$CE")"
 # REFS ARE SPACE-SEPARATED — no comma, the form the Depends-on cell now copies.
 assert "…refs are separated by a space"              "$(fhas '#2101</a> <a href' "$CE")"
 assert "…and never by a comma"                       "$(fhasnt '</a>, <a' "$CE")"
-# THE RESERVATION IS A FLOOR, IN PIXELS (the owner asked for px), AND IT IS CONDITIONAL:
-# `max-width` does nothing here — `td:not(:first-child)` asks for `width:1%`, so a cell
-# that may wrap collapses to ONE ref and a cap above that is never reached — and a row
-# with a single ref must not pay for a second.
-assert "…two refs are reserved, in pixels"           "$(fhas 'td.prs:has(a:nth-of-type(2)){min-width:107px}' "$CE")"
-assert "…and no cap is left behind pretending to work" "$(fhasnt 'td.prs{white-space:normal!important;max-width' "$CE")"
+# THE COLUMN IS A TRACK NOW, NOT A RESERVATION. The row is a five-track grid from the
+# handoff, so the PR column is a fixed 90px whatever the cell holds: nine refs wrap
+# inside it instead of taking the width from the task name, and a row with one ref pays
+# nothing. That deletes the conditional `min-width` this used to need.
+assert "…the PR column is a fixed track, not a floor" "$(fhas 'grid-template-columns:minmax(0,1fr) 105px 140px 80px 90px;' "$CE")"
+assert "…and no reservation is left behind"          "$(fhasnt 'min-width:107px' "$CE")"
+assert "…nor a cap pretending to work"               "$(fhasnt 'td.prs{white-space:normal;max-width' "$CE")"
 assert "…the unconditional rule reserves nothing"    "$(yes_if python3 -c "
 import re, sys
 m = re.search(r'td\.prs\{([^}]*)\}', open('$CE', encoding='utf-8').read())
 sys.exit(0 if m and 'min-width' not in m.group(1) and 'max-width' not in m.group(1) else 1)")"
-# 107px = 12 characters of IBM Plex Mono at .8rem on a 16px root (advance 0.6em ⇒ 7.68px)
-# plus this td's own .9rem of horizontal padding, which box-sizing:border-box counts.
-# `#1234 #1234` is 11 of those 12; a third ref needs six more characters, 46px, so it
-# cannot nearly fit. Every term is a number the stylesheet states elsewhere, and the last
-# two clauses are what make this fail if the target moves to one ref or to three.
-assert "…and 107px is 12 characters plus that padding" "$(yes_if python3 -c "
-import math, sys
-ch = 0.8 * 16 * 0.6
-content = 107 - 0.9 * 16
-sys.exit(0 if math.ceil(12 * ch + 0.9 * 16) == 107
-             and 2 * 5 * ch + 1 * ch <= content
-             and 3 * 5 * ch + 2 * ch > content else 1)")"
+# ONE TEMPLATE, SHARED BY THE HEAD ROW AND EVERY BODY ROW — which is what makes the
+# columns line up at all. Written once in the sheet, so the two cannot drift apart; the
+# assertion is that there is exactly one of it, not that two copies happen to agree.
+assert "…and the head and body rows share one template" "$(yes_if python3 -c "
+import re, sys
+src = open('$CE', encoding='utf-8').read()
+n = len(re.findall(r'grid-template-columns:minmax\(0,1fr\) 105px 140px 80px 90px', src))
+sys.exit(0 if n == 1 else 1)")"
 
 echo "== the Depends on cell allows three refs, space-separated =="
 assert "pills are separated by a space"              "$(fhas '</button> <button class="dep"' "$CE")"
 assert "…and the \", \" separator is gone"            "$(fhasnt '</button>, <button' "$CE")"
-# THE MIN-WIDTH IS RE-DERIVED FOR BOTH CHANGES AT ONCE — three refs instead of two, and
-# two one-character separators instead of one two-character one. The separator term stays
-# `2ch` and that is a coincidence worth naming rather than a number left unchanged.
-assert "…and three pills are reserved, not two"      "$(fhas 'min-width:calc(3*(3ch + .7rem + 2px) + 2ch + .9rem)' "$CE")"
-assert "…with no two-pill width left in the sheet"   "$(fhasnt 'min-width:calc(2*(3ch + .7rem + 2px)' "$CE")"
-# THE RE-DERIVATION HAD TO HAPPEN, and this says so in arithmetic: the width the rule used
-# to reserve is too small for three pills, the width it reserves now holds three, and it
-# does not stretch to four. Terms are read off button.dep's and the td's own CSS.
-# The `new >= need3` half would be true by construction — `new` IS the calc — so it is
-# not asserted: the two clauses that can fail are that the OLD width could not have held
-# three, and that the new one does not stretch to four.
-assert "…and the numbers really move the target"     "$(yes_if python3 -c "
-import sys
-ch = 0.74 * 16 * 0.6                  # 1ch in the cell's own monospace context
-pill = 3 * ch + 0.7 * 16 + 2          # 3 digits + .35rem padding each side + 1px border each
-old = 2 * pill + 2 * ch               # what the rule reserved: two pills and one \", \"
-new = 3 * pill + 2 * ch               # what it reserves now: three pills, two spaces
-sys.exit(0 if old < 3 * pill + 2 * ch and 4 * pill + 3 * ch > new else 1)")"
+# THE 140px TRACK REPLACES THE `calc()`. Same property, one number instead of a
+# derivation that had to be re-done every time a pill's padding moved: the cell wraps
+# inside its own track and cannot take width from the task column.
+assert "…and the cell wraps inside its own track"    "$(fhas '.deps{white-space:normal}' "$CE")"
+assert "…with no derived width left in the sheet"    "$(fhasnt 'min-width:calc(' "$CE")"
 # BOTH CELLS JOIN THE SAME WAY, which is the point of dropping the comma: one form for
 # two columns of the same kind of thing.
 assert "…so both cells use one separator form"       "$(yes_if python3 -c "
@@ -1227,16 +1214,19 @@ assert "…and a close item carries none"              "$(rail_of "$TM" 'Finishe
 assert "…the close item really is there"             "$(rail_of "$TM" 'Finished and proposing' | fhas_in 'class="verb">close')"
 
 echo "== the waiting block separates from the card holding it =="
-# ITS FILL WAS 1.12:1 AGAINST THE CARD — `--signal` 8% on `--surface`, against a
-# `.proj.wants` head of 7% of the same hue, so the one block that says "you are the
-# blocker" dissolved into its container. Now `--signal` 16% on `--sunk`: 1.42:1 in light
-# and 1.47:1 in dark. Same hue, deeper and desaturated — a second accent would compete
-# with the one that already means "needs you" everywhere on this page.
-assert "the fill is built on the recessed neutral"   "$(fhas 'background:color-mix(in srgb,var(--signal) 16%,var(--sunk))' "$BOUT")"
-assert "…and is no longer the card's own surface"    "$(fhasnt 'color-mix(in srgb,var(--signal) 8%,var(--surface))' "$BOUT")"
-assert "the amber left rail is kept"                 "$(fhas '.rail{border-left:.22rem solid var(--signal)' "$BOUT")"
+# THE FILL IS A LAYER NOW, NOT A TINT. It was `--signal` 16% mixed into `--sunk`,
+# because the palette had three backgrounds and the block needed a fourth. The soft-slate
+# theme ships four — ground, surface, sunk, inner — so the block is plain `--sunk` set
+# INTO a `--surface` card, with the decision cards inside it on `--inner`. Same hue
+# discipline: a second accent would compete with the one that means "needs you".
+assert "the fill is the recessed layer itself"       "$(fhas '.rail{background:var(--sunk);' "$BOUT")"
+assert "…and is no longer a tint of the card"        "$(fhasnt 'color-mix(in srgb,var(--signal) 16%,var(--sunk))' "$BOUT")"
+assert "…nor the card's own surface"                 "$(fhasnt 'color-mix(in srgb,var(--signal) 8%,var(--surface))' "$BOUT")"
+assert "…with the decision cards a layer deeper"     "$(fhas '.ask{display:flex;flex-direction:column;padding:14px 16px;
+  background:var(--inner);' "$BOUT")"
+assert "the amber left rail is kept"                 "$(fhas 'border-left:4px solid var(--signal);' "$BOUT")"
 assert "…and so is the WAITING FOR YOU · N label"    "$(fhas '<h2>Waiting for you · ' "$BOUT")"
-assert "…rendered upper case, as it reads on the page" "$(fhas '.rail h2{margin:0 0 .7rem;font-size:.68rem;text-transform:uppercase' "$BOUT")"
+assert "…rendered upper case, as it reads on the page" "$(fhas '.rail h2{margin:0;font:700 11px/1.4 "IBM Plex Sans",sans-serif;text-transform:uppercase' "$BOUT")"
 # NO SECOND ACCENT. Every colour the block uses is --signal, --ink, --sunk, --surface,
 # --line or --muted; --accent and --ok appearing inside a .rail rule would be a second
 # thing competing for "this one needs you".
@@ -1246,15 +1236,16 @@ src = open('$BOUT', encoding='utf-8').read()
 rules = re.findall(r'(?:^|\})\s*(\.rail[^{}]*)\{([^}]*)\}', src)
 bad = [s for s, b in rules if 'var(--accent)' in b or 'var(--ok)' in b or 'var(--stop)' in b]
 sys.exit(0 if rules and not bad else 1)")"
-# THE LABEL MOVED WITH THE FILL. Plain --signal on the deeper ground is 3.93:1, under AA
-# for text this small; 22% of --ink brings it to 5.22:1 light / 6.05:1 dark and keeps it
-# amber. Mixing toward --ink rather than toward black is what makes ONE rule right in
-# both themes, the same trick .c.you uses.
-assert "the label is darkened, not left at 3.93:1"   "$(fhas 'color:color-mix(in srgb,var(--signal) 78%,var(--ink))' "$BOUT")"
+# THE LABEL TAKES THE DEEPENED AMBER, NOT PLAIN --signal. Plain --signal on --sunk is
+# 3.55:1 in light, under AA for 11px text; --signal-soft-text is 5.52:1 light and
+# 10.34:1 dark. One token, right in both themes, and it is the same amber the header's
+# "N items need you" and the decision card's verb already use.
+assert "the label takes the deepened amber"          "$(fhas 'letter-spacing:.1em;color:var(--signal-soft-text)}' "$BOUT")"
+assert "…and not the mix the tinted fill needed"     "$(fhasnt 'color-mix(in srgb,var(--signal) 78%,var(--ink))' "$BOUT")"
 # THE BREADCRUMB WAS THE LEAST LEGIBLE THING IN THE BLOCK, measurably: --dim on .ask's
 # surface is 3.18:1 in light and 3.79:1 in dark, both under AA's 4.5:1 for .75rem text.
-assert "the breadcrumb is off --dim"                 "$(fhas '.where{width:100%;font-size:.75rem;color:var(--muted)}' "$BOUT")"
-assert "…and --dim is not still on it"               "$(fhasnt '.where{width:100%;font-size:.75rem;color:var(--dim)}' "$BOUT")"
+assert "the breadcrumb is off --dim"                 "$(fhas '.where{width:100%;font-size:13px;color:var(--muted);' "$BOUT")"
+assert "…and --dim is not still on it"               "$(fhasnt '.where{width:100%;font-size:13px;color:var(--dim)' "$BOUT")"
 # THE RATIOS ARE COMPUTED HERE, not copied from the PR body — a number quoted in prose
 # and nowhere else is a number nobody re-checks. Both themes, since the palette is
 # redefined for dark and a fix that only holds in one is half a fix.
@@ -1273,23 +1264,24 @@ lo, hi = sorted((a, b))
 sys.exit(0 if (hi + 0.05) / (lo + 0.05) >= float(sys.argv[3]) else 1)
 PYC
 }
-# --muted on --surface, the pair the breadcrumb actually renders as (.ask is --surface).
-assert "…clearing AA in light (5.98:1)"              "$(yes_if contrast_ok '#5c6470' '#ffffff' 4.5)"
-assert "…and in dark (6.67:1)"                       "$(yes_if contrast_ok '#98a1ac' '#171a1e' 4.5)"
+# --muted on --inner, the pair the breadcrumb actually renders as (.ask is --inner).
+assert "…clearing AA in light (5.25:1)"              "$(yes_if contrast_ok '#5f6786' '#f7f8fc' 4.5)"
+assert "…and in dark (6.69:1)"                       "$(yes_if contrast_ok '#9da5c0' '#1c1f2c' 4.5)"
 # NON-VACUITY: the colour it replaced must FAIL the same check, or this asserts nothing
 # about the change.
-assert "…where --dim failed it in light (3.18:1)"    "$(contrast_ok '#89919c' '#ffffff' 4.5 && echo 1 || echo 0)"
-assert "…and failed it in dark too (3.79:1)"         "$(contrast_ok '#6d7681' '#171a1e' 4.5 && echo 1 || echo 0)"
-# The label's new colour, resolved as the browser would resolve the color-mix, against
-# the fill resolved the same way.
-assert "the label clears AA on the new fill, light"  "$(yes_if contrast_ok '#7e4811' '#dfd7cd' 4.5)"
-assert "…and dark"                                   "$(yes_if contrast_ok '#deac6d' '#3d362f' 4.5)"
-assert "…where plain --signal would not, in light"   "$(contrast_ok '#9c560d' '#dfd7cd' 4.5 && echo 1 || echo 0)"
-# SEPARATION from the card is the point of the whole change, so it is measured too —
-# as a ratio against --surface, which is what the card is.
-assert "the fill separates from the card, light"     "$(yes_if contrast_ok '#dfd7cd' '#ffffff' 1.35)"
-assert "…and dark"                                   "$(yes_if contrast_ok '#3d362f' '#171a1e' 1.35)"
-assert "…where the old fill did not"                 "$(contrast_ok '#f7f1ec' '#ffffff' 1.35 && echo 1 || echo 0)"
+assert "…where --dim failed it in light (2.90:1)"    "$(contrast_ok '#8c92ab' '#f7f8fc' 4.5 && echo 1 || echo 0)"
+assert "…and failed it in dark too (3.52:1)"         "$(contrast_ok '#6c7393' '#1c1f2c' 4.5 && echo 1 || echo 0)"
+# The rail label — --signal-soft-text on --sunk, both themes.
+assert "the label clears AA on the rail, light"      "$(yes_if contrast_ok '#7c5410' '#e6e9f2' 4.5)"
+assert "…and dark"                                   "$(yes_if contrast_ok '#ffcb6b' '#20242f' 4.5)"
+assert "…where plain --signal would not, in light"   "$(contrast_ok '#a2701a' '#e6e9f2' 4.5 && echo 1 || echo 0)"
+# SEPARATION IS WHAT THE FOUR LAYERS BUY, so each adjacent pair is measured in both
+# themes. The numbers are small on purpose — this is layer separation, not text contrast
+# — but they are the whole reason the block reads as set INTO the card.
+assert "the rail separates from the card, light"     "$(yes_if contrast_ok '#e6e9f2' '#ffffff' 1.05)"
+assert "…and dark"                                   "$(yes_if contrast_ok '#20242f' '#262a3b' 1.05)"
+assert "the decision card separates from the rail, light" "$(yes_if contrast_ok '#f7f8fc' '#e6e9f2' 1.05)"
+assert "…and dark"                                   "$(yes_if contrast_ok '#1c1f2c' '#20242f' 1.05)"
 
 echo "== advisor_notes is information, not a demand =="
 assert "an untriaged concern shows as a concern pill" "$(fhas 'concern' "$OUT")"
