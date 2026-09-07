@@ -652,6 +652,88 @@ banner "$equal"
 ok "checker absent: still exit 0"              "$RC" 0
 ok "…and still no line about it"               "$(printf '%s\n' "$OUT" | grep -c 'UPDATE' || true)" 0
 
+echo "== 8. THE PLUGIN INSTALL is the other subject, and it is bounded and cached =="
+# =======================================================================================
+# A MARKETPLACE INSTALL HAS NO CHECKOUT ABOVE IT — what lands on a machine is the contents
+# of `plugin/` under a version directory — so until this section the check answered "no
+# checkout, nothing to compare" on every real install. The subject there is the INSTALLED
+# plugin against the marketplace clone `claude plugin update` pulls from, which is derived
+# from the install path's own shape and never searched for.
+#
+# The remote is a local bare repo: nothing here touches the network.
+PHOME="$TMP/phome/plugins"
+PINST="$PHOME/cache/mkt/ai-bridge/1.0.0"
+PMKT="$PHOME/marketplaces/mkt"
+PCACHE="$PHOME/data/ai-bridge-mkt/version-check"
+mkdir -p "$PINST/scripts" "$PHOME/marketplaces"
+cp "$CHECK" "$PINST/scripts/"
+printf '1.0.0\n' > "$PINST/VERSION"
+PBARE="$TMP/pmkt.git"; PSEED="$TMP/pmkt.seed"
+GIT init -q --bare "$PBARE"; GIT -C "$PBARE" symbolic-ref HEAD refs/heads/main
+GIT init -q "$PSEED"; GIT -C "$PSEED" symbolic-ref HEAD refs/heads/main
+mkt_at() { printf '%s\n' "$1" > "$PSEED/VERSION"; GIT -C "$PSEED" add -A >/dev/null 2>&1
+           GIT -C "$PSEED" commit -qm "$1" >/dev/null 2>&1; GIT -C "$PSEED" push -q "$PBARE" main; }
+mkt_at 1.0.0
+GIT clone -q "$PBARE" "$PMKT" 2>/dev/null
+# Invoked through the file inside the INSTALL, with no --template and no --plugin, so the
+# self-location path is what finds both sides — exactly as the banner invokes it.
+pcheck() { OUT="$(bash "$PINST/scripts/check-template-version.sh" "$@" 2>/dev/null)"; RC=$?; }
+
+rm -f "$PCACHE"; pcheck --state
+ok "level with the marketplace: state is current"  "$(printf '%s' "$OUT" | cut -f1)" current
+ok "…and it names the installed version"           "$(printf '%s' "$OUT" | cut -f2)" 1.0.0
+ok "…and the plugin, so a caller need not spell it" "$(printf '%s' "$OUT" | cut -f4)" ai-bridge
+pcheck
+ok "…and the human line stays byte-empty"          "$(printf '%s' "$OUT" | wc -c | tr -d ' ')" 0
+
+mkt_at 1.0.1
+rm -f "$PCACHE"; pcheck --state
+ok "the marketplace moved ahead: state is behind"  "$(printf '%s' "$OUT" | cut -f1)" behind
+ok "…naming the version it would install"          "$(printf '%s' "$OUT" | cut -f3)" 1.0.1
+
+# THE CACHE IS THE REASON A SESSION MAKES NO NETWORK CALL. With a fresh stamp the remote may
+# move as far as it likes and the answer does not — and `--fetch` is what forces past it.
+mkt_at 1.0.9
+pcheck --state
+ok "a fresh cache is not re-fetched"               "$(printf '%s' "$OUT" | cut -f3)" 1.0.1
+pcheck --state --fetch
+ok "…and --fetch forces past it"                   "$(printf '%s' "$OUT" | cut -f3)" 1.0.9
+
+# 8a. THE TWO-SECOND CAP, measured. A `git` that never returns from `fetch` is the shape of
+# a hung remote, and a SessionStart banner may not wait on one. The elapsed bound is loose
+# (the cap is 2s) so a slow machine does not make this flaky, and 30s is what it would take
+# with no cap at all.
+SLOW="$TMP/slowbin"; mkdir -p "$SLOW"
+REALGIT="$(command -v git)"
+{ printf '#!/bin/sh\n'
+  printf 'for a in "$@"; do [ "$a" = fetch ] && { sleep 30; exit 0; }; done\n'
+  printf 'exec %s "$@"\n' "$REALGIT"; } > "$SLOW/git"
+chmod +x "$SLOW/git"
+rm -f "$PCACHE"
+_t0="$(date +%s)"
+OUT="$(PATH="$SLOW:$PATH" bash "$PINST/scripts/check-template-version.sh" --state 2>/dev/null)"
+_t1="$(date +%s)"
+ok "a fetch that never returns is cut off"         "$(yn [ "$((_t1 - _t0))" -lt 15 ])" yes
+ok "…and a timeout is unknown, never behind"       "$(printf '%s' "$OUT" | cut -f1)" unknown
+ok "…and the human line says nothing at all" \
+  "$(PATH="$SLOW:$PATH" bash "$PINST/scripts/check-template-version.sh" 2>/dev/null | wc -c | tr -d ' ')" 0
+ok "…and nothing was left on stderr" \
+  "$(PATH="$SLOW:$PATH" bash "$PINST/scripts/check-template-version.sh" --state 2>&1 >/dev/null | wc -c | tr -d ' ')" 0
+
+# 8b. A FAILURE IS NEVER "BEHIND", on this path either.
+GIT -C "$PMKT" remote set-url origin "$TMP/no-such-marketplace.git"
+rm -f "$PCACHE"; pcheck --state
+ok "unreachable marketplace, cold cache: unknown"  "$(printf '%s' "$OUT" | cut -f1)" unknown
+pcheck
+ok "…and byte-empty on the human line"             "$(printf '%s' "$OUT" | wc -c | tr -d ' ')" 0
+# NO MARKETPLACE CLONE AT ALL — a vendored copy, or a machine that dropped the clone.
+rm -rf "$PMKT"; rm -f "$PCACHE"; pcheck --state
+ok "no marketplace clone: unknown, exit 0"         "$(printf '%s' "$OUT" | cut -f1)" unknown
+ok "…exit 0"                                       "$RC" 0
+# THE INSTALL IS NEVER WRITTEN TO: only the data dir is.
+ok "the install directory is untouched by a run" \
+  "$(yn [ ! -e "$PINST/version-check" ])" yes
+
 # =======================================================================================
 echo "== 7. the shipped file is executable in the INDEX, like every other script =="
 # =======================================================================================
