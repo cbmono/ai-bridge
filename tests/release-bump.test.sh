@@ -58,6 +58,46 @@ plant() { # <dir> <version> — set VERSION alone, so the bump has to move the o
   printf '%s\n' "$2" > "$1/VERSION"
   GIT -C "$1" commit -q -am "plant $2"
 }
+plant_companions() { # <dir> <version> — every non-core entry, in BOTH manifests, so the
+  # fixture never depends on where the live repo's companions happen to sit
+  python3 -c '
+import json, io, sys
+root, v = sys.argv[1], sys.argv[2]
+p = root + "/.claude-plugin/marketplace.json"
+mkt = json.load(io.open(p, encoding="utf-8"))
+for e in mkt["plugins"]:
+    if e["name"] == "ai-bridge": continue
+    e["version"] = v
+    m = root + "/" + e["source"].lstrip("./") + "/.claude-plugin/plugin.json"
+    d = json.load(io.open(m, encoding="utf-8")); d["version"] = v
+    io.open(m, "w", encoding="utf-8").write(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
+io.open(p, "w", encoding="utf-8").write(json.dumps(mkt, indent=2, ensure_ascii=False) + "\n")
+' "$1" "$2"
+  GIT -C "$1" commit -q -am "plant companions $2"
+}
+plant_five() { # <dir> <version> — ALL five places, so a fixture built from a HEAD that already
+  # sits on the target version still has every place to move (the count assertion needs that)
+  python3 -c '
+import io, json, re, sys
+root, v = sys.argv[1], sys.argv[2]
+for rel in ("VERSION", "plugin/VERSION"):
+    io.open(root + "/" + rel, "w", encoding="utf-8").write(v + "\n")
+for rel in ("plugin/.claude-plugin/plugin.json",):
+    d = json.load(io.open(root + "/" + rel, encoding="utf-8")); d["version"] = v
+    io.open(root + "/" + rel, "w", encoding="utf-8").write(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
+p = root + "/.claude-plugin/marketplace.json"; mkt = json.load(io.open(p, encoding="utf-8"))
+for e in mkt["plugins"]:
+    if e["name"] == "ai-bridge": e["version"] = v
+io.open(p, "w", encoding="utf-8").write(json.dumps(mkt, indent=2, ensure_ascii=False) + "\n")
+p = root + "/docs/operations.md"; lines = io.open(p, encoding="utf-8").read().split("\n")
+for i, l in enumerate(lines):
+    if l.startswith("AI-Bridge v"):
+        lines[i] = re.sub(r"^AI-Bridge v[0-9.]+", "AI-Bridge v" + v, l)
+        if i + 1 < len(lines) and lines[i+1] and set(lines[i+1]) == {u"\u2500"}: lines[i+1] = u"\u2500" * len(lines[i])
+io.open(p, "w", encoding="utf-8").write("\n".join(lines))
+' "$1" "$2"
+  GIT -C "$1" commit -q -am "plant five $2"
+}
 mkt_core() { # <dir> — the marketplace version of the entry the host resolves
   python3 -c '
 import json, sys
@@ -152,7 +192,8 @@ ok "…on a header that really did get longer"  "$(five "$TMP/five" | cut -d' ' 
 # The v2 release is the case this field was added for: 1.20.0 -> 2.0.0 zeroes BOTH lower
 # fields and SHORTENS the banner header, the direction the re-cut had never taken.
 fixture "$TMP/major"
-plant "$TMP/major" 1.20.0
+plant_five "$TMP/major" 1.20.0
+plant_companions "$TMP/major" 1.0.0
 ok "major is accepted"                     "$(run major --repo "$TMP/major")" 0
 ok "…and moves 1.20.0 to 2.0.0 in all five" "$(five "$TMP/major")" "2.0.0 2.0.0 2.0.0 2.0.0 2.0.0"
 ok "…with the banner rule re-cut to the SHORTER header" \
@@ -167,7 +208,7 @@ print(len(bad))' "$TMP/major")" 0
 ok "…and every companion moved to 2.0.0 in BOTH its manifests" \
   "$(companions "$TMP/major")" "2.0.0/2.0.0 2.0.0/2.0.0 2.0.0/2.0.0"
 ok "…while a patch bump leaves the companions alone" \
-  "$(run patch --repo "$TMP/five" >/dev/null; companions "$TMP/five")" "1.0.0/1.0.0 1.0.0/1.0.0 1.0.0/1.0.0"
+  "$(plant_companions "$TMP/five" 1.0.0; run patch --repo "$TMP/five" >/dev/null; companions "$TMP/five")" "1.0.0/1.0.0 1.0.0/1.0.0 1.0.0/1.0.0"
 ok "…and template-version.test.sh passes on 2.0.0" \
   "$(harness "$TMP/major" template-version.test.sh)" "fail=0 rc=0"
 ok "…in ONE commit naming the move"        \
