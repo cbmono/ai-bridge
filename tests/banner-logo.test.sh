@@ -3,11 +3,13 @@
 # banner-logo.test.sh — the ship above the banner's header: three lines of DATA, coloured
 # by GLYPH CLASS, and adding nothing else to the banner.
 #
-# The four claims, and each is here because a content grep passes without it: the three
+# The five claims, and each is here because a content grep passes without it: the three
 # lines are byte-exact; a `~` is water and a block is hull or bridge in all three colour
-# tiers; the opt-outs leave the lines with no SGR at all; and the header and its rule are
+# tiers; the opt-outs leave the lines with no SGR at all; the header and its rule are
 # the same bytes they were before the logo existed — proved against a mutant of the hook
-# with the `logo` call removed, so "nothing else changed" is measured, not asserted.
+# with the `logo` call removed, so "nothing else changed" is measured, not asserted; and
+# (§5) the ship renders on the SessionStart channel ALONE, never on the relayed `/welcome`
+# path, where markdown drops the leading space of line 1 and carries no colour.
 #
 # assert(): 0 is a PASS, matching the banner harnesses next door.
 set -uo pipefail
@@ -15,8 +17,10 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
+SH="$TPL/plugin/scripts/ai-bridge.sh"
+SKILL="$TPL/plugin/skills/welcome/SKILL.md"
 DOC="$TPL/docs/operations.md"
-for f in "$HOOK" "$DOC"; do
+for f in "$HOOK" "$SH" "$SKILL" "$DOC"; do
   [ -f "$f" ] || { echo "banner-logo.test: missing $f" >&2; exit 2; }
 done
 command -v python3 >/dev/null 2>&1 || {
@@ -150,7 +154,7 @@ assert "…while the same json run without it colours them" \
 # THE `/welcome` RELAY. Markdown renders there and SGR does not, so that rendering carries
 # the same three lines and no escape — colour is not promised on that channel.
 MD="$(run "$HOOK" --format md)"
-assert "the md rendering /welcome relays shows the same three lines" "$(plain_logo "$MD")"
+assert "the hook's md rendering shows the same three lines" "$(plain_logo "$MD")"
 assert "…and the hook's own header says colour is not promised there" \
   "$(has 'colour is not promised' "$(sed -n '1,260p' "$HOOK")")"
 # AND THE EQUALITY THE TWO CHANNELS RUN ON: strip_sgr(systemMessage) is the text banner.
@@ -185,6 +189,55 @@ assert "…so the identity line is unchanged" \
   "$(eq "$(nth "$OUT" "$((n+3))")" "$(nth "$NOLOGO" "$(head_no "$NOLOGO")")")"
 assert "…and so is the rule under it"      \
   "$(eq "$(nth "$OUT" "$((n+4))")" "$(nth "$NOLOGO" "$(( $(head_no "$NOLOGO") + 1 ))")")"
+
+# =======================================================================================
+echo "== 5. the ship is the SessionStart channel's alone =="
+# =======================================================================================
+# BOTH SIDES, IN ONE SECTION, because the claim is a difference between two channels and
+# either half alone passes on a hook that lost the logo entirely. The hook keeps it; the
+# `/welcome` path — `ai-bridge.sh`, which `exec`s that same hook — starts at the header.
+SMJ="$(strip_sgr "$(sm "$(run "$HOOK" --format json)")")"
+assert "the SessionStart channel carries the ship's three lines" \
+  "$([ "$(has "$L1" "$SMJ")" = 0 ] && [ "$(has "$L2" "$SMJ")" = 0 ] \
+     && [ "$(has "$L3" "$SMJ")" = 0 ] && echo 0 || echo 1)"
+
+welcome() { CLAUDE_PROJECT_DIR="$INST" bash "$SH" "$@" 2>/dev/null; }
+no_logo_at_all() { # <output> -> 0 when no logo line is anywhere in it
+  local o="$1"
+  [ "$(has "$L1" "$o")" = 1 ] && [ "$(has "$L2" "$o")" = 1 ] \
+    && [ "$(has "$L3" "$o")" = 1 ] && echo 0 || echo 1
+}
+# The three forms the welcome skill can run, and the relay's own two branches: a pipe with
+# no NO_COLOR is the `--format md` one, and NO_COLOR hands back the plain rendering.
+W="$(welcome)"
+assert "the welcome path carries no logo line"   "$(no_logo_at_all "$W")"
+assert "…and its first line IS the identity line" \
+  "$(eq "$(nth "$W" "$(head_no "$W")" | sed 's/\*\*//g' | cut -c1-9)" 'AI-Bridge')"
+assert "…and it is not empty (not a vacuous pass)" "$(has 'AI-Bridge' "$W")"
+NCW="$(NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST" bash "$SH" 2>/dev/null)"
+assert "NO_COLOR takes the other branch and carries none either" "$(no_logo_at_all "$NCW")"
+assert "the explicit \`banner\` form carries none"  "$(eq "$(welcome banner)" "$W")"
+assert "\`check\` carries none"  "$(no_logo_at_all "$(welcome check --instance "$INST" --template "$TPL")")"
+assert "\`fix\` carries none"    "$(no_logo_at_all "$(welcome fix --instance "$INST" --template "$TPL")")"
+# A FLAG THE CALLER PASSED LEAVES THE DECISION ALONE — that contract is the reason this is
+# `--no-logo` on the wrapper's own branches and not a format the hook picks for itself.
+assert "a caller's own --format md still gets the ship" \
+  "$(plain_logo "$(welcome --format md)")"
+# AND THE SUPPRESSION SUBTRACTS THE THREE LINES AND NOTHING ELSE, measured the way §4
+# measures the mutant: the intact banner minus them IS the `--no-logo` one, byte for byte.
+FULL="$(run "$HOOK")"; f="$(head_no "$FULL")"
+NL="$(run "$HOOK" --no-logo)"
+assert "--no-logo drops them from the hook too"   "$(no_logo_at_all "$NL")"
+assert "…and the banner minus the three lines IS that banner" \
+  "$(eq "$(printf '%s\n' "$FULL" | sed "$f,$((f+2))d")" "$NL")"
+# THE SUPERSESSION IS RECORDED WHERE THE LOGO LIVES, in one line, so the next reader of
+# task-024's criterion finds the reversal in the file it is a criterion about.
+assert "the hook's header records that this supersedes task-024" \
+  "$(eq "$(grep -c 'SUPERSEDES task-024' "$HOOK")" 1)"
+# AND THE SKILL SAYS WHY THE SHIP IS ABSENT THERE, so the model relaying the output does
+# not read it as a missing line and reach for a copy of its own.
+assert "the welcome skill says why the logo is absent there" \
+  "$(has 'the SessionStart channel alone' "$(cat "$SKILL")")"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

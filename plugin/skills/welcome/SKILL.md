@@ -20,6 +20,11 @@ because a relayed answer is rendered as markdown and ANSI does not survive the r
 (measured — 0 of 4 escape bytes reached the reader). A fence turns that emphasis back into
 literal asterisks and hands the human the flat page the styling exists to replace.
 
+**The banner starts at the `AI-Bridge v…` line, and that is not a line gone missing.** The
+ship above it renders on the SessionStart channel alone, because a relayed copy is markdown:
+it drops the leading space of the ship's first line and carries none of its colour, so the
+human read a second, shifted ship under the Bash tool's own output. Never draw one back in.
+
 **And relay every other byte unaltered, the spaces included.** The banner's two tables are
 fixed-width: their `FROM` column is a column only as long as nothing re-flows the lines and
 nothing adds or removes a character. The script's side of that bargain is that no cell
@@ -30,7 +35,7 @@ as an autolink once, and that row's `FROM` sat two columns left of every other's
 
 | You ran | It does |
 |---|---|
-| `/welcome` | `exec`s the SessionStart hook, so you get **that** banner, not a copy of it |
+| `/welcome` | `exec`s the SessionStart hook, so you get **that** banner minus its ship, not a copy of it |
 | `/welcome check` | reports state that could be wrong, each line a fact with its evidence |
 | `/welcome fix` | repairs the **idempotent** tier only, and prints every other tier without acting |
 

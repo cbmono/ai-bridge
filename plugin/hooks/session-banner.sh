@@ -168,9 +168,9 @@
 #
 # The `/welcome` path is the OPPOSITE: its output is relayed by the model into an assistant
 # message, 0 of 4 ESC bytes survived that relay, and the human is left reading a literal
-# `[1m`. One answer does not fit both channels, which is why each one is asked separately.
-# So `/welcome` shows the same three logo lines as the banner, and colour is not promised
-# there.
+# `[1m`. One answer does not fit both channels, which is why each one is asked separately,
+# and colour is not promised there.
+# task-006 SUPERSEDES task-024's "/welcome shows the logo": the ship is THIS channel's alone.
 #
 # SO THERE ARE THREE RENDERINGS, NOT TWO, AND THE THIRD IS `--format md`. It is the path
 # `/welcome` relays — `ai-bridge.sh` asks for it when its own stdout is a pipe —
@@ -252,6 +252,7 @@ set -uo pipefail
 
 COLOR=auto
 FORMAT=text
+LOGO=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --color) shift; COLOR="${1:-auto}"; shift || true ;;
@@ -259,6 +260,9 @@ while [ $# -gt 0 ]; do
     --no-color) COLOR=never; shift ;;
     --format) shift; FORMAT="${1:-text}"; shift || true ;;
     --format=*) FORMAT="${1#--format=}"; shift ;;
+    # `ai-bridge.sh` passes this on its no-argument branches: a relayed banner is markdown,
+    # which drops the leading space of the ship's first line and carries no SGR at all.
+    --no-logo) LOGO=0; shift ;;
     # An unknown argument is IGNORED rather than fatal. This is a SessionStart hook: if a
     # future settings.json passes it something it does not know, printing the banner is
     # still the better outcome than exiting 2 at every session start.
@@ -672,6 +676,7 @@ LOGO_LINES=(' █▀█' '▄███▄▄▄▄▄▄' '~▀▀▀▀▀▀�
 # appears, line 1's glyphs are the bridge, every other block is hull. With colour off every
 # name below is empty and this prints the array's bytes and nothing else.
 logo() {
+  [ "$LOGO" -eq 1 ] || return 0
   local n=0 ln rest run block
   for ln in "${LOGO_LINES[@]}"; do
     n=$((n + 1))

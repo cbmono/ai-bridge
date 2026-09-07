@@ -467,20 +467,27 @@ echo "== 6. /ai-bridge INVOKES this hook, it does not reproduce it =="
 # The equality is therefore against the hook in that same rendering, and it still says the
 # thing it always said: the wrapper contributes not one byte of its own. Comparing it to the
 # hook's BARE output would now be asserting that the wrapper ignores its reader.
+#
+# AND IN THE SAME `--no-logo` (task-006). The ship renders on the SessionStart channel alone,
+# so the wrapper asks for a banner without it; tests/banner-logo.test.sh §5 measures that
+# subtraction, and these stay identity assertions about the wrapper. `MD_OUT`/`TXT_OUT` keep
+# the ship below, because the emphasis claims are about the hook's own renderings.
 AB="$TPL/plugin/scripts/ai-bridge.sh"
 if [ -f "$AB" ]; then
   AB_OUT="$( cd "$INST" && CLAUDE_PROJECT_DIR="$INST" bash "$AB" 2>/dev/null )"
+  AB_MD="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md --no-logo 2>/dev/null)"
+  AB_TXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --no-logo 2>/dev/null)"
   MD_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"
   TXT_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"
   assert "the /ai-bridge bare form prints a banner" "$(has 'AI-Bridge' "$AB_OUT")"
-  assert "…byte for byte the RELAYED rendering this hook prints" "$(eq "$AB_OUT" "$MD_OUT")"
+  assert "…byte for byte the RELAYED rendering this hook prints" "$(eq "$AB_OUT" "$AB_MD")"
   assert "…and carries no banner text of its own" \
     "$(grep -qF 'AI-Bridge' "$AB" && echo 1 || echo 0)"
   # AND `NO_COLOR` REACHES IT THERE TOO. On a channel that draws `**bold**` as bold, the
   # emphasis IS the colour, so the reader's opt-out has to switch it off — otherwise the
   # opt-out holds on two channels out of three.
   assert "…while NO_COLOR=1 hands back the plain banner instead" \
-    "$(eq "$( cd "$INST" && NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST" bash "$AB" 2>/dev/null )" "$TXT_OUT")"
+    "$(eq "$( cd "$INST" && NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST" bash "$AB" 2>/dev/null )" "$AB_TXT")"
 
   # =====================================================================================
   # THE THIRD RENDERING DIFFERS FROM THE TEXT ONE IN EMPHASIS MARKERS ALONE.

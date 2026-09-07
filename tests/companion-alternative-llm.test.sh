@@ -247,8 +247,10 @@ ok "unset -> the banner says nothing about a backend" \
       bash "$BANNER" --no-color 2>/dev/null | grep -c 'NOT ANTHROPIC')" 0
 # It re-prints on /ai-bridge:welcome because that form EXECS this hook — asserted on the
 # skill's own contract, so a second copy of the banner could not satisfy it.
+# Three exec sites since 2x/task-006: the md form, the plain form (both --no-logo) and the
+# pass-through — every one of them the hook itself, none a second rendering.
 ok "/ai-bridge:welcome execs the hook, not a copy"  \
-   "$(grep -c 'exec bash "$hook"' "$REPO/plugin/scripts/ai-bridge.sh")" 2
+   "$(grep -c 'exec bash "$hook"' "$REPO/plugin/scripts/ai-bridge.sh")" 3
 
 echo
 echo "== 8. it ships as a companion, on the contract core already has =="

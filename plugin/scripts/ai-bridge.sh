@@ -234,6 +234,8 @@ fi
 # rendering, whose only difference from the plain text one is `**…**` on the identity line
 # and the two table headers. A terminal gets the bare form and its SGR, exactly as before.
 #
+# `--no-logo`: relayed through markdown the ship loses its leading space and its colour, so
+# the human saw a shifted second copy under the Bash tool's own. Arguments pass through as is.
 # THE LADDER IS THE SAME ONE `--style` RESOLVES BELOW, and deliberately: `NO_COLOR` first,
 # because it is the READER's opt-out and emphasis on a channel that draws `**bold**` as bold
 # is that reader's colour. `--style` has no counterpart here — a caller that wants a specific
@@ -256,8 +258,11 @@ if [ "$FORM" = banner ]; then
     exit 2
   fi
   export CLAUDE_PROJECT_DIR="$ROOT"
-  if [ $# -eq 0 ] && [ -z "${NO_COLOR:-}" ] && [ ! -t 1 ]; then
-    exec bash "$hook" --format md
+  if [ $# -eq 0 ]; then
+    if [ -z "${NO_COLOR:-}" ] && [ ! -t 1 ]; then
+      exec bash "$hook" --format md --no-logo
+    fi
+    exec bash "$hook" --no-logo
   fi
   exec bash "$hook" "$@"
 fi
