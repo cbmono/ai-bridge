@@ -14,20 +14,17 @@
 # queues hidden inside them is STRICTLY WORSE than the clutter it removes: the clutter
 # was at least honest about which projects wanted you. So the summary line carries the
 # signal, and "can I tell, from the collapsed view alone, exactly which projects need
-# me?" is the question this design answers. THE WEIGHTING, in full — it is three
-# reinforcing channels for one number, not decoration:
-#   · the COUNT itself — `<b>N</b> awaiting you`, the number of that project's rail
-#     items, so the same N the pooled list would have shown for it. It is the ONLY
-#     count pill in the signal colour, and since 2026-08-31 the only pill on the line
-#     about attention at all: an outlined `N questions` counter used to sit beside it
-#     measuring an overlapping thing, and this one now holds that pill's slot and
-#     treatment (see `.c.you` in the CSS for what the merge gave up and why);
-#   · a signal border and inset bar on the WHOLE CARD (`.proj.wants`) — visible at any
-#     scroll position, and to a reader who never looks at a row of chips;
+# me?" is the question this design answers. THE WEIGHTING, in full — two reinforcing
+# channels for one number, not decoration:
+#   · the COUNT itself — `<b>N</b> need you`, the number of that project's rail items,
+#     so the same N the pooled list would have shown for it. The soft-slate redesign
+#     (2026-09-07) makes every other count on the line a plain run of text, so this is
+#     the ONLY filled box on a collapsed row — which is why the card border and inset
+#     bar that used to be the second channel are gone rather than kept beside it;
 #   · ORDER — a project with items sorts above one without, inside its own half of the
 #     board (live above, finished below), the snapshot's order preserved within each.
-# A project with nothing waiting gets none of the three. Colour alone would fail a
-# reader who cannot see it; the count and the order do not depend on it.
+# A project with nothing waiting gets neither. Colour alone would fail a reader who
+# cannot see it; the count and the order do not depend on it.
 #
 # THE ✕ COPIES A COMMAND. IT NEVER CLOSES ANYTHING. Closing a project is
 # `/close-project`, a human-run command with its own consolidation, log entry and
@@ -835,7 +832,6 @@ button:hover{border-color:var(--signal)}
 .counts>*+*:not(.you)::before{content:"· ";color:var(--dim)}
 .c b{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
 .c.ok b{color:var(--ok)} .c.run b{color:var(--accent)} .c.wait b{color:var(--ink)}
-.c.done-tag{color:var(--ok);font-weight:600}
 /* THE ONE PILL, AND IT IS FILLED AGAIN. Amber ground, ink-dark text in dark and white
    in light — the only filled thing on a collapsed row, so "this one wants you" reads
    from across the page. Order is the second channel and is unchanged. */
@@ -861,7 +857,10 @@ button:hover{border-color:var(--signal)}
 .proj.other .ptitle{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:14px;
   color:var(--muted)}
 .proj.other[open] .ptitle{color:var(--ink)}
-/* Creation date, read from project.md's `timestamp:`. */
+/* A project that wants you keeps its title at full weight even under the finished or
+   other-owner treatments. The filled amber pill and the sort are the other two channels
+   — the card border and inset bar are gone, because the handoff draws every card the
+   same and the pill is filled again (see `.c.you`). */
 .proj.wants .ptitle{color:var(--ink);font-weight:600}
 /* The ✕. It COPIES `/close-project <slug>` and does nothing else — see the header. */
 button.pclose{font-size:14px;line-height:1;padding:4px 8px;color:var(--dim);
@@ -933,9 +932,8 @@ button.dlv:hover{color:var(--ink)}
 /* THE FIVE STATES AND THEIR GLYPHS. The glyph is markup, not a pseudo-element, so a
    status the board has never seen still renders as its own text with no glyph. */
 .state{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
-.state.ok{color:var(--ok)} .state.signal{color:var(--signal-soft-text)}
-.state.stop{color:var(--stop)} .state.accent{color:var(--accent)}
-.state.dim{color:var(--dim)}
+.state.ok{color:var(--ok)} .state.accent{color:var(--accent)}
+.state.stop{color:var(--stop)} .state.dim{color:var(--dim)}
 .dim{color:var(--dim)} .sig{color:var(--signal-soft-text);font-weight:600}
 td.dim{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
 td a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent;
