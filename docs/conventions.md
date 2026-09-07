@@ -787,7 +787,11 @@ that the hook cannot is who is about to read the output: a pipe here is the Bash
 what comes out of it is relayed into an assistant message that renders markdown and destroys
 ANSI. So with no arguments, no `NO_COLOR` and stdout not a terminal it asks for the hook's
 third rendering (`--format md`), whose only difference from the plain text one is `**…**` on
-the identity line and the two table headers; a terminal gets the bare form. The byte-identity
+the identity line and the two table headers; a terminal gets the bare form. It also asks for
+`--no-logo` on both of those branches: the ship renders on the SessionStart channel alone,
+because a relayed copy is markdown, which drops the leading space of the ship's first line
+and carries none of its colour — the human was reading a second, shifted ship under the Bash
+tool's own output. The byte-identity
 assertion is then against the hook *in that same rendering* — the form still adds not one
 byte of its own, and any argument at all leaves the decision alone, because the flags belong
 to the banner. It is the same ladder `--style` resolves for `check`, `NO_COLOR` first.

@@ -234,12 +234,9 @@ fi
 # rendering, whose only difference from the plain text one is `**…**` on the identity line
 # and the two table headers. A terminal gets the bare form and its SGR, exactly as before.
 #
-# AND IT ASKS FOR `--no-logo` ON EVERY BRANCH, WHICH IS THE ONE THING IT SUBTRACTS. The ship
-# renders as designed on the SessionStart channel and nowhere else: relayed, markdown drops
-# the leading space of its first line and carries no colour, so the human got a second,
-# shifted copy of it under the Bash tool's own. This form therefore starts at the identity
-# line. It is not a rendering flag a caller may want back — any argument at all leaves this
-# whole decision alone, exactly as it leaves `--format`.
+# AND IT ASKS FOR `--no-logo`, THE ONE THING IT SUBTRACTS: relayed, the ship's first line
+# loses its leading space and all of its colour, so the human read a second, shifted copy of
+# it under the Bash tool's own. Both no-argument branches pass it; an argument leaves it off.
 #
 # THE LADDER IS THE SAME ONE `--style` RESOLVES BELOW, and deliberately: `NO_COLOR` first,
 # because it is the READER's opt-out and emphasis on a channel that draws `**bold**` as bold

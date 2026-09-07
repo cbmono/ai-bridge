@@ -260,8 +260,8 @@ while [ $# -gt 0 ]; do
     --no-color) COLOR=never; shift ;;
     --format) shift; FORMAT="${1:-text}"; shift || true ;;
     --format=*) FORMAT="${1#--format=}"; shift ;;
-    # `ai-bridge.sh` passes this on every relayed path: a relayed banner is markdown, which
-    # drops the leading space of the ship's first line and carries no SGR at all.
+    # `ai-bridge.sh` passes this on its no-argument branches: a relayed banner is markdown,
+    # which drops the leading space of the ship's first line and carries no SGR at all.
     --no-logo) LOGO=0; shift ;;
     # An unknown argument is IGNORED rather than fatal. This is a SessionStart hook: if a
     # future settings.json passes it something it does not know, printing the banner is
