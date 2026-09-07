@@ -642,6 +642,260 @@ assert "…and never labels a row \".\""              "$(yes_if sh -c 'printf "%
 assert "the HTML board names it too"                "$(fhas '<h1>Stamped Bridge Board</h1>' "$TMP/fresh.html")"
 assert "…and never an empty name in the masthead"   "$(fhasnt '<h1> Bridge Board' "$TMP/fresh.html")"
 
+# ---------------------------------------------------------------------------
+# THE SOFT-SLATE REDESIGN. The handoff is a set of NUMBERS — twelve colours per theme,
+# five grid tracks, one breakpoint — so what is asserted here is those numbers, read
+# back off the rendered page. A design pinned in prose is a design that drifts.
+#
+# WHY THIS FILE AND NOT tests/artifact-board.test.sh: that one owns the page's MARKUP
+# contracts (handles, escaping, what a button copies). The palette, the tab row, the
+# toggle and the breakpoint are the RENDERER's own output and belong beside the other
+# renderer assertions here.
+SLATE="$TMP/slate.html"
+( cd "$ALPHA" && bash "$BOARD" --standalone --out "$SLATE" >/dev/null 2>&1 )
+
+# The hex a token carries inside ONE declaration block, or "" — so a token defined only
+# in some other block reads as absent rather than as the value it has somewhere else.
+tokval() { # <file> <selector> <token-name>
+  python3 - "$1" "$2" "$3" <<'PYT'
+import re, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(re.escape(sys.argv[2]) + r"\{([^}]*)\}", src)
+if not m:
+    sys.exit(0)
+v = re.search(r"--" + re.escape(sys.argv[3]) + r":\s*(#[0-9a-fA-F]{3,8})", m.group(1))
+sys.stdout.write(v.group(1) if v else "")
+PYT
+}
+
+echo "== the soft-slate palette: twelve values per theme, off the rendered page =="
+assert "the page renders at all"                     "$(yes_if test -s "$SLATE")"
+DARK_TOKENS='ground #191c27
+surface #262a3b
+sunk #20242f
+inner #1c1f2c
+ink #e8ebf7
+muted #9da5c0
+dim #6c7393
+line #3a3f55
+signal #ffcb6b
+ok #c3e88d
+stop #ff6e7f
+accent #89ddff'
+LIGHT_TOKENS='ground #eef0f6
+surface #ffffff
+sunk #e6e9f2
+inner #f7f8fc
+ink #232635
+muted #5f6786
+dim #8c92ab
+line #d9dce8
+signal #a2701a
+ok #55803a
+stop #c94e60
+accent #2e7cae'
+while read -r name hex; do
+  [ -n "$name" ] || continue
+  assert "dark --$name is $hex"                      "$(eq "$(tokval "$SLATE" ':root[data-theme="dark"]' "$name")" "$hex")"
+done <<< "$DARK_TOKENS"
+while read -r name hex; do
+  [ -n "$name" ] || continue
+  assert "light --$name is $hex"                     "$(eq "$(tokval "$SLATE" ':root[data-theme="light"]' "$name")" "$hex")"
+done <<< "$LIGHT_TOKENS"
+# THE BARE :root IS THE DARK BLOCK, value for value — that is what "no stored choice
+# renders dark" means in the stylesheet, and it is asserted rather than assumed because
+# a palette split across a default and an override is how a theme drifts in one half.
+while read -r name hex; do
+  [ -n "$name" ] || continue
+  assert "…and bare :root carries the dark --$name"  "$(eq "$(tokval "$SLATE" ':root' "$name")" "$hex")"
+done <<< "$DARK_TOKENS"
+# The four soft fills and the two soft texts, one check per theme: they are new tokens,
+# so an absent one reads as "" and fails here rather than silently rendering unstyled.
+softs() { # <selector> <expected, space separated name:hex>
+  local sel="$1"; shift
+  local ok=0 pair
+  for pair in "$@"; do
+    [ "$(tokval "$SLATE" "$sel" "${pair%%:*}")" = "${pair##*:}" ] || ok=1
+  done
+  echo "$ok"
+}
+assert "dark carries the four soft fills and two soft texts" \
+  "$(softs ':root[data-theme="dark"]' signal-soft:#3c3524 signal-soft-text:#ffcb6b \
+           ok-soft:#2e3a26 stop-soft:#42262e neutral-soft:#333850 neutral-soft-text:#d4d9ec)"
+assert "…and light carries them too"                 \
+  "$(softs ':root[data-theme="light"]' signal-soft:#f3e7cd signal-soft-text:#7c5410 \
+           ok-soft:#e6f0da stop-soft:#f9e4e8 neutral-soft:#e6e9f2 neutral-soft-text:#454c68)"
+# THE LIGHT PILL IS THE AMBER ITSELF WITH WHITE ON IT (owner, 2026-09-07), not the soft
+# fill — #ffcb6b on white is 1.6:1, so the light theme deepens the amber instead of
+# lightening the text. Both halves: the fill is --signal, the text is --signal-ink.
+assert "the needs-you pill is filled with --signal"  "$(fhas '.c.you{background:var(--signal);color:var(--signal-ink);' "$SLATE")"
+assert "…and light --signal-ink is white"            "$(eq "$(tokval "$SLATE" ':root[data-theme="light"]' 'signal-ink')" '#ffffff')"
+assert "…while dark --signal-ink is the ground"      "$(eq "$(tokval "$SLATE" ':root[data-theme="dark"]' 'signal-ink')" '#191c27')"
+assert "…and the pill is not drawn in the soft fill" "$(fhasnt '.c.you{background:var(--signal-soft)' "$SLATE")"
+# The header's own amber text is the deepened one — #7c5410 in light, where plain
+# --signal on --ground would be the pill colour on a pale ground.
+assert "the header's amber text is --signal-soft-text" "$(fhas '.sub .sig{color:var(--signal-soft-text);font-weight:600}' "$SLATE")"
+
+echo "== the tab row filters project rows, and All is what ships =="
+assert "the board carries the default tab"           "$(fhas '<div class="board" data-tab="all">' "$SLATE")"
+for pick in all you act fin other; do
+  assert "…a $pick tab is rendered"                  "$(fhas "data-pick=\"$pick\"" "$SLATE")"
+done
+assert "…five of them and no more"                   "$(eq "$(grep -oF '<button class="tab' "$SLATE" | wc -l | tr -d ' ')" 5)"
+assert "…labelled from the handoff"                  "$(yes_if python3 -c "
+import re, sys
+labels = re.findall(r'data-pick=\"[a-z]+\">([^<]*) · [0-9]+</button>', open('$SLATE', encoding='utf-8').read())
+sys.exit(0 if labels == ['All', 'Needs you', 'Active', 'Finished', 'Other owners'] else 1)")"
+# THE COUNTS ARE THE BOARD'S OWN, and each is re-derived here from what actually
+# rendered — a tab saying 3 over 4 cards is the only way a filter can lie. `Needs you`
+# counts ITEMS, exactly as the masthead tally does, while the other four count PROJECTS;
+# that asymmetry is the handoff's and is pinned rather than smoothed over.
+assert "…and every count matches the rows it filters" "$(yes_if python3 -c "
+import re, sys
+page = open('$SLATE', encoding='utf-8').read()
+tabs = dict((p, int(n)) for p, n in
+            re.findall(r'data-pick=\"([a-z]+)\">[^<]*· ([0-9]+)</button>', page))
+facets = re.findall(r'<div class=\"pcard\" data-f=\"([^\"]*)\">', page)
+mine = [f for f in facets if 'other' not in f.split()]
+awaiting = int(re.search(r'awaiting you</dt><dd>([0-9]+)</dd>', page).group(1))
+sys.exit(0 if tabs['all'] == len(mine)
+             and tabs['you'] == awaiting
+             and sum(1 for f in mine if 'you' in f.split())
+                 == len(re.findall(r'class=\"c you\"', page))
+             and tabs['act'] == sum(1 for f in mine if 'act' in f.split())
+             and tabs['fin'] == sum(1 for f in mine if 'fin' in f.split())
+             and tabs['other'] == len(re.findall(r'class=\"proj other\"', page)) else 1)")"
+# FILTERING IS CSS, NOT A LIST OF ROWS THE SCRIPT WALKS: the script writes ONE attribute
+# and every hide is a selector on it, so nothing can go out of step with the markup.
+assert "each tab hides by selector, not by script"   "$(fhas '.board[data-tab="you"] .pcard:not([data-f~="you"]),' "$SLATE")"
+assert "…for the Active tab too"                     "$(fhas '.board[data-tab="act"] .pcard:not([data-f~="act"]),' "$SLATE")"
+assert "…and the Finished one"                       "$(fhas '.board[data-tab="fin"] .pcard:not([data-f~="fin"]),' "$SLATE")"
+assert "…and the script writes one attribute"        "$(fhas "b.setAttribute('data-tab', p.getAttribute('data-pick'));" "$SLATE")"
+# OTHER OWNERS IS A TAB, NOT A TRAILING SECTION any more: hidden under All, shown under
+# its own tab, and its divider goes with it.
+assert "other owners are hidden under All"           "$(fhas '.board[data-tab="all"] .pcard[data-f~="other"],' "$SLATE")"
+assert "…and so is the heading that led that section" "$(fhas '.board[data-tab="all"] .sep.others,' "$SLATE")"
+assert "…the facet the tab selects on is on the card" "$(fhas '<div class="pcard" data-f="' "$SLATE")"
+
+echo "== one segmented ☀/☾ toggle, and the default is DARK =="
+assert "the control is one segmented group"          "$(fhas '<div class="seg" role="group" aria-label="Theme">' "$SLATE")"
+assert "…with a sun segment"                         "$(fhas 'data-set-theme="light" title="Light theme"' "$SLATE")"
+assert "…and a moon segment"                         "$(fhas 'data-set-theme="dark" title="Dark theme"' "$SLATE")"
+assert "…exactly two segments, not a row of buttons" "$(eq "$(grep -oF 'data-set-theme=' "$SLATE" | wc -l | tr -d ' ')" 2)"
+assert "…drawn with the handoff's glyphs"            "$(fhas '>☀</button>' "$SLATE")"
+assert "…and the moon"                               "$(fhas '>☾</button>' "$SLATE")"
+# THE DEFAULT IS THE ABSENCE OF AN ATTRIBUTE. Nothing renders `data-theme`, the bare
+# :root is dark (asserted above), and the moon lights up off that same absence — so an
+# unvisited page is dark AND says so, whatever the system prefers.
+assert "nothing renders a data-theme attribute"      "$(fhasnt 'data-theme="dark">' "$SLATE")"
+assert "…and prefers-color-scheme is not consulted"  "$(fhasnt 'prefers-color-scheme' "$SLATE")"
+assert "…the moon segment is active with no choice stored" \
+  "$(fhas ':root:not([data-theme="light"]) .seg .moon,' "$SLATE")"
+assert "…and the sun only with an explicit light choice" "$(fhas ':root[data-theme="light"] .seg .sun{background:var(--seg-on);' "$SLATE")"
+# A STORED CHOICE WINS, and it is restored before the first paint — the script is in the
+# head for that reason, so a light page never flashes dark on its way in.
+assert "a stored choice is read back"                "$(fhas "var saved=localStorage.getItem(KEY);" "$SLATE")"
+assert "…only for the two values it wrote"           "$(fhas "if(saved==='light'||saved==='dark')" "$SLATE")"
+assert "…and a click persists it"                    "$(fhas "localStorage.setItem(KEY,v);" "$SLATE")"
+assert "…with the restore ahead of the body"         "$(yes_if python3 -c "
+import sys
+t = open('$SLATE', encoding='utf-8').read()
+sys.exit(0 if t.index('localStorage.getItem(KEY)') < t.index('<body>') else 1)")"
+# STILL ONE SCRIPT. The clipboard helper, the theme and the tabs share the single inline
+# <script> this page has always had — a second one would be a second place for the
+# page's only scripted behaviour to live.
+assert "the page carries exactly one script element" "$(eq "$(grep -oF '<script>' "$SLATE" | wc -l | tr -d ' ')" 1)"
+
+echo "== the five-track task grid, and the phone layout below 760px =="
+assert "the row is the handoff's five tracks"        "$(fhas 'grid-template-columns:minmax(0,1fr) 105px 140px 80px 90px;' "$SLATE")"
+assert "…written once, so head and body cannot drift" "$(eq "$(grep -oF 'grid-template-columns:minmax(0,1fr) 105px 140px 80px 90px' "$SLATE" | wc -l | tr -d ' ')" 1)"
+assert "…and it is still a <table>, not a stack of divs" "$(fhas '<table><thead><tr>' "$SLATE")"
+assert "the state cells carry the handoff's glyphs"  "$(yes_if python3 -c "
+import re, sys
+states = set(re.findall(r'<span class=\"state[^\"]*\">(.)', open('$SLATE', encoding='utf-8').read()))
+sys.exit(0 if states and states <= set('✓◐■◇⊘') else 1)")"
+assert "the breakpoint is at 760px"                  "$(fhas '@media (max-width:760px){' "$SLATE")"
+# WHAT THE BREAKPOINT HAS TO DO, one assertion each — a media query that exists and
+# changes nothing is the failure this would otherwise miss.
+assert "…the header row has nothing left to label"   "$(fhas 'thead{display:none}' "$SLATE")"
+assert "…the row becomes a wrapping meta line"       "$(fhas 'tr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 0}' "$SLATE")"
+assert "…with the task cell on a line of its own"    "$(fhas 'td:first-child{width:100%}' "$SLATE")"
+assert "…the action buttons reach 40px"              "$(fhas '.acts button{min-height:40px;' "$SLATE")"
+assert "…and the tab pills scroll instead of wrapping" "$(fhas '.tabwrap{flex-wrap:nowrap;overflow-x:auto;' "$SLATE")"
+assert "…while the desktop rule lets them wrap"      "$(fhas '.tabwrap{display:flex;gap:8px;flex-wrap:wrap;' "$SLATE")"
+# NON-VACUITY: every rule above must be INSIDE the query, or they describe the desktop.
+assert "…and all of it really is inside the query"   "$(yes_if python3 -c "
+import re, sys
+src = open('$SLATE', encoding='utf-8').read()
+m = re.search(r'@media \(max-width:760px\)\{(.*?)\n\}', src, re.S)
+body = m.group(1) if m else ''
+need = ['thead{display:none}', 'tr{display:flex;flex-wrap:wrap',
+        'td:first-child{width:100%}', '.acts button{min-height:40px',
+        '.tabwrap{flex-wrap:nowrap']
+sys.exit(0 if body and all(n in body for n in need) else 1)")"
+
+echo "== the handoff's measurements, one assertion per number =="
+# EVERY SIZE IN README §1–§2, read back off the sheet. A redesign whose numbers live
+# only in a source document is a redesign that drifts on the first edit; these are the
+# values the artboards were drawn at, so a changed one has to be changed here too.
+sized() { # <label> <literal css>
+  assert "$1" "$(fhas "$2" "$SLATE")"
+}
+sized "header title 23px/700"            'h1{font-size:23px;font-weight:700;'
+sized "snapshot line 14px"               '.sub{color:var(--muted);margin:6px 0 0;font-size:14px}'
+sized "stat number 21px/700"             '.tally dd{order:1;margin:0;font:700 21px/1.25'
+sized "stat label 12px"                  '.tally dt{order:2;font-size:12px;'
+sized "tab pill 13px, 6px 16px, 999px"   'font:500 13px/1 "IBM Plex Sans",sans-serif;padding:6px 16px;border-radius:999px;'
+sized "toggle 999px with 3px padding"    'border-radius:999px;padding:3px;flex-shrink:0}'
+sized "project card 14px radius"         '.proj{background:var(--surface);border:1px solid var(--line);border-radius:14px}'
+sized "collapsed row 15px 20px padding"  'padding:15px 20px;list-style:none;border-radius:14px}'
+sized "project title 15px/600"           '.ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto;min-width:0;font-size:15px;'
+sized "project date 13px"                '.pdate{font-size:13px;color:var(--dim);'
+sized "count summary 13px"               '.counts{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;align-items:center;
+  font-size:13px;'
+sized "needs-you pill 6px 14px, 999px"   'padding:6px 14px;border-radius:999px;margin-left:8px}'
+sized "finished divider 12px/600 .08em"  '.sep{font-size:12px;text-transform:uppercase;letter-spacing:.08em;'
+sized "decision rail 12px radius, 16px"  'border-left:4px solid var(--signal);border-radius:12px;padding:16px;'
+sized "rail label 11px/700 uppercase"    '.rail h2{margin:0;font:700 11px/1.4 "IBM Plex Sans",sans-serif;text-transform:uppercase;
+  letter-spacing:.1em;'
+sized "decision card 10px radius"        'border:1px solid var(--line);border-radius:10px}'
+sized "decision card 14px 16px padding"  '.ask{display:flex;flex-direction:column;padding:14px 16px;'
+sized "verb mono 11px/600 uppercase"     '.verb{font:600 11px/1.5 "IBM Plex Mono",ui-monospace,monospace;text-transform:uppercase;'
+sized "card title 15px/600, 1.45 lh"     '.what{width:100%;font-size:15px;font-weight:600;line-height:1.45;'
+sized "breadcrumb 13px"                  '.where{width:100%;font-size:13px;color:var(--muted);'
+sized "action button 9px 16px, 9px"      'border-radius:9px;
+  padding:9px 16px;'
+sized "task id mono 11px"                '.tid{color:var(--dim);font-size:11px;'
+sized "task title 14px"                  '.tbtn{background:none;border:0;padding:0;font:400 14px/1.4'
+sized "state 12px/600"                   '.state{font-size:12px;font-weight:600;'
+sized "depends-on mono 12px"             'button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;'
+sized "Q chip 5px radius"                'border:0;border-radius:5px;padding:2px 8px;'
+sized "PR ref 13px in the activity blue" 'td a{color:var(--accent);text-decoration:none;'
+sized "row 18px column gap, 12px rows"   'gap:0 18px;
+  align-items:center;padding:12px 4px;border-top:1px solid var(--line)}'
+# EVERY ACTION IS VISIBLE ON DESKTOP — no overflow menu, stated as the absence of one
+# and as the presence of the wrap that replaces it.
+assert "the action row wraps rather than collapsing" "$(fhas '.acts{display:flex;flex-wrap:wrap;gap:8px;' "$SLATE")"
+assert "…and no overflow control is rendered"        "$(fhasnt 'data-what="More"' "$SLATE")"
+
+echo "== the page still renders from SNAPSHOT.json alone, and stays escaped =="
+# The hostile instance renders through the SAME new markup: a title carrying ESC, a
+# newline, a tab and a bidi override reaches the tab row's neighbours and the pill, and
+# none of it may arrive as anything but text.
+HOSTILE="$TMP/hostile.html"
+( cd "$DELTA" && bash "$BOARD" --standalone --out "$HOSTILE" "$DELTA" >/dev/null 2>&1 )
+assert "the hostile snapshot renders"                "$(yes_if test -s "$HOSTILE")"
+assert "…with no unescaped angle bracket from a title" "$(fhasnt '<span class="ptitle">ANSITITLE<' "$HOSTILE")"
+assert "…and the tab counts are integers, never text" "$(yes_if python3 -c "
+import re, sys
+n = re.findall(r'data-pick=\"[a-z]+\">[^<]*· ([^<]*)</button>', open('$HOSTILE', encoding='utf-8').read())
+sys.exit(0 if n and all(x.isdigit() for x in n) else 1)")"
+assert "…and no snapshot text reaches the script"    "$(yes_if python3 -c "
+import re, sys
+src = open('$HOSTILE', encoding='utf-8').read()
+m = re.search(r'<script>(.*?)</script>', src, re.S)
+sys.exit(0 if m and 'ANSITITLE' not in m.group(1) and 'FORGEDROW' not in m.group(1) else 1)")"
+
 # THE RENDERERS SHIP WITH THE PLUGIN, NOT INTO A BUNDLE (task-013). This used to assert
 # that a stamp LINKED them into `<bundle>/scripts/`; a bundle carries no machinery now, so
 # the property worth pinning is that the plugin ships both and that a stamp put no link

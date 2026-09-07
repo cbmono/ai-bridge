@@ -14,20 +14,17 @@
 # queues hidden inside them is STRICTLY WORSE than the clutter it removes: the clutter
 # was at least honest about which projects wanted you. So the summary line carries the
 # signal, and "can I tell, from the collapsed view alone, exactly which projects need
-# me?" is the question this design answers. THE WEIGHTING, in full — it is three
-# reinforcing channels for one number, not decoration:
-#   · the COUNT itself — `<b>N</b> awaiting you`, the number of that project's rail
-#     items, so the same N the pooled list would have shown for it. It is the ONLY
-#     count pill in the signal colour, and since 2026-08-31 the only pill on the line
-#     about attention at all: an outlined `N questions` counter used to sit beside it
-#     measuring an overlapping thing, and this one now holds that pill's slot and
-#     treatment (see `.c.you` in the CSS for what the merge gave up and why);
-#   · a signal border and inset bar on the WHOLE CARD (`.proj.wants`) — visible at any
-#     scroll position, and to a reader who never looks at a row of chips;
+# me?" is the question this design answers. THE WEIGHTING, in full — two reinforcing
+# channels for one number, not decoration:
+#   · the COUNT itself — `<b>N</b> need you`, the number of that project's rail items,
+#     so the same N the pooled list would have shown for it. The soft-slate redesign
+#     (2026-09-07) makes every other count on the line a plain run of text, so this is
+#     the ONLY filled box on a collapsed row — which is why the card border and inset
+#     bar that used to be the second channel are gone rather than kept beside it;
 #   · ORDER — a project with items sorts above one without, inside its own half of the
 #     board (live above, finished below), the snapshot's order preserved within each.
-# A project with nothing waiting gets none of the three. Colour alone would fail a
-# reader who cannot see it; the count and the order do not depend on it.
+# A project with nothing waiting gets neither. Colour alone would fail a reader who
+# cannot see it; the count and the order do not depend on it.
 #
 # THE ✕ COPIES A COMMAND. IT NEVER CLOSES ANYTHING. Closing a project is
 # `/close-project`, a human-run command with its own consolidation, log entry and
@@ -389,8 +386,23 @@ def toint(v, default=0):
         return default
 
 # ---------------------------------------------------------------- the board
-TONE = {"blocked": "stop", "review": "signal", "in-review": "signal",
-        "done": "ok", "in-progress": "accent"}
+TONE = {"blocked": "stop", "review": "accent", "in-review": "accent",
+        "done": "ok", "in-progress": "accent", "cancelled": "dim"}
+# THE GLYPH AND THE LABEL ARE MARKUP, NOT A PSEUDO-ELEMENT, and both fall back to the
+# raw status: a value the board has never seen still renders as its own text, so drift
+# stays visible instead of arriving as a blank cell.
+GLYPH = {"done": "✓", "in-review": "◐", "review": "◐", "in-progress": "◐",
+         "blocked": "■", "draft": "◇", "ready": "◇", "cancelled": "⊘"}
+LABEL = {"in-review": "In review", "review": "In review", "in-progress": "In progress",
+         "done": "Done", "blocked": "Blocked", "draft": "Draft", "ready": "Ready",
+         "cancelled": "Cancelled"}
+
+
+def state_cell(st):
+    """`<glyph> <Label>` for a known status, the raw string for anything else."""
+    g = GLYPH.get(st)
+    return ("%s %s" % (g, LABEL[st])) if g else st
+
 PENDING = ("draft", "ready", "blocked")
 RUNNING = ("in-progress", "in-review", "review")
 TERMINAL = ("done", "cancelled")
@@ -649,362 +661,295 @@ WORDING = {
 TABLE_HEAD = """<title>__TITLE__</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-/* Full light palette on BARE :root — no colour is ever defined only inside a media
-   or [data-theme] block. Dark redefines the same tokens twice: once for the system
-   preference (guarded so an explicit light choice wins), once for an explicit choice. */
+/* THE FULL DARK PALETTE SITS ON BARE :root, because DARK IS THE DEFAULT — no stored
+   choice renders dark whatever the system prefers, so the system preference is never
+   queried here and no colour is defined only inside a [data-theme] block.
+   Four background layers do the separating: ground -> surface -> sunk -> inner. */
 :root{
-  --ground:#f4f6f7; --surface:#fff; --sunk:#eceff1; --raise:#f8fafb;
-  --ink:#15181d; --muted:#5c6470; --dim:#89919c; --line:#dde2e6;
-  --accent:#0f6b66; --signal:#9c560d; --ok:#2c6647; --stop:#a03a32;
-  --shadow:0 1px 2px rgba(20,26,34,.05),0 8px 24px -16px rgba(20,26,34,.22);
+  --ground:#191c27; --surface:#262a3b; --sunk:#20242f; --inner:#1c1f2c; --raise:#2e3242;
+  --ink:#e8ebf7; --muted:#9da5c0; --dim:#6c7393; --line:#3a3f55;
+  --accent:#89ddff; --signal:#ffcb6b; --signal-ink:#191c27; --seg-on:#3a3f55;
+  --signal-soft:#3c3524; --signal-soft-text:#ffcb6b;
+  --ok:#c3e88d; --ok-soft:#2e3a26; --stop:#ff6e7f; --stop-soft:#42262e;
+  --neutral-soft:#333850; --neutral-soft-text:#d4d9ec;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -16px rgba(0,0,0,.7);
 }
-@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
-  --ground:#0e1013; --surface:#171a1e; --sunk:#1e2227; --raise:#1b1f24;
-  --ink:#e5e8eb; --muted:#98a1ac; --dim:#6d7681; --line:#262b31;
-  --accent:#44b0a7; --signal:#dda157; --ok:#5fac82; --stop:#dc7a70;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -16px rgba(0,0,0,.7);
-}}
 :root[data-theme="dark"]{
-  --ground:#0e1013; --surface:#171a1e; --sunk:#1e2227; --raise:#1b1f24;
-  --ink:#e5e8eb; --muted:#98a1ac; --dim:#6d7681; --line:#262b31;
-  --accent:#44b0a7; --signal:#dda157; --ok:#5fac82; --stop:#dc7a70;
+  --ground:#191c27; --surface:#262a3b; --sunk:#20242f; --inner:#1c1f2c; --raise:#2e3242;
+  --ink:#e8ebf7; --muted:#9da5c0; --dim:#6c7393; --line:#3a3f55;
+  --accent:#89ddff; --signal:#ffcb6b; --signal-ink:#191c27; --seg-on:#3a3f55;
+  --signal-soft:#3c3524; --signal-soft-text:#ffcb6b;
+  --ok:#c3e88d; --ok-soft:#2e3a26; --stop:#ff6e7f; --stop-soft:#42262e;
+  --neutral-soft:#333850; --neutral-soft-text:#d4d9ec;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -16px rgba(0,0,0,.7);
+}
+/* Amber is DEEPENED to #a2701a here, not lightened: #ffcb6b on white is 1.6:1. The
+   filled pill therefore takes white text, while amber TEXT on a pale ground is the
+   darker #7c5410 (--signal-soft-text), which is what the header and the rail label use. */
+:root[data-theme="light"]{
+  --ground:#eef0f6; --surface:#ffffff; --sunk:#e6e9f2; --inner:#f7f8fc; --raise:#f6f6f7;
+  --ink:#232635; --muted:#5f6786; --dim:#8c92ab; --line:#d9dce8;
+  --accent:#2e7cae; --signal:#a2701a; --signal-ink:#ffffff; --seg-on:#e6e9f2;
+  --signal-soft:#f3e7cd; --signal-soft-text:#7c5410;
+  --ok:#55803a; --ok-soft:#e6f0da; --stop:#c94e60; --stop-soft:#f9e4e8;
+  --neutral-soft:#e6e9f2; --neutral-soft-text:#454c68;
+  --shadow:0 1px 2px rgba(20,26,34,.05),0 8px 24px -16px rgba(20,26,34,.22);
 }
 *,*::before,*::after{box-sizing:border-box}
 body{background:var(--ground);color:var(--ink);margin:0;
   font:400 15px/1.55 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
   -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
 .board{width:min(100% - 2rem, 104rem);margin:0 auto;display:flex;flex-direction:column;
-  gap:1.1rem;padding:clamp(1.4rem,3vw,2.6rem) 0 4rem}
-/* Prose keeps a readable measure even when the board is wide — only the data grows. */
+  gap:10px;padding:clamp(1.4rem,3vw,2.6rem) 0 4rem}
 .sub,.where,footer p{max-width:52rem}
 
-.mast{display:flex;flex-wrap:wrap;gap:1.3rem;justify-content:space-between;
-  align-items:flex-end;padding-bottom:1rem;border-bottom:2px solid var(--ink)}
-h1{font-size:clamp(1.5rem,3.6vw,1.95rem);font-weight:600;letter-spacing:-.02em;
-  margin:0;text-wrap:balance}
-.sub{color:var(--muted);margin:.28rem 0 0;font-size:.82rem;
-  font-family:"IBM Plex Mono",ui-monospace,monospace}
-.tally{display:flex;gap:1.5rem;margin:0}
-.tally div{display:flex;flex-direction:column-reverse;gap:.1rem}
-.tally dt{font-size:.65rem;text-transform:uppercase;letter-spacing:.09em;
-  color:var(--dim);margin:0}
-.tally dd{margin:0;font:600 1.5rem/1 "IBM Plex Mono",ui-monospace,monospace;
-  color:var(--muted);font-variant-numeric:tabular-nums}
-.tally .live dd,.tally .live dt{color:var(--signal)}
+.mast{display:flex;flex-wrap:wrap;gap:24px;justify-content:space-between;
+  align-items:flex-end}
+h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:6px 0 0;font-size:14px}
+.sub .sig{color:var(--signal-soft-text);font-weight:600}
+.tally{display:flex;gap:26px;margin:0;align-items:flex-end}
+.tally div{display:flex;flex-direction:column;text-align:right}
+.tally dt{order:2;font-size:12px;color:var(--muted);margin:0}
+.tally dd{order:1;margin:0;font:700 21px/1.25 "IBM Plex Sans",sans-serif;
+  color:var(--ink);font-variant-numeric:tabular-nums}
+.tally dd .of{color:var(--dim)}
+.tally .live dd,.tally .live dt{color:var(--signal-soft-text)}
 
-/* THE BLOCK THAT MATTERS HAS TO SEPARATE FROM THE CARD HOLDING IT. Its fill was
-   `--signal` 8% on `--surface` — 1.12:1 against the card it sits in, and the card's own
-   `.proj.wants` head is 7% of the same hue, so the one block on the page that says "you
-   are the blocker" dissolved into its container. It is now a DEEPER, DESATURATED amber
-   built on `--sunk` (the page's recessed neutral) rather than on `--surface`, so it
-   reads as a panel set INTO the card: 1.42:1 in light, 1.47:1 in dark. Still one hue —
-   the accent already means "needs you" everywhere here, and a second one would compete
-   with it — and the amber left rail and the label stay, since those are what the eye
-   finds first.
-   THE LABEL MOVES WITH THE FILL. Plain `--signal` on this deeper ground is 3.93:1,
-   under AA for text this small (.68rem), so it takes 22% of `--ink`: 5.22:1 in light and
-   6.05:1 in dark, and still visibly amber (#7e4811 / #dfb178). Mixing toward `--ink`
-   rather than toward black is what makes one rule right in both themes — `--ink` is
-   dark in light mode and light in dark mode, exactly as `.c.you` does it. */
-.rail{border-left:.22rem solid var(--signal);border-radius:0 6px 6px 0;
-  background:color-mix(in srgb,var(--signal) 16%,var(--sunk));padding:.9rem 1rem}
-.rail h2{margin:0 0 .7rem;font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;
-  color:color-mix(in srgb,var(--signal) 78%,var(--ink));font-weight:600}
-.rail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem}
-.ask{display:flex;flex-direction:column;gap:.5rem;padding:.65rem .75rem;
-  background:var(--surface);border:1px solid var(--line);border-radius:5px}
+/* THE TAB ROW FILTERS PROJECT ROWS, AND IT DOES IT IN CSS. The script only writes
+   `data-tab` on .board; every hide below is a selector, so the filter survives with
+   scripting off at whatever tab the page was rendered with (All). */
+.tabs{display:flex;gap:8px;align-items:center;margin:22px 0 16px}
+.tabwrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center;min-width:0}
+.tab{border:1px solid var(--line);background:var(--surface);color:var(--muted);
+  font:500 13px/1 "IBM Plex Sans",sans-serif;padding:6px 16px;border-radius:999px;
+  cursor:pointer;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab.rest{color:var(--dim)}
+/* Active tab: filled amber. The 1px border stays and keeps its colour, so the active
+   pill is the same box as an inactive one and the row does not shift on a click. */
+.board[data-tab="all"] .tab[data-pick="all"],
+.board[data-tab="you"] .tab[data-pick="you"],
+.board[data-tab="act"] .tab[data-pick="act"],
+.board[data-tab="fin"] .tab[data-pick="fin"],
+.board[data-tab="other"] .tab[data-pick="other"]{background:var(--signal);
+  border-color:var(--signal);color:var(--signal-ink);font-weight:700}
+.seg{margin-left:auto;display:flex;align-items:center;border:1px solid var(--line);
+  background:var(--surface);border-radius:999px;padding:3px;flex-shrink:0}
+.seg button{font-size:12px;line-height:1;padding:4px 10px;border-radius:999px;border:0;
+  background:none;color:var(--dim);margin:0}
+.seg button:hover{color:var(--muted);border-color:transparent}
+/* The active segment is decided by the ROOT ATTRIBUTE, so the control shows the theme
+   the page is actually in without the script touching it. No attribute means dark. */
+:root:not([data-theme="light"]) .seg .moon,
+:root[data-theme="light"] .seg .sun{background:var(--seg-on);color:var(--ink)}
+
+/* One wrapper per project row, carrying the facets the tabs filter on. It is a
+   SEPARATE attribute rather than more classes on the <details>, so the card's own
+   class list stays exactly what it was. */
+.board[data-tab="you"] .pcard:not([data-f~="you"]),
+.board[data-tab="act"] .pcard:not([data-f~="act"]),
+.board[data-tab="fin"] .pcard:not([data-f~="fin"]),
+.board[data-tab="other"] .pcard:not([data-f~="other"]),
+.board[data-tab="all"] .pcard[data-f~="other"],
+.board[data-tab="all"] .sep.others,
+.board:not([data-tab="all"]) .sep{display:none}
+
+/* THE DECISION RAIL. Sunk ground, a 4px amber left border and the label above it —
+   the panel is set INTO the card rather than tinted on top of it, which is what the
+   four background layers buy. */
+.rail{background:var(--sunk);border:1px solid var(--line);
+  border-left:4px solid var(--signal);border-radius:12px;padding:16px;
+  display:flex;flex-direction:column;gap:12px}
+.rail h2{margin:0;font:700 11px/1.4 "IBM Plex Sans",sans-serif;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--signal-soft-text)}
+.rail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+/* The decision card, one layer further in. */
+.ask{display:flex;flex-direction:column;padding:14px 16px;
+  background:var(--inner);border:1px solid var(--line);border-radius:10px}
 /* A snapshot that could not be parsed is a VISIBLE note here too, not just a line on
-   stderr — one broken instance must not be able to disappear quietly. Named
-   `.snapnote` rather than `.note`, because `.c.note` below is the advisor-concern
-   pill and a bare `.note` rule would restyle it. */
-.snapnote{border:1px solid var(--stop);border-left:.22rem solid var(--stop);
-  border-radius:5px;padding:.7rem .85rem;font-size:.84rem;color:var(--muted);
+   stderr — one broken instance must not be able to disappear quietly. */
+.snapnote{border:1px solid var(--stop);border-left:4px solid var(--stop);
+  border-radius:10px;padding:14px 16px;font-size:13px;color:var(--muted);
   background:var(--surface)}
-.line{display:flex;flex-wrap:wrap;gap:.3rem .55rem;align-items:baseline}
-.what{font-weight:500}
-/* The task filename on a waiting row. `.tid` already owns this treatment in the task
-   table; the only difference here is that the flex gap supplies the separation, so its
-   own right margin would double it. */
-.line .tid{margin-right:0}
-.verb{font:600 .64rem/1.7 "IBM Plex Mono",ui-monospace,monospace;text-transform:uppercase;
-  letter-spacing:.08em;color:var(--signal);white-space:nowrap}
-/* THE BREADCRUMB WAS THE LEAST LEGIBLE THING IN THE BLOCK, and it was measurably so,
-   not just to taste: `--dim` on `.ask`'s surface is 3.18:1 in light and 3.79:1 in dark,
-   both under AA's 4.5:1 for text this small (.75rem ≈ 12px). `--muted` is 5.98:1 and
-   6.67:1 — the same grey family one step up, no new colour. */
-.where{width:100%;font-size:.75rem;color:var(--muted)}
-.acts{display:flex;flex-wrap:wrap;gap:.35rem}
-/* The title line IS the toggle: click anywhere on it for the explanation. A caret
-   marks it as expandable, since a heading that happens to be clickable is invisible. */
+.line{display:flex;flex-wrap:wrap;gap:0 10px;align-items:baseline}
+.what{width:100%;font-size:15px;font-weight:600;line-height:1.45;margin-top:6px;
+  color:var(--ink)}
+.line .tid{margin-right:0;font-size:12px;color:var(--muted)}
+.verb{font:600 11px/1.5 "IBM Plex Mono",ui-monospace,monospace;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--signal-soft-text);white-space:nowrap}
+/* The breadcrumb is --muted, not --dim: --dim under AA at this size on this ground. */
+.where{width:100%;font-size:13px;color:var(--muted);margin-top:4px}
+/* EVERY ACTION IS VISIBLE — no overflow menu. The row wraps instead. */
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+/* The title line IS the toggle: click anywhere on it for the explanation. */
 .why summary{cursor:pointer;list-style:none}
 .why summary::-webkit-details-marker{display:none}
-.why summary::after{content:"▸";color:var(--dim);font-size:.7rem;
-  transition:transform .15s;display:inline-block;margin-left:.15rem}
-.why[open] summary::after{transform:rotate(90deg)}
-.why summary:hover .what{color:var(--accent)}
-.why summary:hover::after{color:var(--accent)}
-.why p{margin:.55rem 0 0;color:var(--muted);line-height:1.5;max-width:52rem;
-  font-size:.83rem;border-left:2px solid var(--line);padding-left:.6rem}
-button{font:500 .78rem/1 "IBM Plex Sans",sans-serif;cursor:pointer;border-radius:4px;
-  padding:.38rem .62rem;border:1px solid var(--line);background:var(--raise);
+.why summary::after{content:"▸";color:var(--dim);font-size:11px;
+  display:inline-block;margin-left:.15rem}
+.why[open] summary::after{content:"▾"}
+.why summary:hover .what{color:var(--signal-soft-text)}
+.why p{margin:10px 0 0;color:var(--muted);line-height:1.5;max-width:52rem;
+  font-size:13px;border-left:2px solid var(--line);padding-left:10px}
+button{font:500 13px/1 "IBM Plex Sans",sans-serif;cursor:pointer;border-radius:9px;
+  padding:9px 16px;border:1px solid var(--line);background:var(--raise);
   color:var(--ink)}
-button:hover{border-color:var(--accent)}
-button.go{border-color:var(--ok);color:var(--ok)}
-button.no{border-color:var(--stop);color:var(--stop)}
+button:hover{border-color:var(--signal)}
+/* THE ACTION ROW'S FIVE TREATMENTS, one per meaning: amber for a question, green for
+   approve, neutral for discuss and for the ref, red for reject. All soft fills, so no
+   button shouts louder than the amber rail already does. */
+.acts button{border:0;background:var(--neutral-soft);color:var(--neutral-soft-text)}
+.acts button:hover{filter:brightness(1.12)}
+.acts button.go{background:var(--ok-soft);color:var(--ok);font-weight:600;padding:9px 18px}
+.acts button.no{background:var(--stop-soft);color:var(--stop)}
+.acts button.ghost{background:var(--neutral-soft);color:var(--muted);font-size:13px;
+  padding:9px 16px}
+.acts .qbtn{background:var(--signal-soft);color:var(--signal-soft-text);font-weight:600;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;padding:9px 16px}
+.acts .qbtn.nonum{background:var(--neutral-soft);color:var(--muted)}
 
 /* Collapsed by default: no `open` attribute, and no script involved. */
-.proj{background:var(--surface);border:1px solid var(--line);border-radius:6px;
-  box-shadow:var(--shadow)}
-.phead{display:flex;flex-wrap:wrap;gap:.5rem .9rem;align-items:center;cursor:pointer;
-  padding:.8rem .95rem;list-style:none;border-radius:6px}
+.proj{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.phead{display:flex;flex-wrap:wrap;gap:16px;align-items:center;cursor:pointer;
+  padding:15px 20px;list-style:none;border-radius:14px}
 .phead::-webkit-details-marker{display:none}
-.phead::before{content:"\\25B8";color:var(--dim);font-size:.8rem;flex-shrink:0;
-  transition:transform .15s}
-.proj[open] .phead::before{transform:rotate(90deg)}
-.phead:hover{background:var(--raise)}
-.phead:hover .ptitle{color:var(--accent)}
-/* The title no longer eats the free space — the date sits immediately after it, and a
-   growing title would have pushed the date to the far end again, which is where it just
-   came from. `.counts` takes the space instead, so the chips stay exactly where they
-   have always been: hard against the ✕ at the end of the line. */
-.ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto;min-width:0;font-size:.97rem}
-.counts{display:flex;gap:.35rem;flex-wrap:wrap;margin-left:auto}
-.c{font-size:.72rem;color:var(--muted);border:1px solid var(--line);border-radius:3px;
-  padding:.15rem .42rem;white-space:nowrap}
-.c b{font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
-.c.ok b{color:var(--ok)} .c.run b{color:var(--accent)} .c.wait b{color:var(--signal)}
-.tag{font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
-  background:var(--sunk);border-radius:3px;padding:.14rem .38rem;white-space:nowrap}
-.body{padding:0 .95rem .9rem;border-top:1px solid var(--line)}
+.phead::before{content:"▸";color:var(--dim);font-size:12px;flex-shrink:0}
+.proj[open] .phead::before{content:"▾"}
+.phead:hover{background:color-mix(in srgb,var(--ink) 4%,var(--surface))}
+.ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto;min-width:0;font-size:15px;
+  color:var(--ink)}
+.pdate{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;
+  white-space:nowrap;flex-shrink:0;margin-left:-8px}
+/* THE COUNT SUMMARY IS ONE SENTENCE, NOT A ROW OF CHIPS: `2 done · 3 active · 2
+   pending`, muted, with the numbers bold and coloured. The interpunct is drawn by the
+   separator rule, so nothing but the amber pill is a box on this line. */
+.counts{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;align-items:center;
+  font-size:13px;color:var(--muted)}
+.c,.tag{font-size:13px;color:var(--muted);border:0;background:none;padding:0;
+  white-space:nowrap;letter-spacing:normal;text-transform:none}
+.counts>*+*:not(.you)::before{content:"· ";color:var(--dim)}
+.c b{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.c.ok b{color:var(--ok)} .c.run b{color:var(--accent)} .c.wait b{color:var(--ink)}
+/* THE ONE PILL, AND IT IS FILLED AGAIN. Amber ground, ink-dark text in dark and white
+   in light — the only filled thing on a collapsed row, so "this one wants you" reads
+   from across the page. Order is the second channel and is unchanged. */
+.c.you{background:var(--signal);color:var(--signal-ink);font-weight:700;
+  padding:6px 14px;border-radius:999px;margin-left:8px}
+.c.you b{color:var(--signal-ink);font-weight:700}
+.c.note{color:var(--stop)}
+.c.note b{color:var(--stop)}
+.body{padding:18px 20px 20px;border-top:1px solid var(--line);display:flex;
+  flex-direction:column;gap:18px}
 
-/* Finished projects: sunk below a divider, desaturated, and labelled. Still fully
-   readable when expanded — dimming the summary, not the contents. */
-.sep{font-size:.66rem;text-transform:uppercase;letter-spacing:.11em;color:var(--dim);
-  font-weight:600;margin:.9rem 0 -.35rem;display:flex;align-items:center;gap:.6rem}
-.sep::after{content:"";flex:1;height:1px;background:var(--line)}
-.proj.fin{background:transparent;box-shadow:none;border-style:dashed}
-.proj.fin .ptitle{color:var(--muted);font-weight:500}
-.proj.fin .phead{opacity:.8}
-.proj.fin[open] .phead{opacity:1}
-/* Another owner's work: the same card, set in mono and dimmed like a finished one,
-   because it is context rather than your queue. It is NOT hidden — the name is in the
-   markup whether this block is open or shut; the collapse is ergonomics. */
-.proj.other{background:transparent;box-shadow:none;border-style:dashed}
-.proj.other .ptitle{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.9rem;
+/* Finished projects: below a hairline divider, dashed, with a ✓ where the caret was. */
+.sep{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);
+  font-weight:600;margin:8px 0 0;display:flex;align-items:center;gap:12px}
+.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
+.proj.fin{background:transparent;border-style:dashed}
+.proj.fin .ptitle{color:var(--muted);font-weight:500;font-size:14px}
+.proj.fin .phead::before{content:"✓";color:var(--ok);font-size:14px}
+.proj.fin[open] .phead::before{content:"▾";color:var(--dim)}
+/* Another owner's work: the same card, dashed and set in mono, because it is context
+   rather than your queue. Its own tab is where it lives now. */
+.proj.other{background:transparent;border-style:dashed}
+.proj.other .ptitle{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:14px;
   color:var(--muted)}
 .proj.other[open] .ptitle{color:var(--ink)}
-/* THE AWAITING SIGNAL ON A COLLAPSED LINE. Three channels for one number, so the
-   collapsed board still answers "which projects need me?" — see the header's WEIGHTING
-   block. These rules sit AFTER .proj.fin/.proj.other on purpose: a finished project
-   proposing its own close is exactly a project that wants you, and must not be
-   quietened by the dashed, shadowless treatment above. */
-.proj.wants{border-color:color-mix(in srgb,var(--signal) 55%,var(--line));
-  border-style:solid;box-shadow:inset .3rem 0 0 var(--signal),var(--shadow)}
-.proj.wants .phead{padding-left:1.25rem;
-  background:color-mix(in srgb,var(--signal) 7%,transparent)}
-.proj.wants .phead:hover{background:color-mix(in srgb,var(--signal) 13%,transparent)}
+/* A project that wants you keeps its title at full weight even under the finished or
+   other-owner treatments. The filled amber pill and the sort are the other two channels
+   — the card border and inset bar are gone, because the handoff draws every card the
+   same and the pill is filled again (see `.c.you`). */
 .proj.wants .ptitle{color:var(--ink);font-weight:600}
-.proj.fin.wants .phead{opacity:1}
-/* THE ONE PILL, IN THE SLOT AND THE TREATMENT THE `N questions` PILL HELD. There were
-   two: this one, filled and first in the row, plus an outlined `N questions` at the end
-   of it. Two chips for overlapping things is a chip nobody trusts, so the questions
-   counter went and this one moved into its place — last of the count chips, outlined,
-   signal-coloured, `.c.q`'s own rule kept and relabelled rather than a third styling
-   invented. It is still the only chip on the line in the signal colour.
-   The filled treatment is what this gives up. It was one of three channels (header,
-   WEIGHTING); the two that do not depend on noticing a chip — `.proj.wants` on the
-   whole card, and the sort — are unchanged and carry the collapsed view on their own. */
-.c.you{color:var(--signal);border-color:color-mix(in srgb,var(--signal) 40%,var(--line));
-  font-weight:600}
-.c.you b{color:var(--signal);font-weight:700}
-/* Creation date, read from project.md's `timestamp:`. Mono and tabular so a column of
-   them lines up down the page. */
-.pdate{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.72rem;
-  color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0}
 /* The ✕. It COPIES `/close-project <slug>` and does nothing else — see the header. */
-button.pclose{font-size:.85rem;line-height:1;padding:.2rem .42rem;color:var(--dim);
+button.pclose{font-size:14px;line-height:1;padding:4px 8px;color:var(--dim);
   background:none;border-color:transparent;flex-shrink:0}
 button.pclose:hover{color:var(--stop);border-color:var(--stop);background:var(--surface)}
-/* A project's own rail, inside its body and above its task table. */
-.body>.rail{margin:.85rem 0 .1rem}
-/* `.c.q` — the `N questions` pill — is deliberately absent. Its slot and its treatment
-   are `.c.you`'s above; there is no second counter for the same thing. */
-.c.note{color:var(--dim);border-style:dashed}
-.c.note b{color:var(--muted)}
-.c.done-tag{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 45%,var(--line));
-  background:color-mix(in srgb,var(--ok) 9%,transparent);font-weight:600}
 
+/* THE TASK TABLE IS A GRID, and it is still a <table>. `display:contents` on the
+   sections promotes each <tr> to a grid of its own, so the five tracks line up down
+   the card while the row keeps its own top border — which a `display:contents` row
+   could not draw. */
 .scroll{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:.86rem;min-width:min(100%,33rem)}
-th{text-align:left;font-size:.64rem;text-transform:uppercase;letter-spacing:.09em;
-  color:var(--dim);font-weight:500;padding:.7rem .45rem .35rem;
-  border-bottom:1px solid var(--line);white-space:nowrap}
-th.r,td.r{text-align:right}
-th:not(:first-child),td:not(:first-child){width:1%;white-space:nowrap}
-th:first-child,td:first-child{width:auto}
-/* MIDDLE, not baseline. Against a title that wraps to two lines every other cell in the
-   row — the state, the dependencies, the PR link — sat pinned to the first line and read
-   as if it belonged to that line rather than to the row. (An assignee cell used to be the
-   clearest case; the Role column is gone, the alignment defect is not.) */
-td{padding:.4rem .45rem;vertical-align:middle;
-  border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
-tbody tr:last-child td{border-bottom:0}
-tr.flight td:first-child{box-shadow:inset 2px 0 0 var(--accent)}
-.tid{color:var(--dim);font-size:.74rem;margin-right:.4rem;
+table{border-collapse:collapse;width:100%;display:block;font-size:14px}
+thead,tbody{display:contents}
+tr{display:grid;grid-template-columns:minmax(0,1fr) 105px 140px 80px 90px;gap:0 18px;
+  align-items:center;padding:12px 4px;border-top:1px solid var(--line)}
+thead tr{padding:0 4px 10px;border-top:0}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--dim);font-weight:600;padding:0;white-space:nowrap}
+th.r,td.r{text-align:left}
+td{padding:0;vertical-align:middle;min-width:0}
+tr.flight{box-shadow:inset 2px 0 0 var(--accent)}
+.tid{color:var(--dim);font-size:11px;margin-right:.4rem;
   font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 td:first-child{overflow-wrap:break-word}
 
-/* ---- THE TASK ROW: THE JITTER IS THE BUG, NOT THE LINE COUNT --------------------
-   `014-banner-reaches-the-human Some title` and `001-local-board Some title` are two
-   inline runs, so every title started at a different x and the whole column read as
-   ragged. Worse, the row reflowed between one and two lines as the window moved, and a
-   list where some rows are one line and their neighbours two is a list you re-find your
-   place in on every scroll. Both are the SAME defect — nothing about the row is fixed —
-   and both are fixed by giving the filename a column of its own.
-
-   STACKED IS THE ONLY SHAPE, because it is the one that needs no measurement: `.trow` is
-   a flex COLUMN, so filename is line 1 and title is line 2 on EVERY row, at EVERY width.
-   Uniform by construction — there is no width at which one row can be one line and the
-   next two. It was the narrow half of two layouts until 2026-08-31; the block below the
-   rules says what the other half bought and why it is deleted rather than re-tuned.
-
-   `.tfile` IS THE FILENAME LINE, AND THE PROMOTE CONTROL IS ON IT. It used to sit in
-   `.tmain` above the title, which made a draft row THREE lines while every other row was
-   two. Here it rides beside the filename: one line either way, so a draft row is exactly
-   as tall as its neighbours. `flex-wrap:wrap` is the
-   escape valve for a filename long enough to leave the control no room — the control
-   drops to a line of its own rather than overflowing the column or pushing the title
-   out of alignment, and only that one row grows.
-   `.tmain` holds the title alone. */
-.trow{display:flex;flex-direction:column;align-items:flex-start;gap:.15rem;min-width:0}
+/* THE TASK CELL IS STACKED AT EVERY WIDTH: filename line 1, title line 2, so every
+   title starts at the cell's own left edge and no row is taller than its neighbour.
+   `.tfile` is the filename line; nothing is allowed to make a third one. */
+.trow{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
 .tfile{display:flex;align-items:baseline;flex-wrap:wrap;gap:.3rem;min-width:0}
 .tfile>.tid{margin-right:0;min-width:0;overflow-wrap:anywhere}
 .tmain{display:flex;flex-direction:column;align-items:flex-start;gap:.22rem;min-width:0}
-
-/* ONE LAYOUT AT EVERY WIDTH, AND THE WIDE VARIANT IS DELETED RATHER THAN NARROWED.
-   A width-conditional block at 1200px used to turn `.trow` back into a row with `.tfile`
-   pinned to a fixed 56-character flex basis — 39 for the longest filename in the bundle,
-   2 of gutter, ~15 for the promote control — so every title started at the same x.
-   It bought that alignment at a price the owner read off the rendered page: a title
-   sitting ~400px to the right of its own filename, with the whitespace between them
-   growing on every filename shorter than the longest one, and the eye having to travel
-   the gap to pair the two halves of one row. The stacked pair reads as one thing; the
-   split pair reads as two columns that happen to be adjacent.
-   SO THE BREAKPOINT IS GONE, NOT RE-TUNED. A second layout is a second set of row
-   metrics to keep honest — that basis was already the third number measured for it — and
-   the defect it existed to fix (ragged title x-positions) is fixed by the base rule too:
-   `.trow` is a flex COLUMN, so the filename is line 1 and the title is line 2 on EVERY
-   row, at EVERY width, and every title starts at the same x because it starts at the
-   cell's own left edge. Uniform by construction, with no width at which one row is one
-   line and its neighbour two, and nothing left to re-measure when a longer filename
-   arrives — `min-width:0` plus `overflow-wrap:anywhere` on `.tfile>.tid` still wrap it.
-   Do not reintroduce a width-conditional row without deleting this paragraph. */
-.tbtn{background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;
-  border-bottom:1px dotted var(--dim);border-radius:0}
-.tbtn:hover{color:var(--accent);border-color:var(--accent)}
-/* THE PROMOTE CONTROL LOOKS LIKE A CONTROL AT REST. It used to be a plain grey button
-   that only picked up the accent on hover — so the one row on the board asking for an
-   action announced itself only to a pointer already on top of it, and to a touch screen
-   never at all. The states are INVERTED: the accent outline is the resting
-   appearance, and hover drops it for a filled neutral. Hover is now a state change
-   ("you are on this one"), not the moment the button becomes visible. */
-.promote{font-size:.68rem;padding:.14rem .4rem;margin:0;
-  border-color:var(--accent);color:var(--accent);background:transparent}
-.promote:hover,.promote:focus-visible{border-color:var(--ink);color:var(--ink);
-  background:var(--sunk)}
-/* The Q count is a button only when there is something to ask about. Its TEXT is
-   never on this page — the allowlist forbids question text, and AWAITING.md has it. */
-.qbtn{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.8rem;font-weight:600;
-  color:var(--signal);border-color:color-mix(in srgb,var(--signal) 45%,var(--line));
-  background:color-mix(in srgb,var(--signal) 10%,transparent);padding:.1rem .45rem;
+.tbtn{background:none;border:0;padding:0;font:400 14px/1.4 "IBM Plex Sans",sans-serif;
+  color:var(--ink);text-align:left;border-radius:0}
+.tbtn:hover{color:var(--signal-soft-text)}
+/* THE PROMOTE CHIP RIDES IN THE PR COLUMN, where a draft has no PR to show. It is the
+   only chip in the table that asks for something, and it still only COPIES a prompt. */
+.promote{font:600 11px/1.4 "IBM Plex Sans",sans-serif;padding:2px 8px;margin:0;
+  border:0;border-radius:5px;background:var(--ok-soft);color:var(--ok);
+  justify-self:start;white-space:nowrap}
+.promote:hover,.promote:focus-visible{filter:brightness(1.15)}
+/* The Q chip. Its TEXT is never on this page — the allowlist forbids question text. */
+.qbtn{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-weight:500;
+  color:var(--signal-soft-text);border:0;border-radius:5px;padding:2px 8px;
+  background:var(--signal-soft);font-variant-numeric:tabular-nums}
+.qs{display:inline-flex;gap:4px;flex-wrap:wrap}
+.qbtn:hover{filter:brightness(1.15)}
+/* A HANDLE THE BOARD CANNOT NAME: quieter, because it does not know which question it
+   is. What it must never do is borrow a number from its position — see q_split(). */
+.qbtn.nonum{color:var(--muted);background:var(--neutral-soft)}
+button.ghost{font-size:13px;color:var(--muted)}
+.deps{white-space:normal}
+button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+  padding:0 4px 0 0;color:var(--muted);background:none;border:0;
   font-variant-numeric:tabular-nums}
-.qs{display:inline-flex;gap:.2rem}
-.qbtn:hover{border-color:var(--signal);background:color-mix(in srgb,var(--signal) 18%,transparent)}
-/* A HANDLE THE BOARD CANNOT NAME. It is drawn quieter and dashed on purpose: it does
-   not know which question it is, so it must not look as authoritative as one that does.
-   Its tooltip says which of the two absences produced it. What it must never do is
-   borrow a number from its position in the list — see q_split(). */
-.qbtn.nonum{color:var(--muted);border-style:dashed;background:transparent}
-.qbtn.nonum:hover{color:var(--signal);border-color:var(--signal);background:transparent}
-button.ghost{font-size:.72rem;padding:.28rem .5rem;color:var(--muted)}
-.deps{white-space:normal!important}
-/* THREE refs must not wrap, and they are separated by a SPACE, not by ", ". A comma
-   between two pills costs a character and carries no information — the pills are
-   already discrete boxes — and it was what held the target at two refs per line. So
-   the width is re-derived for the pair of changes together: button.dep's own box
-   (3ch of digits + .7rem of padding + 2px of border, each) times THREE, plus the two
-   single-space separators between them, plus this td's own .9rem of horizontal padding
-   (box-sizing:border-box counts it). Every term is read off the pill's and the td's own
-   CSS, and the `ch` is well defined because this rule sets the font the cell measures
-   in. The separator term is still `2ch` and that is a coincidence worth naming: it used
-   to be ONE two-character `", "` between two pills, and it is now TWO one-character
-   spaces between three. 4+ refs may still wrap past this width, which is the intent,
-   and a single ref never sees this min-width at all. */
-.deps:has(button.dep:nth-of-type(2)){font-family:"IBM Plex Mono",ui-monospace,monospace;
-  font-size:.74rem;min-width:calc(3*(3ch + .7rem + 2px) + 2ch + .9rem)}
-/* THE PR CELL WRAPS AT TWO REFS, AND ITS WIDTH IS IN PIXELS BECAUSE IT WAS MEASURED.
-   Nine PRs on one task rendered as ONE UNBROKEN LINE — 386px measured at 1400px, the
-   widest thing in the table and in one of the columns nobody reads first — because
-   `td:not(:first-child)` is `nowrap` and nothing capped the column. The board this was
-   reported from carries ten on a row.
-   WHERE 107px COMES FROM. The cell sets its own font, exactly as `.deps` does above and
-   for the same reason: with one font in the cell, every character in it — the refs and
-   the spaces between them — is one advance wide, and the number below is a measurement
-   rather than an estimate spanning two typefaces. Nothing sets `html`'s font-size, so
-   1rem is the root's 16px and .8rem is 12.8px; IBM Plex Mono's advance is 0.6em, so one
-   character is 7.68px — confirmed against the rendered page, where a `#1234` link
-   measures 38.41px across its five characters (7.682px each). Twelve characters is
-   92.16px, which is `#1234 #1234` (eleven) with one to spare, and this td's own .9rem of
-   horizontal padding is 14.4px (box-sizing:border-box counts it): 92.16 + 14.4 =
-   106.56, so 107px.
-   IT IS A FLOOR, AND THE FLOOR IS WHAT DOES THE WORK — `max-width` here does nothing,
-   measured: `td:not(:first-child)` asks for `width:1%`, so once the cell may wrap the
-   column collapses to its min-content (ONE ref, 52.78px) and a cap above that is never
-   reached. `min-width` is therefore the property, exactly as `.deps` uses it, and the
-   1% is what stops the column growing past it: 107 - 14.4 = 92.6px of content, which
-   holds two refs and their space (84.5px) and cannot hold three (130.6px).
-   ON A ROW WITH ONE REF the reservation would be width taken for nothing, so it is
-   conditional on a second ref being there — again `.deps`'s shape. A five-digit repo
-   (`#12345`, 46.08px) puts one ref per line rather than two: the cell wraps instead of
-   overflowing, which is the property, and nothing here assumes four digits. */
-td.prs{white-space:normal!important;
-  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.8rem}
-td.prs:has(a:nth-of-type(2)){min-width:107px}
-button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.74rem;
-  padding:.08rem .35rem;color:var(--muted);background:var(--sunk);border-color:transparent;
-  font-variant-numeric:tabular-nums}
-button.dep:hover{color:var(--accent);border-color:var(--accent);background:transparent}
-.delivs{padding:.85rem .95rem 0}
-.delivs h3{margin:0 0 .5rem;font-size:.64rem;text-transform:uppercase;letter-spacing:.09em;
+button.dep:hover{color:var(--accent)}
+/* The PR cell wraps rather than stretching the task column: its track is a fixed 90px,
+   so nine refs stack instead of taking the width from the task name. */
+td.prs{white-space:normal;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:13px;overflow-wrap:anywhere}
+.delivs{padding-top:4px}
+.delivs h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;
   color:var(--dim);font-weight:600}
-.delivs ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.4rem}
-button.dlv{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.76rem;
-  padding:.28rem .55rem;color:var(--muted);background:var(--sunk);border-color:transparent}
-button.dlv:hover{color:var(--accent);border-color:var(--accent);background:transparent}
-.state{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
-  white-space:nowrap}
-.state.ok{color:var(--ok)} .state.signal{color:var(--signal)}
-.state.stop{color:var(--stop)} .state.accent{color:var(--accent)}
-.dim{color:var(--dim)} .sig{color:var(--signal);font-weight:500}
-td.r,td.dim{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.8rem}
+.delivs ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+button.dlv{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+  padding:6px 10px;color:var(--muted);background:var(--neutral-soft);border:0;
+  border-radius:9px}
+button.dlv:hover{color:var(--ink)}
+/* THE FIVE STATES AND THEIR GLYPHS. The glyph is markup, not a pseudo-element, so a
+   status the board has never seen still renders as its own text with no glyph. */
+.state{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.state.ok{color:var(--ok)} .state.accent{color:var(--accent)}
+.state.stop{color:var(--stop)} .state.dim{color:var(--dim)}
+.dim{color:var(--dim)} .sig{color:var(--signal-soft-text);font-weight:600}
+td.dim{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
 td a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent;
-  white-space:nowrap;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.8rem}
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px}
 td a:hover,td a:focus-visible{border-bottom-color:currentColor}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
 
 .toast{position:fixed;left:50%;bottom:1.3rem;transform:translateX(-50%);z-index:9;
   display:flex;gap:.6rem;align-items:flex-start;
-  background:var(--ink);color:var(--ground);font-size:.83rem;padding:.55rem .9rem;
-  border-radius:5px;box-shadow:var(--shadow);max-width:calc(100vw - 2rem);
+  background:var(--ink);color:var(--ground);font-size:13px;padding:.55rem .9rem;
+  border-radius:9px;box-shadow:var(--shadow);max-width:calc(100vw - 2rem);
   opacity:0;pointer-events:none;transition:opacity .18s}
 .toast.on{opacity:1}
 /* THE FAILURE STATE, and why it is not just a red message. On a `file://` origin the
    clipboard can be refused outright, and a notice that fades after three seconds and
-   cannot be selected leaves the reader with nothing — the same as a control that
-   silently did nothing. So a failed copy is SELECTABLE and STAYS until dismissed. */
+   cannot be selected leaves the reader with nothing. So it STAYS and is SELECTABLE. */
 .toast.fail{background:var(--stop);color:var(--ground);pointer-events:auto;
   user-select:text;-webkit-user-select:text}
 .toast.fail code{display:block;margin-top:.3rem;padding:.2rem .35rem;font-size:.86em;
@@ -1014,17 +959,88 @@ td a:hover,td a:focus-visible{border-bottom-color:currentColor}
 .toast.fail .x{display:block;flex-shrink:0;background:none;border-color:transparent;
   color:var(--ground);font-size:1rem;line-height:1;padding:.1rem .3rem}
 .toast.fail .x:hover{border-color:var(--ground)}
-footer{border-top:1px solid var(--line);padding-top:.9rem}
-footer p{margin:0 0 .5rem;font-size:.76rem;color:var(--dim);max-width:45rem}
+footer{border-top:1px solid var(--line);padding-top:.9rem;margin-top:1rem}
+footer p{margin:0 0 .5rem;font-size:12px;color:var(--dim);max-width:45rem}
 footer p:last-child{margin:0}
 code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.93em}
+
+/* ---- BELOW 760px: STACKED CARDS, A WRAPPED META LINE, 40px TOUCH TARGETS ----------
+   The five-track grid is the one thing that cannot survive a phone, so the row becomes
+   a wrapping flex line: the task cell takes the full width (id over title) and state,
+   dependencies, Q and PR wrap onto the meta line under it. Two lines plus meta, every
+   row the same, and the header row has nothing left to label. */
+@media (max-width:760px){
+  .board{width:min(100% - 1.6rem, 104rem)}
+  h1{font-size:19px}
+  .mast{gap:12px;align-items:center}
+  .sub{font-size:13px}
+  .tally{gap:16px}
+  .tally dd{font-size:18px}
+  .tabs{margin:16px 0 12px;gap:6px}
+  .tabwrap{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .tabwrap::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto;font-size:12px;padding:6px 14px}
+  .seg button{font-size:11px;padding:3px 8px}
+  .phead{padding:16px;gap:8px}
+  .ptitle{font-size:14px;flex:1 1 100%}
+  .pdate{margin-left:0;font-size:12px}
+  .counts{width:100%;margin-left:0;justify-content:space-between;font-size:12px}
+  .c,.tag{font-size:12px}
+  .c.you{font-size:12px;padding:4px 10px;margin-left:0}
+  .body{padding:12px 16px 16px;gap:12px}
+  .rail{padding:12px;border-left-width:3px}
+  .ask{padding:12px}
+  .what{font-size:13px}
+  .acts{gap:6px}
+  .acts button{min-height:40px;padding:10px 12px}
+  thead{display:none}
+  table{font-size:13px}
+  tr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 0}
+  td:first-child{width:100%}
+  .tid{font-size:10px}
+  .tbtn{font-size:13px}
+  .state{font-size:11px}
+  td.prs,td.dim,td a,button.dep{font-size:11px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>"""
 
 TABLE_SCRIPT = r"""<script>
-// The ONLY scripted behaviour: put a button's text on the clipboard. Everything
-// else — layout, collapse, links — is markup and CSS, so scripting off costs the
-// page nothing but this.
+// The ONLY scripted behaviour: put a button's text on the clipboard, remember the
+// theme, and remember the tab. Everything else — layout, collapse, filtering, which
+// segment looks active — is markup and CSS, so scripting off costs the page nothing
+// but the clipboard and two remembered choices.
+//
+// THIS SCRIPT IS IN THE HEAD, and that is what makes the theme restore flicker-free:
+// the attribute is on the root element before the first paint. The handler is delegated
+// off `document`, so nothing here needs the body to exist yet.
+(function(){
+  // DARK IS THE DEFAULT AND IT IS THE ABSENCE OF AN ATTRIBUTE — a stored choice is the
+  // only thing that ever writes one, so an unvisited page renders dark whatever the
+  // system prefers, and the moon segment lights up off the same absence.
+  var KEY='ai-bridge-board-theme';
+  try{
+    var saved=localStorage.getItem(KEY);
+    if(saved==='light'||saved==='dark'){ document.documentElement.setAttribute('data-theme',saved); }
+  }catch(err){}
+  document.addEventListener('click', function(e){
+    if(!e.target.closest) return;
+    var t=e.target.closest('[data-set-theme]');
+    if(t){
+      var v=t.getAttribute('data-set-theme');
+      document.documentElement.setAttribute('data-theme',v);
+      try{ localStorage.setItem(KEY,v); }catch(err){}
+      return;
+    }
+    // The tab writes ONE attribute on the board and stops. Every hide is a CSS
+    // selector on that attribute, so there is no list of rows to keep in step.
+    var p=e.target.closest('[data-pick]');
+    if(p){
+      var b=p.closest('.board');
+      if(b) b.setAttribute('data-tab', p.getAttribute('data-pick'));
+    }
+  });
+})();
 (function(){
   var el, msg, code, dismiss;
   // Built once, from NODES rather than from markup: every string that lands in here is
@@ -1522,7 +1538,9 @@ def render_table():
             ts = [todict(t) for t in tolist(p.get("tasks"))]
             # "Done" is all-tasks-terminal, or the project saying so. A project with no
             # tasks yet is NOT done — it has not started.
-            done_proj = bool(p.get("status") == "done" or (
+            # `cancelled` joins `done` here so the Finished TAB and the Finished
+            # divider name the same set — criterion 3 defines the tab as done-or-cancelled.
+            done_proj = bool(p.get("status") in TERMINAL or (
                 ts and all(t.get("status") in TERMINAL for t in ts)))
             # THIS project's rail items, collected into their own list rather than only
             # into the pooled one. `asks` still exists and is still the page-wide count
@@ -1583,29 +1601,64 @@ def render_table():
     # makes "within each half" true rather than approximately true.
     rows.sort(key=lambda r: (r[2], not r[4]))
 
-    head = [TABLE_HEAD.replace("__TITLE__", e(title))]
-    o = ['<div class="board">']
+    # Grouped here rather than at the section below, because the tab row needs its
+    # count — one derivation, read twice.
+    by_owner = {}
+    for x in others:
+        x = todict(x)
+        by_owner.setdefault(str(x.get("owner") or "?"), []).append(x)
+    n_owners = len(by_owner)
+
+    head = [TABLE_HEAD.replace("__TITLE__", e(title)), TABLE_SCRIPT]
+    # `all` is the rendered state, so a page with no scripting is the unfiltered board.
+    o = ['<div class="board" data-tab="all">']
 
     o.append('<header class="mast"><div><h1>%s</h1>' % e(title))
     stamps = sorted(str(s.get("generated_at") or "") for s in instances if s.get("generated_at"))
-    if stamps:
-        o.append('<p class="sub">Snapshot %s UTC</p>'
-                 % e(stamps[-1].replace("T", " ").replace("Z", "")))
-    # WHAT IS LEFT OF THE POOLED QUEUE, and all that is left of it: one line saying how
-    # many projects to look for. The list itself is inside those projects now (see the
-    # header), so this says where to look rather than repeating what is there — a
-    # second copy of sixteen items is the thing being deleted, not something to shrink.
+    # ONE SNAPSHOT LINE, carrying what is left of the pooled queue: how many items want
+    # you and how many projects to look for. The list itself is inside those projects.
     n_wanting = sum(1 for r in rows if r[4])
+    sub = []
+    if stamps:
+        sub.append("Snapshot %s UTC" % e(stamps[-1].replace("T", " ").replace("Z", "")))
     if asks:
-        o.append('<p class="sub">%d waiting on you, in %d project%s — marked and sorted '
-                 "to the top below.</p>"
-                 % (len(asks), n_wanting, "" if n_wanting == 1 else "s"))
+        sub.append('<span class="sig">%d item%s need you</span> across %d project%s'
+                   % (len(asks), "" if len(asks) == 1 else "s",
+                      n_wanting, "" if n_wanting == 1 else "s"))
+    if sub:
+        o.append('<p class="sub">%s</p>' % " · ".join(sub))
     o.append("</div><dl class=\"tally\">")
-    o.append('<div><dt>Projects</dt><dd>%d</dd></div>' % len(rows))
-    o.append('<div><dt>Done</dt><dd>%d/%d</dd></div>' % (n_done, n_tasks))
-    o.append('<div class="%s"><dt>Awaiting you</dt><dd>%d</dd></div>'
+    o.append('<div><dt>projects</dt><dd>%d</dd></div>' % len(rows))
+    o.append('<div><dt>done</dt><dd>%d<span class="of">/%d</span></dd></div>'
+             % (n_done, n_tasks))
+    o.append('<div class="%s"><dt>awaiting you</dt><dd>%d</dd></div>'
              % ("live" if asks else "", len(asks)))
     o.append("</dl></header>")
+
+    # ---- the tab row: five filters over the SAME project rows, plus the theme ----
+    #
+    # THE TABS ARE FILTERS, NEVER A SECOND VIEW. Each one hides project rows whose
+    # wrapper does not carry its facet; nothing is re-derived, re-ordered or re-rendered,
+    # and `All` is what the page ships as. The counts are the ones the board already
+    # computes for its own masthead and sections, so a tab can never disagree with the
+    # rows under it.
+    n_active = sum(1 for r in rows if str(r[1].get("status") or "") == "active")
+    n_fin_tab = sum(1 for r in rows if r[2])
+    tabs = [("all", "All", len(rows)), ("you", "Needs you", len(asks)),
+            ("act", "Active", n_active), ("fin", "Finished", n_fin_tab),
+            ("other", "Other owners", n_owners)]
+    o.append('<nav class="tabs"><div class="tabwrap">')
+    for pick, label, count in tabs:
+        o.append('<button class="tab%s" data-pick="%s">%s · %d</button>'
+                 % (" rest" if pick == "other" else "", pick, e(label), count))
+    o.append("</div>")
+    # ONE SEGMENTED CONTROL, and which segment looks active is decided by the root
+    # attribute in CSS — the script writes the attribute and nothing else.
+    o.append('<div class="seg" role="group" aria-label="Theme">'
+             '<button class="sun" data-set-theme="light" title="Light theme" '
+             'aria-label="Light theme">☀</button>'
+             '<button class="moon" data-set-theme="dark" title="Dark theme" '
+             'aria-label="Dark theme">☾</button></div></nav>')
 
     for d, msg in broken:
         o.append('<div class="snapnote"><strong>Unreadable snapshot.</strong> '
@@ -1715,7 +1768,7 @@ def render_table():
     n_fin = sum(1 for r in rows if r[2])
     for idx, (g, p, fin, created, mine) in enumerate(rows):
         if fin and (idx == 0 or not rows[idx - 1][2]):
-            o.append('<h2 class="sep">Finished · %d</h2>' % n_fin)
+            o.append('<h2 class="sep fin">Finished · %d</h2>' % n_fin)
         tasks = [todict(t) for t in tolist(p.get("tasks"))]
         nd = sum(1 for t in tasks if t.get("status") == "done")
         nr = sum(1 for t in tasks if t.get("status") in RUNNING)
@@ -1730,6 +1783,15 @@ def render_table():
         dps = [d for d in (bundle_deliverable(x, str(p.get("slug") or ""))
                            for x in tolist(p.get("deliverable_paths"))) if d]
         slug = str(p.get("slug") or "")
+        # THE TAB FACETS RIDE ON A WRAPPER, not on the card's class list. Needs you = at
+        # least one rail item; Active = the project says `active`; Finished = the same
+        # half of the board the divider above already draws.
+        facets = ["you"] if mine else []
+        if str(p.get("status") or "") == "active":
+            facets.append("act")
+        if fin:
+            facets.append("fin")
+        o.append('<div class="pcard" data-f="%s">' % e(" ".join(facets)))
         o.append('<details class="proj%s%s"><summary class="phead">'
                  % (" fin" if fin else "", " wants" if mine else ""))
         o.append('<span class="ptitle">%s</span>' % e(p.get("title")))
@@ -1742,8 +1804,6 @@ def render_table():
             o.append('<span class="pdate" title="Project created %s">%s</span>'
                      % (e(created), e(created)))
         o.append('<span class="counts">')
-        if fin:
-            o.append('<span class="c done-tag">✓ done</span>')
         o.append('<span class="c ok"><b>%d</b> done</span>' % nd)
         if not fin:
             o.append('<span class="c run"><b>%d</b> in progress</span>' % nr)
@@ -1768,7 +1828,8 @@ def render_table():
             # whole card is bordered and inset-barred (`.proj.wants`), and a project
             # that wants you sorts above one that does not. The pill is still the only
             # one on the line in the signal colour.
-            o.append('<span class="c you"><b>%d</b> awaiting you</span>' % len(mine))
+            o.append('<span class="c you"><b>%d</b> need%s you</span>'
+                     % (len(mine), "s" if len(mine) == 1 else ""))
         na = sum(toint(t.get("advisor_notes")) for t in tasks)
         if na:
             # Deliberately NOT in the signal colour and deliberately not in the
@@ -1846,26 +1907,12 @@ def render_table():
             # see the `.trow` rules for why that second layout is gone rather than tuned.
             o.append('<td><div class="trow"><span class="tfile"><span class="tid">%s</span>'
                      % e(short))
-            if st == "draft":
-                # THE PROMOTE CONTROL SITS ON THE FILENAME'S OWN LINE, immediately after
-                # it — inside `.tfile`, which is the filename line. It was a sibling of
-                # the title, i.e. a THIRD line (filename, then the control, then the
-                # title), so the one row on the board asking for an action was also the
-                # only row a third taller than its neighbours. Here it costs no line at
-                # all: `.tfile` is one line either way, and `flex-wrap:wrap` is what
-                # keeps that true when a filename leaves it no room.
-                # It still only COPIES a prompt: promoting is `status: ready` in the
-                # document, a human authority (SCHEMA.md), and nothing here does it.
-                # THE HANDLE, THEN THE VERB — the notation every other control on this
-                # page uses, and the same string the rail's Approve copies (PROMOTE).
-                promo = "%s: %s" % (task_handle(p, tid), PROMOTE)
-                o.append('<button class="promote" data-copy="%s" data-what="Promotion prompt">'
-                         "promote → ready</button>" % e(promo))
             o.append('</span><div class="tmain">')
             o.append('<button class="tbtn" data-copy="%s" data-what="Task handle">%s</button>'
                      % (e(task_handle(p, tid)), e(t.get("title"))))
             o.append("</div></div></td>")
-            o.append('<td><span class="state %s">%s</span></td>' % (TONE.get(st, ""), e(st)))
+            o.append('<td><span class="state %s">%s</span></td>'
+                     % (TONE.get(st, ""), e(state_cell(st))))
             deps = [str(d) for d in tolist(t.get("depends_on"))]
             if deps:
                 # Show the short id, the same form the Task column shows, and copy the
@@ -1905,6 +1952,18 @@ def render_table():
             # URL straight into the href — one of the two hardening rules the second
             # script did not carry (see the header).
             cells = []
+            if st == "draft":
+                # THE PROMOTE CHIP RIDES IN THE PR COLUMN, where a draft has no PR to
+                # show — the one cell in the row that is otherwise empty on exactly the
+                # rows that want something. It used to sit on the filename's own line,
+                # which cost the task column width on every draft row.
+                # It still only COPIES a prompt: promoting is `status: ready` in the
+                # document, a human authority (SCHEMA.md), and nothing here does it.
+                # THE HANDLE, THEN THE VERB — the notation every other control on this
+                # page uses, and the same string the rail's Approve copies (PROMOTE).
+                promo = "%s: %s" % (task_handle(p, tid), PROMOTE)
+                cells.append('<button class="promote" data-copy="%s" '
+                             'data-what="Promotion prompt">promote →</button>' % e(promo))
             for x in (todict(x) for x in tolist(t.get("prs"))):
                 u = href(x.get("url"))
                 if u:
@@ -1928,23 +1987,20 @@ def render_table():
                 o.append('<li><button class="dlv" data-copy="%s" data-what="Deliverable path" '
                          'title="%s">%s</button></li>' % (e(dp), e(dp), e(fname)))
             o.append("</ul></div>")
-        o.append("</div></details>")
+        o.append("</div></details></div>")
 
     # ---- the other owners, one collapsed block each, from git HEAD ----------
     # NAMED and COLLAPSED. No `open` attribute, and no script — the same <details> the
     # projects above use, for the same reasons. The collapse is ergonomics: this is
     # context, not your queue. It hides nothing, and the footer says so.
-    by_owner = {}
-    for x in others:
-        x = todict(x)
-        by_owner.setdefault(str(x.get("owner") or "?"), []).append(x)
     if by_owner:
-        o.append('<h2 class="sep">Other owners · %d</h2>' % len(by_owner))
+        o.append('<h2 class="sep others">Other owners · %d</h2>' % len(by_owner))
         for who in sorted(by_owner, key=lambda s: s.lower()):
             entries = by_owner[who]
             nd = sum(toint(x.get("done")) for x in entries)
             nr = sum(toint(x.get("running")) for x in entries)
             nw = sum(toint(x.get("pending")) for x in entries)
+            o.append('<div class="pcard" data-f="other">')
             o.append('<details class="proj other"><summary class="phead">')
             o.append('<span class="ptitle">%s</span><span class="counts">' % e(who))
             o.append('<span class="c"><b>%d</b> project%s</span>'
@@ -1965,14 +2021,15 @@ def render_table():
                 o.append('<tr><td>%s</td><td class="dim"><code>/projects/%s/</code></td>'
                          '<td><span class="state %s">%s</span></td>'
                          '<td class="r">%d</td><td class="r">%d</td><td class="r">%d</td></tr>'
-                         % (e(x.get("title")), e(x.get("slug")), TONE.get(st, ""), e(st),
+                         % (e(x.get("title")), e(x.get("slug")), TONE.get(st, ""),
+                            e(state_cell(st)),
                             toint(x.get("done")), toint(x.get("running")),
                             toint(x.get("pending"))))
             o.append("</tbody></table></div>"
                      "<p class=\"where\">Read from the tracked documents at this clone’s "
                      "current <code>HEAD</code> — never from another clone’s snapshot, "
                      "which is gitignored and never present here. It moves when you pull, "
-                     "and it never shows uncommitted work.</p></div></details>")
+                     "and it never shows uncommitted work.</p></div></details></div>")
 
     o.append('<footer><p>Derived from each instance’s <code>SNAPSHOT.json</code> and '
              "<strong>as sensitive as the task documents it comes from</strong>. Titles are "
@@ -1990,7 +2047,6 @@ def render_table():
              "<code>projects/&lt;project&gt;/tasks/task-&lt;n&gt;*.md</code>. Decision "
              "buttons copy that same handle and then what the button means; the bundle, "
              "not this page, is where a decision is recorded.</p></footer></div>")
-    o.append(TABLE_SCRIPT)
     return head, o, len(asks)
 
 

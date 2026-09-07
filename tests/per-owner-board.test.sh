@@ -217,7 +217,8 @@ json.dump(d, open(p, "w", encoding="utf-8"))
 PYX
 H="$TMP/h.html"
 ( cd "$INST" && bash "$GEN" --out "$H" . ) >/dev/null 2>&1
-assert "…and an EXPIRED entry is not served"         "$(fhasnt 'Other owners' "$H")"
+assert "…and an EXPIRED entry is not served"         "$(fhasnt 'class="sep others"' "$H")"
+assert "…nor any block for one"                      "$(fhasnt 'class="proj other"' "$H")"
 mv "$INST/.git-off" "$INST/.git"
 
 # A commit that changes another owner's document MUST move the section — the assertion a
@@ -260,7 +261,11 @@ E="$TMP/e.html"; rce=0
 assert "a non-repo instance: exits 0"            "$(eq "$rce" 0)"
 assert "…writes a page"                          "$(yes_if test -s "$E")"
 assert "…with no traceback"                      "$(fhasnt 'Traceback (most recent call last)' "$TMP/e.err")"
-assert "…and simply has no second section"       "$(fhasnt 'Other owners' "$E")"
+# The Other owners TAB is always in the row (it names a filter, like every other tab);
+# what an instance with no other owners must not have is the SECTION under it.
+assert "…and simply has no second section"       "$(fhasnt 'class="sep others"' "$E")"
+assert "…nor any block for one"                  "$(fhasnt 'class="proj other"' "$E")"
+assert "…while the tab still names the filter"   "$(fhas 'data-pick="other">Other owners · 0' "$E")"
 
 # An owner nobody has ever heard of, in a bundle with no defaultOwner and no local file:
 # it is a string, it renders as a string, and it is HTML-escaped like every other string
