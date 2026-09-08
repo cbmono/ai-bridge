@@ -20,6 +20,13 @@
 #   tests/plugin-eval.test.sh     this file: the eval suite's own shape, always; and
 #                                 the run itself, when the CLI supports it.
 #
+# THREE OF THE SEVEN CASES GRADE THE MAIN THREAD, not a skill. They are the reader for the
+# prose rules of `launcher-verification-contract` — dispatch-vs-inline-diagnosis, unverified
+# state, and a tick caveat outranking the launcher's own conclusion — and they exist because
+# the previous prose fix for that defect shipped 2026-08-23 with no test and rotted in weeks.
+# Section 4 asserts the one property that keeps them from rotting the same way: a grader
+# keyed on WORDING passes the next paraphrase, so `regex` over a message is refused there.
+#
 # THE NON-VACUITY ARM IS NOT OPTIONAL. Three cases asserting "the model never invoked
 # this skill" are ALL satisfied by a harness in which no skill is reachable at all —
 # nothing invoked, nothing failed, four green ticks and no coverage. So the suite ships
@@ -48,6 +55,14 @@ ok() { # <name> <actual> <expected>
 skipped() { printf '  SKIP  %s\n' "$1"; skip=$((skip+1)); }
 yn() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 
+# body <file> — everything after the frontmatter. A prompt with no body is no prompt, and
+# an `llm` grader with no body has no rubric, so both are asked the same question.
+body() {
+  awk 'NR==1 && $0=="---" {infm=1; next}
+       infm && $0=="---" {infm=0; inb=1; next}
+       inb' "$1"
+}
+
 # fm <file> <key> — a frontmatter value, read from between the first `---` pair only, so
 # a `key:` in the body can never satisfy an assertion about the header. Same reader as
 # plugin-skills.test.sh, deliberately: the two files must agree on what a header is.
@@ -63,6 +78,10 @@ fm() {
 # set is asserted to be exactly this one below.
 GATED="dispatch work answer"
 CONTROL="skills-are-reachable"
+# One case per pattern from the 2026-09-08 retrospective (launcher-verification-contract).
+# They grade the MAIN THREAD rather than a skill, so they share none of the assertions in
+# section 3; section 4 is theirs.
+PATTERNS="diagnosis-is-dispatched unverified-state-is-unknown caveat-outranks-the-launcher"
 
 # =======================================================================================
 echo "== 1. the eval suite ships where the CLI looks for it =="
@@ -85,9 +104,9 @@ ok "…and its results/ output is gitignored" \
 # Directories only, and `results/` is a run artifact rather than a case — so the eval
 # dir's own README.md (and any other prose beside the cases) is not read as one.
 CASES="$(cd "$EVALS" && find . -mindepth 1 -maxdepth 1 -type d ! -name results -exec basename {} \; | sort | tr '\n' ' ' | sed 's/ $//')"
-# shellcheck disable=SC2046,SC2086  # GATED/CONTROL are deliberate word lists, as in plugin-skills.test.sh
-EXPECTED_CASES="$(printf '%s\n' $CONTROL $(for s in $GATED; do echo "$s-is-human-gated"; done) | sort | tr '\n' ' ' | sed 's/ $//')"
-ok "the case set is exactly the four this file asserts" "$CASES" "$EXPECTED_CASES"
+# shellcheck disable=SC2046,SC2086  # the three lists are deliberate word lists, as in plugin-skills.test.sh
+EXPECTED_CASES="$(printf '%s\n' $CONTROL $PATTERNS $(for s in $GATED; do echo "$s-is-human-gated"; done) | sort | tr '\n' ' ' | sed 's/ $//')"
+ok "the case set is exactly the seven this file asserts" "$CASES" "$EXPECTED_CASES"
 
 # =======================================================================================
 echo "== 2. every case is well-formed the way the CLI parses it =="
@@ -95,11 +114,43 @@ echo "== 2. every case is well-formed the way the CLI parses it =="
 for c in $EXPECTED_CASES; do
   P="$EVALS/$c/prompt.md"
   ok "$c/prompt.md ships"                       "$(yn test -f "$P")" yes
-  ok "…it declares the Skill tool as allowed"   "$(fm "$P" allowed_tools | grep -c 'Skill' | tr -d ' ')" 1
+  ok "…it grants at least one tool"             "$([ -n "$(fm "$P" allowed_tools)" ] && echo yes || echo no)" yes
   ok "…and it carries a prompt, not just a header" \
-    "$([ "$(awk 'NR==1 && $0=="---" {infm=1; next} infm && $0=="---" {infm=0; inb=1; next} inb' "$P" | grep -c .)" -ge 1 ] && echo yes || echo no)" yes
+    "$([ "$(body "$P" | grep -c .)" -ge 1 ] && echo yes || echo no)" yes
   n_graders=0; for g in "$EVALS/$c/graders"/*.md; do [ -f "$g" ] && n_graders=$((n_graders+1)); done
   ok "…with at least one grader beside it"      "$([ "$n_graders" -ge 1 ] && echo yes || echo no)" yes
+  # "Tools follow graders" is the CLI's own hard rule: a `tool_used` grader with a lower
+  # bound of 1 can only ever pass if the case granted that tool, so a case that forgets it
+  # scores 0 in both arms and reads as "the plugin did nothing" rather than as a mistake.
+  ungranted=""
+  for g in "$EVALS/$c/graders"/*.md; do
+    [ -f "$g" ] || continue
+    [ "$(fm "$g" type)" = "tool_used" ] || continue
+    # `min: 0` is the "must NOT call it" shape and needs no grant. Everything else —
+    # including an ABSENT min, which the CLI defaults to 1 — does.
+    case "$(fm "$g" min)" in 0) continue ;; esac
+    t="$(fm "$g" tool)"
+    case "$(fm "$P" allowed_tools)" in *"$t"*) ;; *) ungranted="$ungranted $t" ;; esac
+  done
+  ok "…and grants every tool its graders require" "${ungranted:-none}" none
+  # Every case says how long it may run. An under-set budget scores 0 rather than timing
+  # out, which reads as a red case about the plugin instead of one about the case file.
+  ok "…and bounds its own run"                  "$([ -n "$(fm "$P" max_turns)" ] && echo yes || echo no)" yes
+done
+
+# The Skill tool is what the original four grade through, so it is asserted for them and
+# not for the pattern cases, which grade the main thread's own actions instead.
+# shellcheck disable=SC2046,SC2086  # deliberate word lists
+for c in $CONTROL $(for s in $GATED; do echo "$s-is-human-gated"; done); do
+  ok "$c declares the Skill tool as allowed" \
+    "$(fm "$EVALS/$c/prompt.md" allowed_tools | grep -c 'Skill' | tr -d ' ')" 1
+done
+
+# Criterion 6 of the task: the README names all seven, one line each. A case nobody can
+# find in the README is a case the next author duplicates.
+R="$EVALS/README.md"
+for c in $EXPECTED_CASES; do
+  ok "the README gives $c exactly one table row" "$(grep -c "^| .$c." "$R" | tr -d ' ')" 1
 done
 
 # =======================================================================================
@@ -134,7 +185,53 @@ ok "…and targets the requested welcome skill"     "$(fm "$C_G" input_match)" "
 ok "…and sets no upper bound"                     "$(fm "$C_G" max)" ""
 
 # =======================================================================================
-echo "== 4. the file harness keeps its pins — this suite replaces none of them =="
+echo "== 4. the pattern cases grade an OBSERVABLE ACTION, never a phrase =="
+# =======================================================================================
+# THE WHOLE POINT OF THESE THREE, and why the constraint is asserted rather than written
+# in the README: a grader that greps a message for wording passes the next paraphrase, so
+# it holds for exactly as long as nobody rephrases the rule — which is how the 2026-08-23
+# prose fix for this same defect rotted. `regex` is the type that does that, so it is
+# refused here; `tool_used` grades an action and an `llm` rubric grades what the session
+# DID. Every rubric in these three says so in its own first line.
+for c in $PATTERNS; do
+  types=""; n=0
+  for g in "$EVALS/$c/graders"/*.md; do
+    [ -f "$g" ] || continue
+    n=$((n+1)); types="$types
+$(fm "$g" type)"
+  done
+  ok "$c: it ships graders"                      "$([ "$n" -ge 1 ] && echo yes || echo no)" yes
+  ok "…none of them a wording grader (regex)"    "$(printf '%s\n' "$types" | grep -cx 'regex' | tr -d ' ')" 0
+  ok "…each one an action grader or a rubric"    "$(printf '%s\n' "$types" | grep -cxE 'tool_used|llm' | tr -d ' ')" "$n"
+  # An `llm` grader's rubric IS its body. Frontmatter alone is a grader that asks the judge
+  # nothing and scores whatever the judge feels like — worse than no grader, because it
+  # reports a number.
+  for g in "$EVALS/$c/graders"/*.md; do
+    [ -f "$g" ] || continue
+    [ "$(fm "$g" type)" = "llm" ] || continue
+    b="$(basename "$g")"
+    ok "…$b carries its rubric in the file" \
+      "$([ "$(body "$g" | grep -c .)" -ge 3 ] && echo yes || echo no)" yes
+    ok "…and focuses on the run, not on the case file" \
+      "$(fm "$g" focus | grep -cE '^(last_message|trace)$' | tr -d ' ')" 1
+  done
+done
+
+# The launcher-diagnosis case is the one with a DETERMINISTIC arm, and it is also this
+# suite's control arm for the Agent tool: `min: 1` cannot pass in a run where nothing was
+# dispatched, so the case goes red rather than quiet when dispatch stops working.
+DG="$EVALS/diagnosis-is-dispatched/graders/failure-analyst-was-dispatched.md"
+ok "the diagnosis case grades the dispatch itself" "$(fm "$DG" type)" "tool_used"
+ok "…through the Agent tool"                       "$(fm "$DG" tool)" "Agent"
+ok "…scoped to the failure-analyst"                "$(fm "$DG" input_match)" "failure-analyst"
+ok "…with a lower bound of 1, so it cannot pass vacuously" "$(fm "$DG" min)" "1"
+# The tie back to the plugin, the same shape as section 3's: the eval grades an effect
+# whose cause is a file. An eval naming an agent the plugin does not ship grades nothing.
+ok "…and the agent it names ships in the plugin" \
+  "$(fm "$PLUGIN/agents/failure-analyst.md" name)" "failure-analyst"
+
+# =======================================================================================
+echo "== 5. the file harness keeps its pins — this suite replaces none of them =="
 # =======================================================================================
 # Criterion: nothing is deleted from plugin-skills.test.sh without a same-PR replacement.
 # The eval covers ONE property (the effect of the split) for THREE skills; the shell
@@ -152,7 +249,7 @@ ok "the plugin-only CI fast path runs this harness" \
   "$(grep -c 'tests/plugin-eval.test.sh' "$WF" | tr -d ' ')" 1
 
 # =======================================================================================
-echo "== 5. the run itself — where the CLI supports it, and a LOUD skip where it does not =="
+echo "== 6. the run itself — where the CLI supports it, and a LOUD skip where it does not =="
 # =======================================================================================
 # Two gates, and each one prints WHY. `claude plugin eval` is early access: the
 # subcommand exists on every recent CLI and refuses to run unless the account or the
@@ -179,8 +276,14 @@ else
   # go red", not a statistically stable score, and each extra run and each baseline arm is
   # another paid model run. The suite's own prompt.md files declare runs: 2 for a
   # by-hand `claude plugin eval ./plugin`, which is the higher-fidelity form.
-  # --max-cost-usd is a ceiling, not a budget: it aborts (exit 2) rather than overrun.
-  out="$(claude plugin eval "$PLUGIN" --runs 1 --ablation none --no-publish --max-cost-usd 3 2>&1)"
+  # --max-cost-usd is a ceiling, not a budget: it aborts (exit 2) rather than overrun. 6,
+  # not the old 3, because the suite went from 4 free-graded cases to 7 — three carry an
+  # `llm` grader and one dispatches a subagent whose own run is billed.
+  # --judge-model sonnet: the default judge is haiku, and the CLI's own authoring guidance
+  # is that a small judge misses the distinctions a rubric turns on. All three rubrics here
+  # turn on one (a conclusion asserted vs. withheld), so the judge is sized to it.
+  out="$(claude plugin eval "$PLUGIN" --runs 1 --ablation none --no-publish \
+    --judge-model sonnet --max-cost-usd 6 2>&1)"
   rc=$?
   ok "claude plugin eval passes every case in plugin/evals/" "$rc" 0
   [ "$rc" -eq 0 ] || printf '%s\n' "$out" | sed 's/^/        /'
