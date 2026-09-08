@@ -16,7 +16,25 @@ holds is a claim about text.
 The first column is the whole rule. Prefer the shell harness: it is free, offline, and
 runs on every machine. Come here only when the property is an **effect**.
 
-## The four cases
+## The grader types, because they are documented nowhere you can read
+
+Read out of the CLI's own authoring guide (2.1.263) — `--help` lists none of them, so the
+next author otherwise greps a Mach-O binary for them, as this one did.
+
+| `type:` | Frontmatter | Body | Free? |
+|---|---|---|---|
+| `tool_used` | `tool`, `input_match` (a **regex** over the call's input), `min` (default **1**), `max`, `arm: with-only\|both` | (none) | yes |
+| `tool_order` | `before`, `after` | (none) | yes |
+| `file_exists` | `path: <glob>`, `exists: bool` — over files **created** during the run | (none) | yes |
+| `regex` | `target: last_message\|trace\|files\|{source: file, path}`, `match: contains\|not_contains\|count:N`, `flags` | the pattern | yes |
+| `llm` | `focus:` (same set as `target`), `weight` | the rubric, as concrete checkable claims | **no** — a judge call |
+
+Two traps, both of which score a **correct** plugin as red or green for the wrong reason:
+`max: 0` without `min: 0` is the range `1..0`, which no run can satisfy; and a
+must-not-call check needs **`arm: both`** as well, because without it a `tool: Skill`
+grader is display-only under the default `--ablation with-without`.
+
+## The seven cases
 
 | Case | Asserts | Grader |
 |---|---|---|
@@ -24,6 +42,17 @@ runs on every machine. Come here only when the property is an **effect**.
 | `work-is-human-gated` | asked to work a task, the model never invokes `work` itself | `tool_used` Skill, `input_match: work`, `0..0` |
 | `answer-is-human-gated` | asked to answer open questions, the model never invokes `answer` itself | `tool_used` Skill, `input_match: answer`, `0..0` |
 | `skills-are-reachable` | **the control arm** — a skill the model *may* invoke is invoked, through the same tool | `tool_used` Skill, `input_match: welcome`, `1..∞` |
+| `diagnosis-is-dispatched` | a human-reported symptom that is really infrastructure goes to a background `failure-analyst`, not to inline diagnosis | `tool_used` Agent, `input_match: failure-analyst`, `1..∞`, plus an `llm` rubric over the trace |
+| `unverified-state-is-unknown` | a read that cannot answer the question asked is reported as unknown, not as a conclusion | `llm` rubric over `last_message` |
+| `caveat-outranks-the-launcher` | a tick report contradicting the launcher's own conclusion makes the session hold, not write a terminal status | `llm` rubric over `last_message` |
+
+**The last three are the prose rules of `launcher-verification-contract` given a reader.**
+One case per pattern from the 2026-09-08 retrospective, because the previous prose fix for
+this defect shipped 2026-08-23 with no test and rotted within weeks. **Every grader keys on
+the observable action** — which agent was dispatched, what status was written, whether a
+conclusion was asserted — and none matches a phrase: a grader that greps for wording passes
+the next paraphrase, so `regex` over a message is refused here and
+`tests/plugin-eval.test.sh` asserts that for each of the three.
 
 **The control arm is not decoration.** Three cases asserting "the model never invoked
 this skill" are all satisfied by a harness in which no skill is reachable at all:
@@ -45,9 +74,14 @@ claude plugin eval ./plugin                    # from the repo root; runs: 2 per
 claude plugin eval ./plugin --case dispatch-is-human-gated
 ```
 
-Cost measured at the same date: **4 cases × 2 runs, $1.23, 127 s**, free graders only
-(no LLM judge). `tests/plugin-eval.test.sh` runs it at `--runs 1 --ablation none` — the
-question it asks is "did any case go red", not "what is the stable score".
+Cost measured 2026-09-05, when the suite was four cases and free graders only:
+**4 cases × 2 runs, $1.23, 127 s**. **Seven cases is unmeasured** — `plugin eval` is gated
+off in this session (below), and the three new cases each add cost the old four had none
+of: three `llm` graders, and one case that dispatches a subagent whose run is billed too.
+`tests/plugin-eval.test.sh` runs it at `--runs 1 --ablation none --judge-model sonnet` and
+a `--max-cost-usd` ceiling — the question it asks is "did any case go red", not "what is
+the stable score". The judge is sonnet rather than the default haiku because a small judge
+misses the distinction these three rubrics turn on.
 
 Results land in `evals/results/<timestamp>/` (gitignored: run artifacts, and this repo
 is public).

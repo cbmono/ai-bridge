@@ -52,10 +52,13 @@ Run them from a bundle root (where `SCHEMA.md` and `instance.config.json` live).
 ## Evals
 
 `evals/` holds the `claude plugin eval` suite: real model runs, graded, pinning the one
-class of contract a file check cannot reach — that the model never reaches for `/dispatch`,
-`/work` or `/answer` on its own. Four cases, three gated plus a control arm that proves the
-other three are not vacuous. See [`evals/README.md`](evals/README.md) for how to run it and
-why it self-skips where `plugin eval` is not enabled.
+class of contract a file check cannot reach. **Seven cases.** Three that the model never
+reaches for `/dispatch`, `/work` or `/answer` on its own, plus a control arm that proves
+those three are not vacuous; and three that grade the **main thread** rather than a skill —
+diagnosis dispatched instead of run inline, an unanswerable read reported as unknown, and a
+tick caveat outranking the launcher's own conclusion. See
+[`evals/README.md`](evals/README.md) for how to run it and why it self-skips where
+`plugin eval` is not enabled.
 
 ## Hooks
 
