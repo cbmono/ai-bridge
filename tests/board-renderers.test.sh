@@ -878,6 +878,94 @@ sized "row 18px column gap, 12px rows"   'gap:0 18px;
 assert "the action row wraps rather than collapsing" "$(fhas '.acts{display:flex;flex-wrap:wrap;gap:8px;' "$SLATE")"
 assert "…and no overflow control is rendered"        "$(fhasnt 'data-what="More"' "$SLATE")"
 
+echo "== the signal pill is LAST on the meta row, whatever else that row carries =="
+# THE BUG THIS PINS, and why the assertion is on ORDER rather than presence: the pill was
+# emitted before `concerns`, `phases` and `deliverables`, so the one chip whose job is to
+# be found at a glance sat at a different x-position on every card. Presence was already
+# true while it was broken. The fix is SOURCE ORDER — no `margin-left:auto`, no new
+# positioning rule — so the pill's own CSS is pinned below as well.
+ORDER="$TMP/group/_ai-bridge-order"
+new_instance "$ORDER"
+python3 - "$ORDER/SNAPSHOT.json" <<'PY'
+import json, sys
+
+def task(i, status, awaiting="", notes=0):
+    return {"id": "task-%03d" % i, "title": "t%d" % i, "kind": "build",
+            "status": status, "assignee": "software-engineer", "phase": "",
+            "in_flight": False, "awaiting": awaiting, "open_questions": 0,
+            "advisor_notes": notes, "prs": []}
+
+def proj(slug, title, tasks, phases=(0, 0), deliv=()):
+    return {"slug": slug, "title": title, "kind": "build", "status": "active",
+            "autonomy": "gated", "awaiting_close": False,
+            "phase_progress": {"done": phases[0], "total": phases[1]},
+            "phases": [], "deliverable_paths": list(deliv), "tasks": tasks}
+
+snap = {
+    "group": "order",
+    "generated_at": "2026-09-08T00:00:00Z",
+    "counts": {"projects": 3, "tasks": 6, "awaiting": 3},
+    "projects": [
+        # Every optional pill at once — done, in progress, pending, concerns, phases,
+        # deliverables AND a signal count of two.
+        proj("loaded", "EVERYPILL",
+             [task(1, "done"), task(2, "in-progress"),
+              task(3, "draft", awaiting="approve", notes=2),
+              task(4, "in-review", awaiting="merge")],
+             phases=(1, 3), deliv=["/projects/loaded/deliverables/report.md"]),
+        # A signal count and nothing optional — the row the loaded one has to line up with.
+        proj("bare", "SIGNALONLY", [task(1, "draft", awaiting="approve")]),
+        # Concerns and phases but NOTHING awaiting: absent means zero, so no pill at all.
+        proj("quiet", "NOSIGNAL", [task(1, "in-progress", notes=1)], phases=(1, 2)),
+    ],
+}
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+    json.dump(snap, fh)
+PY
+ORDERED="$TMP/ordered.html"
+( cd "$ORDER" && bash "$BOARD" --standalone --out "$ORDERED" "$ORDER" >/dev/null 2>&1 )
+assert "the ordering fixture renders"                "$(yes_if test -s "$ORDERED")"
+# The pill classes of one card's meta span, in the order they were EMITTED.
+pills() { python3 -c "
+import re, sys
+for chunk in open('$ORDERED', encoding='utf-8').read().split('<div class=\"pcard\"')[1:]:
+    t = re.search(r'<span class=\"ptitle\">([^<]*)</span>', chunk)
+    if not t or t.group(1) != sys.argv[1]:
+        continue
+    seg = chunk.split('<span class=\"counts\">', 1)[1].split('</summary>', 1)[0]
+    print(' '.join(re.findall(r'<span class=\"(c [a-z]+|tag)\"', seg)))
+" "$1"; }
+assert "a row carrying every pill puts the signal last" \
+  "$(eq "$(pills EVERYPILL)" "c ok c run c wait c note tag tag c you")"
+assert "…and a row with a signal count and no concerns puts it in the same place" \
+  "$(eq "$(pills SIGNALONLY)" "c ok c run c wait c you")"
+assert "…while a row with nothing awaiting emits no signal pill at all" \
+  "$(eq "$(pills NOSIGNAL)" "c ok c run c wait c note tag")"
+# The concerns pill keeps its own treatment: the muted-red class, never the signal one,
+# and the title that says the loop owns it.
+assert "concerns keeps its class and its title"      "$(fhas '<span class="c note" title="Advisor concerns the loop has not triaged yet — not waiting on you"><b>2</b> concerns</span>' "$ORDERED")"
+assert "…and the plural signal reads 'need you'"     "$(fhas '<span class="c you"><b>2</b> need you</span>' "$ORDERED")"
+assert "…the singular one 'needs you'"               "$(fhas '<span class="c you"><b>1</b> needs you</span>' "$ORDERED")"
+# THE DISMISS CONTROL IS OUTSIDE THE META SPAN, to its right, exactly as before — the
+# pill moving to the end of the span must not have carried it inside.
+assert "the ✕ stays outside the meta span"           "$(yes_if python3 -c "
+import re, sys
+page = open('$ORDERED', encoding='utf-8').read()
+ok = 0
+for chunk in page.split('<div class=\"pcard\"')[1:]:
+    seg = chunk.split('<span class=\"counts\">', 1)[1].split('</summary>', 1)[0]
+    if not re.search(r'</span>\n</span>\n<button class=\"pclose\"', seg):
+        sys.exit(1)
+    ok += 1
+sys.exit(0 if ok == 3 else 1)")"
+# SOURCE ORDER, NOT CSS. The pill's own rules are pinned whole, so a later
+# `margin-left:auto` (or any other positioning declaration) on it goes red here.
+assert "the pill carries no positioning rule"        "$(yes_if python3 -c "
+import re, sys
+bodies = re.findall(r'\.c\.you\{([^}]*)\}', open('$ORDERED', encoding='utf-8').read())
+sys.exit(0 if bodies == ['background:var(--signal);color:var(--signal-ink);font-weight:700;\n  padding:6px 14px;border-radius:999px;margin-left:8px',
+                         'font-size:12px;padding:4px 10px;margin-left:0'] else 1)")"
+
 echo "== the page still renders from SNAPSHOT.json alone, and stays escaped =="
 # The hostile instance renders through the SAME new markup: a title carrying ESC, a
 # newline, a tab and a bidi override reaches the tab row's neighbours and the pill, and

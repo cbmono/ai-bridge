@@ -1808,12 +1808,29 @@ def render_table():
         if not fin:
             o.append('<span class="c run"><b>%d</b> in progress</span>' % nr)
             o.append('<span class="c wait"><b>%d</b> pending</span>' % nw)
+        na = sum(toint(t.get("advisor_notes")) for t in tasks)
+        if na:
+            # Deliberately NOT in the signal colour and deliberately not in the
+            # awaiting rail: an untriaged advisor concern is the loop's inbox, not
+            # yours. It becomes a question only if the PM escalates it.
+            o.append('<span class="c note" title="Advisor concerns the loop has not '
+                     'triaged yet — not waiting on you"><b>%d</b> concern%s</span>'
+                     % (na, "" if na == 1 else "s"))
+        if toint(ph.get("total")):
+            o.append('<span class="tag">%d/%d phases</span>'
+                     % (toint(ph.get("done")), toint(ph.get("total"))))
+        if dps:
+            o.append('<span class="tag">%d deliverable%s</span>'
+                     % (len(dps), "" if len(dps) == 1 else "s"))
         if mine:
             # THE SIGNAL, and the reason collapsing sixteen projects is not a
             # regression — see the header's WEIGHTING block for the other two channels
             # (the card's own marking, and the sort). It is a count of this project's
             # rail items, which is exactly what the pooled list above used to
             # contribute for it.
+            #
+            # LAST ON THE ROW, AND BY SOURCE ORDER — every optional pill is emitted
+            # above it, so the signal ends the row flush right on every card.
             #
             # ONE PILL, WHERE THERE WERE TWO. A project header used to carry BOTH a
             # filled `N awaiting you` at the front of the row and an outlined
@@ -1830,20 +1847,6 @@ def render_table():
             # one on the line in the signal colour.
             o.append('<span class="c you"><b>%d</b> need%s you</span>'
                      % (len(mine), "s" if len(mine) == 1 else ""))
-        na = sum(toint(t.get("advisor_notes")) for t in tasks)
-        if na:
-            # Deliberately NOT in the signal colour and deliberately not in the
-            # awaiting rail: an untriaged advisor concern is the loop's inbox, not
-            # yours. It becomes a question only if the PM escalates it.
-            o.append('<span class="c note" title="Advisor concerns the loop has not '
-                     'triaged yet — not waiting on you"><b>%d</b> concern%s</span>'
-                     % (na, "" if na == 1 else "s"))
-        if toint(ph.get("total")):
-            o.append('<span class="tag">%d/%d phases</span>'
-                     % (toint(ph.get("done")), toint(ph.get("total"))))
-        if dps:
-            o.append('<span class="tag">%d deliverable%s</span>'
-                     % (len(dps), "" if len(dps) == 1 else "s"))
         o.append("</span>")
         if SLUG_SEG.fullmatch(slug):
             # THE ✕ COPIES A COMMAND. It does not close, mutate or navigate anything —
