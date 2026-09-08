@@ -928,7 +928,9 @@ rule_launcher_diagnoses_nothing() {
   # selective than it, the same order `subagent_merge` reads `agent_id` in.
   [ -z "$AGENT_TYPE" ] || return 1        # a dispatched subagent is exactly who should do this
   cwd_is_instance_root || return 1
-  case "$1" in *gh*|*kubectl*|*oc*|*argocd*|*curl*|*wget*|*grep*|*cat*|*rg*|*head*|*tail*) ;; *) return 1 ;; esac
+  # `*oc*` is the superset for both cluster spellings, since "argocd" contains "oc" — so
+  # `*argocd*` beside it is a pattern that can never match (shellcheck SC2222).
+  case "$1" in *gh*|*kubectl*|*oc*|*curl*|*wget*|*grep*|*cat*|*rg*|*head*|*tail*) ;; *) return 1 ;; esac
 
   local stage c sub w host pat skipv seen f
   # `-e`/`--include`/`-g`… take a value, so their operand is not a path to judge. Same
@@ -994,6 +996,10 @@ EOT
           if [ "$skipv" = 1 ]; then skipv=0; continue; fi
           case "$w" in
             -*) for f in $grep_value_flags; do [ "$w" = "$f" ] && { skipv=1; break; }; done
+                # A pattern given by FLAG means the first operand is already a path.
+                # Without this, `grep -e build dist/main.js` skipped `dist/main.js` as the
+                # pattern it had just been handed — a silent false negative.
+                case "$w" in -e|--regexp|--regexp=*|-f|--file|--file=*) pat=1 ;; esac
                 continue ;;
           esac
           if [ "$pat" = 0 ]; then pat=1; continue; fi

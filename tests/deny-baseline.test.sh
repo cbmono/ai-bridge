@@ -557,6 +557,12 @@ ok "…grepping one under .next" \
    "$(verdict "$CPROOT" 'grep -rn "hydration" .next/server')" "deny:launcher_diagnoses_nothing"
 ok "…and rg under build/, behind a pipe" \
    "$(verdict "$CPROOT" 'rg TODO build/out | head -5')" "deny:launcher_diagnoses_nothing"
+# A pattern given by FLAG: skipping the first operand as "the pattern" would then skip the
+# PATH, which is the silent false negative this file's five-false-results section is about.
+ok "…a pattern via -e does not shield the path" \
+   "$(verdict "$CPROOT" 'grep -e build dist/main.js')" "deny:launcher_diagnoses_nothing"
+ok "…and a path-qualified cat is still cat" \
+   "$(verdict "$CPROOT" '/bin/cat dist/main.js')" "deny:launcher_diagnoses_nothing"
 
 # --- ALLOW HALF A: THE SAME COMMAND FROM A DISPATCHED AGENT. This is criterion 6, and it is
 # the half that decides whether the rule is keepable: the failure-analyst it names as the
