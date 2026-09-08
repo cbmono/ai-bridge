@@ -44,7 +44,8 @@ Three standing facts the steps below rest on:
 
 ## Preconditions
 
-**Two checks, and the list is closed** — see "The launcher reads nothing else".
+**Two checks. What the launcher may look at is an ALLOWLIST of two** — see "The launcher
+reads nothing else"; anything not on it is a tick or a subagent.
 
 1. Must run from a **control-panel instance root**: confirm `SCHEMA.md` +
    `instance.config.json` exist in the cwd; if not, tell the user to `cd` into the
@@ -54,23 +55,37 @@ Three standing facts the steps below rest on:
    job's prompt is `run the project-manager agent for one LIVE tick`, `CronDelete` it.
    Do **not** create a cron here.
 
-### The launcher reads nothing else
+### The launcher reads nothing else — an ALLOWLIST of two, and everything else is a tick
 
-Do **not** read task documents, `log.md`, the tick ledger, `AWAITING.md`,
-`SNAPSHOT.json`, a worktree listing, `git status`, `git log`, `gh repo view` or
-`gh pr list` here — before a tick, or instead of one; step 2b's advisor adjudication,
-which runs after a tick reports, is that step's own contract — not the whole thing,
-not a summary, not "just to orient". **The tick does every one of them** (`project-manager.md` step 0
-and step 1). Every byte read here lands in the main session's context — the one
-context this loop must survive on for hours — while the tick's context is disposable;
-the full argument is `docs/pm-design.md#launcher-reads-nothing`.
+**Everything the launcher may look at — this bundle, git, the GitHub API, the network,
+the machine — is exactly these two operations:**
 
-**The one exception, named on purpose: the tick lock.** `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire`
-is a **write** only the launcher can make, returns an exit code rather than content,
-and prints nothing on the normal path. **No other reader may be added by analogy** —
-the list above is closed. And never call `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` before `acquire`
-— the check and the write are deliberately one operation; looking first rebuilds the
-race this closes.
+1. **The cwd precondition** — `SCHEMA.md` + `instance.config.json` in the cwd, which is
+   precondition 1 above and nothing wider.
+2. **`${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire`** — a **write** only the launcher can
+   make, which returns an exit code rather than content and prints nothing on the normal path.
+
+**Anything that is not one of those two is a TICK or a SUBAGENT.** That is the whole
+rule, and it is a **category**, so there is no list to keep current and nothing to add
+to when the world grows a new kind of source. **And here is the disposal, so you are
+told what to do and not only what to stop:** dispatch the tick and let it read —
+`project-manager.md` step 0 and step 1 do every one of them, in a context that is thrown
+away — or, when the question is genuinely not the tick's, hand it to a **background
+subagent** and let that context pay. Never here, and never before a tick or instead of
+one: not the whole thing, not a summary, not "just to orient". (Step 2b's advisor
+adjudication runs *after* a tick reports and is that step's own contract.)
+
+**A third entry is the regression, not an exception.**
+**No other reader may be added by analogy** — what stood here was an enumeration of
+forbidden sources that said it was closed, and it was, and it rotted anyway the day the
+expensive reads were a category it had never named.
+`tests/pm-loop-launcher.test.sh` fails when this list grows.
+
+Why: every byte read here lands in the main session's context — the one context this
+loop must survive on for hours — while the tick's context is disposable; the full
+argument is `docs/pm-design.md#launcher-reads-nothing`.
+And never call `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` before `acquire` — the check
+and the write are deliberately one operation; looking first rebuilds the race this closes.
 
 ### Why there is no publish grant, and no publish step
 

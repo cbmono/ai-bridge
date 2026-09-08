@@ -35,6 +35,14 @@
 # so the absence of the grant, the absence of the step, and the switch that replaced them
 # are asserted together at the bottom.
 #
+# THE RULE IS AN ALLOWLIST NOW, AND THAT IS WHAT THIS FILE COUNTS. The 2026-08-23 version
+# enumerated the forbidden sources — task docs, `log.md`, the ledger, `git log`, `gh pr
+# list` — and said the list was closed. It was, and it rotted anyway: the reads that
+# actually happened next were CI logs, built SPA chunks and `curl` probes, a category the
+# enumeration never had. So the section is now two allowed operations, everything else is
+# a tick or a subagent by category, and the assertion the old fix lacked is here: the
+# count fails when the list grows.
+#
 # AND IT OWNS THE ONE GRANT THAT WAS DELIBERATELY ADDED BACK. `Bash(scripts/tick-lock.sh:*)`
 # joined the allowlist on 2026-08-30, and a file whose subject is "the launcher stays
 # closed" is exactly where that has to be visible. The reason it is not a regression: the
@@ -141,24 +149,51 @@ ok "…and FAILS on a different script grant" \
 # `The launcher reads nothing else` is an anchor both files cite, so it is grepped
 # literally — the same reason `awaiting-queue.test.sh` greps a heading.
 ok "launcher carries the closed-list rule" "$(has "$LAUNCHER" 'The launcher reads nothing else')" yes
-# The rule must still name what it forbids; a heading over an empty list is no rule.
-forbidden_named() { # <file> -> count of the four costly sources named in that section
-  awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$1" \
-    | grep -o -E 'log\.md|tick ledger|git log|gh pr list' | sort -u | wc -l | tr -d ' '
+section() { awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$1"; }
+in_section() { section "$LAUNCHER" | grep -qF -- "$1" && echo yes || echo no; }
+
+# THE RULE IS AN ALLOWLIST, AND ITS SIZE IS THE ASSERTION THE OLD FIX DID NOT HAVE. The
+# 2026-08-23 version enumerated the forbidden sources and said the list was closed. It
+# was closed, and it rotted anyway, because the next day's expensive reads were a
+# category it had never named. An inversion with no check that FAILS WHEN THE LIST GROWS
+# is that same fix again — so the count is pinned here, and "just a quick orient" coming
+# back as a third allowed operation is exactly what it catches.
+count_allowed_ops() { section "$1" | grep -c -E '^[0-9]+\. ' | tr -d ' '; }
+ok "the allowlist is exactly two operations" "$(count_allowed_ops "$LAUNCHER")" 2
+ok "…op 1 is the cwd precondition"    "$(in_section 'The cwd precondition')" yes
+ok "…op 2 is the lock, by script name" "$(in_section 'scripts/tick-lock.sh acquire')" yes
+# NON-VACUITY, and it IS the property: a third allowed operation must fail this check.
+printf -- '### The launcher reads nothing else — an ALLOWLIST of two\n\n1. cwd\n2. lock\n3. just a quick orient\n\n## Next\n' > "$TMP/third.md"
+ok "…and a THIRD allowed operation fails it" \
+  "$( [ "$(count_allowed_ops "$TMP/third.md")" -ne 2 ] && echo yes || echo no )" yes
+printf -- '### The launcher reads nothing else — an ALLOWLIST of two\n\n1. cwd\n2. lock\n\n## Next\n' > "$TMP/two.md"
+ok "…while exactly two still passes"  "$(count_allowed_ops "$TMP/two.md")" 2
+
+# THE ENUMERATION OF FORBIDDEN NOUNS IS DELETED, NOT KEPT BESIDE THE ALLOWLIST. Keeping
+# both is how the list nobody can complete survives the inversion that replaced it.
+nouns_named() { # <file> -> count of the old blocklist's nouns still in that section
+  section "$1" \
+    | grep -o -E 'log\.md|tick ledger|task documents|AWAITING\.md|SNAPSHOT\.json|worktree listing|git status|git log|gh repo view|gh pr list' \
+    | sort -u | wc -l | tr -d ' '
 }
-ok "the rule names what it forbids" "$(forbidden_named "$LAUNCHER")" 4
-# THE ONE EXCEPTION, AND THE SENTENCE THAT STOPS IT BECOMING A PRECEDENT. The rule was
-# amended, not ignored and not relaxed: the lock read is named in the section, the
-# context-economy argument it is measured against is still there, and the section says in
-# as many words that nothing else may be added by analogy. All three are asserted, because
-# dropping the third is how a narrow exception becomes an open door while the file still
-# reads as if it had a rule.
-section() { awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$LAUNCHER"; }
-in_section() { section | grep -qF -- "$1" && echo yes || echo no; }
-ok "…and names the ONE exception"     "$(in_section 'The one exception, named on purpose: the tick lock')" yes
-ok "…which is the lock, by script name" "$(in_section 'scripts/tick-lock.sh acquire')" yes
+ok "the blocklist of nouns is gone"   "$(nouns_named "$LAUNCHER")" 0
+printf -- '### The launcher reads nothing else\n\nDo not read `log.md` or run `gh pr list`.\n\n## Next\n' > "$TMP/nouns.md"
+ok "…and the check sees nouns that ARE there" \
+  "$( [ "$(nouns_named "$TMP/nouns.md")" -ge 1 ] && echo yes || echo no )" yes
+
+# The category, the disposal, and the sentence that stops a third entry arriving by
+# analogy. The disposal matters on its own: a rule that only refuses leaves the reader
+# holding the work with no route, which is how "just to orient" gets rationalised.
+ok "…stated as a category, not a list" "$(in_section 'is a TICK or a SUBAGENT')" yes
+ok "…naming the tick as the disposal" "$(in_section 'dispatch the tick and let it read')" yes
+ok "…and the subagent as the other"   "$(in_section 'subagent** and let that context pay')" yes
 ok "…closing the list against analogy" "$(in_section 'No other reader may be added by analogy')" yes
 ok "…keeping the cost argument"       "$(in_section "main session's context")" yes
+# The Preconditions pointer must not still read as a blocklist either — both ends of the
+# cross-reference were rewritten, or half the file still teaches the old polarity.
+ok "the Preconditions pointer is inverted too" \
+  "$(grep -c -F 'Two checks, and the list is closed' "$LAUNCHER" | tr -d ' ')" 0
+ok "…and names the allowlist instead" "$(has "$LAUNCHER" 'is an ALLOWLIST of two')" yes
 # The launcher must never look before it takes it: a `status` then `acquire` would rebuild
 # the check-then-write window the lock exists to close.
 ok "…and forbids reading it separately" "$(in_section 'never call `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` before `acquire`')" yes
@@ -169,6 +204,10 @@ ok "old launcher imperative gone" \
 # launcher's reads must land on the tick that now owns them, and vice versa.
 ok "launcher points at the tick's step 0"  "$(has "$LAUNCHER" 'project-manager.md` step 0')" yes
 ok "tick points back at the launcher rule" "$(has "$TICK" 'The launcher reads nothing else')" yes
+# …and it must point back at the ALLOWLIST. A cross-reference that still describes the
+# launcher as a set of refusals is half the pair teaching the polarity the other half
+# just deleted, and both files would still read correctly on their own.
+ok "…as an allowlist, not a set of refusals" "$(has "$TICK" 'allowlist of two')" yes
 
 # --- the property is not lost: it lives in the tick, naming all four disk sources --
 step0() { awk '/^0\. /{p=1} p&&/^1\. /{p=0} p' "$TICK"; }
