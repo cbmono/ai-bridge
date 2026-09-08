@@ -57,6 +57,9 @@ assert "…with build-kb-index.sh named as its rule" "$(has 'build-kb-index.sh' 
 assert ".gitignore is a decidable class"          "$(has '.gitignore' "$TABLE")"
 assert "…with the seed-side rule named"           "$(has 'take the seed side' "$TABLE")"
 assert "…and every bundle-added line kept"        "$(has 'bundle-added line is kept' "$TABLE")"
+assert "CLAUDE.md is a decidable class"           "$(has 'CLAUDE.md' "$TABLE")"
+assert "…named instance-additions"                "$(has 'instance-additions' "$TABLE")"
+assert "…with the markdown heading spelled out"   "$(has 'kept across seed refreshes' "$TABLE")"
 
 # ------------------------------------------------------------- a bundle, stamped
 INST="$TMP/group/_ai-bridge-fixture"
