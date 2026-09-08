@@ -108,13 +108,14 @@ tool="$(printf '%s' "$payload" | jq -r '.tool_name // ""' 2>/dev/null || true)"
 CMD="$(printf '%s' "$payload" | jq -r '.tool_input.command // ""' 2>/dev/null || true)"
 [ -n "$CMD" ] || exit 0
 
-# `agent_id` is present on a DISPATCHED subagent's PreToolUse event and ABSENT on the
-# parent session's own tool call (measured 2026-08-23; see agent-control.sh's WHY agent_id).
-# All the rules below are command-shape rules that apply to every session; the ONE
-# exception is `subagent_merge`, whose whole point is that it fires for a dispatched agent
-# and not for the human — the human merging in their own session IS the escape hatch. So
-# this is read once here and consulted only by that rule.
+# `agent_id` and `agent_type` are present on a DISPATCHED subagent's PreToolUse event and
+# ABSENT on the parent session's own tool call (measured 2026-08-23; see agent-control.sh's
+# WHY agent_id). Most rules below are command-shape rules that apply to every session; the
+# session-scoped ones read these two and say so in their own header — `subagent_merge` and
+# `subagent_push_default` fire only for a dispatched agent, `launcher_diagnoses_nothing`
+# only for the main thread.
 AGENT_ID="$(printf '%s' "$payload" | jq -r '.agent_id // ""' 2>/dev/null || true)"
+AGENT_TYPE="$(printf '%s' "$payload" | jq -r '.agent_type // ""' 2>/dev/null || true)"
 
 CWD="$(printf '%s' "$payload" | jq -r '.cwd // ""' 2>/dev/null || true)"
 [ -n "$CWD" ] && [ -d "$CWD" ] || CWD="$PWD"
@@ -280,6 +281,19 @@ default_branch() {
   printf '%s' "$_default_branch"
 }
 
+# Is the SESSION's cwd a control-panel instance root? The `SCHEMA.md` + `instance.config.json`
+# pair `skills/dispatch/SKILL.md` precondition 1 checks — deliberately the payload's `cwd` and
+# NOT `$INSTANCE_ROOT`, which is `$CLAUDE_PROJECT_DIR` and stays the bundle even for an agent
+# whose cwd is a worktree. Cached: it is two stats in front of every Bash call.
+_cwd_instance=""
+cwd_is_instance_root() {
+  if [ -z "$_cwd_instance" ]; then
+    if [ -f "$CWD/instance.config.json" ] && [ -f "$CWD/SCHEMA.md" ]; then _cwd_instance=yes
+    else _cwd_instance=no; fi
+  fi
+  [ "$_cwd_instance" = yes ]
+}
+
 # Lexical, not `realpath`: the target of an `rm -rf` may not exist, and resolving symlinks
 # is not wanted here — `rm -rf <symlink-to-repo>` is a different command.
 norm_path() { # <path>
@@ -343,7 +357,7 @@ covers() { # <p> <x>
 # the tools falls through in microseconds. Narrowing one of these silently disables part of
 # a rule, so derive it from the rule body, and note that the deny half of that rule's tests
 # is what proves the filter still lets the real shapes through.
-RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration subagent_merge subagent_push_default"
+RULES="terraform_destroy k8s_irreversible_delete k8s_production_target sql_destructive_remote rm_rf_repo_root force_push_protected secret_exfiltration subagent_merge subagent_push_default launcher_diagnoses_nothing"
 
 # --- terraform_destroy --------------------------------------------------------------- #
 # JUSTIFIED BY: `destroy` deletes real infrastructure and there is no legitimate agent
@@ -883,6 +897,125 @@ EOT
         fi
       done
     done
+  done <<EOF
+$(stages "$1")
+EOF
+  return 1
+}
+
+# --- launcher_diagnoses_nothing ------------------------------------------------------ #
+# JUSTIFIED BY: five of twelve symptoms in the launcher-verification review were the MAIN
+# session reading CI logs, clusters, deployed hosts and build output. That answer is thrown
+# away the moment the session dispatches, so it is paid for in the one context that has to
+# survive the day, and prose has already had its turn — a slash command's `allowed-tools`
+# prevented none of it (bundle Finding "launcher-state-reads-belong-in-the-tick").
+# TWO CONDITIONS, AND NEITHER ALONE: `agent_type` EMPTY (the main thread) and a cwd that is
+# a control-panel instance root. NARROW ENOUGH TO KEEP: a dispatched role agent — the
+# failure-analyst that is the named alternative, and every software/devops agent in a
+# worktree — runs all of it untouched, and so does the human's own session in any other
+# directory, including a target repo.
+# ORDERED LAST in `RULES` on purpose: a command this and a shape rule both match (an agent's
+# `kubectl delete namespace`) should be refused with the shape rule's reason.
+#
+# The reason names the dispatch to make instead, namespaced — a bare role name does not
+# resolve — because a refusal with no route is a refusal that gets worked around.
+_launcher_reason() { # <what was read> <the shape>
+  printf '%s from the control-panel root, in the MAIN session (%s). The answer is discarded the moment this session dispatches, so it is paid for in the context that has to survive the day. Dispatch a background `ai-bridge:failure-analyst` — read-only, namespaced — with the ref, the repo and "root cause + ranked next steps", and let it read this. A dispatched agent runs the identical command untouched, as does this session anywhere but a bundle root.' "$1" "$2"
+}
+
+rule_launcher_diagnoses_nothing() {
+  # The two session-scope checks come BEFORE the glob — they are cheaper and far more
+  # selective than it, the same order `subagent_merge` reads `agent_id` in.
+  [ -z "$AGENT_TYPE" ] || return 1        # a dispatched subagent is exactly who should do this
+  cwd_is_instance_root || return 1
+  # `*oc*` is the superset for both cluster spellings, since "argocd" contains "oc" — so
+  # `*argocd*` beside it is a pattern that can never match (shellcheck SC2222).
+  case "$1" in *gh*|*kubectl*|*oc*|*curl*|*wget*|*grep*|*cat*|*rg*|*head*|*tail*) ;; *) return 1 ;; esac
+
+  local stage c sub w host pat skipv seen f
+  # `-e`/`--include`/`-g`… take a value, so their operand is not a path to judge. Same
+  # failure `VALUE_FLAGS` documents for kubectl: read one as a path and the rule fires on a
+  # pattern the user typed.
+  local grep_value_flags="-e --regexp --include --exclude --exclude-dir --exclude-from -m --max-count -A -B -C --before-context --after-context --context -g --glob -t --type -T --iglob --replace -f --file -d --max-depth"
+  while IFS= read -r stage; do
+    [ -n "$stage" ] || continue
+    c="$(first_word "$stage")" || continue
+    case "$c" in
+      # a CI log. `gh run view --log`/`--log-failed`, and the same bytes via the REST API.
+      gh)
+        sub="$(word_after "$stage" gh || true)"
+        if [ "$sub" = run ] && { has_token "$stage" --log || has_token "$stage" --log-failed; }; then
+          _launcher_reason 'Reading a CI log' '`gh run view --log`'
+          return 0
+        fi
+        if [ "$sub" = api ]; then
+          case "$stage" in
+            *actions/runs/*log*|*actions/jobs/*log*|*check-runs/*log*)
+              _launcher_reason 'Reading a CI log' '`gh api` on a run'"'"'s logs'
+              return 0 ;;
+          esac
+        fi
+        ;;
+      # driving a cluster. `oc` is kubectl's other spelling, as everywhere else in this file.
+      kubectl|oc|argocd)
+        _launcher_reason 'Driving a cluster' "\`$c\`"
+        return 0
+        ;;
+      # probing a deployed host: an http(s) target that is not local. A localhost call is
+      # this bundle's own board server, and is not a deployed host.
+      curl|wget)
+        host=""
+        while IFS= read -r w; do
+          case "$w" in http://*|https://*) ;; *) continue ;; esac
+          host="${w#*://}"; host="${host##*@}"; host="${host%%/*}"; host="${host%%\?*}"
+          case "$host" in
+            \[*) host="${host%%\]*}"; host="${host#\[}" ;;   # [::1]:3000
+            *) host="${host%%:*}" ;;
+          esac
+          case "$(lower "$host")" in
+            localhost|127.0.0.1|0.0.0.0|::1|host.docker.internal|*.localhost|127.*) host="" ;;
+            *) break ;;
+          esac
+        done <<EOT
+$(tokens_of "$stage")
+EOT
+        if [ -n "$host" ]; then
+          _launcher_reason 'Probing a deployed host' "\`$c\` at \`$host\`"
+          return 0
+        fi
+        ;;
+      # a build artifact. The FIRST operand of a grep-family call is the pattern, not a
+      # path, so it is skipped: `grep -rn build plugin/` must not read as a `build/` path.
+      cat|head|tail|grep|egrep|fgrep|rg|ag)
+        pat=0; skipv=0; seen=0
+        case "$c" in grep|egrep|fgrep|rg|ag) ;; *) pat=1 ;; esac
+        while IFS= read -r w; do
+          # BASENAME, as everywhere else here: `/bin/cat` is `cat`, and a literal compare
+          # would never find the command word and would judge it as an operand.
+          if [ "$seen" = 0 ]; then [ "${w##*/}" = "$c" ] && seen=1; continue; fi
+          if [ "$skipv" = 1 ]; then skipv=0; continue; fi
+          case "$w" in
+            -*) for f in $grep_value_flags; do [ "$w" = "$f" ] && { skipv=1; break; }; done
+                # A pattern given by FLAG means the first operand is already a path.
+                # Without this, `grep -e build dist/main.js` skipped `dist/main.js` as the
+                # pattern it had just been handed — a silent false negative.
+                case "$w" in -e|--regexp|--regexp=*|-f|--file|--file=*) pat=1 ;; esac
+                continue ;;
+          esac
+          if [ "$pat" = 0 ]; then pat=1; continue; fi
+          case "$w" in *'$'*|*'`'*) continue ;; esac
+          # SEGMENT equality, never a substring: `plugin/scripts/build-board.sh` is not a
+          # path under `build/`, and `.next-doc` is not `.next`.
+          case "/${w#./}" in
+            */dist|*/dist/*|*/build|*/build/*|*/.next|*/.next/*)
+              _launcher_reason 'Reading a build artifact' "\`$c $w\`"
+              return 0 ;;
+          esac
+        done <<EOT
+$(tokens_of "$stage")
+EOT
+        ;;
+    esac
   done <<EOF
 $(stages "$1")
 EOF
