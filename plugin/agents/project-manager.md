@@ -231,16 +231,20 @@ state, and act only on deltas.
    **On every path but IDLE, open your tick ledger entry NOW — this is where step 0.5
    used to do it.** Append one line to the root `log.md`:
    `* TICK <ISO-8601 timestamp> by <login> open: <what you are about to do>`. Step 8
-   rewrites it as the closed summary. **`by <login>` names the login this tick RAN as** —
-   `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`, this clone's
-   `ownerGithubUser`, `<unknown>` written as-is on a clone that configures none. On a
-   bundle two humans share the ledger is one file both loops append to, so a line that
-   does not say whose tick it was is a line a reader cannot attribute at all
-   (`SCHEMA.md` → "Decisions name the human"). Resolve it once and reuse it for the close. It must be the first thing the full walk does, not part of
+   rewrites it as the closed summary. It must be the first thing the full walk does, not
+   part of
    curation: an open `TICK` line with no close is the only signal that a died tick ever
    dispatched. Here rather than in step 0.5 because
    **the probe reads a tree that append would have dirtied** — and by this point the
    answer is already `DELTA`, so the append can no longer change it.
+
+   **`by <login>` names the login this tick RAN as** —
+   `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`, this clone's
+   `ownerGithubUser`, `<unknown>` written as-is on a clone that configures none. On a
+   bundle two humans share the ledger is one file both loops append to, so a line that
+   does not say whose tick it was is a line a reader cannot attribute at all
+   (`SCHEMA.md` → "Decisions name the human"). Resolve it once and reuse it for the idle
+   line and for step 8's close.
 
    The probe can only ever skip work the fingerprint proves un-owed; every doubt is
    exit 2 and the full tick. What it deliberately does not see — a PR body edit at an
@@ -641,8 +645,8 @@ state, and act only on deltas.
    deliverable is something a human LOOKS at, the agent opens a draft PR, records a
    `preview: <url>` line under `# Notes` and stops at `in-review`; a draft is never
    merge-eligible, so report the URL in the tick summary and never queue it as a merge.
-   When the human
-   approves it — in-session, or by marking the draft ready for review — append one
+   When the human approves it — in-session, or by marking the draft ready for review —
+   append one
    `# Notes` line, `preview approved <ISO 8601> by <login>` from
    `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`, then let the PR through the
    ordinary gate unchanged. **The same form and the same resolver as every other stamp**

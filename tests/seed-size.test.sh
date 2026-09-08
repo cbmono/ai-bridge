@@ -43,7 +43,12 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # up to the installed plugin is something an agent must know before its first stamp, so
 # it is always-loaded like the invariants around it. Measured, not rounded; flagged in
 # the PR body.
-CEILING=13924
+# 13924 -> 13964 (ai-bridge-2x/task-011). +40 bytes: the answer instruction now shows the
+# stamped form, `<ISO 8601> by <login> · <entry>`. The human reads this file when they type
+# the ` --- ` reply, so the shape their answer lands in has to be here rather than one
+# document away; written as the shortest form that still shows the `by`. Measured, not
+# rounded; flagged in the PR body.
+CEILING=13964
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

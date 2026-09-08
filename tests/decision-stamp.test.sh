@@ -256,7 +256,7 @@ ok "…and may actually run it"         "$(hasf "$CLOSE" 'scripts/decision-stamp
 ok "the dispatch skill's summary agrees" \
    "$(hasf "$DISPATCH" '`<ISO 8601> by <login> · <the entry verbatim>`')" yes
 ok "the seed CLAUDE.md shows the answer form" \
-   "$(hasf "$SEED_CLAUDE" '`<ISO 8601> by <login> · <the entry')" yes
+   "$(hasf "$SEED_CLAUDE" '`<ISO 8601> by <login> · <entry>`')" yes
 ok "the seed README shows it to the human" \
    "$(hasf "$SEED_README" '`<ISO 8601> by <login> · <the entry')" yes
 

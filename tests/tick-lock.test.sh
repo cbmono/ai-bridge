@@ -1047,15 +1047,17 @@ echo "== the tick's own ledger still exists — it moved to step 0.9, it was not
 # entry opened in 0.5 forces the answer the 0.9 probe exists to give, and the idle
 # fast-path never runs. The entry is unchanged; only the step that writes it moved, so
 # these pin the LOCATION in both directions rather than the file-wide presence they used to.
+# The literal gained ` by <login>` in ai-bridge-2x/task-011 — a shared bundle's ledger is one
+# file both loops append to, so a line that does not say whose tick it was cannot be attributed.
 # step05only stops at 0.9; the step05() defined below deliberately runs on to step 1, so it
 # would report 0.9's line as 0.5's and this pair would not be able to fail.
 step05only() { awk '/^0\.5\. \*\*Take the tick lock/{p=1;next} p&&/^0\.9\. /{p=0} p' "$TICK"; }
 step09() { awk '/^0\.9\. \*\*Probe the idle fast-path/{p=1;next} p&&/^1\. \*\*Orient/{p=0} p' "$TICK"; }
-ok "the tick still opens a ledger entry" "$(has "$TICK" '* TICK <ISO-8601 timestamp> open:')" yes
+ok "the tick still opens a ledger entry" "$(has "$TICK" '* TICK <ISO-8601 timestamp> by <login> open:')" yes
 ok "…and step 0.9 is what opens it" \
-  "$(step09 | grep -qF '* TICK <ISO-8601 timestamp> open:' && echo yes || echo no)" yes
+  "$(step09 | grep -qF '* TICK <ISO-8601 timestamp> by <login> open:' && echo yes || echo no)" yes
 ok "…step 0.5 no longer does" \
-  "$(step05only | grep -qF '* TICK <ISO-8601 timestamp> open:' && echo yes || echo no)" no
+  "$(step05only | grep -qF '* TICK <ISO-8601 timestamp> by <login> open:' && echo yes || echo no)" no
 ok "…and the probe's reason for the move is stated" \
   "$(step09 | grep -qF 'the probe reads a tree that append would have dirtied' && echo yes || echo no)" yes
 ok "…still re-deriving from disk first"  "$(has "$TICK" 're-derive the in-flight set from disk')" yes
