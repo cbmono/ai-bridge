@@ -16,6 +16,24 @@ holds is a claim about text.
 The first column is the whole rule. Prefer the shell harness: it is free, offline, and
 runs on every machine. Come here only when the property is an **effect**.
 
+## The grader types, because they are documented nowhere you can read
+
+Read out of the CLI's own authoring guide (2.1.263) — `--help` lists none of them, so the
+next author otherwise greps a Mach-O binary for them, as this one did.
+
+| `type:` | Frontmatter | Body | Free? |
+|---|---|---|---|
+| `tool_used` | `tool`, `input_match` (a **regex** over the call's input), `min` (default **1**), `max`, `arm: with-only\|both` | (none) | yes |
+| `tool_order` | `before`, `after` | (none) | yes |
+| `file_exists` | `path: <glob>`, `exists: bool` — over files **created** during the run | (none) | yes |
+| `regex` | `target: last_message\|trace\|files\|{source: file, path}`, `match: contains\|not_contains\|count:N`, `flags` | the pattern | yes |
+| `llm` | `focus:` (same set as `target`), `weight` | the rubric, as concrete checkable claims | **no** — a judge call |
+
+Two traps, both of which score a **correct** plugin as red or green for the wrong reason:
+`max: 0` without `min: 0` is the range `1..0`, which no run can satisfy; and a
+must-not-call check needs **`arm: both`** as well, because without it a `tool: Skill`
+grader is display-only under the default `--ablation with-without`.
+
 ## The seven cases
 
 | Case | Asserts | Grader |
