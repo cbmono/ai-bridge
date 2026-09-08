@@ -79,7 +79,8 @@ adjudication runs *after* a tick reports and is that step's own contract.)
 **No other reader may be added by analogy** — what stood here was an enumeration of
 forbidden sources that said it was closed, and it was, and it rotted anyway the day the
 expensive reads were a category it had never named.
-`tests/pm-loop-launcher.test.sh` fails when this list grows.
+The launcher's own harness under `tests/` counts these operations and fails when the
+list grows.
 
 Why: every byte read here lands in the main session's context — the one context this
 loop must survive on for hours — while the tick's context is disposable; the full
