@@ -180,7 +180,7 @@ gh_slug() {
   u="$(git config --get remote.origin.url 2>/dev/null)" || return 1
   u="${u%.git}"
   case "$u" in *github.com[:/]*) u="${u##*github.com}"; u="${u#[:/]}" ;; *) return 1 ;; esac
-  case "$u" in */*/*|*[!A-Za-z0-9._/-]*) return 1 ;; esac
+  case "$u" in */*/*|/*|*[!A-Za-z0-9._/-]*) return 1 ;; esac
   case "$u" in */?*) printf '%s' "$u" ;; *) return 1 ;; esac
 }
 
@@ -277,11 +277,13 @@ if [[ "$RETAIN" != "true" ]]; then
   fi
 
   if [[ $APPLY -eq 1 ]]; then
-    [[ -n "$SHA" ]] || {
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
       echo "close-project-folder: not inside a git work tree — refusing to delete $PROJ/ unversioned." >&2
       exit 2
     }
-    if [[ -n "$DLV" ]]; then
+    # No HEAD (an unborn branch) means no sha to pin, so there is no honest entry to
+    # write. The removal still proceeds; the index is what is skipped.
+    if [[ -n "$DLV" && -n "$SHA" ]]; then
       if grep -qxF "## $SLUG" "$CLOSED_MD" 2>/dev/null; then
         note "WARN" "$CLOSED_MD already carries \`## $SLUG\` — not appending a second entry."
       else
@@ -300,7 +302,7 @@ if [[ "$RETAIN" != "true" ]]; then
     fi
     echo "---"
     echo "close-project-folder: $SLUG removed (staged). Commit it with the roll-up edits."
-    if [[ -n "$DLV" ]]; then
+    if [[ -n "$DLV" && -n "$SHA" ]]; then
       echo "Name $CLOSED_MD in the commit's paths — the entry must land in THIS commit."
     fi
   else

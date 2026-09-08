@@ -1809,6 +1809,63 @@ assert "…and that instance is off the board"           "$(has 'no SNAPSHOT.jso
 assert "…so there is nothing to write"                 "$(has 'nothing written' "$OFFBOARD")"
 assert "…and no page carries its content"              "$(yes_if test ! -e "$TMP/off.html")"
 
+# ---------------------------------------------------------------- `closed`
+# projects/CLOSED.md is TRACKED and written by close-project-folder.sh; this half of the
+# chain is the parse. Two properties: a stanza with deliverables becomes an entry, and
+# ABSENCE LEAVES THE KEY OUT — never an empty array, so a reader can tell "no closed
+# projects" from "a snapshot older than this key".
+echo
+echo "== projects/CLOSED.md -> the \`closed\` array =="
+CLI="$TMP/group/_ai-bridge-closed"
+mkdir -p "$CLI/projects"
+: > "$CLI/SCHEMA.md"; echo '{ "org": "fixture-org" }' > "$CLI/instance.config.json"
+: > "$CLI/SNAPSHOT.json"
+( cd "$CLI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+assert "no CLOSED.md ⇒ no \`closed\` key at all"  "$(yes_if python3 -c '
+import json,sys; sys.exit(0 if "closed" not in json.load(open(sys.argv[1])) else 1)' "$CLI/SNAPSHOT.json")"
+
+cat > "$CLI/projects/CLOSED.md" <<'CLOSED'
+# Closed projects
+
+## ai-bridge-2x
+
+- closed: 2026-09-08
+- pinned: 8fefa76aaaaaaaabbbbbbbbccccccccdddddddd
+- outcome: ten merged PRs, 2.0.1 → 2.1.5
+- deliverable: `/projects/ai-bridge-2x/project.md` — https://github.com/o/r/blob/8fefa76aaaaaaaabbbbbbbbccccccccdddddddd/projects/ai-bridge-2x/project.md
+  - restore: `gh api repos/o/r/contents/projects/ai-bridge-2x/project.md?ref=8fefa76 --jq .content | base64 -d > /tmp/project.md`
+
+## shipped-nothing
+
+- closed: 2026-09-01
+- pinned: 1111111111111111111111111111111111111111
+- outcome: cancelled before it produced anything
+CLOSED
+( cd "$CLI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+CLJ="$CLI/SNAPSHOT.json"
+assert "the snapshot still parses as JSON"       "$(yes_if python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$CLJ")"
+assert "…one entry, and it is the one WITH deliverables" "$(yes_if python3 -c '
+import json,sys
+c = json.load(open(sys.argv[1]))["closed"]
+sys.exit(0 if len(c) == 1 and c[0]["slug"] == "ai-bridge-2x" else 1)' "$CLJ")"
+assert "…a project that shipped NOTHING adds no entry"   "$(yes_if python3 -c '
+import json,sys
+c = json.load(open(sys.argv[1]))["closed"]
+sys.exit(0 if not any(x["slug"] == "shipped-nothing" for x in c) else 1)' "$CLJ")"
+assert "…the date, sha and one-line outcome are carried" "$(yes_if python3 -c '
+import json,sys
+c = json.load(open(sys.argv[1]))["closed"][0]
+sys.exit(0 if c["closed"] == "2026-09-08" and c["sha"].startswith("8fefa76")
+         and c["outcome"].startswith("ten merged PRs") else 1)' "$CLJ")"
+assert "…one deliverable, path and PERMALINK"    "$(yes_if python3 -c '
+import json,sys
+d = json.load(open(sys.argv[1]))["closed"][0]["deliverables"]
+sys.exit(0 if len(d) == 1 and d[0]["path"] == "/projects/ai-bridge-2x/project.md"
+         and "/blob/8fefa76" in d[0]["url"] and "/blob/main/" not in d[0]["url"] else 1)' "$CLJ")"
+# The restore command is CLOSED.md's, for a human at a terminal. It names a local
+# filesystem path, so it stays out of the file one step from being published.
+assert "…and the restore command is NOT carried"  "$(fhasnt 'base64 -d' "$CLJ")"
+
 echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
