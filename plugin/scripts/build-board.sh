@@ -1517,9 +1517,13 @@ def render_table():
         title = "Bridge Board"
 
     rows, asks, others = [], [], []
+    closed_all = []
     n_tasks = n_done = 0
     for s, d in zip(instances, inst_dirs):
         g = s.get("group", "?")
+        # A closed project has no folder left, so the snapshot's `closed` array is the
+        # only thing that can reach the page — no filesystem read, no token spend.
+        closed_all += [todict(c) for c in tolist(s.get("closed"))]
         me, default_owner = who_and_default(d)
         others += others_for(d, me, default_owner)
         for p in tolist(s.get("projects")):
@@ -1991,6 +1995,49 @@ def render_table():
                          'title="%s">%s</button></li>' % (e(dp), e(dp), e(fname)))
             o.append("</ul></div>")
         o.append("</div></details></div>")
+
+    # ---- the closed projects, one collapsed block, from `closed` ------------
+    # COLLAPSED, like the block below and the project cards above: this is the shelf you
+    # go to, not your queue. Every string goes through e() and every URL through href(),
+    # so a `javascript:` link renders as inert text exactly as a PR URL does — a
+    # CLOSED.md URL is the same untrusted-snapshot-text class. Absent key ⇒ no section.
+    if closed_all:
+        n_dlv = sum(len(tolist(c.get("deliverables"))) for c in closed_all)
+        o.append('<div class="pcard" data-f="fin">')
+        o.append('<details class="proj fin"><summary class="phead">')
+        o.append('<span class="ptitle">Closed · %d</span><span class="counts">' % len(closed_all))
+        o.append('<span class="c"><b>%d</b> deliverable%s</span>'
+                 % (n_dlv, "" if n_dlv == 1 else "s"))
+        o.append("</span></summary>")
+        o.append('<div class="body"><div class="scroll"><table><thead><tr>'
+                 "<th>Project</th><th>Closed</th><th>Pinned</th>"
+                 "<th>Deliverable</th></tr></thead><tbody>")
+        for c in sorted(closed_all, key=lambda x: str(x.get("closed") or ""), reverse=True):
+            dls = [todict(x) for x in tolist(c.get("deliverables"))] or [{}]
+            for i, dl in enumerate(dls):
+                u = href(dl.get("url"))
+                name = str(dl.get("path") or "").rsplit("/", 1)[-1] or "—"
+                if u:
+                    cell = ('<a href="%s" target="_blank" rel="noopener noreferrer" '
+                            'title="%s">%s</a>' % (e(u), e(dl.get("path")), e(name)))
+                else:
+                    cell = ('<span class="dim">%s (link withheld: not http/https)</span>'
+                            % e(name))
+                o.append('<tr><td>%s%s</td><td class="dim">%s</td>'
+                         '<td class="dim">%s</td><td>%s</td></tr>'
+                         % (e(c.get("slug")) if i == 0 else "",
+                            ('<br><span class="dim">%s</span>' % e(c.get("outcome")))
+                            if i == 0 and c.get("outcome") else "",
+                            e(c.get("closed")) if i == 0 else "",
+                            e(str(c.get("sha") or "")[:7]) if i == 0 else "",
+                            cell))
+        o.append("</tbody></table></div>"
+                 "<p class=\"where\">Read from each instance’s <code>projects/CLOSED.md</code>, "
+                 "written by closeout. The folder is gone; every link is a "
+                 "<strong>permalink at the commit it was pinned to</strong>, because a "
+                 "branch-path link 404s the moment the folder is removed. "
+                 "<code>CLOSED.md</code> carries a one-paste restore command beside each "
+                 "link for a deliverable GitHub will not render.</p></div></details></div>")
 
     # ---- the other owners, one collapsed block each, from git HEAD ----------
     # NAMED and COLLAPSED. No `open` attribute, and no script — the same <details> the

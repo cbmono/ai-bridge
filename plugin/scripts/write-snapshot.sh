@@ -39,6 +39,14 @@
 #              closeout stamps these, this file only forwards them; see task-007's
 #              board panel and the shape check build-board.sh applies before render)
 #     phase:   file, order, title, status
+#     closed:  slug, close date, pinned sha, one-line outcome, and one bundle-relative
+#              path + GitHub permalink per deliverable — read from the TRACKED
+#              projects/CLOSED.md, which close-project-folder.sh writes. A SECOND
+#              deliberate widening (2026-09-08): a closed project has no folder left, so
+#              the board can only reach it through here. The permalink is the one URL
+#              other than a PR URL this file carries, and it is a github.com blob link
+#              by construction; the `restore:` command in CLOSED.md is NOT carried, and
+#              the board applies href()'s http/https rule to the URL like any other.
 #     task:    id, title, kind, status, assignee (a ROLE slug, never a person),
 #              in_flight, awaiting (a verb, not a reason), open_questions (a COUNT),
 #              open_question_ids (one `Q<n>` LABEL per open question, never its text —
@@ -748,6 +756,57 @@ done <<EOF
 $PROJECT_FILES
 EOF
 
+# ---------------------------------------------------------------- closed projects
+# projects/CLOSED.md — tracked, written by close-project-folder.sh, one `## <slug>`
+# stanza per closed project that had deliverables. The key prefixes below ARE the parse
+# contract; a hand-written variation simply does not parse, which is the intended
+# failure for a file whose own header says not to hand-edit it.
+closed_records() { # -> TSV: P slug | C date | S sha | O outcome | D path url
+  awk '
+    /^## / { print "P\t" substr($0, 4); next }
+    /^- closed: /  { print "C\t" substr($0, 11); next }
+    /^- pinned: /  { print "S\t" substr($0, 11); next }
+    /^- outcome: / { print "O\t" substr($0, 12); next }
+    /^- deliverable: / {
+      s = substr($0, 16); q = index(s, " — ")
+      if (q > 0) { p = substr(s, 1, q - 1); u = substr(s, q + 5) } else { p = s; u = "" }
+      gsub(/`/, "", p); sub(/^[ \t]+/, "", u); sub(/[ \t]+$/, "", u)
+      print "D\t" p "\t" u
+    }
+  ' projects/CLOSED.md
+}
+
+closed_json=""
+c_slug=""; c_date=""; c_sha=""; c_out=""; c_dlv=""
+# Emitted only for a stanza that has at least one deliverable — CLOSED.md is an index of
+# things to come back to, and log.md already records every close.
+flush_closed() {
+  [[ -n "$c_slug" && -n "$c_dlv" ]] || return 0
+  [[ -n "$closed_json" ]] && closed_json="$closed_json,"
+  closed_json="$closed_json
+    {\"slug\": $(jstr "$c_slug"), \"closed\": $(jstr "$c_date"), \"sha\": $(jstr "$c_sha"), \"outcome\": $(jstr "$c_out"), \"deliverables\": [$c_dlv]}"
+}
+if [[ -f projects/CLOSED.md ]]; then
+  while IFS=$'\t' read -r kind a b; do
+    case "$kind" in
+      P) flush_closed; c_slug="$a"; c_date=""; c_sha=""; c_out=""; c_dlv="" ;;
+      C) c_date="$a" ;;
+      S) c_sha="$a" ;;
+      O) c_out="$a" ;;
+      D) [[ -n "$c_dlv" ]] && c_dlv="$c_dlv, "
+         c_dlv="$c_dlv{\"path\": $(jstr "$a"), \"url\": $(jstr "$b")}" ;;
+    esac
+  done <<EOF
+$(closed_records)
+EOF
+  flush_closed
+fi
+# Absent or empty ⇒ the key is left OUT, never written as `[]`: a reader must be able to
+# tell "this instance has no closed projects" from "this snapshot predates the key".
+CLOSED_BLOCK=""
+if [[ -n "$closed_json" ]]; then CLOSED_BLOCK="\"closed\": [$closed_json],
+  "; fi
+
 # ---------------------------------------------------------------- write
 # Temp file BESIDE the target, never $TMPDIR: a cross-filesystem `mv` degrades to
 # copy-and-remove, where an interruption leaves a half-written snapshot that the
@@ -762,7 +821,7 @@ cat > "$tmp" <<JSON
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},
-  "projects": [$projects_json]
+  ${CLOSED_BLOCK}"projects": [$projects_json]
 }
 JSON
 
