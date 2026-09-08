@@ -317,8 +317,9 @@ ticks, regardless of how long a tick runs.
   instead of dispatching and put the line it prints in `AWAITING.md`. The cap is
   `maxStallRounds` in `instance.config.json` (**absent ⇒ 2**).
 - **An answered question is MOVED, never deleted** — from `open_questions` into
-  `answered_questions`, one flat line `<ISO 8601> · <the entry verbatim>`
-  (`SCHEMA.md`). `open_questions` must still empty — that is the promotion signal; an
+  `answered_questions`, one flat line `<ISO 8601> by <login> · <the entry verbatim>`,
+  the login from `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh` (`SCHEMA.md` →
+  "Decisions name the human"; an `advisor:` entry the loop wrote carries no `by`). `open_questions` must still empty — that is the promotion signal; an
   entry left in both lists blocks the draft forever.
 - Concurrency cap: **at most `maxAgentsInFlight` role agents in flight** — resolve
   with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-max-agents.sh` (local file first, tracked second; prints

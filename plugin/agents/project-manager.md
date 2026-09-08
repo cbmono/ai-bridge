@@ -202,7 +202,7 @@ state, and act only on deltas.
      clean, nothing untracked under `projects/`, no task `in-progress`, and every
      open PR's head, state and review decision exactly as the last full tick recorded
      them. **Skip steps 1–7.** Append ONE already-closed line to the root `log.md` —
-     `* TICK <ISO-8601> idle — fingerprint unchanged (tick-delta)` — then go to step 8
+     `* TICK <ISO-8601> by <login> idle — fingerprint unchanged (tick-delta)` — then go to step 8
      to commit and sync it as usual, reporting `noop: true`.
      **Then stop — your entire report is that one line, the probe's own, verbatim:**
      no sections, no counts, no "nothing to report" preamble, and nothing from the
@@ -230,8 +230,13 @@ state, and act only on deltas.
 
    **On every path but IDLE, open your tick ledger entry NOW — this is where step 0.5
    used to do it.** Append one line to the root `log.md`:
-   `* TICK <ISO-8601 timestamp> open: <what you are about to do>`. Step 8 rewrites it as
-   the closed summary. It must be the first thing the full walk does, not part of
+   `* TICK <ISO-8601 timestamp> by <login> open: <what you are about to do>`. Step 8
+   rewrites it as the closed summary. **`by <login>` names the login this tick RAN as** —
+   `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`, this clone's
+   `ownerGithubUser`, `<unknown>` written as-is on a clone that configures none. On a
+   bundle two humans share the ledger is one file both loops append to, so a line that
+   does not say whose tick it was is a line a reader cannot attribute at all
+   (`SCHEMA.md` → "Decisions name the human"). Resolve it once and reuse it for the close. It must be the first thing the full walk does, not part of
    curation: an open `TICK` line with no close is the only signal that a died tick ever
    dispatched. Here rather than in step 0.5 because
    **the probe reads a tree that append would have dirtied** — and by this point the
@@ -286,9 +291,21 @@ state, and act only on deltas.
    an `open_questions` entry on the same line (answering in-session works too). When
    answered, bake each answer into the task itself — `# Context`, a tightened
    `acceptance_criteria`, or `# Notes` — then **MOVE that entry out of
-   `open_questions` into `answered_questions`**: prefix the current ISO 8601 timestamp
-   and ` · `, keep the entry text **verbatim**. A **moot** question moves the same way,
-   with the reason as its answer. `answered_questions` is a human audit record —
+   `open_questions` into `answered_questions`**: prefix the current ISO 8601 timestamp,
+   ` by <login>` and ` · `, keep the entry text **verbatim**. A **moot** question moves
+   the same way, with the reason as its answer.
+
+   **`by <login>` names the human whose answer it was**, and the login comes from
+   `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh` — never from your own reading:
+   `--author <task-doc>` where the reply arrived as a ` --- ` line in a commit (its git
+   author's email resolves through `people`, so a reply pushed from the OTHER clone
+   attributes to the other human, not to whoever's loop folded it in), `--self` where the
+   answer was given in this session. Unattributable prints `<unknown>` and exits 1 —
+   **write it anyway**: an omitted stamp is indistinguishable from a decision nobody made.
+   An entry YOU wrote — the `advisor:` receipt — carries no `by`, because no human decided
+   it. The shape is `SCHEMA.md` → "Decisions name the human"; none of it is a gate.
+
+   `answered_questions` is a human audit record —
    nothing reads it. `open_questions` still holds only questions awaiting an answer,
    so a `draft` becomes clean once **that** list empties. Moving an entry must never
    leave it in both lists — a copy left behind silently blocks the draft forever.
@@ -335,6 +352,21 @@ state, and act only on deltas.
    Its model comes from `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh plan-architect` — `roleTiers`
    (`apex`) through `models` — never a hard-coded alias; and `plan-architect` stays out
    of `roles`.
+
+2.5. **Stamp promotions — every task past `draft`, once.** For each task whose status is
+   `ready` or beyond and whose `# Notes` carries no `promoted … by …` line yet, append
+   one, verbatim from
+   `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --promotion <task-doc>` —
+   `promoted <ISO 8601> by <login>`, derived from the git author of the commit that
+   changed `status:` (`git log -1` on the task file). **So a HAND-promotion is attributed
+   too**, which is the whole point: `draft → ready` is a human authority, it leaves no
+   other record inside the document, and on a shared bundle it is *either* human's — the
+   promoter's login is the only thing that says whose approval this was. `<unknown>` is
+   written as-is rather than skipped. **Once**: the line's presence is the receipt, so a
+   later tick must not add a second one, and this is not a gate — an unstamped `ready`
+   task is still dispatched. Stamp it before you dispatch, so the document a briefed agent
+   reads already says who approved it. Applies to `kind: research` as well, which never
+   reaches step 3.
 
 3. **Dispatch `ready → in-progress`.** **Build tasks only.** Skip any `kind: research`
    task entirely here — those are human-driven; never spawn an agent for them.
@@ -605,6 +637,19 @@ state, and act only on deltas.
    **preflight**. Never merge on your reading of PR prose. `AUTONOMY.md` absent ⇒
    surface, don't merge.
 
+   **A preview approval is a human decision, so it is stamped like one.** Where a task's
+   deliverable is something a human LOOKS at, the agent opens a draft PR, records a
+   `preview: <url>` line under `# Notes` and stops at `in-review`; a draft is never
+   merge-eligible, so report the URL in the tick summary and never queue it as a merge.
+   When the human
+   approves it — in-session, or by marking the draft ready for review — append one
+   `# Notes` line, `preview approved <ISO 8601> by <login>` from
+   `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`, then let the PR through the
+   ordinary gate unchanged. **The same form and the same resolver as every other stamp**
+   (`SCHEMA.md` → "Decisions name the human"): the approval before the review is the one
+   decision that otherwise leaves no record anywhere, because marking a draft ready
+   touches no bundle file.
+
    **Report the worktree, never remove it.** `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` is
    report-only: it classifies every worktree and prints the exact
    `git worktree remove` commands. Surface its `REMOVABLE` and `RECLAIMABLE` sets as
@@ -630,8 +675,10 @@ state, and act only on deltas.
    toward the cap) — and it is THE cataloguer for this tick: step 7's throttle is
    tick-wide, not step-7-local, so brief this one to cover the closeout consolidation
    AND anything this tick's merges produced; for a research project, graduate the
-   chosen `deliverables` into `knowledge/`; (b) prepend a dated **Project closed** entry to the root `log.md`
-   naming the project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s)
+   chosen `deliverables` into `knowledge/`; (b) prepend a dated **Project closed** entry to the root `log.md`,
+   stamped `by <login>` from `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`
+   exactly as a promotion and a preview approval are — closing is the human's OK and the
+   entry is the only place that OK is ever written down — naming the project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s)
    produced, and the removing commit SHA; (c) set `project.md` `status: done`, drop it
    from the active `## Projects` list in the ROOT `index.md`, refresh
    `projects/<slug>/index.md` when the project is retained, and update its objective —
@@ -715,7 +762,8 @@ state, and act only on deltas.
    `cataloguer`, committed normally.
 
    **Close this tick's ledger entry** (opened in step 0.5) by rewriting it as a dated
-   one-line summary. **Make it reconstructible, not descriptive:** name every task id
+   one-line summary, **keeping its `by <login>`** — the rewrite replaces the `open:` half,
+   never the attribution. **Make it reconstructible, not descriptive:** name every task id
    you dispatched and every one whose completion you reflected — "dispatched task-004,
    task-007; reflected task-002 merged" is what a successor reads instead of its own
    memory. **A KB sweep (step 7) is named the same way — its trigger and its result, both

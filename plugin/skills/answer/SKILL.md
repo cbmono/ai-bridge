@@ -3,7 +3,7 @@ name: answer
 disable-model-invocation: true
 description: Answer the PM's pending open_questions interactively — gather the unanswered questions (all projects, one project, or one task), ask them in one batch, then fold the answers back into the tasks (clearing them). In-session convenience instead of editing each task file by hand.
 argument-hint: "[<project-slug> | projects/<slug> | <task path>]  omit for every project"
-allowed-tools: Bash(pwd), Bash(ls:*), Read, Edit, Glob, Grep, AskUserQuestion
+allowed-tools: Bash(pwd), Bash(ls:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Read, Edit, Glob, Grep, AskUserQuestion
 ---
 
 Answer the Project Manager's pending `open_questions` **interactively**, instead of
@@ -39,9 +39,13 @@ and stop.
    (`# Context`, a tightened `acceptance_criteria`, or `# Notes` as fits) and **move
    that entry** out of `open_questions` into `answered_questions` — the same effect as
    the ` --- <answer>` delimiter, applied here. Write the moved entry as one flat line —
-   the current ISO 8601 timestamp, then ` · `, then the original question with the
-   answer appended after ` --- `, e.g.
-   `2026-01-01T00:00:00Z · Q1: which region? --- eu-central-1`.
+   the current ISO 8601 timestamp, then ` by <login> · `, then the original question with
+   the answer appended after ` --- `, e.g.
+   `2026-01-01T00:00:00Z by example-user-007 · Q1: which region? --- eu-central-1`.
+   **The login is YOURS** — you are answering in this session — from
+   `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`, written as `<unknown>` when
+   this clone configures no `ownerGithubUser`. A decision a document records says who
+   made it (`SCHEMA.md` → "Decisions name the human").
    Make sure it is **gone from `open_questions`**: that list emptying is
    what makes the draft promotable, so an entry left in both places blocks it forever.
    `answered_questions` is a human audit record — nothing reads it (see `SCHEMA.md`).

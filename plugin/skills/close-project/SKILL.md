@@ -3,7 +3,7 @@ name: close-project
 disable-model-invocation: true
 description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. Human-gated; run once a project's tasks are all done/cancelled.
 argument-hint: <project-slug>  [--dry-run] [--force]
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
 ---
 
 **Close a completed Project.** This is the human-triggered form of the closeout the
@@ -91,10 +91,15 @@ candidates) and ask which to close.
    Zero errors before step 7 commits, and `knowledge/index.md` goes in that commit by
    explicit path.
 
-3. **Record the closeout.** Get a timestamp (`date -u +%Y-%m-%dT%H:%M:%SZ`). Prepend
-   a dated **Project closed** entry to the root `log.md` (newest-first) naming the
+3. **Record the closeout.** Get a timestamp (`date -u +%Y-%m-%dT%H:%M:%SZ`) and the
+   login closing it (`${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`). Prepend
+   a dated **Project closed** entry to the root `log.md` (newest-first), stamped
+   `by <login>`, naming the
    project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s) it produced
-   (KB links), and a one-line outcome. (The closing commit SHA is added by step 7's
+   (KB links), and a one-line outcome. **Closing is a human decision and the entry is the
+   only place it is ever written down**, so it names the human the same way a promotion
+   and a preview approval do (`SCHEMA.md` → "Decisions name the human"); `<unknown>` goes
+   in as-is rather than being left out. (The closing commit SHA is added by step 7's
    commit — reference it as "removed in the closing commit".)
 
    **For a retained project, say so and name what was pruned** — step 7's command

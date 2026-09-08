@@ -554,6 +554,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | Script | Does | Writes? |
 |---|---|---|
 | `ai-bridge.sh` | backs the plugin's `/welcome`: reprints the SessionStart banner, `check` reports state that could be wrong, `fix` repairs only the idempotent tier | only under `fix` |
+| `decision-stamp.sh` | the one resolver of *which GitHub login made a decision a document records* — `--self` for a decision taken in this session, `--author <path>`/`--promotion <path>` for one that arrived as a commit (the git author's email reverse-mapped through `people`, so a hand-promotion or a reply pushed from the other clone attributes to the other human). Unattributable prints `<unknown>` and exits 1; the stamp is written anyway. A login, never an address | no |
 | `resolve-config.sh` | the one implementation of the two-file config precedence — `instance.config.local.json` first, `instance.config.json` second, dicts merged entry by entry | no |
 | `resolve-max-agents.sh` | prints the concurrency cap **this machine** should honour, from the same two files | no |
 | `resolve-account.sh` | the one reader of *which Claude account is this bundle on* — prints `declared`/`active`/launcher path, exit 0 match, 3 mismatch, 4 no account on this session, 1 inert (no `ai-bridge-accounts` companion, or nothing declared). Reads no credential | no |
