@@ -71,7 +71,8 @@ this file so product-repo sessions aren't told they are a control panel. -->
 - Tasks are created `draft`. The `project-manager` runs as an **idempotent loop**:
   it refines drafts (fills `acceptance_criteria`; records numbered `open_questions` —
   you answer by appending ` --- <answer>` to the question's line, and the next tick
-  folds it in), dispatches human-approved `ready` tasks, monitors PRs, reflects
+  folds it in as `<ISO 8601> by <login> · <entry>`), dispatches human-approved
+  `ready` tasks, monitors PRs, reflects
   merges as `done`, **reports** finished worktrees (`prune-worktrees.sh` prints
   removal commands, never deletes), and **proposes** closing finished projects —
   never closes them itself.

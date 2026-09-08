@@ -162,7 +162,9 @@ task, and clears the question; the `draft` becomes promotable once the list empt
 (Answering in chat during a session works too.)
 
 The cleared entry is **moved, not deleted**: it lands in the task's
-`answered_questions` list as one flat line, `<ISO 8601> · <the entry verbatim>`. That
+`answered_questions` list as one flat line, `<ISO 8601> by <login> · <the entry
+verbatim>` — the `by` naming **you**, because a decision a document records says who made
+it (`SCHEMA.md` → "Decisions name the human"). That
 list is a human audit record — nothing reads it — and `open_questions` still has to
 empty, because that is the promotion signal. **No customer PII in an answer**: unlike a
 question you clear, this list persists for the life of the repo.

@@ -45,7 +45,8 @@ and a `done`/`cancelled` task is finished.
 - Push early; open the PR against the default branch with the task id in the title.
 - Hit a genuine ambiguity ⇒ add a numbered entry to the task's `open_questions` and
   say so — in-session the human may answer immediately, which you then fold in and
-  MOVE to `answered_questions` (verbatim, timestamped) per the bundle rules.
+  MOVE to `answered_questions` (verbatim, timestamped, stamped `by <login>`) per the
+  bundle rules.
 
 ## Close the loop — the part solo work usually forgets
 
