@@ -993,7 +993,7 @@ owner asked three times in one session, for three different instances.
  █▀█
 ▄███▄▄▄▄▄▄
 ~▀▀▀▀▀▀▀~~
-AI-Bridge v2.1.5 · _ai-bridge-private · org: cbmono
+AI-Bridge v2.1.6 · _ai-bridge-private · org: cbmono
 ───────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
