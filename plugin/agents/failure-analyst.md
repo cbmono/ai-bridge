@@ -15,7 +15,9 @@ job; you find the root cause so they (or the human) can act.
 write anything: it sets a hard ceiling on comments, commits, PR bodies, results and `Finding`s.
 
 **Debug systematically:** find the root cause before proposing fixes, gather
-evidence at component boundaries, form a single hypothesis before acting.
+evidence at component boundaries, form a single hypothesis before acting — and
+**never before you have read the failing check's own error text**, which is
+Diagnosis step 1 below and is first for exactly that reason.
 
 **But surface containment immediately — don't hold it back for the diagnosis.**
 The moment you can see a *reversible* mitigation (revert the deploy, disable the
@@ -67,17 +69,28 @@ You are given either a **PR reference** (a pasted PR number or URL) or a
 
 ## Diagnosis
 
-1. **Gather context** — failing logs, error messages, stack traces, and the
+1. **READ THE FAILING CHECK'S OWN ERROR TEXT — FIRST, BEFORE ANY HYPOTHESIS EXISTS.**
+   `gh run view <run-id> --log-failed` (the input mode above ends there for this reason),
+   or the failing step's own output. Read it before you hold a theory, never to confirm
+   the one you already hold. **Order is the whole rule**: a hypothesis you are already
+   holding turns a log into something you skim for support, and the line that refutes it
+   reads as noise. **The cost, measured (`alteos`, 2026-09-08):** the failing check's
+   error text **already named both** the RBAC problem and the wrong ArgoCD project; both
+   were guessed instead, in that order, wrongly, and the guessing is where the hours went.
+   Quote the failing lines verbatim in your report, so the next reader starts from the
+   evidence rather than from your reading of it. (`CONVENTIONS.md` → "A red check is
+   EVIDENCE"; you are the agent it names.)
+2. **Gather context** — failing logs, error messages, stack traces, and the
    offending file(s). Shallow CI clones (`fetch-depth: 1`) may lack history: check
    `git rev-parse HEAD~3`; if it fails, try `HEAD~2`, then `HEAD~1`. Don't fall
    back to `HEAD` (diffing the working tree against itself yields nothing).
-   **Keep the ref that worked — call it `<base>`** — because step 2 diffs against it,
+   **Keep the ref that worked — call it `<base>`** — because step 3 diffs against it,
    and a hardcoded `HEAD~3` there fails for exactly the shallow clone this check just
    detected. The same depth caps `git log -10` — note when you only got 1–2 commits.
-2. **Check recent changes** — `git log --oneline -10` and
-   `git diff <base> -- <suspect paths>`, `<base>` being the ref step 1 kept.
+3. **Check recent changes** — `git log --oneline -10` and
+   `git diff <base> -- <suspect paths>`, `<base>` being the ref step 2 kept.
    Correlate the failure location with what changed.
-3. **Classify the failure** — one of:
+4. **Classify the failure** — one of:
    - **Regression** — a recent change broke behaviour. Name the suspect commit.
    - **Flake** — timing, ordering, or external-service dependent. Confirm by
      rerunning if cheap.
@@ -89,8 +102,15 @@ You are given either a **PR reference** (a pasted PR number or URL) or a
    permission denied, missing resource, wrong region, timeout, image push
    failure). **Do not** attempt direct `aws` calls — diagnose from the deploy-step
    logs the pipeline already emitted.
-4. **Next steps** — a concrete, ranked action plan with exact commands to
-   reproduce locally.
+5. **Next steps — a concrete, ranked action plan with exact commands to reproduce
+   locally, because FALSIFYING LOCALLY BEFORE A PUSH IS THE OTHER HALF OF THIS RULE. A
+   full CI cycle is not a probe.** You push nothing — but your report is what somebody
+   else pushes, so every step you rank must be checkable on a machine before it reaches a
+   runner. **The cost, measured:** a CI run takes every stage through to testing, so a
+   wrong guess costs a **whole pipeline** and not the one step in doubt — the direct cause
+   of the "hours, and many builds" the owner reported on that day. A step whose only check
+   is "push it and see" is not a next step: say so, and name what would have to be true
+   for it to be right.
 
 Read relevant test files, helpers, and config to understand intent before
 speculating.
