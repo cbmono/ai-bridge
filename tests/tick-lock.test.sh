@@ -1212,19 +1212,17 @@ ok "…and the operator docs say so too" \
   "$(has "$TPL/docs/operations.md" 'Dispatch follows the lock being')" yes
 
 echo
-echo "== the closed list gained ONE named exception, and stayed closed =="
+echo "== the lock is one of the launcher's THREE allowed operations, and the list is closed =="
+# The launcher's rule is an allowlist: three operations, and anything else is a tick or a
+# subagent by category. The lock is entry 2 — asserted here, beside the lock, because
+# this is the one grant that was ever added back. The shape of the list, the deleted
+# blocklist and the further-entry regression are pm-loop-launcher.test.sh's.
 section() { awk '/^### The launcher reads nothing else/{p=1;next} p&&/^#/{p=0} p' "$LAUNCHER"; }
-ok "the exception is named"              "$(section | grep -qF 'The one exception, named on purpose: the tick lock' && echo yes || echo no)" yes
-ok "…and says it is not a precedent"     "$(section | grep -qF 'No other reader may be added by analogy' && echo yes || echo no)" yes
+ok "the lock is an allowed operation"    "$(section | grep -qF 'scripts/tick-lock.sh acquire' && echo yes || echo no)" yes
+ok "…and the list is closed against analogy" "$(section | grep -qF 'No other reader may be added by analogy' && echo yes || echo no)" yes
 ok "…keeping the economy justification"  "$(section | grep -qF "main session's context" && echo yes || echo no)" yes
-# Every source the rule forbade is still forbidden by name in that same section. This is
-# the half that would rot if the exception were ever widened into a relaxation.
-missing=0
-for src in 'log.md' 'tick ledger' 'task documents' 'AWAITING.md' 'SNAPSHOT.json' \
-           'worktree listing' 'git status' 'git log' 'gh repo view' 'gh pr list'; do
-  section | grep -qF -- "$src" || { echo "  (no longer forbidden: $src)"; missing=$((missing+1)); }
-done
-ok "…and all ten forbidden sources remain" "$missing" 0
+ok "…and it is an allowlist of exactly three" \
+  "$(section | grep -c -E '^[0-9]+\. ' | tr -d ' ')" 3
 
 echo
 echo "== the lock is gitignored on a freshly stamped instance =="
