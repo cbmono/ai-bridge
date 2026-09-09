@@ -235,6 +235,7 @@ echo
 # A suite can LOSE assertions without going red — an unterminated string once swallowed
 # nine of them elsewhere in this directory and the file still reported fail=0. Pin the
 # count so a block that stops executing shows up here rather than as silence.
+# 64 and not 65: `total` is read BEFORE this assertion — itself the 65th `ok` — runs.
 total=$((pass + fail))
 ok "exactly 64 assertions ran"              "$total" 64
 
