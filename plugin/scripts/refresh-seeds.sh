@@ -133,25 +133,34 @@ DIFF_CAP="${UPGRADE_DIFF_LINES:-40}"   # lines of a conflicting diff to print in
 # `<seed path>|<class>|<the rule that resolves it>`. One row per class of conflict that has
 # the same right answer on every bundle. Anything not named here stays a CONFLICT.
 DECIDABLE='knowledge/index.md|derived|derived from frontmatter — regenerated with build-kb-index.sh, never merged
-.gitignore|seed-managed-lines|conflicting hunks that touch only seed-managed lines take the seed side; every bundle-added line is kept, and the trailing "# Instance additions" block is the bundle'"'"'s own'
+.gitignore|seed-managed-lines|conflicting hunks that touch only seed-managed lines take the seed side; every bundle-added line is kept, and the trailing "# Instance additions" block is the bundle'"'"'s own
+CLAUDE.md|instance-additions|the trailing "## Instance additions (kept across seed refreshes)" block is the bundle'"'"'s own — split off both sides before the merge, re-appended verbatim, and everything above it judged against the seed'
 
 # The seed-managed .gitignore paths: derived files this machinery itself writes, so which
 # side ignores them is the plugin's answer and never the bundle's.
 SEED_MANAGED_IGNORE='board\.html|\.board-live/|AWAITING\.md|\.tick-lock|\.ai-bridge/'
 
-# `.gitignore`'s TRAILING INSTANCE BLOCK IS BUNDLE-OWNED: the `# Instance additions`
-# heading (plus the blank run before it) through end of file. It is split off both sides
-# before the merge and re-appended unchanged after it — otherwise the one file every bundle
-# customises is the one file that can never read clean (2x/task-008).
-GI_ADDITIONS_RE='^# Instance additions'
-# …and the index-ignore marker block rides with it when init has put it directly above.
+# A TRAILING INSTANCE BLOCK IS BUNDLE-OWNED: the additions heading (plus the blank run
+# before it) through end of file, split off both sides before the merge and re-appended
+# unchanged after it — otherwise the files every bundle customises are the ones that can
+# never read clean (2x/task-008).
+#
+# `<seed path>|<heading ERE>`. THE SPELLING DIFFERS PER FILE and the set is what keeps the
+# three split call sites in agreement: `.gitignore` opens the block with a comment,
+# CLAUDE.md with a markdown heading whose `(kept across seed refreshes)` suffix the ERE
+# matches by prefix. A path in no row is never split.
+ADDITIONS_HEADING='.gitignore|^# Instance additions
+CLAUDE.md|^## Instance additions'
+additions_re() { printf '%s\n' "$ADDITIONS_HEADING" | awk -F'|' -v p="$1" '$1==p {print $2; exit}'; }
+
+# The index-ignore marker block rides with `.gitignore`'s when init has put it directly above.
 # Those two lines are written by this machinery and appear in no seed, so leaving them in
 # the body puts a bundle-side insertion exactly where a seed append lands — a CONFLICT on
 # the next seed edit, which is the bug this whole split exists to remove.
 GI_IDX_BEGIN='# >>> ai-bridge index ignore >>>'
 GI_IDX_END='# <<< ai-bridge index ignore <<<'
-gi_split() { # <file> <body-out> <block-out>; no heading ⇒ the whole file is body
-  awk -v re="$GI_ADDITIONS_RE" -v bm="$GI_IDX_BEGIN" -v em="$GI_IDX_END" \
+split_additions() { # <file> <body-out> <block-out> <heading-ere>; no heading ⇒ all body
+  awk -v re="$4" -v bm="$GI_IDX_BEGIN" -v em="$GI_IDX_END" \
       -v body="$2" -v block="$3" '
     function back(i) { while (i > 1 && l[i-1] ~ /^[[:space:]]*$/) i--; return i }
     { l[NR] = $0 } $0 ~ re && !h { h = NR }
@@ -564,14 +573,16 @@ while IFS= read -r rel; do
   # the instance holds. Chosen as the base, the base→seed diff is empty, the merge is a
   # no-op, and real drift is silently reported as "nothing to port". The fixture caught
   # exactly that: a hand-diverged CLAUDE.md read as in sync.
-  # `.gitignore`: split the bundle-owned instance block off both sides, so everything
-  # below judges the SEED-SHAPED part of the file. Re-appended after the merge.
-  cmp_inst="$inst_f"; seed_side="$seed_f"; : > "$TMPD/giblock"
-  if [ "$rel" = .gitignore ]; then
-    gi_split "$inst_f" "$TMPD/instbody" "$TMPD/giblock"
-    if [ -s "$TMPD/giblock" ]; then
+  # A file in ADDITIONS_HEADING: split the bundle-owned instance block off both sides, so
+  # everything below judges the SEED-SHAPED part of the file. Re-appended after the merge.
+  cmp_inst="$inst_f"; seed_side="$seed_f"; : > "$TMPD/addblock"
+  add_re="$(additions_re "$rel")"
+  if [ -n "$add_re" ]; then
+    split_additions "$inst_f" "$TMPD/instbody" "$TMPD/addblock" "$add_re"
+    if [ -s "$TMPD/addblock" ]; then
       cmp_inst="$TMPD/instbody"
-      gi_split "$seed_f" "$TMPD/seedbody" "$TMPD/seedblock"; seed_side="$TMPD/seedbody"
+      split_additions "$seed_f" "$TMPD/seedbody" "$TMPD/seedblock" "$add_re"
+      seed_side="$TMPD/seedbody"
     fi
   fi
 
@@ -646,8 +657,8 @@ EOF
   fi
 
   cat_base "$base_blob" "$rel" "$TMPD/base"
-  if [ -s "$TMPD/giblock" ]; then
-    gi_split "$TMPD/base" "$TMPD/basebody" "$TMPD/baseblock"
+  if [ -s "$TMPD/addblock" ]; then
+    split_additions "$TMPD/base" "$TMPD/basebody" "$TMPD/baseblock" "$add_re"
     mv "$TMPD/basebody" "$TMPD/base"
   fi
   cp "$cmp_inst" "$TMPD/ours"
@@ -656,7 +667,7 @@ EOF
     -L "$rel (this instance)" -L "seed @ ${base_blob}" -L "seed (new)" \
     "$TMPD/ours" "$TMPD/base" "$seed_side" > "$TMPD/merged" 2>/dev/null || merge_rc=$?
   # The bundle's block goes back on VERBATIM, separated exactly as it was found.
-  if [ -s "$TMPD/giblock" ]; then cat "$TMPD/giblock" >> "$TMPD/merged"; fi
+  if [ -s "$TMPD/addblock" ]; then cat "$TMPD/addblock" >> "$TMPD/merged"; fi
 
   short="$(printf '%s' "$base_blob" | cut -c1-8)"
   if [ "$merge_rc" -ge 255 ]; then

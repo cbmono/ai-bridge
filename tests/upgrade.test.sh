@@ -501,6 +501,60 @@ GI_REPORT="$(bash "$UPGRADE" "$GINST" 2>&1)"
 assert "the ported bundle reads IN SYNC again" \
   "$([[ -z "$(gi_labels "$GI_REPORT")" ]] && echo 0 || echo 1)"
 
+echo "== CLAUDE.md's instance-additions block is the bundle's own too =="
+# Same mechanism, second spelling: `.gitignore` opens the block with a comment, CLAUDE.md
+# with a markdown heading carrying a parenthetical. The two bundles below diverge from the
+# seed in IDENTICAL bytes except for that heading line, so the pair is the whole claim.
+MD_HEAD='## Instance additions (kept across seed refreshes)'
+md_line()   { grep -nxF -e "$2" -- "$1" | head -1 | cut -d: -f1 || true; }
+md_where()  { # <file> <heading> <pattern> <before|after>
+  local h p; h="$(md_line "$1" "$2")"; p="$(md_line "$1" "$3")"
+  [[ -n "$h" && -n "$p" ]] || { echo 1; return; }
+  if [[ "$4" == before ]]; then [[ "$p" -lt "$h" ]] && echo 0 || echo 1
+  else [[ "$p" -gt "$h" ]] && echo 0 || echo 1; fi
+}
+md_labels() { printf '%s\n' "$1" | awk '$1 ~ /^[A-Z]+$/ && $2 == "CLAUDE.md" { print $1 }' | tr '\n' ' '; }
+
+md_bundle() { # <dir> <heading-or-empty> — stamp, edit the BODY, append a trailing block
+  mkdir -p "$1"
+  bash "$TPL/plugin/scripts/init-bundle.sh" "$1" > "$TMP/md-stamp.out" 2>&1
+  sed 's/^intro line — TEMPLATE V2$/intro line — HOUSE EDIT/' "$1/CLAUDE.md" > "$TMP/m"
+  mv "$TMP/m" "$1/CLAUDE.md"
+  { echo; [[ -z "$2" ]] || { echo "$2"; echo; }; echo '- a house rule nobody upstream knows'; } >> "$1/CLAUDE.md"
+}
+MDI="$TMP/group/_ai-bridge-claude"; md_bundle "$MDI" "$MD_HEAD"
+MDN="$TMP/group/_ai-bridge-claude-noblock"; md_bundle "$MDN" ""
+assert "the stamped body is the seed's, so the hand edit is real drift" \
+  "$(yes_if grep -qxF 'intro line — HOUSE EDIT' "$MDI/CLAUDE.md")"
+md_block() { awk -v h="$MD_HEAD" 'index($0, h) == 1 { f = 1 } f' "$1"; }
+md_block "$MDI/CLAUDE.md" > "$TMP/md-block.before"
+
+# The seed grows a new TRAILING section — exactly where a bundle's EOF append sits.
+printf '\n## A section new in seed v4\nseed tail line\n' >> "$TPL/plugin/seed/CLAUDE.md"
+( cd "$TPL" && git add -A && gc "template, seed v4 — a new trailing CLAUDE.md section" )
+
+MD_REPORT="$(bash "$UPGRADE" "$MDI" 2>&1)"
+assert "a seed tail change is PORTABLE, not a CONFLICT"  "$(has 'PORTABLE  CLAUDE.md' "$MD_REPORT")"
+assert "…and never silently IN SYNC — the drift is named" \
+  "$([[ "$(md_labels "$MD_REPORT")" == "PORTABLE " ]] && echo 0 || echo 1)"
+MD_APPLY="$(bash "$UPGRADE" "$MDI" --apply 2>&1)"
+assert "--apply ports it"                        "$(has 'PORTED    CLAUDE.md' "$MD_APPLY")"
+assert "…the seed's new section landed"          "$(yes_if grep -qxF '## A section new in seed v4' "$MDI/CLAUDE.md")"
+assert "…above the instance block"               "$(md_where "$MDI/CLAUDE.md" "$MD_HEAD" '## A section new in seed v4' before)"
+assert "…the bundle's block survived, below the heading" "$(md_where "$MDI/CLAUDE.md" "$MD_HEAD" '- a house rule nobody upstream knows' after)"
+md_block "$MDI/CLAUDE.md" > "$TMP/md-block.after"
+assert "…and came back BYTE-IDENTICAL"           "$(yes_if cmp -s "$TMP/md-block.before" "$TMP/md-block.after")"
+assert "…and the body's own hand edit survived"  "$(yes_if grep -qxF 'intro line — HOUSE EDIT' "$MDI/CLAUDE.md")"
+assert "…with no conflict marker written"        "$(hasnt '<<<<<<<' "$(cat "$MDI/CLAUDE.md")")"
+assert "the ported bundle reads IN SYNC again"   "$([[ -z "$(md_labels "$(bash "$UPGRADE" "$MDI" 2>&1)")" ]] && echo 0 || echo 1)"
+
+# The other direction: no heading ⇒ the whole file is body and the plain 3-way merge runs,
+# so the same seed append collides with the bundle's — today's behaviour, unchanged.
+MDN_REPORT="$(bash "$UPGRADE" "$MDN" 2>&1)"
+assert "no heading ⇒ the trailing text is body, and it CONFLICTS" \
+  "$(has 'CONFLICT  CLAUDE.md' "$MDN_REPORT")"
+assert "…and report mode left that file untouched" \
+  "$(hasnt '## A section new in seed v4' "$(cat "$MDN/CLAUDE.md")")"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
