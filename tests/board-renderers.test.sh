@@ -984,6 +984,74 @@ src = open('$HOSTILE', encoding='utf-8').read()
 m = re.search(r'<script>(.*?)</script>', src, re.S)
 sys.exit(0 if m and 'ANSITITLE' not in m.group(1) and 'FORGEDROW' not in m.group(1) else 1)")"
 
+# ---------------------------------------------------------------- Closed section
+# A closed project has NO FOLDER, so the snapshot's `closed` array is the only route it
+# has to the page — and its URLs come from a tracked markdown file, which is the same
+# untrusted-text class as a title or a PR URL. The two properties that matter: the
+# section renders collapsed from the array alone, and a `javascript:` deliverable URL
+# is inert text, never an href.
+echo
+echo "== the board's Closed section =="
+CL="$TMP/group/_ai-bridge-closed"
+mkdir -p "$CL"
+cat > "$CL/SNAPSHOT.json" <<'JSON'
+{ "_schema": "ai-bridge board snapshot v1", "group": "closed",
+  "generated_at": "2026-09-08T00:00:00Z",
+  "counts": {"projects": 0, "tasks": 0, "awaiting": 0},
+  "closed": [
+    {"slug": "ai-bridge-2x", "closed": "2026-09-08", "sha": "8fefa76aaaaaaaa",
+     "outcome": "ten merged PRs",
+     "deliverables": [
+       {"path": "/projects/ai-bridge-2x/project.md",
+        "url": "https://github.com/o/r/blob/8fefa76/projects/ai-bridge-2x/project.md"},
+       {"path": "/projects/ai-bridge-2x/sources/screens.html",
+        "url": "javascript:alert(1)"}]}],
+  "projects": [] }
+JSON
+CLH="$TMP/closed-board.html"
+( cd "$CL" && bash "$BOARD" --standalone --out "$CLH" "$CL" >/dev/null 2>&1 )
+assert "a snapshot with \`closed\` renders the section"  "$(fhas 'Closed · 1' "$CLH")"
+assert "…COLLAPSED — its <details> carries no \`open\`"  "$(yes_if python3 -c "
+import sys
+src = open('$CLH', encoding='utf-8').read()
+tag = src[:src.index('Closed · 1')].rsplit('<details', 1)[1].split('>', 1)[0]
+sys.exit(0 if ' open' not in tag else 1)")"
+assert "…it opens to the per-deliverable link"           "$(fhas 'blob/8fefa76/projects/ai-bridge-2x/project.md' "$CLH")"
+# THE CELL, not the bare sha: `8fefa76` is in the permalink one column over, so a
+# renderer that dropped the Pinned column entirely still passed the old assertion.
+assert "…the pinned sha is shown, short"                 "$(fhas '<td class="dim">8fefa76</td>' "$CLH")"
+# The slug is unique only inside one instance, so the row names the group it came from.
+assert "…and the instance group beside the slug"         "$(fhas 'ai-bridge-2x <span class="dim">· closed</span>' "$CLH")"
+assert "…and the one-line outcome"                       "$(fhas 'ten merged PRs' "$CLH")"
+assert "a javascript: deliverable URL is NOT a link"    "$(fhasnt 'javascript:' "$CLH")"
+assert "…it renders as inert text instead"               "$(fhas 'link withheld: not http/https' "$CLH")"
+# The count is over PROJECTS and the chip over deliverables — a section claiming one and
+# showing the other is the presence-assertion failure this repo has already paid for.
+assert "…and the chip counts deliverables, not projects" "$(fhas '<b>2</b> deliverable' "$CLH")"
+
+# Two instances closing the SAME slug. `group` is per-snapshot, so without it stamped
+# onto each record these two rows are indistinguishable — which is the whole reason the
+# aggregation carries it.
+CL2="$TMP/group/_ai-bridge-other"
+mkdir -p "$CL2"
+sed 's/"group": "closed"/"group": "other"/' "$CL/SNAPSHOT.json" > "$CL2/SNAPSHOT.json"
+TWOH="$TMP/closed-two.html"
+( cd "$TMP" && bash "$BOARD" --standalone --out "$TWOH" "$CL" "$CL2" >/dev/null 2>&1 )
+assert "two instances, same slug: the first row names its group"  "$(fhas 'ai-bridge-2x <span class="dim">· closed</span>' "$TWOH")"
+assert "…and the second names the other one"                      "$(fhas 'ai-bridge-2x <span class="dim">· other</span>' "$TWOH")"
+
+NOCL="$TMP/group/_ai-bridge-nocl"
+mkdir -p "$NOCL"
+python3 - "$CL/SNAPSHOT.json" "$NOCL/SNAPSHOT.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8")); d.pop("closed")
+open(sys.argv[2], "w", encoding="utf-8").write(json.dumps(d))
+PY
+NOCLH="$TMP/nocl-board.html"
+( cd "$NOCL" && bash "$BOARD" --standalone --out "$NOCLH" "$NOCL" >/dev/null 2>&1 )
+assert "a snapshot with NO \`closed\` key renders the page" "$(yes_if test -s "$NOCLH")"
+assert "…and no Closed section at all"                     "$(fhasnt 'Closed · ' "$NOCLH")"
+
 # THE RENDERERS SHIP WITH THE PLUGIN, NOT INTO A BUNDLE (task-013). This used to assert
 # that a stamp LINKED them into `<bundle>/scripts/`; a bundle carries no machinery now, so
 # the property worth pinning is that the plugin ships both and that a stamp put no link

@@ -15,8 +15,12 @@
 #
 # THE TWO OUTCOMES.
 #
-#   retain absent/false  ⇒  `git rm -r` the folder. Unchanged behaviour: git history and
-#                           the KB are the record, and there is no `archive/`.
+#   retain absent/false  ⇒  `git rm -r` the folder, AND append the project's entry to
+#                           `projects/CLOSED.md` — the tracked index back into git, one
+#                           GitHub permalink per declared deliverable, pinned at HEAD
+#                           (the parent of the closing commit, because a `blob/main`
+#                           link 404s the moment the folder goes). Written here, in the
+#                           closing commit: a list maintained by hand rots.
 #   retain: true         ⇒  the folder STAYS. It is frozen first:
 #                             · `deliverable_paths:` is stamped into project.md, and
 #                             · working files are pruned (below).
@@ -166,6 +170,77 @@ set_list_field() { # <file> <key> <inline-value>
   ' "$f" > "$tmp" && mv "$tmp" "$f"
 }
 
+# ---------------------------------------------------------------- closed index
+CLOSED_MD="projects/CLOSED.md"
+
+# `<org>/<repo>` of THIS BUNDLE's own GitHub remote, or nothing. Not `org` from
+# instance.config.json: that names the TARGET repos, and these links point here.
+gh_slug() {
+  local u
+  u="$(git config --get remote.origin.url 2>/dev/null)" || return 1
+  u="${u%.git}"
+  case "$u" in *github.com[:/]*) u="${u##*github.com}"; u="${u#[:/]}" ;; *) return 1 ;; esac
+  case "$u" in */*/*|/*|*[!A-Za-z0-9._/-]*) return 1 ;; esac
+  case "$u" in */?*) printf '%s' "$u" ;; *) return 1 ;; esac
+}
+
+# Every deliverable this project DECLARED that still exists on disk, first-seen order.
+# The same two sources the retained branch stamps from, so removal and retention report
+# one set and not two.
+declared_deliverables() {
+  local seen="" ref
+  while IFS= read -r ref; do
+    [[ -n "$ref" ]] || continue
+    case "$seen" in *"[$ref]"*) continue ;; esac
+    seen="${seen}[$ref]"
+    # An `if`, not a `&&`: a declared-but-missing LAST entry would otherwise make the
+    # loop — and this function, and the caller's assignment — exit non-zero under `set -e`.
+    if [[ -e ".$ref" ]]; then printf '%s\n' "$ref"; fi
+  done <<EOF
+$(find "$PROJ/tasks" -maxdepth 1 -name '*.md' 2>/dev/null | grep -vE '/(index|log)\.md$' | sort \
+   | while IFS= read -r t; do [[ -n "$t" ]] && refs_for "$t" artifacts; done
+  refs_for "$PROJ/project.md" deliverable_paths)
+EOF
+}
+
+# One stanza, appended. The key prefixes are the parse contract write-snapshot.sh reads;
+# the restore command is there because GitHub renders an HTML deliverable as source and
+# raw.githubusercontent.com 404s unauthenticated on a private repo.
+append_closed_entry() { # <sha> <org/repo>  — deliverable refs on stdin
+  local sha="$1" nwo="$2" outcome ref file
+  outcome="$(field "$PROJ/project.md" description)"
+  [[ -n "$outcome" ]] || outcome="$(field "$PROJ/project.md" title)"
+  [[ -f "$CLOSED_MD" ]] || cat > "$CLOSED_MD" <<'HDR'
+# Closed projects
+
+A closed project's folder is removed at closeout; this file is the index back into git.
+Every link is a GitHub **permalink at a commit sha** — a `blob/main` link 404s the moment
+the folder goes. `pinned:` is the last commit that still carried the files, i.e. the
+parent of the closing commit.
+
+Written by `close-project-folder.sh`, in the closing commit. **Do not hand-edit** — a
+list maintained by hand rots, which is the failure this file exists to end.
+HDR
+  {
+    printf '\n## %s\n\n' "$SLUG"
+    printf -- '- closed: %s\n' "$(date -u +%Y-%m-%d)"
+    printf -- '- pinned: %s\n' "$sha"
+    printf -- '- outcome: %s\n' "$outcome"
+    while IFS= read -r ref; do
+      [[ -n "$ref" ]] || continue
+      file="${ref##*/}"
+      if [[ -n "$nwo" ]]; then
+        printf -- '- deliverable: `%s` — https://github.com/%s/blob/%s%s\n' "$ref" "$nwo" "$sha" "$ref"
+        printf -- '  - restore: `gh api repos/%s/contents/%s?ref=%s --jq .content | base64 -d > /tmp/%s`\n' \
+          "$nwo" "${ref#/}" "$sha" "$file"
+      else
+        printf -- '- deliverable: `%s`\n' "$ref"
+        printf -- '  - restore: `git show %s:%s > /tmp/%s`\n' "$sha" "${ref#/}" "$file"
+      fi
+    done
+  } >> "$CLOSED_MD"
+}
+
 # ---------------------------------------------------------------- report helpers
 stamped=0; missing=0; pruned_files=0; pruned_dirs=0
 LOG_BITS=""
@@ -178,11 +253,44 @@ RETAIN="$(field "$PROJ/project.md" retain | tr '[:upper:]' '[:lower:]')"
 if [[ "$RETAIN" != "true" ]]; then
   echo "close-project-folder: $SLUG — not retained (no \`retain: true\` on project.md)."
   note "REMOVE" "$PROJ/ (git rm -r)"
+
+  # Resolved BEFORE anything is deleted: afterwards the paths no longer resolve and the
+  # sha is archaeology.
+  DLV="$(declared_deliverables)"
+  SHA=""; NWO=""
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    SHA="$(git rev-parse --verify HEAD 2>/dev/null || true)"
+    NWO="$(gh_slug || true)"
+  fi
+  if [[ -n "$DLV" && -n "$SHA" ]]; then
+    n_dlv="$(printf '%s\n' "$DLV" | grep -c . || true)"
+    note "INDEX" "$CLOSED_MD += ## $SLUG — $n_dlv deliverable(s) pinned at ${SHA:0:7}"
+    # An unpushed sha 404s exactly like a branch path does, so it is worth saying now.
+    if [[ -z "$(git branch -r --contains "$SHA" 2>/dev/null)" ]]; then
+      note "WARN" "${SHA:0:7} is on no remote branch yet — push before these links resolve."
+    fi
+    [[ -n "$NWO" ]] || note "WARN" "no github remote on this clone — recording \`git show\` restores, not permalinks."
+  else
+    # An index of things to come back to, not a second changelog: log.md already
+    # records every close.
+    note "INDEX" "no entry — $SLUG declared no deliverable that exists on disk."
+  fi
+
   if [[ $APPLY -eq 1 ]]; then
     git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
       echo "close-project-folder: not inside a git work tree — refusing to delete $PROJ/ unversioned." >&2
       exit 2
     }
+    # No HEAD (an unborn branch) means no sha to pin, so there is no honest entry to
+    # write. The removal still proceeds; the index is what is skipped.
+    if [[ -n "$DLV" && -n "$SHA" ]]; then
+      if grep -qxF "## $SLUG" "$CLOSED_MD" 2>/dev/null; then
+        note "WARN" "$CLOSED_MD already carries \`## $SLUG\` — not appending a second entry."
+      else
+        printf '%s\n' "$DLV" | append_closed_entry "$SHA" "$NWO"
+        git add -- "$CLOSED_MD"
+      fi
+    fi
     # -f because closeout has just written `status: done` into a file that is about to
     # stop existing; that edit is deliberately discarded with the folder. Untracked
     # files are a different matter: `git rm` leaves them, and this script does NOT
@@ -194,6 +302,9 @@ if [[ "$RETAIN" != "true" ]]; then
     fi
     echo "---"
     echo "close-project-folder: $SLUG removed (staged). Commit it with the roll-up edits."
+    if [[ -n "$DLV" && -n "$SHA" ]]; then
+      echo "Name $CLOSED_MD in the commit's paths — the entry must land in THIS commit."
+    fi
   else
     echo "---"
     echo "close-project-folder: report only — nothing changed. Re-run with --apply."

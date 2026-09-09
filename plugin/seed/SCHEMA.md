@@ -889,10 +889,31 @@ in this order:
    command, `scripts/close-project-folder.sh <slug> --apply`, so the deletion has a
    fixed, tested scope instead of being improvised from prose.
 
-   **Without `retain:`** — `git rm -r projects/<slug>/`, exactly as before. **Git
-   history + the KB are the record — there is no `archive/`.** The full
-   task→PR→Finding trail stays recoverable via `git`. Reversible with `git revert`,
-   but treated as final.
+   **Without `retain:`** — `git rm -r projects/<slug>/`, and the same command appends
+   the project's entry to **`projects/CLOSED.md`**, in that same commit. **Git history +
+   the KB are the record — there is still no `archive/`; what replaces it is an INDEX,
+   not a copy.** The full task→PR→Finding trail stays recoverable via `git`. Reversible
+   with `git revert`, but treated as final.
+
+   **`projects/CLOSED.md` is where a closed project's deliverables are found**, and it
+   is TRACKED (unlike `index.md` and `SNAPSHOT.json`, which are derived and gitignored):
+
+   * One `## <slug>` stanza per closed project **that had deliverables** — its close
+     date, the `pinned:` sha, a one-line outcome, and one `- deliverable:` row per
+     declared artifact that existed on disk. A project that shipped nothing adds no
+     stanza: this is an index of things to come back to, and `log.md` already records
+     every close.
+   * **Every link is a GitHub permalink at a commit sha, never a branch path.** The sha
+     is the parent of the closing commit — the last commit that still carried the files
+     — because the closing commit is the one that removed them, so a `blob/main` link
+     404s at exactly the moment it is needed.
+   * Each row carries a **one-paste restore command** beside its link, because GitHub
+     serves an HTML deliverable as source and `raw.githubusercontent.com` 404s
+     unauthenticated on a private repo.
+   * **It is written by the closeout, never by hand** — a hand-maintained list rots, and
+     that decay is the failure it exists to end. `write-snapshot.sh` parses it into the
+     snapshot's top-level `closed` array and the board renders it as a collapsed
+     **Closed · N** section, so a closed project stays findable with no folder on disk.
 
    **With `retain: true`** the folder stays, and is *frozen* first:
 

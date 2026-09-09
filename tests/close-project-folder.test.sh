@@ -393,6 +393,98 @@ echo "== the closeout PROSE routes to this script, and invents no status value =
 # a harness — but WHICH MECHANISM the prose names can be, and that is the part that
 # rots. These assertions exist so a future edit cannot quietly put a hand-rolled
 # `git rm -r` back beside a tested script, or grow the status enum a value.
+# ---------------------------------------------------------------- projects/CLOSED.md
+# THE SHA IS ASSERTED AGAINST A REAL REMOVAL, NOT A STRING. The fixture is closed for
+# real — the script runs, then the closing commit is made — and the recorded sha is then
+# compared against `git rev-parse HEAD^` of that commit. A hand-written expectation would
+# pass while the script pinned the wrong end of the parent edge, which is the ONE defect
+# that matters here: a branch-path or child-commit link 404s exactly when it is needed.
+echo "== the closed index: projects/CLOSED.md =="
+ROOT="$TMP/closed"
+new_instance "$ROOT" adoption ""
+( cd "$ROOT" && git remote add origin git@github.com:fixture-org/fixture-bundle.git )
+run "$ROOT" adoption --apply
+assert "the closeout exits 0"                         "$(eq "$RC" 0)"
+assert "…and writes projects/CLOSED.md"               "$(exists "$ROOT/projects/CLOSED.md")"
+assert "…and STAGES it, so it lands in the closing commit" \
+  "$(yes_if sh -c 'cd "$1" && git diff --cached --name-only | grep -qx "projects/CLOSED.md"' _ "$ROOT")"
+assert "…under a \`## <slug>\` heading"               "$(yes_if grep -qx '## adoption' "$ROOT/projects/CLOSED.md")"
+assert "…with an ISO close date"                      "$(yes_if grep -qE '^- closed: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "$ROOT/projects/CLOSED.md")"
+assert "…and the project's one-line outcome"          "$(yes_if grep -q '^- outcome: finished research, kept as a reference surface$' "$ROOT/projects/CLOSED.md")"
+
+# THE PARENT EDGE, on the real commit. This is the assertion the whole file is for.
+( cd "$ROOT" && git_c commit -qm "chore: close adoption" >/dev/null 2>&1 )
+CLOSING="$( cd "$ROOT" && git rev-parse HEAD )"
+PARENT="$( cd "$ROOT" && git rev-parse "$CLOSING^" )"
+PINNED="$(sed -n 's/^- pinned: //p' "$ROOT/projects/CLOSED.md")"
+assert "the pinned sha is the PARENT of the closing commit" "$(eq "$PINNED" "$PARENT")"
+assert "…and is NOT the closing commit itself"              "$(no_if test "$PINNED" = "$CLOSING")"
+assert "…the folder really is gone at the closing commit"   "$(no_if sh -c \
+  'cd "$1" && git cat-file -e "HEAD:projects/adoption/project.md"' _ "$ROOT")"
+assert "…and really is there at the pinned one"             "$(yes_if sh -c \
+  'cd "$1" && git cat-file -e "$2:projects/adoption/deliverables/deck.html"' _ "$ROOT" "$PINNED")"
+
+# One row per DECLARED deliverable that existed. `never-written.pdf` was declared and
+# never written; `handout.pdf` exists and was never declared. Neither is a deliverable.
+assert "a row per declared deliverable that exists (3)" \
+  "$(eq "$(grep -c '^- deliverable: ' "$ROOT/projects/CLOSED.md")" 3)"
+assert "…a declared-but-missing artifact gets no row"  "$(hasnt 'never-written.pdf' "$(cat "$ROOT/projects/CLOSED.md")")"
+assert "…an undeclared file on disk gets no row"       "$(hasnt 'handout.pdf' "$(cat "$ROOT/projects/CLOSED.md")")"
+assert "the link is a permalink at the pinned sha"     "$(yes_if grep -qF \
+  "https://github.com/fixture-org/fixture-bundle/blob/$PARENT/projects/adoption/deliverables/deck.html" "$ROOT/projects/CLOSED.md")"
+assert "…and never a branch path"                      "$(hasnt '/blob/main/' "$(cat "$ROOT/projects/CLOSED.md")")"
+assert "…the restore command sits beside it"           "$(yes_if grep -qF \
+  "  - restore: \`gh api repos/fixture-org/fixture-bundle/contents/projects/adoption/deliverables/deck.html?ref=$PARENT --jq .content | base64 -d > /tmp/deck.html\`" "$ROOT/projects/CLOSED.md")"
+assert "…and the file says not to hand-edit it"        "$(has 'Do not hand-edit' "$(cat "$ROOT/projects/CLOSED.md")")"
+
+# A project that shipped nothing: log.md already records the close, so an index of
+# things to come back to gains nothing from a row.
+new_instance "$ROOT" bare ""
+rm -rf "$ROOT/projects/bare/tasks" "$ROOT/projects/bare/deliverables"
+mkdir -p "$ROOT/projects/bare/tasks"
+( cd "$ROOT" && git_c add -A . >/dev/null 2>&1 && git_c commit -qm refix >/dev/null 2>&1 )
+run "$ROOT" bare --apply
+assert "a project with NO deliverables still closes"   "$(eq "$RC" 0)"
+assert "…and writes no CLOSED.md at all"               "$(gone "$ROOT/projects/CLOSED.md")"
+assert "…and says so"                                  "$(has 'no entry' "$OUT")"
+
+# The report-only default is a dry run: it must say what it WOULD record and write nothing.
+new_instance "$ROOT" adoption ""
+run "$ROOT" adoption
+assert "report-only names the entry it would add"      "$(has 'CLOSED.md += ## adoption' "$OUT")"
+assert "…and writes nothing"                           "$(gone "$ROOT/projects/CLOSED.md")"
+
+# Re-running against an index that already names the project must not double it.
+new_instance "$ROOT" adoption ""
+run "$ROOT" adoption --apply
+n1="$(grep -c '^## adoption$' "$ROOT/projects/CLOSED.md")"
+( cd "$ROOT" && git_c commit -qm close >/dev/null 2>&1 )
+mkdir -p "$ROOT/projects/adoption/tasks" "$ROOT/projects/adoption/deliverables"
+echo deck > "$ROOT/projects/adoption/deliverables/deck.md"
+cat > "$ROOT/projects/adoption/project.md" <<'PRJ'
+---
+type: Project
+title: AI adoption research
+description: finished research, kept as a reference surface
+kind: research
+status: done
+timestamp: 2026-08-26T00:00:00Z
+---
+PRJ
+cat > "$ROOT/projects/adoption/tasks/task-001.md" <<'TSK'
+---
+type: Task
+title: Build the mandate deck
+status: done
+artifacts: [ /projects/adoption/deliverables/deck.md ]
+---
+TSK
+( cd "$ROOT" && git_c add -A . >/dev/null 2>&1 && git_c commit -qm resurrect >/dev/null 2>&1 )
+run "$ROOT" adoption --apply
+assert "a second close of the same slug appends nothing" \
+  "$(eq "$(grep -c '^## adoption$' "$ROOT/projects/CLOSED.md")" "$n1")"
+assert "…and says why"                                 "$(has 'not appending a second entry' "$OUT")"
+
 CMD="$TPL/plugin/skills/close-project/SKILL.md"
 PM="$TPL/plugin/agents/project-manager.md"
 SCH="$TPL/plugin/seed/SCHEMA.md"
@@ -403,6 +495,13 @@ assert "…and it is in the command's allowed-tools"      "$(yes_if grep -q 'Bas
 assert "the PM's closeout calls the same script"        "$(yes_if grep -q 'close-project-folder.sh <slug>' "$PM")"
 assert "the PM skips done projects at the frontmatter"  "$(yes_if grep -q 'skip every .status: done. project right' "$PM")"
 assert "SCHEMA.md documents retain:"                    "$(yes_if grep -q '^retain: true ' "$SCH")"
+assert "…and names CLOSED.md as where deliverables are found" \
+  "$(yes_if grep -q 'CLOSED.md.* is where a closed project.s deliverables are found' "$SCH")"
+assert "…and says CLOSED.md is TRACKED"                 "$(yes_if grep -q 'is TRACKED (unlike' "$SCH")"
+# The `no archive/` line stands, but no longer stands alone contradicting the index.
+assert "…and the 'no archive/' line says what replaces it" \
+  "$(yes_if grep -q 'there is still no .archive/.; what replaces it is an INDEX' "$SCH")"
+assert "…and retain: is NOT removed by this change"     "$(yes_if grep -qF 'With `retain: true`** the folder stays' "$SCH")"
 assert "…and deliverable_paths: as closeout-written"    "$(yes_if grep -q '^deliverable_paths: \[ /projects/' "$SCH")"
 assert "…and that non-terminal tasks become cancelled"  "$(yes_if grep -q 'not terminal at closeout becomes .cancelled' "$SCH")"
 # The enum itself, at its enforcement point. A "closed-unfinished" sibling status would
