@@ -20,6 +20,10 @@ repo's history, while a research project's output *is* the folder. Everything el
 about closeout is identical, and the project still ends `status: done`. See
 `SCHEMA.md` → "Project & objective completion" for the full contract.
 
+**This file is a LAUNCHER and a BRIEF, and the split is the point.** You establish two
+preconditions and dispatch; one background agent does steps 1–7 in a context that is
+thrown away. Two decisions never leave this thread, and they are named below.
+
 > **Generic plugin file** (ships inside the `ai-bridge` plugin, never copied into a bundle). Reads the
 > bundle's own `SCHEMA.md` (see "Project & objective completion") and
 > `instance.config.json` — never hardcode org/repo/path literals here.
@@ -30,10 +34,108 @@ about closeout is identical, and the project still ends `status: done`. See
 - `--force` — proceed even if some tasks are **not** terminal (records which). Use
   sparingly — normally every task should be `done`/`cancelled` first.
 
-If no slug is given, list projects whose tasks are all terminal (the close
-candidates) and ask which to close.
+Pass both flags on to the agent verbatim; neither changes what you may look at.
 
-## Steps
+## Preconditions
+
+**Two checks. What the launcher may look at is an ALLOWLIST of two** — see "The launcher
+reads nothing else"; anything not on it belongs to the closeout agent. Both checks below
+are on it.
+
+1. **A slug.** Take it from `$ARGUMENTS`. If none was given, `ls projects/` for the
+   **directory names**, offer them, and ask which to close — never open one to judge
+   whether it is closeable. That judgement is the agent's step 1, which refuses a project
+   whose tasks are still live.
+2. **The folder exists.** Confirm `projects/<slug>/` is there; if it is not, stop and
+   report. Nothing inside it is read here.
+
+### The launcher reads nothing else — an ALLOWLIST of two, and everything else is the closeout agent
+
+**Everything the launcher may look at — this bundle, git, the GitHub API, the network,
+the machine — is exactly these operations:**
+
+1. **The slug** — `$ARGUMENTS`, or `ls projects/` for the directory names when it is
+   absent: precondition 1 above, and nothing wider.
+2. **The folder probe** — that `projects/<slug>/` exists, which is precondition 2 and
+   the whole of it.
+
+**Anything that is not one of those is the CLOSEOUT AGENT or a SUBAGENT.** That is the
+whole rule, and it is a **category**: a launcher may establish that the thing it is about
+to dispatch on **exists**, and nothing about what it *is*. A directory name is existence;
+anything a document, the history or the host would have to answer is state, and state is
+the agent's. So there is no list to keep current and nothing to add to when the world
+grows a new kind of source. **And here is the disposal, so you are told what to do and
+not only what to stop:** dispatch the agent and let it read — the brief below is every
+one of those reads, in a context that is discarded when it ends — or, when a question is
+genuinely not the closeout's, hand it to a **background subagent** and let that context
+pay. Never here, and never before the agent or instead of it: not the whole thing, not a
+summary, not "just to orient".
+
+**A further entry is the regression, not an exception** — the list closes over a
+**category** and not over a count of nouns. **No other reader may be added by analogy.**
+An enumeration of forbidden sources is the shape that already failed: it said it was
+closed, it was, and it rotted the day the expensive reads were a category it had never
+named.
+
+**One contract, two launchers.** `/ai-bridge:dispatch` states the same rule under the
+same heading (`skills/dispatch/SKILL.md` → "The launcher reads nothing else"). They are
+one contract in two places; change the shape here and change it there, or a reader learns
+two different rules from two commands that do the same thing. Note what the rule does
+**not** rest on: `allowed-tools` is documentation, not enforcement — this launcher's
+grants are the closeout's, unchanged by the split, and what closes it is the allowlist
+above plus the harness that counts it.
+
+Why: every byte read here lands in the **main session's context** — the one this human is
+working in for the rest of the day — while the agent's is disposable.
+
+### What the split buys, measured rather than claimed
+
+**On this bundle, 2026-09-08:** the `ai-bridge-2x` closeout took
+roughly **a dozen main-thread tool calls** before the folder step, and
+`prune-worktrees.sh` alone returned
+**29 `REMOVABLE` lines** the main session had no use for. That is what moves into a
+context that is thrown away.
+
+## Dispatch the closeout — one background agent for steps 1–7
+
+Spawn **one fresh `ai-bridge:project-manager`**
+(namespaced — a bare agent name does not resolve)
+**in the background**, briefed with "The closeout agent's brief" below verbatim,
+the slug, and any `--dry-run`/`--force` flag. Resolve its model with
+`${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager`. **Never wake a completed
+closeout agent with a message** — dispatch a fresh one.
+
+**A closeout is NOT a tick, and the brief must say so.** It runs once, it is not
+idempotent, and it takes **no tick lock** — the tick's step 0.5 ledger/lock dance is
+skipped, because a closeout that adopted the tick's re-entry logic would either deadlock
+behind a live tick or re-run a removal that already happened. For the same reason, do not
+start a closeout while a tick is in flight: both write `log.md`, the KB and task
+documents in one working tree. Wait for the loop's notification, or stop the loop first.
+
+**Two decisions never leave this thread.** They are the agent's escalation path and never
+its call:
+
+- **Step 4** — *all of this objective's projects are terminal — set it `achieved`?*
+- **Step 6** — *the source task is `cancelled`, not `done` — is the dependent work still
+  viable?*
+
+**Both are settled BEFORE the agent writes anything.** The brief's step 0 tests for them
+first and, if either fires with no answer in the brief, the agent reports and stops
+having written nothing. Answer here, then dispatch a **fresh** agent carrying the answers
+— an escalation from the middle of a closeout would strand a half-written tree that the
+next tick reads as real work.
+
+**Authority — identical whichever agent runs it.** The closeout agent **never promotes a
+task `draft → ready` and never merges a pull request** (`SCHEMA.md` → "Two human
+authorities"); running in the background changes neither. It also **never commits as the
+human**: the closing commit is authored `project-manager`, as the PM's own closeout step
+is, while the log entry still names the human who decided.
+
+## The closeout agent's brief — steps 1 to 7
+
+> **You are the closeout agent.** These seven steps are yours; the launcher that spawned
+> you did the two checks in "The launcher reads nothing else" above and nothing else, so
+> read what you need from disk rather than from your brief.
 
 > **`--dry-run` short-circuits every mutation.** Do step 1 (read-only checks),
 > then for steps 2–7 *report exactly what you would do* — do **not** dispatch the
@@ -43,6 +145,13 @@ candidates) and ask which to close.
 > `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug>` **without `--apply`** is the one thing you
 > may run: it is report-only by design and prints the exact removal or prune it would
 > perform, which is a better dry-run report than a description of one.
+
+0. **Both escalations, before any write.** Read `project.md` and every `tasks/*.md`, the
+   project's objective, and the inbound refs step 6 lists. Then answer two questions:
+   would step 4 ask about the objective, and does step 6 find a ref whose source task is
+   not `done`? **If either fires and your brief carries no answer to it, write nothing —
+   report the question and stop.** The human answers in the main thread and dispatches a
+   fresh closeout carrying the answer. Neither is ever yours to decide.
 
 1. **Resolve & check.** Confirm `projects/<slug>/` exists (else stop and report).
    Read its `project.md` — including whether it carries `retain: true`, which decides
@@ -63,6 +172,10 @@ candidates) and ask which to close.
    **research** project, decide with the user which `deliverables` graduate into
    `knowledge/` and have the cataloguer fold them in. Skip only if the project produced
    nothing durable (trivial/superseded) — say so.
+
+   **It nests under YOU, not under the main session** — you dispatch it, you read its
+   report, and the consolidation pass plus every read it makes stays in a context that is
+   thrown away with yours.
 
    **Then supersede what this project made untrue** — brief the cataloguer to run it, per
    `SCHEMA.md` → "Superseding a Finding": every `Finding` the project contradicted gets
@@ -99,7 +212,8 @@ candidates) and ask which to close.
    (KB links), and a one-line outcome. **Closing is a human decision and the entry is the
    only place it is ever written down**, so it names the human the same way a promotion
    and a preview approval do (`SCHEMA.md` → "Decisions name the human"); `<unknown>` goes
-   in as-is rather than being left out. (The closing commit SHA is added by step 7's
+   in as-is rather than being left out. The login is the human's, never yours — you are
+   recording their decision, not making one. (The closing commit SHA is added by step 7's
    commit — reference it as "removed in the closing commit".)
 
    **For a retained project, say so and name what was pruned** — step 7's command
@@ -117,16 +231,19 @@ candidates) and ask which to close.
    projects, so nothing will ever regenerate it, and an uncommitted front door exists
    on exactly one machine. Update its objective's
    "Projects serving this objective" list to mark it delivered; if **all** of that
-   objective's projects are now terminal, **ask** whether to set the objective
-   `status: achieved` (don't flip it silently).
+   objective's projects are now terminal, **the objective question is the human's** — it
+   is step 0's first escalation, answered in the main thread before you started. Set
+   `status: achieved` only where that answer says so; never flip it silently, and never
+   decide it yourself.
 
 5. **Report leftover worktrees** — **only when no role agents are in flight.** Run
    `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh`; it classifies and prints `git worktree remove`
    commands but never deletes. Include its `REMOVABLE`/`RECLAIMABLE` lines for this
    project's worktrees in the closing summary so the human can reclaim them; don't
-   run the commands yourself. If agents are still working (a `--force` closeout can
-   reach this step while they are), **skip this step** and say so — a report that
-   races a live dispatch recommends deleting it.
+   run the commands yourself. **Only this project's lines** — the rest is the reason this
+   step is here and not in the main thread. If agents are still working (a `--force`
+   closeout can reach this step while they are), **skip this step** and say so — a report
+   that races a live dispatch recommends deleting it.
 
 6. **Resolve inbound references — before the folder is removed.** **Skip this step
    entirely for a `retain: true` project**: nothing is removed, so nothing dangles, and
@@ -157,10 +274,11 @@ candidates) and ask which to close.
    * **Source task is `done`** → remove the entry from `depends_on:` and record it in
      the dependent task's `# Notes` ("depended on `<slug>/task-007`, completed and
      closed 2026-08-21"). History belongs in prose, where it cannot dangle.
-   * **Source task is `cancelled`, or anything other than `done`** → **stop and ask
-     the human.** The dependent work may no longer be viable. Either set the dependent
-     task `blocked` with the reason in `# Notes`, or record an explicit replacement
-     dependency. Never drop it silently.
+   * **Source task is `cancelled`, or anything other than `done`** → **the human's, and
+     you already asked.** The dependent work may no longer be viable, so this is step 0's
+     second escalation: act on the answer your brief carries — set the dependent task
+     `blocked` with the reason in `# Notes`, or record the explicit replacement
+     dependency it names. Never drop it silently, and never decide it yourself.
 
 7. **Remove — or retain — then validate, then commit.** Unless `--dry-run`, run
 
@@ -175,7 +293,9 @@ candidates) and ask which to close.
    `retain: true` it stamps `deliverable_paths:` into `project.md` (each task's
    `artifacts:`, verified on disk) and prunes only `tmp/`/`temp/`, `.DS_Store` and
    **non-markdown** files under `sources/` — never `deliverables/`, never `tasks/`,
-   never `sources/**/*.md`. Under `--dry-run`, run it **without** `--apply`: it reports the
+   never `sources/**/*.md`. It also writes the project's stanza into `projects/CLOSED.md`,
+   which is how a closed project's deliverables stay findable. Under `--dry-run`, run it
+   **without** `--apply`: it reports the
    exact removal or prune and changes nothing. Keep its `log.md fragment` line for
    step 3's entry.
 
@@ -191,13 +311,22 @@ candidates) and ask which to close.
      user to re-stamp: an index the tick will never regenerate and git will never
      carry exists on exactly one machine.
 
-   Commit via `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human "chore: close <slug> project" -- <path>...`.
+   Commit via `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "chore: close <slug> project" -- <path>...`,
+   naming every path — including `projects/<slug>` and `projects/CLOSED.md`. **Author it
+   as `project-manager`, never as `human`**: `human` is the one role every guard trusts
+   (it skips the promotion-authority check and the explicit-path requirement), and an
+   agent must not commit under it. Step 3's entry still names the human who decided.
    **Run `${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh` after the folder step and before committing** —
    validating beforehand cannot see a reference that only dangles once the folder is
    gone, which is the whole failure class step 6 exists to prevent. Zero errors is the
    gate. Print the closing commit SHA and the `log.md` entry. For a removal, remind the
    user the full record stays recoverable via `git log -- projects/<slug>/`; for a
    retention, that the folder is deliberately partial and the log entry says how.
+
+**Report back** — one tight summary: what the cataloguer folded in, the `log.md` entry,
+the closing commit SHA, this project's worktree lines, and anything you skipped. You never
+promoted a task and you never merged a pull request; say so if either was ever in
+question.
 
 ## Notes
 - **No archive.** Removal is deliberate, and `git` + the KB already hold the record.
