@@ -163,7 +163,7 @@ ok "…dated"                                       "$(in_launcher '2026-09-08')
 ok "it dispatches one fresh agent"     "$(in_launcher 'one fresh `ai-bridge:project-manager`')" yes
 ok "…namespaced, because a bare name does not resolve" \
   "$(in_launcher 'a bare agent name does not resolve')" yes
-ok "…in the background"                "$(in_launcher '**in the background**')" yes
+ok "…in the background"                "$(in_launcher 'in the background')" yes
 ok "…for steps 1-7"                    "$(in_launcher 'one background agent for steps 1–7')" yes
 ok "…never resumed"                    "$(in_launcher 'Never wake a completed')" yes
 ok "…on its resolved model"            "$(in_launcher 'scripts/resolve-model.sh project-manager')" yes

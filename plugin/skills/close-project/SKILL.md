@@ -90,18 +90,16 @@ working in for the rest of the day — while the agent's is disposable.
 
 ### What the split buys, measured rather than claimed
 
-**On this bundle, 2026-09-08:** the `ai-bridge-2x` closeout took
-roughly **a dozen main-thread tool calls** before the folder step, and
-`prune-worktrees.sh` alone returned
-**29 `REMOVABLE` lines** the main session had no use for. That is what moves into a
-context that is thrown away.
+**On this bundle, 2026-09-08:** the `ai-bridge-2x` closeout took roughly
+**a dozen main-thread tool calls** before the folder step, and `prune-worktrees.sh`
+alone returned **29 `REMOVABLE` lines** the main session had no use for. That is what
+moves into a context that is thrown away.
 
 ## Dispatch the closeout — one background agent for steps 1–7
 
-Spawn **one fresh `ai-bridge:project-manager`**
-(namespaced — a bare agent name does not resolve)
-**in the background**, briefed with "The closeout agent's brief" below verbatim,
-the slug, and any `--dry-run`/`--force` flag. Resolve its model with
+Spawn **one fresh `ai-bridge:project-manager`**, in the background, briefed with "The
+closeout agent's brief" below verbatim, the slug, and any `--dry-run`/`--force` flag.
+Namespace it — a bare agent name does not resolve. Resolve its model with
 `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager`. **Never wake a completed
 closeout agent with a message** — dispatch a fresh one.
 
