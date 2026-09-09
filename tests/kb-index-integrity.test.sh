@@ -264,6 +264,20 @@ add_source "$D" pipe-in-title '/..'
 ok "a /.. token: --check still only warns"  "$(check_rc "$D")" 0
 ok "…but it never rides the parent's existence" "$(check_out | grep -c 'source: escapes the bundle root: /\.\.')" 1
 
+D="$(plant source-symlink)"
+mkdir -p "$TMP/outside"; : > "$TMP/outside/leaked.md"
+# The escape a text check cannot see: from the bundle's side the token spells no `..`,
+# and the symlink still lands outside. `/inside` is the other half — not all links leave.
+ln -s ../outside "$D/escaped"
+ln -s knowledge/vocab.md "$D/inside"
+add_source "$D" pipe-in-title '/escaped, /escaped/leaked.md'
+add_source "$D" new-rule '/inside'
+ok "a symlink out of the bundle: only warns" "$(check_rc "$D")" 0
+ok "…the symlink itself is refused"          "$(check_out | grep -c 'escapes the bundle root: /escaped$')" 1
+ok "…and so is a path through it"            "$(check_out | grep -c 'escapes the bundle root: /escaped/leaked.md$')" 1
+ok "…neither read as resolving to nothing"   "$(check_out | grep -c 'resolves to nothing')" 0
+ok "a symlink that stays inside is silent"   "$(check_out | grep -c '/inside')" 0
+
 D="$(plant source-live)"
 add_source "$D" new-rule '/knowledge/vocab.md'
 ok "a path that resolves today is silent"  "$(check_rc "$D")" 0

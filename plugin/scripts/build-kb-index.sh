@@ -276,8 +276,24 @@ links_in() { # <file> -> "line<TAB>target", one per markdown inline link
 # bundle path and must resolve. A URL carries no such token, so it is not checked.
 # WARN, not ERROR: a bundle measured at 322 dangling of 514 would have its `--check`
 # red until every one was rewritten by hand (SCHEMA.md, "A `source:` is a durable URL").
+
+# macOS ships no `readlink -f`, so the leaf's link chain is walked by hand.
+physical() { # <path> -> its target with `..` and every symlink resolved, or nothing
+  local d b l n=0
+  d=$(dirname "$1"); b=$(basename "$1")
+  while [ "$n" -lt 32 ]; do
+    d=$(cd "$d" 2>/dev/null && pwd -P) || return 1
+    [ -L "$d/$b" ] || break
+    l=$(readlink "$d/$b")
+    case "$l" in /*) : ;; *) l="$d/$l" ;; esac
+    d=$(dirname "$l"); b=$(basename "$l"); n=$((n+1))
+  done
+  printf '%s/%s\n' "${d%/}" "$b"
+}
+
 check_source() {
-  local kind f fmv val tok
+  local kind f fmv val tok root
+  root=$(pwd -P)
   for kind in services findings runbooks teams references; do
     while IFS= read -r f; do
       [ -n "$f" ] || continue
@@ -292,7 +308,16 @@ check_source() {
         case "$tok/" in
           */../*) warn "$f" "source: escapes the bundle root: $tok"; continue ;;
         esac
-        [ -e ".$tok" ] || warn "$f" "source: resolves to nothing: $tok — SCHEMA.md wants the task's PR URL, or a blob/<sha> permalink when there is no PR"
+        if [ ! -e ".$tok" ]; then
+          warn "$f" "source: resolves to nothing: $tok — SCHEMA.md wants the task's PR URL, or a blob/<sha> permalink when there is no PR"
+          continue
+        fi
+        # A committed symlink spells no `..` and still leaves the bundle, so
+        # containment is decided on the physical target, not on the text.
+        case "$(physical ".$tok")" in
+          "$root"|"$root"/*) : ;;
+          *) warn "$f" "source: escapes the bundle root: $tok" ;;
+        esac
       done <<< "$(printf '%s\n' "$val" | tr ',' ' ' | tr -s '[:space:]' '\n')"
     done <<< "$(docs_in "$kind")"
   done
