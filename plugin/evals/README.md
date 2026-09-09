@@ -54,6 +54,10 @@ the observable action** — which agent was dispatched, what status was written,
 conclusion was asserted — and none matches a phrase: a grader that greps for wording passes
 the next paraphrase, so `regex` over a message is refused here and
 `tests/plugin-eval.test.sh` asserts that for each of the four.
+**Two of them name the prose they read.** `unverified-state-is-unknown` is the behavioural
+reader for `seed/CONVENTIONS.md` → "A read that could not have established the answer
+returns UNKNOWN", whose four measured corollaries include this case's empty digest; and
+`dormant-side-effect-is-not-a-decision` reads that rule's narrow case in `seed/CLAUDE.md`.
 
 **The control arm is not decoration.** Three cases asserting "the model never invoked
 this skill" are all satisfied by a harness in which no skill is reachable at all:

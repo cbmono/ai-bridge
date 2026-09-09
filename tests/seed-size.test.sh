@@ -54,7 +54,12 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # Code defect — request all the open browsers and let the human pick. Both govern what the
 # MAIN THREAD does before it dispatches anything, so neither can live one document away.
 # Measured, not rounded; flagged in the PR body.
-CEILING=14622
+# 14622 -> 14737 (launcher-verification-contract/task-006). +115 bytes: the rule promoted
+# above now names the general rule it is the narrow case of, in CONVENTIONS.md. The link is
+# in the seed because the main thread reads this file and not that one, and a rule with no
+# route to its general form is re-derived narrowly. Measured, not rounded; flagged in the PR
+# body.
+CEILING=14737
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

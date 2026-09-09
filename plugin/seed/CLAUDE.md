@@ -112,7 +112,8 @@ through `/ai-bridge:dispatch`.
 **Never manufacture a decision out of a side effect that isn't live yet.** Establish
 the condition exists **today** before you raise it. A deferred one-line mitigation goes
 on the task's `# Notes` — never into a three-option architecture question — and record
-"do NOT pre-build X", so a later session doesn't resurrect it.
+"do NOT pre-build X", so a later session doesn't resurrect it. It is the narrow case of
+`CONVENTIONS.md` → "A read that could not have established the answer returns UNKNOWN".
 
 **Offer the loop when there is work to dispatch — once, and only then.** The
 SessionStart banner prints `Ready to dispatch   N` only when at least one task is
