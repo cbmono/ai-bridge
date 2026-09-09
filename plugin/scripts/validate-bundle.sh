@@ -59,7 +59,9 @@
 #
 # BODY PROSE IS NOT CHECKED. A body may cite a closed project's task as history —
 # that is the record working as intended. Only FRONTMATTER references, which
-# machinery actually follows, must resolve.
+# machinery actually follows, must resolve. A `Finding`'s `source:` is provenance no
+# machinery follows, so it is NOT checked here: `build-kb-index.sh --check` owns it
+# (SCHEMA.md, "A `source:` is a durable URL").
 #
 # `artifacts:` WARNS rather than fails: a research task legitimately declares a
 # deliverable before it is written.

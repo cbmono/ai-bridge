@@ -234,6 +234,51 @@ ok "the clean fixture breaks no link"      "$(check_out | grep -c 'link resolves
 ok "…and still clears"                     "$CLEAN_RC" 0
 
 echo
+echo "== source: is a durable URL — a dangling path token is an ERROR, not a warning =="
+# One document carrying every token shape, so "handled explicitly" cannot be satisfied by
+# a value the tokeniser silently declines to look at.
+add_source() { # <dir> <slug> <value> — insert a source: line above status:
+  awk -v v="$3" '/^status:/ && !done { print "source: " v; done=1 } { print }' \
+    "$1/knowledge/findings/$2.md" > "$1/k" && mv "$1/k" "$1/knowledge/findings/$2.md"
+}
+
+D="$(plant source-url)"
+add_source "$D" new-rule 'https://github.com/cbmono/ai-bridge/pull/192'
+ok "a PR URL carries no path token"        "$(check_rc "$D")" 0
+ok "…so nothing is reported about it"      "$(check_out | grep -c 'source:')" 0
+
+D="$(plant source-dangling)"
+add_source "$D" pipe-in-title '/projects/closed/tasks/task-009.md'
+ok "a dangling /projects path: RED"        "$(check_rc "$D")" 1
+ok "…named, with the target"               "$(check_out | grep -c 'source: resolves to nothing: /projects/closed/tasks/task-009.md')" 1
+ok "…and it says what to write instead"    "$(check_out | grep -c 'blob/<sha> permalink')" 1
+
+D="$(plant source-live)"
+add_source "$D" new-rule '/knowledge/vocab.md'
+ok "a path that resolves today is silent"  "$(check_rc "$D")" 0
+
+D="$(plant source-prose)"
+add_source "$D" new-rule '/knowledge/vocab.md — TICK 2026-08-31T18:26:13Z (ai-bridge#88)'
+ok "PROSE around a live path still clears" "$(check_rc "$D")" 0
+add_source "$D" pipe-in-title '/objectives/gone.md, /knowledge/vocab.md'
+ok "a comma list checks EVERY token"       "$(check_rc "$D")" 1
+ok "…reporting the dead one only"          "$(check_out | grep -c 'source: resolves to nothing')" 1
+ok "…and it is the objectives path"        "$(check_out | grep -c 'nothing: /objectives/gone.md')" 1
+
+ok "the clean fixture carries no source:"  "$(check_rc "$CLEAN")" 0
+
+echo
+echo "== the policy is in the seed, so the NEXT document is written correctly =="
+ok "SCHEMA names the field's own section"  "$(has "$SCHEMA" '#### `source:` is a durable URL, not a path into `projects/`')" yes
+ok "…the PR URL first"                     "$(has "$SCHEMA" "the task's PR URL")" yes
+ok "…the commit-pinned fallback"           "$(has "$SCHEMA" 'a commit-pinned permalink**, when there is no PR')" yes
+ok "…the tokenisation rule the count uses" "$(has "$SCHEMA" 'every token beginning with `/` must resolve')" yes
+ok "…the severity, and that it is ERROR"   "$(has "$SCHEMA" 'A dangling token is an ERROR')" yes
+ok "…and why body links stay at WARN"      "$(has "$SCHEMA" 'different population')" yes
+ok "…the old bare-path example is gone"    "$(has "$SCHEMA" 'e.g. /projects/.../tasks/<id>.md or a PR URL')" no
+ok "validate-bundle points at the owner"   "$(has "$VALIDATE" 'build-kb-index.sh --check` owns it')" yes
+
+echo
 echo "== a superseded Finding is never citable =="
 printf 'The rule applies [[new-rule]] and [[old-rule]].\nOnly history here [[old-rule]].\n' > "$TMP/cites.md"
 CITE_RC=$( cd "$CLEAN" && bash "$CITE" --text-file "$TMP/cites.md" --brief new-rule,old-rule >"$TMP/cite.out" 2>&1; echo $? )
