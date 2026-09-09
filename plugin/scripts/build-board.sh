@@ -1523,7 +1523,10 @@ def render_table():
         g = s.get("group", "?")
         # A closed project has no folder left, so the snapshot's `closed` array is the
         # only thing that can reach the page — no filesystem read, no token spend.
-        closed_all += [todict(c) for c in tolist(s.get("closed"))]
+        # `group` is per-SNAPSHOT and the slug is only unique within one instance, so it
+        # is stamped onto each record here — two instances closing `redesign` are one
+        # ambiguous pair of rows without it. Ours wins over any key of the same name.
+        closed_all += [dict(todict(c), group=g) for c in tolist(s.get("closed"))]
         me, default_owner = who_and_default(d)
         others += others_for(d, me, default_owner)
         for p in tolist(s.get("projects")):
@@ -2023,9 +2026,15 @@ def render_table():
                 else:
                     cell = ('<span class="dim">%s (link withheld: not http/https)</span>'
                             % e(name))
+                # The instance's group rides BESIDE the slug: a slug is unique only
+                # within one instance, so two boards' `redesign` rows are otherwise the
+                # same row twice. Same e() as every other string on the page.
+                who = e(c.get("slug"))
+                if c.get("group"):
+                    who += ' <span class="dim">· %s</span>' % e(c.get("group"))
                 o.append('<tr><td>%s%s</td><td class="dim">%s</td>'
                          '<td class="dim">%s</td><td>%s</td></tr>'
-                         % (e(c.get("slug")) if i == 0 else "",
+                         % (who if i == 0 else "",
                             ('<br><span class="dim">%s</span>' % e(c.get("outcome")))
                             if i == 0 and c.get("outcome") else "",
                             e(c.get("closed")) if i == 0 else "",

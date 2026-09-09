@@ -1017,13 +1017,28 @@ src = open('$CLH', encoding='utf-8').read()
 tag = src[:src.index('Closed · 1')].rsplit('<details', 1)[1].split('>', 1)[0]
 sys.exit(0 if ' open' not in tag else 1)")"
 assert "…it opens to the per-deliverable link"           "$(fhas 'blob/8fefa76/projects/ai-bridge-2x/project.md' "$CLH")"
-assert "…the pinned sha is shown, short"                 "$(fhas '8fefa76' "$CLH")"
+# THE CELL, not the bare sha: `8fefa76` is in the permalink one column over, so a
+# renderer that dropped the Pinned column entirely still passed the old assertion.
+assert "…the pinned sha is shown, short"                 "$(fhas '<td class="dim">8fefa76</td>' "$CLH")"
+# The slug is unique only inside one instance, so the row names the group it came from.
+assert "…and the instance group beside the slug"         "$(fhas 'ai-bridge-2x <span class="dim">· closed</span>' "$CLH")"
 assert "…and the one-line outcome"                       "$(fhas 'ten merged PRs' "$CLH")"
 assert "a javascript: deliverable URL is NOT a link"    "$(fhasnt 'javascript:' "$CLH")"
 assert "…it renders as inert text instead"               "$(fhas 'link withheld: not http/https' "$CLH")"
 # The count is over PROJECTS and the chip over deliverables — a section claiming one and
 # showing the other is the presence-assertion failure this repo has already paid for.
 assert "…and the chip counts deliverables, not projects" "$(fhas '<b>2</b> deliverable' "$CLH")"
+
+# Two instances closing the SAME slug. `group` is per-snapshot, so without it stamped
+# onto each record these two rows are indistinguishable — which is the whole reason the
+# aggregation carries it.
+CL2="$TMP/group/_ai-bridge-other"
+mkdir -p "$CL2"
+sed 's/"group": "closed"/"group": "other"/' "$CL/SNAPSHOT.json" > "$CL2/SNAPSHOT.json"
+TWOH="$TMP/closed-two.html"
+( cd "$TMP" && bash "$BOARD" --standalone --out "$TWOH" "$CL" "$CL2" >/dev/null 2>&1 )
+assert "two instances, same slug: the first row names its group"  "$(fhas 'ai-bridge-2x <span class="dim">· closed</span>' "$TWOH")"
+assert "…and the second names the other one"                      "$(fhas 'ai-bridge-2x <span class="dim">· other</span>' "$TWOH")"
 
 NOCL="$TMP/group/_ai-bridge-nocl"
 mkdir -p "$NOCL"

@@ -1866,6 +1866,33 @@ sys.exit(0 if len(d) == 1 and d[0]["path"] == "/projects/ai-bridge-2x/project.md
 # filesystem path, so it stays out of the file one step from being published.
 assert "…and the restore command is NOT carried"  "$(fhasnt 'base64 -d' "$CLJ")"
 
+# THE WHOLE URL, UNDER EVERY AWK ON THE MACHINE. The `path — url` separator is an em
+# dash, which is multi-byte: index()/substr() count BYTES on BSD awk and mawk and
+# CHARACTERS on gawk in a UTF-8 locale, so the parse's old hardcoded `q + 5` started two
+# characters late under gawk and served `tps://…`. Asserting the path suffix is exactly
+# what let that through, so this asserts the scheme too — and runs the whole write under
+# each awk present via a PATH shim, skipping (loudly) any that is not installed.
+CLURL='https://github.com/o/r/blob/8fefa76aaaaaaaabbbbbbbbccccccccdddddddd/projects/ai-bridge-2x/project.md'
+for _awk in gawk mawk awk; do
+  _bin="$(command -v "$_awk" 2>/dev/null || true)"
+  if [ -z "$_bin" ]; then echo "   (skip: no $_awk here — its units are unpinned on this machine)"; continue; fi
+  _shim="$TMP/awkshim-$_awk"; mkdir -p "$_shim"
+  printf '#!/bin/sh\nexec %s "$@"\n' "$_bin" > "$_shim/awk"; chmod +x "$_shim/awk"
+  ( cd "$CLI" && PATH="$_shim:$PATH" bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
+  assert "…the deliverable URL survives \`$_awk\` WHOLE, scheme included" "$(yes_if python3 -c '
+import json,sys
+d = json.load(open(sys.argv[1]))["closed"][0]["deliverables"]
+sys.exit(0 if d[0]["url"] == sys.argv[2] else 1)' "$CLJ" "$CLURL")"
+done
+# The loop can only pin the awks a machine HAS, and CI is macos-latest — BSD awk, no
+# gawk, no mawk — so the invariant is asserted statically as well: the offset past the
+# separator is DERIVED from its length and never a literal, which is the one property
+# that holds in either unit.
+assert "…and the parse derives that offset, never hardcodes it" "$(yes_if python3 -c '
+import re, sys
+prog = open(sys.argv[1], encoding="utf-8").read().split("closed_records()", 1)[1].split("\n}", 1)[0]
+sys.exit(0 if "q + length(SEP)" in prog and not re.search(r"q \+ [0-9]", prog) else 1)' "$TPL/plugin/scripts/write-snapshot.sh")"
+
 echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

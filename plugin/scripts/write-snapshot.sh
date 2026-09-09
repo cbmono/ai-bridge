@@ -763,13 +763,17 @@ EOF
 # failure for a file whose own header says not to hand-edit it.
 closed_records() { # -> TSV: P slug | C date | S sha | O outcome | D path url
   awk '
+    BEGIN { SEP = " — " }
     /^## / { print "P\t" substr($0, 4); next }
     /^- closed: /  { print "C\t" substr($0, 11); next }
     /^- pinned: /  { print "S\t" substr($0, 11); next }
     /^- outcome: / { print "O\t" substr($0, 12); next }
     /^- deliverable: / {
-      s = substr($0, 16); q = index(s, " — ")
-      if (q > 0) { p = substr(s, 1, q - 1); u = substr(s, q + 5) } else { p = s; u = "" }
+      # `length(SEP)` and never a literal 5: the em dash is multi-byte, and index()/
+      # substr() count BYTES on a BSD/mawk awk and CHARACTERS on a gawk in a UTF-8
+      # locale — a hardcoded offset ate `https://` on one of them.
+      s = substr($0, 16); q = index(s, SEP)
+      if (q > 0) { p = substr(s, 1, q - 1); u = substr(s, q + length(SEP)) } else { p = s; u = "" }
       gsub(/`/, "", p); sub(/^[ \t]+/, "", u); sub(/[ \t]+$/, "", u)
       print "D\t" p "\t" u
     }
