@@ -918,13 +918,18 @@ above it so none may grow its share.
   unavailable to you as a subagent. (`settings.json` sets `worktree.bgIsolation:
   none` so the control panel manages worktrees itself; harness isolation would
   only isolate this repo, not the product repos.)
-  **Scratch files go in `<worktree>/.scratch/`, never a shared scratchpad.** Mutation
+  **Scratch files go in `<worktree>/tmp/`, never a shared scratchpad.** Mutation
   scripts, probe output and throwaway configs collide when several agents run at once.
-  Keep them inside your own worktree (git-ignore or clean up before the PR) — verified
-  working with three concurrent agents on one tick.
+  Keep them inside your own worktree — verified working with three concurrent agents on
+  one tick.
+  **A scratch path that the repo does not IGNORE is not scratch.** Until 2026-09-09 this
+  rule named a directory `cbmono/ai-bridge` TRACKS, so an obedient agent wrote its drafts
+  into version control and its own cleanup deleted a tracked file. `tmp/` is ignored by
+  every bundle this seed stamps and by that repo; elsewhere, `git check-ignore -q` before
+  you write, and pick a path the repo does ignore if it says no.
   **It fails silently:** two agents sharing one scratchpad path on 2026-09-08 overwrote
   each other's PR-body draft, and the body that got posted was well-formed, merely the
-  wrong task's. `prune-worktrees.sh` recognises `.scratch` as scaffolding, so obeying
+  wrong task's. `prune-worktrees.sh` recognises `tmp` as scaffolding, so obeying
   this never leaves you a worktree that reads as dirty forever.
 - **Browser (only if the project opts in):** when the task's project sets `browser:
   claude-for-chrome` **and** the `mcp__claude-in-chrome__*` tools are actually present,

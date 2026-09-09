@@ -389,8 +389,8 @@ is_scaffolding() {
     probe|probe-*|probe.*|probe_*) return 0 ;;
     baseline|baseline-*|baseline.*|baseline_*) return 0 ;;
     mutant|mutant-*|mutants|*.orig|*.rej|*.log|*.tmp|*~) return 0 ;;
-    # CONVENTIONS.md "Parallel-safety" sends every agent's scratch here; unrecognised, an obedient worktree is KEPT forever.
-    .scratch) return 0 ;;
+    # CONVENTIONS.md "Parallel-safety" sends every agent's scratch here (`.scratch`: bundles stamped before 2026-09-09); unrecognised, an obedient worktree is KEPT forever.
+    tmp|.scratch) return 0 ;;
     .DS_Store|.bun-cache*|.pnpm-store*|node_modules|__pycache__) return 0 ;;
     .venv|.venv-*|venv|venv-*) return 0 ;;
   esac
