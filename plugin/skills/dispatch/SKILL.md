@@ -79,6 +79,14 @@ subagent** and let that context pay. Never here, and never before a tick or inst
 one: not the whole thing, not a summary, not "just to orient". (Step 2b's advisor
 adjudication runs *after* a tick reports and is that step's own contract.)
 
+**The one write follows from the same category, and so does the one it forbids.** Item 2 is
+the launcher's only write because it needs no view of this bundle's state — an exit code, not
+content. **So the launcher may not clear a caveat it did not raise:** a task's
+`open_caveats:` (`SCHEMA.md`) comes out only on evidence, and evidence about this bundle's
+state is precisely what the category above puts out of the launcher's reach. Not a further
+entry, and not something to weigh against being able to dispatch — the tick or a subagent
+raised it, and the same actor clears it.
+
 **A further entry is the regression, not an exception** — the list closes over a
 **category**, reads that cannot observe this bundle's state, and not over a count of nouns.
 **No other reader may be added by analogy** — what stood here was an enumeration of

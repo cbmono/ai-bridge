@@ -825,6 +825,10 @@ above it so none may grow its share.
   never its output** — no pasted log, no secrets, no PII, same rule as `last_blocker`.
   The list caps at 10: at the cap the script refuses (exit 1) and the `project-manager`
   folds the oldest into `# Notes`. A round that ends green appends nothing.
+- **A task's `open_caveats:` outranks what you were told, and it holds `done`/`cancelled`
+  until evidence clears it** — never your own conclusion that the caveat no longer applies
+  (`SCHEMA.md` → the field; the bundle validator errors on that write while the list is
+  non-empty). It is not a promotion gate and never blocks your round.
 - Write the PR URL and a `# Result` summary back into the task document, and set
   the task `status: in-review` (or `blocked`, with why, if you can't proceed).
 - **No customer PII** in code, commits, or PR text; **never echo, print, or log

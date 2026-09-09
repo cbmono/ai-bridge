@@ -157,6 +157,49 @@ flow_entries() { # <raw value>
   }'
 }
 
+# Entries of a list-valued key, one per line, in BOTH YAML forms — flow
+# (`k: [ a, "b, c" ]`) and block (`k:` then `  - a`), quoted or bare. `flow_entries`
+# above counts only QUOTED flow entries, which is enough for a warning and not for a
+# gate: a form that reads as empty would let the write it holds through in silence.
+list_entries() { # <frontmatter> <key>
+  printf '%s\n' "$1" | awk -v key="$2" '
+    function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
+    function emit(s,   q) {
+      s = trim(s); q = substr(s, 1, 1)
+      if (length(s) > 1 && (q == "\"" || q == SQ) && substr(s, length(s)) == q)
+        s = substr(s, 2, length(s) - 2)
+      if (s != "") print s
+    }
+    function flow(t,   i, n, ch, inq, q, cur) {
+      n = length(t); cur = ""; inq = 0
+      for (i = 1; i <= n; i++) {
+        ch = substr(t, i, 1)
+        if (inq) {
+          if (ch == "\\") { cur = cur ch substr(t, i + 1, 1); i++; continue }
+          if (ch == q) inq = 0
+          cur = cur ch; continue
+        }
+        if (ch == "\"" || ch == SQ) { inq = 1; q = ch; cur = cur ch; continue }
+        if (ch == ",") { emit(cur); cur = ""; continue }
+        cur = cur ch
+      }
+      emit(cur)
+    }
+    BEGIN { SQ = sprintf("%c", 39) }
+    $0 ~ "^" key ":" {
+      rest = trim(substr($0, length(key) + 2))
+      # From the LAST `]`, so a trailing `# comment` is not read as an entry.
+      if (rest ~ /^\[/) { sub(/^\[/, "", rest); sub(/\][^]]*$/, "", rest); flow(rest); inblock = 0 }
+      else if (rest == "" || rest ~ /^#/) inblock = 1
+      else { emit(rest); inblock = 0 }
+      next
+    }
+    inblock && /^[[:space:]]+-[[:space:]]*/ { line = $0; sub(/^[[:space:]]+-[[:space:]]*/, "", line); emit(line); next }
+    inblock && /^[[:space:]]*$/ { next }
+    /^[^[:space:]]/ { inblock = 0 }
+  '
+}
+
 fail() { printf '  ERROR  %s\n         %s\n' "$1" "$2"; errors=$((errors+1)); }
 warn() { printf '  WARN   %s\n         %s\n' "$1" "$2"; warns=$((warns+1)); }
 
@@ -235,6 +278,15 @@ while IFS= read -r file; do
       if [[ -n "$n" && "$n" -gt $DO_NOT_REPEAT_MAX ]]; then
         warn "$rel" "do_not_repeat carries $n entries; CONVENTIONS.md caps it at $DO_NOT_REPEAT_MAX — the project-manager folds the oldest into '# Notes'"
       fi
+    fi
+
+    # `open_caveats` holds a TERMINAL write only — `done`/`cancelled`. Any other status
+    # with a caveat outstanding is the normal working state and stays silent.
+    if [[ "$status" == done || "$status" == cancelled ]]; then
+      while IFS= read -r caveat; do
+        [[ -n "$caveat" ]] || continue
+        fail "$rel" "status '$status' is held by an open caveat (SCHEMA.md 'open_caveats' — clear it with evidence, in its own edit): $caveat"
+      done <<< "$(list_entries "$fm" open_caveats)"
     fi
   fi
 
