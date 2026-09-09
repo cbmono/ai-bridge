@@ -20,10 +20,11 @@
 #   tests/plugin-eval.test.sh     this file: the eval suite's own shape, always; and
 #                                 the run itself, when the CLI supports it.
 #
-# THREE OF THE SEVEN CASES GRADE THE MAIN THREAD, not a skill. They are the reader for the
+# FOUR OF THE EIGHT CASES GRADE THE MAIN THREAD, not a skill. They are the reader for the
 # prose rules of `launcher-verification-contract` — dispatch-vs-inline-diagnosis, unverified
-# state, and a tick caveat outranking the launcher's own conclusion — and they exist because
-# the previous prose fix for that defect shipped 2026-08-23 with no test and rotted in weeks.
+# state, a tick caveat outranking the launcher's own conclusion, and a decision manufactured
+# out of a side effect that is not live yet — and they exist because the previous prose fix
+# for that defect shipped 2026-08-23 with no test and rotted in weeks.
 # Section 4 asserts the one property that keeps them from rotting the same way: a grader
 # keyed on WORDING passes the next paraphrase, so `regex` over a message is refused there.
 #
@@ -81,7 +82,8 @@ CONTROL="skills-are-reachable"
 # One case per pattern from the 2026-09-08 retrospective (launcher-verification-contract).
 # They grade the MAIN THREAD rather than a skill, so they share none of the assertions in
 # section 3; section 4 is theirs.
-PATTERNS="diagnosis-is-dispatched unverified-state-is-unknown caveat-outranks-the-launcher"
+PATTERNS="diagnosis-is-dispatched unverified-state-is-unknown caveat-outranks-the-launcher
+dormant-side-effect-is-not-a-decision"
 
 # =======================================================================================
 echo "== 1. the eval suite ships where the CLI looks for it =="
@@ -106,7 +108,7 @@ ok "…and its results/ output is gitignored" \
 CASES="$(cd "$EVALS" && find . -mindepth 1 -maxdepth 1 -type d ! -name results -exec basename {} \; | sort | tr '\n' ' ' | sed 's/ $//')"
 # shellcheck disable=SC2046,SC2086  # the three lists are deliberate word lists, as in plugin-skills.test.sh
 EXPECTED_CASES="$(printf '%s\n' $CONTROL $PATTERNS $(for s in $GATED; do echo "$s-is-human-gated"; done) | sort | tr '\n' ' ' | sed 's/ $//')"
-ok "the case set is exactly the seven this file asserts" "$CASES" "$EXPECTED_CASES"
+ok "the case set is exactly the eight this file asserts" "$CASES" "$EXPECTED_CASES"
 
 # =======================================================================================
 echo "== 2. every case is well-formed the way the CLI parses it =="
@@ -146,7 +148,7 @@ for c in $CONTROL $(for s in $GATED; do echo "$s-is-human-gated"; done); do
     "$(fm "$EVALS/$c/prompt.md" allowed_tools | grep -c 'Skill' | tr -d ' ')" 1
 done
 
-# Criterion 6 of the task: the README names all seven, one line each. A case nobody can
+# Criterion 6 of the task: the README names them all, one line each. A case nobody can
 # find in the README is a case the next author duplicates.
 R="$EVALS/README.md"
 for c in $EXPECTED_CASES; do
@@ -276,14 +278,14 @@ else
   # go red", not a statistically stable score, and each extra run and each baseline arm is
   # another paid model run. The suite's own prompt.md files declare runs: 2 for a
   # by-hand `claude plugin eval ./plugin`, which is the higher-fidelity form.
-  # --max-cost-usd is a ceiling, not a budget: it aborts (exit 2) rather than overrun. 6,
-  # not the old 3, because the suite went from 4 free-graded cases to 7 — three carry an
-  # `llm` grader and one dispatches a subagent whose own run is billed.
+  # --max-cost-usd is a ceiling, not a budget: it aborts (exit 2) rather than overrun. 7,
+  # not the old 6, because a fourth pattern case took the suite from 7 cases to 8 — four
+  # now carry an `llm` grader and one dispatches a subagent whose own run is billed.
   # --judge-model sonnet: the default judge is haiku, and the CLI's own authoring guidance
-  # is that a small judge misses the distinctions a rubric turns on. All three rubrics here
+  # is that a small judge misses the distinctions a rubric turns on. All four rubrics here
   # turn on one (a conclusion asserted vs. withheld), so the judge is sized to it.
   out="$(claude plugin eval "$PLUGIN" --runs 1 --ablation none --no-publish \
-    --judge-model sonnet --max-cost-usd 6 2>&1)"
+    --judge-model sonnet --max-cost-usd 7 2>&1)"
   rc=$?
   ok "claude plugin eval passes every case in plugin/evals/" "$rc" 0
   [ "$rc" -eq 0 ] || printf '%s\n' "$out" | sed 's/^/        /'

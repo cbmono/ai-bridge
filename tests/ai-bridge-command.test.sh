@@ -232,7 +232,9 @@ ok "…and every row declares whether it may speak on the banner path" \
 FIXOUT="$(AI_BRIDGE_INIT_PASS=1 bash "$SH" fix --instance "$INST1" --template "$SRC" 2>&1)"
 missing_fix=""
 for id in $ids; do
-  printf '%s\n' "$FIXOUT" | grep -q -- "── $id \[" || missing_fix="${missing_fix:+$missing_fix }$id"
+  # Here-string, never a pipe: `grep -q` exits at the first match and under `pipefail` the
+  # dead printf turns that MATCH into a failure (grep-q-under-pipefail-reports-a-match-as-a-failure).
+  grep -q -- "── $id \[" <<<"$FIXOUT" || missing_fix="${missing_fix:+$missing_fix }$id"
 done
 ok "fix walked EVERY row of the list"                      "$missing_fix" ""
 # And the reverse: fix must not know about a row the list does not carry. Its section
@@ -244,7 +246,7 @@ ok "…and no row fix printed is absent from the list" \
 mismatch=0
 while IFS="$(printf '\t')" read -r id tier _; do
   [ -n "$id" ] || continue
-  printf '%s\n' "$FIXOUT" | grep -q -- "── $id \[$tier\]" || mismatch=$((mismatch+1))
+  grep -q -- "── $id \[$tier\]" <<<"$FIXOUT" || mismatch=$((mismatch+1))
 done <<EOF
 $LIST
 EOF

@@ -21,7 +21,9 @@ ok() { # <name> <actual> <expected>
   if [ "$2" = "$3" ]; then printf '  PASS  %-62s (%s)\n' "$1" "$2"; pass=$((pass+1))
   else printf '  FAIL  %-62s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
 }
-saw() { printf '%s' "$1" | grep -qE "$2" && echo yes || echo no; }
+# Here-string, never a pipe: under `set -o pipefail` a pipe into `grep -q` reports a MATCH
+# as a failure whenever the reader exits first (grep-q-under-pipefail-reports-a-match-as-a-failure).
+saw() { grep -qE -- "$2" <<<"$1" && echo yes || echo no; }
 # The sentence that went stale wrapped across two lines, and grep is line-based — so a
 # line-by-line assertion would have passed the very file it was written to refuse.
 flat() { printf '%s' "$1" | tr '\n' ' ' | tr -s ' '; }

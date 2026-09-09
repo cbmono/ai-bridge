@@ -48,7 +48,13 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # the ` --- ` reply, so the shape their answer lands in has to be here rather than one
 # document away; written as the shortest form that still shows the `by`. Measured, not
 # rounded; flagged in the PR body.
-CEILING=13964
+# 13964 -> 14622 (launcher-verification-contract/task-009). +658 bytes for two rules four
+# stamped bundles had each written by hand: don't manufacture a decision out of a side
+# effect that is not live yet (§ Ad-hoc requests), and generic browser labels are a Claude
+# Code defect — request all the open browsers and let the human pick. Both govern what the
+# MAIN THREAD does before it dispatches anything, so neither can live one document away.
+# Measured, not rounded; flagged in the PR body.
+CEILING=14622
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))

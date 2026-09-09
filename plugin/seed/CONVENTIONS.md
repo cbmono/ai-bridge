@@ -885,6 +885,14 @@ above it so none may grow its share.
   unavailable to you as a subagent. (`settings.json` sets `worktree.bgIsolation:
   none` so the control panel manages worktrees itself; harness isolation would
   only isolate this repo, not the product repos.)
+  **Scratch files go in `<worktree>/.scratch/`, never a shared scratchpad.** Mutation
+  scripts, probe output and throwaway configs collide when several agents run at once.
+  Keep them inside your own worktree (git-ignore or clean up before the PR) — verified
+  working with three concurrent agents on one tick.
+  **It fails silently:** two agents sharing one scratchpad path on 2026-09-08 overwrote
+  each other's PR-body draft, and the body that got posted was well-formed, merely the
+  wrong task's. `prune-worktrees.sh` recognises `.scratch` as scaffolding, so obeying
+  this never leaves you a worktree that reads as dirty forever.
 - **Browser (only if the project opts in):** when the task's project sets `browser:
   claude-for-chrome` **and** the `mcp__claude-in-chrome__*` tools are actually present,
   **rung 1 above applies to the browser like any other tool**: verify the change in the
