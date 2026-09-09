@@ -144,12 +144,14 @@ is, while the log entry still names the human who decided.
 > may run: it is report-only by design and prints the exact removal or prune it would
 > perform, which is a better dry-run report than a description of one.
 
-0. **Both escalations, before any write.** Read `project.md` and every `tasks/*.md`, the
-   project's objective, and the inbound refs step 6 lists. Then answer two questions:
-   would step 4 ask about the objective, and does step 6 find a ref whose source task is
-   not `done`? **If either fires and your brief carries no answer to it, write nothing —
-   report the question and stop.** The human answers in the main thread and dispatches a
-   fresh closeout carrying the answer. Neither is ever yours to decide.
+0. **Both escalations, before any write.** This step is the split's, and steps 1–7 below
+   are the closeout as it always was. Read `project.md` and every `tasks/*.md`, the
+   project's objective, and — unless the project is `retain: true`, which skips step 6
+   entirely — the inbound refs step 6 lists. Then answer two questions: would step 4 ask
+   about the objective, and does step 6 find a ref whose source task is not `done`?
+   **If either fires and your brief carries no answer to it, write nothing — report the
+   question and stop.** The human answers in the main thread and dispatches a fresh
+   closeout carrying the answer. Neither is ever yours to decide.
 
 1. **Resolve & check.** Confirm `projects/<slug>/` exists (else stop and report).
    Read its `project.md` — including whether it carries `retain: true`, which decides
@@ -238,8 +240,8 @@ is, while the log entry still names the human who decided.
    `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh`; it classifies and prints `git worktree remove`
    commands but never deletes. Include its `REMOVABLE`/`RECLAIMABLE` lines for this
    project's worktrees in the closing summary so the human can reclaim them; don't
-   run the commands yourself. **Only this project's lines** — the rest is the reason this
-   step is here and not in the main thread. If agents are still working (a `--force`
+   run the commands yourself. **Report only this project's lines**; the rest of the scan
+   is exactly the noise the main thread no longer pays for. If agents are still working (a `--force`
    closeout can reach this step while they are), **skip this step** and say so — a report
    that races a live dispatch recommends deleting it.
 
