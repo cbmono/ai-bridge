@@ -34,6 +34,14 @@ thrown away. Two decisions never leave this thread, and they are named below.
 - `--force` — proceed even if some tasks are **not** terminal (records which). Use
   sparingly — normally every task should be `done`/`cancelled` first.
 
+**Split the flags off BEFORE the slug is anything.** `$ARGUMENTS` is whitespace-separated
+tokens: every token starting with `--` is a flag, and the one token that is left is the
+slug. So `alpha --dry-run` is the slug `alpha` plus `--dry-run`, and `--dry-run` alone
+carries no slug at all — that is precondition 1's "none was given" branch, not a project
+named `--dry-run`. **Refuse the rest rather than guessing**: two or more non-flag tokens
+(say which you saw and ask which is the slug), and any `--` token that is neither
+`--dry-run` nor `--force` (name it and stop).
+
 Pass both flags on to the agent verbatim; neither changes what you may look at.
 
 ## Preconditions
@@ -42,10 +50,11 @@ Pass both flags on to the agent verbatim; neither changes what you may look at.
 reads nothing else"; anything not on it belongs to the closeout agent. Both checks below
 are on it.
 
-1. **A slug.** Take it from `$ARGUMENTS`. If none was given, `ls projects/` for the
-   **directory names**, offer them, and ask which to close — never open one to judge
-   whether it is closeable. That judgement is the agent's step 1, which refuses a project
-   whose tasks are still live.
+1. **A slug.** Take the one non-flag token of `$ARGUMENTS` (→ "Inputs" — the flags come
+   off first, so no `--flag` ever reaches the folder probe as part of a path). If none
+   was given, `ls projects/` for the **directory names**, offer them, and ask which to
+   close — never open one to judge whether it is closeable. That judgement is the agent's
+   step 1, which refuses a project whose tasks are still live.
 2. **The folder exists.** Confirm `projects/<slug>/` is there; if it is not, stop and
    report. Nothing inside it is read here.
 
@@ -54,8 +63,8 @@ are on it.
 **Everything the launcher may look at — this bundle, git, the GitHub API, the network,
 the machine — is exactly these operations:**
 
-1. **The slug** — `$ARGUMENTS`, or `ls projects/` for the directory names when it is
-   absent: precondition 1 above, and nothing wider.
+1. **The slug** — the non-flag token of `$ARGUMENTS`, or `ls projects/` for the directory
+   names when there is none: precondition 1 above, and nothing wider.
 2. **The folder probe** — that `projects/<slug>/` exists, which is precondition 2 and
    the whole of it.
 

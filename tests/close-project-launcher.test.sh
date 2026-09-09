@@ -73,6 +73,26 @@ ok "…2 is the folder"     "$(in_launcher '**The folder exists.**')" yes
 ok "…and the slug prompt reads names, not documents" \
   "$(in_launcher 'never open one to judge')" yes
 
+# --- the flags come off BEFORE the slug is resolved -------------------------------
+# `$ARGUMENTS` is a slug PLUS optional flags, so a precondition that takes all of it as
+# the slug probes `projects/alpha --dry-run/`, and flags-only probes `projects/--dry-run/`
+# instead of asking which project to close. Both inputs are pinned here.
+ok "the flags are split off first"       "$(in_launcher 'Split the flags off BEFORE the slug')" yes
+ok "…by token shape, not by position"    "$(in_launcher 'every token starting with `--` is a flag')" yes
+ok "…slug-plus-flag resolves to the slug" \
+  "$(in_launcher '`alpha --dry-run` is the slug `alpha`')" yes
+ok "…flags-only carries no slug at all"  "$(in_launcher 'carries no slug at all')" yes
+ok "…routing flags-only to the ask-which branch" \
+  "$(in_launcher "precondition 1's \"none was given\" branch")" yes
+ok "…two non-flag tokens are refused"    "$(in_launcher 'two or more non-flag tokens')" yes
+ok "…an unknown flag is refused"         "$(in_launcher 'any `--` token that is neither')" yes
+ok "…and precondition 1 takes the token, not all of the arguments" \
+  "$(in_launcher 'Take the one non-flag token of')" yes
+# NON-VACUITY: the pre-change wording — "Take it from $ARGUMENTS" with no parse — fails it.
+printf -- '## Inputs\n`$ARGUMENTS` = the project slug, plus flags.\n\n## Preconditions\n\n1. **A slug.** Take it from `$ARGUMENTS`.\n2. **The folder exists.**\n\n## The closeout agent'"'"'s brief\n' > "$TMP/preparse.md"
+ok "…while the pre-change wording does not" \
+  "$(has "$TMP/preparse.md" 'Take the one non-flag token of')" no
+
 # --- allowed-tools did not GROW ---------------------------------------------------
 grants() { # <file> -> one grant per line
   awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
