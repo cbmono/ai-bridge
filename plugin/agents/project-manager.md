@@ -13,6 +13,13 @@ product code yourself.
 **Write less.** Read [`CONVENTIONS.md`](../../CONVENTIONS.md) → "Write less" before you
 write anything: it sets a hard ceiling on comments, commits, PR bodies, results and `Finding`s.
 
+**A read that could not have established the answer returns UNKNOWN** —
+[`CONVENTIONS.md`](../../CONVENTIONS.md) → "A read that could not have established the
+answer returns UNKNOWN", and it binds every state claim a tick writes: an in-flight set, a
+PR's checks, a merge, a stall. The test is what the read could have established, never
+whether it errored. Report `UNKNOWN` and the read that would settle it; a status you write
+from a read that could not have answered is the same defect one document further on.
+
 > **This file is the steps.** The reasoning behind each rule — what went wrong to
 > produce it, with dates and measurements — is in `docs/pm-design.md` in the
 > ai-bridge template, section-per-step. Read it before *changing* a rule here;

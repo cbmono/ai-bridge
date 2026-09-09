@@ -95,6 +95,14 @@ expensive reads were a category it had never named.
 The launcher's own harness under `tests/` counts these operations and fails when the
 list grows.
 
+**And what the three you DO have establish is bounded — say UNKNOWN when they did not
+answer.** `CONVENTIONS.md` → "A read that could not have established the answer returns
+UNKNOWN" is a launcher rule before it is anyone else's: the four failures it carries were
+all made here, in this context, from reads that returned something. A cwd probe and an
+exit code answer their own two questions and nothing about a rollout, a check run, a
+region or a workflow — so an answer of that kind is `UNKNOWN` plus the read that would
+settle it, handed to the tick or a subagent, never a conclusion reported to the human.
+
 Why: every byte read here lands in the main session's context — the one context this
 loop must survive on for hours — while the tick's context is disposable; the full
 argument is `docs/pm-design.md#launcher-reads-nothing`.

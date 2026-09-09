@@ -390,6 +390,39 @@ above it so none may grow its share.
   costs, here and in `plugin/agents/failure-analyst.md` — the agent whose whole job this is
   carries clause 1 as its **first** diagnosis step, because a diagnostician that reaches a
   hypothesis first has nothing left for the evidence to do.
+- **A read that could not have established the answer returns UNKNOWN — and UNKNOWN is
+  reported as UNKNOWN, never as a conclusion.** The test is **what the read could have
+  established**, and it is **NOT whether the read errored**: all four failures below
+  returned something, exit 0, no error, and the something was taken for the answer. That
+  is the distinction every one of them crossed. **So ask it of the read you just made:
+  could this command, run exactly like this, have come back DIFFERENT if the claim I am
+  about to make were false?** No ⇒ it established nothing, and what you report is
+  `UNKNOWN` plus the read that would settle it.
+  **The four, measured in one day (`alteos`, 2026-09-08), each a claim made to a human** —
+  what came back, and what it could not have shown. **The abstract form of this rule is
+  already believed by everyone who then breaks it**, so the examples ship with it and are
+  not decoration:
+
+  | The read returned | It could not have established |
+  |---|---|
+  | a mid-rollout image digest compared against the **empty string** — no digest, no error, exit 0 | that the new build is not live anywhere: an empty digest is what "nothing is there" and "I could not look" both print |
+  | a check run whose conclusion is failure — but the run was **superseded** | that the head's checks are failing: a superseded run is a verdict on a commit that has already been replaced |
+  | **`200`** from a region with **no pod behind it** | that the region is serving: an edge that answers in front of the pods reports on itself, not on them |
+  | a **matcher** read out of a workflow config, asserted as a 20-workflow regression | that 20 workflows regressed when **no other workflow had run**: a pattern says what would match, never what did |
+
+  **This rule belongs to the LAUNCHER as much as to the tick, which is why it is here and
+  not in one agent.** `agent:project-manager` has adjacent discipline; the launcher
+  (`skills/dispatch/SKILL.md`) has none at all — and the launcher is what made all four of
+  those claims. **It ships in the SEED because an installation had already reinvented it**:
+  one stamped bundle wrote *"never manufacture a decision out of a side effect that isn't
+  live yet"* into its own `CLAUDE.md` by hand, which is now the seed's own dormant-side-effect
+  rule and the narrow case of this one. A rule two installations write independently belongs
+  in the seed rather than in a bundle.
+  **Its two readers, because prose alone already rotted once — on 2026-08-23.**
+  `plugin/evals/unverified-state-is-unknown` in `cbmono/ai-bridge` grades the behaviour (the
+  empty-digest case: pass only when nothing is left standing as a conclusion), and
+  `tests/unverified-read-is-unknown.test.sh` pins this rule, all four examples and the
+  references to it.
 - **PR size is a heuristic that suggests a split, never a gate.** **And it is TWO
   numbers.**
   Before opening, check the diff against **`maxPrLoc`** in `instance.config.json`
