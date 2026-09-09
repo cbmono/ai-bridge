@@ -257,6 +257,13 @@ ok "…contributing 0 to the error count"    "$(check_out | grep -c '^build-kb-i
 # Non-vacuous: exit 0 alone would pass a checker that never looked at the field.
 ok "…but --strict still turns it red"      "$(strict_rc "$D")" 1
 
+D="$(plant source-escape)"
+add_source "$D" pipe-in-title '/..'
+# `.$tok` is `./..`, which EXISTS — so the existence test alone accepts a path
+# outside the bundle as a valid bundle-relative source.
+ok "a /.. token: --check still only warns"  "$(check_rc "$D")" 0
+ok "…but it never rides the parent's existence" "$(check_out | grep -c 'source: escapes the bundle root: /\.\.')" 1
+
 D="$(plant source-live)"
 add_source "$D" new-rule '/knowledge/vocab.md'
 ok "a path that resolves today is silent"  "$(check_rc "$D")" 0

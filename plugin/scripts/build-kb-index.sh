@@ -287,6 +287,11 @@ check_source() {
         [ -n "$tok" ] || continue
         case "$tok" in /*) : ;; *) continue ;; esac
         tok=${tok%%#*}
+        # `.$tok` would resolve `/..` against the bundle's PARENT, so it must be
+        # refused before the existence test, not by it.
+        case "$tok/" in
+          */../*) warn "$f" "source: escapes the bundle root: $tok"; continue ;;
+        esac
         [ -e ".$tok" ] || warn "$f" "source: resolves to nothing: $tok — SCHEMA.md wants the task's PR URL, or a blob/<sha> permalink when there is no PR"
       done <<< "$(printf '%s\n' "$val" | tr ',' ' ' | tr -s '[:space:]' '\n')"
     done <<< "$(docs_in "$kind")"
