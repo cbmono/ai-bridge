@@ -172,7 +172,8 @@ state, and act only on deltas.
    failure this prevents — re-dispatching a finished task sequence — is the most
    expensive one this loop has: it costs a full set of agent runs and can open
    duplicate PRs. `/ai-bridge:dispatch` deliberately reads none of this before
-   spawning you — its **allowlist of two** holds a cwd probe and the tick lock, and
+   spawning you — its **allowlist of three** holds a cwd probe, the tick lock and a cron
+   cleanup that reads the scheduler and not this bundle, and
    everything else is yours by category (see its "The launcher reads nothing else") —
    so if you skip it, nobody did it.
 

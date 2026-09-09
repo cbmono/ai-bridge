@@ -44,8 +44,8 @@ Three standing facts the steps below rest on:
 
 ## Preconditions
 
-**Two checks. What the launcher may look at is an ALLOWLIST of two** — see "The launcher
-reads nothing else"; anything not on it is a tick or a subagent.
+**Two checks. What the launcher may look at is an ALLOWLIST of three** — see "The launcher
+reads nothing else"; anything not on it is a tick or a subagent. Both checks below are on it.
 
 1. Must run from a **control-panel instance root**: confirm `SCHEMA.md` +
    `instance.config.json` exist in the cwd; if not, tell the user to `cd` into the
@@ -55,17 +55,21 @@ reads nothing else"; anything not on it is a tick or a subagent.
    job's prompt is `run the project-manager agent for one LIVE tick`, `CronDelete` it.
    Do **not** create a cron here.
 
-### The launcher reads nothing else — an ALLOWLIST of two, and everything else is a tick
+### The launcher reads nothing else — an ALLOWLIST of three, and everything else is a tick
 
 **Everything the launcher may look at — this bundle, git, the GitHub API, the network,
-the machine — is exactly these two operations:**
+the machine — is exactly these operations:**
 
 1. **The cwd precondition** — `SCHEMA.md` + `instance.config.json` in the cwd, which is
    precondition 1 above and nothing wider.
 2. **`${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh acquire`** — a **write** only the launcher can
    make, which returns an exit code rather than content and prints nothing on the normal path.
+3. **The cron cleanup** — `CronList`, then `CronDelete` on a job whose prompt matches:
+   precondition 2 above, and the two tools the frontmatter's `allowed-tools` already grants.
+   It reads the **scheduler**, never this bundle's state, so it is inside the category the
+   list closes over rather than an exception to it.
 
-**Anything that is not one of those two is a TICK or a SUBAGENT.** That is the whole
+**Anything that is not one of those is a TICK or a SUBAGENT.** That is the whole
 rule, and it is a **category**, so there is no list to keep current and nothing to add
 to when the world grows a new kind of source. **And here is the disposal, so you are
 told what to do and not only what to stop:** dispatch the tick and let it read —
@@ -75,7 +79,8 @@ subagent** and let that context pay. Never here, and never before a tick or inst
 one: not the whole thing, not a summary, not "just to orient". (Step 2b's advisor
 adjudication runs *after* a tick reports and is that step's own contract.)
 
-**A third entry is the regression, not an exception.**
+**A further entry is the regression, not an exception** — the list closes over a
+**category**, reads that cannot observe this bundle's state, and not over a count of nouns.
 **No other reader may be added by analogy** — what stood here was an enumeration of
 forbidden sources that said it was closed, and it was, and it rotted anyway the day the
 expensive reads were a category it had never named.

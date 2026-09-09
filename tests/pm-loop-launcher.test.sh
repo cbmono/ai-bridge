@@ -39,7 +39,7 @@
 # enumerated the forbidden sources — task docs, `log.md`, the ledger, `git log`, `gh pr
 # list` — and said the list was closed. It was, and it rotted anyway: the reads that
 # actually happened next were CI logs, built SPA chunks and `curl` probes, a category the
-# enumeration never had. So the section is now two allowed operations, everything else is
+# enumeration never had. So the section is now three allowed operations, everything else is
 # a tick or a subagent by category, and the assertion the old fix lacked is here: the
 # count fails when the list grows.
 #
@@ -157,17 +157,21 @@ in_section() { section "$LAUNCHER" | grep -qF -- "$1" && echo yes || echo no; }
 # was closed, and it rotted anyway, because the next day's expensive reads were a
 # category it had never named. An inversion with no check that FAILS WHEN THE LIST GROWS
 # is that same fix again — so the count is pinned here, and "just a quick orient" coming
-# back as a third allowed operation is exactly what it catches.
+# back as a further allowed operation is exactly what it catches. Op 3 is the cron cleanup:
+# admitted on 2026-09-09 because precondition 2 always ran it, so the prose and the
+# frontmatter's `CronList, CronDelete` grant now agree instead of contradicting each other.
 count_allowed_ops() { section "$1" | grep -c -E '^[0-9]+\. ' | tr -d ' '; }
-ok "the allowlist is exactly two operations" "$(count_allowed_ops "$LAUNCHER")" 2
+ok "the allowlist is exactly three operations" "$(count_allowed_ops "$LAUNCHER")" 3
 ok "…op 1 is the cwd precondition"    "$(in_section 'The cwd precondition')" yes
 ok "…op 2 is the lock, by script name" "$(in_section 'scripts/tick-lock.sh acquire')" yes
-# NON-VACUITY, and it IS the property: a third allowed operation must fail this check.
-printf -- '### The launcher reads nothing else — an ALLOWLIST of two\n\n1. cwd\n2. lock\n3. just a quick orient\n\n## Next\n' > "$TMP/third.md"
-ok "…and a THIRD allowed operation fails it" \
-  "$( [ "$(count_allowed_ops "$TMP/third.md")" -ne 2 ] && echo yes || echo no )" yes
-printf -- '### The launcher reads nothing else — an ALLOWLIST of two\n\n1. cwd\n2. lock\n\n## Next\n' > "$TMP/two.md"
-ok "…while exactly two still passes"  "$(count_allowed_ops "$TMP/two.md")" 2
+ok "…op 3 is the cron cleanup, by tool name" "$(in_section 'The cron cleanup')" yes
+ok "…naming both cron tools"          "$(in_section '`CronList`, then `CronDelete`')" yes
+# NON-VACUITY, and it IS the property: a FOURTH allowed operation must fail this check.
+printf -- '### The launcher reads nothing else — an ALLOWLIST of three\n\n1. cwd\n2. lock\n3. cron\n4. just a quick orient\n\n## Next\n' > "$TMP/fourth.md"
+ok "…and a FOURTH allowed operation fails it" \
+  "$( [ "$(count_allowed_ops "$TMP/fourth.md")" -ne 3 ] && echo yes || echo no )" yes
+printf -- '### The launcher reads nothing else — an ALLOWLIST of three\n\n1. cwd\n2. lock\n3. cron\n\n## Next\n' > "$TMP/three.md"
+ok "…while exactly three still passes" "$(count_allowed_ops "$TMP/three.md")" 3
 
 # THE ENUMERATION OF FORBIDDEN NOUNS IS DELETED, NOT KEPT BESIDE THE ALLOWLIST. Keeping
 # both is how the list nobody can complete survives the inversion that replaced it.
@@ -193,7 +197,7 @@ ok "…keeping the cost argument"       "$(in_section "main session's context")"
 # cross-reference were rewritten, or half the file still teaches the old polarity.
 ok "the Preconditions pointer is inverted too" \
   "$(grep -c -F 'Two checks, and the list is closed' "$LAUNCHER" | tr -d ' ')" 0
-ok "…and names the allowlist instead" "$(has "$LAUNCHER" 'is an ALLOWLIST of two')" yes
+ok "…and names the allowlist instead" "$(has "$LAUNCHER" 'is an ALLOWLIST of three')" yes
 # The launcher must never look before it takes it: a `status` then `acquire` would rebuild
 # the check-then-write window the lock exists to close.
 ok "…and forbids reading it separately" "$(in_section 'never call `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh status` before `acquire`')" yes
@@ -207,7 +211,7 @@ ok "tick points back at the launcher rule" "$(has "$TICK" 'The launcher reads no
 # …and it must point back at the ALLOWLIST. A cross-reference that still describes the
 # launcher as a set of refusals is half the pair teaching the polarity the other half
 # just deleted, and both files would still read correctly on their own.
-ok "…as an allowlist, not a set of refusals" "$(has "$TICK" 'allowlist of two')" yes
+ok "…as an allowlist, not a set of refusals" "$(has "$TICK" 'allowlist of three')" yes
 
 # --- the property is not lost: it lives in the tick, naming all four disk sources --
 step0() { awk '/^0\. /{p=1} p&&/^1\. /{p=0} p' "$TICK"; }
