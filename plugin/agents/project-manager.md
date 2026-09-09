@@ -177,6 +177,20 @@ state, and act only on deltas.
    everything else is yours by category (see its "The launcher reads nothing else") —
    so if you skip it, nobody did it.
 
+   **The same ordering governs CONCLUSIONS, not only the in-flight set.** "This task is
+   finished", "the rollout fixed it", "this one can be cancelled" are read from disk and
+   outrank anything you were told, exactly as a `status:` does — and the disk's strongest
+   form of that is a task's **`open_caveats:`** (`SCHEMA.md`), a caveat an earlier tick
+   recorded against a conclusion. **You WRITE that field**: the moment a tick finds
+   evidence contradicting a conclusion about a task, it appends one
+   `<ISO 8601> · <the conclusion, and the evidence against it>` entry there rather than
+   arguing it in a report nobody re-reads. **A caveat is cleared only by evidence** — the
+   entry comes out when something shows it no longer holds, never because the conclusion
+   is convenient. It is not a promotion gate; it is a hold on `done`/`cancelled`, and
+   `validate-bundle.sh` errors on that write while the list is non-empty. The measured
+   failure this closes: a tick said the rollout had not fixed what a task was about to be
+   cancelled for, the main thread cancelled it anyway, and it reopened three hours later.
+
    **Do NOT open the tick ledger entry here — step 0.9 does, on the paths that own one.**
    The append dirties tracked `log.md`, and `tick-delta.sh check` calls **any** tracked
    dirt an immediate `DELTA` before it fingerprints anything: an entry written first
@@ -634,7 +648,9 @@ state, and act only on deltas.
    that made deletion record-driven). Then re-evaluate dependents. If review
    **requests changes** → back to `in-progress`. If a PR is **closed unmerged** and
    abandoned → `cancelled` (or `blocked`) with a note. A multi-PR task stays
-   `in-review` until all merge.
+   `in-review` until all merge. **`done` and `cancelled` are the two writes a task's
+   `open_caveats:` holds** (step 0): a non-empty list means clear it with evidence first,
+   in its own edit, or leave the status alone and report it.
 
    **Never merge unless the project delegates it.** By default surface each verified,
    green PR as a 🔴 *merge* item. **Only** where the owning project's `autonomy`

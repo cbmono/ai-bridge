@@ -118,6 +118,31 @@ doc projects/live/tasks/task-014-owner.md '---' 'type: Task' 'title: Owned' 'sta
 doc projects/live/tasks/task-015-owner-odd.md '---' 'type: Task' 'title: OddOwner' 'status: draft' \
   'owner: not a username!' "timestamp: $TS" '---' 'body'
 
+# --- open_caveats: a TERMINAL-WRITE gate, not a promotion gate ------------------
+# Three states, because two of them cannot tell this field from `open_questions`. The
+# third — in-progress with a caveat outstanding must PASS — is the only one that does,
+# and a two-case harness would go green on an implementation that gated promotion.
+doc projects/live/tasks/task-016-caveat-done.md '---' 'type: Task' 'title: CaveatDone' 'status: done' \
+  'open_caveats: [ "2026-01-01T00:00:00Z · the rollout did not fix the 500s — error rate unchanged" ]' \
+  "timestamp: $TS" '---' 'body'
+doc projects/live/tasks/task-017-caveat-cancelled.md '---' 'type: Task' 'title: CaveatCancelled' 'status: cancelled' \
+  'open_caveats: [ "2026-01-02T00:00:00Z · cancelled for a fix that has not landed" ]' \
+  "timestamp: $TS" '---' 'body'
+doc projects/live/tasks/task-018-caveat-empty.md '---' 'type: Task' 'title: CaveatEmpty' 'status: done' \
+  'open_caveats: [ ]' "timestamp: $TS" '---' 'body'
+doc projects/live/tasks/task-019-caveat-in-progress.md '---' 'type: Task' 'title: CaveatInProgress' 'status: in-progress' \
+  'open_caveats: [ "2026-01-03T00:00:00Z · the rollout has not fixed what this would be cancelled for" ]' \
+  "timestamp: $TS" '---' 'body'
+# The count primitive this file already had (`flow_entries`) sees only QUOTED entries on
+# one line, so block form and bare entries would read as empty and pass the gate in
+# silence — the same false negative the block-style `depends_on` cases above record.
+doc projects/live/tasks/task-020-caveat-block.md '---' 'type: Task' 'title: CaveatBlock' 'status: done' \
+  'open_caveats:' '  - "2026-01-04T00:00:00Z · a block-form caveat is still a caveat"' \
+  "timestamp: $TS" '---' 'body'
+doc projects/live/tasks/task-021-caveat-bare.md '---' 'type: Task' 'title: CaveatBare' 'status: cancelled' \
+  'open_caveats: [ 2026-01-05T00:00:00Z · an unquoted caveat is still a caveat ]' \
+  "timestamp: $TS" '---' 'body'
+
 # --- files that must be IGNORED ------------------------------------------------
 # Navigation and content. None of these carries frontmatter, and validating them
 # is what drowned the first version.
@@ -184,9 +209,28 @@ assert "a 48-line Finding warns"                    "$(saw 'Finding is 48 lines'
 assert "…naming the cap"                            "$(saw "caps it at 40")"
 assert "--strict turns both into failures"          "$([[ $RC_STRICT -ne 0 ]] && echo 0 || echo 1)"
 
+echo "== open_caveats holds a TERMINAL write, and holds nothing else =="
+assert "done with a non-empty open_caveats FAILS" \
+  "$(saw 'the rollout did not fix the 500s')"
+assert "…as an ERROR, not a WARN" \
+  "$(printf '%s\n' "$OUT" | grep -B1 'the rollout did not fix the 500s' | grep -q 'ERROR' && echo 0 || echo 1)"
+assert "…and no WARN is emitted for it" \
+  "$(printf '%s\n' "$OUT" | grep -B1 'the rollout did not fix the 500s' | grep -q 'WARN' && echo 1 || echo 0)"
+assert "…naming the status that is held"        "$(saw "status 'done' is held by an open caveat")"
+assert "cancelled with a non-empty open_caveats FAILS" \
+  "$(saw "status 'cancelled' is held by an open caveat")"
+assert "done with an EMPTY open_caveats passes"  "$(not_seen 'task-018-caveat-empty.md')"
+assert "in-progress with a non-empty open_caveats passes" \
+  "$(not_seen 'task-019-caveat-in-progress.md')"
+assert "…so it is not a promotion gate: the caveat text is never quoted for it" \
+  "$(not_seen 'has not fixed what this would be cancelled for')"
+assert "a BLOCK-form caveat is still seen"       "$(saw 'a block-form caveat is still a caveat')"
+assert "a BARE (unquoted) caveat is still seen"  "$(saw 'an unquoted caveat is still a caveat')"
+
 echo "== valid documents are silent =="
 for f in objectives/good.md projects/live/project.md projects/live/phases/1-a.md \
          projects/live/tasks/task-001-ok.md projects/live/tasks/task-013-answered.md \
+         projects/live/tasks/task-018-caveat-empty.md projects/live/tasks/task-019-caveat-in-progress.md \
          knowledge/findings/good.md knowledge/findings/sources/raw-note.md; do
   assert "no complaint about $f" "$(not_seen "$f")"
 done
@@ -202,7 +246,10 @@ assert "errors make it exit 1"                    "$([[ $RC -eq 1 ]] && echo 0 |
 assert "--strict also exits non-zero"             "$([[ $RC_STRICT -ne 0 ]] && echo 0 || echo 1)"
 
 echo "== a clean bundle passes, and --strict still passes with no warnings =="
+# task-018/019 stay: they are the two caveat cases that must be CLEAN, not merely unchecked.
 rm -f projects/live/tasks/task-00[2-9]*.md projects/live/tasks/task-01[02]*.md \
+      projects/live/tasks/task-016*.md projects/live/tasks/task-017*.md \
+      projects/live/tasks/task-02[01]*.md \
       knowledge/services/bad-service.md \
       knowledge/findings/no-lesson.md knowledge/findings/too-long.md \
       knowledge/references/bad-ref.md knowledge/references/no-status-ref.md
