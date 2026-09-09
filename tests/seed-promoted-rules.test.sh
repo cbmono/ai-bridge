@@ -14,9 +14,12 @@
 # was never the owner's policy, it traces to one session's self-imposed dispatch throttle,
 # and it ships no reader. Section 4 keeps it out.
 #
-# Rule 4 has a second half that is not prose — `prune-worktrees.sh` has to RECOGNISE
-# `.scratch`, or a bundle that obeys the rule gets worktrees held forever by their own
-# scratch dir. That half is exercised, not grepped.
+# Rule 4 has a second half that is not prose — `prune-worktrees.sh` has to RECOGNISE the
+# directory the rule names, or a bundle that obeys the rule gets worktrees held forever by
+# their own scratch dir. That half is exercised, not grepped.
+#
+# The path itself moved on 2026-09-09 (`.scratch/` -> `tmp/`): the old one is TRACKED in this
+# repo. `scratch-path-is-ignored.test.sh` owns that invariant; this file pins the wording.
 #
 # Matching is done on a NEWLINE-SQUEEZED copy of each document, so a phrase that reflows
 # across a line break still matches and a re-wrap does not turn this red for no change.
@@ -85,10 +88,11 @@ R2='**Generic browser labels are a Claude Code defect, not a misconfiguration.**
 R2ALL='send a connection request to **all** the open browsers and let the human pick'
 R2NEVER='Never refuse the work first, and never advise renaming browsers.'
 
-R4='**Scratch files go in `<worktree>/.scratch/`, never a shared scratchpad.**'
+R4='**Scratch files go in `<worktree>/tmp/`, never a shared scratchpad.**'
 R4WHY='Mutation scripts, probe output and throwaway configs collide when several agents run at once.'
 R4VERIFIED='verified working with three concurrent agents on one tick'
-R4PRUNE='`prune-worktrees.sh` recognises `.scratch` as scaffolding'
+R4PRUNE='`prune-worktrees.sh` recognises `tmp` as scaffolding'
+R4IGNORED='**A scratch path that the repo does not IGNORE is not scratch.**'
 
 # =======================================================================================
 echo "== 1. rule 1 lives in seed/CLAUDE.md § Ad-hoc requests, where the main thread reads it =="
@@ -144,7 +148,8 @@ echo "== 3. rule 4 lives in seed/CONVENTIONS.md § Parallel-safety, with its rec
 # =======================================================================================
 PS="$(bullet "$CONV" '**Parallel-safety:**')"
 ok "the Parallel-safety bullet still exists" "$([ -n "$PS" ] && echo yes || echo no)" yes
-ok "scratch goes in the worktree's own .scratch/" "$(saw "$PS" "$R4")" yes
+ok "scratch goes in the worktree's own tmp/" "$(saw "$PS" "$R4")" yes
+ok "…and the path must be git-ignored, not merely private" "$(saw "$PS" "$R4IGNORED")" yes
 ok "…and says what collides"                 "$(saw "$PS" "$R4WHY")" yes
 ok "…and keeps the evidence it was verified on" "$(saw "$PS" "$R4VERIFIED")" yes
 ok "…and points at the recognition that makes it free" "$(saw "$PS" "$R4PRUNE")" yes
@@ -161,7 +166,10 @@ ok "is_scaffolding() was extractable from the script" \
    "$([ -s "$TMP/is_scaffolding.sh" ] && echo yes || echo no)" yes
 # shellcheck disable=SC1091  # the extract above, written this run
 . "$TMP/is_scaffolding.sh"
-ok "…and it recognises the untracked .scratch/ git reports" \
+ok "…and it recognises the untracked tmp/ git reports" \
+   "$(is_scaffolding 'tmp/' && echo yes || echo no)" yes
+# Bundles stamped before 2026-09-09 still send scratch to .scratch/; the arm stays for them.
+ok "…and still recognises the .scratch/ older bundles write" \
    "$(is_scaffolding '.scratch/' && echo yes || echo no)" yes
 ok "…and a plain untracked file is still WORK" \
    "$(is_scaffolding 'notes.md' && echo yes || echo no)" no
