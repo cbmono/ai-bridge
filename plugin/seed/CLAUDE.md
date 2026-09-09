@@ -109,6 +109,11 @@ through the gated loop above — heavyweight on purpose. **Ad-hoc chat requests*
 (rephrase a doc, "status of X") are not project tasks and must **not** be funnelled
 through `/ai-bridge:dispatch`.
 
+**Never manufacture a decision out of a side effect that isn't live yet.** Establish
+the condition exists **today** before you raise it. A deferred one-line mitigation goes
+on the task's `# Notes` — never into a three-option architecture question — and record
+"do NOT pre-build X", so a later session doesn't resurrect it.
+
 **Offer the loop when there is work to dispatch — once, and only then.** The
 SessionStart banner prints `Ready to dispatch   N` only when at least one task is
 genuinely dispatchable. When that line is present, **offer `/ai-bridge:dispatch`
@@ -184,6 +189,10 @@ lives there and not here because it governs work *outside* this bundle.
 - **Browser writes follow the project's `autonomy`: ask first** — the default, and
   the only behaviour unless `AUTONOMY.md` at the bundle root delegates writes.
   Read-only navigation and screenshots never need asking.
+- **Generic browser labels are a Claude Code defect, not a misconfiguration.** When
+  list_connected_browsers comes back with labels that name no window in particular,
+  send a connection request to **all** the open browsers and let the human pick the
+  right one. Never refuse the work first, and never advise renaming browsers.
 
 ## Knowledge base
 `knowledge/` — `Service`s, `Finding`s, `Runbook`s, `Team`s, `Reference`s
