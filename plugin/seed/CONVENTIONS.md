@@ -361,6 +361,35 @@ above it so none may grow its share.
   asks nobody to trust **less** verification — it moves the verification to the only place
   the merge gate actually reads. `tests/local-vs-ci-testing.test.sh` in `cbmono/ai-bridge`
   pins the clauses above by name.
+- **A red check is EVIDENCE, and it is already written down: read the failing check's own
+  error text BEFORE you form a hypothesis, and falsify locally BEFORE you push.** Two
+  clauses, and each one ships with **the cost of skipping it**, because the instruction on
+  its own is already believed by everyone who skipped it — nobody sets out to guess.
+  **1. THE ERROR TEXT FIRST, BEFORE ANY HYPOTHESIS EXISTS.** `gh run view <run-id>
+  --log-failed`, or the failing step's own output — read before you hold a theory, not to
+  confirm the one you already hold. **Order is the whole rule**: a hypothesis you are
+  already holding turns a log into something you skim for support, and the line that
+  refutes it reads as noise.
+  **The cost, measured on the day this rule comes from (`alteos`, 2026-09-08):** the failing
+  check's error text **already named both** the RBAC problem and the wrong ArgoCD project.
+  Both were guessed instead, in that order, wrongly. The answer was sitting in a log nobody
+  had opened, and the guessing is where the day went.
+  **2. FALSIFY LOCALLY BEFORE YOU PUSH — A FULL CI CYCLE IS NOT A PROBE.** Reproduce the
+  failing step's command on your own machine and try to **break** your hypothesis before you
+  push it. A push is how you confirm a hypothesis you have already tried to falsify; it is
+  never how you test one.
+  **The cost, measured:** a CI run takes **every stage through to testing**, so a wrong guess
+  costs a **whole pipeline** and not the one step you doubted — about **9 minutes** here (→
+  "The full suite belongs to CI"), far longer on a deploy pipeline. Probing by push is the
+  **direct cause** of the "hours, and many builds" the owner reported on that day.
+  **When you genuinely cannot run it locally** — a runner-only tool, a credential you do not
+  hold — that is a capability gap (→ the three rungs above): say **which clause you could
+  not satisfy**, and take the cheapest falsification you do have, which is re-reading the
+  log *against* your hypothesis for the line that refutes it.
+  `tests/read-the-error-text-first.test.sh` in `cbmono/ai-bridge` pins both clauses and both
+  costs, here and in `plugin/agents/failure-analyst.md` — the agent whose whole job this is
+  carries clause 1 as its **first** diagnosis step, because a diagnostician that reaches a
+  hypothesis first has nothing left for the evidence to do.
 - **PR size is a heuristic that suggests a split, never a gate.** **And it is TWO
   numbers.**
   Before opening, check the diff against **`maxPrLoc`** in `instance.config.json`
