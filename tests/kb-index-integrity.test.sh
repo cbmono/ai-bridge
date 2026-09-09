@@ -234,7 +234,7 @@ ok "the clean fixture breaks no link"      "$(check_out | grep -c 'link resolves
 ok "…and still clears"                     "$CLEAN_RC" 0
 
 echo
-echo "== source: is a durable URL — a dangling path token is an ERROR, not a warning =="
+echo "== source: is a durable URL — a dangling path token WARNs, and never fails --check =="
 # One document carrying every token shape, so "handled explicitly" cannot be satisfied by
 # a value the tokeniser silently declines to look at.
 add_source() { # <dir> <slug> <value> — insert a source: line above status:
@@ -249,9 +249,13 @@ ok "…so nothing is reported about it"      "$(check_out | grep -c 'source:')" 
 
 D="$(plant source-dangling)"
 add_source "$D" pipe-in-title '/projects/closed/tasks/task-009.md'
-ok "a dangling /projects path: RED"        "$(check_rc "$D")" 1
-ok "…named, with the target"               "$(check_out | grep -c 'source: resolves to nothing: /projects/closed/tasks/task-009.md')" 1
-ok "…and it says what to write instead"    "$(check_out | grep -c 'blob/<sha> permalink')" 1
+ok "a dangling /projects path: --check clears" "$(check_rc "$D")" 0
+ok "…reported at WARN, naming the doc"     "$(check_out | grep -c '^  WARN   knowledge/findings/pipe-in-title.md$')" 1
+ok "…with the target"                      "$(check_out | grep -c 'source: resolves to nothing: /projects/closed/tasks/task-009.md')" 1
+ok "…and what to write instead"            "$(check_out | grep -c 'blob/<sha> permalink')" 1
+ok "…contributing 0 to the error count"    "$(check_out | grep -c '^build-kb-index: 0 error(s), 1 warning(s).$')" 1
+# Non-vacuous: exit 0 alone would pass a checker that never looked at the field.
+ok "…but --strict still turns it red"      "$(strict_rc "$D")" 1
 
 D="$(plant source-live)"
 add_source "$D" new-rule '/knowledge/vocab.md'
@@ -261,9 +265,9 @@ D="$(plant source-prose)"
 add_source "$D" new-rule '/knowledge/vocab.md — TICK 2026-08-31T18:26:13Z (ai-bridge#88)'
 ok "PROSE around a live path still clears" "$(check_rc "$D")" 0
 add_source "$D" pipe-in-title '/objectives/gone.md, /knowledge/vocab.md'
-ok "a comma list checks EVERY token"       "$(check_rc "$D")" 1
-ok "…reporting the dead one only"          "$(check_out | grep -c 'source: resolves to nothing')" 1
-ok "…and it is the objectives path"        "$(check_out | grep -c 'nothing: /objectives/gone.md')" 1
+ok "a comma list: still only a warning"    "$(check_rc "$D")" 0
+ok "…and it checks EVERY token"            "$(check_out | grep -c 'source: resolves to nothing')" 1
+ok "…the dead one being the objectives path" "$(check_out | grep -c 'nothing: /objectives/gone.md')" 1
 
 ok "the clean fixture carries no source:"  "$(check_rc "$CLEAN")" 0
 
@@ -273,8 +277,10 @@ ok "SCHEMA names the field's own section"  "$(has "$SCHEMA" '#### `source:` is a
 ok "…the PR URL first"                     "$(has "$SCHEMA" "the task's PR URL")" yes
 ok "…the commit-pinned fallback"           "$(has "$SCHEMA" 'a commit-pinned permalink**, when there is no PR')" yes
 ok "…the tokenisation rule the count uses" "$(has "$SCHEMA" 'every token beginning with `/` must resolve')" yes
-ok "…the severity, and that it is ERROR"   "$(has "$SCHEMA" 'A dangling token is an ERROR')" yes
-ok "…and why body links stay at WARN"      "$(has "$SCHEMA" 'different population')" yes
+ok "…the severity, and that it is WARN"    "$(has "$SCHEMA" 'A dangling token is a WARN')" yes
+ok "…the measurement WARN rests on"        "$(has "$SCHEMA" '322 dangling of 514')" yes
+ok "…and that body links are their own population" "$(has "$SCHEMA" 'different population')" yes
+ok "…no ERROR claim survives the flip"     "$(has "$SCHEMA" 'A dangling token is an ERROR')" no
 ok "…the old bare-path example is gone"    "$(has "$SCHEMA" 'e.g. /projects/.../tasks/<id>.md or a PR URL')" no
 ok "validate-bundle points at the owner"   "$(has "$VALIDATE" 'build-kb-index.sh --check` owns it')" yes
 

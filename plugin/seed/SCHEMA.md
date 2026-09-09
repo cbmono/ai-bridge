@@ -293,10 +293,13 @@ instead, in this order:
 and links — no other machinery reads `source:`, so `validate-bundle.sh`'s "references
 machinery follows" is the wrong home for it. **Tokenisation:** the value splits on commas and
 whitespace, and every token beginning with `/` must resolve from the bundle root; a URL
-carries no such token and is not checked. **A dangling token is an ERROR**, because under
-this policy the field is wrong rather than unlucky — which is a **different population** from
-the broken *body* links one section of the same checker reports at WARN. Body prose may cite
-a closed project as history; this field may not.
+carries no such token and is not checked. **A dangling token is a WARN**, and the number is
+why: an existing bundle carries **322 dangling of 514**, so an error would fail its `--check`
+— and dispatch a cataloguer every tick — until all 322 were rewritten by hand, and a gate
+people must silence is a gate that gets deleted. Same call the same checker makes for broken
+*body* links, on a **different population**: body prose may cite a closed project as history,
+this field may not. The policy above is what makes an error reachable — once the bundles read
+zero, the severity can be raised.
 
 **Tags are a closed set.** `/knowledge/vocab.md` lists every allowed tag with its aliases;
 ground a lookup by **longest match** over both columns and use the canonical tag.

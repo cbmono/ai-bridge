@@ -7,8 +7,7 @@
 # Exit: 0 clean · 1 a defect (with --strict, a warning too) · 2 usage/no KB here.
 # A row is derived, never hand-written: its summary is the doc's `lesson:` (else
 # `description:`), `|` is escaped, and superseded Findings render in their own
-# section. Broken bundle-relative links in knowledge/** WARN; a dangling `source:`
-# path ERRORS (SCHEMA.md, "A `source:` is a durable URL").
+# section. A broken link in knowledge/** WARNs, and so does a dangling `source:`.
 # Reasoning and the defect list: ai-bridge-next/task-007, task-019.
 set -uo pipefail
 
@@ -275,11 +274,8 @@ links_in() { # <file> -> "line<TAB>target", one per markdown inline link
 # TOKENISATION, because the field is free-form and the number is meaningless without
 # it: split the value on commas and whitespace; every token starting with `/` is a
 # bundle path and must resolve. A URL carries no such token, so it is not checked.
-# ERROR, not WARN, and that is a DIFFERENT population from check_links above: a body
-# link may cite a closed project as history (validate-bundle.sh's header), while
-# SCHEMA.md now requires this field to be durable — so here a dangle is wrong, not
-# unlucky. `closing-a-project-is-what-breaks-the-kbs-links` measured the body-prose
-# population and stands.
+# WARN, not ERROR: a bundle measured at 322 dangling of 514 would have its `--check`
+# red until every one was rewritten by hand (SCHEMA.md, "A `source:` is a durable URL").
 check_source() {
   local kind f fmv val tok
   for kind in services findings runbooks teams references; do
@@ -291,7 +287,7 @@ check_source() {
         [ -n "$tok" ] || continue
         case "$tok" in /*) : ;; *) continue ;; esac
         tok=${tok%%#*}
-        [ -e ".$tok" ] || err "$f" "source: resolves to nothing: $tok — SCHEMA.md wants the task's PR URL, or a blob/<sha> permalink when there is no PR"
+        [ -e ".$tok" ] || warn "$f" "source: resolves to nothing: $tok — SCHEMA.md wants the task's PR URL, or a blob/<sha> permalink when there is no PR"
       done <<< "$(printf '%s\n' "$val" | tr ',' ' ' | tr -s '[:space:]' '\n')"
     done <<< "$(docs_in "$kind")"
   done
