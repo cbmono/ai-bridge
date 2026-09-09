@@ -181,7 +181,8 @@ ok "…step 6's cancelled-source question" "$(in_launcher 'is the dependent work
 ok "…settled before any write"     "$(in_launcher 'BEFORE the agent writes anything')" yes
 ok "…and the agent stops having written nothing" \
   "$(in_brief 'write nothing —')" yes
-ok "the brief tests both at step 0" "$(in_brief '0. **Both escalations, before any write.**')" yes
+ok "the brief tests both in its pre-flight" \
+  "$(in_brief '**Both escalations, before any write — the pre-flight.**')" yes
 ok "…and never decides either"      "$(in_brief 'Neither is ever yours to decide')" yes
 ok "step 4 defers the objective to the human" "$(in_brief 'the objective question is the human')" yes
 ok "step 6 defers the cancelled source too"   "$(in_brief 'never decide it yourself')" yes

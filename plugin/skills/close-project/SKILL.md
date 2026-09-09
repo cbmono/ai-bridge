@@ -104,7 +104,7 @@ Namespace it — a bare agent name does not resolve. Resolve its model with
 closeout agent with a message** — dispatch a fresh one.
 
 **A closeout is NOT a tick, and the brief must say so.** It runs once, it is not
-idempotent, and it takes **no tick lock** — the tick's step 0.5 ledger/lock dance is
+idempotent, and it takes **no tick lock** — the tick's entry-time ledger/lock dance is
 skipped, because a closeout that adopted the tick's re-entry logic would either deadlock
 behind a live tick or re-run a removal that already happened. For the same reason, do not
 start a closeout while a tick is in flight: both write `log.md`, the KB and task
@@ -117,7 +117,7 @@ its call:
 - **Step 6** — *the source task is `cancelled`, not `done` — is the dependent work still
   viable?*
 
-**Both are settled BEFORE the agent writes anything.** The brief's step 0 tests for them
+**Both are settled BEFORE the agent writes anything.** The brief's **pre-flight** tests for them
 first and, if either fires with no answer in the brief, the agent reports and stops
 having written nothing. Answer here, then dispatch a **fresh** agent carrying the answers
 — an escalation from the middle of a closeout would strand a half-written tree that the
@@ -144,7 +144,7 @@ is, while the log entry still names the human who decided.
 > may run: it is report-only by design and prints the exact removal or prune it would
 > perform, which is a better dry-run report than a description of one.
 
-0. **Both escalations, before any write.** This step is the split's, and steps 1–7 below
+0. **Both escalations, before any write — the pre-flight.** This step is the split's, and steps 1–7 below
    are the closeout as it always was. Read `project.md` and every `tasks/*.md`, the
    project's objective, and — unless the project is `retain: true`, which skips step 6
    entirely — the inbound refs step 6 lists. Then answer two questions: would step 4 ask
@@ -232,7 +232,7 @@ is, while the log entry still names the human who decided.
    on exactly one machine. Update its objective's
    "Projects serving this objective" list to mark it delivered; if **all** of that
    objective's projects are now terminal, **the objective question is the human's** — it
-   is step 0's first escalation, answered in the main thread before you started. Set
+   is the pre-flight's first escalation, answered in the main thread before you started. Set
    `status: achieved` only where that answer says so; never flip it silently, and never
    decide it yourself.
 
@@ -275,7 +275,7 @@ is, while the log entry still names the human who decided.
      the dependent task's `# Notes` ("depended on `<slug>/task-007`, completed and
      closed 2026-08-21"). History belongs in prose, where it cannot dangle.
    * **Source task is `cancelled`, or anything other than `done`** → **the human's, and
-     you already asked.** The dependent work may no longer be viable, so this is step 0's
+     you already asked.** The dependent work may no longer be viable, so this is the pre-flight's
      second escalation: act on the answer your brief carries — set the dependent task
      `blocked` with the reason in `# Notes`, or record the explicit replacement
      dependency it names. Never drop it silently, and never decide it yourself.
