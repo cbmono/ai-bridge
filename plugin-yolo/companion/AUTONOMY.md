@@ -52,6 +52,12 @@ What it delegates, and to what anchor:
 | Browser writes | Ask first | Permitted without asking | The task itself — a write nobody asked for is still out of scope |
 | Spend the `qa-reviewer` fallback on a reviewer that failed **terminally** | Ask first | The loop may dispatch it without asking | `scripts/review-clearance.sh` exit **5** — the reviewer's own words, machine-classified (below) |
 
+**Disclosure on the Browser writes row, because that is where the two changes meet.**
+Browser access is a project's **default** now (`SCHEMA.md` → "Browser access"), so a
+`yolo` project gets browser access **and** delegated browser writes with no prompt at any
+point — the compounding the ask-first gate exists to prevent; the row's behaviour and its
+anchor are unchanged, this only says what the row now costs.
+
 The anchor is always a **machine** signal, never a self-report. `yolo` removes the
 human, not the evidence.
 

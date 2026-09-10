@@ -77,7 +77,7 @@ target_repo: <org>/<repo>             # BUILD only: default repo for this projec
 deliverables: [ "<artifact>", ... ]   # RESEARCH only: what this project produces, e.g. "tech landscape per domain (md)", "exec summary deck (marp)"
 autonomy: gated | <mode>              # optional (default gated). gated = the human promotes `ready` AND merges — both gates absolute. Any other value names a delegated-authority mode defined in `AUTONOMY.md`, and is INERT unless that file exists (absent ⇒ gated). See "Delegated authority" below.
 clis: [ <name>, ... ]                 # optional: external CLIs/integrations this project's agents may use (e.g. render, supabase). A declaration — agents still verify a CLI works before relying on it. BUILD-SHAPED: research projects dispatch no agents, so `/new-project` never asks for it there (an explicit clis= flag is still recorded).
-browser: off | claude-for-chrome      # optional (default off). claude-for-chrome = agents may drive the browser via the claude-in-chrome tools when present — background role agents included, each with its OWN tab group (not the human's tabs), so navigate explicitly. Absent tools = degrade, don't fail. Writes follow the project's autonomy: ask-first by default, permitted where a delegated mode says so (AUTONOMY.md). See "Browser access" below.
+browser: claude-for-chrome | off      # optional (default claude-for-chrome). Agents may drive the browser via the claude-in-chrome tools when present — background role agents included, each with its OWN tab group (not the human's tabs), so navigate explicitly. THE DEFAULT GRANTS READ ACCESS TO EVERY SITE THIS HUMAN IS LOGGED INTO in that browser; `off` is the opt-out, and an ABSENT key means claude-for-chrome. Absent tools = degrade, don't fail. Writes follow the project's autonomy: ask-first by default, permitted where a delegated mode says so (AUTONOMY.md). See "Browser access" below.
 owner: <github-username>              # optional: which human's work this project is, on an instance shared by more than one. A GitHub USERNAME, never an email. Absent ⇒ nobody in particular, so it is this clone's — see "Ownership on a shared instance" below. Gates DISPATCH only, never promotion.
 retain: true                          # optional (default absent = false). Closeout KEEPS this project's folder instead of `git rm -r`-ing it. Governs the FOLDER ONLY — not the tasks, not the status: a retained project still ends `status: done` with every task terminal. See "Project & objective completion" below.
 deliverable_paths: [ /projects/<slug>/deliverables/<file>, ... ]   # WRITTEN BY CLOSEOUT, not by hand. Bundle-relative paths, resolved once from each task's `artifacts:` and verified on disk at closeout. `[ ]` means closeout looked and found none.
@@ -987,15 +987,38 @@ in this order:
 
 <!-- tool-mention: mcp__claude-in-chrome__*(1) — five agents are told to read this file and only `qa-reviewer` holds any browser tool, so for most readers the name below states a capability they do not have. It is named once, to explain that the tools are injected rather than configured and that their absence is normal; rule 1 is the route for a reader without them. Enforced by tests/agent-tool-allowlist.test.sh. -->
 
-A project may let its agents **drive a real browser** — read a logged-in page, click
-through a flow, screenshot — via **Claude for Chrome**. Opt in per project with
-`browser: claude-for-chrome` on `project.md` (default `off`).
+A project's agents may **drive a real browser** — read a logged-in page, click through a
+flow, screenshot — via **Claude for Chrome**. **This is the default.** A project carries
+`browser: claude-for-chrome` unless it sets `browser: off`, which is the **opt-out**, and
+an **absent `browser:` key means `claude-for-chrome`** (below).
+
+**What the default grants, said plainly rather than left to be inferred.** Agents get
+**read access to every site this human is logged into in that browser** — mail, cloud
+consoles, admin panels — because the browser carries their cookies. That is defensible
+because **writes still ask first** (rule 4), and for no other reason: a default nobody was
+told about is the failure this line exists to prevent.
+
+**Existing projects: the flip is RETROACTIVE, and that is the choice.** A `project.md`
+with no `browser:` key was scaffolded before this default, and from the next plugin upgrade
+it resolves to `claude-for-chrome` — so projects approved under the old default gain
+browser **read** access without anyone re-approving them. Stated rather than discovered:
+it is what a default *for* browser access means, rule 4 is untouched so nothing new may be
+**written** anywhere, and the opt-out is one line on one file. **No
+migration script ships and none should.** Rewriting `browser: off` onto every existing
+`project.md` would be a policy decision taken by a sweep instead of by the human whose
+projects they are — and `refresh-seeds.sh` 3-way-merges seed *docs* and never touches
+`projects/`, so nothing already in the bundle could do it.
+
+**Record the why on the exception.** A project that turns browser access **off** says why
+in its `# Context`, the way a project used to record why it turned browser access on. The
+polarity flipped; the practice did not.
 
 **How it's wired: it isn't.** The Chrome extension **injects** the
 `mcp__claude-in-chrome__*` tools into a live paired session. There is no `mcpServers`
 stanza, no `.mcp.json`, nothing in `settings.json` — `claude mcp list` doesn't even show
-it. Opting in at the machine level = **install the extension and grant it per-site
-permissions**; opting in per project = this field. Nothing to configure in this bundle.
+it. Enabling it at the machine level = **install the extension and grant it per-site
+permissions**; this field only says whether a project's agents may use it. Nothing to
+configure in this bundle.
 
 **Rules for agents:**
 
@@ -1007,9 +1030,9 @@ permissions**; opting in per project = this field. Nothing to configure in this 
    connection is inherited by background subagents; the human's open tabs are **not**.
    So always **navigate explicitly** from a URL rather than assuming a page is already
    open, and never assume you can see (or should touch) what the human is looking at.
-3. **Browser-first, escalate if stuck.** On a `browser: claude-for-chrome` project, if a
+3. **Browser-first, escalate if stuck.** Unless the project sets `browser: off`, if a
    step needs a browser, try it yourself before handing it back — that's the point of the
-   opt-in. Ask the human only when the browser genuinely can't get there (an MFA prompt,
+   default. Ask the human only when the browser genuinely can't get there (an MFA prompt,
    a permission the extension lacks, a destructive confirmation).
 4. **Writes follow the project's `autonomy`, like every other gate.** **Ask first before
    any browser write** — that is the default and the only behaviour unless the project's
