@@ -263,7 +263,7 @@ tags: [ <tag>, ... ]              # from /knowledge/vocab.md ONLY — never a ne
 status: current | superseded | corrected
 supersedes: [ <slug>, ... ]       # Findings this one replaces
 superseded_by: <slug>             # set together with status: superseded
-source:                           # where it came from, e.g. /projects/.../tasks/<id>.md or a PR URL
+source:                           # where it came from — a DURABLE URL, or a path that resolves TODAY. Never a bare /projects/... path (below).
 timestamp: <ISO 8601>
 ---
 ```
@@ -274,6 +274,32 @@ Body headings: `# Context`, `# Finding` (or `# Decision`), `# Rationale`,
 **`lesson:` is the index row.** `build-kb-index.sh` copies it into `knowledge/index.md`
 verbatim, so a hand-written summary can no longer drift from the document. Without one the
 row falls back to `description:` and `--check` warns.
+
+#### `source:` is a durable URL, not a path into `projects/`
+
+**A `source:` naming `/projects/<slug>/…` is guaranteed to dangle** — `/close-project`
+removes the folder by design, so the population regrows on every close. Write one of these
+instead, in this order:
+
+1. **the task's PR URL** — `https://github.com/<org>/<repo>/pull/<n>`. First choice: it
+   outlives the bundle's working tree entirely.
+2. **a commit-pinned permalink**, when there is no PR — a bundle-only `Finding`, a research
+   project, a folder. `https://github.com/<org>/<bundle>/blob/<sha>/projects/<slug>/tasks/<id>.md`
+   (`tree` for a folder), `<sha>` being the commit **before** the close. Same shape as
+   `projects/CLOSED.md`, and unlike `<sha>:<path>` a browser can open it.
+3. **a bundle path** only while it resolves today — `/knowledge/…`, `/log.md`, a live project.
+
+**The reader is `build-kb-index.sh --check`**, whose job is already the KB's own frontmatter
+and links — no other machinery reads `source:`, so `validate-bundle.sh`'s "references
+machinery follows" is the wrong home for it. **Tokenisation:** the value splits on commas and
+whitespace, and every token beginning with `/` must resolve from the bundle root; a URL
+carries no such token and is not checked. **A dangling token is a WARN**, and the number is
+why: an existing bundle carries **322 dangling of 514**, so an error would fail its `--check`
+— and dispatch a cataloguer every tick — until all 322 were rewritten by hand, and a gate
+people must silence is a gate that gets deleted. Same call the same checker makes for broken
+*body* links, on a **different population**: body prose may cite a closed project as history,
+this field may not. The policy above is what makes an error reachable — once the bundles read
+zero, the severity can be raised.
 
 **Tags are a closed set.** `/knowledge/vocab.md` lists every allowed tag with its aliases;
 ground a lookup by **longest match** over both columns and use the canonical tag.
