@@ -931,17 +931,12 @@ above it so none may grow its share.
   each other's PR-body draft, and the body that got posted was well-formed, merely the
   wrong task's. `prune-worktrees.sh` recognises `tmp` as scaffolding, so obeying
   this never leaves you a worktree that reads as dirty forever.
-- **Browser (ON unless the project opted OUT):** browser access is a project's **default**
-  — the task's project has it unless its `project.md` says `browser: off`, and **an absent
-  `browser:` key means ON** (a project scaffolded before the default flipped, never an
-  opt-out; only the literal `browser: off` turns it off). So when the project does not say
-  `off` **and** the `mcp__claude-in-chrome__*` tools are actually present,
+- **Browser (only if the project opts in):** when the task's project sets `browser:
+  claude-for-chrome` **and** the `mcp__claude-in-chrome__*` tools are actually present,
   **rung 1 above applies to the browser like any other tool**: verify the change in the
   real page, read the logged-in view, take the screenshot. This paragraph used to state
   that as a browser-only rule; it is the general one now, stated once, so the two cannot
-  drift. **What the default hands you is read access to every site the human is logged
-  into** in that browser, so read what the task needs and nothing else. You get your **own
-  tab group**, not the human's tabs, so always navigate from an
+  drift. You get your **own tab group**, not the human's tabs, so always navigate from an
   explicit URL. Tools absent (e.g. a headless tick) → **that is a capability gap, so take
   the non-browser route, say so, and carry on** — never report blocked *only* for a missing
   browser. **Browser writes follow the project's

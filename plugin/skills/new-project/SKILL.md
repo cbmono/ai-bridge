@@ -43,10 +43,8 @@ build projects.
   agents may use (e.g. `render`, `supabase`). **Build-shaped**: research projects
   dispatch no agents, so it is never *asked* for one — but an explicit flag is still
   honoured (the in-session escape hatch for a research project that queries a datasource).
-- `browser=claude-for-chrome|off` (shorthand `/claudeforchrome`) — let agents drive the
-  browser via the claude-in-chrome MCP when present. **Default `claude-for-chrome`**, so
-  **`browser=off` is the opt-OUT** a human types. `/claudeforchrome` keeps working and now
-  names the default — harmless, and deleting a shorthand people have learned is not.
+- `browser=off|claude-for-chrome` (shorthand `/claudeforchrome`) — let agents drive the
+  browser via the claude-in-chrome MCP when present (default `off`).
 - `owner=<github-username>` — **only for a bundle shared by more than one human**:
   whose project this is. A GitHub username, never an email. Like `clis`, it is
   **never asked for** — an instance with one human has no use for it and the question
@@ -111,12 +109,13 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
      connected MCP servers and probe `PATH` for likely CLIs; show each with a ✓/✗ on
      whether it looks authenticated, plus "other" for free entry. Declarations — agents
      still verify a CLI works before relying on it.
-   - **browser** — claude-for-chrome (default) / off. **Asked on both kinds** — web
+   - **browser** — off (default) / claude-for-chrome. **Asked on both kinds** — web
      research is the clearest case for it, so don't skip it the way `clis` is skipped.
-     Ask it as the **opt-OUT it now is** ("turn browser access off for this project?"),
-     and state in one line what the default costs before they answer: agents get **read
-     access to every site this human is logged into** in their browser. Browser **writes**
-     still ask first (below), which is what makes that defensible.
+     Ask it as the opt-IN it is ("grant browser access to this project?"), and **state
+     in one line what granting it means before they answer**: agents get **read access to
+     every site this human is logged into** in their browser, and browser **writes** still
+     ask first (below), which is what makes granting it defensible. Where the answer is
+     `claude-for-chrome`, record **why** in `# Context` beside the key.
    If **browser = claude-for-chrome** and the chosen mode **delegates browser writes**,
    don't block it — that combination is supported and deliberate. State once what it means
    so the choice is informed: agents may **write** in the human's logged-in browser
@@ -147,22 +146,11 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
      `success_criteria: [...]` from step 3, `status: active`, `timestamp`; plus
      `objective: /objectives/<slug>.md` only where step 3 resolved one) — plus
      `target_repo` for **build**, or `deliverables: [...]` for **research**; plus the
-     capabilities from step 4: `autonomy:` (always; default `gated`), **`browser:`
-     (ALWAYS, explicitly — see below)**, and `clis:` / `owner:` only when non-default or
-     explicitly given (omit them
+     capabilities from step 4: `autonomy:` (always; default `gated`), and `clis:` /
+     `browser:` / `owner:` only when non-default or explicitly given (omit them
      otherwise) — and a `# Context` body
      that states what the project does and why, ending by linking its `index.md` and
      `log.md`.
-     - **`browser:` is written onto every scaffolded `project.md`, whichever way it went.**
-       Not "only when non-default": the default is now `claude-for-chrome`, so that rule
-       would write the key on the opt-OUT and omit it on the opt-IN, and an absent key
-       would mean two things. Written always, an **absent `browser:` means exactly one
-       thing — legacy, scaffolded before this version** (`SCHEMA.md` → "Browser access"
-       resolves it to `claude-for-chrome`). Two lines go in `# Context` beside it: the
-       **disclosure**, that the default grants agents read access to every site this human
-       is logged into in their browser and that browser writes still ask first; and, **when
-       the answer was `off`, why** — the record a project used to leave when it opted in,
-       kept now for the exception instead.
    - `index.md` — `# <title> — tasks`, one bullet per seed task with its status.
      **Derived and gitignored** (the PM rewrites it each tick): create it, but it is
      not part of the commit in step 7.
