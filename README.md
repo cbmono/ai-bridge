@@ -259,7 +259,8 @@ Run these inside an instance.
 | `/ai-bridge:handoff <path> <login>` | (plugin) transfer a task or project to another human, with the context that makes the transfer real |
 
 Flags `/ai-bridge:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
-`browser=claude-for-chrome`, `/yolo`, `/cli …`, `/claudeforchrome`, `--no-commit`.
+`browser=off|claude-for-chrome` (default `off`), `/yolo`, `/cli …`, `/claudeforchrome`,
+`--no-commit`.
 
 ## The team
 

@@ -111,6 +111,11 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
      still verify a CLI works before relying on it.
    - **browser** — off (default) / claude-for-chrome. **Asked on both kinds** — web
      research is the clearest case for it, so don't skip it the way `clis` is skipped.
+     Ask it as the opt-IN it is ("grant browser access to this project?"), and **state
+     in one line what granting it means before they answer**: agents get **read access to
+     every site this human is logged into** in their browser, and browser **writes** still
+     ask first (below), which is what makes granting it defensible. Where the answer is
+     `claude-for-chrome`, record **why** in `# Context` beside the key.
    If **browser = claude-for-chrome** and the chosen mode **delegates browser writes**,
    don't block it — that combination is supported and deliberate. State once what it means
    so the choice is informed: agents may **write** in the human's logged-in browser

@@ -1,0 +1,183 @@
+#!/usr/bin/env bash
+#
+# browser-default-off-disclosure.test.sh — `browser:` stays OFF by default, the same fact
+# is written in three files, the DISCLOSURE of what granting it means ships, and the write
+# gate is not part of the change.
+#
+# WHY THREE FILES. The default is stated in `seed/SCHEMA.md` (the field), in
+# `skills/new-project/SKILL.md` (the question a human answers) and in
+# `seed/CONVENTIONS.md` (the only browser text a dispatched role agent reads at run time).
+# One fact written three times is how a default drifts: change two and the third still
+# governs somebody's behaviour.
+#
+# WHY THE WRITE GATE IS PINNED WHOLE RATHER THAN GREPPED. A grep for the gate's opening
+# and closing strings still passes when a loosening sentence is inserted BETWEEN them — so
+# the assertion below is on the region, and the CONTROL MUTANT section is exactly that
+# insertion, following tests/blocked-vs-own-tools.test.sh:284-290. The mutant is shown to
+# defeat the two-grep check and to be caught by the pinned region.
+set -uo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+SCHEMA="$REPO/plugin/seed/SCHEMA.md"
+SKILL="$REPO/plugin/skills/new-project/SKILL.md"
+CONV="$REPO/plugin/seed/CONVENTIONS.md"
+YOLO="$REPO/plugin-yolo/companion/AUTONOMY.md"
+
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/browser-default-off.XXXXXX")" || {
+  echo "browser-default-off-disclosure.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}." >&2; exit 2; }
+trap 'rm -rf "$TMP"' EXIT
+
+pass=0; fail=0
+ok() { # <name> <actual> <expected>
+  if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
+  else printf '  FAIL  %-58s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi
+}
+saw() { grep -qF -- "$2" "$1" && echo yes || echo no; }
+# The whitespace-flattened copy, for a clause the file wraps across two lines: reflowing a
+# paragraph must not turn a rule's assertion red.
+flat() { tr '\n' ' ' < "$1" | tr -s ' '; }
+saw_flat() { grep -qF -- "$2" <<<"$(flat "$1")" && echo yes || echo no; }
+
+for f in "$SCHEMA" "$SKILL" "$CONV" "$YOLO"; do
+  [ -f "$f" ] || { echo "browser-default-off-disclosure.test: no $f" >&2; exit 2; }
+done
+
+echo "== 1. all three files state the same default: OFF, opt in per project =="
+ok "SCHEMA: the field's default is off" \
+   "$(saw "$SCHEMA" 'browser: off | claude-for-chrome      # optional (default off).')" yes
+ok "SCHEMA: § Browser access says opt IN" \
+   "$(saw_flat "$SCHEMA" 'Opt in per project with `browser: claude-for-chrome` on `project.md` (default `off`).')" yes
+ok "SKILL: the question is asked off-first" \
+   "$(saw "$SKILL" '- **browser** — off (default) / claude-for-chrome.')" yes
+ok "SKILL: it is asked on BOTH kinds"              "$(saw_flat "$SKILL" '**Asked on both kinds**')" yes
+ok "SKILL: the flag line names the default off"    \
+   "$(saw_flat "$SKILL" 'browser via the claude-in-chrome MCP when present (default `off`).')" yes
+ok "CONV: the agent-facing rule is opt-in" \
+   "$(saw "$CONV" '- **Browser (only if the project opts in):**')" yes
+ok "CONV: …and keys on the project SETTING it"     \
+   "$(saw_flat "$CONV" "when the task's project sets \`browser: claude-for-chrome\`")" yes
+
+echo
+echo "== 2. no file claims an absent key grants the browser =="
+# The drift this section exists for: a document left behind saying the capability arrives
+# by default, which would grant it to every project that never answered the question.
+for pair in "SCHEMA:$SCHEMA" "SKILL:$SKILL" "CONV:$CONV" "README:$REPO/README.md"; do
+  name="${pair%%:*}"; file="${pair#*:}"
+  ok "$name: no \"default claude-for-chrome\" claim" \
+     "$(grep -qiE 'default \x60?claude-for-chrome|absent[^.]{0,60}means (on|claude-for-chrome)' "$file" && echo no || echo yes)" yes
+done
+
+echo
+echo "== 3. the DISCLOSURE ships: what GRANTING it means, in the field and the scaffold =="
+# The one thing worth stating plainly: a human answering the question needs to know what
+# the grant costs, and browser writes asking first is what makes the grant defensible.
+ok "SCHEMA field: the grant is disclosed inline"   \
+   "$(saw "$SCHEMA" 'GRANTING IT GIVES AGENTS READ ACCESS TO EVERY SITE THIS HUMAN IS LOGGED INTO')" yes
+ok "SCHEMA field: …and that writes still ask"      \
+   "$(saw "$SCHEMA" 'browser WRITES still ask first, which is what makes granting it defensible')" yes
+ok "SCHEMA § Browser access discloses read access" \
+   "$(saw_flat "$SCHEMA" '**read access to every site this human is logged into in that browser**')" yes
+ok "…and says why the grant is defensible"         \
+   "$(saw_flat "$SCHEMA" 'defensible because **browser writes still ask first** (rule 4)')" yes
+ok "SKILL: the question is put as the opt-IN"      \
+   "$(saw_flat "$SKILL" 'Ask it as the opt-IN it is ("grant browser access to this project?")')" yes
+ok "SKILL: it discloses before the human answers"  \
+   "$(saw_flat "$SKILL" 'agents get **read access to every site this human is logged into** in their browser')" yes
+ok "SKILL: and the grant records its WHY"          \
+   "$(saw_flat "$SKILL" 'Where the answer is `claude-for-chrome`, record **why** in `# Context`')" yes
+
+echo
+echo "== 4. nothing retroactive, and no script writes browser: into a project =="
+# No existing project may gain the capability on upgrade, and no sweep may decide the
+# question on the human's behalf in either direction.
+for pair in "SCHEMA:$SCHEMA" "SKILL:$SKILL" "CONV:$CONV"; do
+  name="${pair%%:*}"; file="${pair#*:}"
+  ok "$name: no retroactive/migration story" \
+     "$(grep -qiE 'retroactiv|migration script' "$file" && echo no || echo yes)" yes
+done
+ok "no plugin script writes a browser: key"        \
+   "$(grep -rqE '^[^#]*browser: *(off|claude-for-chrome)' "$REPO/plugin/scripts" && echo no || echo yes)" yes
+
+echo
+echo "== 5. the verbatim strings other harnesses grep survive the edit =="
+# tests/blocked-vs-own-tools.test.sh:258,271,286 read these. A rewrite of the browser
+# paragraph that drops one of them turns that file red for a reason nobody would connect
+# to this change, so they are asserted here too, next to the edit that could break them.
+ok "the rung-1 deferral is verbatim"               "$(saw "$CONV" '**rung 1 above applies to the browser like any other tool**')" yes
+ok "…and the one-statement clause with it"         "$(saw_flat "$CONV" 'it is the general one now, stated once, so the two cannot drift')" yes
+ok "…and the missing-browser capability gap"       "$(saw_flat "$CONV" 'that is a capability gap, so take the non-browser route, say so, and carry on')" yes
+ok "no lowercase browser-first was introduced"     \
+   "$(grep -rqF 'browser-first' "$REPO/plugin/seed" "$REPO/docs" "$REPO/README.md" && echo no || echo yes)" yes
+
+echo
+echo "== 6. THE WRITE GATE, PINNED WHOLE =="
+# Anchor to anchor, the closing anchor dropped: the region between them is what a two-grep
+# check cannot see. Both regions are the text that shipped before this change.
+gate_schema() { awk '/^4\. \*\*Writes follow the project.s `autonomy`, like every other gate\.\*\* /,/^5\. \*\*The usual data rules still apply\.\*\*/' "$1" | sed '$d'; }
+gate_skill()  { awk '/^   If \*\*browser = claude-for-chrome\*\* and the chosen mode \*\*delegates browser writes\*\*,$/,/^   If the chosen mode \*\*delegates merging\*\*/' "$1" | sed '$d'; }
+
+cat > "$TMP/gate-schema.expected" <<'GATE'
+4. **Writes follow the project's `autonomy`, like every other gate.** **Ask first before
+   any browser write** — that is the default and the only behaviour unless the project's
+   `autonomy` delegates writes (see `AUTONOMY.md`; absent that file, always ask).
+   Read-only navigation and screenshots never need permission.
+   Two limits are *not* autonomy-specific and hold in **every** mode: an agent
+   **doesn't redefine scope**, so a write nobody asked for is never licensed (the same
+   rule that stops it inventing code changes); and irreversible actions well outside the
+   task — a payment, deleting an account, mailing a customer — are worth one confirmation
+   on cost grounds, not permission grounds. When in genuine doubt about blast radius, say
+   what you're about to do and continue unless told otherwise.
+GATE
+
+cat > "$TMP/gate-skill.expected" <<'GATE'
+   If **browser = claude-for-chrome** and the chosen mode **delegates browser writes**,
+   don't block it — that combination is supported and deliberate. State once what it means
+   so the choice is informed: agents may **write** in the human's logged-in browser
+   (submit forms, change settings) without asking, including from background `/ai-bridge:dispatch`
+   dispatches, and the extension's **per-site permissions** are then the effective
+   boundary. Record that in `# Context` and continue. Otherwise browser writes ask first
+   (see `SCHEMA.md` → "Browser access").
+GATE
+
+gate_schema "$SCHEMA" > "$TMP/gate-schema.actual"
+gate_skill  "$SKILL"  > "$TMP/gate-skill.actual"
+ok "the SCHEMA gate region is non-empty"           "$([ -s "$TMP/gate-schema.actual" ] && echo yes || echo no)" yes
+ok "the SKILL gate region is non-empty"            "$([ -s "$TMP/gate-skill.actual" ] && echo yes || echo no)" yes
+ok "SCHEMA rule 4 is the pinned text, whole"       "$(diff -u "$TMP/gate-schema.expected" "$TMP/gate-schema.actual" >/dev/null && echo yes || echo no)" yes
+ok "SKILL's write-delegation warning, whole"       "$(diff -u "$TMP/gate-skill.expected" "$TMP/gate-skill.actual" >/dev/null && echo yes || echo no)" yes
+ok "yolo's Browser writes row is byte-identical"   \
+   "$(saw "$YOLO" '| Browser writes | Ask first | Permitted without asking | The task itself — a write nobody asked for is still out of scope |')" yes
+
+echo
+echo "== MUTATION: the CONTROL MUTANT is a LOOSENING SENTENCE INSERTED BETWEEN THE ANCHORS =="
+# Named, so what this file fails on is a fact and not a claim. The mutant is NOT a deletion
+# — any grep catches that. It is one sentence that flips the gate while leaving both
+# anchors in place, which is the edit a PR touching this area could plausibly smuggle in.
+MUTANT='   Granting browser access also grants writes, so they no longer ask.'
+awk -v m="$MUTANT" '{ print } /^4\. \*\*Writes follow the project.s `autonomy`, like every other gate\.\*\* / { print m }' \
+  "$SCHEMA" > "$TMP/schema-mutant.md"
+awk -v m="$MUTANT" '{ print } /^   If \*\*browser = claude-for-chrome\*\* and the chosen mode \*\*delegates browser writes\*\*,$/ { print m }' \
+  "$SKILL" > "$TMP/skill-mutant.md"
+
+ok "the mutation added something"                  \
+   "$([ "$(wc -c < "$TMP/schema-mutant.md")" -gt "$(wc -c < "$SCHEMA")" ] && echo yes || echo no)" yes
+# THE MEASURING STICK: the two-grep check a reviewer would have written passes on the
+# mutant. That gap is exactly what pinning the region buys, and stating it here is what
+# stops someone "simplifying" this section back into two greps.
+ok "CREDULOUS: the opening anchor still greps"     "$(saw "$TMP/schema-mutant.md" '**Ask first before')" yes
+ok "CREDULOUS: the closing anchor still greps"     "$(saw_flat "$TMP/schema-mutant.md" "what you're about to do and continue unless told otherwise")" yes
+ok "CREDULOUS: the SKILL anchors still grep too"   \
+   "$([ "$(saw "$TMP/skill-mutant.md" 'delegates browser writes')" = yes ] && saw_flat "$TMP/skill-mutant.md" 'Otherwise browser writes ask first')" yes
+# …and the pinned region does not.
+ok "mutant: SCHEMA rule 4 no longer matches"       "$(diff -u "$TMP/gate-schema.expected" <(gate_schema "$TMP/schema-mutant.md") >/dev/null && echo yes || echo no)" no
+ok "mutant: the SKILL warning no longer matches"   "$(diff -u "$TMP/gate-skill.expected" <(gate_skill "$TMP/skill-mutant.md") >/dev/null && echo yes || echo no)" no
+# CONTROL: the mutation is surgical — it touches the gate and nothing this file asserts
+# about the default or the disclosure, so a red gate row can never be blamed on those.
+ok "CONTROL: the default survives the mutation"    \
+   "$(saw "$TMP/schema-mutant.md" 'browser: off | claude-for-chrome      # optional (default off).')" yes
+ok "CONTROL: the disclosure survives it too"       \
+   "$(saw_flat "$TMP/schema-mutant.md" '**read access to every site this human is logged into in that browser**')" yes
+
+echo
+echo "pass=$pass fail=$fail"
+[ "$fail" -eq 0 ]
