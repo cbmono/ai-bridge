@@ -73,8 +73,8 @@ echo "== 3. the DISCLOSURE ships: what GRANTING it means, in the field and the s
 # that makes it defensible carries its own exception inline — § 7 is where that is graded.
 ok "SCHEMA field: the grant is disclosed inline"   \
    "$(saw "$SCHEMA" 'GRANTING IT GIVES AGENTS READ ACCESS TO EVERY SITE THIS HUMAN IS LOGGED INTO')" yes
-ok "SCHEMA field: …and that writes still ask"      \
-   "$(saw "$SCHEMA" 'browser WRITES still ask first, which is what makes granting it defensible')" yes
+ok "SCHEMA field: …and the writes clause is qualified" \
+   "$(saw "$SCHEMA" "browser WRITES ask first unless the project's autonomy delegates them, which is what makes granting it defensible")" yes
 ok "SCHEMA § Browser access discloses read access" \
    "$(saw_flat "$SCHEMA" '**read access to every site this human is logged into in that browser**')" yes
 ok "…and says why the grant is defensible"         \
@@ -196,6 +196,9 @@ accurate() { # <sentence> <mode> <what that mode actually does>
 claim_of() { grep -oE -- "$2" "$1"; }           # <flat file> <ERE for the sentence>
 SCHEMA_CLAIM_RE='it is defensible because [^.]*\.'
 SKILL_CLAIM_RE='and browser \*\*writes\*\* [^.]*\.'
+# The field comment at `SCHEMA.md:80` is a THIRD disclosure, and the two REs above cannot
+# see it — so it is graded here as its own claim, in both modes, like the other two.
+SCHEMA_FIELD_RE='browser WRITES [^.]*\.'
 flat "$SCHEMA" > "$TMP/schema.flat"
 flat "$SKILL"  > "$TMP/skill.flat"
 
@@ -213,13 +216,18 @@ ok "no mode file at all: writes ASK too"           "$UNARMED_WRITES" ask
 ok "delegating mode: writes are PERMITTED"         "$DELEG_WRITES" may-not-ask
 
 SCHEMA_CLAIM="$(claim_of "$TMP/schema.flat" "$SCHEMA_CLAIM_RE")"
+SCHEMA_FIELD_CLAIM="$(claim_of "$TMP/schema.flat" "$SCHEMA_FIELD_RE")"
 SKILL_CLAIM="$(claim_of "$TMP/skill.flat" "$SKILL_CLAIM_RE")"
 # Vacuity guard: an extraction that found nothing would grade an empty string.
 ok "the SCHEMA claim extracts, exactly one sentence" "$(grep -c . <<<"$SCHEMA_CLAIM")" 1
+ok "the SCHEMA FIELD claim extracts, one sentence"   "$(grep -c . <<<"$SCHEMA_FIELD_CLAIM")" 1
 ok "the SKILL claim extracts, exactly one sentence"  "$(grep -c . <<<"$SKILL_CLAIM")" 1
 ok "SCHEMA claim is accurate under gated"          "$(accurate "$SCHEMA_CLAIM" gated "$GATED_WRITES")" yes
 ok "SCHEMA claim is accurate when writes ARE delegated" \
    "$(accurate "$SCHEMA_CLAIM" delegating "$DELEG_WRITES")" yes
+ok "SCHEMA field claim is accurate under gated"    "$(accurate "$SCHEMA_FIELD_CLAIM" gated "$GATED_WRITES")" yes
+ok "SCHEMA field claim is accurate when delegated" \
+   "$(accurate "$SCHEMA_FIELD_CLAIM" delegating "$DELEG_WRITES")" yes
 ok "SKILL claim is accurate under gated"           "$(accurate "$SKILL_CLAIM" gated "$GATED_WRITES")" yes
 ok "SKILL claim is accurate when writes ARE delegated"  \
    "$(accurate "$SKILL_CLAIM" delegating "$DELEG_WRITES")" yes
@@ -271,10 +279,15 @@ SKILL_NEW='browser **writes** ask first unless the chosen `autonomy` mode delega
 SKILL_OLD='browser **writes** still ask first (below)'
 lit_sub "$TMP/schema.flat" "$SCHEMA_NEW" "$SCHEMA_OLD" > "$TMP/schema-reverted.flat"
 lit_sub "$TMP/skill.flat"  "$SKILL_NEW"  "$SKILL_OLD"  > "$TMP/skill-reverted.flat"
+# On the literals, never `cmp`: `lit_sub` prints a trailing newline the flattened file has
+# not got, so a byte compare reads as "replaced" even when it substituted nothing.
+replaced() { # <flat> <reverted> <new literal> <old literal>
+  grep -qF -- "$3" "$1" && ! grep -qF -- "$3" "$2" && grep -qF -- "$4" "$2" && echo yes || echo no
+}
 ok "the SCHEMA reversion actually replaced text"   \
-   "$(! cmp -s "$TMP/schema.flat" "$TMP/schema-reverted.flat" && grep -qF -- "$SCHEMA_OLD" "$TMP/schema-reverted.flat" && echo yes || echo no)" yes
+   "$(replaced "$TMP/schema.flat" "$TMP/schema-reverted.flat" "$SCHEMA_NEW" "$SCHEMA_OLD")" yes
 ok "the SKILL reversion actually replaced text"    \
-   "$(! cmp -s "$TMP/skill.flat" "$TMP/skill-reverted.flat" && grep -qF -- "$SKILL_OLD" "$TMP/skill-reverted.flat" && echo yes || echo no)" yes
+   "$(replaced "$TMP/skill.flat" "$TMP/skill-reverted.flat" "$SKILL_NEW" "$SKILL_OLD")" yes
 
 # THE MEASURING STICK: the presence check this file carried before § 7 is GREEN on the
 # reverted text. That is the gap two modes buy, and stating it is what stops someone
@@ -296,6 +309,33 @@ ok "reverted SKILL claim: INACCURATE when delegated"  \
 # file asserts, so a red row above can never be blamed on the read-access disclosure.
 ok "CONTROL: read access survives the reversion"   \
    "$(grep -qF -- '**read access to every site this human is logged into in that browser**' "$TMP/schema-reverted.flat" && echo yes || echo no)" yes
+ok "CONTROL: the FIELD claim survives this reversion" \
+   "$(accurate "$(claim_of "$TMP/schema-reverted.flat" "$SCHEMA_FIELD_RE")" delegating "$DELEG_WRITES")" yes
+
+echo
+echo "== MUTATION 3: THE FIELD TEXT AT :80 UNQUALIFIED, ALONE =="
+# The half the rationale RE above cannot see: only `SCHEMA.md:80` goes back to its pre-task
+# words, and the § 998 sentence stays qualified. Red here with green above is what proves
+# the two disclosures are graded separately rather than one standing in for the other.
+SCHEMA_FIELD_NEW="browser WRITES ask first unless the project's autonomy delegates them, which is what makes granting it defensible"
+SCHEMA_FIELD_OLD='browser WRITES still ask first, which is what makes granting it defensible'
+lit_sub "$TMP/schema.flat" "$SCHEMA_FIELD_NEW" "$SCHEMA_FIELD_OLD" > "$TMP/schema-field-reverted.flat"
+ok "the FIELD reversion actually replaced text"    \
+   "$(replaced "$TMP/schema.flat" "$TMP/schema-field-reverted.flat" "$SCHEMA_FIELD_NEW" "$SCHEMA_FIELD_OLD")" yes
+# THE MEASURING STICK, again: § 3's presence check is a plain grep, so it is GREEN on the
+# unqualified field text. That is exactly how this line survived three passes.
+ok "CREDULOUS: § 3's presence check passes on it"  \
+   "$(grep -qF -- "$SCHEMA_FIELD_OLD" "$TMP/schema-field-reverted.flat" && echo yes || echo no)" yes
+
+REV_FIELD_CLAIM="$(claim_of "$TMP/schema-field-reverted.flat" "$SCHEMA_FIELD_RE")"
+ok "reverted FIELD claim: extracts one sentence"   "$(grep -c . <<<"$REV_FIELD_CLAIM")" 1
+ok "reverted FIELD claim: accurate under gated"    "$(accurate "$REV_FIELD_CLAIM" gated "$GATED_WRITES")" yes
+ok "reverted FIELD claim: INACCURATE when delegated" \
+   "$(accurate "$REV_FIELD_CLAIM" delegating "$DELEG_WRITES")" no
+# CONTROL: the § 998 rationale is untouched here, so it is still accurate in both modes —
+# the field-only mutant is invisible to it, which is the gap this section closes.
+ok "CONTROL: the :998 rationale survives it"       \
+   "$(accurate "$(claim_of "$TMP/schema-field-reverted.flat" "$SCHEMA_CLAIM_RE")" delegating "$DELEG_WRITES")" yes
 
 echo
 echo "pass=$pass fail=$fail"
