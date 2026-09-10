@@ -995,10 +995,10 @@ through a flow, screenshot — via **Claude for Chrome**. Opt in per project wit
 claude-for-chrome` gives this project's agents **read access to every site this human is
 logged into in that browser** — mail, cloud consoles, admin panels — because the browser
 carries their cookies. It is scoped to a project rather than to a session for exactly that
-reason, and it is defensible because **browser writes still ask first** (rule 4). A human
-answering `/ai-bridge:new-project`'s browser question needs both halves to answer it, so
-the scaffold states them there too; a project that opts in records **why** in its
-`# Context`.
+reason, and it is defensible because **browser writes ask first unless the project's
+`autonomy` delegates them** (rule 4). A human answering `/ai-bridge:new-project`'s browser
+question needs both halves to answer it, so the scaffold states them there too; a project
+that opts in records **why** in its `# Context`.
 
 **How it's wired: it isn't.** The Chrome extension **injects** the
 `mcp__claude-in-chrome__*` tools into a live paired session. There is no `mcpServers`
