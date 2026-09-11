@@ -132,8 +132,14 @@ above it so none may grow its share.
   harness provides; **`none`** ⇒ no attribution line and no session URL, which is the
   documented opt-out for an organisation that requires one. Push to `origin` early
   (don't wait until the end) so an interrupted worktree loses nothing.
-- PR title format: `<type>: <subject> [<task-id>]` (OKF task id, e.g.
-  `[ci-hardening/task-001]`). Target the default branch. **Never merge.**
+- PR title format: `<type>: <subject> [<JIRA-ID>]` — e.g. `fix: retry on 429 [DPT-1234]`.
+  **The id is the human's to supply**: use the one your task or your brief names, and
+  **`[DPT-0]` when neither does** — that is the normal case and the whole answer. Never
+  invent an id, never guess a project prefix, and never block a PR on the absence of one;
+  nothing in this bundle carries a Jira id, so there is nowhere to look one up. Where a
+  real id exists, its **ticket URL goes in the body**, one line under the TL;DR. **No OKF
+  task id in the title** — the task-to-PR link is the task document's own `pr:` field.
+  Target the default branch. **Never merge.**
 - **Write for a human who will not read it.** They scan. Say the thing, then stop —
   a reader who wants depth will ask, and asking is cheap where re-reading to find the
   point is not. **One house style, for every surface below:**
