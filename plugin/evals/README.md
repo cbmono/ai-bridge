@@ -34,7 +34,7 @@ Two traps, both of which score a **correct** plugin as red or green for the wron
 must-not-call check needs **`arm: both`** as well, because without it a `tool: Skill`
 grader is display-only under the default `--ablation with-without`.
 
-## The eight cases
+## The nine cases
 
 | Case | Asserts | Grader |
 |---|---|---|
@@ -46,18 +46,29 @@ grader is display-only under the default `--ablation with-without`.
 | `unverified-state-is-unknown` | a read that cannot answer the question asked is reported as unknown, not as a conclusion | `llm` rubric over `last_message` |
 | `caveat-outranks-the-launcher` | a tick report contradicting the launcher's own conclusion makes the session hold, not write a terminal status | `llm` rubric over `last_message` |
 | `dormant-side-effect-is-not-a-decision` | asked to design around a side effect that is switched off everywhere, the session says the condition is not live and defers it in one line instead of ranking designs | `llm` rubric over `last_message` |
+| `comment-is-warranted-or-absent` | asked to edit code carrying one named trap, the answer comments the trap and nothing else — no annotation of the code it just wrote | `llm` rubric over `last_message` |
 
-**The last four are the prose rules of `launcher-verification-contract` given a reader.**
+**Four of the nine are the prose rules of `launcher-verification-contract` given a reader.**
 One case per pattern from the 2026-09-08 retrospective, because the previous prose fix for
 this defect shipped 2026-08-23 with no test and rotted within weeks. **Every grader keys on
 the observable action** — which agent was dispatched, what status was written, whether a
 conclusion was asserted — and none matches a phrase: a grader that greps for wording passes
 the next paraphrase, so `regex` over a message is refused here and
-`tests/plugin-eval.test.sh` asserts that for each of the four.
+`tests/plugin-eval.test.sh` asserts that for every case in the group.
 **Two of them name the prose they read.** `unverified-state-is-unknown` is the behavioural
 reader for `seed/CONVENTIONS.md` → "A read that could not have established the answer
 returns UNKNOWN", whose four measured corollaries include this case's empty digest; and
 `dormant-side-effect-is-not-a-decision` reads that rule's narrow case in `seed/CLAUDE.md`.
+
+**The ninth reads the inline-comment row of `seed/CONVENTIONS.md` → "Write less", and it
+is there because that row is a TRIGGER (none by default; one where the code is unusual,
+risky to change, or carries a trap) rather than a budget.** The rule stays prose and gets
+no comment-density check: a counter sees volume only, so it fires on a legitimately
+commented tricky function and stays quiet on six restatements of obvious code — punishing
+exactly the comments the rule keeps. Whether a comment was *warranted* is a judgement, so
+the reader is a judged case. Decided 2026-09-11 (`role-agent-output-conventions/task-001`).
+The case is two-sided on purpose: a run that comments nothing at all fails too, because
+the trap named in its prompt is the one thing there that does warrant a comment.
 
 **The control arm is not decoration.** Three cases asserting "the model never invoked
 this skill" are all satisfied by a harness in which no skill is reachable at all:
@@ -80,9 +91,9 @@ claude plugin eval ./plugin --case dispatch-is-human-gated
 ```
 
 Cost measured 2026-09-05, when the suite was four cases and free graders only:
-**4 cases × 2 runs, $1.23, 127 s**. **Eight cases is unmeasured** — `plugin eval` is gated
-off in this session (below), and the four pattern cases each add cost the old four had none
-of: four `llm` graders, and one case that dispatches a subagent whose run is billed too.
+**4 cases × 2 runs, $1.23, 127 s**. **Nine cases is unmeasured** — `plugin eval` is gated
+off in this session (below), and the five pattern cases each add cost the old four had none
+of: five `llm` graders, and one case that dispatches a subagent whose run is billed too.
 `tests/plugin-eval.test.sh` runs it at `--runs 1 --ablation none --judge-model sonnet` and
 a `--max-cost-usd` ceiling — the question it asks is "did any case go red", not "what is
 the stable score". The judge is sonnet rather than the default haiku because a small judge
