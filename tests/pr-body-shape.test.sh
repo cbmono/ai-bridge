@@ -257,7 +257,10 @@ ok "evidence as a short list, not prose"  "$(saw "$CONV_FLAT" '**Evidence as a s
 ok "agents do NOT need the verbosity"     "$(saw "$CONV_FLAT" '**The verbosity is not needed for the agent readers either**')" yes
 ok "…they read the diff and the table"    "$(saw "$CONV_FLAT" 'reads the **diff** and the **criteria table**, not our narration')" yes
 ok "…so brevity costs nothing either way" "$(saw "$CONV_FLAT" '**brevity costs nothing on either side**')" yes
+ok "280 is a cost, not a reason"          "$(saw "$CONV_FLAT" '**280 is what a comment MAY cost, never a reason to write one.**')" yes
+ok "…so the usual inline count is zero"   "$(saw "$CONV_FLAT" 'the usual number of inline comments in a diff is **zero**')" yes
 ok "the measured average is recorded"     "$(saw "$CONV_FLAT" 'averaged **2,027 characters** across 6 inline comments')" yes
+ok "…and the 6 is read alongside it"      "$(saw "$CONV_FLAT" '**Read the 6 as well as the 2,027.**')" yes
 ok "…against the humans on the same PR"   "$(saw "$CONV_FLAT" 'averaged **120** across 2')" yes
 ok "…and the ratio is stated"             "$(saw "$CONV_FLAT" '**17x the humans**')" yes
 
@@ -340,6 +343,7 @@ ok "mutant: the stated shape is gone"     "$(saw "$COMMENT_FLAT" '**The shape is
 ok "mutant: don't-restate-the-diff gone"  "$(saw "$COMMENT_FLAT" '**Never restate the diff back at the reader**')" no
 ok "mutant: the agent-reader answer gone" "$(saw "$COMMENT_FLAT" '**The verbosity is not needed for the agent readers either**')" no
 ok "mutant: the measurement is gone"      "$(saw "$COMMENT_FLAT" 'averaged **2,027 characters** across 6 inline comments')" no
+ok "mutant: cost-not-a-reason is gone"    "$(saw "$COMMENT_FLAT" '**280 is what a comment MAY cost, never a reason to write one.**')" no
 
 echo
 echo "== 13. MUTATION: cut the shape bullet, and the heading assertions flip =="

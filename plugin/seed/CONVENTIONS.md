@@ -35,7 +35,7 @@ agent on every surface below.**
 
 | Surface | Ceiling |
 |---|---|
-| an **inline comment** | a non-obvious **WHY**, at most **2 lines**. Never a paragraph of history, never a restatement of the code the reader is already looking at. |
+| an **inline comment** | **none by default — it is a trigger, not a budget.** One, only where the code is **unusual**, is **risky to change**, or carries a **trap the reader would not see**. **Explaining what the code does is not a trigger** — the reader, human or agent, is looking at it. |
 | a **script header** | **10 lines** — what it does, its exit codes, and where the reasoning lives. |
 | a **commit** | subject **72 characters**, body at most **5 lines**. |
 | a **PR body** | the TL;DR line + the criteria table + at most **3 one-line notes**. Hard ceiling **2,500 characters**. |
@@ -571,6 +571,10 @@ above it so none may grow its share.
   surfaces the shapes above never reached: an **inline code comment** and a **PR thread
   comment**, whoever writes them. Longer only when the finding genuinely needs it — a race
   whose trigger takes three sentences to state — and **never by default**.
+  **280 is what a comment MAY cost, never a reason to write one.** The inline half is
+  gated first by the row in "Write less": none unless the code is unusual, risky to change,
+  or carries a trap — so the usual number of inline comments in a diff is **zero**, and 280
+  bounds the one that clears the trigger.
   **The shape is: what is wrong, where, and what to do.**
 
   ```md
@@ -596,6 +600,9 @@ above it so none may grow its share.
   short form landed for PR bodies, review replies and progress reports while comments kept
   the old habit, because nothing named them as a surface. They are named here, and
   `tests/pr-body-shape.test.sh` keeps them named.
+  **Read the 6 as well as the 2,027.** The humans wrote 2 comments where the agents wrote
+  6, so the count was half the gap and a shorter budget would have fixed neither — which is
+  why the row above became a trigger on 2026-09-11 instead of a smaller number.
 - **A reply to review findings has a shape, and now it has a reader.** The list form above
   is the rule; this is the part a gate can check. It exists because the reply style was
   prose-only on the one surface nothing read — `pr-body-clearance.sh` reads a PR *body* and

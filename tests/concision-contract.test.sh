@@ -74,7 +74,9 @@ saw() { grep -Fq -- "$2" "$1" && echo yes || echo no; }
 
 echo "== CONVENTIONS.md carries the section, with every number =="
 ok "the section exists"                    "$(saw "$CONV" '## Write less')" yes
-ok "inline comment: 2 lines"               "$(saw "$CONV" 'at most **2 lines**')" yes
+ok "inline comment: none by default"       "$(saw "$CONV" '**none by default — it is a trigger, not a budget.**')" yes
+ok "…and it names its three triggers"      "$(saw "$CONV" 'is **risky to change**, or carries a **trap the reader would not see**')" yes
+ok "…and the named non-trigger"            "$(saw "$CONV" '**Explaining what the code does is not a trigger**')" yes
 ok "script header: 10 lines"               "$(saw "$CONV" '**10 lines**')" yes
 ok "commit subject 72, body 5"             "$(saw "$CONV" 'subject **72 characters**, body at most **5 lines**')" yes
 ok "PR body: 2,500 characters"             "$(saw "$CONV" 'Hard ceiling **2,500 characters**')" yes

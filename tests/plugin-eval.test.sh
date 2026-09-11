@@ -20,11 +20,15 @@
 #   tests/plugin-eval.test.sh     this file: the eval suite's own shape, always; and
 #                                 the run itself, when the CLI supports it.
 #
-# FOUR OF THE EIGHT CASES GRADE THE MAIN THREAD, not a skill. They are the reader for the
+# FIVE OF THE NINE CASES GRADE THE MAIN THREAD, not a skill. Four are the reader for the
 # prose rules of `launcher-verification-contract` — dispatch-vs-inline-diagnosis, unverified
 # state, a tick caveat outranking the launcher's own conclusion, and a decision manufactured
 # out of a side effect that is not live yet — and they exist because the previous prose fix
-# for that defect shipped 2026-08-23 with no test and rotted in weeks.
+# for that defect shipped 2026-08-23 with no test and rotted in weeks. The fifth is the
+# reader for `CONVENTIONS.md` -> "Write less": its inline-comment row is a trigger, and
+# whether a comment was WARRANTED is a judgement no counter can make — a density check
+# fires on the legitimately commented tricky function and stays quiet on six restatements
+# of obvious code, so the rule stays prose and this case is what reads it.
 # Section 4 asserts the one property that keeps them from rotting the same way: a grader
 # keyed on WORDING passes the next paraphrase, so `regex` over a message is refused there.
 #
@@ -79,11 +83,11 @@ fm() {
 # set is asserted to be exactly this one below.
 GATED="dispatch work answer"
 CONTROL="skills-are-reachable"
-# One case per pattern from the 2026-09-08 retrospective (launcher-verification-contract).
-# They grade the MAIN THREAD rather than a skill, so they share none of the assertions in
-# section 3; section 4 is theirs.
+# One case per pattern from the 2026-09-08 retrospective (launcher-verification-contract),
+# plus the inline-comment trigger's own reader. They grade the MAIN THREAD rather than a
+# skill, so they share none of the assertions in section 3; section 4 is theirs.
 PATTERNS="diagnosis-is-dispatched unverified-state-is-unknown caveat-outranks-the-launcher
-dormant-side-effect-is-not-a-decision"
+dormant-side-effect-is-not-a-decision comment-is-warranted-or-absent"
 
 # =======================================================================================
 echo "== 1. the eval suite ships where the CLI looks for it =="
@@ -108,7 +112,7 @@ ok "…and its results/ output is gitignored" \
 CASES="$(cd "$EVALS" && find . -mindepth 1 -maxdepth 1 -type d ! -name results -exec basename {} \; | sort | tr '\n' ' ' | sed 's/ $//')"
 # shellcheck disable=SC2046,SC2086  # the three lists are deliberate word lists, as in plugin-skills.test.sh
 EXPECTED_CASES="$(printf '%s\n' $CONTROL $PATTERNS $(for s in $GATED; do echo "$s-is-human-gated"; done) | sort | tr '\n' ' ' | sed 's/ $//')"
-ok "the case set is exactly the eight this file asserts" "$CASES" "$EXPECTED_CASES"
+ok "the case set is exactly the nine this file asserts" "$CASES" "$EXPECTED_CASES"
 
 # =======================================================================================
 echo "== 2. every case is well-formed the way the CLI parses it =="
