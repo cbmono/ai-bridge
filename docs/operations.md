@@ -998,6 +998,7 @@ AI-Bridge v2.2.9 · _ai-bridge-private · org: cbmono
 
 SETTING               VALUE                               FROM
 owner                 example-user-007 · you@example.com  local/tracked
+claudeAccount         you@work.example                    session
 maxAgentsInFlight     2                                   local
 maxPrLoc              2000                                tracked
 
@@ -1009,6 +1010,17 @@ Board   file:///Users/you/workspace/_ai-bridge-private/.board-live/board.html
 Run     /ai-bridge:board serve for a live URL
 Update  claude plugin update ai-bridge  (2.0.3 → 2.0.4) — restart to apply it
 ```
+
+**`owner` and `claudeAccount` are two different people, and the banner prints both.**
+`owner` is `ownerGithubUser · authorEmail` from the config — who this clone *commits* as.
+`claudeAccount` is `oauthAccount.emailAddress` out of `${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json`,
+the same file `/status` reads — which Anthropic login is *authorising* the session. On a
+machine carrying more than one login those two addresses routinely differ, and answering the
+second one used to mean leaving the banner for `/status`. Its `FROM` cell reads `session`
+rather than `tracked`/`local`, because the value is in neither config file. `CLAUDE_CONFIG_DIR`
+is consulted before `$HOME` so an `ai-bridge-accounts` switch is reflected rather than hidden;
+no file, no key or no `python3` prints no row at all. Nothing else from that object — the
+account and organisation UUIDs beside the address — ever reaches the banner.
 
 **The `Update` row is the third row of the board block, and it is one command.** It names
 what fetches a newer AI Bridge and installs it — `claude plugin update <plugin>` — plus the
