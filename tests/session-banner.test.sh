@@ -329,6 +329,12 @@ rm -f "$CCD/.claude.json"
 run_cc
 assert "no .claude.json at all: still no row"    "$(eq "$(row claudeAccount)" '')"
 assert "…and still exit 0"                       "$(eq "$RC" 0)"
+# Neither variable set: the path must not fall together as `/.claude.json` and read a
+# root-level file this hook has no business in.
+OUT="$(CLAUDE_PROJECT_DIR="$INST" env -u CLAUDE_CONFIG_DIR -u HOME bash "$HOOK" 2>&1)"; RC=$?
+assert "no CLAUDE_CONFIG_DIR and no \$HOME: no row" "$(eq "$(row claudeAccount)" '')"
+assert "…the settings block still prints"        "$(has 'maxPrLoc' "$OUT")"
+assert "…and exit 0"                             "$(eq "$RC" 0)"
 
 # =======================================================================================
 echo "== 2b. roleTiers is a TABLE, resolved end to end, with per-entry provenance =="
