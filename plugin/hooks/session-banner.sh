@@ -1422,7 +1422,18 @@ if [ "$board_on" -eq 1 ]; then
     IFS="$TAB" read -r u_state u_here u_there u_name <<<"${_upd:-}"
     case "${u_state:-}" in
       behind)  echo "$(pad Update "$BOARD_LW")claude plugin update ${u_name:-ai-bridge}  (${u_here} → ${u_there}) — restart to apply it" ;;
-      current) echo "$(pad Update "$BOARD_LW")up to date (${u_here})" ;;
+      current)
+        # `.ai-bridge/seed-base/VERSION` is the plugin version the bundle was last stamped
+        # with; trailing the installed one means seed edits are waiting on /ai-bridge:init.
+        stamped=""
+        [ -r "$root/.ai-bridge/seed-base/VERSION" ] && IFS= read -r stamped < "$root/.ai-bridge/seed-base/VERSION"
+        case "$stamped" in ""|*[!0-9A-Za-z.-]*) stamped="" ;; esac
+        [ "${#stamped}" -le 20 ] || stamped=""
+        if [ -n "$stamped" ] && [ "$stamped" != "${u_here}" ]; then
+          echo "$(pad Update "$BOARD_LW")up to date (${u_here}) · bundle stamped at ${stamped} — run /ai-bridge:init"
+        else
+          echo "$(pad Update "$BOARD_LW")up to date (${u_here})"
+        fi ;;
       *)       echo "$(pad Update "$BOARD_LW")unknown (offline)" ;;
     esac
   fi

@@ -76,7 +76,8 @@ could not derive it prints as a `needs` line naming the key and its flag.
 `instance.config.local.json` is written for you, from what the machine already knows.
 Then `/ai-bridge:welcome` for the banner, and `/ai-bridge:dispatch` for the loop.
 **Run this command again after every plugin update** — it is the one that brings a
-bundle up to the installed plugin.
+bundle up to the installed plugin. The banner's `Update` row says when: `bundle stamped at
+<old> — run /ai-bridge:init`.
 
 If the directory is not a bundle and was not meant to be one, say which directory it is
 and stop — never stamp somewhere on a guess.

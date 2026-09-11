@@ -526,6 +526,25 @@ if command -v git >/dev/null 2>&1; then
   assert "…and it offers no command, because there is nothing to run" \
     "$(hasnt 'claude plugin update' "$OUT")"
 
+  # THE STAMP RECORD. /ai-bridge:init writes the plugin version it ran with; a record that
+  # trails the installed plugin means seed edits are waiting on a re-stamp. All off the
+  # cached verdict, so nothing here touches the fixture remote.
+  mkdir -p "$INST/.ai-bridge/seed-base"
+  printf '9.9.8\n' > "$INST/.ai-bridge/seed-base/VERSION"; run
+  assert "a stamp record behind the installed plugin: the row names /ai-bridge:init" \
+    "$(line_is 'Update  up to date (9.9.9) · bundle stamped at 9.9.8 — run /ai-bridge:init' "$OUT")"
+  assert "…and the section is still three rows"    "$(eq "$(section | grep -c .)" 3)"
+  printf '9.9.9\n' > "$INST/.ai-bridge/seed-base/VERSION"; run
+  assert "a record matching the plugin: the plain row" \
+    "$(line_is 'Update  up to date (9.9.9)' "$OUT")"
+  printf 'not a version <b>\n' > "$INST/.ai-bridge/seed-base/VERSION"; run
+  assert "an unparseable record is ignored, never printed" \
+    "$(line_is 'Update  up to date (9.9.9)' "$OUT")"
+  assert "…and none of it leaks"                   "$(hasnt 'not a version' "$OUT")"
+  rm -f "$INST/.ai-bridge/seed-base/VERSION"; run
+  assert "no record — stamped before it existed: the plain row" \
+    "$(line_is 'Update  up to date (9.9.9)' "$OUT")"
+
   mkt_version 9.9.10
   rm -f "$CACHE"; run
   # ONE ROW CARRIES ALL THREE FACTS — the command, both versions, and the restart. The

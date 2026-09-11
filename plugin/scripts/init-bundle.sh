@@ -2723,6 +2723,13 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
   fi
 fi
 
+# 5b. The plugin version this stamp ran with, tracked with the rest of the record. The
+# banner's Update row compares it with the installed plugin and names /ai-bridge:init when
+# they differ — "re-run init after every plugin update" had no reader before this file.
+if [ -f "$PLUGIN_ROOT/VERSION" ] && mkdir -p "$SEED_BASE_DIR" 2>/dev/null; then
+  cp "$PLUGIN_ROOT/VERSION" "$SEED_BASE_DIR/VERSION" 2>/dev/null || true
+fi
+
 # 6. One nudge, and only a nudge, when the bundle's own documents do not satisfy the
 # schema. Silent unless the validator says exactly "there are errors" (exit 1): absent,
 # clean, or "not a bundle root" (exit 2) are not things a human can act on from here.

@@ -1012,14 +1012,21 @@ Update  claude plugin update ai-bridge  (2.0.3 → 2.0.4) — restart to apply i
 
 **The `Update` row is the third row of the board block, and it is one command.** It names
 what fetches a newer AI Bridge and installs it — `claude plugin update <plugin>` — plus the
-restart, which is the only step left with you. Three states, one row (the numbers above are
+restart, which is the only step left with you. Four states, one row (the numbers above are
 illustrative):
 
 | The check found | The row reads |
 |---|---|
 | the marketplace is ahead | `claude plugin update ai-bridge  (2.0.3 → 2.0.4) — restart to apply it` |
 | nothing newer | `up to date (2.0.3)` |
+| nothing newer, but this bundle was last stamped by an older plugin | `up to date (2.0.4) · bundle stamped at 2.0.3 — run /ai-bridge:init` |
 | no answer — offline, no clone, no git | `unknown (offline)` |
+
+The fourth reads `.ai-bridge/seed-base/VERSION`, which `/ai-bridge:init` writes on every
+stamp. A plugin update lands on the machine; the seed edits it carries land in a bundle only
+when that bundle is re-stamped — so "run init after every plugin update" is a row you see,
+not a rule you remember. A bundle stamped before the record existed prints the plain row
+until its next `/ai-bridge:init`.
 
 The verdict is `scripts/check-template-version.sh --state`, which is also what
 `/ai-bridge:welcome check` reads, so the row and that check can never disagree. On a
