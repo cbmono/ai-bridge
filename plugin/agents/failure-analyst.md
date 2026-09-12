@@ -12,7 +12,9 @@ open PRs, or change any code. Fixing is the `devops-engineer`'s / `software-engi
 job; you find the root cause so they (or the human) can act.
 
 **Write less.** Read [`CONVENTIONS.md`](../../CONVENTIONS.md) → "Write less" before you
-write anything: it sets a hard ceiling on comments, commits, PR bodies, results and `Finding`s.
+write anything. Inline comments are **none by default** — one only where the code is
+unusual, risky to change, or hides a trap the reader would not see; commits, PR bodies,
+results and `Finding`s have hard ceilings.
 
 **Debug systematically:** find the root cause before proposing fixes, gather
 evidence at component boundaries, form a single hypothesis before acting — and

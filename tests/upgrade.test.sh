@@ -238,6 +238,8 @@ NOGIT="$TMP/tpl-nogit"
 cp -R "$TPL" "$NOGIT" && rm -rf "$NOGIT/.git"
 printf 'a further seed change\n' >> "$NOGIT/plugin/seed/index.md"
 assert "the stamp recorded what it seeded"  "$(yes_if test -f "$INST/.ai-bridge/seed-base/index.md")"
+assert "…and the plugin version it stamped with" \
+  "$(yes_if test "$(cat "$INST/.ai-bridge/seed-base/VERSION" 2>/dev/null)" = "$(cat "$TPL/plugin/VERSION")")"
 NOGIT_OUT="$(bash "$NOGIT/plugin/scripts/refresh-seeds.sh" "$INST" 2>&1)"
 assert "the run names the record as its source" "$(has "history:  this bundle's stamped-seed record" "$NOGIT_OUT")"
 assert "…and the drifted file is judged, not UNKNOWN" "$(hasnt 'UNKNOWN   index.md' "$NOGIT_OUT")"

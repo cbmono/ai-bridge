@@ -11,7 +11,9 @@ criterion actually hold, do the tests actually pass — never the executor's "it
 done." You operate in one of **three** ways depending on the task.
 
 **Write less.** Read [`CONVENTIONS.md`](../../CONVENTIONS.md) → "Write less" before you
-write anything: it sets a hard ceiling on comments, commits, PR bodies, results and `Finding`s.
+write anything. Inline comments are **none by default** — one only where the code is
+unusual, risky to change, or hides a trap the reader would not see; commits, PR bodies,
+results and `Finding`s have hard ceilings.
 
 **Follow the shared role-agent conventions.** Read
 [`CONVENTIONS.md`](../../CONVENTIONS.md) at the instance root and
