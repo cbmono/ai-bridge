@@ -1115,6 +1115,28 @@ else
 fi
 add s owner "$ov" "$os"
 
+# Which Claude login the session is on — docs/operations.md, "The session banner".
+# CLAUDE_CONFIG_DIR BEFORE $HOME: `ai-bridge-accounts` switches accounts by pointing it at
+# ~/.claude-accounts/<name>, so a reader "simplified" to $HOME prints the account the
+# session is NOT on.
+cc_dir="${CLAUDE_CONFIG_DIR:-${HOME:-}}"
+# `-n "$dump"` though this value is in neither config file: §6 withholds the WHOLE settings
+# block when the resolver is missing, and one row under its header reads as a table that
+# lost its config.
+if [ -n "$dump" ] && [ -n "$cc_dir" ] && [ -f "$cc_dir/.claude.json" ] \
+   && command -v python3 >/dev/null 2>&1; then
+  cc_email="$(python3 -c 'import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    raise SystemExit(0)
+a = d.get("oauthAccount")
+e = a.get("emailAddress") if isinstance(a, dict) else ""
+if isinstance(e, str) and len(e) <= 254 and "\n" not in e and "\t" not in e:
+    sys.stdout.write(e)' "$cc_dir/.claude.json" 2>/dev/null)" || cc_email=""
+  add s claudeAccount "$cc_email" session
+fi
+
 # `maxPrFiles` rides beside `maxPrLoc` because they are one heuristic in two units and a
 # banner showing only the line bound is a banner that hides the bound the external
 # reviewer actually enforces. Both are absent from most configs, and `continue` above

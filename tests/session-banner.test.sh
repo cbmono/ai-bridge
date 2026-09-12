@@ -284,6 +284,59 @@ assert "…nor does a key outside the allowlist"   "$(hasnt 'some-internal-repo'
 tracked_cfg
 
 # =======================================================================================
+echo "== 2a. claudeAccount: which Claude login this session is on =="
+# =======================================================================================
+# EVERY CASE PINS BOTH `CLAUDE_CONFIG_DIR` AND `HOME`: let either fall through and the test
+# reads the address of whoever runs the suite, passes on their machine, and says nothing.
+CCD="$TMP/ccfg"; CCHOME="$TMP/cchome"
+mkdir -p "$CCD" "$CCHOME"
+cc_write() { # <dir> <json>
+  mkdir -p "$1"; printf '%s\n' "$2" > "$1/.claude.json"
+}
+run_cc() { OUT="$(CLAUDE_PROJECT_DIR="$INST" CLAUDE_CONFIG_DIR="$CCD" HOME="$CCHOME" \
+                  bash "$HOOK" 2>&1)"; RC=$?; }
+
+cc_write "$CCD" '{"oauthAccount":{"emailAddress":"session-user@example.com","accountUuid":"11111111-2222-3333-4444-555555555555","organizationName":"Example Org"}}'
+run_cc
+assert "exit 0 with an account to report"        "$(eq "$RC" 0)"
+assert "the logged-in address is a row"          "$(eq "$(value claudeAccount)" 'session-user@example.com')"
+assert "…whose FROM is session, not a config file" "$(eq "$(from claudeAccount)" session)"
+assert "…printed on the line after owner" \
+  "$(eq "$(printf '%s\n' "$OUT" | grep -nE '^(owner|claudeAccount) ' | awk -F: 'NR==1{a=$1} NR==2{print $1-a}')" 1)"
+assert "…and no UUID from the same object rides along" "$(hasnt '11111111-2222-3333-4444-555555555555' "$OUT")"
+assert "…nor the organisation name"                    "$(hasnt 'Example Org' "$OUT")"
+
+cc_write "$CCHOME" '{"oauthAccount":{"emailAddress":"home-user@example.com"}}'
+run_cc
+assert "CLAUDE_CONFIG_DIR wins over \$HOME"      "$(eq "$(value claudeAccount)" 'session-user@example.com')"
+assert "…and the \$HOME address never appears"   "$(hasnt 'home-user@example.com' "$OUT")"
+
+OUT="$(CLAUDE_PROJECT_DIR="$INST" HOME="$CCHOME" env -u CLAUDE_CONFIG_DIR bash "$HOOK" 2>&1)"; RC=$?
+assert "no CLAUDE_CONFIG_DIR: \$HOME answers"    "$(eq "$(value claudeAccount)" 'home-user@example.com')"
+
+cc_write "$CCD" '{"numStartups":41}'
+run_cc
+assert "no oauthAccount: no row at all"          "$(eq "$(row claudeAccount)" '')"
+assert "…and the banner is otherwise intact"     "$(has 'example-user-009 · you@example.com' "$OUT")"
+cc_write "$CCD" '{"oauthAccount":{"emailAddress":""}}'
+run_cc
+assert "an empty address: no row either"         "$(eq "$(row claudeAccount)" '')"
+cc_write "$CCD" '{"oauthAccount":{"emailAdd'
+run_cc
+assert "a half-written file costs the row and nothing else" "$(eq "$(row claudeAccount)" '')"
+assert "…and the hook still exits 0"             "$(eq "$RC" 0)"
+rm -f "$CCD/.claude.json"
+run_cc
+assert "no .claude.json at all: still no row"    "$(eq "$(row claudeAccount)" '')"
+assert "…and still exit 0"                       "$(eq "$RC" 0)"
+# Neither variable set: the path must not fall together as `/.claude.json` and read a
+# root-level file this hook has no business in.
+OUT="$(CLAUDE_PROJECT_DIR="$INST" env -u CLAUDE_CONFIG_DIR -u HOME bash "$HOOK" 2>&1)"; RC=$?
+assert "no CLAUDE_CONFIG_DIR and no \$HOME: no row" "$(eq "$(row claudeAccount)" '')"
+assert "…the settings block still prints"        "$(has 'maxPrLoc' "$OUT")"
+assert "…and exit 0"                             "$(eq "$RC" 0)"
+
+# =======================================================================================
 echo "== 2b. roleTiers is a TABLE, resolved end to end, with per-entry provenance =="
 # =======================================================================================
 # It is the same three columns as the settings table above it — role, the resolved
@@ -633,6 +686,10 @@ cp "$HOOK" "$TMP/orphan-banner.sh"
 OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$TMP/orphan-banner.sh" 2>&1)"; RC=$?
 assert "no resolver reachable: still exit 0"        "$(eq "$RC" 0)"
 assert "…and the settings block is simply absent"   "$(hasnt 'FROM' "$OUT")"
+# Withheld though `.claude.json` is still readable: a lone row under a full header reads as
+# a config table that lost its config, not as a block deliberately absent.
+assert "…including the claudeAccount row, config or not" \
+  "$(hasnt 'claudeAccount' "$OUT")"
 assert "…while the identity line still prints"      "$(has 'AI-Bridge' "$OUT")"
 # The section that used to answer here was the queue tail, deleted in task-023. The count
 # line is what the sections BELOW the settings block now amount to, so it is the one that
