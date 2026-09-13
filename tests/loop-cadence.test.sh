@@ -183,8 +183,8 @@ cp "$SEEDIGNORE" "$CLONE/.gitignore"
 ( cd "$CLONE" && git init -q . ) >/dev/null 2>&1
 
 ignored=0
-for f in instance.config.local.json .tick-lock .tick-lock.claim AWAITING.md SNAPSHOT.json \
-         repos/ai-bridge .board-live/board.html; do
+for f in instance.config.local.json "$AB_LOCK" "$AB_LOCK_CLAIM" "$AB_AWAITING" "$AB_SNAPSHOT" \
+         repos/ai-bridge "$AB_BOARD_DIR/board.html"; do
   if ( cd "$CLONE" && git check-ignore -q "$f" ); then ignored=$((ignored+1))
   else printf '        NOT IGNORED (a remote clone WOULD have it): %s\n' "$f" >&2; fi
 done
@@ -193,7 +193,7 @@ ok "7 of 7 operating inputs are gitignored" "$ignored" 7
 ok "…while instance.config.json is tracked" \
   "$( ( cd "$CLONE" && git check-ignore -q instance.config.json ) && echo no || echo yes)" yes
 ok "…and SCHEMA.md is tracked"            \
-  "$( ( cd "$CLONE" && git check-ignore -q SCHEMA.md ) && echo no || echo yes)" yes
+  "$( ( cd "$CLONE" && git check-ignore -q "$AB_SCHEMA" ) && echo no || echo yes)" yes
 
 O="$(flatten "$OPS")"
 ok "operations.md names the standard form" "$(saw "$O" '**`/loop 10m /ai-bridge:dispatch`.** That is the whole answer')" yes
