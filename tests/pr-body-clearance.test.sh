@@ -329,6 +329,48 @@ serve "$(sized_body "$INCIDENT_CHARS")"
 expect "the ${INCIDENT_CHARS}-character incident body -> now REFUSE" 4 42
 
 echo
+echo "== the ceiling measures the AUTHORED half: ai-bridge#195, verbatim =="
+# THE REAL CASE, captured as a fixture for the reason the row corpus is: a body anyone can
+# edit is not a baseline — #195's has been edited three times since. This is the state it
+# was in at 2026-09-09T21:34Z, when the gate refused it for 740 characters of release
+# notes CodeRabbit wrote into it. The author cannot shorten that block and it regenerates
+# on every review, so a body that cleared when it was posted refused later.
+BODY195="$(cd "$(dirname "$0")" && pwd)/fixtures/pr-body/ai-bridge-195.md"
+PR195_POSTED=2672          # what the host served     -> was REFUSED at 4
+PR195_AUTHORED=1932        # what its author wrote    -> must CLEAR
+PR195_OVER=2600            # the same body, authored past the ceiling -> must REFUSE
+OPEN195='<!-- This is an auto-generated comment: release notes by coderabbit.ai -->'
+CLOSE195='<!-- end of auto-generated comment: release notes by coderabbit.ai -->'
+
+ok "the fixture is there"   "$([ -r "$BODY195" ] && echo yes || echo no)" yes
+ok "…verbatim, to the character" "$(chars "$BODY195")" "$PR195_POSTED"
+ok "…carrying the marker pair"   "$(grep -cF -e "$OPEN195" -e "$CLOSE195" "$BODY195")" 2
+
+serve "$BODY195"
+expect "#195 as posted (${PR195_POSTED}) -> CLEAR on its ${PR195_AUTHORED} authored" 0 42
+says   "  ...reporting the authored count" "body is $PR195_AUTHORED characters (ceiling $BODY_CEILING)"
+says   "  ...and what it did not count"    "of $PR195_POSTED posted"
+
+# THE MARKER IS THE ANCHOR, NEVER THE EDITOR'S LOGIN — which nothing here even reads. The
+# identical text without its markers is an unrecognised block, so it is counted in full.
+UNMARKED195="$TMP/pr195-unmarked.md"
+grep -vF -e "$OPEN195" -e "$CLOSE195" "$BODY195" > "$UNMARKED195"
+serve "$UNMARKED195"
+expect "…the same text with the markers removed -> REFUSE" 4 42
+says   "  ...on the whole body"            "over the ${BODY_CEILING}-character ceiling"
+
+# It loosens exactly one thing: an author past the ceiling is still refused, block or no.
+OVER195="$TMP/pr195-over.md"
+{ awk -v m="$OPEN195" '$0 == m { exit } { print }' "$BODY195"
+  # One short of the difference: the padding line carries its own newline.
+  printf '%*s\n' "$(( PR195_OVER - PR195_AUTHORED - 1 ))" '' | tr ' ' 'x'
+  awk -v m="$OPEN195" 'index($0, m) { p = 1 } p { print }' "$BODY195"
+} > "$OVER195"
+serve "$OVER195"
+expect "…and #195 padded to ${PR195_OVER} AUTHORED characters -> REFUSE" 4 42
+says   "  ...counting its author's half, not the block" "is $PR195_OVER characters"
+
+echo
 echo "== the NOTES ceiling: three is the limit, and the fourth is the essay =="
 notes_body() { # <n> -> a complete body carrying n claim-first Notes bullets
   local n="$1" i lines=()

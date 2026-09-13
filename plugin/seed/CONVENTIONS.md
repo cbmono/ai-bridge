@@ -272,6 +272,9 @@ above it so none may grow its share.
   on LENGTH at exit 4** — over 2,500 characters, or more than 3 `## Notes` bullets, per
   "Write less" above. The two are separate codes because the fixes are: exit 1 says add
   the missing element, exit 4 says move the reasoning to the task doc.
+  **The 2,500 are YOURS**: a block a reviewer generates into the body between its own
+  marker comments is stripped before the count, because a ceiling on text its author
+  cannot shorten refuses whoever pushed last. Text carrying no marker is counted in full.
   Run it on your draft before you open the PR
   (`scripts/pr-body-clearance.sh --body-file <file>`); it is the cheapest check you have.
   **Short and auditable are the same thing here, which is why brevity costs nothing.**
