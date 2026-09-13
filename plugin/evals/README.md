@@ -56,8 +56,10 @@ One case per pattern from the 2026-09-08 retrospective, because the previous pro
 this defect shipped 2026-08-23 with no test and rotted within weeks. **Every grader keys on
 the observable action** — which agent was dispatched, what status was written, whether a
 conclusion was asserted — and none matches a phrase: a grader that greps for wording passes
-the next paraphrase, so `regex` over a message is refused here and
-`tests/plugin-eval.test.sh` asserts that for every case in the group.
+the next paraphrase, so `regex` over a message is refused in **that group**, and
+`tests/plugin-eval.test.sh` asserts it case by case. The last three are not in it: each
+reads a document the session hands back, where a `regex` is the assertion rather than a
+paraphrase of one.
 **Two of them name the prose they read.** `unverified-state-is-unknown` is the behavioural
 reader for `seed/CONVENTIONS.md` → "A read that could not have established the answer
 returns UNKNOWN", whose four measured corollaries include this case's empty digest; and
