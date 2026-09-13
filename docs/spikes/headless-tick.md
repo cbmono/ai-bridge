@@ -43,8 +43,8 @@ Three things defeat a prefix allowlist for a real tick, all measured on the live
 3. **An untrusted workspace silently drops `permissions.allow` entries** from the bundle's
    own `.claude/settings.json` (stderr says so; `-p` skips the trust dialog).
 
-With a prefix allowlist the tick's `acquire --as tick` was denied in 4 of 4 runs, and the
-tick still exited 0. The route that worked is `--permission-mode bypassPermissions` **with
+All 3 ticks run under a prefix allowlist had their own `acquire --as tick` denied, and each
+still exited 0. The route that worked is `--permission-mode bypassPermissions` **with
 the plugin's `deny-destructive.sh` hook as the guardrail** — under bypass, headless, that
 hook still refused a bare force push and the refusal still landed in
 `permission_denials[]`.
