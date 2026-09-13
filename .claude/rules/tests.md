@@ -11,8 +11,19 @@ build step.
 **Run the harnesses your change touches before pushing — not all of them:**
 
 ```bash
-bash tests/<the-one-you-touched>.test.sh
+tests/run.sh --changed        # the core plus every harness that NAMES a path you changed
+tests/run.sh --all            # all 106 — once, before you open the PR, and never polled
+bash tests/<one>.test.sh      # still fine while you iterate on one harness
 ```
+
+`--changed` is the same selection CI takes on a plugin-only PR, because CI runs
+`tests/run.sh --ci` — one implementation, and `tests/ci-workflow.test.sh` fails if the
+workflow grows a second copy. It reads committed, uncommitted and untracked paths against
+`origin/HEAD` (`--base <ref>` for another base). **No changed path runs the core; a changed
+path no harness names runs the core and says so in one line** — never a zero-harness run
+that reads as a pass, which is why `--all` is still the answer before the PR.
+Measured on an M3 Pro, 2026-09-13: a one-line edit to `plugin/scripts/commit-as.sh`
+selects 17 harnesses and takes **9m 12s**, against **39m 47s** for all 106.
 
 The full suite is CI's job: `harness suite` is a required check with `strict=true`, and it
 runs everything against the merged base. Locally the same loop measured **39m 47s and
@@ -20,11 +31,23 @@ runs everything against the merged base. Locally the same loop measured **39m 47
 your change touches shared machinery every harness loads, and say why in the PR body —
 `plugin/seed/CONVENTIONS.md` → "The full suite belongs to CI" is the rule this defers to.
 
-The full loop, for that exception only — and never polled:
+## The core
 
-```bash
-for f in tests/*.test.sh; do bash "$f" || echo "FAILED: $f"; done
-```
+`tests/run.sh` always runs these nine, because no changed path can be expected to name
+them — they read `plugin/` wholesale or reach their subject indirectly:
+
+| Harness | Why it cannot be derived |
+|---|---|
+| `plugin-manifest`, `plugin-skills`, `plugin-agents` | structural, whole-tree |
+| `plugin-eval` | the eval **suite** lives under `plugin/evals/` |
+| `deny-baseline`, `agent-control` | the two enforcement **hooks** (ai-bridge-v2/task-003) |
+| `commit-as-guard`, `companion-plugins` | the two-human-authority guard (ai-bridge-v2/task-030). Both are also reachable by derivation and stay here anyway: the guard's behaviour depends on `plugin/scripts/resolve-autonomy.sh`, which `commit-as-guard.test.sh` never names |
+| `harness-read-paths` | it reads the whole `tests/` tree and resolves every literal path against the plugin tree — the one diff that names none of its own subject (ai-bridge-v2/task-029) |
+
+Everything else is **derived**: a harness is selected because it *names* a changed path
+(or a ≥2-component suffix of one — never a bare basename), so the next path move under
+`plugin/` carries its own harness in. A hand-kept list is what let #124 move the authority
+guard and leave its harness behind, with the required check green.
 
 ## Rules
 

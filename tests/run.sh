@@ -167,8 +167,10 @@ start_ts=$(date +%s)
 
 for f in "${files[@]}"; do
   group "$f"
+  f_start=$(date +%s)
   if out="$(bash "$f" 2>&1)"; then rc=0; else rc=$?; fi
   printf '%s\n' "$out"
+  echo "-- $f took $(( $(date +%s) - f_start ))s"
   endgroup
 
   if ! verify_checkout; then
