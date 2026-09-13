@@ -71,7 +71,8 @@ TPL="$TMP/tpl"
 mkdir -p "$TPL"
 mkdir -p "$TPL/plugin/scripts"
 cp -R "$TPL_SRC/plugin/scripts/init-bundle.sh" "$TPL_SRC/plugin/scripts/refresh-seeds.sh" \
-      "$TPL_SRC/plugin/scripts/validate-bundle.sh" "$TPL/plugin/scripts/"
+      "$TPL_SRC/plugin/scripts/validate-bundle.sh" "$TPL_SRC/plugin/scripts/bundle-paths.sh" \
+      "$TPL/plugin/scripts/"
 cp -R "$TPL_SRC/plugin/seed" "$TPL/plugin/seed"
 # VERSION lives INSIDE plugin/ for the root derivation; the root copy is the mirror the
 # repo keeps for its docs and for check-template-version.sh.
@@ -324,7 +325,8 @@ MTPL="$TMP/tpl-moved"
 mkdir -p "$MTPL/plugin/scripts"
 cp -R "$TPL_SRC/plugin/seed" "$MTPL/seed"
 cp "$TPL_SRC/plugin/scripts/init-bundle.sh" "$TPL_SRC/plugin/scripts/refresh-seeds.sh" \
-   "$TPL_SRC/plugin/scripts/validate-bundle.sh" "$MTPL/plugin/scripts/"
+   "$TPL_SRC/plugin/scripts/validate-bundle.sh" "$TPL_SRC/plugin/scripts/bundle-paths.sh" \
+   "$MTPL/plugin/scripts/"
 cp "$TPL_SRC/VERSION" "$MTPL/plugin/VERSION"
 cp "$TPL_SRC/VERSION" "$MTPL/VERSION"
 printf '# Index\nline A\nline B\n'        > "$MTPL/seed/index.md"
@@ -369,7 +371,8 @@ CTPL="$TMP/tpl-cache-src"
 mkdir -p "$CTPL/plugin/scripts"
 cp -R "$TPL_SRC/plugin/seed" "$CTPL/plugin/seed"
 cp "$TPL_SRC/plugin/scripts/init-bundle.sh" "$TPL_SRC/plugin/scripts/refresh-seeds.sh" \
-   "$TPL_SRC/plugin/scripts/validate-bundle.sh" "$CTPL/plugin/scripts/"
+   "$TPL_SRC/plugin/scripts/validate-bundle.sh" "$TPL_SRC/plugin/scripts/bundle-paths.sh" \
+   "$CTPL/plugin/scripts/"
 cp "$TPL_SRC/VERSION" "$CTPL/plugin/VERSION"
 cp "$TPL_SRC/VERSION" "$CTPL/VERSION"
 printf '# Index\nline A\nline B\n'        > "$CTPL/plugin/seed/index.md"

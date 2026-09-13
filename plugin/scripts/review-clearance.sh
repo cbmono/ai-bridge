@@ -216,6 +216,7 @@
 # the first such assignment would exit the script with a success-looking code. Every
 # failure path below is therefore explicit.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 # --- table 1: who is a reviewer, and what its check is called ----------------
 # Two whitespace-separated fields per row, so neither may contain a space:
@@ -721,7 +722,7 @@ nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.
 # the read did not answer — unknown state, and unknown fails closed.
 [ -n "$pr_author" ] || {
   echo "error: PR $pr reports no author login, so the rule that an author is not its own" >&2
-  echo "       independent reviewer (SCHEMA.md, clause 8) cannot be applied — and a rule" >&2
+  echo "       independent reviewer ($AB_SCHEMA, clause 8) cannot be applied — and a rule" >&2
   echo "       that cannot be applied is not a rule that passes. Refusing (fail closed)." >&2
   exit 2
 }
@@ -1540,7 +1541,7 @@ EOF
 refuse_clause9() { # <the clearance message that is being withheld>
   if [ "$clause9_state" = "unreadable" ]; then
     echo "error: PR $pr has a review at head $head_sha, but its review THREADS could not be" >&2
-    echo "       read, so SCHEMA.md clause 9 (no reviewer-authored thread still unresolved)" >&2
+    echo "       read, so $AB_SCHEMA clause 9 (no reviewer-authored thread still unresolved)" >&2
     echo "       cannot be applied. A clause that cannot be applied is not a clause that" >&2
     echo "       passes. Refusing (fail closed)." >&2
     exit 2
@@ -1551,7 +1552,7 @@ refuse_clause9() { # <the clearance message that is being withheld>
     echo "       so clause 9 is UNKNOWN here rather than satisfied. Refusing (fail closed)." >&2
     exit 2
   fi
-  echo "refuse: PR $pr WAS reviewed at head $head_sha (${1#ok: }) — but SCHEMA.md clause 9" >&2
+  echo "refuse: PR $pr WAS reviewed at head $head_sha (${1#ok: }) — but $AB_SCHEMA clause 9" >&2
   echo "        refuses it: the reviewer's own thread(s) below are still unresolved, so a" >&2
   echo "        finding it raised has not been answered. DO NOT REQUEST ANOTHER REVIEW;" >&2
   echo "        you already have one. Answer or fix each thread, resolve it, and push." >&2

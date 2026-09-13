@@ -79,6 +79,7 @@
 #
 # Verified by tests/agent-control.test.sh.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 usage() {
   cat <<'USAGE'
@@ -107,7 +108,7 @@ USAGE
 find_root() {
   d="$(pwd -P)"
   while [ "$d" != / ]; do
-    if [ -f "$d/SCHEMA.md" ] && [ -f "$d/instance.config.json" ]; then
+    if [ -f "$d/$AB_SCHEMA" ] && [ -f "$d/instance.config.json" ]; then
       printf '%s\n' "$d"; return 0
     fi
     d="$(dirname "$d")"
@@ -116,7 +117,7 @@ find_root() {
 }
 
 ROOT="$(find_root)" || {
-  echo "error: not inside an ai-bridge instance (no SCHEMA.md + instance.config.json)." >&2
+  echo "error: not inside an ai-bridge instance (no $AB_SCHEMA + instance.config.json)." >&2
   echo "       Run this from an instance root." >&2
   exit 1
 }
@@ -358,11 +359,11 @@ halt|gate|pause|steer)
       echo
       echo "  If this halt belongs in the bundle's permanent history, add it yourself —"
       echo "  the hook deliberately never edits tracked files (see its header). Prepend to"
-      echo "  log.md under a '## $(date -u +%Y-%m-%d)' heading:"
+      echo "  $AB_LEDGER under a '## $(date -u +%Y-%m-%d)' heading:"
       echo
       echo "    * **Agent halted**: $id — $reason"
       echo
-      echo "    commit-as.sh human \"chore: record halt of $id\" -- log.md"
+      echo "    commit-as.sh human \"chore: record halt of $id\" -- $AB_LEDGER"
       ;;
     gate)
       echo "GATE set for $id. Every tool call is refused until you clear it; the agent is"

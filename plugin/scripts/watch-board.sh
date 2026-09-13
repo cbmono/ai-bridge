@@ -86,8 +86,9 @@
 # build-board.sh's output, unchanged. No network. Verified by
 # tests/board-renderers.test.sh.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
-OUT_DIR=".board-live"
+OUT_DIR="$AB_BOARD_DIR"
 INTERVAL=2
 ONCE=0
 DIRS=()
@@ -112,7 +113,7 @@ case "${WATCH_BOARD_WATCHER:-auto}" in auto|poll|fswatch) ;; *) echo "watch-boar
 [[ -n "$OUT_DIR" ]] || { echo "watch-board: --out needs a path" >&2; exit 2; }
 
 # Self-detecting, and silent when it does not apply — see the header.
-[[ -f SCHEMA.md && -f instance.config.json ]] || exit 0
+[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || exit 0
 
 # The sibling scripts, found relative to THIS file so it works from the template and
 # from an instance (where both are symlinks in the same scripts/ directory).
@@ -146,7 +147,7 @@ DOC_DIRS=()
 [[ -d "./projects" ]] && DOC_DIRS+=("./projects")
 SNAP_FILES=()
 for d in "${WATCH_DIRS[@]}"; do
-  [[ -f "$d/SNAPSHOT.json" ]] && SNAP_FILES+=("$d/SNAPSHOT.json")
+  [[ -f "$d/$AB_SNAPSHOT" ]] && SNAP_FILES+=("$d/$AB_SNAPSHOT")
 done
 # What fswatch is pointed at: this instance's documents, plus each OTHER watched
 # instance (a snapshot is replaced by a rename, so the directory is the reliable thing
@@ -194,7 +195,7 @@ render() {
   # This instance only — see the header. The off switch is honoured exactly as the
   # writer honours it: no SNAPSHOT.json here means this instance opted out, so nothing
   # is written and nothing is created, and the page is built from whoever else has one.
-  if [[ -f "SNAPSHOT.json" ]]; then
+  if [[ -f "$AB_SNAPSHOT" ]]; then
     bash "$WRITER" --quiet || echo "watch-board: write-snapshot failed — rendering the previous snapshot." >&2
   fi
   if ! bash "$BOARD" --standalone --out "$OUT_FILE" "${WATCH_DIRS[@]}" >/dev/null; then

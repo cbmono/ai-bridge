@@ -47,6 +47,9 @@ OTHER_SHA="0123456789abcdef0123456789abcdef01234567"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/review-clearance.XXXXXX")" || {
   echo "review-clearance.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+# The mutants run from $TMP, and the script sources its sibling resolver
+# (ai-bridge-v3/task-031) — without it they exit 2 before reaching their subject.
+cp "$(dirname "$SCRIPT")/bundle-paths.sh" "$TMP/bundle-paths.sh"
 pass=0; fail=0
 
 command -v jq >/dev/null 2>&1 || { echo "jq is required to run this test"; exit 2; }

@@ -38,6 +38,7 @@
 # Run from a control-panel instance root. Bash + awk + git only.
 # Verified by tests/migrate-bundle.test.sh.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 APPLY=0
 while [[ $# -gt 0 ]]; do
@@ -49,8 +50,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-[[ -f SCHEMA.md && -f instance.config.json ]] || {
-  echo "migrate-bundle: run from a control-panel instance root (SCHEMA.md + instance.config.json)." >&2
+[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || {
+  echo "migrate-bundle: run from a control-panel instance root ($AB_SCHEMA + instance.config.json)." >&2
   exit 2
 }
 

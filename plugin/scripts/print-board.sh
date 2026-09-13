@@ -80,6 +80,7 @@
 #
 # Deterministic. No network. Verified by tests/board-renderers.test.sh.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 WIDTH=""
 COLOR="auto"
@@ -106,7 +107,7 @@ case "$COLOR" in auto|always|never) ;; *) echo "print-board: --color takes auto|
 # Self-detecting, and silent when it does not apply. Not an error: this script ships in
 # the plugin, serves every instance, and will be run from a product repo, a worktree, or a
 # home directory by accident, and a wall of usage text there is noise.
-[[ -f SCHEMA.md && -f instance.config.json ]] || exit 0
+[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || exit 0
 
 TTY=0; [[ -t 1 ]] && TTY=1
 
@@ -136,6 +137,7 @@ from pathlib import Path
 
 WIDTH = int(os.environ.get("BOARD_WIDTH") or 0)      # 0 = unlimited
 COLOR = os.environ.get("BOARD_COLOR") == "1"
+AB_SNAPSHOT = os.environ["AB_SNAPSHOT"]
 
 # SCHEMA.md's Task enum, in the canonical order, plus the two derived columns. An
 # unknown status lands in OTHER and is named in a note — see the header.
@@ -273,13 +275,13 @@ dirs, source = resolve_dirs(sys.argv[1:])
 
 instances, broken = [], []
 for d in dirs:
-    snap = d / "SNAPSHOT.json"
+    snap = d / AB_SNAPSHOT
     if not d.is_dir():
         print(f"print-board: skipped {d} — no such directory.", file=sys.stderr)
         continue
     if not snap.is_file():
         # The off switch. Absent from the board entirely, by design.
-        print(f"print-board: skipped {d} — no SNAPSHOT.json (off the board).", file=sys.stderr)
+        print(f"print-board: skipped {d} — no {AB_SNAPSHOT} (off the board).", file=sys.stderr)
         continue
     try:
         data = json.loads(snap.read_text(encoding="utf-8"))
@@ -291,7 +293,7 @@ for d in dirs:
         # reader benefit. The stderr line keeps the full path, for the one person who
         # can act on it.
         broken.append((clean(dirname(d) or str(d)), clean(f"{type(exc).__name__}: {exc}")))
-        print(f"print-board: {d}/SNAPSHOT.json is malformed — printing a note.", file=sys.stderr)
+        print(f"print-board: {d}/{AB_SNAPSHOT} is malformed — printing a note.", file=sys.stderr)
         continue
     # str(), not just truthiness: a non-string group (say 5) survives a `not` test and
     # then breaks the first thing that compares or pads it.
@@ -422,8 +424,8 @@ if not rows:
     if broken:
         emit("No readable instance on the board.")
     else:
-        wrap("No instance on the board. An instance joins once it has a SNAPSHOT.json — "
-             "`touch SNAPSHOT.json` in it, then run write-snapshot.sh.")
+        wrap(f"No instance on the board. An instance joins once it has a {AB_SNAPSHOT} — "
+             f"`touch {AB_SNAPSHOT}` in it, then run write-snapshot.sh.")
 elif vertical:
     # The narrow fallback: one block per project, never a wrapped table. Only the
     # non-zero statuses are listed — on a narrow screen the zeros are the noise.
@@ -467,7 +469,7 @@ else:
 if (broken or unknown) and lines and lines[-1] != "":
     emit()
 for name, msg in broken:
-    wrap(paint(f"! {name}: unreadable SNAPSHOT.json — that instance is not on the board. "
+    wrap(paint(f"! {name}: unreadable {AB_SNAPSHOT} — that instance is not on the board. "
                f"Re-run write-snapshot.sh there. ({msg})", YELLOW), hang="  ")
 if unknown:
     wrap(paint("! task status(es) outside the schema enum, counted under OTHER: "
@@ -477,7 +479,7 @@ if unknown:
 
 if lines and lines[-1] != "":
     emit()
-wrap(paint("Read from each instance's SNAPSHOT.json — derived, and as sensitive as the task "
+wrap(paint(f"Read from each instance's {AB_SNAPSHOT} — derived, and as sensitive as the task "
            "documents it comes from. Instances listed from: "
            + (source or "command line") + ".", DIM))
 

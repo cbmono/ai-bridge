@@ -60,6 +60,7 @@
 #
 # Verified by tests/check-dispatch.test.sh.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 usage() {
   echo "Usage: $(basename "$0") <task-doc>" >&2
@@ -305,7 +306,7 @@ EOF
   [ "$found" -eq 0 ] || return 1
   echo "               A tool you hold is not a blocker. Re-read the allowlist in" >&2
   echo "               $afile before writing a blocker reason." >&2
-  echo "               If a tool really is absent, CONVENTIONS.md's middle rung applies:" >&2
+  echo "               If a tool really is absent, $AB_CONVENTIONS's middle rung applies:" >&2
   echo "               record the request in open_questions and CARRY ON — blocked is not" >&2
   echo "               the response to a missing tool." >&2
   echo "               This is a report, not an instruction. Nothing is re-dispatched." >&2

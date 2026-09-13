@@ -115,6 +115,7 @@
 # Bash + awk + git only — no jq, no python.
 # Verified by tests/upgrade.test.sh and tests/seed-conflict-resolution.test.sh.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 # The plugin root — ONE directory up from this script and then verified. Same rule as
 # init-bundle.sh, and see the long comment there for why: `source: ./plugin` means an
@@ -138,7 +139,7 @@ CLAUDE.md|instance-additions|the trailing "## Instance additions (kept across se
 
 # The seed-managed .gitignore paths: derived files this machinery itself writes, so which
 # side ignores them is the plugin's answer and never the bundle's.
-SEED_MANAGED_IGNORE='board\.html|\.board-live/|AWAITING\.md|\.tick-lock|\.ai-bridge/'
+SEED_MANAGED_IGNORE="board\.html|${AB_BOARD_DIR//./\\.}/|${AB_AWAITING//./\\.}|${AB_LOCK//./\\.}|\.ai-bridge/"
 
 # A TRAILING INSTANCE BLOCK IS BUNDLE-OWNED: the additions heading (plus the blank run
 # before it) through end of file, split off both sides before the merge and re-appended
@@ -206,9 +207,9 @@ TARGET="$(cd "${TARGET:-$PWD}" 2>/dev/null && pwd || true)"
 # A bundle root, or refuse. `-L` is still tested for SCHEMA.md because a bundle that has
 # not been converted yet carries it as a symlink into a template checkout — possibly a
 # BROKEN one, which is exactly a bundle that needs this, not a stranger.
-if [ ! -e "$TARGET/instance.config.json" ] || { [ ! -e "$TARGET/SCHEMA.md" ] && [ ! -L "$TARGET/SCHEMA.md" ]; }; then
+if [ ! -e "$TARGET/instance.config.json" ] || { [ ! -e "$TARGET/$AB_SCHEMA" ] && [ ! -L "$TARGET/$AB_SCHEMA" ]; }; then
   cat >&2 <<EOF
-refresh-seeds: $TARGET is not an ai-bridge bundle root (expected SCHEMA.md + instance.config.json).
+refresh-seeds: $TARGET is not an ai-bridge bundle root (expected $AB_SCHEMA + instance.config.json).
                To create a NEW bundle, run /ai-bridge:init $TARGET
 EOF
   exit 2

@@ -414,6 +414,9 @@ ok "…and is still valid shell"           "$(yn bash -n "$MUTANT")" yes
 # The same sequence against both scripts, from identical empty instances, so the only
 # variable is the refusal itself.
 MR="$TMP/mutant-run"; MRR="$TMP/real-run"; mkdir -p "$MR" "$MRR"
+# tick-lock.sh sources its sibling resolver (ai-bridge-v3/task-031); the mutant lives in
+# $TMP, so the resolver has to as well or it exits 2 before reaching the refusal.
+cp "$(dirname "$LOCKSH")/bundle-paths.sh" "$MUT/bundle-paths.sh"
 bash "$MUTANT" acquire --as tick --instance "$MR"  >/dev/null 2>&1; MUT_RC=$?
 bash "$LOCKSH" acquire --as tick --instance "$MRR" >/dev/null 2>&1; REAL_RC=$?
 ok "the real script refuses that resumed tick"    "$REAL_RC" 4

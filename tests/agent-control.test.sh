@@ -63,6 +63,9 @@ printf 'x\n' > "$INST/.claude/agents/index.md"
 PLUGROOT="$TMP/plugin"; mkdir -p "$PLUGROOT/hooks"
 cp "$HOOK_SRC" "$PLUGROOT/hooks/agent-control.sh"
 cp "$CTL_SRC"  "$INST/scripts/control.sh"
+# control.sh sources its sibling resolver (ai-bridge-v3/task-031), so a one-file fixture
+# has to carry it too — the plugin never ships one without the other.
+cp "$REPO/plugin/scripts/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
 chmod +x "$PLUGROOT/hooks/agent-control.sh" "$INST/scripts/control.sh"
 HOOK="$PLUGROOT/hooks/agent-control.sh"
 CTL="$INST/.claude/control"

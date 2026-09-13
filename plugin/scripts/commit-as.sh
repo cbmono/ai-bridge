@@ -94,6 +94,7 @@
 # SCOPE: this control-panel instance repo ONLY. Target product repos may forbid
 # AI attribution — never use this there; commit with the repo's normal identity.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 VALID_ROLES=(project-manager software-engineer devops-engineer qa-reviewer cataloguer human)
 
@@ -474,7 +475,7 @@ EOF
   if [ -n "$violations" ]; then
     echo "error: role '$role' may not promote these tasks to 'ready':" >&2
     printf '%s' "$violations" >&2
-    echo "       draft→ready is the human's authority (SCHEMA.md). The loop may promote a task" >&2
+    echo "       draft→ready is the human's authority ($AB_SCHEMA). The loop may promote a task" >&2
     echo "       only where AUTONOMY.md exists (no file = no delegated modes) — at this" >&2
     echo "       bundle's root, or from the ai-bridge-yolo companion plugin — the owning" >&2
     echo "       project's 'autonomy' is exactly 'yolo' — the one mode AUTONOMY.md defines;" >&2

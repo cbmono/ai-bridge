@@ -10,10 +10,11 @@
 #   2 (bad flag), 3 (the port is held by something that is not this board).
 #   Why it is shaped this way: docs/operations.md § 5.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 PORT=""
 INTERVAL=1
-OUT_DIR=".board-live"
+OUT_DIR="$AB_BOARD_DIR"
 PRINT_PORT=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -34,7 +35,7 @@ case "$INTERVAL" in ''|*[!0-9]*|0) echo "board-serve: --interval takes a positiv
 
 # Self-detecting and silent when it does not apply, exactly as watch-board.sh is: this
 # ships into every bundle and will be run from the wrong directory.
-[[ -f SCHEMA.md && -f instance.config.json ]] || exit 0
+[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || exit 0
 
 # The PHYSICAL path, so a bundle reached through a symlink (or a `//` in TMPDIR) derives
 # ONE port rather than one per route.
@@ -98,7 +99,7 @@ INTERVAL = int(os.environ["BOARD_INTERVAL"])
 RENDER   = os.environ["BOARD_RENDER"]
 WRITER   = os.environ["BOARD_WRITER"]
 PAGE     = os.path.join(OUT, "board.html")
-SNAP     = os.path.join(ROOT, "SNAPSHOT.json")
+SNAP     = os.path.join(ROOT, os.environ["AB_SNAPSHOT"])
 STATE    = os.path.join(OUT, ".serve")
 URL      = "http://localhost:%d" % PORT
 

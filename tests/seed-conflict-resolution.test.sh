@@ -35,7 +35,8 @@ gc() { git -c user.email=a@b -c user.name=a commit -qm "$1"; }
 TPL="$TMP/tpl"
 mkdir -p "$TPL/plugin/scripts"
 for f in init-bundle.sh refresh-seeds.sh validate-bundle.sh ai-bridge.sh build-kb-index.sh \
-         check-template-version.sh normalise-config.sh link-repos.sh tick-lock.sh; do
+         check-template-version.sh normalise-config.sh link-repos.sh tick-lock.sh \
+         bundle-paths.sh; do
   cp "$REPO/plugin/scripts/$f" "$TPL/plugin/scripts/"
 done
 cp -R "$REPO/plugin/seed" "$TPL/plugin/seed"

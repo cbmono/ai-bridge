@@ -643,6 +643,7 @@ sibling_case() { # <name> <what to write into review-clearance.sh> <expected mes
   local name="$1" writer="$2" want="$3"
   local dir="$TMP/sib.$((sib_n = ${sib_n:-0} + 1))"; mkdir -p "$dir"
   cp "$SCRIPT" "$dir/required-checks.sh"
+  cp "$(dirname "$SCRIPT")/bundle-paths.sh" "$dir/bundle-paths.sh"
   eval "$writer" > "$dir/review-clearance.sh"
   chmod +x "$dir/review-clearance.sh"           # the mode bit `[ -x ]` would be happy with
   setup; checks "pass	Build"; declared "Build"
@@ -659,6 +660,7 @@ sibling_case() { # <name> <what to write into review-clearance.sh> <expected mes
 
 LONELY="$TMP/lonely"; mkdir -p "$LONELY"
 cp "$SCRIPT" "$LONELY/required-checks.sh"
+cp "$(dirname "$SCRIPT")/bundle-paths.sh" "$LONELY/bundle-paths.sh"
 setup; checks "pass	Build"; declared "Build"
 out="$("$LONELY/required-checks.sh" 42 2>&1)"; rc=$?
 if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -Fq "review-clearance.sh not found"; then
@@ -726,6 +728,7 @@ sibling_case "…including the deleted third answer -> refuse" \
 # the refusals above are the sibling being broken and not the fixture being unclearable.
 REALSIB="$TMP/realsib"; mkdir -p "$REALSIB"
 cp "$SCRIPT" "$REALSIB/required-checks.sh"
+cp "$(dirname "$SCRIPT")/bundle-paths.sh" "$REALSIB/bundle-paths.sh"
 cp "$(dirname "$SCRIPT")/review-clearance.sh" "$REALSIB/review-clearance.sh"
 # Precondition 3's sibling travels with the other two: this control asserts that an
 # INTACT install clears, so a copy missing one of the three would make it pass for the

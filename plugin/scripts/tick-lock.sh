@@ -455,9 +455,10 @@
 #
 # Verified by tests/tick-lock.test.sh.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
-LOCK_NAME=".tick-lock"
-CLAIM_NAME=".tick-lock.claim"
+LOCK_NAME="$AB_LOCK"
+CLAIM_NAME="$AB_LOCK_CLAIM"
 
 usage() {
   echo "Usage: $(basename "$0") acquire [--as launcher|loop|tick] [--agent <id>] [--claimant <id>]" >&2
@@ -678,11 +679,11 @@ lock_claimant_line() {
 claim_exclusive() { # <origin: adopted — `took` is legacy-read only, never written>
   ( set -o noclobber
     { printf '%s\n' \
-        "# The TICK's claim on the .tick-lock beside it — written by the tick, never by the" \
+        "# The TICK's claim on the $LOCK_NAME beside it — written by the tick, never by the" \
         "# launcher. It records WHOSE the claim is, and from WHICH source that identity came:" \
         "# a later acquire that can PROVE it is the same tick re-enters and proceeds; anyone" \
         "# else holds; an identity that merely matches is exit 2 and a human's call." \
-        "# NOT a second lock and NOT a second clock: staleness is computed from .tick-lock" \
+        "# NOT a second lock and NOT a second clock: staleness is computed from $LOCK_NAME" \
         "# alone. Removed with the lock by: tick-lock.sh release" \
         "timestamp: $NOW_ISO" \
         "epoch: $NOW" \
