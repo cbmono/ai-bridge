@@ -169,6 +169,24 @@ ok "…and NO_COLOR= (empty) is NOT set, so colour stays" \
 ok "the coloured line is the plain one plus SGR" \
    "$(printf '%s' "$DEF" | sed "s/$esc\[[0-9;]*m//g")" "$(plain "$INST")"
 
+
+# COLOURED BY STATE, which is the half of criterion 1 the plain line cannot show. Read off
+# the SGR the segment is wrapped in, not off the words.
+sgr_of() { # <output> <segment text> -> the code that opens it
+  printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p' | head -n1
+}
+C="$(run --instance "$INST" --color always)"
+ok "work in flight is cyan"                "$(sgr_of "$C" '2 in flight')" 36
+ok "a queue that needs you is yellow"       "$(sgr_of "$C" '3 need you')" 33
+ok "a free lock is dim, not shouting"       "$(sgr_of "$C" 'lock free')" 2
+: > "$INST/.tick-lock"
+ok "…and a held one is yellow"              "$(sgr_of "$(run --instance "$INST" --color always)" 'lock held')" 33
+rm -f "$INST/.tick-lock"
+Z="$(run --instance "$TMP/d5" --color always)"
+ok "zero in flight goes dim, not cyan"      "$(sgr_of "$Z" '0 in flight')" 2
+U="$(run --instance "$TMP/d1" --color always)"
+ok "an unknown number is red"               "$(sgr_of "$U" '? need you')" 31
+
 echo
 echo "== 8. 3/4-bit ONLY — no 256-colour, no truecolor, no terminfo probe =="
 ok "no \`38;5;\` (256-colour) anywhere"  "$(grep -c '38;5;' "$SL" | tr -d ' ')" 0
@@ -199,14 +217,14 @@ echo
 echo "== 11. it is a SCRIPT, and a fast one =="
 ok "ships executable" "$(cd "$REPO" && git ls-files -s plugin/scripts/status-line.sh | awk '{print $1}')" 100755
 ok "bash -n clean"    "$(bash -n "$SL" 2>&1 | wc -l | tr -d ' ')" 0
-# 20 invocations at the rate a 5000 ms refreshInterval asks for, wall-clock over the lot.
-# Reported whatever it says; only a gross regression fails, because a loaded CI box is not
-# the machine the 100 ms budget is about.
+# 100 invocations, wall-clock over the lot — `date +%s` is whole seconds, so a smaller
+# sample cannot resolve a 50 ms call at all. Reported whatever it says; only a gross
+# regression fails, because a loaded CI box is not the machine the 100 ms budget is about.
 T0="$(date +%s)"; i=0
-while [ "$i" -lt 20 ]; do plain "$INST" >/dev/null; i=$((i + 1)); done
+while [ "$i" -lt 100 ]; do plain "$INST" >/dev/null; i=$((i + 1)); done
 T1="$(date +%s)"
-ELAPSED_MS=$(( (T1 - T0) * 1000 / 20 ))
-printf '  INFO  %-62s (%s ms/call over 20)\n' "measured invocation cost" "$ELAPSED_MS"
+ELAPSED_MS=$(( (T1 - T0) * 1000 / 100 ))
+printf '  INFO  %-62s (%s ms/call over 100)\n' "measured invocation cost" "$ELAPSED_MS"
 ok "…and it is nowhere near a second per call" "$([ "$ELAPSED_MS" -lt 1000 ] && echo yes || echo no)" yes
 
 echo
