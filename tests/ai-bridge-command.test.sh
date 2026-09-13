@@ -346,6 +346,7 @@ echo "== 5. SHIP-BLOCKER: fix never clears a tick lock, not even a stale one =="
 # one on that evidence is the double-dispatch this machinery exists to prevent.
 INST3="$TMP/inst3"; mkinstance "$INST3"
 cp "$TPL/plugin/scripts/tick-lock.sh" "$INST3/scripts/tick-lock.sh"
+cp "$TPL/plugin/scripts/bundle-paths.sh" "$INST3/scripts/bundle-paths.sh"
 old="$(date -u -r $(( $(date +%s) - 7200 )) +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
        || date -u -d '-2 hours' +%Y-%m-%dT%H:%M:%SZ)"
 printf 'timestamp: %s\nagent: project-manager\n' "$old" > "$INST3/.tick-lock"
@@ -391,6 +392,9 @@ ok "no fix_ function exists for a print-only tier" \
   "$(for t in config_uncommitted tick_lock config_layers orphan_processes; do
        grep -c "^fix_$t()" "$SH"; done | awk '{s+=$1} END {print s+0}')" 0
 ROGUE="$TMP/rogue.sh"
+# The mutants run from $TMP, and ai-bridge.sh sources its sibling resolver — without this
+# copy both exit 2 for the wrong reason, which is the code the guard itself returns.
+cp "$TPL/plugin/scripts/bundle-paths.sh" "$TMP/bundle-paths.sh"
 # BEFORE the call, not after: a function defined after `assert_no_rogue_fixers` runs would
 # not be visible to it, and this test would then "pass" against a guard that never fired.
 awk '/^assert_list_is_wired$/ && !d { print "fix_tick_lock() { :; }"; d=1 }

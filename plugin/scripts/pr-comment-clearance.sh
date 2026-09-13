@@ -174,6 +174,7 @@
 # the first such test would exit the script with a success-looking code. Every failure path
 # below is explicit.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 # --- table 1: the verdict vocabulary ------------------------------------------
 # One POSIX ERE per line, matched case-insensitively against an entry's own text. Blank
@@ -493,7 +494,7 @@ decide() { # <rendered> <label> -> 0 clear, 1 shape missing, 2 unknown, 3 an ele
   if [ "$state" = empty ]; then
     echo "refuse: $label is empty — a reply with no readable text tells the reviewer" >&2
     echo "        nothing. One line per finding, each with its verdict. See" >&2
-    echo "        CONVENTIONS.md, 'A reply to review findings has a shape'." >&2
+    echo "        $AB_CONVENTIONS, 'A reply to review findings has a shape'." >&2
     return 1
   fi
 
@@ -516,7 +517,7 @@ decide() { # <rendered> <label> -> 0 clear, 1 shape missing, 2 unknown, 3 an ele
 $noverdict
 EOF
     echo "        Say it in one word per entry — valid, fixed, declined, already" >&2
-    echo "        deferred — then the fix or the reason. See CONVENTIONS.md, 'A reply" >&2
+    echo "        deferred — then the fix or the reason. See $AB_CONVENTIONS, 'A reply" >&2
     echo "        to review findings has a shape'." >&2
     return 1
   }
@@ -531,7 +532,7 @@ EOF
     echo "ok: $label claims a CARVE-OUT and is exempt from the element ceiling:" >&2
     echo "      \"$carve\"" >&2
     echo "    An error report, a security finding and a destructive-action confirmation" >&2
-    echo "    are never trimmed (CONVENTIONS.md). No element size was measured." >&2
+    echo "    are never trimmed ($AB_CONVENTIONS). No element size was measured." >&2
     return 0
   }
 
@@ -546,7 +547,7 @@ EOF
 
   n="$(printf '%s\n' "$over" | grep -c '^')"
   echo "refuse: $label has $n element(s) over the $REPLY_ELEMENT_CEILING-byte ceiling" >&2
-  echo "        CONVENTIONS.md puts on ONE element of a reply:" >&2
+  echo "        $AB_CONVENTIONS puts on ONE element of a reply:" >&2
   # `set -u` is on and a short line would leave a field unset, so every field is read
   # through a default: a refusal that aborted on an unset variable would be a gate that
   # stopped reporting half-way.

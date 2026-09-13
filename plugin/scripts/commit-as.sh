@@ -4,6 +4,7 @@
 # author identity, for provenance in the autonomous PM loop.
 #
 #   Usage: commit-as.sh <role> "<commit message>" [git args...] -- <path>...
+#          commit-as.sh <role> "<commit message>" --stage [git args...] -- <path>...
 #          commit-as.sh <role> "<commit message>" --all-staged [git args...]
 #
 # The author NAME is the role; the author EMAIL is shared so the host (e.g.
@@ -17,9 +18,10 @@
 # happened repeatedly in practice. Naming paths commits only those, leaving
 # everyone else's staged changes staged and intact.
 #
-# What gets committed for a named path is the STAGED content — `git add` it first.
-# A working-tree edit made after that `git add` is not committed and stays a
-# working-tree edit.
+# What gets committed for a named path is the STAGED content — `git add` it first,
+# or pass `--stage` to have this script `git add` exactly the named paths (never
+# `-A`, never a path you did not name) as its first act. A working-tree edit made
+# after that `git add` is not committed and stays a working-tree edit.
 #
 # So for every role except `human`, one of the two forms above is REQUIRED:
 #   - `-- <path>...`  commit exactly these paths (strongly preferred), or
@@ -92,11 +94,13 @@
 # SCOPE: this control-panel instance repo ONLY. Target product repos may forbid
 # AI attribution — never use this there; commit with the repo's normal identity.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 VALID_ROLES=(project-manager software-engineer devops-engineer qa-reviewer cataloguer human)
 
 usage() {
   echo "Usage: $(basename "$0") <role> \"<commit message>\" [git args...] -- <path>..." >&2
+  echo "       $(basename "$0") <role> \"<commit message>\" --stage [git args...] -- <path>..." >&2
   echo "       $(basename "$0") <role> \"<commit message>\" --all-staged [git args...]" >&2
   echo "Roles: ${VALID_ROLES[*]}" >&2
   exit 2
@@ -119,6 +123,7 @@ esac
 git_args=()
 paths=()
 all_staged=0
+stage=0
 seen_dashdash=0
 for arg in "$@"; do
   if [ "$seen_dashdash" -eq 1 ]; then
@@ -127,6 +132,8 @@ for arg in "$@"; do
     seen_dashdash=1
   elif [ "$arg" = "--all-staged" ]; then
     all_staged=1
+  elif [ "$arg" = "--stage" ]; then
+    stage=1
   else
     git_args+=("$arg")
   fi
@@ -139,6 +146,17 @@ fi
 
 if [ "$all_staged" -eq 1 ] && [ "${#paths[@]}" -gt 0 ]; then
   echo "error: pass either --all-staged or '-- <path>...', not both" >&2
+  usage
+fi
+
+if [ "$stage" -eq 1 ] && [ "$all_staged" -eq 1 ]; then
+  echo "error: --stage stages the paths it is given, so there is nothing for it to do" >&2
+  echo "       with --all-staged. Pass '--stage -- <path>...' or --all-staged, not both." >&2
+  usage
+fi
+
+if [ "$stage" -eq 1 ] && [ "${#paths[@]}" -eq 0 ]; then
+  echo "error: --stage needs the paths to stage: '--stage -- <path>...'" >&2
   usage
 fi
 
@@ -296,6 +314,15 @@ has_head=0
 git rev-parse --verify -q HEAD >/dev/null 2>&1 && has_head=1
 
 if [ "${#paths[@]}" -gt 0 ]; then
+  # --stage does the caller's `git add -- <the named paths>` and nothing wider. It is
+  # the one thing here that writes the SHARED index — exactly the two-step it replaces,
+  # so a sibling's staged entries are untouched and a refusal below leaves these staged.
+  if [ "$stage" -eq 1 ] && ! git add -- "${paths[@]}"; then
+    echo "error: could not stage the named path(s) — refusing to commit as role" >&2
+    echo "       '$role' (fail closed)." >&2
+    exit 3
+  fi
+
   selected_index="$(mktemp "${TMPDIR:-/tmp}/commit-as-index.XXXXXX")"
   trap 'rm -f "$selected_index"' EXIT
 
@@ -340,6 +367,7 @@ if [ "${#paths[@]}" -gt 0 ]; then
     for p in "${paths[@]}"; do printf '         %s\n' "$p" >&2; done
     echo "       Stage your changes by explicit path first, then commit those same paths:" >&2
     echo "         git add -- <path>...   # never 'git add -A' in a shared instance" >&2
+    echo "       Or in one command: $(basename "$0") $role \"$message\" --stage -- <path>..." >&2
     exit 4
   fi
 fi
@@ -472,7 +500,7 @@ EOF
   if [ -n "$violations" ]; then
     echo "error: role '$role' may not promote these tasks to 'ready':" >&2
     printf '%s' "$violations" >&2
-    echo "       draft→ready is the human's authority (SCHEMA.md). The loop may promote a task" >&2
+    echo "       draft→ready is the human's authority ($AB_SCHEMA). The loop may promote a task" >&2
     echo "       only where AUTONOMY.md exists (no file = no delegated modes) — at this" >&2
     echo "       bundle's root, or from the ai-bridge-yolo companion plugin — the owning" >&2
     echo "       project's 'autonomy' is exactly 'yolo' — the one mode AUTONOMY.md defines;" >&2

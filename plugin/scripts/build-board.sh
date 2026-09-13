@@ -227,6 +227,7 @@
 # split and its HEAD keying), tests/board-renderers.test.sh (print-board and watch-board)
 # (this file's size).
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 OUT="board.html"
 STANDALONE=0
@@ -261,6 +262,8 @@ from pathlib import Path
 
 OUT = Path(os.environ["BOARD_OUT"])
 STANDALONE = os.environ.get("BOARD_STANDALONE") == "1"
+AB_SNAPSHOT = os.environ["AB_SNAPSHOT"]
+AB_AWAITING = os.environ["AB_AWAITING"]
 
 
 def e(v):
@@ -341,13 +344,13 @@ if os.environ.get("BOARD_LIST_ONLY") == "1":
 # filesystem path to be picked up by something that walks the snapshot's own fields.
 instances, inst_dirs, broken = [], [], []
 for d in dirs:
-    snap = d / "SNAPSHOT.json"
+    snap = d / AB_SNAPSHOT
     if not d.is_dir():
         print(f"build-board: skipped {d} — no such directory.", file=sys.stderr)
         continue
     if not snap.is_file():
         # The off switch. Absent from the board entirely, by design.
-        print(f"build-board: skipped {d} — no SNAPSHOT.json (off the board).", file=sys.stderr)
+        print(f"build-board: skipped {d} — no {AB_SNAPSHOT} (off the board).", file=sys.stderr)
         continue
     try:
         data = json.loads(snap.read_text(encoding="utf-8"))
@@ -359,7 +362,7 @@ for d in dirs:
         # reader benefit. The stderr line above still carries the full path, where
         # the person who can fix it is the only one reading.
         broken.append((dirname(d) or str(d), type(exc).__name__ + ": " + str(exc)))
-        print(f"build-board: {d}/SNAPSHOT.json is malformed — rendering a note.", file=sys.stderr)
+        print(f"build-board: {d}/{AB_SNAPSHOT} is malformed — rendering a note.", file=sys.stderr)
         continue
     data["_dir"] = dirname(d) or str(d)   # name, not path — see the note above
     # str(), not just truthiness: a non-string group (say 5) survives a `not` test and
@@ -442,7 +445,7 @@ TERMINAL = ("done", "cancelled")
 # EVERYTHING READ HERE IS UNTRUSTED TEXT, exactly as a snapshot is: same human-written
 # documents, arriving through git instead of through the writer. It goes through the same
 # e(), it renders only bundle-relative paths, and none of it reaches a <script>.
-OTHERS_CACHE = ".board-others.json"
+OTHERS_CACHE = os.environ["AB_BOARD_OTHERS"]
 OTHERS_SCHEMA = "ai-bridge other-owners cache v1"
 OTHERS_TTL = 900          # seconds — the FALLBACK only; see others_for()
 
@@ -1501,9 +1504,9 @@ def explain(verb, p, t, hint):
         return ("There %s %d open question%s on this task, and an unanswered question blocks "
                 "promotion — the loop will not dispatch it. The board never carries question "
                 "text; use the Q button in the task table to copy a prompt that opens "
-                "%s, or read AWAITING.md, which does carry %s."
+                "%s, or read %s, which does carry %s."
                 % ("is" if one else "are", n, "" if one else "s",
-                   "it" if one else "them", "it" if one else "them"))
+                   "it" if one else "them", AB_AWAITING, "it" if one else "them"))
     if verb == "merge":
         prs = [todict(x) for x in tolist(t.get("prs"))]
         nums = ", ".join("#%s" % x.get("number") for x in prs)
@@ -1681,9 +1684,9 @@ def render_table():
 
     for d, msg in broken:
         o.append('<div class="snapnote"><strong>Unreadable snapshot.</strong> '
-                 '<code>%s/SNAPSHOT.json</code> could not be parsed, so that instance is '
+                 '<code>%s/%s</code> could not be parsed, so that instance is '
                  'not on the board. Re-run <code>write-snapshot.sh</code> there. '
-                 '<br>%s</div>' % (e(d), e(msg)))
+                 '<br>%s</div>' % (e(d), e(AB_SNAPSHOT), e(msg)))
 
     # ---- one project's decision rail: one click copies a complete prompt ----
     #
@@ -2098,7 +2101,7 @@ def render_table():
                      "which is gitignored and never present here. It moves when you pull, "
                      "and it never shows uncommitted work.</p></div></details></div>")
 
-    o.append('<footer><p>Derived from each instance’s <code>SNAPSHOT.json</code> and '
+    o.append('<footer><p>Derived from each instance’s <code>' + e(AB_SNAPSHOT) + '</code> and '
              "<strong>as sensitive as the task documents it comes from</strong>. Titles are "
              "human-written free text; no customer PII belongs in a task title, and so none "
              "belongs here. Task descriptions, document bodies, question and blocker text, "

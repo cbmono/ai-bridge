@@ -69,6 +69,7 @@ make_tpl() { # <dir>
   cp "$REPO/VERSION" "$d/plugin/VERSION"
   printf '{ "name": "ai-bridge", "plugins": [] }\n' > "$d/.claude-plugin/marketplace.json"
   cp "$REPO/plugin/scripts/init-bundle.sh" "$d/plugin/scripts/init-bundle.sh"
+  cp "$REPO/plugin/scripts/bundle-paths.sh" "$d/plugin/scripts/bundle-paths.sh"
   cp -R "$REPO/config" "$d/config"
   printf '{}\n' > "$d/plugin/seed/instance.config.json"
   # The REAL seed CLAUDE.md, so the stale-import nudge is exercised against the content a

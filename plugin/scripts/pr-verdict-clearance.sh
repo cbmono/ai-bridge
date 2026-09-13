@@ -13,6 +13,7 @@
 #
 # Reasoning: ai-bridge-next/task-013. The gate it feeds is SCHEMA.md clause 7.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 # A checker row's evidence cell must carry one of these — a command, a path, a link, a
 # run. Anything else is an assertion, and an assertion is not evidence.
@@ -179,7 +180,7 @@ decide() { # <worker-scan> <checker-scan> <checker-login> <author-login>
     return 2; }
   [ "$wn" -gt 0 ] || {
     echo "unknown: no worker table found in the PR body — the ✓/✗ acceptance-criteria" >&2
-    echo "         table CONVENTIONS.md requires. Nothing to compare." >&2
+    echo "         table $AB_CONVENTIONS requires. Nothing to compare." >&2
     return 2; }
 
   i=0
@@ -232,7 +233,7 @@ EOF
   if [ -n "$clogin" ] && [ -n "$alogin" ] \
      && [ "$(norm "$clogin")" = "$(norm "$alogin")" ]; then
     echo "refuse: the checker posted under $(safe "$clogin"), the PR author's own login," >&2
-    echo "        so nothing here shows a second principal (SCHEMA.md clause 8)." >&2
+    echo "        so nothing here shows a second principal ($AB_SCHEMA clause 8)." >&2
     echo "        KNOWN LIMIT: on a solo bundle every agent shares one gh login, so this" >&2
     echo "        is the standing answer there and routing to a human IS the gate." >&2
     return 4

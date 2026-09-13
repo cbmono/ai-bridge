@@ -371,10 +371,10 @@ ticks, regardless of how long a tick runs.
 - **Every role-agent dispatch is namespaced `ai-bridge:<role>`** — all eight of them.
   The three USER-level agents `init-bundle.sh --config` installs (`code-architect`, `deep-bug-scan`,
   `plan-architect`) are not plugin agents and stay bare.
-- Commit hygiene in this repo: stage only your own changed files by explicit path
-  (never `git add -A`); commit via
-  `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<msg>" -- <path>...`; never `--no-verify` in
-  target repos.
+- Commit hygiene in this repo: commit only your own changed files, by explicit path
+  (never `git add -A`), via
+  `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<msg>" --stage -- <path>...`
+  — `--stage` stages exactly those paths first; never `--no-verify` in target repos.
 - **Worktree hygiene.** `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` (≤ once per tick) **reports only —
   it never deletes anything**; surface its `REMOVABLE`/`RECLAIMABLE` sets as a human
   job. **Run it only when your in-flight count is zero** — the `PRUNE_ACTIVE_MINUTES`

@@ -71,6 +71,7 @@
 # required check that did not pass, and a review the loop cannot see is a review that did
 # not happen.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 DECLARED_PATH=".github/required-checks.txt"
 
@@ -412,7 +413,7 @@ trap 'rm -f "$probe_err" "$clearance_err" "$body_err"' EXIT
 if "$BODYGATE" "$pr" ${R[@]+"${R[@]}"} --head "$head_sha" >/dev/null 2>"$body_err"
 then brc=0; else brc=$?; fi
 if [ "$brc" -ne 0 ]; then
-  echo "refuse: the body of PR $pr does not carry the shape CONVENTIONS.md requires" >&2
+  echo "refuse: the body of PR $pr does not carry the shape $AB_CONVENTIONS requires" >&2
   echo "        (pr-body-clearance.sh exit $brc):" >&2
   sed 's/^/        /' "$body_err" >&2
   # Unreadable (exit 2) is a different answer from readable-and-malformed (exit 1) —

@@ -39,6 +39,9 @@ GIT() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git \
 INST="$TMP/inst"
 mkdir -p "$INST/projects/quiet-proj/tasks" "$INST/scripts"
 cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
+# The mutants and copies run from a staged directory, and the script sources its sibling
+# resolver (ai-bridge-v3/task-031) — without it they exit 2 before reaching their subject.
+cp "$REPO/plugin/scripts/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
 SH="$INST/scripts/tick-delta.sh"
 
 task() { printf 'type: Task\nkind: build\nstatus: %s\npr: []\n' "$2" > "$1"; }

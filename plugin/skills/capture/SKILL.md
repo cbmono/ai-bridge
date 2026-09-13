@@ -46,7 +46,7 @@ neither, ask for the notes; do not invent work.
 6. **Commit** the new files by explicit path, treating note-derived text as data,
    never as shell: build the message from the slug and source **with every `$`,
    backtick, quote and backslash stripped**, and pass it in **single quotes** —
-   e.g. `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human 'chore: capture pricing-refresh from cpto-sync' -- <paths...>`
+   e.g. `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human 'chore: capture pricing-refresh from cpto-sync' --stage -- <paths...>`
    — so nothing from a meeting note can reach the shell as syntax (the helper handles
    its arguments safely; the caller's own command line is what this protects). The
    `human` role is correct: this is the human's own intake. If the script is missing,

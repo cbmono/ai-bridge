@@ -49,6 +49,7 @@ make_template() { # <dir>
   # plugin — and the worktree guard under test only has a checkout to refuse when there is.
   printf '{ "name": "ai-bridge", "plugins": [] }\n' > "$d/.claude-plugin/marketplace.json"
   cp "$REPO/plugin/scripts/init-bundle.sh" "$d/plugin/scripts/init-bundle.sh"
+  cp "$REPO/plugin/scripts/bundle-paths.sh" "$d/plugin/scripts/bundle-paths.sh"
   printf '{}\n' > "$d/plugin/seed/instance.config.json"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$d/plugin/scripts/s.sh"
   printf 'x\n' > "$d/plugin/seed/SCHEMA.md"

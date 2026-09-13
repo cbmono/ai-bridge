@@ -244,6 +244,7 @@
 # the first such test would exit the script with a success-looking code. Every failure
 # path below is explicit.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 # --- table 1: what a TL;DR marker line looks like -----------------------------
 # One POSIX ERE per line, matched case-insensitively against the fence-stripped body.
@@ -323,7 +324,7 @@ https?://[^[:space:]<>]+
 # the measurement goes red rather than through.
 #
 # THIS IS NOT A BODY LENGTH AND MUST NEVER BECOME ONE. Nothing below sums these, and
-# nothing below compares them to `body_chars`; see the header.
+# nothing below compares them to the body's own length; see the header.
 CRITERIA_EVIDENCE_CEILING=400
 CRITERIA_EVIDENCE_FLOOR=13
 
@@ -332,6 +333,69 @@ CRITERIA_EVIDENCE_FLOOR=13
 # exit 4. `tests/pr-body-clearance.test.sh` pins them and drives a body on each side.
 BODY_CEILING_CHARS=2500
 NOTES_CEILING=3
+
+# --- table 7: the reviewer-generated blocks, NOT counted against the ceiling ----
+# A ceiling is only meaningful over the half the checked party can change. CodeRabbit
+# appends a release-notes block (740 and 531 characters, measured on #195 and #200) that
+# regenerates on every review, so a body that cleared when it was posted refuses later.
+#
+# THE ANCHOR IS THE MARKER, NEVER THE EDITOR'S LOGIN: a login is whoever pushed the last
+# edit, and the block outlives them. Text carrying no marker is counted in full, and an
+# opening marker with no closing one strips nothing — an unrecognised block is counted,
+# never guessed at, which is the only direction that cannot hide an author's own prose.
+# Literal lines, not EREs: these are emitted verbatim by the tool that writes them.
+#
+# AND THE MARKER IS NOT AN EXEMPTION THE AUTHOR CAN WRITE HIMSELF. Nothing in a body says
+# who typed a line, so an unbounded strip lets an author put the required structure
+# outside an exact pair and his essay inside it. The strip is therefore worth at most what
+# the generator emits, markers included — 531, 740 and 741 measured on #200, #195 and
+# #206, so 1,000 is a POLICY bound over three observations and not an empty band. Past it
+# nothing is stripped and the body counts as posted: this gate's verdict before the strip.
+GENERATED_OPEN='<!-- This is an auto-generated comment: release notes by coderabbit.ai -->'
+GENERATED_CLOSE='<!-- end of auto-generated comment: release notes by coderabbit.ai -->'
+GENERATED_CEILING=1000
+
+# The body less every marked block. Byte-for-byte the input when there is no block, so a
+# body nobody appended to is measured exactly as before. Nothing else reads this copy:
+# every structural check below still runs on the body as posted.
+authored_half() { # <src> <dst>
+  if ! grep -Fq -- "$GENERATED_OPEN" "$1" || ! grep -Fq -- "$GENERATED_CLOSE" "$1"; then
+    cat -- "$1" > "$2"
+    return 0
+  fi
+  # `open` and `close` are awk's own; the block's markers are named around them.
+  awk -v bopen="$GENERATED_OPEN" -v bclose="$GENERATED_CLOSE" '
+    function trimmed(s) { sub(/[[:space:]]+$/, "", s); sub(/^[[:space:]]+/, "", s); return s }
+    {
+      if (!inb && trimmed($0) == bopen) { inb = 1; nb = 0; buf[++nb] = $0; next }
+      if (inb) {
+        buf[++nb] = $0
+        if (trimmed($0) == bclose) { inb = 0; nb = 0 }
+        next
+      }
+      print
+    }
+    END { if (inb) for (i = 1; i <= nb; i++) print buf[i] }
+  ' < "$1" > "$2"
+  [ "$(( $(char_count "$1") - $(char_count "$2") ))" -le "$GENERATED_CEILING" ] \
+    || cat -- "$1" > "$2"
+}
+
+# What the caller is measured on, said before the verdict. The second line only appears
+# where a block was actually found, so a body nobody appended to prints what it always did.
+report_length() { # <body-file> <label>
+  local authored posted
+  authored_half "$1" "$TMPD/authored"
+  authored="$(char_count "$TMPD/authored")"
+  posted="$(char_count "$1")"
+  echo "pr-body-clearance: $2 is $authored characters (ceiling $BODY_CEILING_CHARS)" >&2
+  if [ "$posted" != "$authored" ]; then
+    echo "pr-body-clearance: …of $posted posted; the rest is a reviewer-generated block" >&2
+  elif grep -Fq -- "$GENERATED_OPEN" "$1" && grep -Fq -- "$GENERATED_CLOSE" "$1"; then
+    echo "pr-body-clearance: …its marked block is over the $GENERATED_CEILING-character" >&2
+    echo "pr-body-clearance:    allowance, so the whole body is counted" >&2
+  fi
+}
 
 # CODE POINTS, which is what the host reports as a body's length. `jq` when it is there;
 # bytes otherwise, which OVER-counts a multibyte body and so only ever refuses earlier —
@@ -837,7 +901,7 @@ report_rows() { # <scan> <label> -> 0 clear, 3 at least one row outside the boun
   [ -n "$offenders" ] || return 0
   n="$(printf '%s\n' "$offenders" | grep -c '^')"
   echo "refuse: $label carries both structural elements, but $n acceptance-criteria" >&2
-  echo "        row(s) fall outside the two-sided bound CONVENTIONS.md puts on the" >&2
+  echo "        row(s) fall outside the two-sided bound $AB_CONVENTIONS puts on the" >&2
   echo "        EVIDENCE column — floor $CRITERIA_EVIDENCE_FLOOR bytes, ceiling $CRITERIA_EVIDENCE_CEILING bytes:" >&2
   # `set -u` is on and a short line would leave a field unset, so every field is read
   # through a default. The emitted lines always carry five, but a refusal that aborted the
@@ -865,7 +929,7 @@ report_rows() { # <scan> <label> -> 0 clear, 3 at least one row outside the boun
 $offenders
 EOF
   echo "        This bounds ONE CELL of ONE ROW. The body's own ceiling is a separate" >&2
-  echo "        check with a separate code (4). See CONVENTIONS.md, 'The criteria table" >&2
+  echo "        check with a separate code (4). See $AB_CONVENTIONS, 'The criteria table" >&2
   echo "        is the merge gate'." >&2
   return 3
 }
@@ -876,21 +940,24 @@ EOF
 # in one pass: an author over both should learn both in one run.
 report_concision() { # <raw-body> <notes-scan> <label> -> 0 clear, 4 over a ceiling
   local raw="$1" nscan="$2" label="$3" chars notes rc=0
-  chars="$(char_count "$raw")"
+  authored_half "$raw" "$TMPD/authored"
+  chars="$(char_count "$TMPD/authored")"
   notes="$(printf '%s\n' "$nscan" | awk -F'\t' '$1 == "notecount" { print $2; exit }')"
   case "$chars" in ''|*[!0-9]*) return 2 ;; esac
   case "$notes" in ''|*[!0-9]*) return 2 ;; esac
   if [ "$chars" -gt "$BODY_CEILING_CHARS" ]; then
     rc=4
-    echo "refuse: $label carries every required element, and it is $chars characters —" >&2
-    echo "        over the $BODY_CEILING_CHARS-character ceiling CONVENTIONS.md sets in 'Write less'." >&2
+    echo "refuse: $label carries every required element, and it is $chars authored" >&2
+    echo "        characters — over the $BODY_CEILING_CHARS-character ceiling $AB_CONVENTIONS sets in" >&2
+    echo "        'Write less'. A marked reviewer block is not counted, up to $GENERATED_CEILING" >&2
+    echo "        characters; a larger one is counted in full, markers or no markers." >&2
     echo "        Keep the TL;DR line, the Verified line and the criteria table. Move the" >&2
     echo "        design, the alternatives and the incident into the task doc and the" >&2
     echo "        commit message, which travel with the change and have no ceiling." >&2
   fi
   if [ "$notes" -gt "$NOTES_CEILING" ]; then
     rc=4
-    echo "refuse: $label carries $notes Notes bullets — over the $NOTES_CEILING CONVENTIONS.md allows." >&2
+    echo "refuse: $label carries $notes Notes bullets — over the $NOTES_CEILING $AB_CONVENTIONS allows." >&2
     echo "        A note is for something a reviewer cannot see from the diff. Past three" >&2
     echo "        it is the essay the section replaced, arriving under another heading." >&2
   fi
@@ -936,11 +1003,11 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
     echo "ok: $label carries a TL;DR line and a well-formed acceptance-criteria" >&2
     echo "    table, a Verified line that cites something, a heading tally that matches" >&2
     echo "    the rows, claim-first notes where it has any, and is inside the" >&2
-    echo "    CONVENTIONS.md concision ceilings." >&2
+    echo "    $AB_CONVENTIONS concision ceilings." >&2
     return 0
   fi
 
-  echo "refuse: $label does not carry the shape CONVENTIONS.md requires of a PR body." >&2
+  echo "refuse: $label does not carry the shape $AB_CONVENTIONS requires of a PR body." >&2
   rc=1
   [ "$tldr" -eq 0 ] || {
     echo "        MISSING: the TL;DR line. One sentence — what changes, and why it is" >&2
@@ -966,7 +1033,7 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
     unmarked)
       echo "        MISSING: the acceptance-criteria table. A well-formed table is here," >&2
       echo "        but no row of it carries a '✓' or a '✗' — that column IS the checkbox" >&2
-      echo "        state SCHEMA.md clause 7 and AUTONOMY.md read, so as written there is" >&2
+      echo "        state $AB_SCHEMA clause 7 and AUTONOMY.md read, so as written there is" >&2
       echo "        nothing for the merge gate to consult." >&2 ;;
   esac
   case "$tkind" in
@@ -979,7 +1046,7 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
       echo "        MISSING: the tally on the criteria heading, which reads:" >&2
       echo "          \"$(printf '%s\n' "$tally" | cut -f3)\"" >&2
       echo "        Write the counts into it — '### Criteria (10 ✓ / 8 ✗ — every ✗ is a" >&2
-      echo "        later slice)'. SCHEMA.md clause 7 makes an unverified criterion block" >&2
+      echo "        later slice)'. $AB_SCHEMA clause 7 makes an unverified criterion block" >&2
       echo "        clearance, so the counts are the first thing a reader needs." >&2 ;;
     mismatch)
       echo "        WRONG: the criteria heading claims $(printf '%s\n' "$tally" | cut -f3) ✓ / $(printf '%s\n' "$tally" | cut -f4) ✗, and the table" >&2
@@ -992,7 +1059,7 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
     unexplained)
       echo "        MISSING: the reason for the $(printf '%s\n' "$tally" | cut -f3) ✗ on the criteria heading, which reads:" >&2
       echo "          \"$(printf '%s\n' "$tally" | cut -f4)\"" >&2
-      echo "        SCHEMA.md clause 7 makes an unverified criterion block clearance, so a" >&2
+      echo "        $AB_SCHEMA clause 7 makes an unverified criterion block clearance, so a" >&2
       echo "        table with ✗ in it looks alarming until the heading says why. Put the" >&2
       echo "        reason after the tally — '(10 ✓ / 8 ✗ — every ✗ is a later slice or" >&2
       echo "        task-001)'. Whether the reason is a good one is the reviewer's call," >&2
@@ -1013,7 +1080,7 @@ EOF
     echo "        alone. The section is optional; a note that buries its claim is not." >&2
   fi
   echo "        This is the STRUCTURE refusal. Length is a separate check with a" >&2
-  echo "        separate code (4). See CONVENTIONS.md, 'The PR body has a required" >&2
+  echo "        separate code (4). See $AB_CONVENTIONS, 'The PR body has a required" >&2
   echo "        shape'." >&2
   return "$rc"
 }
@@ -1148,6 +1215,30 @@ if [ "${1:-}" = "--self-test" ]; then
     '## Description' "It does the thing. $(st_cell 2600)" '' "$ST_VERIFIED" '' \
     "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |'
+  # THE AUTHORED HALF, AND THE BOUND ON IT. A block the size of a real one is stripped;
+  # the same markers around more text than the generator emits strip nothing. A copy that
+  # strips on something else, strips nothing, or strips whatever it is given fails one.
+  st_probe 0 "a generated block inside the allowance" \
+    '## Description' "It does the thing. $(st_cell 1700)" '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
+    '' "$GENERATED_OPEN" "$(st_cell 700)" "$GENERATED_CLOSE"
+  st_probe 4 "…an author's own pair around 2,600 characters, which strips nothing" \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
+    '' "$GENERATED_OPEN" "$(st_cell 2600)" "$GENERATED_CLOSE"
+  st_probe 4 "…the same text with no marker around it" \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
+    '' "$(st_cell 2600)"
+  st_probe 4 "…and an author over the ceiling beside a block of his own" \
+    '## Description' "It does the thing. $(st_cell 2600)" '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
+    '' "$GENERATED_OPEN" 'Generated.' "$GENERATED_CLOSE"
+  st_probe 4 "…and an opening marker that never closes" \
+    '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
+    '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
+    '' "$GENERATED_OPEN" "$(st_cell 2600)"
+
   st_probe 0 "three claim-first notes" \
     '## Description' 'It does the thing.' '' "$ST_VERIFIED" '' "$ST_HEAD1" '' \
     '| Criterion | ✓ | Verified by |' '|---|---|---|' '| it works | ✓ | `a.test.sh` 40/0 |' \
@@ -1204,8 +1295,7 @@ if [ -n "$body_file" ]; then
     exit 2
   }
   # Reported here for the author; `decide` measures it again against the ceiling.
-  body_chars="$(char_count "$body_file")"
-  echo "pr-body-clearance: $body_file is $body_chars characters (ceiling $BODY_CEILING_CHARS)" >&2
+  report_length "$body_file" "$body_file"
   render_body "$body_file" "$TMPD/rendered"
   decide "$body_file" "$TMPD/rendered" "'$body_file'"
   exit $?
@@ -1265,8 +1355,7 @@ printf '%s' "$raw" | jq -j '.body // ""' > "$TMPD/body" 2>/dev/null || {
   exit 2
 }
 
-body_chars="$(char_count "$TMPD/body")"
-echo "pr-body-clearance: PR $pr body is $body_chars characters (ceiling $BODY_CEILING_CHARS)" >&2
+report_length "$TMPD/body" "PR $pr body"
 
 render_body "$TMPD/body" "$TMPD/rendered"
 decide "$TMPD/body" "$TMPD/rendered" "the body of PR $pr ($url)"

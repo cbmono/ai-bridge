@@ -76,6 +76,7 @@
 #
 # Verified by tests/validate-bundle.test.sh.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 STRICT=0
 while [[ $# -gt 0 ]]; do
@@ -87,8 +88,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-[[ -f SCHEMA.md && -f instance.config.json ]] || {
-  echo "validate-bundle: run from a control-panel instance root (SCHEMA.md + instance.config.json)." >&2
+[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || {
+  echo "validate-bundle: run from a control-panel instance root ($AB_SCHEMA + instance.config.json)." >&2
   exit 2
 }
 
@@ -260,10 +261,10 @@ while IFS= read -r file; do
   if [[ "$type" == Finding ]]; then
     lines="$(grep -c '' "$file" || true)"
     if [[ -n "$lines" && "$lines" -gt $FINDING_MAX_LINES ]]; then
-      warn "$rel" "Finding is $lines lines; CONVENTIONS.md 'Write less' caps it at $FINDING_MAX_LINES — the history behind it belongs in the task doc"
+      warn "$rel" "Finding is $lines lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES — the history behind it belongs in the task doc"
     fi
     if ! printf '%s\n' "$fm" | grep -q '^lesson:[[:space:]]*[^[:space:]]'; then
-      warn "$rel" "Finding has no one-line 'lesson:' — the takeaway the next agent needs, required by CONVENTIONS.md 'Write less'"
+      warn "$rel" "Finding has no one-line 'lesson:' — the takeaway the next agent needs, required by $AB_CONVENTIONS 'Write less'"
     fi
     # `author:` is the GitHub login that filed it. Provenance has to survive a file move,
     # so it is frontmatter and never the path — there are no per-user folders in the KB.
@@ -276,7 +277,7 @@ while IFS= read -r file; do
     # the contract; it reads knowledge/index.md, which is not a concept document.
     if printf '%s\n' "$fm" | grep -q '^superseded_by:[[:space:]]*[^[:space:]]' \
        && [[ "$(printf '%s\n' "$fm" | sed -n 's/^status:[[:space:]]*//p' | head -1)" != superseded ]]; then
-      fail "$rel" "carries superseded_by: but status is not 'superseded' — SCHEMA.md 'Superseding a Finding' sets both"
+      fail "$rel" "carries superseded_by: but status is not 'superseded' — $AB_SCHEMA 'Superseding a Finding' sets both"
     fi
   fi
 
@@ -285,7 +286,7 @@ while IFS= read -r file; do
     if [[ -n "$dnr" ]]; then
       n="$(flow_entries "$dnr")"
       if [[ -n "$n" && "$n" -gt $DO_NOT_REPEAT_MAX ]]; then
-        warn "$rel" "do_not_repeat carries $n entries; CONVENTIONS.md caps it at $DO_NOT_REPEAT_MAX — the project-manager folds the oldest into '# Notes'"
+        warn "$rel" "do_not_repeat carries $n entries; $AB_CONVENTIONS caps it at $DO_NOT_REPEAT_MAX — the project-manager folds the oldest into '# Notes'"
       fi
     fi
 
@@ -294,7 +295,7 @@ while IFS= read -r file; do
     if [[ "$status" == done || "$status" == cancelled ]]; then
       while IFS= read -r caveat; do
         [[ -n "$caveat" ]] || continue
-        fail "$rel" "status '$status' is held by an open caveat (SCHEMA.md 'open_caveats' — clear it with evidence, in its own edit): $caveat"
+        fail "$rel" "status '$status' is held by an open caveat ($AB_SCHEMA 'open_caveats' — clear it with evidence, in its own edit): $caveat"
       done <<< "$(list_entries "$fm" open_caveats)"
     fi
   fi

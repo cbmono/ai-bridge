@@ -151,7 +151,7 @@ echo "== MUTATION: a trigger that ignored idleness would be caught =="
 # The mutant needs its siblings beside it — the script resolves them from its own path —
 # so it goes in a scripts/ of symlinks rather than beside the real one.
 MUTDIR="$TMP/scripts"; mkdir -p "$MUTDIR"
-for s in build-kb-index.sh resolve-max-agents.sh resolve-config.sh; do
+for s in build-kb-index.sh resolve-max-agents.sh resolve-config.sh bundle-paths.sh; do
   ln -s "$REPO/plugin/scripts/$s" "$MUTDIR/$s"
 done
 MUTANT="$MUTDIR/kb-sweep-due.sh"

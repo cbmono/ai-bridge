@@ -92,6 +92,7 @@
 # `assert_list_is_wired`: a row with no function makes the command refuse to start.
 # shellcheck disable=SC2329
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 # =========================================================================================
 # THE LIST. `id|tier|banner`
@@ -898,7 +899,7 @@ check_tick_lock() {
   out="$(bash "$sh" status --instance "$ROOT" 2>&1)"; rc=$?
   case "$rc" in
     0) good "no tick lock held — the next dispatch tick takes it"
-       case "$out" in *".tick-lock.claim"*) note "note: a claim file outlived its lock; the next acquire clears it" ;; esac ;;
+       case "$out" in *"$AB_LOCK_CLAIM"*) note "note: a claim file outlived its lock; the next acquire clears it" ;; esac ;;
     1) good "an /ai-bridge:dispatch tick is in flight (this is a live lock, not a fault)"
        printf '%s\n' "$out" | sed -n '1,3p' | sed 's/^/    /'
        case "$out" in *"No tick has claimed it yet"*) note "unclaimed: taken for a dispatch that is starting" ;; esac ;;
@@ -1094,7 +1095,7 @@ EOF
   warn "$hits orphaned process(es) of yours (ppid 1) run out of a worktree — nothing will reap them"
   printf '%s' "$detail"
   [ "$hits" -gt 12 ] && note "… and $((hits - 12)) more not listed"
-  note "a bound on the child is what stops this — CONVENTIONS.md, 'Anything you background'"
+  note "a bound on the child is what stops this — $AB_CONVENTIONS, 'Anything you background'"
   hint "yours, not fix's: ps -p ${pids_hit%% *} -o command= ; then kill $pids_hit"
   return 1
 }

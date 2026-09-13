@@ -70,6 +70,7 @@
 #
 # Verified by tests/task-owner.test.sh.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 CONFIG="instance.config.json"
 LOCAL_CONFIG="instance.config.local.json"
@@ -93,8 +94,8 @@ while [ "$#" -gt 0 ]; do
 done
 [ "$mode" = "self" ] || [ -n "$target" ] || usage
 
-[ -f SCHEMA.md ] && [ -f "$CONFIG" ] || {
-  echo "error: run from a control-panel instance root (SCHEMA.md + $CONFIG)." >&2
+[ -f "$AB_SCHEMA" ] && [ -f "$CONFIG" ] || {
+  echo "error: run from a control-panel instance root ($AB_SCHEMA + $CONFIG)." >&2
   exit 2
 }
 

@@ -154,6 +154,7 @@
 # No `set -e`: a `grep` that finds nothing and a sibling that exits 4 are both ANSWERS
 # here, not faults. Every failure path is explicit.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 CAP=2
 
@@ -419,7 +420,7 @@ if [ "$rounds" -lt "$CAP" ]; then
 fi
 
 echo "refuse: PR $pr ($nwo) has already had $rounds verification round(s), and the cap" >&2
-echo "        is $CAP — CONVENTIONS.md, \"TWO ROUNDS, THEN THE HUMAN DECIDES\". Do NOT" >&2
+echo "        is $CAP — $AB_CONVENTIONS, \"TWO ROUNDS, THEN THE HUMAN DECIDES\". Do NOT" >&2
 echo "        dispatch another verifier. Rounds 3-8 on the pull request this rule comes" >&2
 echo "        from produced adversary-shaped findings against a change that already met" >&2
 echo "        its criteria, because nothing told the reviewer to stop." >&2
