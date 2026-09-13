@@ -9,7 +9,10 @@
 # Exit 0 always: this reports, it never gates.
 set -uo pipefail
 
-LAB="$(mktemp -d)"; LIVE="${1:-}"
+LIVE="${1:-}"
+LAB="$(mktemp -d "${TMPDIR:-/tmp}/native-worktrees-probe.XXXXXX")" || {
+  echo "native-worktrees-probe-2: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}." >&2; exit 2; }
+[ -d "$LAB" ] || { echo "native-worktrees-probe-2: mktemp -d returned no usable directory." >&2; exit 2; }
 # Only ever the fixture's own trees, by path, under a mktemp root: never a scan of a
 # real worktreeRoot — that is the 2026-08-04 incident, and this file must not model it.
 cleanup() {

@@ -15,7 +15,10 @@
 set -uo pipefail
 
 VETO="$(cd "$(dirname "$0")/.." && pwd)/docs/spikes/worktree-remove-veto.sh"
-LAB="$(mktemp -d)"; trap 'chmod -R u+rwX "$LAB" 2>/dev/null; rm -rf "$LAB"' EXIT
+LAB="$(mktemp -d "${TMPDIR:-/tmp}/worktree-remove-veto.XXXXXX")" || {
+  echo "worktree-remove-veto.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}." >&2; exit 2; }
+[ -d "$LAB" ] || { echo "worktree-remove-veto.test: mktemp -d returned no usable directory." >&2; exit 2; }
+trap 'chmod -R u+rwX "$LAB" 2>/dev/null; rm -rf "$LAB"' EXIT
 pass=0; fail=0
 ok() { # <name> <actual> <expected>
   if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
