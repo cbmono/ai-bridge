@@ -12,11 +12,9 @@
 # so the pair at one timestamp is the tick's wall duration. The three usage flags append
 # the one fixed form `agent-usage.sh fmt` prints; without them the line closes exactly as
 # it always did. Offline — no git, no gh — and a second close for one tick is refused.
-# `--tick <ISO>` names WHICH entry to close — the timestamp the caller wrote on its own
-# open line — and is matched exactly. Without it the close is only taken when exactly one
-# entry is open; two open entries (two ticks racing a missing lock) are refused rather
-# than guessed, because guessing the newest closes the other tick's entry under your
-# summary and leaves yours open forever.
+# `--tick <ISO>` names WHICH entry to close, matched exactly; without it a close is taken
+# only when exactly one entry is open. Two racing ticks are refused, never guessed —
+# guessing closes the other tick's entry under your summary and leaves yours open.
 #
 # WHY THIS EXISTS. A tick re-derives everything every time — full task walk, a live
 # read of every open PR — which is correct and stays the default. But measured on a
@@ -103,8 +101,7 @@ while [ $# -gt 0 ]; do
       [ "$cmd" = record ] || { echo "tick-delta: $1 is a \`record\` flag" >&2; exit 3; }
       [ $# -ge 2 ] || { echo "tick-delta: $1 needs a value" >&2; exit 3; }
       case "$1" in
-        # `--close ""` is a caller who MEANT to close: the flag decides the path, never
-        # its value, or an empty summary silently writes a fingerprint instead.
+        # The FLAG decides the path, never its value: `--close ""` is a usage error.
         --close)       close="$2"; close_set=1 ;;
         --tick)        tick="$2" ;;
         --tokens)      tokens="$2" ;;
