@@ -22,6 +22,9 @@
 # with no network. ok() compares actual to expected, in that argument order.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 HERE="$(cd "$(dirname "$0")" && pwd)" || { echo "init-org-bundle.test: cannot locate self" >&2; exit 2; }
 REPO="$(cd "$HERE/.." && pwd)" || { echo "init-org-bundle.test: cannot locate repo root" >&2; exit 2; }
 SCRIPT="$REPO/plugin/scripts/init-bundle.sh"
@@ -112,7 +115,7 @@ rc="$(run "$T1" --org acme)"
 ok "exit 0"                                   "$rc" 0
 ok "the default name is <org>-okf"            "$(saw "$LAST_OUT" 'create acme/acme-okf (private)')" yes
 ok "…and it names the probe that allowed it"  "$(saw "$LAST_OUT" 'gh api orgs/acme/memberships/example-user-007 -> active')" yes
-ok "the seed landed"                          "$([ -f "$T1/SCHEMA.md" ] && echo yes || echo no)" yes
+ok "the seed landed"                          "$([ -f "$T1/$AB_SCHEMA" ] && echo yes || echo no)" yes
 ok "it says the bundle is the org's"          "$(saw "$LAST_OUT" "bundle acme/acme-okf is the organisation's")" yes
 ok "the first commit is pushed"               "$(git -C "$GHFIX/bare/acme_acme-okf.git" rev-list --count HEAD 2>/dev/null || echo 0)" 1
 ok "…and it carries the seed"                 "$(git -C "$GHFIX/bare/acme_acme-okf.git" ls-tree -r --name-only HEAD | grep -cx 'SCHEMA.md')" 1
@@ -136,7 +139,7 @@ ok "exit 0 — a refused create is not a failed stamp" "$rc" 0
 ok "it created under the caller"              "$(saw "$LAST_OUT" 'create example-user-007/globex-okf (private)')" yes
 ok "it says which of the two it did"          "$(saw "$LAST_OUT" 'is under YOUR account')" yes
 ok "…and prints the transfer command"         "$(saw "$LAST_OUT" 'gh repo transfer example-user-007/globex-okf globex')" yes
-ok "the seed landed anyway"                   "$([ -f "$T3/SCHEMA.md" ] && echo yes || echo no)" yes
+ok "the seed landed anyway"                   "$([ -f "$T3/$AB_SCHEMA" ] && echo yes || echo no)" yes
 ok "…and was pushed anyway"                   "$(git -C "$GHFIX/bare/example-user-007_globex-okf.git" rev-list --count HEAD 2>/dev/null || echo 0)" 1
 
 echo
@@ -155,7 +158,7 @@ cat > "$SEEDW/instance.config.json" <<'CFG'
   "people": { "example-user-007": "007@example.com", "example-user-008": "008@example.com" }
 }
 CFG
-echo "# Schema" > "$SEEDW/SCHEMA.md"
+echo "# Schema" > "$SEEDW/$AB_SCHEMA"
 git -C "$SEEDW" add -A >/dev/null 2>&1
 git -C "$SEEDW" commit --quiet -m "the org's bundle" >/dev/null 2>&1
 git -C "$SEEDW" push --quiet "$BARE4" HEAD:refs/heads/main >/dev/null 2>&1
@@ -183,7 +186,7 @@ ok "exit 3 — it refuses"                      "$rc" 3
 ok "it says a 404 is ambiguous"               "$(saw "$LAST_OUT" "'absent' OR 'private, and you cannot see it yet'")" yes
 ok "it names the probe that would settle it"  "$(saw "$LAST_OUT" 'gh api orgs/umbrella/memberships/<you>')" yes
 ok "NOTHING was created"                      "$(calls_for 'repo create')" 0
-ok "…and nothing was stamped"                 "$([ -e "$T5/SCHEMA.md" ] && echo yes || echo no)" no
+ok "…and nothing was stamped"                 "$([ -e "$T5/$AB_SCHEMA" ] && echo yes || echo no)" no
 
 echo
 echo "== 6. it exists, and it is not a bundle — refused by name =="
@@ -203,7 +206,7 @@ rc="$(run "$T6" --org acme --name acme-notes)"
 ok "exit 3 — it refuses"                      "$rc" 3
 ok "…by name"                                 "$(saw "$LAST_OUT" 'acme/acme-notes exists and is not an ai-bridge bundle')" yes
 ok "…naming the two markers it looked for"    "$(saw "$LAST_OUT" 'no instance.config.json, no SCHEMA.md')" yes
-ok "it did NOT stamp the seed over it"        "$([ -e "$T6/SCHEMA.md" ] && echo yes || echo no)" no
+ok "it did NOT stamp the seed over it"        "$([ -e "$T6/$AB_SCHEMA" ] && echo yes || echo no)" no
 ok "…and the repo's own content is intact"    "$(saw "$T6/README.md" "someone else's repo")" yes
 
 echo

@@ -22,6 +22,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 SRC="$REPO/plugin/scripts/tick-delta.sh"
 PM="$REPO/plugin/agents/project-manager.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/quiettick.XXXXXX")" || {
@@ -50,12 +53,12 @@ task "$INST/projects/quiet-proj/tasks/t1.md" draft
 task "$INST/projects/quiet-proj/tasks/t2.md" "done"
 printf '* TICK 2026-09-06T08:00:00Z closed — nothing to do\n' > "$INST/log.md"
 printf '# Awaiting you\n\nLast refreshed: 2026-09-06T08:00:00Z.\n\n## 🔴 Awaiting you (0)\n_None._\n' \
-  > "$INST/AWAITING.md"
+  > "$INST/$AB_AWAITING"
 printf '/.tick-state\n/AWAITING.md\n' > "$INST/.gitignore"
 GIT -C "$INST" init -q
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm init
 
-AW="$INST/AWAITING.md"
+AW="$INST/$AB_AWAITING"
 stamp() { # bytes + mtime, as one comparable string
   printf '%s %s' "$(wc -c < "$AW" | tr -d ' ')" "$(GIT -C "$INST" hash-object "$AW")"
 }

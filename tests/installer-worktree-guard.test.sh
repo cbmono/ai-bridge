@@ -28,6 +28,9 @@
 # ok() compares actual to expected, per this directory's convention.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/wtguard.XXXXXX")" || {
   echo "installer-worktree-guard.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -94,7 +97,7 @@ i2="$TMP/inst-wt"
 ok "a bundle stamp from that same worktree runs" "$(run_stamp "$L" "$i2")" 0
 ok "…and it stamped"                             "$([ -e "$i2/instance.config.json" ] && echo yes || echo no)" yes
 ok "…as real files, with no symlink at all"      "$([ -z "$(find "$i2" -type l 2>/dev/null)" ] && echo yes || echo no)" yes
-ok "…SCHEMA.md included"                         "$([ -f "$i2/SCHEMA.md" ] && [ ! -L "$i2/SCHEMA.md" ] && echo yes || echo no)" yes
+ok "…SCHEMA.md included"                         "$([ -f "$i2/$AB_SCHEMA" ] && [ ! -L "$i2/$AB_SCHEMA" ] && echo yes || echo no)" yes
 
 # --- a plain `git init` repo is a MAIN tree, so the guard must not fire there.
 # Every fixture in this suite is built that way; if the guard misread them, the whole

@@ -14,6 +14,9 @@
 # assert() follows the convention of the other harnesses here: 0 is a PASS.
 set -euo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$HERE/.."
 [ -f "$REPO/plugin/scripts/refresh-seeds.sh" ] || {
@@ -113,7 +116,7 @@ assert ".gitignore is reported RESOLVED"      "$(has 'RESOLVED  .gitignore' "$AP
 assert "…naming the rule that decided it"     "$(has 'take the seed side' "$APPLY")"
 assert "…the seed's side of the conflicting hunk landed" \
   "$(yes_if sh -c 'grep -qx "/board.html" "$1" && ! grep -qx "!/board.html" "$1"' _ "$INST/.gitignore")"
-assert "…the seed's new managed line landed"  "$(yes_if grep -qx '/.board-live/' "$INST/.gitignore")"
+assert "…the seed's new managed line landed"  "$(yes_if grep -qx '/$AB_BOARD_DIR/' "$INST/.gitignore")"
 assert "…and the bundle's own line was kept"  "$(yes_if grep -qx 'MY-OWN-IGNORE' "$INST/.gitignore")"
 assert "…with no conflict marker left in it" \
   "$(grep -qE '^(<<<<<<< |=======$|>>>>>>> )' "$INST/.gitignore" && echo 1 || echo 0)"
@@ -157,7 +160,7 @@ printf 'node_modules/\n!/board.html\n/.tick-lock\nMY-OWN-IGNORE\n' > "$INST/.git
 # A lock and an UNCOMMITTED config the pass must refuse to touch, in the same run. The
 # config is the ambiguous tier's only trigger, so this is also what proves a row outside
 # the idempotent tier is printed and left alone.
-printf 'held by a tick\n' > "$INST/.tick-lock"
+printf 'held by a tick\n' > "$INST/$AB_LOCK"
 ( cd "$INST" && git add -A && gc "before the pass" )
 printf '{\n  "org": "decided-minutes-ago"\n}\n' > "$INST/instance.config.json"
 cp "$INST/instance.config.json" "$TMP/config.pristine"
@@ -168,10 +171,10 @@ assert "…and says it acts on the idempotent tier ONLY" \
   "$(has 'acting ONLY on the idempotent tier' "$STAMP")"
 assert "…and states the two refusals"          "$(has 'Config files and tick locks are NEVER written' "$STAMP")"
 assert "…a non-idempotent tier is reported, not acted on" "$(has 'NOT ACTED ON' "$STAMP")"
-assert "…the tick lock it found is still there"        "$(yes_if test -f "$INST/.tick-lock")"
+assert "…the tick lock it found is still there"        "$(yes_if test -f "$INST/$AB_LOCK")"
 assert "…and instance.config.json was never written"   "$(yes_if cmp -s "$TMP/config.pristine" "$INST/instance.config.json")"
 assert "…and the seed drift was actually resolved" \
-  "$(yes_if sh -c 'grep -qx "/.tick-state" "$1" && grep -qx "MY-OWN-IGNORE" "$1"' _ "$INST/.gitignore")"
+  "$(yes_if sh -c 'grep -qx "/$AB_STATE_DIR" "$1" && grep -qx "MY-OWN-IGNORE" "$1"' _ "$INST/.gitignore")"
 assert "…without re-entering the stamp"        "$(hasnt 'NOT re-stamped' "$STAMP")"
 
 echo "== welcome fix points at init and exits 0 =="

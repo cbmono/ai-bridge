@@ -40,6 +40,8 @@
 set -uo pipefail
 
 TPLSRC="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 # GUARDED, because the canonicalisation below is destructive over an empty TMP: when
 # $TMPDIR names a directory that does not exist, `mktemp -d` fails, this substitution is
 # EMPTY, `cd ""` SUCCEEDS WITHOUT MOVING, `pwd -P` returns this script's own cwd — the
@@ -210,8 +212,8 @@ assert "…and counts them"                "$(yes_if grep -q 'machinery link(s) 
 assert "no symlink is left outside repos/" \
   "$([ -z "$(find "$LEG" -type l -not -path "$LEG/repos/*" -not -name mynotes 2>/dev/null)" ] && echo 0 || echo 1)"
 assert "a symlink of the human's own survives" "$(yes_if test -L "$LEG/mynotes")"
-assert "SCHEMA.md is a real file now"    "$(yes_if bash -c "test -f '$LEG/SCHEMA.md' && ! test -L '$LEG/SCHEMA.md'")"
-assert "CONVENTIONS.md too"              "$(yes_if bash -c "test -f '$LEG/CONVENTIONS.md' && ! test -L '$LEG/CONVENTIONS.md'")"
+assert "SCHEMA.md is a real file now"    "$(yes_if bash -c "test -f '$LEG/$AB_SCHEMA' && ! test -L '$LEG/$AB_SCHEMA'")"
+assert "CONVENTIONS.md too"              "$(yes_if bash -c "test -f '$LEG/$AB_CONVENTIONS' && ! test -L '$LEG/$AB_CONVENTIONS'")"
 # AUTONOMY.md is the deliberate exception: it is the deletable delegated-authority
 # capability, so it is NOT replaced — absence means ask-first, the safe end — and the
 # removal is reported loudly with the command to put it back.
@@ -235,7 +237,7 @@ assert "…and the human's link is still there" "$(yes_if test -L "$LEG/mynotes"
 echo "== uninstall removes the derived views and nothing else =="
 bash "$TPL2/plugin/scripts/init-bundle.sh" --uninstall "$LEG" >"$TMP/uninst" 2>&1
 assert "uninstall exits 0"               "$(yes_if grep -q 'Done.' "$TMP/uninst")"
-assert "…and leaves the seed content"    "$(yes_if test -f "$LEG/SCHEMA.md")"
+assert "…and leaves the seed content"    "$(yes_if test -f "$LEG/$AB_SCHEMA")"
 assert "…and the data"                   "$(yes_if test -f "$LEG/projects/demo/tasks/task-001-x.md")"
 
 echo

@@ -40,6 +40,9 @@
 # assert() follows the convention of the other harnesses here: 0 is a PASS.
 set -euo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL_SRC="$HERE/.."
 [[ -f "$TPL_SRC/plugin/scripts/refresh-seeds.sh" ]] || { echo "upgrade.test: not found at $TPL_SRC/plugin/scripts/refresh-seeds.sh" >&2; exit 2; }
@@ -134,7 +137,7 @@ set +e; bash "$UPGRADE" "$TMP/stranger" > "$TMP/refuse.out" 2>&1; RC=$?; set -e
 assert "exits 2 on a directory that is not an instance" "$([[ $RC -eq 2 ]] && echo 0 || echo 1)"
 assert "says what it expected to find"    "$(has 'instance.config.json' "$(cat "$TMP/refuse.out")")"
 assert "points at /ai-bridge:init for a NEW bundle" "$(has 'ai-bridge:init' "$(cat "$TMP/refuse.out")")"
-assert "it did not stamp the stranger"    "$(yes_if test ! -e "$TMP/stranger/SCHEMA.md")"
+assert "it did not stamp the stranger"    "$(yes_if test ! -e "$TMP/stranger/$AB_SCHEMA")"
 set +e; bash "$UPGRADE" "$TMP/no-such-dir" >/dev/null 2>&1; RC=$?; set -e
 assert "exits 2 on a directory that does not exist" "$([[ $RC -eq 2 ]] && echo 0 || echo 1)"
 

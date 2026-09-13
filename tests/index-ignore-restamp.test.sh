@@ -31,6 +31,9 @@
 # assert(): 0 is a PASS, matching the other harnesses here.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 TPLSRC="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/index-ignore-fixture.XXXXXX")" || {
   echo "index-ignore-restamp.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }

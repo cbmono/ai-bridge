@@ -37,6 +37,9 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 HOOK="$HERE/../plugin/hooks/push-state.sh"
 [ -f "$HOOK" ] || { echo "push-state.test: hook not found at $HOOK" >&2; exit 2; }
 
@@ -63,8 +66,8 @@ run() { OUT="$(cd "$TMP" && CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)"; RC=$
 # The instance-detection triple push-state.sh shares with /pm-loop's preconditions.
 new_instance() {
   rm -rf "$INST"
-  mkdir -p "$INST/.claude/agents"
-  : > "$INST/SCHEMA.md"
+  mkdir -p "$INST/.claude/agents" "$INST/$AB_DIR"
+  : > "$INST/$AB_SCHEMA"
   : > "$INST/instance.config.json"
 }
 
@@ -88,7 +91,7 @@ phase() { # <project-slug> <phase-file-stem> <status>
 queue() { # <n bullets>
   { printf '# Awaiting you\n\n## 🔴 Awaiting you (%s)\n' "$1"
     i=0; while [ "$i" -lt "$1" ]; do printf '* ✅ **approve** — item %s\n' "$i"; i=$((i+1)); done
-  } > "$INST/AWAITING.md"
+  } > "$INST/$AB_AWAITING"
 }
 
 # ============================================================ not an instance
@@ -102,16 +105,19 @@ assert "empty directory -> silent, rc=0" "$( [ -z "$OUT" ] && [ "$RC" = 0 ] && e
 rm -rf "$INST"; mkdir -p "$INST"; printf 'a node project\n' > "$INST/package.json"; run
 assert "unrelated project -> silent, rc=0" "$( [ -z "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"
 
-rm -rf "$INST"; mkdir -p "$INST"; : > "$INST/SCHEMA.md"; run
+rm -rf "$INST"; mkdir -p "$INST/$AB_DIR"; : > "$INST/$AB_SCHEMA"; run
 assert "SCHEMA.md alone -> silent (partial match)" "$( [ -z "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"
 
+# ONE MARKER since the 3.0 layout: instance.config.json, the same one the two plugin
+# hooks and the banner key on. SCHEMA.md moved under .ai-bridge/, so a pair including it
+# would silence this hook in every bundle stamped before the move.
 rm -rf "$INST"; mkdir -p "$INST/.claude/agents"; : > "$INST/instance.config.json"; run
-assert "no SCHEMA.md -> silent (partial match)" "$( [ -z "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"
+assert "instance.config.json alone IS the marker" "$( [ -n "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"
 
 # `.claude/agents` was a third condition until the name swap retired it: the role agents
 # ship in the `ai-bridge` plugin now, so requiring that directory would silence this hook
 # in every instance rather than in none. SCHEMA.md + instance.config.json is the pair.
-rm -rf "$INST"; mkdir -p "$INST"; : > "$INST/SCHEMA.md"; : > "$INST/instance.config.json"; run
+rm -rf "$INST"; mkdir -p "$INST"; : > "$INST/$AB_SCHEMA"; : > "$INST/instance.config.json"; run
 assert "no .claude/agents -> still prints" "$( [ -n "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"
 
 # The hook falls back to $PWD when CLAUDE_PROJECT_DIR is unset. A non-instance cwd
@@ -181,7 +187,7 @@ assert "  ...but its id is"                               "$(has 'p/task-001' "$
 echo "-- AWAITING.md is read, never reshaped"
 
 new_instance; run
-assert "absent AWAITING.md -> reports 'off', not an error" "$(has 'awaiting off (no AWAITING.md)' "$OUT")"
+assert "absent AWAITING.md -> reports 'off', not an error" "$(has "awaiting off (no $AB_AWAITING)" "$OUT")"
 assert "  ...and exits 0 (deletion is a documented off switch)" "$(eq "$RC" 0)"
 
 new_instance; queue 0; run
@@ -189,16 +195,16 @@ assert "present but empty queue -> awaiting 0 (a measured zero)" "$(has 'awaitin
 assert "  ...distinct from the absent case"                      "$(hasnt 'awaiting off' "$OUT")"
 
 new_instance; queue 4
-printf '\n## Notes\n* not an action item\n' >> "$INST/AWAITING.md"
+printf '\n## Notes\n* not an action item\n' >> "$INST/$AB_AWAITING"
 run
 assert "sections after the queue are not counted" "$(has 'awaiting 4' "$OUT")"
 
 # The file is READ-ONLY to this hook. session-banner.sh greps its literal layout,
 # so a hook that rewrote or normalised it would silently empty the startup nudge.
 new_instance; queue 3
-before="$(shasum "$INST/AWAITING.md" | awk '{print $1}')"
+before="$(shasum "$INST/$AB_AWAITING" | awk '{print $1}')"
 run
-after="$(shasum "$INST/AWAITING.md" | awk '{print $1}')"
+after="$(shasum "$INST/$AB_AWAITING" | awk '{print $1}')"
 assert "AWAITING.md is byte-identical after a run" "$(eq "$before" "$after")"
 
 # ============================================================ the cap

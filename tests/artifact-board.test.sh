@@ -33,6 +33,9 @@
 # assert on forms the live instance does not currently contain.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 # No render below passes a layout flag: there is one page, and `--layout` now exits 2
 # rather than selecting anything.
@@ -55,7 +58,7 @@ HOSTILE='Rename <script>alert(1)</script> & "quote" it'
 
 mk() { # <dir> <group> <json-projects>
   mkdir -p "$1"
-  cat > "$1/SNAPSHOT.json" <<JSON
+  cat > "$1/$AB_SNAPSHOT" <<JSON
 {"_schema":"ai-bridge board snapshot v1","group":"$2",
  "generated_at":"2026-08-23T12:00:00Z","counts":{"projects":1,"tasks":1,"awaiting":0},
  "projects":$3}
@@ -82,7 +85,7 @@ mk "$TMP/alpha" "alpha" '[
   "tasks":[{"id":"task-001","title":"Done","status":"done","assignee":"","awaiting":"",
             "open_questions":0,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]}]'
 # substitute the hostile title without fighting JSON quoting in the heredoc
-python3 - "$TMP/alpha/SNAPSHOT.json" "$HOSTILE" <<'PYS'
+python3 - "$TMP/alpha/$AB_SNAPSHOT" "$HOSTILE" <<'PYS'
 import json, sys
 p, hostile = sys.argv[1], sys.argv[2]
 d = json.load(open(p))
@@ -1536,7 +1539,7 @@ assert "…while a board with no snapshot exits 0"     "$(eq "$rcd2" 0)"
 assert "…and creates no directory at all"            "$(yes_if test ! -e "$TMP/untouched")"
 
 echo "== one drifted instance must not blank the board =="
-mkdir -p "$TMP/bad"; printf 'not json at all\n' > "$TMP/bad/SNAPSHOT.json"
+mkdir -p "$TMP/bad"; printf 'not json at all\n' > "$TMP/bad/$AB_SNAPSHOT"
 rc3=0; bash "$GEN" --out "$TMP/mixed.html" "$TMP/bad" "$TMP/alpha" >/dev/null 2>&1 || rc3=$?
 assert "a broken snapshot is skipped, not fatal"     "$(eq "$rc3" 0)"
 assert "…and the good instance still renders"        "$(fhas 'Alpha Bridge Board' "$TMP/mixed.html")"
@@ -1551,7 +1554,7 @@ assert "…and never by its path"                      "$(fhasnt "$TMP/bad" "$TM
 # every count and every container here goes through toint()/tolist()/todict().
 mkdir -p "$TMP/drift"
 drift_case() { # <label> <snapshot json>
-  printf '%s\n' "$2" > "$TMP/drift/SNAPSHOT.json"
+  printf '%s\n' "$2" > "$TMP/drift/$AB_SNAPSHOT"
   # Removed first: a page left behind by the previous case would satisfy the
   # "still renders" half even if this case wrote nothing at all.
   rm -f "$TMP/drift.html"
