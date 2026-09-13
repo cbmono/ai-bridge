@@ -108,10 +108,12 @@ shopt -s nullglob
 files=(tests/*.test.sh)
 shopt -u nullglob
 
+# `.git` is a FILE in a linked worktree. init-bundle.sh --config refuses to run from one
+# by design, so four harnesses fail there for reasons unrelated to the code under test.
+[ -f "$workspace/.git" ] && echo "run.sh: this is a git WORKTREE — derived-indexes, link-repos, snapshot and board-renderers fail here by design (.claude/rules/tests.md). Verify from the main checkout or a fresh clone." >&2
+
 case "$mode" in
-  all)
-    [ -f "$workspace/.git" ] && echo "run.sh: this is a git WORKTREE — four harnesses that call init-bundle.sh will fail here by design (.claude/rules/tests.md). Run --all from the main checkout or a fresh clone." >&2
-    ;;
+  all) ;;
 
   changed)
     [ -n "$base" ] || base="$(default_base)"

@@ -81,7 +81,6 @@ assert "declares a push trigger" \
 assert "both triggers scope to the default branch (main)" \
   "$([ "$(grep -cE '^[[:space:]]*branches:[[:space:]]*\[main\]' <<<"$WF_TEXT")" -ge 2 ] && echo 0 || echo 1)"
 
-
 echo "== it invokes tests/run.sh, and carries NO SECOND COPY of the selection =="
 # ai-bridge-v3/task-028. The selection and the runner live in tests/run.sh so that a
 # contributor can run what CI runs; the whole point is lost the moment this file grows
