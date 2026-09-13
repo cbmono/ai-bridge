@@ -343,13 +343,18 @@ ok "…so neither hook name appears in it" \
 # `session-banner.sh`; ai-bridge-v2/task-013 moved that one and `push-state.sh` into the
 # PLUGIN beside the two enforcement hooks, because a bundle carries no machinery for a
 # `"$CLAUDE_PROJECT_DIR"/.claude/hooks/…` command to resolve to. So the seeded
-# settings.json registers NO hook of any event, and all five are counted on the plugin
-# manifest instead. Both halves, so "we deleted the block" cannot pass by deleting the
+# settings.json registers NO hook of any event, and every registration is counted on the
+# plugin manifest instead. Both halves, so "we deleted the block" cannot pass by deleting the
 # feature.
 ok "…and the seeded settings.json has no hooks key at all" \
    "$(jq -r 'if has("hooks") then "present" else "absent" end' "$SETTINGS")" "absent"
-ok "…while the plugin manifest carries all five" \
-   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "5"
+# 5 -> 6 registrations across the SAME five scripts: `agent-control.sh` is registered on
+# `SubagentStop` as well as `PreToolUse`, which is what drops a doom-loop counter when the
+# agent ends. Both numbers are asserted so neither a lost script nor a lost event passes.
+ok "…while the plugin manifest carries all five scripts" \
+   "$(jq -r '[.hooks[][].hooks[].command] | unique | length' "$HOOKSJSON")" "5"
+ok "…across six registrations" \
+   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "6"
 
 echo "== the permissions.deny block: unconditional shapes only"
 # This block is the SECOND layer — the harness matches it before any hook runs — and every

@@ -526,6 +526,19 @@ state, and act only on deltas.
    it. Never re-dispatch it and never roll it back yourself: both are the human's, and
    `docs/pm-design.md#step-3` carries the price of re-running a finished sequence.
 
+   **A doom-loop breach is reflected here, and NEVER re-dispatched.** When the control
+   surface is armed, `agent-control.sh` appends `repeat-loop <agent_id> <agent_type>
+   <tool> count=… limit=…` to `.claude/control/control.log` — it writes no task document
+   and no `AWAITING.md`, because the PreToolUse payload carries no task path. So **you**
+   map it: `${CLAUDE_PLUGIN_ROOT}/scripts/control.sh agents` gives the `agent_id`'s role
+   and first-seen time, which names the task this or an earlier tick dispatched to that
+   role. Then **one `# Notes` line** on that task (the tool, the count, the limit — never
+   the arguments, which the log does not carry either) and **at most one 🔴 queue row**,
+   whatever the log holds: an agent that looped is one item, not fifty. An `agent_id` you
+   cannot map is reported unmapped, never guessed onto a task. **Never re-dispatch on a
+   breach** — a looping agent is the stall rule's case, and this line must not contradict
+   it.
+
    **Independent verification (the verifier edge).** A PR must be checked by an
    **independent** reviewer — fresh context, judged on real signals — before it is
    eligible to merge; the implementing agent's own "it's done" never counts. **Each
