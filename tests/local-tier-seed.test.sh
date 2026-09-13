@@ -160,7 +160,9 @@ ok "…and for a tier"                       "$(FROM "$I" models deep)" local
 # is about the column a human looks at, so it is asserted against the hook's own output:
 # `<role>  <tier>→<alias>  <from>`, whitespace-separated, last field.
 BANNER="$TPL/plugin/hooks/session-banner.sh"
-BOUT="$(CLAUDE_PROJECT_DIR="$I" bash "$BANNER" 2>&1)"
+# `--full`: the SessionStart banner holds 12 lines and drops the two tables
+# (ai-bridge-v3/task-025); the AGENT table is what this section is about.
+BOUT="$(CLAUDE_PROJECT_DIR="$I" bash "$BANNER" --full 2>&1)"
 brow() { printf '%s\n' "$BOUT" | awk -v r="$1" '$1==r { print $NF }' | head -n1; }
 # The gap before the arrow is variable: the tier is padded to the widest tier in the table
 # (tests/session-banner.test.sh §2c), so the row is matched with `+` rather than one space.
