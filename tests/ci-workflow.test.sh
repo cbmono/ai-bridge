@@ -9,10 +9,11 @@
 # check is proven to actually go red on an absent file, not merely green on today's.
 #
 # WHAT THIS DOES NOT DO. It does not re-run the suite (that is what the workflow itself
-# is for) and it does not require any particular CI provider beyond "a file GitHub
-# Actions reads" — it reads .github/workflows/tests.yml because that is the file this
-# repo ships, and pins its path the same way the other structural checks here pin the
-# things they depend on existing.
+# is for), it does not require any particular CI provider beyond "a file GitHub Actions
+# reads", and since ai-bridge-v3/task-028 it no longer tests the RUNNER: the selection
+# and the loop live in tests/run.sh and are exercised by tests/test-runner.test.sh.
+# What is left here is the workflow's own shape, plus the one thing only this file can
+# see — that the workflow delegates and carries no second copy.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)" || { echo "ci-workflow.test: cannot locate self" >&2; exit 2; }
@@ -80,13 +81,43 @@ assert "declares a push trigger" \
 assert "both triggers scope to the default branch (main)" \
   "$([ "$(grep -cE '^[[:space:]]*branches:[[:space:]]*\[main\]' <<<"$WF_TEXT")" -ge 2 ] && echo 0 || echo 1)"
 
-echo "== it actually invokes the FULL suite — no partial, hardcoded file list =="
-# The literal glob, not a subset: this is what "the FULL tests/*.test.sh suite" in the
-# task's acceptance criteria cashes out to. Anchored to a real shell-loop use (preceded
-# by 'in'/'(' is too fragile to pin generically; the literal glob string is what matters
-# and what a narrowing edit would have to change).
-assert "the run step invokes the literal glob tests/*.test.sh" \
-  "$(grep -qF 'tests/*.test.sh' <<<"$WF_TEXT" && echo 0 || echo 1)"
+
+echo "== it invokes tests/run.sh, and carries NO SECOND COPY of the selection =="
+# ai-bridge-v3/task-028. The selection and the runner live in tests/run.sh so that a
+# contributor can run what CI runs; the whole point is lost the moment this file grows
+# its own copy, and a drifted copy is invisible until a required check goes green
+# having run the wrong set. The BEHAVIOUR of that runner is tests/test-runner.test.sh —
+# this section only pins that the workflow delegates to it and reimplements none of it.
+#
+# Read off the file with its COMMENT lines stripped: the header comment names the
+# selection in prose on purpose, and prose is not a second implementation.
+wf_code() { grep -v '^[[:space:]]*#' <<<"$WF_TEXT"; }
+
+assert "a run step invokes tests/run.sh --ci" \
+  "$(wf_code | grep -qF 'tests/run.sh --ci' && echo 0 || echo 1)"
+
+# Each marker is a load-bearing line of the runner — the derivation, the summary parse,
+# the integrity re-check, the harness loop, the core list. Any of them here is a copy.
+COPY_MARKERS=(
+  'grep -lF -e "$suffix" tests/*.test.sh'
+  "grep -oE 'pass=[0-9]+ fail=[0-9]+'"
+  'verify_checkout'
+  'for f in "${files[@]}"'
+  'tests/plugin-manifest.test.sh'
+)
+inline_copy() { # <text> — echoes the markers it found
+  local text="$1" m
+  for m in "${COPY_MARKERS[@]}"; do
+    grep -qF -e "$m" <<<"$text" && printf '%s\n' "$m"
+  done
+  return 0
+}
+found="$(inline_copy "$(wf_code)")"
+assert "…and reimplements none of the selection or the runner${found:+ (found: $(tr '\n' ' ' <<<"$found"))}" \
+  "$([ -z "$found" ] && echo 0 || echo 1)"
+# Non-vacuity: the identical check must FAIL on a workflow that does carry a copy.
+assert "…and that check really discriminates (a workflow with an inline copy fails it)" \
+  "$([ -n "$(inline_copy "$(printf '%s\n' "$WF_TEXT" 'run: verify_checkout')")" ] && echo 0 || echo 1)"
 
 echo "== ai-bridge-v4/task-022: the host-rendering oracle's --check runs automatically =="
 # Before this task it could only be run by hand, which meant it would not be run. Pinned
@@ -97,290 +128,6 @@ assert "a step invokes tests/fixtures/reviewer/record-host-rendering.sh --check"
   "$(grep -qF 'tests/fixtures/reviewer/record-host-rendering.sh --check' <<<"$WF_TEXT" && echo 0 || echo 1)"
 assert "…and that step is continue-on-error, so host drift never fails the required check" \
   "$(grep -B8 -F 'record-host-rendering.sh --check' <<<"$WF_TEXT" | grep -qF 'continue-on-error: true' && echo 0 || echo 1)"
-
-echo "== the runner distrusts a harness's exit code on its own =="
-# Pins that the double-check this task exists to add — reported fail count, not just
-# $? — is actually present, not merely described in a comment. See
-# knowledge/findings/suite-cleanup-can-delete-its-own-checkout.md: a harness printed
-# pass=53 fail=0 and exited 0 while it had destroyed its own checkout.
-assert "the runner extracts a 'pass=N fail=N' summary from each harness's own output" \
-  "$(grep -qF "grep -oE 'pass=[0-9]+ fail=[0-9]+'" <<<"$WF_TEXT" && echo 0 || echo 1)"
-assert "…and gates on the reported fail count, not only on the exit status" \
-  "$(grep -qF 'f_fail' <<<"$WF_TEXT" && echo 0 || echo 1)"
-
-echo "== the runner re-verifies the checkout itself survives each harness =="
-assert "a checkout-integrity check runs after every harness, not just once at the start" \
-  "$(grep -qF 'verify_checkout' <<<"$WF_TEXT" && echo 0 || echo 1)"
-# EVERY DIRECTORY IT PROBES FOR MUST ACTUALLY EXIST IN THIS REPO, and that is not a
-# tautology — it is the assertion this file was missing. `verify_checkout` fails CLOSED:
-# a probe naming a directory the repo no longer has refuses EVERY checkout, before a
-# single harness runs, with "checkout is not intact before the suite even started". It
-# happened: `symlink/` was in the list, ai-bridge-v2/task-013 retired that directory, the
-# whole suite went red at 6 seconds, and every green assertion in this file stayed green
-# because none of them read the NAME.
-probe_missing=""
-while IFS= read -r d; do
-  [ -n "$d" ] || continue
-  # `-e`, not `-d`: CI runs on a plain clone where `.git` is a directory, but this
-  # harness also runs from a linked WORKTREE, where `.git` is a FILE. The property under
-  # test is "the path exists in this repo", and requiring a directory here would fail
-  # every worktree run for a reason that has nothing to do with the workflow.
-  [ -e "$REPO/$d" ] || probe_missing="${probe_missing:+$probe_missing }$d"
-done <<EOF
-$(printf '%s\n' "$WF_TEXT" | sed -n 's#.*\[ -d "\$workspace/\([A-Za-z0-9._-]*\)" \].*#\1#p' | sort -u)
-EOF
-assert "…and every directory it probes for exists in this repo${probe_missing:+ (missing: $probe_missing)}" \
-  "$([ -z "$probe_missing" ] && echo 0 || echo 1)"
-# Non-vacuity: the extraction really found probes to check.
-assert "…and it found some to check (the extraction is not empty)" \
-  "$(printf '%s\n' "$WF_TEXT" | sed -n 's#.*\[ -d "\$workspace/\([A-Za-z0-9._-]*\)" \].*#\1#p' | grep -qc . >/dev/null && echo 0 || echo 1)"
-
-echo "== the runner treats a MISSING pass/fail summary as a FAILURE, never a pass =="
-# ai-bridge-v4/task-031, criterion 4. Every assertion above this one reads the
-# WORKFLOW'S TEXT — a grep can drift from what the embedded shell actually does with
-# it. This section extracts the "Run tests/*.test.sh" step's `run:` script VERBATIM
-# and executes it for real, against a fixture harness that exits non-zero printing
-# NOTHING — exactly tests/snapshot.test.sh's failure mode under install.sh's worktree
-# guard before task-031's fix, and "the half that outlives this one harness" the task
-# doc names: a harness that dies before printing its summary must be indistinguishable
-# from a FAILURE, never from a pass, no matter which harness it is.
-if python3 -c 'import yaml' >/dev/null 2>&1; then RUNNER_ORACLE="pyyaml"
-elif command -v ruby >/dev/null 2>&1 && ruby -rpsych -e 'Psych::VERSION' >/dev/null 2>&1; then RUNNER_ORACLE="psych"
-else RUNNER_ORACLE=""
-fi
-
-if [ -z "$RUNNER_ORACLE" ]; then
-  skipped "no YAML parser on this machine (PyYAML or Ruby/Psych) — cannot extract the runner's embedded script"
-else
-  RUNNER_TMP="$(mktemp -d "${TMPDIR:-/tmp}/ci-workflow-runner.XXXXXX")" || {
-    echo "ci-workflow.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
-  trap 'rm -rf "$RUNNER_TMP"' EXIT
-
-  EXTRACTED="$RUNNER_TMP/runner.sh"
-  if [ "$RUNNER_ORACLE" = "pyyaml" ]; then
-    python3 - "$WF" > "$EXTRACTED" <<'PY'
-import sys, yaml
-wf = yaml.safe_load(open(sys.argv[1]))
-steps = wf["jobs"]["suite"]["steps"]
-step = next((s for s in steps if s.get("name") == "Run tests/*.test.sh"), None)
-if step is None:
-    sys.exit("step not found")
-sys.stdout.write(step["run"])
-PY
-  else
-    ruby -rpsych - "$WF" > "$EXTRACTED" <<'RB'
-require "psych"
-wf = Psych.load_file(ARGV[0])
-steps = wf["jobs"]["suite"]["steps"]
-step = steps.find { |s| s["name"] == "Run tests/*.test.sh" }
-abort("step not found") unless step
-print step["run"]
-RB
-  fi
-  assert "the run step's script was extracted from $WF" \
-    "$([ -s "$EXTRACTED" ] && echo 0 || echo 1)"
-
-  # A minimal workspace covering the extracted script's own preconditions: a git repo
-  # with a commit (verify_checkout reads HEAD), and tests/ + plugin/ present. ONE
-  # fixture harness, printing nothing and exiting non-zero.
-  #
-  # `plugin/`, not `symlink/`: the directory verify_checkout probes for moved with the
-  # machinery (ai-bridge-v2/task-013), and a fixture built on the old name proves the
-  # extracted script runs while the real workflow refuses every checkout — which is
-  # exactly what happened, on the first CI run of that change.
-  WS="$RUNNER_TMP/ws"
-  mkdir -p "$WS/tests" "$WS/plugin"
-  ( cd "$WS" && git init -q . && git config user.email t@e.st && git config user.name t \
-    && : > .keep && git add .keep && git commit -qm seed >/dev/null )
-  cat > "$WS/tests/silent-death.test.sh" <<'FIX'
-#!/usr/bin/env bash
-exit 7
-FIX
-
-  RUN_OUT="$( cd "$WS" && GITHUB_WORKSPACE="$WS" RUNNER_TEMP="$RUNNER_TMP/runner-tmp" bash "$EXTRACTED" 2>&1 )"; RUN_RC=$?
-  assert "a harness with no summary and a non-zero exit fails the runner" \
-    "$([ "$RUN_RC" -ne 0 ] && echo 0 || echo 1)"
-  assert "…and says so by name" \
-    "$(printf '%s\n' "$RUN_OUT" | grep -qF 'printed no recognised pass/fail summary' && echo 0 || echo 1)"
-  assert "…lists it under FAILED harnesses" \
-    "$(printf '%s\n' "$RUN_OUT" | grep -qF 'FAILED harnesses:' && echo 0 || echo 1)"
-  assert "…and never prints the all-passed banner" \
-    "$(printf '%s\n' "$RUN_OUT" | grep -qF 'ok: all' && echo 1 || echo 0)"
-
-  # PROVING THE PIN IS NOT VACUOUS. Every assertion above passed on the FIRST run,
-  # with nothing broken to make it fail — the runner already gets this right. So the
-  # non-vacuity is shown the other way: mutate the runner's OWN missing-summary guard
-  # into the naive shape the task doc warns about ("a harness that dies before
-  # printing is indistinguishable from one that never ran") by replacing it with a
-  # bare `continue`, which skips both the exit-code check below it AND recording the
-  # harness as bad, then confirm THAT version reports a false all-clear on the
-  # identical fixture.
-  MUTATED="$RUNNER_TMP/runner-mutated.sh"
-  # Mirrors the extraction branch above: on a Python-less host RUNNER_ORACLE is
-  # "psych", and a bare python3 call here would die under this file's own
-  # `set -uo pipefail` before the assertion below it ever ran — the branch built
-  # specifically for that host would never reach what it exists to prove.
-  #
-  # ANCHORED ON THE UNIQUE ERROR TEXT, not a generic "if -z summary" pattern: the
-  # real script has TWO such blocks (an inner one that only swaps the dense summary
-  # for the prose-style fallback, and this outer one that actually gives up). A
-  # generic pattern matches both, and Python's `subn(..., count=1)` silently caps
-  # the reported match count at 1 regardless of how many exist — hiding exactly the
-  # ambiguity this guard is supposed to catch. Anchoring on the error message text,
-  # unique to the give-up block, then walking outward to its enclosing `if`/`fi` is
-  # unambiguous regardless of how many other "if -z summary" blocks the script has.
-  if [ "$RUNNER_ORACLE" = "pyyaml" ]; then
-    python3 - "$EXTRACTED" "$MUTATED" <<'PY'
-import re, sys
-src = open(sys.argv[1]).read()
-anchor = "printed no recognised pass/fail summary"
-idx = src.index(anchor)
-if_re = re.compile(r'if \[ -z "\$summary" \]; then\n')
-starts = [m.end() for m in if_re.finditer(src) if m.start() < idx]
-if not starts:
-    sys.exit("could not locate the enclosing missing-summary guard")
-then_end = starts[-1]
-fi_m = re.compile(r'\n( *)fi\n').search(src, idx)
-if not fi_m:
-    sys.exit("could not find the closing fi for the missing-summary guard")
-mutated = src[:then_end] + "      continue\n" + fi_m.group(1) + "fi\n" + src[fi_m.end():]
-open(sys.argv[2], "w").write(mutated)
-PY
-  else
-    ruby - "$EXTRACTED" "$MUTATED" <<'RB'
-src = File.read(ARGV[0])
-anchor = "printed no recognised pass/fail summary"
-idx = src.index(anchor)
-abort("could not locate the missing-summary anchor text") unless idx
-if_re = /if \[ -z "\$summary" \]; then\n/
-if_starts = []
-pos = 0
-while (m = if_re.match(src, pos))
-  if_starts << m.end(0)
-  pos = m.end(0)
-end
-if_starts.select! { |e| e <= idx }
-abort("could not locate the enclosing missing-summary guard") if if_starts.empty?
-then_end = if_starts.last
-fi_match = /\n( *)fi\n/.match(src, idx)
-abort("could not find the closing fi for the missing-summary guard") unless fi_match
-mutated = src[0...then_end] + "      continue\n" + fi_match[1] + "fi\n" + src[fi_match.end(0)..-1]
-File.write(ARGV[1], mutated)
-RB
-  fi
-  MUT_STATUS=$?
-  assert "the give-up missing-summary guard was located and mutated" "$([ "$MUT_STATUS" -eq 0 ] && echo 0 || echo 1)"
-  if [ "$MUT_STATUS" -eq 0 ]; then
-    MUT_OUT="$( cd "$WS" && GITHUB_WORKSPACE="$WS" RUNNER_TEMP="$RUNNER_TMP/runner-tmp2" bash "$MUTATED" 2>&1 )"; MUT_RC=$?
-    assert "…and on the SAME fixture, a mutated runner that drops the guard falsely passes (proves the pin bites)" \
-      "$([ "$MUT_RC" -eq 0 ] && echo 0 || echo 1)"
-    assert "…reporting the all-clear banner it should not" \
-      "$(printf '%s\n' "$MUT_OUT" | grep -qF 'ok: all' && echo 0 || echo 1)"
-  fi
-
-  # ---- ai-bridge-v2/task-030: the plugin-only fast path, EXECUTED ---------------
-  # #121 gave the required `harness suite` check a fast path: a PR whose every changed
-  # path is under plugin/ or .claude-plugin/ runs a subset instead of all 74. #124 then
-  # moved the two-human-authority promotion guard to plugin/scripts/commit-as.sh and did
-  # NOT add tests/commit-as-guard.test.sh to that hand-kept list — so a PR editing only
-  # the guard took the fast path and the required check went green having never run it.
-  #
-  # The list is now a small CORE plus a set DERIVED from the diff, and this section runs
-  # the WORKFLOW'S OWN extracted script against fixture repos to check the three
-  # properties that matter — a text grep over the list would go green on a selector that
-  # never reads it. The fixture's harness set is read out of the extracted script, so a
-  # name added to the core cannot leave the fixture behind.
-  fp_names="$(grep -oE 'tests/[A-Za-z0-9_-]+\.test\.sh' "$EXTRACTED" | sort -u)"
-  assert "the fixture's harness set was read out of the runner (the core names were found)" \
-    "$([ -n "$fp_names" ] && echo 0 || echo 1)"
-
-  # <root> — a base repo plus a clone of it, so the runner's `git fetch origin
-  # $GITHUB_BASE_REF` and `git diff origin/main...HEAD` both work for real.
-  fp_build() {
-    local root="$1" h
-    mkdir -p "$root/base/tests" "$root/base/plugin/scripts" "$root/base/plugin/agents"
-    for h in $fp_names; do
-      printf '#!/usr/bin/env bash\necho "pass=1 fail=0"\n' > "$root/base/$h"
-    done
-    # NAMES the guard's path and is on no list — it must be selected by DERIVATION.
-    printf '#!/usr/bin/env bash\n# reads "$REPO/plugin/scripts/commit-as.sh"\necho "pass=1 fail=0"\n' \
-      > "$root/base/tests/fp-names-the-guard.test.sh"
-    # Names nothing that changes below — it must NOT be selected, which is what tells
-    # a real derivation from a selector that simply runs everything.
-    printf '#!/usr/bin/env bash\necho "pass=1 fail=0"\n' \
-      > "$root/base/tests/fp-names-nothing.test.sh"
-    printf '#!/bin/sh\n' > "$root/base/plugin/scripts/commit-as.sh"
-    printf 'seed\n'      > "$root/base/plugin/agents/unread-by-any-harness.md"
-    # `symbolic-ref`, not `git init -b`: -b needs git >= 2.28 and this must not start
-    # failing on an older host for a reason unrelated to the workflow.
-    ( cd "$root/base" && git init -q . && git symbolic-ref HEAD refs/heads/main \
-      && git config user.email t@example.com && git config user.name t \
-      && git add -A && git commit -qm base ) >/dev/null 2>&1
-    git clone -q "$root/base" "$root/work" >/dev/null 2>&1
-  }
-
-  fp_edit() { # <workdir> <path> — one commit on a branch off main
-    ( cd "$1" && git checkout -q -b feat && printf 'edited\n' >> "$2" \
-      && git add -A && git commit -qm edit ) >/dev/null 2>&1
-  }
-
-  fp_run() { # <workdir> [runner] — the extracted runner, as a pull_request event
-    ( cd "$1" && GITHUB_WORKSPACE="$1" RUNNER_TEMP="$1/.rt" \
-        GITHUB_EVENT_NAME=pull_request GITHUB_BASE_REF=main bash "${2:-$EXTRACTED}" 2>&1 )
-  }
-
-  FP_A="$RUNNER_TMP/fp-a"; mkdir -p "$FP_A"; fp_build "$FP_A"
-  fp_edit "$FP_A/work" plugin/scripts/commit-as.sh
-  FP_A_OUT="$(fp_run "$FP_A/work")"
-  assert "a commit-as.sh-only diff still takes the fast path" \
-    "$(printf '%s\n' "$FP_A_OUT" | grep -qF 'plugin-only diff — running' && echo 0 || echo 1)"
-  assert "…and it SELECTS tests/commit-as-guard.test.sh — the harness #124 left behind" \
-    "$(printf '%s\n' "$FP_A_OUT" | grep -qF '  harness: tests/commit-as-guard.test.sh' && echo 0 || echo 1)"
-  assert "…and tests/companion-plugins.test.sh" \
-    "$(printf '%s\n' "$FP_A_OUT" | grep -qF '  harness: tests/companion-plugins.test.sh' && echo 0 || echo 1)"
-  assert "…and a harness that merely NAMES the changed path, on no list at all" \
-    "$(printf '%s\n' "$FP_A_OUT" | grep -qF '  harness: tests/fp-names-the-guard.test.sh' && echo 0 || echo 1)"
-  assert "…and NOT one that names nothing in the diff (it derives, it does not run everything)" \
-    "$(printf '%s\n' "$FP_A_OUT" | grep -qF '  harness: tests/fp-names-nothing.test.sh' && echo 1 || echo 0)"
-
-  # PROVING IT BY REMOVAL — the task's own step 3. Strike the guard's harness out of the
-  # extracted runner's core and the IDENTICAL fixture must stop running it. Without this
-  # the assertion above could be reading a selector that ignores the core entirely.
-  # (In the real repo removal would not hide it: tests/commit-as-guard.test.sh names
-  # plugin/scripts/commit-as.sh, so derivation catches it. The fixture's copy is a stub
-  # that names nothing, which is what isolates the core to the one thing under test.)
-  FP_MUT="$RUNNER_TMP/runner-no-guard.sh"
-  grep -vF 'tests/commit-as-guard.test.sh' "$EXTRACTED" > "$FP_MUT"
-  assert "the removal mutant dropped exactly one line from the runner" \
-    "$([ "$(( $(wc -l < "$EXTRACTED") - $(wc -l < "$FP_MUT") ))" -eq 1 ] && echo 0 || echo 1)"
-  FP_MUT_OUT="$(fp_run "$FP_A/work" "$FP_MUT")"
-  assert "…the mutant still fast-paths (the difference is the selection, not a crash)" \
-    "$(printf '%s\n' "$FP_MUT_OUT" | grep -qF 'plugin-only diff — running' && echo 0 || echo 1)"
-  assert "…and on the SAME fixture it no longer runs the guard's harness (removal bites)" \
-    "$(printf '%s\n' "$FP_MUT_OUT" | grep -qF '  harness: tests/commit-as-guard.test.sh' && echo 1 || echo 0)"
-
-  # The fallback, which is what keeps the derivation honest about what it cannot see: a
-  # changed plugin path NO harness names buys the full suite, never a narrower one.
-  FP_B="$RUNNER_TMP/fp-b"; mkdir -p "$FP_B"; fp_build "$FP_B"
-  fp_edit "$FP_B/work" plugin/agents/unread-by-any-harness.md
-  FP_B_OUT="$(fp_run "$FP_B/work")"
-  assert "a changed plugin path no harness names falls back to the FULL suite" \
-    "$(printf '%s\n' "$FP_B_OUT" | grep -qF 'running the FULL suite' && echo 0 || echo 1)"
-  assert "…and that full suite really does include the harness the fast path leaves out" \
-    "$(printf '%s\n' "$FP_B_OUT" | grep -qF '::group::tests/fp-names-nothing.test.sh' && echo 0 || echo 1)"
-fi
-
-echo "== the fast path names the two authority harnesses, and derives the rest =="
-# The cheap half of ai-bridge-v2/task-030, readable without a YAML parser: the two
-# harnesses guarding SCHEMA.md's two human authorities are in the core by name, and the
-# selector genuinely reads the diff instead of enumerating. The behavioural proof is the
-# fixture section above; these three are what still fire on a host with no YAML oracle.
-assert "the fast-path core names tests/commit-as-guard.test.sh" \
-  "$(grep -qF 'tests/commit-as-guard.test.sh' <<<"$WF_TEXT" && echo 0 || echo 1)"
-assert "…and tests/companion-plugins.test.sh" \
-  "$(grep -qF 'tests/companion-plugins.test.sh' <<<"$WF_TEXT" && echo 0 || echo 1)"
-assert "…and the rest is DERIVED — the selector greps the harnesses for each changed path" \
-  "$(grep -qF 'grep -lF -e "$suffix" tests/*.test.sh' <<<"$WF_TEXT" && echo 0 || echo 1)"
 
 echo "== the check name is declared as a required check, verbatim, on both sides =="
 # CHECK_NAME above is the pin; both the workflow and the declared-checks file are
