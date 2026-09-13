@@ -31,7 +31,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SEED="$REPO/plugin/seed/CLAUDE.md"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
 PRUNE="$REPO/plugin/scripts/prune-worktrees.sh"
-EVALCASE="$REPO/plugin/evals/dormant-side-effect-is-not-a-decision"
+EVALS_DIR="$REPO/plugin/evals"
 EVALS_README="$REPO/plugin/evals/README.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/seed-promoted-rules.XXXXXX")" || {
@@ -115,8 +115,11 @@ ok "…with no borrowed example carried over" "$(saw "$ADHOC" 'sandbox canary')"
 # The prose above is now its only reader, which is exactly why this section asserts the rule
 # WITH ITS SECTION rather than as a sentence — and the retirement stays written down, so the
 # case is not quietly re-added in the same shape.
+# Asked of the evals DIRECTORY and a bare case name, never as a root-rooted path to the
+# case: harness-read-paths.test.sh proves such a path and fails it for not resolving, which
+# is right for every harness but one asserting a deliberate ABSENCE.
 ok "rule 1's eval case is retired, not silently dropped" \
-   "$([ -d "$EVALCASE" ] && echo present || echo retired)" retired
+   "$(ls "$EVALS_DIR" | grep -cx 'dormant-side-effect-is-not-a-decision' | tr -d ' ')" 0
 ok "…and the eval README says why it went" \
    "$(grep -c 'dormant-side-effect-is-not-a-decision' "$EVALS_README" | tr -d ' ')" 1
 

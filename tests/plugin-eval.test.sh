@@ -86,15 +86,14 @@ fm() {
 # moment it lands, and only a case wanting a group's extra assertions is named here.
 GATED="dispatch work answer"
 CONTROL="skills-are-reachable"
-# One case per pattern from the 2026-09-08 retrospective (launcher-verification-contract),
-# plus the inline-comment trigger's own reader. They grade the MAIN THREAD rather than a
-# skill, so they share none of the assertions in section 3; section 4 is theirs.
 # RETIRED 2026-09-13 (ai-bridge-v3/task-033): four cases that could only ever pass inside a
 # fixture bundle. `scaffold_script` + `--scaffold` runs author-supplied bash on every machine
 # that runs this harness, and the bash harnesses named in evals/README.md already pin those
 # behaviours for free. Section 6 below refuses a suite that deletes them without the reason.
 RETIRED="caveat-outranks-the-launcher comment-is-warranted-or-absent
 diagnosis-is-dispatched dormant-side-effect-is-not-a-decision"
+# What survives of that group: it grades the MAIN THREAD rather than a skill, so it shares
+# none of the assertions in section 3; section 4 is where it is asserted.
 PATTERNS="unverified-state-is-unknown"
 
 # =======================================================================================
@@ -287,7 +286,7 @@ ok "…and the PR workflow calls the runner that excludes it" \
 # =======================================================================================
 echo "== 6. the run itself — where the CLI supports it, and a LOUD skip where it does not =="
 # =======================================================================================
-# Two gates, and each one prints WHY. `claude plugin eval` runs ungated on 2.1.270 and was
+# THREE gates, and each one prints WHY. `claude plugin eval` runs ungated on 2.1.270 and was
 # early access up to 2.1.263, where it refuses to run unless the account or the session is
 # enabled for it — so "the binary is there" is not the question, and the probe stays for
 # every build older than the one this was measured on. The probe is free — a --case glob
@@ -325,8 +324,21 @@ else
   out="$(claude plugin eval "$PLUGIN" --runs 1 --ablation none --no-publish --trust-plugin \
     --judge-model sonnet --max-cost-usd 7 2>&1)"
   rc=$?
-  ok "claude plugin eval passes every case in plugin/evals/" "$rc" 0
-  [ "$rc" -eq 0 ] || printf '%s\n' "$out" | sed 's/^/        /'
+  # GATE 3 — AUTHENTICATION, and it is readable only AFTER the run. Neither probe above
+  # makes a model call, so a logged-out CLI is indistinguishable from a working one until
+  # a run is attempted; attempting one is free, because the CLI stops at the first failure
+  # and bills $0.00. Measured on run 34787154536, where this gate did not yet exist: with
+  # the CLI installed and no credential, `answer-is-human-gated` scored 1.00/100% — a
+  # `tool_used` grader reads "Skill called 0x (expected 0..0)" as a PASS on a run that
+  # never happened. So a silent fail here is not the worst case; a vacuous GREEN is.
+  case "$out" in
+    *"Not logged in"*|*"authentication failed"*)
+      skipped "skipped: plugin eval unavailable — the claude CLI here is not logged in"
+      skipped "…so plugin/evals/ was NOT run here; its shape above is all that was checked" ;;
+    *)
+      ok "claude plugin eval passes every case in plugin/evals/" "$rc" 0
+      [ "$rc" -eq 0 ] || printf '%s\n' "$out" | sed 's/^/        /' ;;
+  esac
 fi
 
 printf '\npass=%s fail=%s skip=%s\n' "$pass" "$fail" "$skip"

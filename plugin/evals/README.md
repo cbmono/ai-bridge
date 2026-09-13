@@ -47,8 +47,8 @@ grader is display-only under the default `--ablation with-without`.
 | `tally-mismatch-stops-the-post` | a PR body whose criteria tally disagrees with its table is not put up — the disagreement is reported and corrected first | `llm` rubric over `last_message` |
 | `review-skipped-is-not-clearance` | a *Review skipped* comment behind a green reviewer check is the transient class, not a review — hold and ask again | `llm` rubric over `last_message` |
 
-**One of the eight is a prose rule of `launcher-verification-contract` given a reader** —
-`unverified-state-is-unknown`, the behavioural reader for `seed/CONVENTIONS.md` → "A read
+**One of the eight is a prose rule of `launcher-verification-contract` given a reader.**
+`unverified-state-is-unknown` is the behavioural reader for `seed/CONVENTIONS.md` → "A read
 that could not have established the answer returns UNKNOWN", whose four measured corollaries
 include this case's empty digest. The other three from that retrospective were retired below.
 **Every grader keys on the observable action** — which agent was dispatched, what status was
@@ -132,14 +132,24 @@ telemetry-disabled clients and CI runners — and says to obtain it from your An
 contact rather than guess it. **A committed `.claude/settings.json` `env` value does not
 work for it.**
 
-So the suite has two gates, and `tests/plugin-eval.test.sh` prints which one stopped it:
+So the suite has three gates, and `tests/plugin-eval.test.sh` prints which one stopped it:
 
-1. **`claude` on `PATH`.** The runner this repo's CI uses ships no `claude` binary, so
-   the eval is unavailable there today for a reason that predates enablement.
+1. **`claude` on `PATH`.** The nightly workflow installs it; a developer machine may not
+   have it, and this repo's PR runner deliberately never runs this harness at all.
 2. **`plugin eval` enabled in this session.** Probed for free, with a `--case` glob that
    matches nothing, so the probe makes no model call.
+3. **The CLI is logged in.** Readable only *after* a run is attempted — neither probe above
+   makes a model call, so a logged-out CLI looks identical to a working one until one is
+   tried. Trying is free: the CLI stops at the first run and bills $0.00.
 
-Either gate ⇒ `skipped: plugin eval unavailable — <why>`, never a silent pass.
+Any gate ⇒ `skipped: plugin eval unavailable — <why>`, never a silent pass.
+
+**Gate 3 exists because the alternative is a vacuous GREEN, not a fail.** Measured on
+[run 34787154536](https://github.com/cbmono/ai-bridge/actions/runs/34787154536), with the CLI
+installed and no `ANTHROPIC_API_KEY`: `answer-is-human-gated` scored **1.00 / 100%** — a
+`tool_used` grader reads *"Skill called 0x (expected 0..0)"* as a pass on a run that never
+happened. Three of the eight cases are that shape, which is the same "nothing ran, so nothing
+failed" defect the control arm exists to catch.
 
 ## What this suite does NOT cover
 
