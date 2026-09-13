@@ -116,7 +116,14 @@ case "$CMD" in
     ;;
   check)
     have_record || { echo "papercuts: no record to read (looked at $FILE and $DIR/)" >&2; exit 2; }
-    grep -qE '^## Entries[[:space:]]*$' $(sources) 2>/dev/null \
+    heading=no
+    while IFS= read -r s; do
+      [ -n "$s" ] || continue
+      grep -qE '^## Entries[[:space:]]*$' "$s" 2>/dev/null && { heading=yes; break; }
+    done <<EOF
+$(sources)
+EOF
+    [ "$heading" = yes ] \
       || { echo "papercuts: no '## Entries' heading in any record" >&2; exit 2; }
     n=0; bad=0
     while IFS= read -r l; do

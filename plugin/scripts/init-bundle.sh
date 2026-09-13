@@ -2938,13 +2938,15 @@ fi
 # writes: a local KB commit is somebody's work, and pushing it on their behalf from an
 # installer is exactly the surprise this pass exists to avoid.
 if [ -f "$BIN_DIR/kb-sync.sh" ]; then
-  # Only where a mount is configured: without the key knowledge/ is the bundle's own
-  # tracked folder, and ignoring it there would un-track ~200 documents.
-  if [ -n "$(bash "$BIN_DIR/resolve-config.sh" --instance "$TARGET" knowledge repo 2>/dev/null)" ] \
+  # The mount runs FIRST: it refuses a bundle still awaiting kb-migrate.sh, and ignoring
+  # knowledge/ with no mount behind it would hide ~200 untracked documents from `git add`.
+  mrc=0
+  bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" mount || mrc=$?
+  if [ "$mrc" -eq 0 ] \
+     && [ -n "$(bash "$BIN_DIR/resolve-config.sh" --instance "$TARGET" knowledge repo 2>/dev/null)" ] \
      && ! grep -qxF '/knowledge/' "$TARGET/.gitignore" 2>/dev/null; then
     printf '\n# The knowledge base is MOUNTED from another repository (`knowledge` in\n# instance.config.json). A clone that has not synced yet has no knowledge/ at all;\n# make one with: scripts/kb-sync.sh mount\n/knowledge/\n/knowledge-sources/\n' >> "$TARGET/.gitignore"
   fi
-  bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" mount || true
   krc=0
   bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" status >/dev/null 2>&1 || krc=$?
   if [ "$krc" -eq 1 ]; then

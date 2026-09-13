@@ -269,7 +269,7 @@ while IFS= read -r file; do
     # `author:` is the GitHub login that filed it. Provenance has to survive a file move,
     # so it is frontmatter and never the path — there are no per-user folders in the KB.
     author="$(printf '%s\n' "$fm" | sed -n 's/^author:[[:space:]]*//p' | head -1 \
-              | sed 's/[[:space:]]*$//; s/^"\(.*\)"$/\1/')"
+              | sed 's/[[:space:]]*$//; s/^"\(.*\)"$/\1/; s/^'"'"'\(.*\)'"'"'$/\1/')"
     if [[ -n "$author" ]] && ! printf '%s' "$author" | grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'; then
       warn "$rel" "author: '$author' is not a GitHub login (SCHEMA.md, 'author:')"
     fi
