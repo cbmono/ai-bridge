@@ -218,7 +218,7 @@ echo "== the rule the detector guards must still be in CONVENTIONS.md =="
 # and nobody notices. These are the clauses the acceptance criteria name, asserted verbatim.
 saw() { grep -qF "$2" "$1" && echo yes || echo no; }
 # The same question against a STRING rather than a file, for a live render.
-saw_s() { printf '%s\n' "$1" | grep -qF -- "$2" && echo yes || echo no; }
+saw_s() { grep -qF -- "$2" <<<"$1" && echo yes || echo no; }
 # The same question against a whitespace-flattened copy, for a clause the file wraps across
 # two lines. Reflowing a paragraph must not turn a rule's assertion red — that is upkeep
 # masquerading as a finding — so anything spanning a line break is asserted this way.

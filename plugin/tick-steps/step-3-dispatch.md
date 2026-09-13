@@ -15,6 +15,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    Nothing can check that from the outside — **you** hold it
    (`docs/pm-design.md#step-3` has the price of not holding it).
 
+   **Gate 3 in the core is the ownership check this step depends on** — run
+   `task-owner.sh` and take exit 0 as the only clearance before anything below.
 
    For each **build** `ready` task whose `depends_on` are all `done`, that clears the
    ownership check, and that is not already in-progress: set `assignee` +
