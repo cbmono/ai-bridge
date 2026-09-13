@@ -38,6 +38,7 @@ ln -s "$P" "$B/repos/product"
 emit() { cat > "$LAB/create.sh" <<HOOK
 #!/usr/bin/env bash
 payload="\$(cat)"
+printf 'create\n' >> "$LAB/log/events"
 printf '%s %s\n' "\$(date -u +%FT%T.%N)" "\$payload" >> "$LAB/log/create.jsonl"
 name="\$(printf '%s' "\$payload" | sed -n 's/.*"name":"\([^"]*\)".*/\1/p')"
 git -C "$P" worktree add -q "$LAB/wtroot/\$name" -b "\$name" trunk 2>/dev/null || true
@@ -52,6 +53,7 @@ exit 1
 HOOK
 cat > "$LAB/pretool.sh" <<HOOK
 #!/usr/bin/env bash
+printf 'pretool\n' >> "$LAB/log/events"
 { printf '%s ' "\$(date -u +%FT%T.%N)"; cat; printf '\n'; } >> "$LAB/log/pretool.jsonl"
 HOOK
 chmod +x "$LAB/remove.sh" "$LAB/pretool.sh"
@@ -86,10 +88,12 @@ offline "$B" --worktree task-030 'x'
 say "2b: …with worktree.baseRef set" "$(last_payload | grep -qc base_ref && echo yes || echo no)"
 settings
 
-# --- 3. the hook must CREATE the directory it prints -----------------------------
+# --- 3. the path the hook prints must EXIST --------------------------------------
+# Existence only — probe 6 accepts a pre-existing tree the hook did not create, so nothing
+# here establishes that Claude checks OWNERSHIP of the directory.
 emit 'printf "%s\n" "'"$LAB"'/wtroot/never-created"'
 offline "$B" --worktree nc 'x'
-say "3: prints a path it did not create" "$(sed -n 's/.*\(does not exist or is not a directory\).*/\1/p' "$LAB/out" | head -1)"
+say "3: prints a path that does not exist" "$(sed -n 's/.*\(does not exist or is not a directory\).*/\1/p' "$LAB/out" | head -1)"
 
 # --- 4. a non-zero create hook aborts creation -----------------------------------
 emit 'printf "%s\n" "'"$LAB"'/wtroot/$name"; exit 1'
@@ -133,17 +137,18 @@ say "7c: its own tree locked while it ran" \
      "$LAB/out" | head -1 | grep -q yes && echo yes || echo no)"
 
 # --- 8. a SUBAGENT lands there too, but the payload cannot name the task ---------
-rm -f "$LAB/log/pretool.jsonl"
+rm -f "$LAB/log/pretool.jsonl" "$LAB/log/events"
 run 420 "$B" --settings "$LAB/settings.json" \
   --agents '{"probe":{"description":"probe","tools":["Bash"],"isolation":"worktree","prompt":"Run `pwd` and report its raw output only."}}' \
   'In ONE message, use the Agent tool TWICE in parallel to dispatch two subagents of type `probe`: prompts "TASK-101 pwd" and "TASK-202 pwd". Report both outputs verbatim.'
 say "8: subagent worktree names" "$(sed -n 's/.*"name":"\(agent-[^"]*\)".*/\1/p' "$LAB/log/create.jsonl" | tail -2 | tr '\n' ' ')"
 say "8b: distinct prompt_ids over both" \
   "$(sed -n 's/.*"prompt_id":"\([^"]*\)".*/\1/p' "$LAB/log/create.jsonl" | tail -2 | sort -u | wc -l | tr -d ' ')"
+# Arrival order, not timestamp order: one appended line per event to ONE file, so the file
+# IS the total order. Two clocks can tie, and a tie broken by the label would report an
+# ordering nothing measured.
 say "8c: hook order over one turn (unstable — seen both ways)" \
-  "$( { cut -d' ' -f1 "$LAB/log/pretool.jsonl" | sed 's/$/ pretool/'
-       cut -d' ' -f1 "$LAB/log/create.jsonl" | tail -2 | sed 's/$/ create/'; } |
-     sort | awk '{printf "%s ", $2}')"
+  "$(tr '\n' ' ' < "$LAB/log/events" 2>/dev/null)"
 
 # --- 9. WorktreeRemove ----------------------------------------------------------
 say "9: WorktreeRemove fired" "$([ -s "$LAB/log/remove.jsonl" ] && echo yes || echo no)"

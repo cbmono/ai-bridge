@@ -106,7 +106,7 @@ in-session `Agent` dispatch, which is how role agents run today, `name` is still
 | `name` for a subagent | `agent-<opaque-id>`; still no `agent_type`, no `agent_id` |
 | two subagents dispatched in one turn | one shared `prompt_id`, and the hook order is **not stable**: `pretool pretool create create` in one run, `pretool create pretool create` in the next. Nothing pairs a create with the `Agent` call that caused it, and arrival order is not even consistent, so a hook can only guess |
 | `WorktreeRemove` | **never fired** — not on subagent completion, not on session exit, not for a harness-created `--worktree` tree. One probe run is 10 sessions and 2 subagents: 0 events |
-| hook prints a path it did not create | refused: *"the hook must print the directory it created as the last line of its stdout"* |
+| hook prints a path that **does not exist** | refused: *"… does not exist or is not a directory"*. Existence is what is checked, not authorship — the dirty-worktree row below is a tree the hook did not create, and it is accepted |
 | hook exits non-zero | refused: *"WorktreeCreate hook failed"* — creation aborts |
 | hook prints a **relative** path | refused: *"Refusing to use … git resolves its working tree to …"* (resolved against the cwd, which is the bundle) |
 | hook prints a path **containing a space** | accepted |
@@ -117,10 +117,14 @@ in-session `Agent` dispatch, which is how role agents run today, `name` is still
 
 **`WorktreeRemove` is not a lifecycle, so nothing here can be built on it.** The veto in
 `docs/spikes/worktree-remove-veto.sh` is written and tested
-(`tests/worktree-remove-veto.test.sh` 20/0) so the migration inherits a decided shape, and
+(`tests/worktree-remove-veto.test.sh` 25/0) so the migration inherits a decided shape, and
 it is **not wired**: an event that never fires cannot be measured, and its payload shape is
 therefore unknown. The veto takes the path from argv and reads the task document —
 `pr:` and `status:`, offline — exiting 1 (keep) for **every** state it cannot establish.
+It clears removal only on exactly one `pr:` that is an **empty list** and `status: done`:
+a missing, duplicated or placeholder `pr:` carries zero URLs while establishing nothing,
+and `cancelled` is refused for `reclaim-worktree.sh`'s G2 reason — the PR was closed
+unmerged, so that tree may hold the only copy.
 
 **Nothing in this spike removes a worktree by scanning.** Scan-based removal destroyed
 three running agents' worktrees on 2026-08-04 (`docs/pm-design.md`, step 5), and that

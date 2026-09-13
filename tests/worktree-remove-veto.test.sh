@@ -6,8 +6,8 @@
 # 2026-08-04 incident (docs/pm-design.md, step 5) was a remover that GUESSED. So the
 # property under test is not "it deletes the right trees" but its inverse: EVERY state
 # it cannot establish — no bundle, no task document, two task documents, no frontmatter,
-# an unreadable file — exits 1 and keeps the tree. Removal is the narrow case, and the
-# tests below outnumber it deliberately.
+# an unreadable file, a `pr:` that is missing, duplicated or not a list — exits 1 and keeps
+# the tree. Removal is the narrow case, and the tests below outnumber it deliberately.
 #
 # It also pins that the veto reads the DOCUMENT: no `gh`, no `curl`, no scan of the
 # worktree root. A veto that asks the network is wrong whenever the network is, and a
@@ -67,14 +67,28 @@ task "task-008-x.md" in-progress "pr: [ ]"
 ok "empty pr: but still in-progress" "$(veto "$LAB/wt/task-008-x" --bundle "$B")" 1
 task "task-009-x.md" blocked "pr: [ ]"
 ok "empty pr: but blocked"          "$(veto "$LAB/wt/task-009-x" --bundle "$B")" 1
+task "task-011-x.md" cancelled "pr: [ ]"
+ok "cancelled is NOT terminal here" "$(veto "$LAB/wt/task-011-x" --bundle "$B")" 1
+
+# --- a pr: field that establishes nothing is not an empty one ----------------
+task "task-012-x.md" "done" "target_repo: o/r"
+ok "no pr: field at all"            "$(veto "$LAB/wt/task-012-x" --bundle "$B")" 1
+task "task-013-x.md" "done" 'pr: [ ]
+pr: [ ]'
+ok "duplicate pr: fields"           "$(veto "$LAB/wt/task-013-x" --bundle "$B")" 1
+task "task-014-x.md" "done" "pr: [ pending ]"
+ok "placeholder pr: with no URL"    "$(veto "$LAB/wt/task-014-x" --bundle "$B")" 1
+task "task-015-x.md" "done" 'pr:
+  - TBD'
+ok "block-list pr: with a non-URL"  "$(veto "$LAB/wt/task-015-x" --bundle "$B")" 1
 
 # --- the one state that permits removal --------------------------------------
 task "task-010-x.md" "done" "pr: [ ]"
-ok "done, no PR URL -> remove"      "$(veto "$LAB/wt/task-010-x" --bundle "$B")" 0
-task "task-011-x.md" cancelled "pr: [ ]"
-ok "cancelled, no PR URL -> remove" "$(veto "$LAB/wt/task-011-x" --bundle "$B")" 0
+ok "done, empty pr: -> remove"      "$(veto "$LAB/wt/task-010-x" --bundle "$B")" 0
+task "task-016-x.md" "done" 'pr:'
+ok "done, empty block pr: -> remove" "$(veto "$LAB/wt/task-016-x" --bundle "$B")" 0
 ok "…and CLAUDE_PROJECT_DIR is the same route" \
-  "$(CLAUDE_PROJECT_DIR="$B" bash "$VETO" "$LAB/wt/task-011-x" >/dev/null 2>&1; printf '%s' $?)" 0
+  "$(CLAUDE_PROJECT_DIR="$B" bash "$VETO" "$LAB/wt/task-010-x" >/dev/null 2>&1; printf '%s' $?)" 0
 
 # --- offline and non-scanning by construction --------------------------------
 ok "names no network client"        "$(grep -cE '\b(gh|curl|wget|nc)\b' "$VETO" | tr -d ' ')" 0
