@@ -173,6 +173,7 @@ ACTIONLOG="$CTL/control.log"
 REPEATS="$CTL/repeats"
 REPEAT_CACHE="$CTL/repeat-limit"
 REPEAT_TTL=1800
+REPEAT_RECHECK=60
 REPEAT_SKIP='^(gh (pr (checks|view)|run (view|watch|list))|sleep )'
 
 stamp="$(date -u +'%Y-%m-%dT%H:%M:%SZ %s' 2>/dev/null || echo 'unknown 0')"
@@ -189,21 +190,30 @@ note() {
   { printf '%s' "$now"; printf '\t%s' "$@"; printf '\n'; } >> "$ACTIONLOG" 2>/dev/null || true
 }
 
-# `off` unless BOTH config layers are consulted and one carries a usable number. The
-# `-nt` tests are bash conditionals, so an unchanged config costs no process at all.
+# `off` unless one of the two config layers carries a usable number. The `-nt` tests are
+# bash conditionals, so an unchanged config costs no process at all — but `-nt` is only as
+# fine-grained as the filesystem's mtime, and an edit landing in the same SECOND as the
+# last refresh is invisible to it. Hence the age of the cached answer is stored beside it
+# and re-read after REPEAT_RECHECK: the mtime is the fast path, the age is the backstop.
 REPEAT_N=off
 repeat_limit_load() {
-  local cfg="$root/instance.config.json" loc="$root/instance.config.local.json" n layers
+  local cfg="$root/instance.config.json" loc="$root/instance.config.local.json" n when layers
+  REPEAT_N=off; when=0
+  if [ -r "$REPEAT_CACHE" ]; then
+    read -r REPEAT_N when < "$REPEAT_CACHE" 2>/dev/null || { REPEAT_N=off; when=0; }
+    case "$when" in ''|*[!0-9]*) when=0 ;; esac
+  fi
   if [ ! -e "$REPEAT_CACHE" ] || [ "$cfg" -nt "$REPEAT_CACHE" ] \
-     || { [ -e "$loc" ] && [ "$loc" -nt "$REPEAT_CACHE" ]; }; then
+     || { [ -e "$loc" ] && [ "$loc" -nt "$REPEAT_CACHE" ]; } \
+     || [ "$((epoch - when))" -ge "$REPEAT_RECHECK" ]; then
     layers=("$cfg"); [ -f "$loc" ] && layers=("$loc" "$cfg")
     n="$(jq -s -r '[.[] | .maxRepeatedToolCalls? | numbers] | (.[0] // "off") | tostring' \
          "${layers[@]}" 2>/dev/null)" || n=off
     case "$n" in ''|*[!0-9]*) n=off ;; esac
     [ "$n" = off ] || [ "$n" -ge 2 ] || n=off
-    printf '%s\n' "$n" > "$REPEAT_CACHE" 2>/dev/null || { REPEAT_N="$n"; return 0; }
+    REPEAT_N="$n"
+    printf '%s %s\n' "$n" "$epoch" > "$REPEAT_CACHE" 2>/dev/null || true
   fi
-  IFS='' read -r REPEAT_N < "$REPEAT_CACHE" 2>/dev/null || REPEAT_N=off
   case "$REPEAT_N" in ''|*[!0-9]*) REPEAT_N=off ;; esac
 }
 
