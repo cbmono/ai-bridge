@@ -263,10 +263,12 @@ if [ "$FORM" = banner ]; then
   fi
   export CLAUDE_PROJECT_DIR="$ROOT"
   if [ $# -eq 0 ]; then
+    # `--full` because the two tables are what `welcome` is documented BY: the SessionStart
+    # banner drops them to hold 12 lines, and a human who typed the command asked to look.
     if [ -z "${NO_COLOR:-}" ] && [ ! -t 1 ]; then
-      exec bash "$hook" --format md --no-logo
+      exec bash "$hook" --format md --no-logo --full
     fi
-    exec bash "$hook" --no-logo
+    exec bash "$hook" --no-logo --full
   fi
   exec bash "$hook" "$@"
 fi

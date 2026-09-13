@@ -291,6 +291,25 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    tick. If the advisor errors, times out, or answers in any other shape, ignore it and
    continue.
 
+2c. **End the tick report with ONE metadata footer, and let a script print it.** The last
+   line of the report you relay to the human is the output of
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/agent-usage.sh fmt \
+     --tokens <subagent_tokens> --tools <tool_uses> --duration-ms <duration_ms>
+   ```
+
+   — the three numbers straight off **this tick's** `<task-notification>`, never
+   reformatted and never composed by you: `agent-usage.sh` owns the one usage form, and a
+   second spelling of the same numbers is what makes two reports impossible to compare.
+   **There is no model name in it**: the notification carries none, so there is nothing to
+   print that would not be a guess.
+   **`usage UNKNOWN` ⇒ print no footer at all.** A notification without the fields is a
+   tick nobody measured, and a zero is a claim nothing supports.
+   **The tick report ONLY.** A role agent's result is consumed by the tick, not by you,
+   and its numbers are already on the task document as a `* DISPATCH` line
+   (`project-manager.md` step 3) — a footer there would be the same figure twice.
+
 3. **On completion**, schedule the next tick after the gap: `ScheduleWakeup` with
    `delaySeconds` = the gap and `prompt` = `/dispatch <gap>`. (Gap `0m` ⇒ dispatch the
    next tick immediately instead.)
