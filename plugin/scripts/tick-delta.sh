@@ -136,10 +136,13 @@ if [ -n "$close" ]; then
     '') echo "tick-delta: --close needs a summary" >&2; exit 3 ;;
     *"~/"*) echo "REFUSED: a ledger line carries no path under \`~\` — rewrite the summary." >&2; exit 1 ;;
   esac
+  # Whichever marker comes FIRST decides the line. A summary is free prose and may quote
+  # the other word, so a plain substring test misfiles the entry it is reading.
   found="$(awk '
     /^\* TICK / {
-      if ($0 ~ / close:/) { closed[$3] = 1; next }
-      if ($0 ~ / open:/)  { n++; ts[n] = $3; at[n] = NR }
+      o = index($0, " open: "); c = index($0, " close: ")
+      if (c > 0 && (o == 0 || c < o)) { closed[$3] = 1; next }
+      if (o > 0) { n++; ts[n] = $3; at[n] = NR }
     }
     END {
       for (i = n; i >= 1; i--) if (!(ts[i] in closed)) { print at[i] " " ts[i]; exit }
@@ -152,8 +155,10 @@ if [ -n "$close" ]; then
   esac
   at="${found%% *}"; ts="${found#* }"
   by="$(sed -n "${at}p" "$LOG")"; by="${by#\* TICK "$ts"}"; by="${by%% open:*}"
-  suffix="$("$(dirname "$0")/agent-usage.sh" fmt --tokens "$tokens" --tools "$tools" --duration-ms "$ms")" \
-    || fail2 "agent-usage.sh is missing or failed — the one usage form lives there"
+  FMT="$(dirname "$0")/agent-usage.sh"
+  [ -x "$FMT" ] || { echo "tick-delta: $FMT is missing — the one usage form lives there." >&2; exit 2; }
+  suffix="$("$FMT" fmt --tokens "$tokens" --tools "$tools" --duration-ms "$ms")" \
+    || { echo "tick-delta: $FMT could not format the usage numbers." >&2; exit 2; }
   line="* TICK $ts$by close: $close"
   [ "$suffix" = "usage UNKNOWN" ] || line="$line · $suffix"
   tmp="$LOG.close.$$"

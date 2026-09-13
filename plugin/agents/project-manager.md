@@ -839,7 +839,9 @@ state, and act only on deltas.
    owns that form. **No numbers to give ⇒ drop all three flags** and the line closes
    without them, exactly as it always did. Exit **1** means the entry is already closed
    (or your summary carried a path under `~`, which a ledger line never does) — say so in
-   one line and change nothing. **Make the summary reconstructible, not descriptive:** name every task id
+   one line and change nothing. **An IDLE tick runs none of this** — step 0.9 wrote its one
+   already-closed line and there is no open entry, so the script would correctly refuse.
+   **Make the summary reconstructible, not descriptive:** name every task id
    you dispatched and every one whose completion you reflected — "dispatched task-004,
    task-007; reflected task-002 merged" is what a successor reads instead of its own
    memory. **A KB sweep (step 7) is named the same way — its trigger and its result, both
