@@ -394,6 +394,20 @@ bash "$BRIDGE_INSTALL" "$inst" >/dev/null 2>&1
 simple "deletion survives an installer re-run" \
   "$([ -f "$inst/AWAITING.md" ] && echo resurrected || echo "stays-deleted")" stays-deleted
 
+# WHAT A TICK REPORT'S AWAITING ITEMS MUST CARRY (ai-bridge-v3/task-025). The queue file is
+# one surface; the tick's own report to the human is the other, and it is prose in
+# `project-manager.md` because its writer is a model. That the INSTRUCTION is there is all a
+# harness can hold, and this file is where the awaiting surface is held.
+echo
+echo "-- a report's awaiting items carry a URL or a path"
+PM="$TPL/plugin/agents/project-manager.md"
+pm_has() { grep -qF -- "$1" "$PM" && echo yes || echo no; }
+simple "every item carries a URL or a path"   "$(pm_has 'EVERY ITEM IN THE "AWAITS THE HUMAN" PART CARRIES A URL OR A PATH')" yes
+simple "…a PR as a markdown link, a task as its path"   "$(pm_has 'A PR as `[<repo>#<n>](<url>)`, a task as its')" yes
+simple "…one that can name neither is not rendered" \
+  "$(pm_has 'can name neither is not rendered at all')" yes
+simple "…and it adds NO new report heading"   "$(pm_has 'This is not a new heading and there is no `Needs you` section to add')" yes
+
 echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
