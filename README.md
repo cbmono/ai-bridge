@@ -247,7 +247,7 @@ Run these inside an instance.
 | `/ai-bridge:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
 | `/ai-bridge:dispatch [gap]` | (plugin) the serial background loop: dispatch, track, report. `/ai-bridge:dispatch 10m` ticks every ten minutes |
 | `/ai-bridge:answer` | (plugin) answer the PM's open questions from inside the session |
-| `/ai-bridge:board` | (plugin) `serve` — the board on a local URL, one process per bundle; `publish` — the same page as a private artifact, at the same URL every run |
+| `/ai-bridge:board` | (plugin) `serve` — **the default, so a bare call serves** — the board on a local URL, one process per bundle; `publish` — the same page as a private artifact, at the same URL every run |
 | `/ai-bridge:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
 | `/ai-bridge:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/ai-bridge:fanout <task>` | (plugin) parallel work across several repos |
@@ -403,7 +403,8 @@ tick](docs/operations.md#rendering-it-from-each-tick)). It
 is only as fresh as the last tick — the page's masthead says when that was, and
 `watch-board.sh` is the view that follows your work in between.
 
-**`/ai-bridge:board serve` is the local web app**: one process per bundle, on a port
+**`/ai-bridge:board serve` is the local web app, and it is what a bare
+`/ai-bridge:board` does**: one process per bundle, on a port
 derived from the bundle path (`boardPort` in `instance.config.local.json` overrides it),
 serving `.board-live/` on `127.0.0.1` and nothing else. It re-renders within two seconds of
 `SNAPSHOT.json` changing and the page reloads itself. No LLM is in that path — a tick used

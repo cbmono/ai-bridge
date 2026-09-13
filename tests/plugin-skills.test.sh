@@ -157,6 +157,18 @@ ok "…and stays human-gated" \
   "$(ge1 "$(grep -ci 'human-gated' "$SK/close-project/SKILL.md")")" yes
 # board — the properties that make publishing safe, one assertion each. Its markup
 # comes from the renderer, so the pins are about SCOPE and DESTINATION, not about prose.
+# THE DEFAULT IS THE ONE EXCEPTION, because it is prose and nothing else carries it: a
+# bare call serves, and the argument-hint is where a human reads that before typing.
+ok "a bare /ai-bridge:board serves, and the skill says so" \
+  "$(ge1 "$(grep -cF 'no argument means' "$SK/board/SKILL.md")")" yes
+ok "…and the argument-hint shows serve as the default" \
+  "$(ge1 "$(grep -cF 'argument-hint: "[serve] | publish"' "$SK/board/SKILL.md")")" yes
+ok "…while publish stays something the human typed" \
+  "$(ge1 "$(grep -cF 'Only ever on an explicit `publish`' "$SK/board/SKILL.md")")" yes
+ok "…and the skill refuses outside an instance root in its own words" \
+  "$(ge1 "$(grep -cF 'an instance root' "$SK/board/SKILL.md")")" yes
+ok "…and no model may invoke it, default or not" \
+  "$(ge1 "$(grep -cF 'disable-model-invocation: true' "$SK/board/SKILL.md")")" yes
 ok "board renders scoped to THIS instance (the trailing dot)" \
   "$(ge1 "$(grep -cF -- 'scripts/build-board.sh --out .board-live/artifact-body.html .' "$SK/board/SKILL.md")")" yes
 ok "…as an artifact page BODY, never --standalone" \

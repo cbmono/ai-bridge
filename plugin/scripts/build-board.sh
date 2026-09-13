@@ -838,8 +838,6 @@ button:hover{border-color:var(--signal)}
 .c.you{background:var(--signal);color:var(--signal-ink);font-weight:700;
   padding:6px 14px;border-radius:999px;margin-left:8px}
 .c.you b{color:var(--signal-ink);font-weight:700}
-.c.note{color:var(--stop)}
-.c.note b{color:var(--stop)}
 .body{padding:18px 20px 20px;border-top:1px solid var(--line);display:flex;
   flex-direction:column;gap:18px}
 
@@ -875,12 +873,18 @@ button.pclose:hover{color:var(--stop);border-color:var(--stop);background:var(--
 table{border-collapse:collapse;width:100%;display:block;font-size:14px}
 thead,tbody{display:contents}
 tr{display:grid;grid-template-columns:minmax(0,1fr) 105px 140px 80px 90px;gap:0 18px;
-  align-items:center;padding:12px 4px;border-top:1px solid var(--line)}
+  align-items:start;padding:12px 4px;border-top:1px solid var(--line)}
 thead tr{padding:0 4px 10px;border-top:0}
 th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.1em;
   color:var(--dim);font-weight:600;padding:0;white-space:nowrap}
 th.r,td.r{text-align:left}
 td{padding:0;vertical-align:middle;min-width:0}
+/* THE PILLS SIT LEVEL WITH THE TITLE'S FIRST LINE, NOT WITH THE FILENAME ABOVE IT.
+   `align-items:start` alone levels them with the filename, because the task cell is two
+   lines. 19px is that offset and it is arithmetic, not taste: `.tfile`'s pinned 17px line
+   plus `.trow`'s 2px gap. `.tfile` carries an explicit line-height for exactly this reason
+   — left at `normal` the offset moves with whichever mono font the machine resolves. */
+td:not(:first-child){padding-top:19px}
 tr.flight{box-shadow:inset 2px 0 0 var(--accent)}
 .tid{color:var(--dim);font-size:11px;margin-right:.4rem;
   font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
@@ -890,8 +894,14 @@ td:first-child{overflow-wrap:break-word}
    title starts at the cell's own left edge and no row is taller than its neighbour.
    `.tfile` is the filename line; nothing is allowed to make a third one. */
 .trow{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
-.tfile{display:flex;align-items:baseline;flex-wrap:wrap;gap:.3rem;min-width:0}
-.tfile>.tid{margin-right:0;min-width:0;overflow-wrap:anywhere}
+.tfile{display:flex;align-items:baseline;flex-wrap:wrap;gap:.3rem;min-width:0;
+  line-height:17px}
+/* ONE LINE, OR THE 19px ABOVE IS WRONG. A filename long enough to wrap pushed the title
+   down by a whole line and took the pills out of level — measured at 900px and 761px on a
+   real board, 9 and 25 rows. Truncating restores the invariant this cell's comment already
+   claims; the 760px block hands the wrap back, where the cell has the full row width. */
+.tfile>.tid{margin-right:0;min-width:0;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
 .tmain{display:flex;flex-direction:column;align-items:flex-start;gap:.22rem;min-width:0}
 .tbtn{background:none;border:0;padding:0;font:400 14px/1.4 "IBM Plex Sans",sans-serif;
   color:var(--ink);text-align:left;border-radius:0}
@@ -996,7 +1006,9 @@ code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.93em}
   thead{display:none}
   table{font-size:13px}
   tr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 0}
+  td:not(:first-child){padding-top:0}
   td:first-child{width:100%}
+  .tfile>.tid{white-space:normal;overflow:visible;overflow-wrap:anywhere}
   .tid{font-size:10px}
   .tbtn{font-size:13px}
   .state{font-size:11px}
@@ -1815,14 +1827,10 @@ def render_table():
         if not fin:
             o.append('<span class="c run"><b>%d</b> in progress</span>' % nr)
             o.append('<span class="c wait"><b>%d</b> pending</span>' % nw)
-        na = sum(toint(t.get("advisor_notes")) for t in tasks)
-        if na:
-            # Deliberately NOT in the signal colour and deliberately not in the
-            # awaiting rail: an untriaged advisor concern is the loop's inbox, not
-            # yours. It becomes a question only if the PM escalates it.
-            o.append('<span class="c note" title="Advisor concerns the loop has not '
-                     'triaged yet — not waiting on you"><b>%d</b> concern%s</span>'
-                     % (na, "" if na == 1 else "s"))
+        # NO CONCERNS PILL, DELIBERATELY. `advisor_notes` is still in the snapshot and is
+        # read here by nothing: it counts the loop's own untriaged inbox, and an escalated
+        # one already reaches the human as a `Q<n>` chip.
+
         if toint(ph.get("total")):
             o.append('<span class="tag">%d/%d phases</span>'
                      % (toint(ph.get("done")), toint(ph.get("total"))))

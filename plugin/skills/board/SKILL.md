@@ -1,21 +1,29 @@
 ---
 name: board
 disable-model-invocation: true
-description: The board, two ways. `serve` runs the local board server on a fixed localhost port — a script, no tokens. `publish` publishes the board as a PRIVATE artifact at a stable URL. Run from the instance root.
-argument-hint: "serve | publish"
+description: The board, two ways. Bare or `serve` runs the local board server on a fixed localhost port — a script, no tokens. `publish` publishes the board as a PRIVATE artifact at a stable URL. Run from the instance root.
+argument-hint: "[serve] | publish"
 ---
 
-**Two forms, and `$ARGUMENTS` picks one.** Anything else — including no argument — is a
-typo: say so, name the two forms, and stop. Never guess.
+**Two forms, and `$ARGUMENTS` picks one. `serve` is the default: no argument means
+`serve`.** Anything else is a typo: say so, name the two forms, and stop. Never guess, and
+never read a typo as `publish` — publishing leaves the machine, so it is only ever what the
+human typed.
 
 | `$ARGUMENTS` | What it does |
 |---|---|
-| `serve` | the **local** board server, on this machine only. One command, no tokens. |
+| empty or `serve` | the **local** board server, on this machine only. One command, no tokens. **The default.** |
 | `publish` | the **private artifact**, at a stable URL. Interactive only, and it leaves the machine. |
 
-## `serve` — the local board server
+## `serve` — the local board server, and what a bare `/ai-bridge:board` does
 
-Run it from the instance root and relay what it prints:
+**Confirm you are at an instance root first** — `SCHEMA.md` and `instance.config.json` are
+both present. If they are not, say which directory this is, say that an instance root
+carries those two files, and stop. Do not run the script: it exits 0 and prints nothing
+when the check fails, so a session that delegated the refusal would leave the human
+looking at a blank line.
+
+Then run it from the instance root and relay what it prints:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/board-serve.sh
@@ -33,6 +41,9 @@ says the port is already served and exits 0. The next session's banner prints th
 
 Publish this instance's board as a **private artifact**, at **one URL that never
 changes**. Run it from the instance root.
+
+**Only ever on an explicit `publish`.** A bare `/ai-bridge:board` serves, and no default,
+typo or empty argument reaches this section.
 
 The page is the same page the tick already renders — `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh`, from
 `SNAPSHOT.json` and nothing else. This skill adds no markup, no heading and no note of
