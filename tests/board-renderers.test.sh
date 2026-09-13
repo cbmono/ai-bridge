@@ -872,7 +872,17 @@ sized "depends-on mono 12px"             'button.dep{font-family:"IBM Plex Mono"
 sized "Q chip 5px radius"                'border:0;border-radius:5px;padding:2px 8px;'
 sized "PR ref 13px in the activity blue" 'td a{color:var(--accent);text-decoration:none;'
 sized "row 18px column gap, 12px rows"   'gap:0 18px;
-  align-items:center;padding:12px 4px;border-top:1px solid var(--line)}'
+  align-items:start;padding:12px 4px;border-top:1px solid var(--line)}'
+# THE PILLS ARE LEVEL WITH THE TITLE'S FIRST LINE, and the offset is pinned in bytes
+# because nothing else can catch it: `align-items:start` alone levels them with the
+# FILENAME line above the title, which renders as a near-miss on every wrapped row.
+# 19px = `.tfile`'s pinned 17px line + `.trow`'s 2px gap, so both halves are pinned too.
+sized "pill cells offset to the title line"  'td:not(:first-child){padding-top:19px}'
+sized "…derived from a filename line pinned in bytes" 'line-height:17px}'
+sized "…and the filename stays on ONE line"           '.tfile>.tid{margin-right:0;min-width:0;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}'
+sized "the 760px fallback drops the offset with the grid" 'td:not(:first-child){padding-top:0}'
+assert "the title is never clamped"                   "$(fhasnt 'line-clamp' "$SLATE")"
 # EVERY ACTION IS VISIBLE ON DESKTOP — no overflow menu, stated as the absence of one
 # and as the presence of the wrap that replaces it.
 assert "the action row wraps rather than collapsing" "$(fhas '.acts{display:flex;flex-wrap:wrap;gap:8px;' "$SLATE")"
@@ -936,14 +946,15 @@ for chunk in open('$ORDERED', encoding='utf-8').read().split('<div class=\"pcard
     print(' '.join(re.findall(r'<span class=\"(c [a-z]+|tag)\"', seg)))
 " "$1"; }
 assert "a row carrying every pill puts the signal last" \
-  "$(eq "$(pills EVERYPILL)" "c ok c run c wait c note tag tag c you")"
+  "$(eq "$(pills EVERYPILL)" "c ok c run c wait tag tag c you")"
 assert "…and a row with a signal count and no concerns puts it in the same place" \
   "$(eq "$(pills SIGNALONLY)" "c ok c run c wait c you")"
 assert "…while a row with nothing awaiting emits no signal pill at all" \
-  "$(eq "$(pills NOSIGNAL)" "c ok c run c wait c note tag")"
-# The concerns pill keeps its own treatment: the muted-red class, never the signal one,
-# and the title that says the loop owns it.
-assert "concerns keeps its class and its title"      "$(fhas '<span class="c note" title="Advisor concerns the loop has not triaged yet — not waiting on you"><b>2</b> concerns</span>' "$ORDERED")"
+  "$(eq "$(pills NOSIGNAL)" "c ok c run c wait tag")"
+# THE CONCERNS PILL IS GONE, and the fixture that used to prove it renders keeps its
+# non-zero `advisor_notes` so the assertion is about the RENDERER and not about the data.
+assert "an untriaged concern renders no pill"        "$(fhasnt '<span class="c note"' "$ORDERED")"
+assert "…and no concern text anywhere on the page"   "$(fhasnt 'concern' "$ORDERED")"
 assert "…and the plural signal reads 'need you'"     "$(fhas '<span class="c you"><b>2</b> need you</span>' "$ORDERED")"
 assert "…the singular one 'needs you'"               "$(fhas '<span class="c you"><b>1</b> needs you</span>' "$ORDERED")"
 # THE DISMISS CONTROL IS OUTSIDE THE META SPAN, to its right, exactly as before — the

@@ -1827,9 +1827,10 @@ def render_table():
         if not fin:
             o.append('<span class="c run"><b>%d</b> in progress</span>' % nr)
             o.append('<span class="c wait"><b>%d</b> pending</span>' % nw)
-        # `advisor_notes` is carried by the snapshot and rendered by nothing: it counts
-        # the loop's own untriaged inbox, so it never belonged on a rail whose job is
-        # "what needs you". An escalated one reaches the human as a `Q<n>` chip instead.
+        # NO CONCERNS PILL, DELIBERATELY. `advisor_notes` is still in the snapshot and is
+        # read here by nothing: it counts the loop's own untriaged inbox, and an escalated
+        # one already reaches the human as a `Q<n>` chip.
+
         if toint(ph.get("total")):
             o.append('<span class="tag">%d/%d phases</span>'
                      % (toint(ph.get("done")), toint(ph.get("total"))))

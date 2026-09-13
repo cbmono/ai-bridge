@@ -1058,10 +1058,13 @@ assert "…including its measured character count"     "$(fhasnt '56ch' "$RW")"
 # real name rather than to a comment.
 assert "…the one rule still stacks filename over title" "$(fhas '.trow{display:flex;flex-direction:column;' "$RW")"
 assert "…and that longest name really is on the page" "$(fhas '>017-write-for-a-human-who-will-not-read</span>' "$RW")"
-# DEGRADATION for a name longer still: it wraps INSIDE the filename line rather than
-# overflowing the cell. This rule is what the deleted block relied on too, so it is the
-# half that had to survive the deletion.
-assert "…a longer name wraps rather than overflowing" "$(fhas '.tfile>.tid{margin-right:0;min-width:0;overflow-wrap:anywhere}' "$RW")"
+# DEGRADATION for a name longer still: it CLIPS rather than overflowing the cell — and
+# clipping replaced wrapping deliberately. A wrapped filename makes the cell three lines,
+# which pushes the title down and takes the pills out of level with its first line (the
+# `padding-top:19px` above is a constant, and it can only be one). The comment on
+# `.trow` has always said a third line is not allowed; this is the rule that makes it so.
+assert "…a longer name clips rather than overflowing" "$(fhas '.tfile>.tid{margin-right:0;min-width:0;white-space:nowrap;overflow:hidden;' "$RW")"
+assert "…and the 760px fallback hands the wrap back"  "$(fhas '.tfile>.tid{white-space:normal;overflow:visible;overflow-wrap:anywhere}' "$RW")"
 # VERTICALLY CENTRED. Against a two-line title every other cell in the row — the state,
 # the dependencies, the PR link — sat pinned to the first line and read as though it
 # belonged to that line rather than to the row.
@@ -1283,8 +1286,8 @@ assert "…and dark"                                   "$(yes_if contrast_ok '#2
 assert "the decision card separates from the rail, light" "$(yes_if contrast_ok '#f7f8fc' '#e6e9f2' 1.05)"
 assert "…and dark"                                   "$(yes_if contrast_ok '#1c1f2c' '#20242f' 1.05)"
 
-echo "== advisor_notes is information, not a demand =="
-assert "an untriaged concern shows as a concern pill" "$(fhas 'concern' "$OUT")"
+echo "== advisor_notes is the loop's inbox, so the board renders none of it =="
+assert "an untriaged concern shows no pill"          "$(fhasnt 'concern' "$OUT")"
 assert "…and never as an awaiting verb"              "$(fhasnt 'class="verb">advisor' "$OUT")"
 
 echo "== a PR is a real link =="
