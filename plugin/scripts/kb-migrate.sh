@@ -71,7 +71,9 @@ fi
 # already carries a knowledge/ folder is merged into rather than nested inside.
 mkdir -p "$INST/knowledge"
 if ! cp -R "$STAGE/knowledge/." "$INST/knowledge/"; then
-  die "could not copy knowledge/ into the mount — the originals are in $STAGE."
+  # A partial copy leaves the only complete set in STAGE, so the cleanup trap goes first.
+  trap - EXIT
+  die "could not copy knowledge/ into the mount — the originals are kept in $STAGE."
 fi
 
 # Inside the MOUNTED folder, never at the KB repo's root: with `path: knowledge` that
