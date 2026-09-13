@@ -1,0 +1,40 @@
+name: Tests (deep)
+
+# The `# deep` tier — every harness that spawns the `claude` CLI, today
+# tests/plugin-eval.test.sh, whose run is a paid model call (~$2, ~10 min measured
+# 2026-09-13). It ran on the merge gate until ai-bridge-v3/task-038 and was the single
+# largest item in a 29m 45s required check; nightly is the right cadence for a signal
+# nobody is waiting on. `tests/run.sh --deep` is the same selection a local run takes.
+#
+# NOT a required check, and it does not gate anything: the PR job (`harness suite`) is
+# this repo's one required check. THE GITHUB RUNNER SHIPS NO `claude` CLI, so until one
+# is installed here this job exercises the deep harness's shape and reports its own loud
+# skip for the run itself — the gap is visible in the log rather than silently green.
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  deep:
+    name: deep tier
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Report whether the CLI this tier needs is present
+        shell: bash
+        run: |
+          if command -v claude >/dev/null 2>&1; then claude --version
+          else echo "::warning::no claude CLI on this runner — the deep harnesses will report their own skip, not a result"; fi
+
+      - name: Run tests/run.sh --deep
+        shell: bash
+        run: |
+          export TMPDIR="${RUNNER_TEMP:-/tmp}"
+          mkdir -p "$TMPDIR"
+          tests/run.sh --deep
