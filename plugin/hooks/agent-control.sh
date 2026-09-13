@@ -99,8 +99,9 @@
 #
 # A breach is a `deny`, never a kill, for the reason at the top of this file. It names the
 # tool and the counter and NEVER the arguments: only a fingerprint of them is stored.
-# Read-only WAITS (`gh pr checks`, `gh run watch`, …) are a legitimate poll, so the list in
-# `REPEAT_SKIP` is transparent to the counter however often it repeats.
+# Read-only WAITS (`gh pr checks`, `gh run watch`, …) are a legitimate poll, so a command
+# that is nothing but one of `REPEAT_SKIP` is transparent to the counter however often it
+# repeats — chain anything to it and the whole command is counted.
 #
 # ------------------------------------------------------------------------ BOUNDED
 # Unbounded per-call state in front of every tool call is its own hazard, so the
@@ -175,7 +176,10 @@ REPEATS="$CTL/repeats"
 REPEAT_CACHE="$CTL/repeat-limit"
 REPEAT_TTL=1800
 REPEAT_RECHECK=60
-REPEAT_SKIP='^(gh (pr (checks|view)|run (view|watch|list))|sleep )'
+REPEAT_SKIP='^(gh +(pr +(checks|view)|run +(view|watch|list))|sleep)([[:space:]]|$)'
+# The exemption is for a WHOLE command, so anything that can chain a second one to a poll
+# disqualifies it: `sleep 1; make test` is a `make test` loop wearing a poll's prefix.
+REPEAT_CHAIN='[;&|`\n()]'
 
 stamp="$(date -u +'%Y-%m-%dT%H:%M:%SZ %s' 2>/dev/null || echo 'unknown 0')"
 now="${stamp%% *}"
@@ -208,8 +212,10 @@ repeat_limit_load() {
      || { [ -e "$loc" ] && [ "$loc" -nt "$REPEAT_CACHE" ]; } \
      || [ "$((epoch - when))" -ge "$REPEAT_RECHECK" ]; then
     layers=("$cfg"); [ -f "$loc" ] && layers=("$loc" "$cfg")
-    n="$(jq -s -r '[.[] | .maxRepeatedToolCalls? | numbers] | (.[0] // "off") | tostring' \
-         "${layers[@]}" 2>/dev/null)" || n=off
+    # PRESENCE decides the layer, not usability: a local `null` unsets the tracked value
+    # (`SCHEMA.md`), and filtering to numbers first would have let the tracked one win.
+    n="$(jq -s -r '[.[] | objects | select(has("maxRepeatedToolCalls")) | .maxRepeatedToolCalls]
+         | (.[0] // "off") | tostring' "${layers[@]}" 2>/dev/null)" || n=off
     case "$n" in ''|*[!0-9]*) n=off ;; esac
     [ "$n" = off ] || [ "$n" -ge 2 ] || n=off
     REPEAT_N="$n"
@@ -218,17 +224,34 @@ repeat_limit_load() {
   case "$REPEAT_N" in ''|*[!0-9]*) REPEAT_N=off ;; esac
 }
 
-# One file per agent_id. Two ids that sanitise to the same name do not SHARE a counter:
-# the record carries the raw id, and a mismatch restarts the count rather than inheriting
-# it — a collision costs a reset, never a cross-agent deny.
+digest() { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else cksum; fi; }
+
+# One file per agent_id, under a name NOTHING else can produce. Sanitising an id to
+# `[A-Za-z0-9._-]` let two ids share a path, and `SubagentStop` then deleted the other
+# agent's counter. An id that is already a safe short filename IS its key; anything else
+# is hashed into the `+` namespace, which a safe name can never occupy.
+REPEAT_KEY=""
 repeat_file() {
-  local safe="${agent_id//[!A-Za-z0-9._-]/_}"
-  printf '%s/%s' "$REPEATS" "${safe:0:64}"
+  if [ -z "$REPEAT_KEY" ]; then
+    [ -n "$agent_id" ] || return 1
+    case "$agent_id" in
+      *[!A-Za-z0-9._-]*) ;;
+      *) [ "${#agent_id}" -le 64 ] && REPEAT_KEY="$agent_id" ;;
+    esac
+    if [ -z "$REPEAT_KEY" ]; then
+      local h; h="$(printf '%s' "$agent_id" | digest 2>/dev/null)" || h=""
+      h="${h%%[![:xdigit:]]*}"
+      [ -n "$h" ] || return 1
+      REPEAT_KEY="+${h:0:32}"
+    fi
+  fi
+  printf '%s/%s' "$REPEATS" "$REPEAT_KEY"
 }
 
 repeat_forget() {
   [ -d "$REPEATS" ] || return 0
-  [ -z "$agent_id" ] || rm -f "$(repeat_file)" 2>/dev/null || true
+  local f; f="$(repeat_file)" || f=""
+  [ -z "$f" ] || rm -f "$f" 2>/dev/null || true
   find "$REPEATS" -type f -mmin +60 -delete 2>/dev/null || true
 }
 
@@ -328,9 +351,10 @@ fi
 # Ahead of the directives block because that block exits on an armed-but-empty instance.
 repeat_limit_load
 if [ "$REPEAT_N" != off ]; then
-  probe="$(printf '%s' "$payload" | jq -r --arg skip "$REPEAT_SKIP" '
+  probe="$(printf '%s' "$payload" | jq -r --arg skip "$REPEAT_SKIP" --arg chain "$REPEAT_CHAIN" '
     ((.tool_input.command // "") | sub("^\\s+"; "")) as $c
-    | (if (.tool_name // "") == "Bash" and ($c | test($skip)) then "1" else "0" end),
+    | (if (.tool_name // "") == "Bash" and ($c | test($skip)) and ($c | test($chain) | not)
+       then "1" else "0" end),
       (.tool_name // ""),
       (.tool_input | tojson)' 2>/dev/null)" || probe=""
   if [ -z "$probe" ]; then
@@ -346,11 +370,10 @@ $probe
 EOF
     # A whitelisted poll is transparent: not counted, and it does not reset a count either.
     if [ "$poll" != 1 ] && [ -n "$rtool" ]; then
-      hasher=(cksum)
-      command -v shasum >/dev/null 2>&1 && hasher=(shasum -a 256)
-      fp="$(printf '%s' "$rargs" | "${hasher[@]}" 2>/dev/null)" || fp=""
+      fp="$(printf '%s' "$rargs" | digest 2>/dev/null)" || fp=""
       fp="${fp%%[![:xdigit:]]*}"; fp="${fp:0:16}"
-      cfile="$(repeat_file)"
+      cfile="$(repeat_file)" || cfile=""
+      [ -n "$cfile" ] || fp=""          # no usable key ⇒ count nothing, fail open
       pid=""; ptool=""; pfp=""; pcount=0; pwhen=0
       if [ -r "$cfile" ]; then
         IFS=$'\t' read -r pid ptool pfp pcount pwhen < "$cfile" 2>/dev/null || pid=""

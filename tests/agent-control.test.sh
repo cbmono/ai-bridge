@@ -493,6 +493,12 @@ ok "12x 'gh run watch 9' is never denied"             "$(i=1; while [ $i -le 12 
 # The non-vacuity partner: the whitelist is a PREFIX list, not "anything mentioning gh".
 ok "…while 'gh pr merge' is NOT whitelisted"          "$(thrice P3 "gh pr merge 42")" deny
 
+# THE EXEMPTION IS FOR A WHOLE COMMAND. A poll chained to real work is that work looping.
+ok "'sleep 1; make test' is counted, not exempt"      "$(thrice P4 "sleep 1; make test")" deny
+ok "'gh pr checks && npm test' is counted too"        "$(thrice P5 "gh pr checks && npm test")" deny
+ok "…and so is a poll in a subshell"                  "$(thrice P6 "(gh run watch 9)")" deny
+ok "a bare 'sleep 5' is still exempt 12 times"        "$(i=1; while [ $i -le 12 ]; do run P7 software-engineer Bash "sleep 5"; i=$((i+1)); done; verdict)" allowed
+
 # TWO AGENTS ARE TWO COUNTERS. Interleaved at a limit of 4: each reaches 3 and neither
 # trips, where one shared counter would have reached 6 and denied both.
 set_limit 4
@@ -536,8 +542,27 @@ ok "instance.config.local.json can turn it on alone"  "$(thrice V1 "q")" deny
 printf '{"maxRepeatedToolCalls": 9}\n' > "$INST/instance.config.json"
 rm -f "$CTL/repeat-limit"
 ok "…and still wins when the tracked file says 9"     "$(thrice V2 "q")" deny
+# A local `null` UNSETS the inherited key (`SCHEMA.md`) — presence decides the layer, so
+# filtering to numbers first would have left the tracked 3 standing.
+rm -f "$INST/instance.config.local.json"; set_limit 3
+printf '{"maxRepeatedToolCalls": null}\n' > "$INST/instance.config.local.json"
+rm -f "$CTL/repeat-limit"
+ok "a local null turns the tracked 3 back OFF"        "$(i=1; while [ $i -le 12 ]; do run V3 software-engineer Bash "q"; i=$((i+1)); done; verdict)" allowed
 rm -f "$INST/instance.config.local.json"
 set_limit 3
+
+# TWO IDS THAT SANITISE ALIKE ARE STILL TWO AGENTS. `a b` and `a_b` shared one file when
+# the name was sanitised, so each reset the other and SubagentStop deleted both.
+rm -rf "$CTL/repeats"
+run "a b" software-engineer Bash "make"; run "a_b" software-engineer Bash "make"
+ok "colliding ids get two counter files"              "$(ls "$CTL/repeats" | wc -l | tr -d ' ')" 2
+ok "…the safe id keeps its own readable name"         "$([ -e "$CTL/repeats/a_b" ] && echo yes || echo no)" yes
+run_stop "a b" software-engineer
+ok "…SubagentStop on one leaves the other's count"    "$(awk -F'\t' '{print $4}' "$CTL/repeats/a_b")" 1
+ok "…so the other still trips on ITS third call"      "$(run "a_b" software-engineer Bash "make"; run "a_b" software-engineer Bash "make"; decision)" deny
+ok "an id carrying a slash is counted, not a path"    "$(thrice "z/z" "make")" deny
+ok "…and wrote no directory under repeats"            "$(find "$CTL/repeats" -mindepth 2 | wc -l | tr -d ' ')" 0
+rm -rf "$CTL/repeats"
 
 # The cached limit is refreshed by the config's mtime, not by re-arming — and, because an
 # edit landing in the same mtime SECOND is invisible to `-nt`, by the age of the answer too.

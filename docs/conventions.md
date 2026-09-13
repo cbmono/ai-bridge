@@ -434,7 +434,8 @@ one file per `agent_id` under `.claude/control/repeats/`, carrying a **fingerpri
 never the argument text** — a command line holds tokens, and machine-local state outlives
 the session. A **read-only wait is not a loop**: `gh pr checks`, `gh run view|watch|list`,
 `gh pr view` and `sleep` are transparent to the counter however often they repeat, which
-is the difference between an agent watching CI and an agent stuck. And the config read is
+is the difference between an agent watching CI and an agent stuck — as the WHOLE command,
+since `sleep 1; make test` is a `make test` loop behind a poll's prefix. And the config read is
 off the hot path — the limit is cached beside the counters, refreshed when a config file
 is newer **or** when the cached answer is over a minute old, because `-nt` cannot see an
 edit that lands in the same mtime second. The counter is dropped by the **`SubagentStop`**
