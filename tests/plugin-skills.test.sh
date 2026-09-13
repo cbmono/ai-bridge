@@ -200,13 +200,14 @@ ok "…and naming the duplicate-artifact state, which only the human can leave" 
 # =======================================================================================
 echo "== 6. manifest validation, where the CLI exists =="
 # =======================================================================================
-# CI's runner ships no claude CLI; the skip is REPORTED, never silent, and the structural
+# CI's runner ships no claude CLI, and the merge-gate tier (AB_TIER=gate, set by
+# tests/run.sh) spawns it nowhere; the skip is REPORTED, never silent, and the structural
 # assertions above do not depend on it.
-if command -v claude >/dev/null 2>&1; then
+if [ "${AB_TIER:-deep}" = deep ] && command -v claude >/dev/null 2>&1; then
   vrc=0; claude plugin validate --strict "$TPL/plugin" >/dev/null 2>&1 || vrc=$?
   ok "claude plugin validate --strict passes"            "$vrc" 0
 else
-  echo "  SKIP  claude CLI absent — validate --strict not run here (CI runner has no CLI)"
+  echo "  SKIP  validate --strict not run here (tier=${AB_TIER:-deep}, CLI $(command -v claude >/dev/null 2>&1 && echo present || echo absent))"
 fi
 
 printf '\npass=%s fail=%s\n' "$pass" "$fail"

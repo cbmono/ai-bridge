@@ -69,6 +69,14 @@ build() {
   # real derivation from a selector that simply runs everything.
   printf '#!/usr/bin/env bash\necho "pass=1 fail=0"\n' \
     > "$root/base/tests/fp-names-nothing.test.sh"
+  # The three tier/pool fixtures. Each PRINTS what it saw, so the assertions below read a
+  # real run rather than the runner's own announcement of what it meant to do.
+  printf '#!/usr/bin/env bash\n# deep — costs money, gate tiers must not reach it\necho "deep ran tier=${AB_TIER:-unset}"\necho "pass=1 fail=0"\n' \
+    > "$root/base/tests/fp-deep.test.sh"
+  printf '#!/usr/bin/env bash\n# serial — must never run beside another harness\necho "pass=1 fail=0"\n' \
+    > "$root/base/tests/fp-serial.test.sh"
+  printf '#!/usr/bin/env bash\necho "tier=${AB_TIER:-unset} claude=$(command -v claude || echo none)"\necho "pass=1 fail=0"\n' \
+    > "$root/base/tests/fp-tier.test.sh"
   printf '#!/bin/sh\n' > "$root/base/plugin/scripts/commit-as.sh"
   # path-scan: absent — fixture content, deliberately named by no harness in this repo
   printf 'seed\n'      > "$root/base/plugin/agents/unread-by-any-harness.md"
@@ -200,6 +208,41 @@ V_OUT="$( cd "$V" && bash tests/run.sh --all 2>&1 )"; V_RC=$?
 assert "a tests/ with no harnesses is refused, not reported as a pass" \
   "$([ "$V_RC" -eq 2 ] && echo 0 || echo 1)"
 assert "…and says why"                                        "$(has "$V_OUT" 'refusing to report a vacuous pass')"
+
+echo "== the tiers: a '# deep' harness runs under --deep and NOWHERE else =="
+# The merge gate must be unable to spend a paid `claude plugin eval` run
+# (ai-bridge-v3/task-038). Both directions: the gate tiers skip the deep harness, and
+# --deep runs it and nothing else — a filter that excluded it everywhere would pass half
+# of this and leave the eval unrunnable.
+P_OUT="$( cd "$A/work" && bash tests/run.sh --all --jobs 4 2>&1 )"
+assert "--all does not run the deep harness"                  "$(lacks "$P_OUT" 'deep ran')"
+assert "…and --changed does not either"                       "$(lacks "$(run_changed "$A/work")" 'deep ran')"
+assert "…and --ci does not either"                            "$(lacks "$(run_ci "$A/work")" 'deep ran')"
+DEEP_OUT="$( cd "$A/work" && bash tests/run.sh --deep 2>&1 )"
+assert "--deep runs it"                                       "$(has "$DEEP_OUT" 'deep ran')"
+assert "…telling the harness it is the deep tier"             "$(has "$DEEP_OUT" 'deep ran tier=deep')"
+assert "…and runs nothing else"                               "$(lacks "$DEEP_OUT" 'harness: tests/fp-tier.test.sh')"
+
+echo "== the gate tiers cannot spawn the claude CLI even if a harness tries =="
+assert "a harness in a gate tier is told so"                  "$(has "$P_OUT" 'tier=gate')"
+assert "…and 'claude' on its PATH resolves to the runner's refusing shim, not the real CLI" \
+  "$(grep -qE 'tier=gate claude=.*run-shim[^ ]*/claude' <<<"$P_OUT" && echo 0 || echo 1)"
+
+echo "== the pool: bounded, '# serial' honoured, output replayed in FILE order =="
+assert "the run says how it was split"                        "$(has "$P_OUT" 'serial,')"
+assert "…with the serial harness counted as serial"           "$(has "$P_OUT" '1 serial,')"
+assert "…and a pool of the size asked for"                    "$(has "$P_OUT" 'in a pool of 4')"
+assert "…and every harness still ran green"                   "$(has "$P_OUT" 'ok: all')"
+# Both header forms: the fixture run inherits GITHUB_ACTIONS from a CI job, and there the
+# runner emits `::group::<file>` instead of `== <file>`. Matching only one reads as a
+# failure of the ORDER on every CI run — measured on run 34782353871.
+ORD="$(grep -oE '^(== |::group::)tests/[A-Za-z0-9_.-]*\.test\.sh' <<<"$P_OUT" | sed -E 's/^(== |::group::)//')"
+assert "…and the per-harness output is replayed in file order, never completion order" \
+  "$([ -n "$ORD" ] && [ "$ORD" == "$(printf '%s\n' "$ORD" | sort)" ] && echo 0 || echo 1)"
+assert "…and the tally is still exact (one pass per fixture harness)" \
+  "$(grep -qE '^== [0-9]+ harness\(es\) in [0-9]+s — pass=[0-9]+ fail=0 ==$' <<<"$P_OUT" && echo 0 || echo 1)"
+( cd "$A/work" && bash tests/run.sh --all --jobs 0 >/dev/null 2>&1 ); J_RC=$?
+assert "--jobs 0 is refused at exit 2"                        "$([ "$J_RC" -eq 2 ] && echo 0 || echo 1)"
 
 echo "== the checkout is re-verified after EVERY harness, not once at the start =="
 W="$TMP/w"; mkdir -p "$W"; build "$W"

@@ -91,14 +91,16 @@ ok "plugin/.claude-plugin has one entry" "$(ls -A "$REPO/plugin/.claude-plugin" 
 ok "root .claude-plugin has one entry"   "$(ls -A "$REPO/.claude-plugin" | wc -l | tr -d ' ')" 1
 
 echo "== the CLI's own validator, when present =="
-if command -v claude >/dev/null 2>&1; then
+# AB_TIER=gate is tests/run.sh saying "this run is the merge gate" — no harness spawns the
+# claude CLI there. Absent (a by-hand run), the tier is deep and the validator runs.
+if [ "${AB_TIER:-deep}" = deep ] && command -v claude >/dev/null 2>&1; then
   out="$(claude plugin validate "$REPO/plugin" --strict 2>&1)"; rc=$?
   ok "claude plugin validate --strict passes" "$rc" 0
   # On failure, the validator's own diagnostics are the finding — "got 1, want 0"
   # alone names no field.
   if [ "$rc" -ne 0 ]; then printf '%s\n' "$out" | sed 's/^/        | /'; fi
 else
-  echo "  SKIP  claude CLI not on PATH — jq checks above still hold"
+  echo "  SKIP  claude CLI not spawned here (tier=${AB_TIER:-deep}) — jq checks above still hold"
 fi
 
 echo
