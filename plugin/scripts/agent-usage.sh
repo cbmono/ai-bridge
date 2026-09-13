@@ -8,6 +8,7 @@
 # Exit: 0 done, 1 refused (already written), 2 cannot answer, 3 usage.
 # Reasoning: ai-bridge-v3/task-001.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 NOTES='# Notes'
 UNKNOWN='usage UNKNOWN'
@@ -112,8 +113,8 @@ case "$cmd" in
 
   series)
     [ -d "$inst" ] || die2 "no such instance directory: $inst"
-    [ -r "$inst/log.md" ] || die2 "no readable $inst/log.md"
-    { cat "$inst/log.md"
+    [ -r "$inst/$AB_LEDGER" ] || die2 "no readable $inst/$AB_LEDGER"
+    { cat "$inst/$AB_LEDGER"
       for f in "$inst"/projects/*/tasks/*.md; do [ -r "$f" ] && cat "$f"; done
     } | awk '
       function val(s, k,   r) {

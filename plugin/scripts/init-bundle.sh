@@ -1124,14 +1124,14 @@ if [ -n "$ORG_FLAG" ]; then
       || { echo "error: could not clone $ORG_SLUG" >&2; exit 3; }
     ORG_HOST=existing
     ORG_REMOTE="$(git -C "$TARGET" remote get-url origin 2>/dev/null || true)"
-    if [ -e "$TARGET/instance.config.json" ] || [ -e "$TARGET/SCHEMA.md" ]; then
+    if [ -e "$TARGET/instance.config.json" ] || [ -e "$TARGET/$AB_SCHEMA" ]; then
       :
     elif [ -z "$(git -C "$TARGET" rev-parse --verify HEAD 2>/dev/null || true)" ]; then
       echo "  empty $ORG_SLUG has no commits — seeding it as this org's bundle"
       ORG_PUSH=yes
     else
       echo "error: $ORG_SLUG exists and is not an ai-bridge bundle" >&2
-      echo "       (no instance.config.json, no SCHEMA.md). Refusing to stamp over it." >&2
+      echo "       (no instance.config.json, no $AB_SCHEMA). Refusing to stamp over it." >&2
       echo "       Pick another name: --org $ORG_FLAG --name <repo>" >&2
       echo "       The clone is at $TARGET — remove it if you did not want it:" >&2
       echo "         rm -rf $TARGET" >&2

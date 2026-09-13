@@ -135,7 +135,7 @@ if [ "$close_set" -eq 0 ] && { [ -n "$tick" ] || [ -n "$tokens" ] || [ -n "$tool
   echo "tick-delta: the usage flags go on --close, so they need one" >&2; exit 3
 fi
 if [ "$close_set" -eq 1 ]; then
-  LOG="$inst/log.md"
+  LOG="$inst/$AB_LEDGER"
   [ -f "$LOG" ] && [ -w "$LOG" ] || fail2 "no writable $LOG"
   close="$(printf '%s' "$close" | tr '\n\t' '  ' | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//')"
   case "$close" in
