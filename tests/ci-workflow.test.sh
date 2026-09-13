@@ -99,7 +99,7 @@ assert "a run step invokes tests/run.sh --ci" \
 # Each marker is a load-bearing line of the runner — the derivation, the summary parse,
 # the integrity re-check, the harness loop, the core list. Any of them here is a copy.
 COPY_MARKERS=(
-  'grep -lF -e "$suffix" tests/*.test.sh'
+  's/^# covers:[[:space:]]*//p'
   "grep -oE 'pass=[0-9]+ fail=[0-9]+'"
   'verify_checkout'
   'for f in "${files[@]}"'

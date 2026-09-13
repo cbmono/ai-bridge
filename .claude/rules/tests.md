@@ -11,10 +11,11 @@ build step.
 **Run the harnesses your change touches before pushing — not all of them:**
 
 ```bash
-tests/run.sh --changed        # the core plus every harness that NAMES a path you changed
+tests/run.sh --changed        # the core plus every harness whose `# covers:` names a path you changed
 tests/run.sh --all            # all of them — once, before you open the PR, and never polled
 tests/run.sh --all --jobs 4   # the pool is CPU-wide by default; bound it when you need the machine
 tests/run.sh --deep           # ONLY the `# deep` harnesses: they spawn the claude CLI and cost money
+tests/run.sh --lint           # every harness declares `# covers:`, and each path still exists
 bash tests/<one>.test.sh      # still fine while you iterate on one harness
 ```
 
@@ -22,7 +23,7 @@ bash tests/<one>.test.sh      # still fine while you iterate on one harness
 `tests/run.sh --ci` — one implementation, and `tests/ci-workflow.test.sh` fails if the
 workflow grows a second copy. It reads committed, uncommitted and untracked paths against
 `origin/HEAD` (`--base <ref>` for another base). **No changed path runs the core; a changed
-path no harness names runs the core and says so in one line** — never a zero-harness run
+path no harness covers runs the core and says so in one line** — never a zero-harness run
 that reads as a pass, which is why `--all` is still the answer before the PR.
 **Two tiers and a pool** (ai-bridge-v3/task-038). A harness declares `# serial` in its
 header to run alone, and `# deep` to leave the merge gate altogether — `--deep` and the
@@ -42,22 +43,38 @@ that CI would do for nothing. So run it only when
 your change touches shared machinery every harness loads, and say why in the PR body —
 `plugin/seed/CONVENTIONS.md` → "The full suite belongs to CI" is the rule this defers to.
 
+## Selection: every harness declares what it covers
+
+**Every harness carries a `# covers: <path> …` line in its first 20 lines**, naming the
+paths it reads — a file, or a directory it scans wholesale. `--changed` and `--ci` select
+the harnesses whose declaration intersects the diff, plus the core below; **a harness
+always covers itself**, so editing one runs it. `tests/run.sh --lint` refuses a harness
+with no header, or one naming a path that is no longer in the tree, and
+`tests/test-runner.test.sh` runs that lint over this checkout.
+
+**Declared, not derived from the text** (ai-bridge-v3/task-038, Q2). Selection used to be
+`grep -lF` over each harness's whole text, so a harness that merely *mentioned* a path in
+its prose was selected by it: 54 harnesses mentioned `SCHEMA.md`, 42 `CONVENTIONS.md`, 58
+`instance.config.json`, and a one-word edit to any of them ran half the suite. Declaring
+is also what closes the #124 hole in the other direction — a harness reaching its subject
+through a script it never spells (`commit-as-guard` → `resolve-autonomy.sh`) says so in
+its header instead of being remembered into a list.
+
 ## The core
 
-`tests/run.sh` always runs these eight, because no changed path can be expected to name
-them — they read `plugin/` wholesale or reach their subject indirectly:
+`tests/run.sh` always runs these six, because they read a tree WHOLESALE and no single
+changed path is their subject:
 
-| Harness | Why it cannot be derived |
+| Harness | What it reads whole |
 |---|---|
-| `plugin-manifest`, `plugin-skills`, `plugin-agents` | structural, whole-tree |
-| `deny-baseline`, `agent-control` | the two enforcement **hooks** (ai-bridge-v2/task-003) |
-| `commit-as-guard`, `companion-plugins` | the two-human-authority guard (ai-bridge-v2/task-030). Both are also reachable by derivation and stay here anyway: the guard's behaviour depends on `plugin/scripts/resolve-autonomy.sh`, which `commit-as-guard.test.sh` never names |
-| `harness-read-paths` | it reads the whole `tests/` tree and resolves every literal path against the plugin tree — the one diff that names none of its own subject (ai-bridge-v2/task-029) |
+| `plugin-manifest`, `plugin-skills`, `plugin-agents` | the manifest and the skill/agent trees |
+| `harness-read-paths` | every literal path in `tests/`, resolved against the plugin tree (ai-bridge-v2/task-029) |
+| `scripts-executable` | the mode and shebang of every script under `plugin/` |
+| `concision-contract` | the comment share of every `plugin/**/*.sh` |
 
-Everything else is **derived**: a harness is selected because it *names* a changed path
-(or a ≥2-component suffix of one — never a bare basename), so the next path move under
-`plugin/` carries its own harness in. A hand-kept list is what let #124 move the authority
-guard and leave its harness behind, with the required check green.
+`deny-baseline`, `agent-control`, `commit-as-guard` and `companion-plugins` used to sit
+here. They are now selected by declaration, each naming the paths that were the reason
+they were listed.
 
 ## Rules
 

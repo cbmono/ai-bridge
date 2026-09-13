@@ -9,9 +9,10 @@ name: Tests
 # The harnesses run in a bounded parallel pool (`--jobs`, default CPUs) and a `# deep`
 # harness — one that spawns the claude CLI — runs in tests-deep.yml nightly, never here.
 # Nothing about the selection may be re-implemented in this file: tests/run.sh --ci is
-# the fast path (a plugin-only PR diff selects a core plus every harness that NAMES a
-# changed path; anything else runs all of them), tests/run.sh --changed is the same
-# selection locally, and tests/ci-workflow.test.sh fails on a second copy here.
+# the fast path (a plugin-only PR diff selects a core of six plus every harness whose own
+# `# covers:` header declares a changed path; anything else, including a path no header
+# covers, runs all of them), tests/run.sh --changed is the same selection locally, and
+# tests/ci-workflow.test.sh fails on a second copy here.
 on:
   pull_request:
     branches: [main]
