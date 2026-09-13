@@ -336,6 +336,10 @@ above it so none may grow its share.
   buys the same answer twice and the second copy is the expensive one. Concretely:
   **run the tests your change touches, plus anything that exercises the file you edited**,
   and **do not run the full suite locally as a matter of course**.
+  **Where the repo ships a runner that selects on the diff, use it rather than choosing by
+  hand** — `tests/run.sh --changed` in `cbmono/ai-bridge` runs exactly what CI runs, and
+  its `--all` runs once before the PR is opened. Selecting by hand is how a changed path
+  ends up with no harness covering it and nobody noticing.
   **This is a rule about RE-RUNNING, not about testing.** Follow it literally and you still
   test before every push — that is the point of it, not a loophole in it.
   **Keep the per-branch signal, and this is why:** an agent needs a result **for its own
