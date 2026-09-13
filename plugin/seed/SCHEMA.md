@@ -756,8 +756,9 @@ unmounted bundle keeps `knowledge/papercuts.md`. The **bundle-root `log.md`** �
 tick ledger — is **not** a KB artifact and is never sharded.
 
 **`knowledgeSources[]`** mounts read-only corpora through the same script and the same
-scheme, at `knowledge-sources/<repo-name>/`. They are never written, never pushed and never
-index-regenerated.
+scheme, at `knowledge-sources/<repo-name>/`; a `path` is checked out sparsely under that
+folder, and two entries whose repo names collide are reported rather than mounted over each
+other. They are never written, never pushed and never index-regenerated.
 
 **Migrating an existing bundle** is `scripts/kb-migrate.sh`: one recorded commit pair —
 `git mv` into the KB repo, `git rm --cached` plus the `/knowledge/` ignore line here. It

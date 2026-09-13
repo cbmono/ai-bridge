@@ -166,11 +166,26 @@ for spec in "1 0 pushed" "2 1 failed twice"; do
   out="$(bash "$SYNC" --instance "$R" commit --role cataloguer --message "docs: eta" -- knowledge/findings/eta.md 2>&1)"; rc=$?
   ok "$refusals rejection(s): exit $want_rc" "$rc" "$want_rc"
   ok "…and the transaction is reported, not silent" "$(has "$out" 'attempt')" yes
+  if [ "$refusals" -eq 1 ]; then
+    ok "…and the accepted retry actually pushed eta" \
+      "$(git --git-dir="$RB" show main:findings/eta.md >/dev/null 2>&1; echo $?)" 0
+    ok "…leaving no unpushed KB commit behind" \
+      "$(bash "$SYNC" --instance "$R" status >/dev/null 2>&1; echo $?)" 0
+  fi
   ok "…and no rebase is left behind" \
     "$([ -d "$R/.ai-bridge/kb.git/rebase-merge" ] && echo yes || echo no)" no
 done
 ok "two rejections stop rather than force" \
   "$(bash "$SYNC" --instance "$TMP/r2" status 2>&1 | grep -c 'UNPUSHED' | tr -d ' ')" 1
+
+echo "== the documented recovery command pushes a commit an earlier run left local =="
+out="$(bash "$SYNC" --instance "$TMP/r2" commit --role cataloguer --message "docs: eta" -- knowledge/findings/eta.md 2>&1)"; rc=$?
+ok "re-running commit with nothing new staged still pushes" "$rc" 0
+ok "…rather than reporting 'nothing to commit' forever" "$(has "$out" 'already made')" yes
+ok "…and the KB repo now carries eta" \
+  "$(git --git-dir="$TMP/retry2.git" show main:findings/eta.md >/dev/null 2>&1; echo $?)" 0
+ok "…and the mount reports clean" \
+  "$(bash "$SYNC" --instance "$TMP/r2" status >/dev/null 2>&1; echo $?)" 0
 
 echo "== there are no per-user folders anywhere in the KB =="
 ok "the KB carries exactly one findings/ folder" \

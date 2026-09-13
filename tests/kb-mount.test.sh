@@ -210,6 +210,22 @@ ok "…and is named as read-only" "$(has "$out" 'read-only')" yes
 rc=0; bash "$SYNC" --instance "$RO" commit --message m -- knowledge-sources/shared/x.md >/dev/null 2>&1 || rc=$?
 ok "a write against a read-only mount is refused" "$rc" 1
 
+ROP="$TMP/rop"; mkdir -p "$ROP"; cp "$SEED/SCHEMA.md" "$ROP/SCHEMA.md"
+printf '{ "knowledge": { "repo": "%s", "path": "/", "ref": "main" },\n  "knowledgeSources": [ { "repo": "%s", "path": "knowledge", "ref": "main" } ] }\n' "$BARE" "$BARE2" > "$ROP/instance.config.json"
+bash "$SYNC" --instance "$ROP" mount >/dev/null 2>&1
+ok "a source path: is checked out, not ignored" \
+  "$([ -f "$ROP/knowledge-sources/shared/knowledge/findings/alpha.md" ] && echo yes || echo no)" yes
+ok "…so the repo's own root stays out of the mount" \
+  "$([ -e "$ROP/knowledge-sources/shared/README.md" ] && echo yes || echo no)" no
+
+mkdir -p "$TMP/dup"; DUP="$TMP/dup/shared.git"; git init --bare --quiet "$DUP"
+ROD="$TMP/rod"; mkdir -p "$ROD"; cp "$SEED/SCHEMA.md" "$ROD/SCHEMA.md"
+printf '{ "knowledge": { "repo": "%s", "path": "/", "ref": "main" },\n  "knowledgeSources": [ { "repo": "%s" }, { "repo": "%s" } ] }\n' "$BARE" "$BARE2" "$DUP" > "$ROD/instance.config.json"
+out="$(bash "$SYNC" --instance "$ROD" mount 2>&1)"
+ok "two sources with one repo name are reported, not silently skipped" \
+  "$(has "$out" 'both mount at knowledge-sources/shared')" yes
+ok "…naming the entry that lost" "$(has "$out" "$DUP")" yes
+
 echo "== the KB journals shard per month once shared; the bundle ledger does not =="
 
 PC="$REPO/plugin/scripts/papercuts.sh"

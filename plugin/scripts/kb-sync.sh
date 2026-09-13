@@ -175,14 +175,32 @@ for i,e in enumerate(v):
 ' 2>/dev/null
 }
 
+# Two repos with one basename would share a destination, and the second would land as a
+# silent no-op on the first one's clone — so the collision is named, never mounted over.
+source_sparse() { # <path> -> the subtree to check out, or empty for the whole repo
+  local s="$1"; s="${s#/}"; s="${s%/}"
+  case "$s" in .|"") printf '' ;; *..*) return 1 ;; *) printf '%s' "$s" ;; esac
+}
+
 mount_sources() {
-  local i repo path ref name gd wt
+  local i repo path ref name gd wt sparse seen="" first
   while IFS=$'\t' read -r i repo path ref name; do
     [ -n "${repo:-}" ] || continue
+    first="$(printf '%s' "$seen" | awk -F'\t' -v n="$name" '$1==n {print $2; exit}')"
+    if [ -n "$first" ]; then
+      warn "knowledgeSources[$i] '$repo' and '$first' both mount at knowledge-sources/$name — skipped. Rename one repo or drop one entry."
+      continue
+    fi
+    seen="$seen$name	$repo
+"
+    if ! sparse="$(source_sparse "$path")"; then
+      warn "knowledgeSources[$i] path '$path' escapes the repository — skipped, not fatal"
+      continue
+    fi
     gd="$SRCROOT/$name.git"; wt="$INST/knowledge-sources/$name"
     [ -d "$gd" ] && continue
-    if clone_mount "$gd" "$wt" "$(remote_url "$repo")" "$ref" ""; then
-      say "mounted read-only $repo at knowledge-sources/$name"
+    if clone_mount "$gd" "$wt" "$(remote_url "$repo")" "$ref" "$sparse"; then
+      say "mounted read-only $repo at knowledge-sources/$name${sparse:+/$sparse}"
     else
       rm -rf "$gd"; warn "could not mount read-only source $repo — skipped, not fatal"
     fi
@@ -233,6 +251,15 @@ EOF
   GIT_EDITOR=true kbg rebase --continue >/dev/null 2>&1
 }
 
+# No tracking ref means the branch has never been pushed, so EVERY local commit is
+# unpushed — the case that read as "clean" while holding a day of Findings.
+unpushed_count() {
+  local n
+  n="$(kbg rev-list --count "origin/$KB_REF..HEAD" 2>/dev/null)" || n=""
+  [ -n "$n" ] || n="$(kbg rev-list --count HEAD 2>/dev/null)" || n=""
+  printf '%s' "${n:-0}"
+}
+
 kb_author() { # -> "<name>\t<email>"
   local pair where val who email
   pair="$(cfg --source authorEmail)"; where="${pair%%$'\t'*}"; val="${pair#*$'\t'}"
@@ -276,6 +303,13 @@ do_commit() {
   ( cd "$INST" && regenerate_index ) || die "could not regenerate knowledge/index.md — refusing to commit."
 
   if kbg diff --cached --quiet 2>/dev/null; then
+    # Re-running this command is what a failed push tells you to do, so an already-made
+    # local commit is pushed here rather than reported as "nothing to do" forever.
+    if [ "$(unpushed_count)" -gt 0 ]; then
+      say "nothing new to commit — pushing the KB commit(s) already made here."
+      push_with_one_retry
+      return $?
+    fi
     say "nothing to commit in the KB mount."
     return 0
   fi
@@ -342,11 +376,8 @@ EOF
     kb_configured || exit 3
     kb_vars
     [ -d "$KBGIT" ] || { warn "knowledge is configured but not mounted — run 'kb-sync.sh mount'."; exit 1; }
-    ahead="$(kbg rev-list --count "origin/$KB_REF..HEAD" 2>/dev/null)" || ahead=""
-    # No tracking ref means the branch has never been pushed, so EVERY local commit is
-    # unpushed — the case that read as "clean" while holding a day of Findings.
-    [ -n "$ahead" ] || ahead="$(kbg rev-list --count HEAD 2>/dev/null)" || ahead=""
-    if [ -n "$ahead" ] && [ "$ahead" -gt 0 ]; then
+    ahead="$(unpushed_count)"
+    if [ "$ahead" -gt 0 ]; then
       warn "$ahead KB commit(s) are local and UNPUSHED in $KB_MOUNT — run 'kb-sync.sh commit' or push by hand."
       exit 1
     fi

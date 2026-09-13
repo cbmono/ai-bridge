@@ -35,9 +35,11 @@ knowledge base") means several people write this KB. Absent the key nothing belo
 - **Pull before you write a `Service` doc** — `${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh pull`. Two people
   re-cataloguing one service is the single genuine content conflict, so take the current
   text before you rewrite it, and keep `Service` docs short.
-- **Sync after you write** — `${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh commit --role cataloguer --message "<msg>"
-  -- knowledge/<paths>`. That is the only writer: it regenerates the index, commits,
-  pushes and retries once. `commit-as.sh` refuses a path under the mount by name.
+- **Never commit the mount yourself.** The tick is the one mounted-KB writer (`SCHEMA.md` →
+  "A mounted knowledge base"): write the files, then **list the paths you wrote in your
+  result** and the project manager commits them with `kb-sync.sh commit`. Neither
+  `kb-sync.sh commit` nor `commit-as.sh` is yours here — the latter refuses a path under
+  the mount by name.
 - **Never edit `knowledge/index.md` by hand**, mounted or not. It is derived;
   `build-kb-index.sh` writes every row and `validate-bundle.sh` warns on one it would not
   produce.
