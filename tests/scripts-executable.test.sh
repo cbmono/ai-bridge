@@ -479,17 +479,20 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # A skipped block is now as red as a failed one. The pin counts every assertion BEFORE
 # itself; add or remove an assertion and this number moves with it, deliberately, in the
 # same commit.
-EXPECTED_ASSERTIONS=81
+#
+# THE FILE COUNT IS DERIVED, NOT TYPED (ai-bridge-v3/task-038). This pin used to be one
+# literal with a 30-line `# NN -> NN` history under it, so every PR adding a script edited
+# the same line and every pair of them conflicted — a merge magnet on a number nobody
+# reads. FIXED_ASSERTIONS is what this file asserts independently of how many files exist;
+# the per-file assertions are counted from the same index enumeration check_group itself
+# runs, so a new script moves the pin on its own and the history has nothing left to say.
+FIXED_ASSERTIONS=29
+N_SCRIPTS="$(sgit -C "$TPL" ls-files -- 'plugin/scripts/*.sh' | grep -c .)"
+N_HOOKS="$(sgit -C "$TPL" ls-files -- 'plugin/hooks/*.sh' | grep -c .)"
+EXPECTED_ASSERTIONS=$((FIXED_ASSERTIONS + N_SCRIPTS + N_HOOKS))
 TOTAL=$((pass + fail))
-
-# EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
-# it annotates, so a merge can plausibly keep the annotations and lose the assignment —
-# which is exactly what merging main into ai-bridge-v5/task-005 did. Without this guard
-# the next read aborts under `set -u` with a bash line number and no summary line, and the
-# suite wrapper reports an opaque harness crash. Name the variable instead. The guard sits
-# at the first READ rather than beside `set -uo pipefail`, because the assignment lives at
-# the bottom of the file with the history it belongs to: at the top it would refuse every
-# run.
+# Named rather than left to `set -u`: a lost assignment aborts with a bash line number
+# and no summary line, which the suite wrapper reports as an opaque harness crash.
 : "${EXPECTED_ASSERTIONS:?EXPECTED_ASSERTIONS not set — a merge likely dropped it}"
 assert "exactly $EXPECTED_ASSERTIONS assertions ran — a silently skipped block shows up here (got $TOTAL)" \
   "$([ "$TOTAL" -eq "$EXPECTED_ASSERTIONS" ] && echo 0 || echo 1)"

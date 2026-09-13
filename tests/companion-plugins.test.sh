@@ -185,12 +185,13 @@ fi
 # marketplace from the REMOTE, so the install itself is only exercisable after merge — and
 # actually installing it here would arm delegated autonomy on this machine, which is a
 # decision, not a test step.
-if command -v claude >/dev/null 2>&1; then
+# Not in the merge-gate tier: AB_TIER=gate (tests/run.sh) spawns no claude CLI at all.
+if [ "${AB_TIER:-deep}" = deep ] && command -v claude >/dev/null 2>&1; then
   vout="$(claude plugin validate "$YOLO" --strict 2>&1)"; vrc=$?
   ok "claude plugin validate --strict passes on plugin-yolo" "$vrc" 0
   [ "$vrc" -eq 0 ] || printf '%s\n' "$vout" | sed 's/^/        | /'
 else
-  echo "  SKIP  claude CLI not on PATH — the jq manifest checks above still hold"
+  echo "  SKIP  claude CLI not spawned here (tier=${AB_TIER:-deep}) — the jq manifest checks above still hold"
 fi
 
 echo
