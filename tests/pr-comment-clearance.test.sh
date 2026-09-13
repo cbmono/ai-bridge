@@ -71,6 +71,9 @@ MOTIVATING_CHARS=2986       # the measured reply's own length. A cap at or below
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pr-comment-clearance.XXXXXX")" || {
   echo "pr-comment-clearance.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+# The mutants run from $TMP, and the script sources its sibling resolver
+# (ai-bridge-v3/task-031) — without it they exit 2 before reaching their subject.
+cp "$(dirname "$SCRIPT")/bundle-paths.sh" "$TMP/bundle-paths.sh"
 
 pass=0; fail=0; skipped=0
 command -v jq >/dev/null 2>&1 || { echo "jq is required to run this test"; exit 2; }

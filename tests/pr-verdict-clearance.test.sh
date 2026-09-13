@@ -24,6 +24,9 @@ SCRIPT="$REPO/plugin/scripts/pr-verdict-clearance.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pr-verdict-clearance.XXXXXX")" || {
   echo "pr-verdict-clearance.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}" >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
+# The mutants run from $TMP, and the script sources its sibling resolver
+# (ai-bridge-v3/task-031) — without it they exit 2 before reaching their subject.
+cp "$(dirname "$SCRIPT")/bundle-paths.sh" "$TMP/bundle-paths.sh"
 
 pass=0; fail=0
 ok() { # <label> <actual> <expected>
