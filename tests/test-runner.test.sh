@@ -16,8 +16,8 @@ pass=0; fail=0; skip=0
 assert()  { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
             else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
 summary() { echo; echo "pass=$pass fail=$fail skip=$skip"; [[ "$fail" == 0 ]] || exit 1; exit 0; }
-has()     { printf '%s\n' "$1" | grep -qF -e "$2" && echo 0 || echo 1; }
-lacks()   { printf '%s\n' "$1" | grep -qF -e "$2" && echo 1 || echo 0; }
+has()     { grep -qF -e "$2" <<<"$1" && echo 0 || echo 1; }
+lacks()   { grep -qF -e "$2" <<<"$1" && echo 1 || echo 0; }
 
 echo "== tests/run.sh exists, is executable and parses =="
 assert "$RUNNER exists"        "$([ -f "$RUNNER" ] && echo 0 || echo 1)"
