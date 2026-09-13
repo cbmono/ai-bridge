@@ -51,7 +51,7 @@ BASELINE='577 plugin/hooks/agent-control.sh
 522 plugin/scripts/review-clearance.sh
 525 plugin/scripts/review-rounds.sh
 416 plugin/scripts/task-owner.sh
-417 plugin/scripts/tick-delta.sh
+365 plugin/scripts/tick-delta.sh
 605 plugin/scripts/tick-lock.sh
 356 plugin/scripts/validate-bundle.sh
 466 plugin/scripts/watch-board.sh

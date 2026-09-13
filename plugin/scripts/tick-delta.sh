@@ -4,7 +4,17 @@
 #
 #   Usage: tick-delta.sh check  [--instance DIR] [--gap TEXT]
 #          tick-delta.sh record [--instance DIR]
+#          tick-delta.sh record --close TEXT [--tick ISO] [--tokens N] [--tools N] [--duration-ms N]
 #          tick-delta.sh digest [--instance DIR]
+#
+# `record --close TEXT` IS THE LEDGER HALF, AND IT TOUCHES NO FINGERPRINT. It appends
+# `* TICK <ts> <by> close: TEXT` BESIDE the tick's own open line rather than rewriting it,
+# so the pair at one timestamp is the tick's wall duration. The three usage flags append
+# the one fixed form `agent-usage.sh fmt` prints; without them the line closes exactly as
+# it always did. Offline — no git, no gh — and a second close for one tick is refused.
+# `--tick <ISO>` names WHICH entry to close, matched exactly; without it a close is taken
+# only when exactly one entry is open. Two racing ticks are refused, never guessed —
+# guessing closes the other tick's entry under your summary and leaves yours open.
 #
 # WHY THIS EXISTS. A tick re-derives everything every time — full task walk, a live
 # read of every open PR — which is correct and stays the default. But measured on a
@@ -75,6 +85,7 @@ STATE_NAME=".tick-state"
 
 usage() {
   echo "Usage: $(basename "$0") check|record|digest [--instance DIR] [--gap TEXT]" >&2
+  echo "       $(basename "$0") record --close TEXT [--tick ISO] [--tokens N] [--tools N] [--duration-ms N]" >&2
   exit 3
 }
 
@@ -83,8 +94,21 @@ case "$cmd" in check|record|digest) ;; *) usage ;; esac
 
 inst="."
 gap=""
+close=""; close_set=0; tick=""; tokens=""; tools=""; ms=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    --close|--tick|--tokens|--tools|--duration-ms)
+      [ "$cmd" = record ] || { echo "tick-delta: $1 is a \`record\` flag" >&2; exit 3; }
+      [ $# -ge 2 ] || { echo "tick-delta: $1 needs a value" >&2; exit 3; }
+      case "$1" in
+        # The FLAG decides the path, never its value: `--close ""` is a usage error.
+        --close)       close="$2"; close_set=1 ;;
+        --tick)        tick="$2" ;;
+        --tokens)      tokens="$2" ;;
+        --tools)       tools="$2" ;;
+        --duration-ms) ms="$2" ;;
+      esac
+      shift 2 ;;
     --instance)
       [ $# -ge 2 ] || { echo "tick-delta: --instance needs a directory" >&2; exit 3; }
       inst="$2"; shift 2 ;;
@@ -102,6 +126,63 @@ next_check="on the next tick"
 STATE="$inst/$STATE_NAME"
 
 fail2() { echo "CANNOT ANSWER: $1 — run the full tick." >&2; exit 2; }
+
+# --- the ledger half ---------------------------------------------------------------------
+# Beside the open line, never over it. Everything here is file reads and one insert: a tick
+# that cannot reach git or gh must still be able to close its own entry.
+if [ "$close_set" -eq 0 ] && { [ -n "$tick" ] || [ -n "$tokens" ] || [ -n "$tools" ] || [ -n "$ms" ]; }; then
+  echo "tick-delta: the usage flags go on --close, so they need one" >&2; exit 3
+fi
+if [ "$close_set" -eq 1 ]; then
+  LOG="$inst/log.md"
+  [ -f "$LOG" ] && [ -w "$LOG" ] || fail2 "no writable $LOG"
+  close="$(printf '%s' "$close" | tr '\n\t' '  ' | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//')"
+  case "$close" in
+    '') echo "tick-delta: --close needs a summary" >&2; exit 3 ;;
+    *"~/"*) echo "REFUSED: a ledger line carries no path under \`~\` — rewrite the summary." >&2; exit 1 ;;
+  esac
+  # Whichever marker comes FIRST decides the line. A summary is free prose and may quote
+  # the other word, so a plain substring test misfiles the entry it is reading.
+  found="$(WANT="$tick" awk '
+    /^\* TICK / {
+      o = index($0, " open: "); c = index($0, " close: ")
+      if (c > 0 && (o == 0 || c < o)) { closed[$3] = 1; next }
+      if (o > 0) { n++; ts[n] = $3; at[n] = NR }
+    }
+    END {
+      want = ENVIRON["WANT"]
+      for (i = n; i >= 1; i--) {
+        if (ts[i] in closed) continue
+        if (want != "" && ts[i] != want) continue
+        if (++open_n == 1) hit = at[i] " " ts[i]
+      }
+      if (open_n > 1)  { print "AMBIGUOUS"; exit }
+      if (open_n == 1) { print hit; exit }
+      print (n > 0 ? (want != "" ? "NOMATCH" : "CLOSED") : "NOOPEN")
+    }
+  ' "$LOG")" || fail2 "could not read $LOG"
+  case "$found" in
+    NOOPEN) echo "REFUSED: no \`open:\` TICK entry in $LOG." >&2; exit 1 ;;
+    CLOSED) echo "REFUSED: every open TICK entry already carries a close — not double-writing." >&2; exit 1 ;;
+    NOMATCH) echo "REFUSED: no open TICK entry at \`$tick\` in $LOG — it is already closed, or was never opened." >&2; exit 1 ;;
+    AMBIGUOUS) echo "REFUSED: $LOG has more than one open TICK entry — pass \`--tick <the timestamp of the open line you wrote>\`; closing the newest could close another tick's entry." >&2; exit 1 ;;
+  esac
+  at="${found%% *}"; ts="${found#* }"
+  by="$(sed -n "${at}p" "$LOG")"; by="${by#\* TICK "$ts"}"; by="${by%% open:*}"
+  FMT="$(dirname "$0")/agent-usage.sh"
+  [ -x "$FMT" ] || { echo "tick-delta: $FMT is missing — the one usage form lives there." >&2; exit 2; }
+  suffix="$("$FMT" fmt --tokens "$tokens" --tools "$tools" --duration-ms "$ms")" \
+    || { echo "tick-delta: $FMT could not format the usage numbers." >&2; exit 2; }
+  line="* TICK $ts$by close: $close"
+  [ "$suffix" = "usage UNKNOWN" ] || line="$line · $suffix"
+  tmp="$LOG.close.$$"
+  AT="$at" LINE="$line" awk 'NR == ENVIRON["AT"] + 0 { print; print ENVIRON["LINE"]; next } { print }' \
+    "$LOG" > "$tmp" || { rm -f "$tmp"; fail2 "cannot write beside $LOG"; }
+  [ -s "$tmp" ] || { rm -f "$tmp"; fail2 "refusing to replace $LOG with an empty file"; }
+  mv "$tmp" "$LOG" || { rm -f "$tmp"; fail2 "cannot replace $LOG"; }
+  echo "closed: $ts"
+  exit 0
+fi
 
 command -v git >/dev/null 2>&1 || fail2 "git not found"
 git -C "$inst" rev-parse --verify -q HEAD >/dev/null 2>&1 || fail2 "not a git repo (or no commits)"

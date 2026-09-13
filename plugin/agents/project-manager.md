@@ -175,7 +175,9 @@ state, and act only on deltas.
 
    **Read the in-flight set from disk, never from your brief and never from anyone's
    memory.** Every tick, in this order, each outranking anything you were told: the root
-   `log.md` **tick ledger** (an open `TICK` line with no matching close), then the task
+   `log.md` **tick ledger** (an `open:` line whose ISO timestamp carries no `close:` line
+   at the same timestamp — the two sit as a PAIR now, and the open half is never
+   rewritten), then the task
    documents' own `status:`, then `git log` and `gh pr list` for what actually landed.
    If the ledger and a task's `status:` disagree, **the task document wins**. The
    failure this prevents — re-dispatching a finished task sequence — is the most
@@ -256,7 +258,9 @@ state, and act only on deltas.
    **On every path but IDLE, open your tick ledger entry NOW — this is where step 0.5
    used to do it.** Append one line to the root `log.md`:
    `* TICK <ISO-8601 timestamp> by <login> open: <what you are about to do>`. Step 8
-   rewrites it as the closed summary. It must be the first thing the full walk does, not
+   appends its `close:` line **beside** this one, at the same timestamp; the open half is
+   never rewritten, so the pair is what makes a tick's wall duration readable from the
+   ledger alone. It must be the first thing the full walk does, not
    part of
    curation: an open `TICK` line with no close is the only signal that a died tick ever
    dispatched. Here rather than in step 0.5 because
@@ -514,6 +518,21 @@ state, and act only on deltas.
    `roleTiers.explorer`; seed default)"* — so the reader can tell a chosen tier from an
    unset one.
 
+   **When each dispatched agent reports, record what it cost — one line, written by the
+   script, before you do anything else with the report:**
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/agent-usage.sh dispatch <task-path> \
+     --role <assignee> --model <the alias you dispatched on> \
+     --tokens <subagent_tokens> --tools <tool_uses> --duration-ms <duration_ms>
+   ```
+
+   The three numbers come **from that agent's `<task-notification>`** — never from a
+   transcript, never estimated, never rounded. It appends to the task's `# Notes`, so a
+   **re-dispatch adds a second line** and the rounds stay countable; **you never compose
+   the line yourself**. A notification that carried no usage ⇒ drop the three flags and
+   the line records `usage UNKNOWN`, which is the honest answer and not a zero.
+
 4. **Advance in-flight work.** For **build** `in-progress` tasks: if the role agent
    opened PR(s), append them to the `pr` list and set `status: in-review`. If it
    reported a blocker or died, set `status: blocked` with a `# Notes` reason.
@@ -689,6 +708,18 @@ state, and act only on deltas.
    `PRUNE_ACTIVE_MINUTES` mtime veto (default 120) is a backstop, not the guard; your
    in-flight count is the guard.
 
+   **Sum what that task cost, against the PR(s) that merged.** For each task you move to
+   `done`, once:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/agent-usage.sh total <task-path> --pr <merged-pr-url> [--pr …]
+   ```
+
+   It adds up that task's own `* DISPATCH` lines and appends one `* TOTAL` line to
+   `# Notes`. **A task with no dispatch lines records `usage UNKNOWN`, never zero** — an
+   unmeasured task and a free one are not the same fact. Exit 1 means a `* TOTAL` line is
+   already there; leave it alone.
+
    **Check the citations you are reflecting.** For each task you move to `done`, run
    `${CLAUDE_PLUGIN_ROOT}/scripts/cite-check.sh --text-file <f> --brief <slugs>` over its
    `# Result` section and over each merged PR body, with the slugs that task's brief
@@ -792,9 +823,31 @@ state, and act only on deltas.
    (step 6). `knowledge/index.md` is **not** in that set — tracked, curated by the
    `cataloguer`, committed normally.
 
-   **Close this tick's ledger entry** (opened in step 0.5) by rewriting it as a dated
-   one-line summary, **keeping its `by <login>`** — the rewrite replaces the `open:` half,
-   never the attribution. **Make it reconstructible, not descriptive:** name every task id
+   **Close this tick's ledger entry** (opened in step 0.9) — **the script writes the
+   line, you write only the summary**:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh record --close "<your one-line summary>" \
+     --tick <the ISO timestamp of the open line you wrote in step 0.9> \
+     --tokens <subagent_tokens> --tools <tool_uses> --duration-ms <duration_ms>
+   ```
+
+   **`--tick` names WHICH entry you are closing** — your own timestamp, matched exactly.
+   Pass it always: without it the script closes the only open entry and refuses when
+   there are two, and two open entries is precisely the case (a second loop, a missing
+   lock) where guessing closes the other tick's entry under your summary.
+
+   The script finds the entry, copies its timestamp and its `by <login>`, and appends the
+   `close:` line **beside** it — the open line stays, so the pair is the tick's wall
+   duration. **The three numbers are the ones the completion notifications handed you**
+   (`subagent_tokens`, `tool_uses`, `duration_ms`, summed over this tick's dispatches);
+   **never reformat them and never compose the `usage …` fragment yourself** — the script
+   owns that form. **No numbers to give ⇒ drop all three flags** and the line closes
+   without them, exactly as it always did. Exit **1** means the entry is already closed
+   (or your summary carried a path under `~`, which a ledger line never does) — say so in
+   one line and change nothing. **An IDLE tick runs none of this** — step 0.9 wrote its one
+   already-closed line and there is no open entry, so the script would correctly refuse.
+   **Make the summary reconstructible, not descriptive:** name every task id
    you dispatched and every one whose completion you reflected — "dispatched task-004,
    task-007; reflected task-002 merged" is what a successor reads instead of its own
    memory. **A KB sweep (step 7) is named the same way — its trigger and its result, both
@@ -982,7 +1035,10 @@ the report of a tick that did something.
 
 End each tick with a concise report: drafts refined (and which have open questions),
 tasks dispatched (with PR links once open), PRs awaiting the human's merge, tasks
-moved to `done`, and what currently awaits the human. **On a shared instance, also
+moved to `done`, and what currently awaits the human. **At most ONE cost line, and only
+when there is one to give** — a tick that dispatched nothing and merged nothing prints no
+cost line at all, and no tick prints two. **In tokens, never in money**; there is no price
+table anywhere in this loop and converting is the reader's business. **On a shared instance, also
 report the other human's work you saw and did not dispatch** — one line naming the
 task and its owner. **Cite every PR as a Markdown link — `[<repo>#<n>](<url>)`, bare
 repo name** — and link other artifacts (commits, CI runs) by URL. Follow this

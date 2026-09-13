@@ -245,7 +245,7 @@ ok "PM stamps a preview approval"     "$(hasf "$PM" '`preview approved <ISO 8601
 ok "PM's ledger line names the login it ran as" \
    "$(hasf "$PM" '`* TICK <ISO-8601 timestamp> by <login> open:')" yes
 ok "…the idle line too"               "$(hasf "$PM" '`* TICK <ISO-8601> by <login> idle')" yes
-ok "…and the close keeps it"          "$(hasf "$PM" '**keeping its `by <login>`**')" yes
+ok "…and the close keeps it"          "$(hasf "$PM" 'copies its timestamp and its `by <login>`')" yes
 ok "PM stamps a project closeout"     "$(hasf "$PM" 'stamped `by <login>` from')" yes
 ok "/ai-bridge:answer writes the by"  "$(hasf "$ANSWER" 'then ` by <login> · `')" yes
 ok "…and may actually run the resolver" \
