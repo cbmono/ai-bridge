@@ -77,6 +77,14 @@ Per-instance permission/env overrides go in `.claude/settings.local.json`
 copied once from the plugin, so an edit there becomes a conflict the next time
 `/ai-bridge:init` 3-way merges a template change onto it.
 
+## Shared by several people
+
+**One organisation, one bundle: this repo.** Everyone clones the same one and runs their
+own `/ai-bridge:dispatch` loop. The front door — creating or cloning it with
+`/ai-bridge:init <dir> --org <org>`, the `people` map, `defaultOwner`, and what each
+person sets on their own machine — is
+[docs/sharing.md](https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md).
+
 ## How it works
 ```
 (Objective) ──► Project ──► Task ──► (PM refines) ──► (human approves) ──► (PM dispatches) ──► role agent ──► PR ──► you merge

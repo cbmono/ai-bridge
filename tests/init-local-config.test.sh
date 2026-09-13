@@ -208,9 +208,9 @@ ok "…and never for a derived value"        "$(yn grep -q 'Never ask for a valu
 ok "…and to re-run with the flags"         "$(yn grep -q 're-run the same command with the flags' "$SKILL")" yes
 ok "the flags are in the argument-hint"    "$(yn grep -q 'argument-hint.*--owner' "$SKILL")" yes
 SHARING="$TPL/docs/sharing.md"
-ok "sharing.md's walkthrough is 3 commands" "$(yn grep -q 'git clone <bundle-remote>' "$SHARING")" yes
+ok "sharing.md keeps the hand-clone route"  "$(yn grep -q 'git clone <bundle-remote>' "$SHARING")" yes
 ok "…naming the plugin install"            "$(yn grep -q '/plugin install ai-bridge@ai-bridge' "$SHARING")" yes
-ok "…and /ai-bridge:init ."                "$(yn grep -q '^/ai-bridge:init \.$' "$SHARING")" yes
+ok "…stamped by /ai-bridge:init ."          "$(yn grep -q '^/ai-bridge:init \.$' "$SHARING")" yes
 ok "…and what init derives each from"      "$(yn grep -q 'the bundle.s parent directory' "$SHARING")" yes
 ok "…and that no hand-written file is needed" "$(yn grep -q 'writes the gitignored' "$SHARING")" yes
 PATH="$STUB:$PATH" bash "$INIT" --help >"$TMP/out" 2>&1

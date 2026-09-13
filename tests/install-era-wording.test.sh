@@ -140,7 +140,7 @@ docs/pm-design.md	1	where the two step files moved FROM, past tense
 plugin/README.md	2	names the retired install.sh as the thing /ai-bridge:init converts a bundle from
 plugin/RETIRED	2	the plugin-migration audit: sixteen machinery paths, none of them seed content
 plugin/hooks/session-banner.sh	3	live legacy-link detection, plus two past-tense incident notes
-plugin/scripts/init-bundle.sh	22	the replacement itself — its header is the record of what install.sh and upgrade.sh did
+plugin/scripts/init-bundle.sh	23	the replacement itself — its header is the record of what install.sh and upgrade.sh did
 plugin/scripts/refresh-seeds.sh	4	the record of upgrade.sh stage 4, which is what this script is
 plugin/scripts/resolve-autonomy.sh	1	what used to stamp AUTONOMY.md, and the note that nothing stamps it now
 plugin/scripts/task-owner.sh	1	an SC2295 trap install.sh HAD, cited as precedent

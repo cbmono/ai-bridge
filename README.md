@@ -32,7 +32,7 @@ repos and holds only the state of the work — never application code.
 | [docs/autonomy.md](docs/autonomy.md) | you want the loop to promote or merge without you |
 | [docs/operations.md](docs/operations.md) | installing and upgrading (the plugin half and the bundle half), the board's three renderers, worktrees, editor setup |
 | [docs/migrating.md](docs/migrating.md) | **you already run a pre-plugin install** — upgrade it in place, or re-home it into a fresh folder without losing `projects/` or `knowledge/` |
-| [docs/sharing.md](docs/sharing.md) | two humans will share one instance |
+| [docs/sharing.md](docs/sharing.md) | **several people will share one bundle** — the org's repo, `--org`, and who sets what |
 | [docs/conventions.md](docs/conventions.md) | **you are changing this repo** — every design invariant and why it exists |
 | [docs/releases/v1.0.0.md](docs/releases/v1.0.0.md) | **what 1.0.0 changed** — 91 merged PRs since the last tag, grouped: install, commands, agents, gates, docs |
 | [The config layer](#the-config-layer) | you want this repo's agents, commands and hooks in `~/.claude` too |

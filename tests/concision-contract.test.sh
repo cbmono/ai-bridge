@@ -37,7 +37,7 @@ BASELINE='577 plugin/hooks/agent-control.sh
 576 plugin/scripts/check-template-version.sh
 376 plugin/scripts/close-project-folder.sh
 438 plugin/scripts/commit-as.sh
-464 plugin/scripts/init-bundle.sh
+432 plugin/scripts/init-bundle.sh
 375 plugin/scripts/link-repos.sh
 437 plugin/scripts/pr-body-clearance.sh
 448 plugin/scripts/pr-comment-clearance.sh
