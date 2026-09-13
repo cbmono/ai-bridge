@@ -69,6 +69,7 @@ fi
 
 # `cp -R <dir>/.` copies the CONTENTS, so the mount keeps its own root and a repo that
 # already carries a knowledge/ folder is merged into rather than nested inside.
+mkdir -p "$INST/knowledge"
 if ! cp -R "$STAGE/knowledge/." "$INST/knowledge/"; then
   die "could not copy knowledge/ into the mount — the originals are in $STAGE."
 fi

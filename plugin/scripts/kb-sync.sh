@@ -192,13 +192,15 @@ EOF
 }
 
 pull_one() { # <gitdir> <ref> <label>
-  local gd="$1" ref="$2" label="$3"
+  local gd="$1" ref="$2" label="$3" wt
   [ -d "$gd" ] || return 0
   if ! bounded git --git-dir="$gd" fetch --quiet origin "$ref" 2>/dev/null; then
     warn "could not fetch $label within ${TIMEOUT}s — using the local copy (not fatal)"
     return 0
   fi
-  git --git-dir="$gd" merge --ff-only --quiet FETCH_HEAD 2>/dev/null \
+  wt="$(git --git-dir="$gd" config core.worktree 2>/dev/null)"
+  [ -n "$wt" ] && [ -d "$wt" ] || { warn "$label is fetched but not checked out — run 'kb-sync.sh mount'"; return 0; }
+  ( cd "$wt" && git --git-dir="$gd" merge --ff-only --quiet FETCH_HEAD ) 2>/dev/null \
     || warn "$label is not fast-forwardable — left untouched (not fatal)"
 }
 
@@ -257,6 +259,8 @@ do_commit() {
     p="${p#./}"; p="${p#"$INST"/}"
     case "$p" in
       knowledge|knowledge/*) ;;
+      knowledge-sources/*) die "'$p' is a READ-ONLY mount (knowledgeSources[]). It is never
+       written, never pushed and never index-regenerated — file the change upstream." ;;
       *) die "'$p' is outside knowledge/ — kb-sync commits the mounted KB and nothing else." ;;
     esac
     case "$KB_SPARSE" in "") rel="${p#knowledge/}"; [ "$rel" = knowledge ] && rel="." ;; *) rel="$p" ;; esac
