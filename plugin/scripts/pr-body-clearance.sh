@@ -323,7 +323,7 @@ https?://[^[:space:]<>]+
 # the measurement goes red rather than through.
 #
 # THIS IS NOT A BODY LENGTH AND MUST NEVER BECOME ONE. Nothing below sums these, and
-# nothing below compares them to `body_chars`; see the header.
+# nothing below compares them to the body's own length; see the header.
 CRITERIA_EVIDENCE_CEILING=400
 CRITERIA_EVIDENCE_FLOOR=13
 
