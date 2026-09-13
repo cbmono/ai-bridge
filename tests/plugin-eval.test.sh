@@ -265,9 +265,14 @@ ok "…and still asserts the written split itself" \
   "$([ "$(grep -c 'disable-model-invocation' "$PS")" -ge 2 ] && echo yes || echo no)" yes
 # A plugin-only PR runs a reduced file list in CI. A harness missing from that list is a
 # harness a plugin-only change never runs — which is every change this suite grades.
+# The list moved out of the workflow into tests/run.sh in ai-bridge-v3/task-028; both are
+# checked, so this goes red whichever file the name is dropped from.
+RUNNER="$TPL/tests/run.sh"
 WF="$TPL/.github/workflows/tests.yml"
-ok "the plugin-only CI fast path runs this harness" \
-  "$(grep -c 'tests/plugin-eval.test.sh' "$WF" | tr -d ' ')" 1
+ok "the fast-path core names this harness" \
+  "$(grep -c 'tests/plugin-eval.test.sh' "$RUNNER" | tr -d ' ')" 1
+ok "…and the workflow calls the runner that carries it" \
+  "$(yn grep -qF 'tests/run.sh --ci' "$WF")" yes
 
 # =======================================================================================
 echo "== 6. the run itself — where the CLI supports it, and a LOUD skip where it does not =="
