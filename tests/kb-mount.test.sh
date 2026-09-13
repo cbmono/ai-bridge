@@ -264,7 +264,7 @@ ok "the SessionStart fast-forward sits beside the banner" \
 ok "…and registers no second SessionStart hook" \
   "$(grep -c 'kb-sync' "$REPO/plugin/hooks/hooks.json" | tr -d ' ')" 0
 ok "…with its output on stderr, so --format json stays parseable" \
-  "$(grep -c 'pull >&2 2>&1 || true' "$REPO/plugin/hooks/session-banner.sh" | tr -d ' ')" 1
+  "$(grep -c 'pull >&2 || true' "$REPO/plugin/hooks/session-banner.sh" | tr -d ' ')" 1
 ok "the tick fast-forwards at its start" \
   "$(grep -c 'kb-sync.sh pull' "$REPO/plugin/agents/project-manager.md" | tr -d ' ')" 1
 ok "/ai-bridge:init WARNs on unpushed KB commits" \

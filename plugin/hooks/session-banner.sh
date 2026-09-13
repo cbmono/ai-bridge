@@ -562,7 +562,7 @@ bin=""
 # and macOS ships no `timeout`), its output goes to stderr so it cannot corrupt --format
 # json, and a failure is REPORTED and never fatal — knowledge is not a lock.
 if [ -n "$bin" ] && [ -x "$bin/kb-sync.sh" ]; then
-  bash "$bin/kb-sync.sh" --instance "$root" --timeout 10 pull >&2 2>&1 || true
+  bash "$bin/kb-sync.sh" --instance "$root" --timeout 10 pull >&2 || true
 fi
 
 # The template checkout around the plugin, when there is one — it names the version-drift
