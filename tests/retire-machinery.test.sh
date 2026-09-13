@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/RETIRED plugin/scripts/init-bundle.sh plugin/seed/instance.config.json
 #
 # retire-machinery.test.sh — `/ai-bridge:init` removes a machinery symlink into a template
 # checkout, and nothing else.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/commit-as.sh plugin/scripts/dispatch-brief.sh plugin/seed/CLAUDE.md plugin/seed/CONVENTIONS.md plugin/seed/instance.config.json plugin/seed/SCHEMA.md plugin/skills/work/SKILL.md
 #
 # commit-attribution.test.sh — the `Co-Authored-By: Claude` trailer is the DEFAULT on a
 # target-repo commit, and `commitAttribution: none` is the only thing that removes it.

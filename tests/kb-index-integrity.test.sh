@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/cataloguer.md plugin/scripts/build-kb-index.sh plugin/scripts/cite-check.sh plugin/scripts/validate-bundle.sh plugin/seed/.claude/rules/knowledge-base.md plugin/seed/CLAUDE.md plugin/seed/knowledge plugin/seed/SCHEMA.md plugin/skills/close-project/SKILL.md
 #
 # kb-index-integrity.test.sh — `knowledge/index.md` is DERIVED, and the five defects that
 # were repaired by hand on 2026-09-05/06 are now measured instead.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/board-serve.sh plugin/scripts/write-snapshot.sh
 #
 # board-serve.test.sh — the local board server: port derivation, the one-per-bundle
 # collision message, and the containment boundary.

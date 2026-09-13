@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/review-clearance.sh tests/fixtures/reviewer
 #
 # review-clearance.test.sh — exercises precondition 2 of the delegated merge gate,
 # plugin/scripts/review-clearance.sh.

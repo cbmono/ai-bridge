@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/operations.md plugin/hooks/session-banner.sh plugin/scripts/ai-bridge.sh plugin/skills/welcome/SKILL.md
 #
 # banner-logo.test.sh — the ship above the banner's header: three lines of DATA, coloured
 # by GLYPH CLASS, and adding nothing else to the banner.

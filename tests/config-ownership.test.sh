@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: config/required docs/claude-config-ownership.md plugin/agents/qa-reviewer.md plugin/scripts/init-bundle.sh
 #
 # config-ownership.test.sh — the ONLY `~/.claude` paths this repo may ship are the ones it
 # probes for. Everything else in that directory belongs to `cbmono/ai-setup`.

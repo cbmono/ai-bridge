@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/auditor.md plugin/agents/project-manager.md plugin/scripts/agent-usage.sh plugin/scripts/tick-delta.sh plugin/skills/dispatch/SKILL.md
 #
 # agent-usage.test.sh — what the harness handed back, recorded on the ledger and on the
 # task: `plugin/scripts/agent-usage.sh` and `tick-delta.sh record --close`.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/validate-bundle.sh
 #
 # Exercises plugin/scripts/validate-bundle.sh against a throwaway bundle whose
 # every document is a deliberate decision class: valid, invalid enum, missing

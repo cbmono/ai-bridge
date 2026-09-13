@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude-plugin/marketplace.json plugin-llm/companion/llm.md plugin/hooks/session-banner.sh plugin/scripts/ai-bridge.sh plugin/scripts/init-bundle.sh plugin/seed/.gitignore
 #
 # companion-alternative-llm.test.sh — the `ai-bridge-llm` companion: v1's three secrecy
 # properties carried over intact, the per-machine opt-in gate, the banner's backend

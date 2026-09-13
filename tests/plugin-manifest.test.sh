@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude-plugin/marketplace.json plugin/.claude-plugin/plugin.json plugin/agents plugin/hooks plugin/skills
 #
 # plugin-manifest.test.sh — the plugin packaging surface: both manifests, the skill
 # files, and (when the CLI is present) `claude plugin validate --strict`.

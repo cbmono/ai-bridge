@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks/agent-control.sh plugin/hooks/hooks.json plugin/scripts/bundle-paths.sh plugin/scripts/control.sh plugin/seed/.claude/settings.json
 #
 # agent-control.test.sh — the live kill switch: `plugin/hooks/agent-control.sh`
 # (PreToolUse enforcement), the `plugin/hooks/hooks.json` manifest that registers it, and

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts plugin/seed
 #
 # seed-script-paths.test.sh — every script the seed names by path ships in
 # plugin/scripts/, so a rename cannot strand the prose.

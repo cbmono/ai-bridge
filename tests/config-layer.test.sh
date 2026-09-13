@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude-plugin/marketplace.json config/required plugin/agents/qa-reviewer.md plugin/scripts/bundle-paths.sh plugin/scripts/init-bundle.sh plugin/seed/CLAUDE.md plugin/seed/instance.config.json plugin/seed/SCHEMA.md plugin/VERSION
 #
 # config-layer.test.sh — `install.sh --config` links the ~/.claude layer, and the two
 # halves of this repo stay independent in both directions.

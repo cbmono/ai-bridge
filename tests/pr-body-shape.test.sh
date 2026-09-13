@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin-yolo/companion/AUTONOMY.md plugin/seed/CLAUDE.md plugin/seed/CONVENTIONS.md plugin/seed/SCHEMA.md
 #
 # pr-body-shape.test.sh — the short form for PR bodies, review replies, progress reports
 # and GitHub comments keeps every element that was load-bearing BEFORE it got short.

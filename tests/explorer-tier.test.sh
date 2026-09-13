@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/resolve-model.sh plugin/seed/CONVENTIONS.md plugin/seed/instance.config.json
 #
 # explorer-tier.test.sh — the `explorer` tier resolves like any other role, and its
 # ABSENCE is the case that matters: broad reads go to an Explore subagent

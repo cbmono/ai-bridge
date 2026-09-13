@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks/hooks.json plugin/hooks/session-banner.sh plugin/scripts/ai-bridge.sh
 #
 # banner-user-channel.test.sh — the SessionStart banner must reach the HUMAN.
 #

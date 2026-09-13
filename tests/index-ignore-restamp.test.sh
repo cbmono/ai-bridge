@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/init-bundle.sh
 #
 # index-ignore-restamp.test.sh — the derived-index .gitignore block is idempotently
 # RE-APPLIABLE, not append-once, and a re-stamp cannot corrupt what is around it.

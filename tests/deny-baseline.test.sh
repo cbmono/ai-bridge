@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks/deny-destructive.sh plugin/hooks/hooks.json plugin/scripts/build-board.sh plugin/seed/.claude/settings.json
 #
 # deny-baseline.test.sh — the destructive-action deny baseline:
 # `plugin/hooks/deny-destructive.sh` (PreToolUse enforcement), the `plugin/hooks/hooks.json`

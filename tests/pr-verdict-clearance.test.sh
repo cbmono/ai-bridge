@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/agents/qa-reviewer.md plugin/scripts/pr-verdict-clearance.sh plugin/seed/SCHEMA.md
 #
 # pr-verdict-clearance.test.sh — the checker re-derives the criteria table, and the
 # comparison of the two tables is what routes.

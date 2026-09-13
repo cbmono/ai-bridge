@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/stall-counter.sh
 #
 # stall-counter.test.sh — the same blocker twice escalates to the human, and a slow PR
 # does not.

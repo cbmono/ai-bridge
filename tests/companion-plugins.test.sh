@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude-plugin/marketplace.json plugin-yolo/companion/AUTONOMY.md plugin/README.md plugin/scripts/commit-as.sh plugin/scripts/resolve-autonomy.sh plugin/seed/SCHEMA.md
 #
 # companion-plugins.test.sh — the companion extension point: `resolve-autonomy.sh`'s
 # resolution order against a FIXTURE companion root, the `ai-bridge-yolo` marketplace

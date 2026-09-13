@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin tests
 #
 # harness-read-paths.test.sh — a harness assertion whose literal path does not resolve is
 # a FAILURE, not a datum.

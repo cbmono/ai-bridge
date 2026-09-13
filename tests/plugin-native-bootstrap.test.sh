@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude-plugin/marketplace.json plugin/agents plugin/hooks plugin/scripts/init-bundle.sh plugin/scripts/validate-bundle.sh plugin/seed/instance.config.json plugin/skills
 #
 # plugin-native-bootstrap.test.sh — a bundle carries NO machinery, and everything the
 # plugin invokes lives under `plugin/` and is reached through `${CLAUDE_PLUGIN_ROOT}`.

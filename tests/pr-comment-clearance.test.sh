@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/pr-comment-clearance.sh plugin/seed/CONVENTIONS.md
 #
 # pr-comment-clearance.test.sh — exercises plugin/scripts/pr-comment-clearance.sh, the
 # reader for a PR COMMENT.

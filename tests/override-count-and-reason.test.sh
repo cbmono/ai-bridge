@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/autonomy.md docs/operations.md
 #
 # override-count-and-reason.test.sh — the override count is a QUERY, and the override
 # comment's reason is READ OFF THE PR.

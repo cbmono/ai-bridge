@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude/rules/tests.md plugin/seed/CONVENTIONS.md
 #
 # local-vs-ci-testing.test.sh — the rule "the full suite belongs to CI; locally run the
 # tests your change touches" keeps every clause that makes it survivable, so it can be

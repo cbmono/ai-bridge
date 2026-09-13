@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/reclaim-worktree.sh plugin/seed/SCHEMA.md
 #
 # reclaim-worktree.test.sh — exercises plugin/scripts/reclaim-worktree.sh, the ONE
 # script in this template that deletes a worktree.

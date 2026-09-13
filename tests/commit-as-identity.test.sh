@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/commit-as.sh plugin/scripts/init-bundle.sh plugin/seed/.gitignore plugin/seed/instance.config.json
 #
 # commit-as-identity.test.sh — WHO a commit-as.sh commit is attributed to.
 #

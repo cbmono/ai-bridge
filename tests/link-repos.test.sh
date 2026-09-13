@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/init-bundle.sh plugin/scripts/link-repos.sh
 # Exercises scripts/link-repos.sh — the `repos/` symlink view of reposRoot.
 #
 # The view exists so the product repos are reachable from inside an instance while

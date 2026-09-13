@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude/rules
 #
 # rule-globs-anchored.test.sh — every `paths:` pattern in a rules file must be
 # root-anchored with a leading `/`.

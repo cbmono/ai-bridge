@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/dispatch-brief.sh
 #
 # dispatch-brief.test.sh — the two fixed sections a dispatch brief must carry are pinned
 # as GENERATED TEXT, not as a paragraph telling the PM to include them.
