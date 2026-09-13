@@ -5,7 +5,7 @@ timeout_seconds: 120
 allowed_tools: [Read, Glob, Grep]
 ---
 
-This is the whole of `projects/billing-retry/tasks/task-004-retry-on-429.md`. Refine it into something an engineer can pick up tomorrow, and get it ready to dispatch. Hand the finished document back in your answer — don't write any files.
+This is the whole of `projects/billing-retry/tasks/task-004-retry-on-429.md`, and it is still a draft. Refine it into something an engineer can pick up tomorrow. Hand the finished document back in your answer — don't write any files.
 
 ````md
 ---

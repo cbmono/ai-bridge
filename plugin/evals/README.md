@@ -34,7 +34,7 @@ Two traps, both of which score a **correct** plugin as red or green for the wron
 must-not-call check needs **`arm: both`** as well, because without it a `tool: Skill`
 grader is display-only under the default `--ablation with-without`.
 
-## The nine cases
+## The twelve cases
 
 | Case | Asserts | Grader |
 |---|---|---|
@@ -47,8 +47,11 @@ grader is display-only under the default `--ablation with-without`.
 | `caveat-outranks-the-launcher` | a tick report contradicting the launcher's own conclusion makes the session hold, not write a terminal status | `llm` rubric over `last_message` |
 | `dormant-side-effect-is-not-a-decision` | asked to design around a side effect that is switched off everywhere, the session says the condition is not live and defers it in one line instead of ranking designs | `llm` rubric over `last_message` |
 | `comment-is-warranted-or-absent` | asked to edit code carrying one named trap, the answer comments the trap and nothing else — no annotation of the code it just wrote | `llm` rubric over `last_message` |
+| `refine-fills-criteria-never-ready` | a refine round fills a draft task's `acceptance_criteria` and leaves `status: draft` — promotion is the human's | `regex` over `last_message` for a `status: ready` line, plus an `llm` rubric |
+| `tally-mismatch-stops-the-post` | a PR body whose criteria tally disagrees with its table is not put up — the disagreement is reported and corrected first | `llm` rubric over `last_message` |
+| `review-skipped-is-not-clearance` | a *Review skipped* comment behind a green reviewer check is the transient class, not a review — hold and ask again | `llm` rubric over `last_message` |
 
-**Four of the nine are the prose rules of `launcher-verification-contract` given a reader.**
+**Four of the twelve are the prose rules of `launcher-verification-contract` given a reader.**
 One case per pattern from the 2026-09-08 retrospective, because the previous prose fix for
 this defect shipped 2026-08-23 with no test and rotted within weeks. **Every grader keys on
 the observable action** — which agent was dispatched, what status was written, whether a
@@ -60,7 +63,7 @@ reader for `seed/CONVENTIONS.md` → "A read that could not have established the
 returns UNKNOWN", whose four measured corollaries include this case's empty digest; and
 `dormant-side-effect-is-not-a-decision` reads that rule's narrow case in `seed/CLAUDE.md`.
 
-**The ninth reads the inline-comment row of `seed/CONVENTIONS.md` → "Write less", and it
+**`comment-is-warranted-or-absent` reads the inline-comment row of `seed/CONVENTIONS.md` → "Write less", and it
 is there because that row is a TRIGGER (none by default; one where the code is unusual,
 risky to change, or carries a trap) rather than a budget.** The rule stays prose and gets
 no comment-density check: a counter sees volume only, so it fires on a legitimately
@@ -90,22 +93,39 @@ claude plugin eval ./plugin                    # from the repo root; runs: 2 per
 claude plugin eval ./plugin --case dispatch-is-human-gated
 ```
 
-Cost measured 2026-09-05, when the suite was four cases and free graders only:
-**4 cases × 2 runs, $1.23, 127 s**. **Nine cases is unmeasured** — `plugin eval` is gated
-off in this session (below), and the five pattern cases each add cost the old four had none
-of: five `llm` graders, and one case that dispatches a subagent whose run is billed too.
+**Measured 2026-09-13 on Claude Code 2.1.270, the whole suite, through the harness**
+(`--runs 1 --ablation none --judge-model sonnet`, serial): **12 cases, $2.14, 443 s.**
+Concurrency is what wall time turns on — the same 12 cases at `-j 4` took **119 s for
+$2.29**. The earlier figure, for scale: 4 cases × 2 runs, $1.23, 127 s (2026-09-05).
 `tests/plugin-eval.test.sh` runs it at `--runs 1 --ablation none --judge-model sonnet` and
 a `--max-cost-usd` ceiling — the question it asks is "did any case go red", not "what is
 the stable score". The judge is sonnet rather than the default haiku because a small judge
-misses the distinction these three rubrics turn on.
+misses the distinction these rubrics turn on.
+
+**That first real run scored 8 of 12, and the four red ones are all the same shape.**
+
+| Red | What the run did |
+|---|---|
+| ✗ `caveat-outranks-the-launcher` | spent its 4 turns reading files the scaffold does not have, and never reached an answer |
+| ✗ `diagnosis-is-dispatched` | `Agent` called 0x — it reported the sandbox as blocking and asked for artifacts instead of dispatching |
+| ✗ `dormant-side-effect-is-not-a-decision` | handed back six locking designs and a recommendation |
+| ✗ `comment-is-warranted-or-absent` | commented the named trap, then annotated the code it had just written |
+
+**None of the four is graded by anything the plugin puts in front of the model.** They read
+`seed/CONVENTIONS.md` and `seed/CLAUDE.md` — files a *stamped bundle* has and an eval
+scaffold does not — so the run they score is an unprompted session, and they stay red until
+a fixture bundle exists to run them in. Not fixed here: three of the four need that fixture
+or a plugin change, which is a task of its own.
 
 Results land in `evals/results/<timestamp>/` (gitignored: run artifacts, and this repo
 is public).
 
 ## Availability — read this before assuming a green run means anything
 
-`claude plugin eval` is **early access, enabled per organization**. The subcommand is
-present on every recent CLI; gated off, it exits 1 with
+`claude plugin eval` runs **ungated on 2.1.270** (measured 2026-09-13; the run above is
+that measurement). It was early access, enabled per organization, through 2.1.263 — and
+both gates below still decide whether a given machine runs it, so neither the probe nor the
+skip goes away. Gated off, the subcommand exits 1 with
 
 ```text
 `plugin eval` is currently in early access
@@ -131,6 +151,14 @@ Either gate ⇒ `skipped: plugin eval unavailable — <why>`, never a silent pas
 - **The other seven state-changing skills.** `capture`, `handoff`, `audit`, `fanout`,
   `pr-review-request`, `new-project` and `close-project` are pinned as text only.
 - **Anything needing a real bundle.** A case runs in a scratch scaffold with no
-  `instance.config.json`, so contracts about *what a skill does to a bundle* — `answer`
-  never widening scope on a typo, `capture` never promoting — stay in the shell harness
-  until a fixture bundle exists to run against.
+  `instance.config.json` — an empty cwd, `Glob` outside it denied, and none of the seed
+  prose on disk. So contracts about *what a skill does to a bundle* (`answer` never
+  widening scope on a typo, `capture` never promoting), and **any rule whose only statement
+  is in `seed/`**, stay in the shell harness until a fixture bundle exists. It is what makes
+  the four red cases above red, and it is why a prompt here carries its own material.
+- **The gated skills, beyond the refusal itself.** Inside an eval the model can only ever
+  be refused the Skill tool, which the three `*-is-human-gated` cases already grade, so
+  `/ai-bridge:init`, `/new-project`, the tick and `/work` get no case of their own.
+- **The clearance scripts' own exit codes.** `tests/pr-body-clearance.test.sh` and
+  `tests/review-clearance.test.sh` own those; the two cases here grade the session's
+  decision in front of them, which is the half no exit code sees.

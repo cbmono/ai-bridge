@@ -20,7 +20,7 @@
 #   tests/plugin-eval.test.sh     this file: the eval suite's own shape, always; and
 #                                 the run itself, when the CLI supports it.
 #
-# FIVE OF THE NINE CASES GRADE THE MAIN THREAD, not a skill. Four are the reader for the
+# EIGHT OF THE TWELVE CASES GRADE THE MAIN THREAD, not a skill. Four are the reader for the
 # prose rules of `launcher-verification-contract` — dispatch-vs-inline-diagnosis, unverified
 # state, a tick caveat outranking the launcher's own conclusion, and a decision manufactured
 # out of a side effect that is not live yet — and they exist because the previous prose fix
@@ -31,6 +31,10 @@
 # of obvious code, so the rule stays prose and this case is what reads it.
 # Section 4 asserts the one property that keeps them from rotting the same way: a grader
 # keyed on WORDING passes the next paraphrase, so `regex` over a message is refused there.
+# The other three grade an artifact the session hands back — a refined task document, a PR
+# body, a reviewer verdict — so a deterministic grader can read it and section 4 is not
+# theirs: `refine-fills-criteria-never-ready` pins `status: ready` with a regex over the
+# document itself, which is the assertion, not a paraphrase of one.
 #
 # THE NON-VACUITY ARM IS NOT OPTIONAL. Three cases asserting "the model never invoked
 # this skill" are ALL satisfied by a harness in which no skill is reachable at all —
@@ -78,9 +82,9 @@ fm() {
 }
 
 # The three skills this suite grades, and the control arm that keeps them non-vacuous.
-# A case added to plugin/evals/ without being named here is invisible to every assertion
-# in this file — the silence failure mode this repo's checks are written against, so the
-# set is asserted to be exactly this one below.
+# These are PROPERTY GROUPS, not the case list: the case list is discovered from the
+# directories that exist (section 1), so a new case is asserted over by section 2 the
+# moment it lands, and only a case wanting a group's extra assertions is named here.
 GATED="dispatch work answer"
 CONTROL="skills-are-reachable"
 # One case per pattern from the 2026-09-08 retrospective (launcher-verification-contract),
@@ -110,14 +114,25 @@ ok "…and its results/ output is gitignored" \
 # Directories only, and `results/` is a run artifact rather than a case — so the eval
 # dir's own README.md (and any other prose beside the cases) is not read as one.
 CASES="$(cd "$EVALS" && find . -mindepth 1 -maxdepth 1 -type d ! -name results -exec basename {} \; | sort | tr '\n' ' ' | sed 's/ $//')"
-# shellcheck disable=SC2046,SC2086  # the three lists are deliberate word lists, as in plugin-skills.test.sh
-EXPECTED_CASES="$(printf '%s\n' $CONTROL $PATTERNS $(for s in $GATED; do echo "$s-is-human-gated"; done) | sort | tr '\n' ' ' | sed 's/ $//')"
-ok "the case set is exactly the nine this file asserts" "$CASES" "$EXPECTED_CASES"
+ok "the suite ships cases"                       "$([ -n "$CASES" ] && echo yes || echo no)" yes
+# The control arm, by name, because dropping it is the one edit that makes the whole
+# suite vacuous: three cases asserting "the model never invoked this skill" all pass in a
+# harness where no skill is reachable at all.
+case " $CASES " in *" $CONTROL "*) has_control=yes ;; *) has_control=no ;; esac
+ok "…including the control arm, which may never be dropped" "$has_control" yes
+# The group lists below are not the case list, so a rename would silently take a case out
+# of section 3 or 4 rather than out of the suite. This is what makes that loud.
+# shellcheck disable=SC2046,SC2086  # deliberate word lists, as in plugin-skills.test.sh
+missing=""
+for c in $CONTROL $PATTERNS $(for s in $GATED; do echo "$s-is-human-gated"; done); do
+  case " $CASES " in *" $c "*) ;; *) missing="$missing $c" ;; esac
+done
+ok "…and every case this file groups by name is still there" "${missing:-none}" none
 
 # =======================================================================================
 echo "== 2. every case is well-formed the way the CLI parses it =="
 # =======================================================================================
-for c in $EXPECTED_CASES; do
+for c in $CASES; do
   P="$EVALS/$c/prompt.md"
   ok "$c/prompt.md ships"                       "$(yn test -f "$P")" yes
   ok "…it grants at least one tool"             "$([ -n "$(fm "$P" allowed_tools)" ] && echo yes || echo no)" yes
@@ -155,7 +170,7 @@ done
 # Criterion 6 of the task: the README names them all, one line each. A case nobody can
 # find in the README is a case the next author duplicates.
 R="$EVALS/README.md"
-for c in $EXPECTED_CASES; do
+for c in $CASES; do
   ok "the README gives $c exactly one table row" "$(grep -c "^| .$c." "$R" | tr -d ' ')" 1
 done
 
@@ -257,11 +272,12 @@ ok "the plugin-only CI fast path runs this harness" \
 # =======================================================================================
 echo "== 6. the run itself — where the CLI supports it, and a LOUD skip where it does not =="
 # =======================================================================================
-# Two gates, and each one prints WHY. `claude plugin eval` is early access: the
-# subcommand exists on every recent CLI and refuses to run unless the account or the
-# session is enabled for it, so "the binary is there" is not the question. The probe is
-# free — a --case glob that matches nothing makes no model call — and it tells the two
-# states apart by what the CLI says.
+# Two gates, and each one prints WHY. `claude plugin eval` runs ungated on 2.1.270 and was
+# early access up to 2.1.263, where it refuses to run unless the account or the session is
+# enabled for it — so "the binary is there" is not the question, and the probe stays for
+# every build older than the one this was measured on. The probe is free — a --case glob
+# that matches nothing makes no model call — and it tells the two states apart by what the
+# CLI says.
 unavailable=""
 if ! command -v claude >/dev/null 2>&1; then
   unavailable="claude CLI not on PATH"
