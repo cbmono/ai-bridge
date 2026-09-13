@@ -1,0 +1,56 @@
+{
+  "title": "tick-summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "summary",
+    "refined",
+    "dispatched",
+    "reflected",
+    "awaiting",
+    "lock"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "committed",
+        "idle",
+        "blocked"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 400
+    },
+    "refined": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dispatched": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "reflected": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "awaiting": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "lock": {
+      "enum": [
+        "released",
+        "held",
+        "absent"
+      ]
+    }
+  }
+}
