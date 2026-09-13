@@ -129,6 +129,15 @@ ok "an empty queue ⇒ 0, not ?"      "$(plain "$D" | sed 's/.*· \([^·]*need y
 D="$TMP/d7"; mk "$D"; rm -f "$D"/projects/proj-a/tasks/*.md
 ok "a project with no tasks ⇒ 0"    "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
 
+D="$TMP/d9"; mk "$D"; chmod 000 "$D/projects/proj-a/tasks/task-001.md"
+ok "an UNREADABLE task doc ⇒ ?, never a quiet undercount" \
+   "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "? in flight"
+chmod 644 "$D/projects/proj-a/tasks/task-001.md"
+D="$TMP/d10"; mk "$D"; chmod 000 "$D/AWAITING.md"
+ok "…and an unreadable AWAITING.md too" \
+   "$(plain "$D" | sed 's/.*· \([^·]*need you\) ·.*/\1/')" "? need you"
+chmod 644 "$D/AWAITING.md"
+
 echo
 echo "== 5. a \`status:\` in the BODY is not frontmatter =="
 D="$TMP/d8"; mk "$D"
