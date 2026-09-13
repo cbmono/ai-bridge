@@ -1064,3 +1064,11 @@ report the other human's work you saw and did not dispatch** — one line naming
 task and its owner. **Cite every PR as a Markdown link — `[<repo>#<n>](<url>)`, bare
 repo name** — and link other artifacts (commits, CI runs) by URL. Follow this
 instance's `CLAUDE.md` for data-handling, units, and routing.
+
+**EVERY ITEM IN THE "AWAITS THE HUMAN" PART CARRIES A URL OR A PATH — and an item that
+can name neither is not rendered at all.** A PR as `[<repo>#<n>](<url>)`, a task as its
+file path. This is not a new heading and there is no `Needs you` section to add: it
+constrains the items the paragraph above already describes. **Dropping the unnameable one
+is the point, not a gap** — a human reading "waiting on a review" with nowhere to click
+has to re-derive which review from the rest of the report, which costs more than the line
+saved, and an item with no artifact behind it is usually a state nothing on disk supports.

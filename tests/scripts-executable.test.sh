@@ -479,43 +479,9 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # A skipped block is now as red as a failed one. The pin counts every assertion BEFORE
 # itself; add or remove an assertion and this number moves with it, deliberately, in the
 # same commit.
-# 54 -> 55: plugin/hooks/deny-destructive.sh (ai-bridge-v5/task-006) is one more
-# executable machinery file, so the per-file enumeration runs one more assertion.
-# 55 -> 56: plugin/scripts/tick-lock.sh (ai-bridge-v5/task-003), same reason.
-# 56 -> 55: ai-bridge-v5/task-002 nets one file OFF the enumeration — `resolve-config.sh`
-# is new (+1) while `check-machinery.sh`, `show-awaiting.sh` and `show-board-link.sh`
-# became one `session-banner.sh` (-2).
-# 55 -> 56: plugin/scripts/pr-body-clearance.sh (ai-bridge-v5/task-005), same reason.
-# 56 -> 57: plugin/scripts/check-template-version.sh (ai-bridge-v5/task-008), one more
-# executable machinery file in the per-file enumeration.
-# 57 -> 58: plugin/scripts/ai-bridge.sh (ai-bridge-v5/task-011), same reason.
-# 58 -> 59: plugin/scripts/pr-comment-clearance.sh (ai-bridge-v5/task-026), one more
-# executable machinery file in the per-file enumeration.
-# 60 -> 63: ai-bridge-v2/task-003 moves `deny-destructive.sh` and `agent-control.sh` from
-# `plugin/hooks/` to `plugin/hooks/`. Net +3, and it is worth spelling out because
-# a move is the one shape where the arithmetic is not obvious: -2 files leave the old
-# group's per-file enumeration, +4 arrive with the new group (its vacuity guard, its two
-# files, its min-count), and +1 is the new group's anchored call-site pin.
-# 62 -> 63: plugin/scripts/resolve-autonomy.sh (ai-bridge-v2/task-018), one more
-# executable machinery file in the per-file enumeration.
-# 63 -> 64: plugin/scripts/stall-counter.sh (ai-bridge-next/task-011), same reason.
-# 64 -> 65: plugin/scripts/cite-check.sh (ai-bridge-next/task-014), same reason.
-# 65 -> 66: plugin/scripts/build-kb-index.sh (ai-bridge-next/task-007), same reason.
-# 66 -> 67: plugin/scripts/do-not-repeat.sh (ai-bridge-next/task-012), same reason.
-# 67 -> 68: plugin/scripts/board-serve.sh (ai-bridge-next/task-021), same reason.
-# 68 -> 69: plugin/scripts/resolve-account.sh (ai-bridge-next/task-002), same reason.
-# 69 -> 70: plugin/scripts/papercuts.sh (ai-bridge-next/task-016), same reason.
-# 70 -> 71: plugin/scripts/pr-verdict-clearance.sh (ai-bridge-next/task-013), same reason.
-# 71 -> 72: plugin/scripts/dispatch-brief.sh (ai-bridge-next/task-017), same reason.
-# 72 -> 73: plugin/scripts/release-bump.sh (ai-bridge-next/task-026), same reason.
-# 73 -> 74: plugin/scripts/normalise-config.sh (ai-bridge-2x/task-003), same reason.
-# 74 -> 75: plugin/scripts/kb-sweep-due.sh (ai-bridge-2x/task-010), same reason.
-# 75 -> 76: plugin/scripts/decision-stamp.sh (ai-bridge-2x/task-011), same reason.
-# 76 -> 77: plugin/scripts/agent-usage.sh (ai-bridge-v3/task-001), same reason.
-# 77 -> 79: plugin/scripts/kb-sync.sh and kb-migrate.sh (ai-bridge-v3/task-021), same reason.
-# 77 -> 78: plugin/scripts/bundle-paths.sh (ai-bridge-v3/task-031), same reason.
-EXPECTED_ASSERTIONS=80
+EXPECTED_ASSERTIONS=81
 TOTAL=$((pass + fail))
+
 # EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
 # it annotates, so a merge can plausibly keep the annotations and lose the assignment —
 # which is exactly what merging main into ai-bridge-v5/task-005 did. Without this guard

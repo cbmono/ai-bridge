@@ -20,6 +20,11 @@ because a relayed answer is rendered as markdown and ANSI does not survive the r
 (measured — 0 of 4 escape bytes reached the reader). A fence turns that emphasis back into
 literal asterisks and hands the human the flat page the styling exists to replace.
 
+**The two tables are `welcome`'s alone now, and that is not a divergence.** The
+SessionStart banner is capped at 12 lines and drops them; `ai-bridge.sh` passes `--full`
+here because a human who typed the command asked to look. Same script, same rendering,
+one flag — never a second copy of either table in this file.
+
 **The banner starts at the `AI-Bridge v…` line, and that is not a line gone missing.** The
 ship above it renders on the SessionStart channel alone, because a relayed copy is markdown:
 it drops the leading space of the ship's first line and carries none of its colour, so the
@@ -35,7 +40,7 @@ as an autolink once, and that row's `FROM` sat two columns left of every other's
 
 | You ran | It does |
 |---|---|
-| `/welcome` | `exec`s the SessionStart hook, so you get **that** banner minus its ship, not a copy of it |
+| `/welcome` | `exec`s the SessionStart hook with `--full`, so you get **that** banner minus its ship, plus the two tables — not a copy of it |
 | `/welcome check` | reports state that could be wrong, each line a fact with its evidence |
 | `/welcome fix` | **retired** — prints one line pointing at `/ai-bridge:init`, which runs that pass itself, and exits 0. Relay the line; do not run the repairs by hand |
 
