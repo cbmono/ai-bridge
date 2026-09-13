@@ -3,7 +3,7 @@
 # headless-tick-probe.sh — re-measures docs/spikes/headless-tick.md.
 # Builds a throwaway probe plugin and fixture cwd under a temp root, then prints
 # one line per probe. Probes 1-2 are argument parsing and need no auth; probes
-# 3-9 each spend one cheap turn, need auth, and are skipped without --live.
+# 3-10 each spend one cheap turn, need auth, and are skipped without --live.
 # Nothing here touches a real bundle, and no probe takes a .tick-lock.
 # Exit 0 always: this reports, it never gates.
 set -uo pipefail
@@ -28,7 +28,7 @@ say "1 --json-schema takes a file path" \
 say "2 --json-schema keeps a \$schema draft key" \
   "$(claude -p --json-schema "$DRAFT_KEYED" hi </dev/null 2>&1 | head -1)"
 
-[ "$LIVE" = "--live" ] || { printf '\n(probes 3-9 need auth and a turn each: re-run with --live)\n'; exit 0; }
+[ "$LIVE" = "--live" ] || { printf '\n(probes 3-10 need auth and a turn each: re-run with --live)\n'; exit 0; }
 
 PP="$LAB/probe-plugin"
 mkdir -p "$PP/.claude-plugin" "$PP/hooks" "$PP/skills/slash-only"

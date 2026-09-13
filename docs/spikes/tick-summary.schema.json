@@ -1,5 +1,6 @@
 {
   "title": "tick-summary",
+  "description": "The one object a headless tick returns to its launcher. No \"$schema\" key on purpose: Claude Code 2.1.270 refuses draft 2020-12 by ref, and --json-schema takes inline JSON only, never a path.",
   "type": "object",
   "additionalProperties": false,
   "required": [
