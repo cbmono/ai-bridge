@@ -48,6 +48,9 @@
 # assert() follows the convention of the other harnesses here: 0 is a PASS.
 set -euo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 WRITER="$TPL/plugin/scripts/write-snapshot.sh"
@@ -222,8 +225,8 @@ assert "…while an \\s that appears only in a comment is still not a hit" \
 
 # ---------------------------------------------------------------- fixture instances
 new_instance() { # <dir> — the minimum the writer requires of an instance root
-  mkdir -p "$1"
-  : > "$1/SCHEMA.md"
+  mkdir -p "$1" "$1/$AB_DIR"
+  : > "$1/$AB_SCHEMA"
   cat > "$1/instance.config.json" <<CFG
 {
   "org": "fixture-org",
@@ -824,18 +827,18 @@ pr: [ "https://github.com/acme/monorepo/pull/9999" ]
 TSK
 
 echo "== the off switch: absence, on the writer's side =="
-SNAP="$ALPHA/SNAPSHOT.json"
+SNAP="$ALPHA/$AB_SNAPSHOT"
 OFF_RC=0; OFF_OUT="$( cd "$ALPHA" && bash "$WRITER" 2>&1 )" || OFF_RC=$?
 assert "no SNAPSHOT.json -> exits 0"              "$(eq "$OFF_RC" 0)"
 assert "no SNAPSHOT.json -> the file is NOT created" "$(yes_if test ! -e "$SNAP")"
 assert "…and it says the instance is off the board"  "$(has 'off the board' "$OFF_OUT")"
-assert "…and names the way back in"                  "$(has 'touch SNAPSHOT.json' "$OFF_OUT")"
+assert "…and names the way back in"                  "$(has "touch $AB_SNAPSHOT" "$OFF_OUT")"
 Q_OUT="$( cd "$ALPHA" && bash "$WRITER" --quiet 2>&1 )" || true
 assert "--quiet with no snapshot is completely silent" "$(eq "$Q_OUT" "")"
 assert "…and still creates nothing"                   "$(yes_if test ! -e "$SNAP")"
 
 echo "== refusals =="
-mkdir -p "$ALPHA/SNAPSHOT.json.d" && mv "$ALPHA/SNAPSHOT.json.d" "$ALPHA/SNAPSHOT.json"
+mkdir -p "$ALPHA/SNAPSHOT.json.d" && mv "$ALPHA/SNAPSHOT.json.d" "$ALPHA/$AB_SNAPSHOT"
 DIR_RC=0; DIR_OUT="$( cd "$ALPHA" && bash "$WRITER" 2>&1 )" || DIR_RC=$?
 assert "a directory at that path -> exits 2"     "$(eq "$DIR_RC" 2)"
 assert "…and says it refuses to overwrite"       "$(has 'refusing to overwrite' "$DIR_OUT")"
@@ -1318,10 +1321,10 @@ assert "…and the sentinel is gone again once the control project is removed" \
   "$(fhasnt 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
 
 echo "== the other three instances =="
-printf '{ this is not json' > "$BETA/SNAPSHOT.json"
+printf '{ this is not json' > "$BETA/$AB_SNAPSHOT"
 # Hand-written, because the writer will not produce a non-http PR URL — and the board
 # is required not to trust that.
-cat > "$DELTA/SNAPSHOT.json" <<DELTASNAP
+cat > "$DELTA/$AB_SNAPSHOT" <<DELTASNAP
 {
   "group": "delta",
   "generated_at": "2026-08-22T00:00:00Z",
@@ -1346,14 +1349,14 @@ cat > "$DELTA/SNAPSHOT.json" <<DELTASNAP
   ]
 }
 DELTASNAP
-assert "gamma has no snapshot (the off-switch fixture)" "$(yes_if test ! -e "$GAMMA/SNAPSHOT.json")"
+assert "gamma has no snapshot (the off-switch fixture)" "$(yes_if test ! -e "$GAMMA/$AB_SNAPSHOT")"
 
 echo "== the board renders, and a broken instance cannot blank it =="
 HTML="$TMP/board.html"
 B_RC=0; B_ERR="$( cd "$TMP" && bash "$BOARD" --out "$HTML" "$ALPHA" "$BETA" "$GAMMA" "$DELTA" 2>&1 )" || B_RC=$?
 assert "exits 0 with a malformed snapshot in the list" "$(eq "$B_RC" 0)"
 assert "the run counts the unreadable snapshot"    "$(has '1 unreadable snapshot(s)' "$B_ERR")"
-assert "…and says on stderr which instance is off the board" "$(has 'no SNAPSHOT.json (off the board)' "$B_ERR")"
+assert "…and says on stderr which instance is off the board" "$(has "no $AB_SNAPSHOT (off the board)" "$B_ERR")"
 assert "a malformed snapshot becomes a visible note" "$(fhas 'Unreadable snapshot' "$HTML")"
 # THE WHOLE ROUND-TRIP, ON THE PAGE THIS INVOCATION WRITES: the writer read three
 # differently-shaped questions out of a task document, and the renderer put one
@@ -1407,7 +1410,7 @@ i=t.index("A question that names no number")
 j=t.find("</li>", i)
 sys.exit(0 if not re.search(r"Q[0-9]", t[i:j if j>0 else len(t)]) else 1)' "$HTML")"
 
-assert "…naming the instance by directory NAME"     "$(fhas '_ai-bridge-beta/SNAPSHOT.json' "$HTML")"
+assert "…naming the instance by directory NAME"     "$(fhas "_ai-bridge-beta/$AB_SNAPSHOT" "$HTML")"
 assert "…and not by its path"                      "$(fhasnt '/_ai-bridge-beta' "$HTML")"
 assert "…and telling the human how to fix it"       "$(fhas 'write-snapshot.sh' "$HTML")"
 assert "alpha is still rendered beside the broken one" "$(fhas 'CI hardening' "$HTML")"
@@ -1706,9 +1709,9 @@ echo "== a drifted snapshot cannot blank the board =="
 # instance beside it still renders. A fix that swallows the drift by dropping every
 # instance would pass the first half alone.
 DRIFT="$TMP/group/_ai-bridge-drift"
-mkdir -p "$DRIFT"
+mkdir -p "$DRIFT" "$DRIFT/$AB_DIR"
 drift_case() { # <label> <snapshot json>
-  printf '%s\n' "$2" > "$DRIFT/SNAPSHOT.json"
+  printf '%s\n' "$2" > "$DRIFT/$AB_SNAPSHOT"
   local rc=0 out
   # rm FIRST. Without this the file survives from the previous case, and both the
   # "an output file is written" and "healthy instance still renders" assertions pass
@@ -1745,17 +1748,17 @@ INST="$TMP/group/_ai-bridge-stamped"
 mkdir -p "$INST"
 ( cd "$INST" && git init -q . ) 2>/dev/null || true
 bash "$BRIDGE_INSTALL" "$INST" >"$TMP/i1.out" 2>&1
-assert "the first stamp creates SNAPSHOT.json"  "$(yes_if test -f "$INST/SNAPSHOT.json")"
-assert "…and says the instance is on the board" "$(fhas 'seed  SNAPSHOT.json' "$TMP/i1.out")"
+assert "the first stamp creates SNAPSHOT.json"  "$(yes_if test -f "$INST/$AB_SNAPSHOT")"
+assert "…and says the instance is on the board" "$(fhas "seed  $AB_SNAPSHOT" "$TMP/i1.out")"
 assert "the seeded snapshot is VALID JSON (no note on a brand-new instance)" \
-  "$(yes_if python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$INST/SNAPSHOT.json")"
+  "$(yes_if python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$INST/$AB_SNAPSHOT")"
 FRESH="$( cd "$TMP" && bash "$BOARD" --out "$TMP/fresh.html" "$INST" 2>&1 )"
 assert "…so a fresh instance renders with no unreadable note" "$(has '0 unreadable snapshot(s)' "$FRESH")"
 assert "the seeded .gitignore ignores the snapshot" "$(fhas 'SNAPSHOT.json' "$INST/.gitignore")"
 assert "…and the derived board HTML"                "$(fhas 'board.html' "$INST/.gitignore")"
-printf 'LOCAL SNAPSHOT CONTENT\n' > "$INST/SNAPSHOT.json"
+printf 'LOCAL SNAPSHOT CONTENT\n' > "$INST/$AB_SNAPSHOT"
 bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
-assert "a refresh never clobbers an existing snapshot" "$(fhas 'LOCAL SNAPSHOT CONTENT' "$INST/SNAPSHOT.json")"
+assert "a refresh never clobbers an existing snapshot" "$(fhas 'LOCAL SNAPSHOT CONTENT' "$INST/$AB_SNAPSHOT")"
 # THE OFF SWITCH IS CONFIG NOW, NOT DELETION — and the difference is deliberate.
 #
 # It used to be opt-in by presence: `rm SNAPSHOT.json` was permanent because only a FIRST
@@ -1764,15 +1767,15 @@ assert "a refresh never clobbers an existing snapshot" "$(fhas 'LOCAL SNAPSHOT C
 # that state. So `board` in instance.config.json decides, and it survives a re-stamp.
 #
 # What deletion still does, and what it no longer does, are both asserted here.
-rm "$INST/SNAPSHOT.json"
+rm "$INST/$AB_SNAPSHOT"
 bash "$BRIDGE_INSTALL" "$INST" >"$TMP/i2.out" 2>&1
 assert "a re-stamp RESTORES a deleted snapshot (board defaults on)" \
-  "$(yes_if test -f "$INST/SNAPSHOT.json")"
-assert "…and says so"                               "$(fhas 'seed  SNAPSHOT.json' "$TMP/i2.out")"
+  "$(yes_if test -f "$INST/$AB_SNAPSHOT")"
+assert "…and says so"                               "$(fhas "seed  $AB_SNAPSHOT" "$TMP/i2.out")"
 
 # `board: false` is the durable opt-out: it must beat a re-stamp, which deletion no
 # longer does. This is the assertion a no-publish instance depends on.
-rm "$INST/SNAPSHOT.json"
+rm "$INST/$AB_SNAPSHOT"
 python3 - "$INST/instance.config.json" <<'PYCFG'
 import json, sys
 p = sys.argv[1]
@@ -1780,7 +1783,7 @@ d = json.load(open(p)); d["board"] = False
 json.dump(d, open(p, "w"), indent=2)
 PYCFG
 bash "$BRIDGE_INSTALL" "$INST" >"$TMP/i3.out" 2>&1
-assert "board:false keeps it off across a re-stamp"  "$(yes_if test ! -e "$INST/SNAPSHOT.json")"
+assert "board:false keeps it off across a re-stamp"  "$(yes_if test ! -e "$INST/$AB_SNAPSHOT")"
 assert "…and the installer says which key did it"   "$(fhas 'board: false in instance.config.json' "$TMP/i3.out")"
 python3 - "$INST/instance.config.json" <<'PYCFG'
 import json, sys
@@ -1788,11 +1791,11 @@ p = sys.argv[1]
 d = json.load(open(p)); d.pop("board", None)
 json.dump(d, open(p, "w"), indent=2)
 PYCFG
-assert "an ABSENT board key still means on"          "$(yes_if sh -c 'bash "$1" "$2" >/dev/null 2>&1; test -f "$2/SNAPSHOT.json"' _ "$BRIDGE_INSTALL" "$INST")"
+assert "an ABSENT board key still means on"          "$(yes_if sh -c 'bash "$1" "$2" >/dev/null 2>&1; test -f "$2/$AB_SNAPSHOT"' _ "$BRIDGE_INSTALL" "$INST")"
 
 # The writer is unchanged: it refreshes an existing snapshot and NEVER creates one. That
 # is what still makes a mid-session `rm` take effect immediately.
-rm "$INST/SNAPSHOT.json"
+rm "$INST/$AB_SNAPSHOT"
 mkdir -p "$INST/projects/x/tasks"
 cat > "$INST/projects/x/project.md" <<'PRJ'
 ---
@@ -1803,9 +1806,9 @@ status: active
 ---
 PRJ
 ( cd "$INST" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet ) || true
-assert "the writer never resurrects a deleted snapshot" "$(yes_if test ! -e "$INST/SNAPSHOT.json")"
+assert "the writer never resurrects a deleted snapshot" "$(yes_if test ! -e "$INST/$AB_SNAPSHOT")"
 OFFBOARD="$( cd "$TMP" && bash "$BOARD" --out "$TMP/off.html" "$INST" 2>&1 )"
-assert "…and that instance is off the board"           "$(has 'no SNAPSHOT.json (off the board)' "$OFFBOARD")"
+assert "…and that instance is off the board"           "$(has "no $AB_SNAPSHOT (off the board)" "$OFFBOARD")"
 assert "…so there is nothing to write"                 "$(has 'nothing written' "$OFFBOARD")"
 assert "…and no page carries its content"              "$(yes_if test ! -e "$TMP/off.html")"
 
@@ -1817,12 +1820,12 @@ assert "…and no page carries its content"              "$(yes_if test ! -e "$T
 echo
 echo "== projects/CLOSED.md -> the \`closed\` array =="
 CLI="$TMP/group/_ai-bridge-closed"
-mkdir -p "$CLI/projects"
-: > "$CLI/SCHEMA.md"; echo '{ "org": "fixture-org" }' > "$CLI/instance.config.json"
-: > "$CLI/SNAPSHOT.json"
+mkdir -p "$CLI/projects" "$CLI/$AB_DIR"
+: > "$CLI/$AB_SCHEMA"; echo '{ "org": "fixture-org" }' > "$CLI/instance.config.json"
+: > "$CLI/$AB_SNAPSHOT"
 ( cd "$CLI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
 assert "no CLOSED.md ⇒ no \`closed\` key at all"  "$(yes_if python3 -c '
-import json,sys; sys.exit(0 if "closed" not in json.load(open(sys.argv[1])) else 1)' "$CLI/SNAPSHOT.json")"
+import json,sys; sys.exit(0 if "closed" not in json.load(open(sys.argv[1])) else 1)' "$CLI/$AB_SNAPSHOT")"
 
 cat > "$CLI/projects/CLOSED.md" <<'CLOSED'
 # Closed projects
@@ -1842,7 +1845,7 @@ cat > "$CLI/projects/CLOSED.md" <<'CLOSED'
 - outcome: cancelled before it produced anything
 CLOSED
 ( cd "$CLI" && bash "$TPL/plugin/scripts/write-snapshot.sh" --quiet )
-CLJ="$CLI/SNAPSHOT.json"
+CLJ="$CLI/$AB_SNAPSHOT"
 assert "the snapshot still parses as JSON"       "$(yes_if python3 -c 'import json,sys;json.load(open(sys.argv[1]))' "$CLJ")"
 assert "…one entry, and it is the one WITH deliverables" "$(yes_if python3 -c '
 import json,sys
