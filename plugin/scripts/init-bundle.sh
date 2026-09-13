@@ -2932,3 +2932,16 @@ if [ -n "$ORG_SLUG" ]; then
   echo "  note  everyone else on this bundle starts here:"
   echo "        https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md"
 fi
+
+# 8. The mount, and one WARNING when it carries unpushed commits. It reports, it never
+# writes: a local KB commit is somebody's work, and pushing it on their behalf from an
+# installer is exactly the surprise this pass exists to avoid.
+if [ -f "$BIN_DIR/kb-sync.sh" ]; then
+  bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" mount || true
+  krc=0
+  bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" status >/dev/null 2>&1 || krc=$?
+  if [ "$krc" -eq 1 ]; then
+    echo "warn  the mounted knowledge base has unpushed commits. To see and push them:"
+    echo "      bash $BIN_DIR/kb-sync.sh status   (then: kb-sync.sh commit)"
+  fi
+fi

@@ -265,6 +265,13 @@ while IFS= read -r file; do
     if ! printf '%s\n' "$fm" | grep -q '^lesson:[[:space:]]*[^[:space:]]'; then
       warn "$rel" "Finding has no one-line 'lesson:' — the takeaway the next agent needs, required by CONVENTIONS.md 'Write less'"
     fi
+    # `author:` is the GitHub login that filed it. Provenance has to survive a file move,
+    # so it is frontmatter and never the path — there are no per-user folders in the KB.
+    author="$(printf '%s\n' "$fm" | sed -n 's/^author:[[:space:]]*//p' | head -1 \
+              | sed 's/[[:space:]]*$//; s/^"\(.*\)"$/\1/')"
+    if [[ -n "$author" ]] && ! printf '%s' "$author" | grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'; then
+      warn "$rel" "author: '$author' is not a GitHub login (SCHEMA.md, 'author:')"
+    fi
     # The index row, the tags and the supersession edges are build-kb-index.sh's half of
     # the contract; it reads knowledge/index.md, which is not a concept document.
     if printf '%s\n' "$fm" | grep -q '^superseded_by:[[:space:]]*[^[:space:]]' \
@@ -304,6 +311,15 @@ while IFS= read -r file; do
     [[ -e ".$ref" ]] || warn "$rel" "declared artifact does not exist yet: $ref"
   done <<< "$declared"
 done <<< "$FILE_LIST"
+
+# knowledge/index.md is DERIVED. A row the generator would not produce is a row somebody
+# hand-wrote, and a hand-written row is the conflict magnet the generator exists to remove.
+kb_gen="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/build-kb-index.sh"
+if [[ -r knowledge/index.md && -x "$kb_gen" ]]; then
+  if ! bash "$kb_gen" --print 2>/dev/null | diff -q - knowledge/index.md >/dev/null 2>&1; then
+    warn "knowledge/index.md" "carries rows the generator would not produce — it is derived, never hand-edited. Run build-kb-index.sh (build-kb-index.sh --check names each one)"
+  fi
+fi
 
 echo "---"
 printf 'validate-bundle: %d documents checked, %d errors, %d warnings.\n' "$checked" "$errors" "$warns"

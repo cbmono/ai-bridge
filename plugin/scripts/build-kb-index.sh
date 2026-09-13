@@ -2,7 +2,7 @@
 # build-kb-index.sh — regenerate knowledge/index.md from document frontmatter, or
 # `--check` that the file, the documents and their links agree. From a bundle root.
 #
-#   build-kb-index.sh [--check] [--strict]
+#   build-kb-index.sh [--check | --print] [--strict]
 #
 # Exit: 0 clean · 1 a defect (with --strict, a warning too) · 2 usage/no KB here.
 # A row is derived, never hand-written: its summary is the doc's `lesson:` (else
@@ -15,6 +15,7 @@ MODE=build; STRICT=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --check)  MODE=check ;;
+    --print)  MODE=print ;;
     --strict) STRICT=1 ;;
     -h|--help) sed -n '2,11p' "$0" >&2; exit 2 ;;
     *) echo "build-kb-index: unknown argument '$1'" >&2; exit 2 ;;
@@ -28,6 +29,10 @@ VOCAB=knowledge/vocab.md
 FINDING_STATUSES="current superseded corrected"
 FINDING_MAX_LINES=40
 SUMMARY_MAX=240
+# The KB journal shards per month once it is shared; a single-writer bundle keeps the
+# flat file, and the footer names whichever this bundle actually has.
+JOURNAL=/knowledge/log.md
+[ -d knowledge/log ] && JOURNAL=/knowledge/log/
 
 errors=0; warns=0
 err()  { printf '  ERROR  %s\n         %s\n' "$1" "$2" >&2; errors=$((errors+1)); }
@@ -161,11 +166,7 @@ EOF
 |---|---|---|
 EOF
   render_rows teams 0 none
-  cat <<'EOF'
-
----
-[KB log](/knowledge/log.md) — what changed and when.
-EOF
+  printf '\n---\n[KB log](%s) — what changed and when.\n' "$JOURNAL"
 }
 
 # --- checks -----------------------------------------------------------------
@@ -234,6 +235,10 @@ check_docs() {
       esac
       n=$(grep -c '' "$f")
       [ "$n" -le "$FINDING_MAX_LINES" ] || warn "$f" "Finding is $n lines; CONVENTIONS.md 'Write less' caps it at $FINDING_MAX_LINES"
+      au=$(field "$fmv" author)
+      if [ -n "$au" ] && ! printf '%s' "$au" | grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'; then
+        warn "$f" "author: '$au' is not a GitHub login — provenance has to survive a file move"
+      fi
       if [ -z "$(field "$fmv" lesson)" ]; then
         warn "$f" "no one-line 'lesson:' — the index row falls back to description:"
       elif [ "$(printf '%s' "$(summary_of "$fmv")" | wc -c | tr -d ' ')" -gt "$SUMMARY_MAX" ]; then
@@ -341,6 +346,8 @@ check_links() {
     done <<< "$(links_in "$f")"
   done <<< "$(find knowledge -type f -name '*.md' 2>/dev/null | LC_ALL=C sort)"
 }
+
+if [ "$MODE" = print ]; then generate; exit 0; fi
 
 if [ "$MODE" = check ]; then
   check_index

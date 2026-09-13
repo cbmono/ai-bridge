@@ -886,6 +886,13 @@ above it so none may grow its share.
 - **Capture knowledge:** if you discover something durable and reusable, write or
   update a `Finding` in `knowledge/findings/` (per `SCHEMA.md`) and link it from
   the task, so the next agent doesn't re-derive it.
+  **Where `knowledge/` is MOUNTED from another repository** (`knowledge` in
+  `instance.config.json`; `SCHEMA.md` → "A mounted knowledge base"), **you do not write
+  into it** — return the `Finding` in your result exactly as you would anyway and the tick
+  commits it. There is **one writer per bundle** and it is the tick, so up to
+  `maxAgentsInFlight` agents never share one git tree. `commit-as.sh` refuses a path under
+  the mount by name, so a stale instruction fails loudly rather than committing nothing.
+  **Absent the key nothing changes** and `knowledge/` is the bundle's own folder as before.
 - **Record a papercut — ONE line, and the bar is "it hurt", not "it is durable".** A
   `Finding` costs 40 lines and a judgement call, so the small stuff never gets written down
   at all: a tool that failed, a doc that misled you, a step you did twice. Those go in the

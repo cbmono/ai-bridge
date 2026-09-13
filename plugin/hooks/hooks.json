@@ -25,6 +25,10 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/session-banner.sh --format json"
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh pull --timeout 10 || true"
           }
         ]
       }
