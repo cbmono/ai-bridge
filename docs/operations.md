@@ -416,7 +416,8 @@ scripts/build-board.sh --standalone --out /tmp/board.html .  # ...the same page,
 scripts/watch-board.sh                                       # a local page, re-rendered on every change
 ```
 
-`/ai-bridge:board` is the fifth way to look at it and the only one that leaves the machine:
+`/ai-bridge:board publish` is the fifth way to look at it and the only one that leaves the
+machine:
 it renders the same body and publishes it as a **private artifact** at a URL that does not
 change between runs ([below](#opening-the-board-laptop-phone-published-live)).
 
@@ -426,7 +427,7 @@ re-renders the local page and reports its path ([below](#rendering-it-from-each-
 
 ### Which renderer to reach for
 
-| | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` | `/ai-bridge:board` |
+| | `print-board.sh` | `build-board.sh --standalone` | `build-board.sh` | `watch-board.sh` | `/ai-bridge:board publish` |
 |---|---|---|---|---|---|
 | Output | columns in your terminal | one HTML **file**, openable in a browser | the same page as a **body**, no `<html>` wrapper | the same page, kept fresh | the same body, as a **private artifact** at a fixed URL |
 | Freshness | the moment you ran it | the moment you ran it — or **every tick**, on a looping instance | the moment you ran it | live, to the second | the last time you ran it — no tick can refresh it |
@@ -442,6 +443,13 @@ unreachable for us. So the live page is a terminal tab you keep open — it stop
 close it, sleep the machine, or lose the session, it gives you nothing to share and no
 phone access, and it is per-machine. If any of that matters, the other two cost nothing
 and you re-run them.
+
+**A wrapped task title keeps its pills level with its FIRST line.** The HTML row is a
+five-track grid aligned to the top, and the State / Depends on / Q / PR cells carry a
+fixed 19px offset — the filename line above the title, plus the gap — so a title that
+wraps to four lines leaves the pills where a one-line title puts them. The title itself is
+never clamped or truncated. Below the single `760px` breakpoint the grid gives way and the
+pills wrap *under* the title instead, unchanged.
 
 Details worth knowing before you pick one:
 
@@ -496,7 +504,8 @@ at its next stamp, with no `touch` needed.
 
 ### Before it leaves the machine, know what it carries
 
-`/ai-bridge:board` publishes this page, and a local file is copyable even when you do not.
+`/ai-bridge:board publish` publishes this page, and a local file is copyable even when you
+do not.
 Either way the board's HTML can leave the machine, so the snapshot deliberately carries
 *less* than `AWAITING.md` does — and the list below is the whole of what a published page
 can contain, because the renderer reads the snapshot and nothing else.
@@ -1276,7 +1285,7 @@ The old `/status` command and `DASHBOARD.md` are gone. In each existing instance
 **How fresh does it have to be, and who has to reach it?** Two questions now, and the
 second one has exactly two answers. **Every renderer in the table below writes to the
 machine it runs on**; the two copies that travel are `/board.html`, which the tick
-*commits* — audience: this repo's permission list — and the page `/ai-bridge:board`
+*commits* — audience: this repo's permission list — and the page `/ai-bridge:board publish`
 publishes as a private artifact — audience: you, plus anyone you shared it with. Nothing
 is *served*: no Pages site, no host, no URL that works without one of those two grants.
 
@@ -1286,14 +1295,15 @@ is *served*: no Pages site, no host, no URL that works without one of those two 
 | `build-board.sh --standalone` | a local HTML file | none | you want to open the page — and it is what each tick renders |
 | `build-board.sh` | a page **body**, no wrapper | none | you are embedding the markup in something else |
 | `watch-board.sh` | this machine only | **a resident one** | you want the page to follow your work *between* ticks |
-| `/ai-bridge:board` | a private artifact URL | none | somebody needs the board on a phone, or without a clone |
+| `/ai-bridge:board publish` | a private artifact URL | none | somebody needs the board on a phone, or without a clone |
 
 **The compliance question is a per-instance decision, and it is decided by not running one
 command.** Publishing sends every task **title** to claude.ai; the snapshot's own
 `_sensitivity` field says it is "as sensitive as the task documents it comes from", and an
 instance whose `CLAUDE.md` carries no-PII rules may not want that. This is why the publish
 step is a **human-typed skill** rather than something the tick does: no tick, no cron and
-no agent publishes anything, so an instance that never runs `/ai-bridge:board` never sends
+no agent publishes anything, so an instance that never runs `/ai-bridge:board publish` never
+sends
 a byte. Every renderer in the table answers "nowhere" until you type it, `watch-board.sh`
 is the *live* one rather than the *compliant* one, and the choice stays where it was — with
 the human, per instance. (It was recorded as a Finding in the private instance that raised
@@ -1376,7 +1386,7 @@ that session. So the tick renders the two local pages exactly as before and adds
 line** when this machine has published a board:
 
 ```text
-BOARD: run /ai-bridge:board to refresh the published page
+BOARD: run /ai-bridge:board publish to refresh the published page
 ```
 
 No recorded URL ⇒ no line. Publishing stays a thing a human types.
@@ -1453,11 +1463,12 @@ reaches a device with no checkout on it.
 | Where you are | Do this | Freshness |
 |---|---|---|
 | **Laptop** (the canonical route) | `git pull`, then open `board.html` — `open board.html` on macOS | the last tick that changed something |
-| **Phone** | open the artifact URL — the session banner prints it, and it is the same URL every time | the last `/ai-bridge:board` you ran |
+| **Phone** | open the artifact URL — the session banner prints it, and it is the same URL every time | the last `/ai-bridge:board publish` you ran |
 | **No Claude access** (the fallback) | `git pull`, then a git client that previews HTML (e.g. Working Copy on iOS) — tap `board.html` | the last tick that changed something |
 | **Between ticks** | `scripts/watch-board.sh` → `.board-live/board.html`, on this machine | live, while the watcher runs |
 
-**The phone row used to be a download**, and that is what `/ai-bridge:board` replaces:
+**The phone row used to be a download**, and that is what `/ai-bridge:board publish`
+replaces:
 github.com does not render an `.html` blob as a page — it shows you the source, in the web
 UI and in the mobile app alike — so the raw file had to reach the device before a browser
 would draw it. The artifact is a page, so there is nothing to download. (`htmlpreview` and
@@ -1472,12 +1483,13 @@ banner keeps printing its path under the URL.
 ### Sharing it with a second human — one step
 
 Open the artifact and share it with them, read-only, from the page's own share control.
-That is the whole step. The URL does not change, so every later `/ai-bridge:board` updates
-the page they already have.
+That is the whole step. The URL does not change, so every later `/ai-bridge:board publish`
+updates the page they already have.
 
 **What sharing does not do is let them publish.** Artifact publishing is account-scoped:
 no share level makes a second account able to update your page. On a bundle two humans
-clone, each runs `/ai-bridge:board` from their own clone and keeps their own URL in their
+clone, each runs `/ai-bridge:board publish` from their own clone and keeps their own URL in
+their
 own `instance.config.local.json` — which is why that key is per-machine and why a value in
 the tracked config is ignored. Neither of you is missing anything by that: the cross-owner
 half of the board is read from the tracked task documents at your git `HEAD`, not from
