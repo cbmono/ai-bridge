@@ -63,14 +63,14 @@ echo "== 1. seed/.gitignore ignores board.html =="
 # The seed file is the contract for every instance stamped from now on. Checked through
 # git rather than by grepping the file: a `!/board.html` un-ignore could return in a form
 # the grep missed, and only git decides what git tracks.
-SEEDED="$TMP/seeded"; mkdir -p "$SEEDED"
+SEEDED="$TMP/seeded"; mkdir -p "$SEEDED" "$SEEDED/$AB_DIR"
 cp "$TPL/plugin/seed/.gitignore" "$SEEDED/.gitignore"
 : > "$SEEDED/board.html"
 ok "a repo seeded from seed/ ignores board.html"        "$(ignored "$SEEDED" board.html)" yes
 # The neighbours must keep their ignores — flipping one line must not have flipped three.
 : > "$SEEDED/$AB_SNAPSHOT"; mkdir -p "$SEEDED/$AB_BOARD_DIR"; : > "$SEEDED/$AB_BOARD_DIR/board.html"
-ok "…SNAPSHOT.json is still ignored"                     "$(ignored "$SEEDED" SNAPSHOT.json)" yes
-ok "…and .board-live/board.html still is too"            "$(ignored "$SEEDED" .board-live/board.html)" yes
+ok "…SNAPSHOT.json is still ignored"                     "$(ignored "$SEEDED" "$AB_SNAPSHOT")" yes
+ok "…and the live board page still is too"               "$(ignored "$SEEDED" "$AB_BOARD_DIR/board.html")" yes
 
 # =======================================================================================
 echo "== 2. a re-stamp re-ignores board.html and drops the tracked file =="
@@ -127,6 +127,7 @@ echo "== 3. THE CROSS-BUNDLE LEAK: a trailing . renders THIS instance only =="
 # =======================================================================================
 BB="$TPL/plugin/scripts/build-board.sh"
 snap() { # <dir> <slug> <unique title>
+  mkdir -p "$1/$AB_DIR"
   cat > "$1/$AB_SNAPSHOT" <<JSON
 {
   "_schema": "ai-bridge board snapshot v1",

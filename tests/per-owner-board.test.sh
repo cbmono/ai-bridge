@@ -65,7 +65,7 @@ command -v python3 >/dev/null 2>&1 || {
   echo "  (python3 absent — build-board cases cannot run)"; echo "pass=0 fail=0"; exit 0; }
 
 # ---------------------------------------------------------------- the fixture
-INST="$TMP/_ai-bridge-team"; mkdir -p "$INST/projects"
+INST="$TMP/_ai-bridge-team"; mkdir -p "$INST/projects" "$INST/$AB_DIR"
 printf 'stub\n' > "$INST/$AB_SCHEMA"
 
 mkproj() { # <slug> <title> <owner-or-empty> <task-status>...
@@ -255,7 +255,7 @@ assert "…and a named owner is still named"       "$(fhas '>bob<' "$D")"
 
 # A directory that is not a git repository has no HEAD to key on: no second section, no
 # error, and the own half renders exactly as before.
-NOGIT="$TMP/_ai-bridge-solo"; mkdir -p "$NOGIT"
+NOGIT="$TMP/_ai-bridge-solo"; mkdir -p "$NOGIT" "$NOGIT/$AB_DIR"
 printf 'stub\n' > "$NOGIT/$AB_SCHEMA"
 cp "$INST/instance.config.json" "$NOGIT/instance.config.json"
 cp -R "$INST/projects" "$NOGIT/projects"

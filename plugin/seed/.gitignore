@@ -9,13 +9,13 @@ node_modules/
 # Derived awaiting-you queue — rewritten by each /ai-bridge:dispatch tick from
 # projects/*/tasks/*.md. A view, not source; never commit it. Delete the file
 # itself to turn the queue off (the loop never recreates it).
-AWAITING.md
+/.ai-bridge/AWAITING.md
 
 # Derived board snapshot — rewritten by scripts/write-snapshot.sh at the end of each
 # /ai-bridge:dispatch tick, and read by scripts/build-board.sh (possibly from another instance).
 # A view, not source. Delete the file itself to take this instance off the board (the
 # writer never recreates it).
-SNAPSHOT.json
+/.ai-bridge/SNAPSHOT.json
 
 # The board page is DERIVED and never tracked. It used to be committed on every tick that
 # changed something — which made one path contended by every clone of a shared bundle, for
@@ -29,13 +29,13 @@ SNAPSHOT.json
 # that section can only change when HEAD moves. Derived and per-machine; delete it freely
 # and the next render rebuilds it. /ai-bridge:init appends this line too, so it reaches
 # instances stamped before the cache existed.
-/.board-others.json
+/.ai-bridge/.board-others.json
 
 # The local live board page (scripts/watch-board.sh, scripts/board-serve.sh) — the page
 # regenerated on every task-document change by a watcher you keep running. Derived,
 # per-machine, and safe to delete. /ai-bridge:init appends this line too, so it reaches
 # instances stamped before the directory existed.
-/.board-live/
+/.ai-bridge/.board-live/
 
 # The PM dispatch lock (scripts/tick-lock.sh) — written by /ai-bridge:dispatch immediately before it
 # dispatches a tick and released when that tick reports, so the one-tick-at-a-time
@@ -43,7 +43,7 @@ SNAPSHOT.json
 # never committed: two humans sharing one bundle work from two clones and each dispatches
 # independently, which a shared lock would break. Derived and safe to delete when no tick
 # is running.
-/.tick-lock
+/.ai-bridge/.tick-lock
 
 # The tick's claim on that lock (the second half of the same mechanism): a tick takes the
 # lock too, because a resumed tick never passes through the launcher, and the claim is what
@@ -51,7 +51,7 @@ SNAPSHOT.json
 # derived exactly like the lock, removed with it by `scripts/tick-lock.sh release`. Its own
 # line because `/.tick-lock` does not match it and instances stamped before it exists carry
 # the first line already — /ai-bridge:init appends this one separately for that reason.
-/.tick-lock.claim
+/.ai-bridge/.tick-lock.claim
 
 # API keys — for a substituted model backend (the ai-bridge-llm companion) or anything
 # else. NEVER tracked: a key in a tracked file is a published key, and that launcher

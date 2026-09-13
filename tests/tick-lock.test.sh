@@ -1253,7 +1253,7 @@ if command -v git >/dev/null 2>&1; then
     BRIDGE_INSTALL="$INSTALL_SRC/plugin/scripts/init-bundle.sh"
   fi
 fi
-ok "seed/.gitignore carries the line"    "$(grep -qxF '/.tick-lock' "$TPL/plugin/seed/.gitignore" && echo yes || echo no)" yes
+ok "seed/.gitignore carries the line"    "$(grep -qxF "/$AB_LOCK" "$TPL/plugin/seed/.gitignore" && echo yes || echo no)" yes
 INST="$TMP/g/_ai-bridge-g"; mkdir -p "$INST" "$INST/$AB_DIR"
 bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 ok "a fresh stamp gets the line"         "$(grep -qxF "/$AB_LOCK" "$INST/.gitignore" && echo yes || echo no)" yes
@@ -1272,7 +1272,7 @@ ok "…(removed for the re-stamp)"         "$(grep -cxF "/$AB_LOCK" "$INST/.giti
 bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
 ok "a re-stamp appends it back"          "$(grep -cxF "/$AB_LOCK" "$INST/.gitignore" | tr -d ' ')" 1
 bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
-ok "…and a third stamp adds no duplicate" "$(grep -cxF '/.tick-lock' "$INST/.gitignore" | tr -d ' ')" 1
+ok "…and a third stamp adds no duplicate" "$(grep -cxF "/$AB_LOCK" "$INST/.gitignore" | tr -d ' ')" 1
 
 echo
 echo "== …and so is the claim beside it, under its OWN guard =="
@@ -1281,8 +1281,8 @@ echo "== …and so is the claim beside it, under its OWN guard =="
 # carries `/.tick-lock`, which satisfies that guard, so a line added inside its heredoc
 # would reach exactly nobody who has the first one. That is the case asserted here: remove
 # ONLY the claim line, leave the lock's, and a re-stamp must still append it.
-ok "seed/.gitignore carries the claim too" "$(grep -qxF '/.tick-lock.claim' "$TPL/plugin/seed/.gitignore" && echo yes || echo no)" yes
-ok "a fresh stamp gets it"               "$(grep -cxF '/.tick-lock.claim' "$INST/.gitignore" | tr -d ' ')" 1
+ok "seed/.gitignore carries the claim too" "$(grep -qxF "/$AB_LOCK_CLAIM" "$TPL/plugin/seed/.gitignore" && echo yes || echo no)" yes
+ok "a fresh stamp gets it"               "$(grep -cxF "/$AB_LOCK_CLAIM" "$INST/.gitignore" | tr -d ' ')" 1
 printf 'agent: x\n' > "$INST/$AB_LOCK_CLAIM"
 ok "git itself ignores the claim"        "$( ( cd "$INST" && git check-ignore -q "$AB_LOCK_CLAIM" ) && echo yes || echo no)" yes
 ( cd "$INST" && git add -A >/dev/null 2>&1 )
