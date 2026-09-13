@@ -201,6 +201,9 @@ ok "…and its false claim is visible"     "$(printf '%s' "$OVER" | grep -qF 'en
 
 # (d) a tick-lock with the refusal removed — the mechanism, not the sentence
 sed 's/^\( *\)refuse_unlaunched$/\1: # removed/' "$LOCKSH" > "$FIX/tick-lock.sh"
+# tick-lock.sh sources its sibling resolver (ai-bridge-v3/task-031); without it the mutant
+# exits 2 before reaching the refusal this asserts is gone.
+cp "$(dirname "$LOCKSH")/bundle-paths.sh" "$FIX/bundle-paths.sh"
 MI="$TMP/mutant-instance"; mkdir -p "$MI"
 bash "$FIX/tick-lock.sh" acquire --as tick --instance "$MI" >/dev/null 2>&1
 ok "…and a stripped refusal stops refusing" "$?" 0

@@ -34,6 +34,9 @@ GIT() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git \
 INST="$TMP/inst"
 mkdir -p "$INST/projects/proj-a/tasks" "$INST/scripts"
 cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
+# tick-delta.sh sources its sibling resolver (ai-bridge-v3/task-031), so the staged copy
+# has to carry it too.
+cp "$(dirname "$SRC")/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
 SH="$INST/scripts/tick-delta.sh"
 
 task() { # <file> <status> [pr-url]
