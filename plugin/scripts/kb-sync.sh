@@ -339,6 +339,9 @@ EOF
     kb_vars
     [ -d "$KBGIT" ] || { warn "knowledge is configured but not mounted — run 'kb-sync.sh mount'."; exit 1; }
     ahead="$(kbg rev-list --count "origin/$KB_REF..HEAD" 2>/dev/null)" || ahead=""
+    # No tracking ref means the branch has never been pushed, so EVERY local commit is
+    # unpushed — the case that read as "clean" while holding a day of Findings.
+    [ -n "$ahead" ] || ahead="$(kbg rev-list --count HEAD 2>/dev/null)" || ahead=""
     if [ -n "$ahead" ] && [ "$ahead" -gt 0 ]; then
       warn "$ahead KB commit(s) are local and UNPUSHED in $KB_MOUNT — run 'kb-sync.sh commit' or push by hand."
       exit 1
