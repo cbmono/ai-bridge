@@ -75,3 +75,64 @@ discipline is strictly better: it is deterministic, task-keyed, and already test
 fresh` already encodes the `origin/<default-branch>` rule, and the `agent.spawn` JS
 plugin hook can set a subagent's `cwd`, which would place role agents in their worktrees
 without the agent doing it by hand. Both are separate tasks.
+
+---
+
+# Re-test, 2026-09-13, Claude Code 2.1.270
+
+**Same fixtures, one version later.** Reproduce:
+`bash docs/spikes/native-worktrees-probe-2.sh [--live]` (probes 1-6 need no auth; 7-9
+spend one haiku turn each).
+
+**Verdict: the identity blocker stands for a SUBAGENT and does not exist for a SESSION.**
+The hook can place `<worktreeRoot>/<task-id>` on the task's branch and the agent works
+there — but only when the task id arrives as the session's own `--worktree <name>`. Under
+in-session `Agent` dispatch, which is how role agents run today, `name` is still opaque.
+
+## What the hook can do
+
+| Probe | Result |
+|---|---|
+| session `--worktree task-029`, cwd = bundle, hook emits a tree of the **product** repo | session cwd = `<wtroot>/task-029`, branch `task-029` — the task named it |
+| subagent `isolation: "worktree"` under the same hook | lands in the hook's cross-repo tree, on the hook's branch |
+| `git worktree lock` on a hook-created tree | **not held** — its own `git worktree list --porcelain` stanza carries no `locked` line, read from inside the running session and again from outside after it exits |
+| the tree after the agent and the session exit | **survives**, on both routes |
+
+## What it cannot
+
+| Probe | Result |
+|---|---|
+| payload | `{session_id, transcript_path, cwd, prompt_id, hook_event_name, name}` — **no `base_ref`**, and none appears with `worktree.baseRef: fresh` set either |
+| `name` for a subagent | `agent-<opaque-id>`; still no `agent_type`, no `agent_id` |
+| two subagents dispatched in one turn | one shared `prompt_id`, and the hook order is **not stable**: `pretool pretool create create` in one run, `pretool create pretool create` in the next. Nothing pairs a create with the `Agent` call that caused it, and arrival order is not even consistent, so a hook can only guess |
+| `WorktreeRemove` | **never fired** — not on subagent completion, not on session exit, not for a harness-created `--worktree` tree. One probe run is 10 sessions and 2 subagents: 0 events |
+| hook prints a path that **does not exist** | refused: *"… does not exist or is not a directory"*. Existence is what is checked, not authorship — the dirty-worktree row below is a tree the hook did not create, and it is accepted |
+| hook exits non-zero | refused: *"WorktreeCreate hook failed"* — creation aborts |
+| hook prints a **relative** path | refused: *"Refusing to use … git resolves its working tree to …"* (resolved against the cwd, which is the bundle) |
+| hook prints a path **containing a space** | accepted |
+| hook prints an existing **dirty** worktree | accepted, uncommitted file untouched |
+| hookless `--worktree` | still `<product-repo>/.claude/worktrees/<name>`, branch `worktree-<name>`, **`locked`**, created before the auth check |
+
+## Consequences for the migration
+
+**`WorktreeRemove` is not a lifecycle, so nothing here can be built on it.** The veto in
+`docs/spikes/worktree-remove-veto.sh` is written and tested
+(`tests/worktree-remove-veto.test.sh` 25/0) so the migration inherits a decided shape, and
+it is **not wired**: an event that never fires cannot be measured, and its payload shape is
+therefore unknown. The veto takes the path from argv and reads the task document —
+`pr:` and `status:`, offline — exiting 1 (keep) for **every** state it cannot establish.
+It clears removal only on exactly one `pr:` that is an **empty list** and `status: done`:
+a missing, duplicated or placeholder `pr:` carries zero URLs while establishing nothing,
+and `cancelled` is refused for `reclaim-worktree.sh`'s G2 reason — the PR was closed
+unmerged, so that tree may hold the only copy.
+
+**Nothing in this spike removes a worktree by scanning.** Scan-based removal destroyed
+three running agents' worktrees on 2026-08-04 (`docs/pm-design.md`, step 5), and that
+constraint binds the migration: the probe's own cleanup names the fixture's trees by path
+under a `mktemp` root, and the veto never lists a worktree root at all.
+
+**The settled target, for the follow-up task:** `prune-worktrees.sh` survives as a report
+over `git worktree list --porcelain` lock reasons and still deletes nothing;
+`reclaim-worktree.sh` is retired. Both are **untouched by this PR**. The follow-up is
+gated on the tick dispatching each role agent as its own session — the one route where
+`name` is the task id — not on a payload change we do not control.
