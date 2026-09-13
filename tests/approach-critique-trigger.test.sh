@@ -47,7 +47,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PM="$REPO/plugin/agents/project-manager.md"
+PM="$REPO/plugin/tick-steps/step-2-refine-drafts.md"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 SEED_CFG="$REPO/plugin/seed/instance.config.json"
 VALIDATOR="$REPO/plugin/scripts/validate-bundle.sh"
@@ -85,7 +85,9 @@ command -v jq >/dev/null 2>&1 || { echo "approach-critique-trigger.test: jq requ
 # rather than grepped file-wide so an assertion cannot be satisfied by some other
 # paragraph that happens to use the same words.
 block_of() { # <file>
-  awk '/^   \*\*Approach critique/ { inb = 1 } inb && /^[0-9]+\. \*\*/ { inb = 0 } inb { print }' "$1"
+  awk '/^   \*\*Approach critique/ { inb = 1 }
+       inb && (/^[0-9]+\. \*\*/ || /^<!-- end of step /) { inb = 0 }
+       inb { print }' "$1"
 }
 BLOCK="$(block_of "$PM")"
 FLAT="$(flatten "$BLOCK")"
@@ -121,8 +123,10 @@ ok "…still heavily-inferred criteria"   "$(in_block '`acceptance_criteria` had
 ok "…and says so explicitly"            "$(in_block 'The trigger itself is unchanged')" yes
 ok "…naming WHEN as the thing that changed" "$(in_block 'WHEN the critique runs, never WHAT it may decide')" yes
 # The model-routing step keys on the SAME signal, so the two must not drift apart.
+# Model routing is step 3's, a different file since ai-bridge-v3/task-024 — the drift this
+# guards against is now a cross-file one, which is exactly what it always meant.
 ok "model routing names the same signal" \
-   "$(hasf "$PM" 'the same signal that makes the `plan-architect` approach')" yes
+   "$(hasf "$REPO/plugin/tick-steps/step-3-dispatch.md" 'the same signal that makes the `plan-architect` approach')" yes
 
 echo
 echo "== 3. ADVISORY in authority — findings go to advisor_notes and nowhere else =="

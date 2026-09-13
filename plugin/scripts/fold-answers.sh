@@ -29,9 +29,12 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$doc" ] && [ -r "$doc" ] || { echo "fold-answers: no readable task document given" >&2; exit 2; }
 
-# THE LOGIN IS NEVER THE MODEL'S. `--author` attributes a reply that arrived as a commit to
-# whoever pushed it; `--self` is this session's. Unattributable prints `<unknown>`, which is
-# written as-is: an omitted stamp is indistinguishable from a decision nobody made.
+# **`by <login>` names the human whose answer it was**, and it is never the model's to pick:
+# `--author` attributes a reply that arrived as a ` --- ` line in a commit (its git author's
+# email resolves through `people`, so a reply pushed from the OTHER clone attributes to the
+# other human, not to whoever's loop folded it in), `--self` where the answer was given in
+# session. Unattributable prints `<unknown>` and is written as-is — an omitted stamp is
+# indistinguishable from a decision nobody made. `SCHEMA.md` → "Decisions name the human".
 login="<unknown>"
 if [ -z "$list_key" ] && [ -x "$HERE/decision-stamp.sh" ]; then
   login="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --author "$doc" 2>/dev/null || true)"

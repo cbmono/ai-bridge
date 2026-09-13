@@ -25,7 +25,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$REPO/plugin/scripts/do-not-repeat.sh"
-PM_DOC="$REPO/plugin/agents/project-manager.md"
+PM_DOC="$REPO/plugin/tick-steps/step-3-dispatch.md"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 for f in "$SCRIPT" "$PM_DOC" "$CONV" "$SCHEMA"; do

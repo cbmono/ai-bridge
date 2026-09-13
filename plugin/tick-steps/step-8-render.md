@@ -25,10 +25,11 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
    can read.
 
    **No `AWAITING.md` ⇒ it writes nothing and exits 0** — absence is the off switch, and
-   never create the file. A `noop: true` tick runs none of this: the `Last refreshed:` line
-   moves on every render, so an unconditional rewrite churns the file the SessionStart
-   banner reads and makes a stale queue indistinguishable from a fresh one, and the queue
-   derives from documents a `noop` tick just proved unmoved. `AWAITING.md` is **derived and
+   never create the file. A `noop: true` tick leaves `AWAITING.md` exactly as it is — not
+   rewritten with the same items, not restamped: the `Last refreshed:` line moves on every
+   render, so an unconditional rewrite churns the file the SessionStart banner reads and
+   makes a stale queue indistinguishable from a fresh one, and the queue derives from
+   documents a `noop` tick just proved unmoved. `AWAITING.md` is **derived and
    gitignored**: rewrite it, never stage or commit it.
 
    The queue holds **only** what a human decision unblocks — never in-flight, next, or

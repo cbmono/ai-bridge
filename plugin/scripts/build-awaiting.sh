@@ -10,6 +10,18 @@
 # Exit: 0 rendered (or no AWAITING.md, which is the off switch) · 2 usage · 3 a path it
 # could not read. Why the structure is not prose: docs/pm-design.md#step-8.
 #
+# `🧰 grant` AND `❓ answer` are different asks, and that is why `grant` has a glyph of
+# its own: an `open_questions` entry asking for a tool, an install, a credential or an
+# access grant renders as `🧰 **grant**`, never as `❓ **answer**`, and `is_grant()` below
+# decides it — never the model. The **reply mechanism is the same** — the human still
+# appends ` --- <answer>` to the entry — so the glyph changes what the human is being asked
+# to *do*, not how they answer.
+#
+# Keep the `## 🔴 Awaiting you` heading and the `*` marker followed by one space exactly as
+# `row()` renders them — session-banner.sh greps for both literally.
+# **A new verb is free; a new marker is not**: the glyph sits AFTER the `* `, which is why
+# one writer emits every row and no caller ever composes one.
+#
 # GENERIC PLUGIN FILE — no org, repo or path literals.
 set -uo pipefail
 
@@ -35,6 +47,16 @@ while [ $# -gt 0 ]; do
 done
 inst="$(cd "$inst" 2>/dev/null && pwd)" || fail3 "no such instance directory"
 [ -n "$out" ] || out="$inst/AWAITING.md"
+
+# Resolve every caller-supplied path the same way the walk resolves the ones it finds.
+# Without this, `/var/…` and `/private/var/…` are two spellings of one file and a --trailer
+# silently does nothing — which looks exactly like the model not having passed one.
+norm() { # <path>
+  local d; d="$(cd "$(dirname "$1")" 2>/dev/null && pwd)" || { printf '%s' "$1"; return; }
+  printf '%s/%s' "$d" "$(basename "$1")"
+}
+for ((_i = 0; _i < ${#trailer_paths[@]}; _i++)); do trailer_paths[$_i]="$(norm "${trailer_paths[$_i]}")"; done
+for ((_i = 0; _i < ${#merge_paths[@]};   _i++)); do merge_paths[$_i]="$(norm "${merge_paths[$_i]}")"; done
 
 # ABSENCE IS THE OFF SWITCH, and it is the script's rule rather than the caller's — the
 # same shape write-snapshot.sh uses for SNAPSHOT.json. Never create the file.

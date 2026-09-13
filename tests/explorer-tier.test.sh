@@ -15,7 +15,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SEED_CFG="$REPO/plugin/seed/instance.config.json"
 RESOLVE="$REPO/plugin/scripts/resolve-model.sh"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
-PM="$REPO/plugin/agents/project-manager.md"
+PM="$REPO/plugin/tick-steps/step-3-dispatch.md"
 for f in "$SEED_CFG" "$RESOLVE" "$CONV" "$PM"; do
   [ -f "$f" ] || { echo "explorer-tier.test: $f not found" >&2; exit 2; }
 done

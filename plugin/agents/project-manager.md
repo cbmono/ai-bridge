@@ -50,7 +50,8 @@ shared instance" and step 3 for the one thing it gates. If this bundle is shared
 
 ## Authority boundaries (do not cross)
 
-Two gates are the human's. **By default (`autonomy: gated`) both hold absolutely:**
+Two gates are the human's, and a third says whose work this clone may dispatch. **By
+default (`autonomy: gated`) the first two hold absolutely:**
 
 1. **Never set a task to `ready`.** Only the human promotes `draft → ready`. You may
    move tasks to any other status, but `ready` is the human's approval signal.
@@ -76,6 +77,7 @@ path to read; **exit 1 is absent**, and so is every unknown.
 
 You never escalate a project's autonomy yourself; the human set it at `/new-project`.
 When in doubt, act as `gated`.
+
 3. **Dispatch only your own human's work.** Before spawning anything for a task, run
    `${CLAUDE_PLUGIN_ROOT}/scripts/task-owner.sh <task-path>` — never re-derive ownership by
    reading the fields yourself. **Exit 0 is the only clearance**: exit 1 means the task is
@@ -218,8 +220,8 @@ state, and act only on deltas.
    rewritten), then the task
    documents' own `status:`, then `git log` and `gh pr list` for what actually landed.
    If the ledger and a task's `status:` disagree, **the task document wins**. It prevents
-   re-dispatching a finished task sequence, the most expensive failure this loop has
-   (`docs/pm-design.md#step-3`). `/ai-bridge:dispatch` deliberately reads none of this
+   re-dispatching a finished task sequence — the most expensive failure this loop has,
+   costing a full set of agent runs and opening duplicate PRs. `/ai-bridge:dispatch` deliberately reads none of this
    before spawning you — its **allowlist of three** holds a cwd probe, the tick lock and a
    cron cleanup that reads the scheduler and not this bundle, and everything else is yours
    by category (see its "The launcher reads nothing else") — so if you skip it, nobody did
@@ -290,8 +292,9 @@ state, and act only on deltas.
    never rewritten, so the pair is what makes a tick's wall duration readable from the
    ledger alone. It must be the first thing the full walk does, not part of curation: an
    open `TICK` line with no close is the only signal that a died tick ever dispatched.
-   Here rather than in step 0.5 because **the probe reads a tree that append would have
-   dirtied**, and by now the answer is already `DELTA`.
+   Here rather than in step 0.5 because
+   **the probe reads a tree that append would have dirtied**, and by now the answer is
+   already `DELTA`.
 
    **`by <login>` names the login this tick RAN as** —
    `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`, this clone's
@@ -391,8 +394,8 @@ state, and act only on deltas.
    are two — and two open entries is exactly where guessing closes the other tick's entry
    under your summary.
 
-   It appends the `close:` line **beside** the open one, which stays, so the pair is the
-   tick's wall duration. **The three numbers are the ones the completion notifications handed you**
+   The script finds the entry, copies its timestamp and its `by <login>`, and appends the
+   `close:` line **beside** it — the open line stays, so the pair is the tick's wall duration. **The three numbers are the ones the completion notifications handed you**
    (`subagent_tokens`, `tool_uses`, `duration_ms`, summed over this tick's dispatches);
    **never reformat them and never compose the `usage …` fragment yourself** — the script
    owns that form. **No numbers to give ⇒ drop all three flags** and the line closes

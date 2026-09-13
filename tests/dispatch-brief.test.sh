@@ -23,7 +23,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$REPO/plugin/scripts/dispatch-brief.sh"
-PM_DOC="$REPO/plugin/agents/project-manager.md"
+PM_DOC="$REPO/plugin/tick-steps/step-3-dispatch.md"
 for f in "$SCRIPT" "$PM_DOC"; do
   [ -f "$f" ] || { echo "dispatch-brief.test: missing $f" >&2; exit 2; }
 done
