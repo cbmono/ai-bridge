@@ -6,6 +6,8 @@ name: Tests
 #
 # THE SELECTION AND THE RUNNER LIVE IN tests/run.sh, WHICH THIS CALLS. It used to be
 # inline here, so the only way to run what CI runs was to push — ai-bridge-v3/task-028.
+# The harnesses run in a bounded parallel pool (`--jobs`, default CPUs) and a `# deep`
+# harness — one that spawns the claude CLI — runs in tests-deep.yml nightly, never here.
 # Nothing about the selection may be re-implemented in this file: tests/run.sh --ci is
 # the fast path (a plugin-only PR diff selects a core plus every harness that NAMES a
 # changed path; anything else runs all of them), tests/run.sh --changed is the same
@@ -39,10 +41,11 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: read
-    # One harness alone measures ~7 minutes and the full suite several more on top of
-    # that; this is a generous ceiling, not the measured number (see the PR body for
-    # the measured wall-clock).
-    timeout-minutes: 30
+    # MEASURED, not guessed (ai-bridge-v3/task-038): 111 harnesses, all green, 6m 15s
+    # in a pool of 11 on an M3 Pro — against 29m 45s sequential on run 34774374082, of
+    # which ~7 minutes was the paid eval that now runs nightly in tests-deep.yml. The
+    # ceiling is set at roughly twice the expected CI figure, not at a round 30.
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4

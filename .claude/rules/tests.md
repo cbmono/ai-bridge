@@ -12,7 +12,9 @@ build step.
 
 ```bash
 tests/run.sh --changed        # the core plus every harness that NAMES a path you changed
-tests/run.sh --all            # all 106 — once, before you open the PR, and never polled
+tests/run.sh --all            # all of them — once, before you open the PR, and never polled
+tests/run.sh --all --jobs 4   # the pool is CPU-wide by default; bound it when you need the machine
+tests/run.sh --deep           # ONLY the `# deep` harnesses: they spawn the claude CLI and cost money
 bash tests/<one>.test.sh      # still fine while you iterate on one harness
 ```
 
@@ -22,24 +24,31 @@ workflow grows a second copy. It reads committed, uncommitted and untracked path
 `origin/HEAD` (`--base <ref>` for another base). **No changed path runs the core; a changed
 path no harness names runs the core and says so in one line** — never a zero-harness run
 that reads as a pass, which is why `--all` is still the answer before the PR.
-Measured on an M3 Pro, 2026-09-13: a one-line edit to `plugin/scripts/commit-as.sh`
-selects 17 harnesses and takes **9m 12s**, against **39m 47s** for all 106.
+**Two tiers and a pool** (ai-bridge-v3/task-038). A harness declares `# serial` in its
+header to run alone, and `# deep` to leave the merge gate altogether — `--deep` and the
+nightly `tests-deep.yml` are the only things that run a `# deep` harness, and every other
+mode puts a refusing shim in front of `claude` so no gate run can spend a paid eval.
+Everything else runs in a bounded pool, output replayed in file order.
+Measured on an M3 Pro, 2026-09-13, `claude` masked off PATH: a one-line edit to
+`plugin/scripts/commit-as.sh` selects 18 harnesses and takes **1m 21s** (was 2m 25s
+sequential, and 9m 12s with the eval in the core); all 111 take **6m 15s** in a pool of
+11, against **39m 47s** sequential.
 
 The full suite is CI's job: `harness suite` is a required check with `strict=true`, and it
 runs everything against the merged base. Locally the same loop measured **39m 47s and
-269.4k tokens** (2026-08-29) against ~9 minutes and no tokens in CI. So run it only when
+269.4k tokens** (2026-08-29) before the pool, and tokens are still spent on a local run
+that CI would do for nothing. So run it only when
 your change touches shared machinery every harness loads, and say why in the PR body —
 `plugin/seed/CONVENTIONS.md` → "The full suite belongs to CI" is the rule this defers to.
 
 ## The core
 
-`tests/run.sh` always runs these nine, because no changed path can be expected to name
+`tests/run.sh` always runs these eight, because no changed path can be expected to name
 them — they read `plugin/` wholesale or reach their subject indirectly:
 
 | Harness | Why it cannot be derived |
 |---|---|
 | `plugin-manifest`, `plugin-skills`, `plugin-agents` | structural, whole-tree |
-| `plugin-eval` | the eval **suite** lives under `plugin/evals/` |
 | `deny-baseline`, `agent-control` | the two enforcement **hooks** (ai-bridge-v2/task-003) |
 | `commit-as-guard`, `companion-plugins` | the two-human-authority guard (ai-bridge-v2/task-030). Both are also reachable by derivation and stay here anyway: the guard's behaviour depends on `plugin/scripts/resolve-autonomy.sh`, which `commit-as-guard.test.sh` never names |
 | `harness-read-paths` | it reads the whole `tests/` tree and resolves every literal path against the plugin tree — the one diff that names none of its own subject (ai-bridge-v2/task-029) |
@@ -71,5 +80,7 @@ deletes). So running the suite inside a worktree fails those four, well over a h
 assertions, for a reason that has nothing to do with the code under test.
 
 That is the guard working, not a bug — but it reads exactly like a regression, so: run the
-suite from the main working tree, or from a fresh clone. If you are working in a worktree,
+suite from the main working tree, or from a fresh clone. None of the four needs `# serial`:
+from a real checkout all 111 pass in the pool (measured 2026-09-13, 8,581 assertions, 0
+failed). If you are working in a worktree,
 clone to a temp directory to verify.
