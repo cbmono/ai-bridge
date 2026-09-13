@@ -39,7 +39,7 @@ BASELINE='577 plugin/hooks/agent-control.sh
 425 plugin/scripts/commit-as.sh
 432 plugin/scripts/init-bundle.sh
 375 plugin/scripts/link-repos.sh
-424 plugin/scripts/pr-body-clearance.sh
+423 plugin/scripts/pr-body-clearance.sh
 448 plugin/scripts/pr-comment-clearance.sh
 493 plugin/scripts/prune-worktrees.sh
 417 plugin/scripts/reclaim-worktree.sh

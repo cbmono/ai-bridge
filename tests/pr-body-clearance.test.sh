@@ -371,6 +371,47 @@ expect "…and #195 padded to ${PR195_OVER} AUTHORED characters -> REFUSE" 4 42
 says   "  ...counting its author's half, not the block" "is $PR195_OVER characters"
 
 echo
+echo "== and the marker pair is NOT an exemption an author can write himself =="
+# Nothing in a body says who typed a line, so the strip is bounded by what the generator
+# emits, markers included. Past the bound it strips nothing and the body is counted as
+# posted — the verdict this gate gave before the strip existed.
+GENERATED_CEILING=1000
+PR195_BLOCK=740            # markers included: 2672 - 1932, the block CodeRabbit wrote
+
+ok "the fixture's block is the measured 740" "$(( PR195_POSTED - PR195_AUTHORED ))" "$PR195_BLOCK"
+
+padded_block() { # <chars> -> #195 with its block padded to exactly that many characters
+  local want="$1" out="$TMP/pr195-block-$1.md"
+  { awk -v m="$OPEN195" '{ print } index($0, m) { exit }' "$BODY195"
+    printf '%*s\n' "$(( want - PR195_BLOCK - 1 ))" '' | tr ' ' 'x'
+    awk -v m="$OPEN195" 'p { print } index($0, m) { p = 1 }' "$BODY195"
+  } > "$out"
+  printf '%s' "$out"
+}
+
+# The bound itself, both sides, one character apart.
+AT="$(padded_block "$GENERATED_CEILING")"
+ok "…the padded block is exactly the allowance" \
+   "$(( $(chars "$AT") - PR195_AUTHORED ))" "$GENERATED_CEILING"
+serve "$AT"
+expect "a block AT the ${GENERATED_CEILING}-character allowance -> CLEAR" 0 42
+says   "  ...still on the authored half"   "body is $PR195_AUTHORED characters"
+OVER="$(padded_block "$(( GENERATED_CEILING + 1 ))")"
+serve "$OVER"
+expect "one character past it -> counted in full -> REFUSE" 4 42
+says   "  ...naming the allowance it broke" "marked block is over the ${GENERATED_CEILING}-character"
+says   "  ...and counting the body as posted" "is $(( PR195_AUTHORED + GENERATED_CEILING + 1 )) characters"
+
+# THE SELF-GRANT, which is what the bound exists for: the required structure outside an
+# exact pair the author typed, his essay inside it.
+SELF_GRANT="$(body_file '## Description' 'Adds the gate.' '' "$VERIFIED" '' "$(crit_head 1)" '' \
+                        "$TABLE_HEAD" "$TABLE_RULE" "$TABLE_ROW" '' \
+                        "$OPEN195" "$(printf '%*s' 2600 '' | tr ' ' 'x')" "$CLOSE195")"
+serve "$SELF_GRANT"
+expect "an author-owned exact pair around 2,600 characters -> REFUSE" 4 42
+says   "  ...counting every character of it"  "over the ${BODY_CEILING}-character ceiling"
+
+echo
 echo "== the NOTES ceiling: three is the limit, and the fourth is the essay =="
 notes_body() { # <n> -> a complete body carrying n claim-first Notes bullets
   local n="$1" i lines=()

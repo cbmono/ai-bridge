@@ -275,6 +275,9 @@ above it so none may grow its share.
   **The 2,500 are YOURS**: a block a reviewer generates into the body between its own
   marker comments is stripped before the count, because a ceiling on text its author
   cannot shorten refuses whoever pushed last. Text carrying no marker is counted in full.
+  **The markers are not an exemption you can write yourself** — nothing in a body says who
+  typed a line, so the strip is worth at most 1,000 characters (real blocks measure 531,
+  740, 741), and a marked block larger than that is counted in full, markers and all.
   Run it on your draft before you open the PR
   (`scripts/pr-body-clearance.sh --body-file <file>`); it is the cheapest check you have.
   **Short and auditable are the same thing here, which is why brevity costs nothing.**
