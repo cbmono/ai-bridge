@@ -145,8 +145,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || {
-  echo "write-snapshot: run from a control-panel instance root ($AB_SCHEMA + instance.config.json)." >&2
+ab_is_bundle . || {
+  echo "write-snapshot: run from a control-panel instance root (instance.config.json)." >&2
   exit 2
 }
 

@@ -108,7 +108,7 @@ USAGE
 find_root() {
   d="$(pwd -P)"
   while [ "$d" != / ]; do
-    if [ -f "$d/$AB_SCHEMA" ] && [ -f "$d/instance.config.json" ]; then
+    if ab_is_bundle "$d"; then
       printf '%s\n' "$d"; return 0
     fi
     d="$(dirname "$d")"
@@ -117,7 +117,7 @@ find_root() {
 }
 
 ROOT="$(find_root)" || {
-  echo "error: not inside an ai-bridge instance (no $AB_SCHEMA + instance.config.json)." >&2
+  echo "error: not inside an ai-bridge instance (no instance.config.json)." >&2
   echo "       Run this from an instance root." >&2
   exit 1
 }

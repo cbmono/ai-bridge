@@ -19,7 +19,7 @@ ok() { # <name> <actual> <expected>
 }
 
 # The keys ai-bridge-v3/task-031 names, plus the three the triage folded in.
-KEYS="AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
+KEYS="AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
 AB_STATE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM"
 
 echo
@@ -46,7 +46,7 @@ echo "== 3. the layout is spelled in ONE file =="
 # A literal assignment of one of these names is the shape that forks the layout. The
 # grep is the criterion's own, narrowed to an assignment so a comment is not a failure.
 NAMES='SCHEMA\.md|CONVENTIONS\.md|SNAPSHOT\.json|AWAITING\.md|\.tick-state|\.board-live|\.tick-lock|\.board-others\.json'
-spellers="$(grep -lE "^[A-Za-z_]+=\"?($NAMES)\"?$" "$SCRIPTS"/*.sh | xargs -n1 basename | sort | tr '\n' ' ')"
+spellers="$(grep -lE "^[A-Za-z_]+=\"?(\\\$AB_DIR/)?($NAMES)\"?$" "$SCRIPTS"/*.sh | xargs -n1 basename | sort | tr '\n' ' ')"
 ok "only bundle-paths.sh assigns a layout literal" "$spellers" "bundle-paths.sh "
 
 # The regression that costs a run rather than a review: a script reaches for $AB_* and
@@ -65,6 +65,38 @@ trap 'rm -rf "$TMP"' EXIT
 grep -v 'bundle-paths.sh' "$SCRIPTS/tick-delta.sh" > "$TMP/tick-delta.sh"
 ok "…and it reports a script that dropped it" \
    "$(grep -q 'bundle-paths.sh' "$TMP/tick-delta.sh" && echo sourced || echo missing)" missing
+
+echo
+echo "== 4. the 3.0 layout: every plugin-owned path is under .ai-bridge/ =="
+ok "the directory is .ai-bridge" "$AB_DIR" ".ai-bridge"
+under=""
+for k in $KEYS; do
+  [ "$k" = AB_DIR ] && continue
+  case "${!k}" in "$AB_DIR"/*) ;; *) under="$under $k" ;; esac
+done
+ok "every other key is under it" "$([ -z "$under" ] && echo all || echo "$under")" all
+
+echo
+echo "== 5. the seed stays FLAT and the stamp maps it =="
+ok "SCHEMA.md maps"            "$(ab_seed_dest SCHEMA.md)"           "$AB_SCHEMA"
+ok "agents/index.md maps"      "$(ab_seed_dest agents/index.md)"     "$AB_ROSTER"
+ok "log.md maps"               "$(ab_seed_dest log.md)"              "$AB_LEDGER"
+ok "CLAUDE.md stays at the root" "$(ab_seed_dest CLAUDE.md)"         "CLAUDE.md"
+# The KB index is the human's curated surface and shares a basename with the derived one.
+ok "knowledge/index.md is untouched" "$(ab_seed_dest knowledge/index.md)" "knowledge/index.md"
+
+echo
+echo "== 6. an un-migrated bundle is DETECTED, never half-read =="
+B="$TMP/bundle"; mkdir -p "$B/$AB_DIR"
+ok "an empty dir is not a bundle"  "$(ab_is_bundle "$B" && echo yes || echo no)" no
+: > "$B/instance.config.json"
+ok "instance.config.json alone is the marker" "$(ab_is_bundle "$B" && echo yes || echo no)" yes
+ok "a migrated bundle is not flagged" "$(ab_unmigrated "$B" && echo yes || echo no)" no
+: > "$B/SCHEMA.md"
+ok "a root SCHEMA.md is flagged"   "$(ab_unmigrated "$B" && echo yes || echo no)" yes
+notice="$(ab_unmigrated_notice "$B" 2>&1)"
+ok "the notice names the file"     "$(printf '%s' "$notice" | grep -c "SCHEMA.md -> $AB_SCHEMA")" 1
+ok "…and the one command that fixes it" "$(printf '%s' "$notice" | grep -c 'migrate-bundle.sh')" 1
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

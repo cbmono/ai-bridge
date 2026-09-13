@@ -166,8 +166,8 @@ refuse() { printf 'refuse: %s\n' "$*" >&2; exit 1; }
 noop()   { printf 'noop: %s\n' "$*"; exit 3; }
 fatal()  { printf 'error: %s\n' "$*" >&2; exit 2; }
 
-[ -f "$AB_SCHEMA" ] && [ -f "$CONFIG" ] \
-  || fatal "run from a control-panel instance root ($AB_SCHEMA + $CONFIG)."
+ab_is_bundle . \
+  || fatal "run from a control-panel instance root ($CONFIG)."
 
 # --- readers -----------------------------------------------------------------
 

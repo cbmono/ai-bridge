@@ -94,8 +94,8 @@ while [ "$#" -gt 0 ]; do
 done
 [ "$mode" = "self" ] || [ -n "$target" ] || usage
 
-[ -f "$AB_SCHEMA" ] && [ -f "$CONFIG" ] || {
-  echo "error: run from a control-panel instance root ($AB_SCHEMA + $CONFIG)." >&2
+ab_is_bundle . || {
+  echo "error: run from a control-panel instance root ($CONFIG)." >&2
   exit 2
 }
 

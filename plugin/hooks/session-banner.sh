@@ -556,6 +556,18 @@ if [ -z "$plugin_root" ]; then
 fi
 bin=""
 [ -n "$plugin_root" ] && [ -d "$plugin_root/scripts" ] && bin="$plugin_root/scripts"
+
+# THE LAYOUT RESOLVER, from that same scripts/ directory. Without it this hook cannot name
+# a single bundle file, and reading the pre-3.0 root path it happens to find is the silent
+# half-read the new layout exists to stop — so it says so and stops instead.
+if [ -n "$bin" ] && [ -r "$bin/bundle-paths.sh" ]; then
+  # shellcheck source=../scripts/bundle-paths.sh
+  . "$bin/bundle-paths.sh"
+else
+  echo "ai-bridge: bundle-paths.sh is unreachable, so the banner cannot name this bundle's files." >&2
+  exit 0
+fi
+ab_unmigrated "$root" && ab_unmigrated_notice "$root"
 # The template checkout around the plugin, when there is one — it names the version-drift
 # comparison and nothing else. A plugin installed from a marketplace has one; a plugin
 # vendored some other way may not, and that is reported as "cannot compare", never guessed.
@@ -1278,7 +1290,7 @@ board_on=1
 if tr '\n' ' ' < "$cfg" 2>/dev/null | grep -q '"board"[[:space:]]*:[[:space:]]*false'; then
   board_on=0
 fi
-page="$root/.board-live/board.html"
+page="$root/$AB_BOARD_DIR/board.html"
 # THE BOARD SECTION'S LABEL COLUMN, in characters, so its rows are a table rather than a
 # sentence: `Board`, the widest label, plus the gap the dim continuation lines already use.
 BOARD_LW=8
@@ -1287,7 +1299,7 @@ BOARD_LW=8
 # rather than the file's presence. A dead pid reads as "not up", which is the safe
 # direction: a banner may never send a human to a port nothing is listening on.
 serve_url=""
-_state="$root/.board-live/.serve"
+_state="$root/$AB_BOARD_DIR/.serve"
 if [ -f "$_state" ]; then
   _sport="$(sed -n 1p "$_state" 2>/dev/null)"
   _spid="$(sed -n 2p "$_state" 2>/dev/null)"
@@ -1419,7 +1431,7 @@ if [ "$board_on" -eq 1 ]; then
     # RELATIVE on purpose: the absolute one is what the rendered row prints, and repeating
     # it here would make every `has "$page"` assertion in the harnesses pass on an instance
     # with no board — a vacuous check bought for a few characters of prose.
-    echo "Board   enabled, but never rendered — no .board-live/board.html here yet"
+    echo "Board   enabled, but never rendered — no $AB_BOARD_DIR/board.html here yet"
     say "$C_DIM" "        run /ai-bridge:board serve; otherwise an /ai-bridge:dispatch tick renders it, or build-board.sh"
   fi
   # THE UPDATE ROW — the one command that fetches a newer AI Bridge and installs it, and
@@ -1483,7 +1495,7 @@ fi
 # a queue and one without, which is why the count is in it and why zero prints NOTHING at
 # all rather than a reassuring nil line (the "only fire what is true" rule in the header —
 # and the reason `item(s)` is gone: it reads identically however many there are).
-awaiting="$root/AWAITING.md"
+awaiting="$root/$AB_AWAITING"
 if [ -f "$awaiting" ]; then
   # The block under the "Awaiting you" heading, up to the next "## " heading.
   block="$(awk '

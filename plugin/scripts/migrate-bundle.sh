@@ -23,6 +23,8 @@
 #     added the file. That is real provenance, not a guess. A file git does not know
 #     is reported and skipped — inventing a date would be worse than leaving the
 #     error, because a wrong timestamp is indistinguishable from a right one.
+#   · THE 3.0 LAYOUT. Plugin-owned files still sitting at the bundle root move under
+#     `.ai-bridge/`, and the links pointing at them are rewritten. See that step.
 #
 # WHAT IT REFUSES TO FIX (needs a human):
 #   · Dangling structural references. Whether to drop a `depends_on:` depends on
@@ -50,12 +52,70 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || {
-  echo "migrate-bundle: run from a control-panel instance root ($AB_SCHEMA + instance.config.json)." >&2
+ab_is_bundle . || {
+  echo "migrate-bundle: run from a control-panel instance root (instance.config.json)." >&2
   exit 2
 }
 
 fixed=0; skipped=0; human=0; failed=0
+
+# =========================================================================================
+# THE 3.0 LAYOUT STEP — plugin-owned files move from the bundle root under `.ai-bridge/`.
+# =========================================================================================
+#
+# HARD CUTOVER, NO COMPATIBILITY SYMLINKS. A `mv` once left 185 dangling symlinks across
+# three instances that all looked healthy (docs/operations.md:326-368), so nothing here
+# creates one.
+#
+# TWO REFUSALS AND NO OTHERS: a live `.tick-lock`, or a dirty TRACKED tree. Untracked dirt
+# is deliberately NOT a refusal — a bundle carries untracked derived files on any day a
+# tick has run, and refusing those would refuse every real bundle.
+#
+# `git mv` for what git tracks, plain `mv` for the five derived files it does not. It is
+# allowed to stop short: a refusal prints the commands instead, which is a finished answer
+# for the one colleague migrating three installations today.
+
+layout_pending() { # prints "<old>\t<new>" per plugin-owned file still at the root
+  local pair old
+  for pair in $AB_MOVES; do
+    old="${pair%%:*}"
+    [[ -e "$old" ]] && printf '%s\t%s\n' "$old" "${pair#*:}"
+  done
+  return 0
+}
+
+layout_refusal() { # prints the reason, or nothing
+  [[ -e "$AB_LOCK" || -e ".tick-lock" ]] && { printf 'a dispatch tick holds the lock'; return 0; }
+  git rev-parse --git-dir >/dev/null 2>&1 || return 0
+  [[ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]] \
+    && printf 'the tracked tree is dirty — commit or stash first'
+  return 0
+}
+
+layout_move() { # <old> <new> — git mv when tracked, plain mv when not
+  local old="$1" new="$2"
+  mkdir -p "$(dirname "$new")"
+  if git ls-files --error-unmatch -- "$old" >/dev/null 2>&1; then
+    git mv -- "$old" "$new"
+  else
+    mv -- "$old" "$new"
+  fi
+}
+
+# Links INSIDE the bundle are rewritten in the same step, or they rot: a task document or
+# a Finding pointing at `/SCHEMA.md` names a path that no longer exists.
+layout_relink() {
+  local f tmp
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    tmp="$(temp_beside "$f")" || continue
+    sed -e 's|(/SCHEMA\.md|(/'"$AB_SCHEMA"'|g' \
+        -e 's|(/CONVENTIONS\.md|(/'"$AB_CONVENTIONS"'|g' \
+        -e 's|^\([[:space:]-]*\)/agents/index\.md|\1/'"$AB_ROSTER"'|' \
+        -e 's|(/agents/index\.md|(/'"$AB_ROSTER"'|g' "$f" > "$tmp" && mv "$tmp" "$f"
+  done < <(find ./projects ./knowledge -name '*.md' 2>/dev/null || true)
+}
+
 
 # One write path, and the label comes AFTER the verification.
 #
@@ -144,6 +204,37 @@ collect_files() {
   find ./projects -path '*/tasks/*.md' 2>/dev/null || true
   find ./knowledge -mindepth 2 -maxdepth 2 -type f -name '*.md' 2>/dev/null || true
 }
+
+PENDING="$(layout_pending)"
+if [[ -n "$PENDING" ]]; then
+  echo "layout: this bundle is on the pre-3.0 layout."
+  refusal="$(layout_refusal)"
+  if [[ -n "$refusal" ]]; then
+    echo "  REFUSED  $refusal"
+    echo "           Run these by hand once it clears, from $(pwd):"
+    echo "             mkdir -p $AB_DIR $(dirname "$AB_ROSTER")"
+    while IFS=$'\t' read -r old new; do echo "             git mv $old $new"; done <<< "$PENDING"
+    echo "           …then re-run this script. docs/operations.md carries the full list."
+  elif [[ $APPLY -eq 0 ]]; then
+    while IFS=$'\t' read -r old new; do echo "  WOULD MOVE $old -> $new"; done <<< "$PENDING"
+  else
+    while IFS=$'\t' read -r old new; do
+      layout_move "$old" "$new" && echo "  MOVED    $old -> $new"
+    done <<< "$PENDING"
+    # The five gitignored paths need their ignore lines moved with them; /ai-bridge:init
+    # appends the new ones, so this only has to drop the stale root spellings.
+    if [[ -f .gitignore ]]; then
+      tmp="$(temp_beside .gitignore)" \
+        && grep -vxE '/?(AWAITING\.md|SNAPSHOT\.json|index\.md|\.tick-state|\.board-live/?|\.board-others\.json|\.tick-lock|\.tick-lock\.claim)' .gitignore > "$tmp" \
+        && mv "$tmp" .gitignore \
+        && echo "  REWROTE  .gitignore (the root spellings of the derived files are gone)"
+    fi
+    layout_relink
+    echo "  RELINKED projects/ and knowledge/ links to $AB_SCHEMA and $AB_CONVENTIONS"
+    echo "           Now run /ai-bridge:init to re-seed the ignore lines at their new paths."
+  fi
+  echo "---"
+fi
 
 FILE_LIST="$(collect_files | grep -vE '/(index|log)\.md$' | sort -u || true)"
 

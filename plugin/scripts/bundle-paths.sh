@@ -9,27 +9,75 @@
 #
 # Exit: 0 ok, 1 no such key. Reasoning: ai-bridge-v3/task-031.
 
-AB_SCHEMA="SCHEMA.md"
-AB_CONVENTIONS="CONVENTIONS.md"
-AB_SNAPSHOT="SNAPSHOT.json"
-AB_AWAITING="AWAITING.md"
-AB_LEDGER="log.md"
-AB_INDEX="index.md"
-AB_ROSTER="agents/index.md"
+AB_DIR=".ai-bridge"
+AB_SCHEMA="$AB_DIR/SCHEMA.md"
+AB_CONVENTIONS="$AB_DIR/CONVENTIONS.md"
+AB_SNAPSHOT="$AB_DIR/SNAPSHOT.json"
+AB_AWAITING="$AB_DIR/AWAITING.md"
+AB_LEDGER="$AB_DIR/log.md"
+AB_INDEX="$AB_DIR/index.md"
+AB_ROSTER="$AB_DIR/agents/index.md"
 # A FILE, not a directory, despite the name — tick-delta.sh writes one fingerprint line
 # to it. The key is named in ai-bridge-v3/task-031's criteria, so it is spelled as filed.
-AB_STATE_DIR=".tick-state"
-AB_BOARD_DIR=".board-live"
-AB_BOARD_OTHERS=".board-others.json"
-AB_LOCK=".tick-lock"
-AB_LOCK_CLAIM=".tick-lock.claim"
+AB_STATE_DIR="$AB_DIR/.tick-state"
+AB_BOARD_DIR="$AB_DIR/.board-live"
+AB_BOARD_OTHERS="$AB_DIR/.board-others.json"
+AB_LOCK="$AB_DIR/.tick-lock"
+AB_LOCK_CLAIM="$AB_DIR/.tick-lock.claim"
 
-export AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
-export AB_STATE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM
+# The pre-3.0 root spellings, as `<old>:<new>` pairs in the order migrate-bundle.sh moves
+# them. One list, so the migration, the un-migrated detector and the harnesses agree on
+# what moved without any of them re-deriving it.
+AB_MOVES="SCHEMA.md:$AB_SCHEMA CONVENTIONS.md:$AB_CONVENTIONS log.md:$AB_LEDGER \
+agents/index.md:$AB_ROSTER AWAITING.md:$AB_AWAITING SNAPSHOT.json:$AB_SNAPSHOT \
+index.md:$AB_INDEX .tick-state:$AB_STATE_DIR .board-live:$AB_BOARD_DIR \
+.board-others.json:$AB_BOARD_OTHERS"
 
-AB_KEYS="AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER \
+export AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
+export AB_STATE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM AB_MOVES
+
+AB_KEYS="AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER \
 AB_STATE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM"
 export AB_KEYS
+
+# Is <root> a bundle, and has it been migrated to the 3.0 layout?
+#
+# The marker is instance.config.json ALONE. It used to be `SCHEMA.md + instance.config.json`
+# in ten scripts and both hooks, and every one of those readers treats "not a bundle" as
+# silence — so with SCHEMA.md moved, an un-migrated bundle would read as a switched-off one
+# and no reader would say why.
+ab_is_bundle() { [ -f "${1:-.}/instance.config.json" ]; }
+
+# THE SEED STAYS FLAT; this is the mapping onto the bundle.
+#
+# `plugin/seed/` ships `SCHEMA.md` and friends at its top level and keeps `seed-base/`
+# where it is. Nesting the seed instead would re-arm the documented gitignore trap — a
+# `/.ai-bridge/index.md` line in the seed's own `.gitignore` hides the seed's own file.
+ab_seed_dest() { # <seed-relative path> — where the stamp puts it
+  local pair
+  for pair in $AB_MOVES; do
+    [ "$1" = "${pair%%:*}" ] && { printf '%s' "${pair#*:}"; return 0; }
+  done
+  printf '%s' "$1"
+}
+
+ab_unmigrated() { # <root> — a bundle still carrying plugin files at its root
+  local r="${1:-.}" pair
+  ab_is_bundle "$r" || return 1
+  for pair in $AB_MOVES; do
+    [ -e "$r/${pair%%:*}" ] && return 0
+  done
+  return 1
+}
+
+ab_unmigrated_notice() { # <root> — names what is still at the root, and the one fix
+  local r="${1:-.}" pair old
+  echo "ai-bridge: this bundle still has plugin-owned files at its root:" >&2
+  for pair in $AB_MOVES; do
+    old="${pair%%:*}"; [ -e "$r/$old" ] && echo "             $old -> ${pair#*:}" >&2
+  done
+  echo "           Fix it with: migrate-bundle.sh --layout --apply" >&2
+}
 
 ab_expand() {   # stdin -> stdout, __AB_SCHEMA__ and friends replaced by their values.
   local k; local -a e=()

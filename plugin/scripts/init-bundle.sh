@@ -1374,18 +1374,22 @@ if [ -d "$SEED_SRC" ]; then
       fi
       continue
     fi
-    src="$SEED_SRC/$rel"; dst="$TARGET/$rel"
+    # THE SEED IS FLAT AND THE BUNDLE IS NOT — the mapping happens here, on the copy.
+    # `record_seed_base` is keyed by the SEED path, so `.ai-bridge/seed-base/` stays flat
+    # and refresh-seeds.sh's merge base is unchanged by the move.
+    dest="$(ab_seed_dest "$rel")"
+    src="$SEED_SRC/$rel"; dst="$TARGET/$dest"
     dstdir="$(dirname "$dst")"
     if [ -e "$dst" ]; then
-      echo "  keep  $rel (exists)"
+      echo "  keep  $dest (exists)"
     elif [ "$(basename "$rel")" = ".gitkeep" ] && [ -d "$dstdir" ] && [ -n "$(ls -A "$dstdir" 2>/dev/null)" ]; then
       # The dir already has real content — a placeholder .gitkeep would just be clutter.
-      echo "  skip  $rel (dir already populated)"
+      echo "  skip  $dest (dir already populated)"
     else
       mkdir -p "$dstdir"
       cp "$src" "$dst"
       record_seed_base "$rel" "$src"
-      echo "  seed  $rel"
+      echo "  seed  $dest"
     fi
   done <<EOF
 $(cd "$SEED_SRC" && find . -type f | sed 's#^\./##' | sort)

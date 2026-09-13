@@ -281,14 +281,14 @@ default_branch() {
   printf '%s' "$_default_branch"
 }
 
-# Is the SESSION's cwd a control-panel instance root? The `SCHEMA.md` + `instance.config.json`
-# pair `skills/dispatch/SKILL.md` precondition 1 checks — deliberately the payload's `cwd` and
-# NOT `$INSTANCE_ROOT`, which is `$CLAUDE_PROJECT_DIR` and stays the bundle even for an agent
-# whose cwd is a worktree. Cached: it is two stats in front of every Bash call.
+# Is the SESSION's cwd a control-panel instance root? `instance.config.json`, the one marker
+# the block at the top of this file names — deliberately the payload's `cwd` and NOT
+# `$INSTANCE_ROOT`, which is `$CLAUDE_PROJECT_DIR` and stays the bundle even for an agent
+# whose cwd is a worktree. Cached: it is a stat in front of every Bash call.
 _cwd_instance=""
 cwd_is_instance_root() {
   if [ -z "$_cwd_instance" ]; then
-    if [ -f "$CWD/instance.config.json" ] && [ -f "$CWD/SCHEMA.md" ]; then _cwd_instance=yes
+    if [ -f "$CWD/instance.config.json" ]; then _cwd_instance=yes
     else _cwd_instance=no; fi
   fi
   [ "$_cwd_instance" = yes ]

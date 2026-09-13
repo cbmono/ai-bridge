@@ -180,6 +180,62 @@ mkdir -p "$TMP/x" && cd "$TMP/x"
 set +e; bash "$MIGRATE" >/dev/null 2>&1; RC=$?; set -e
 assert "exits 2 outside an instance root" "$([[ $RC -eq 2 ]] && echo 0 || echo 1)"
 
+# =========================================================================================
+# THE 3.0 LAYOUT STEP — its own bundle, because it moves the fixture out from under itself.
+# =========================================================================================
+. "$HERE/../plugin/scripts/bundle-paths.sh"
+
+L="$TMP/layout"; mkdir -p "$L/projects/p/tasks" "$L/knowledge/findings"; cd "$L"
+echo '{ "org": "x" }' > instance.config.json
+echo '# Schema' > SCHEMA.md
+echo '# Conventions' > CONVENTIONS.md
+printf 'AWAITING.md\n/.board-live/\n/.tick-lock\nnode_modules/\n' > .gitignore
+doc projects/p/tasks/task-001-x.md '---' 'type: Task' 'title: T' 'status: draft' "timestamp: $TS" '---' \
+  'See [SCHEMA](/SCHEMA.md) and [CONVENTIONS](/CONVENTIONS.md).'
+git init -q -b main . && git add -A && git -c user.email=a@b -c user.name=a commit -qm init
+: > AWAITING.md   # gitignored, so git mv would refuse it
+
+echo "== the layout step: report-only by default =="
+DRY="$(bash "$MIGRATE" 2>&1)"
+assert "it reports the move"           "$(printf '%s' "$DRY" | grep -q "WOULD MOVE SCHEMA.md -> $AB_SCHEMA" && echo 0 || echo 1)"
+assert "the untracked file too"        "$(printf '%s' "$DRY" | grep -q "WOULD MOVE AWAITING.md -> $AB_AWAITING" && echo 0 || echo 1)"
+assert "nothing actually moved"        "$([[ -f SCHEMA.md && ! -e $AB_SCHEMA ]] && echo 0 || echo 1)"
+
+echo "== it refuses on a live lock, and prints the commands instead =="
+: > .tick-lock
+LOCKED="$(bash "$MIGRATE" --apply 2>&1)"
+assert "REFUSED while a tick holds the lock" "$(printf '%s' "$LOCKED" | grep -q 'REFUSED.*lock' && echo 0 || echo 1)"
+assert "the manual command list is printed"  "$(printf '%s' "$LOCKED" | grep -q "git mv SCHEMA.md $AB_SCHEMA" && echo 0 || echo 1)"
+assert "and it moved nothing"                "$([[ -f SCHEMA.md ]] && echo 0 || echo 1)"
+rm -f .tick-lock
+
+echo "== it refuses a dirty TRACKED tree, but not untracked dirt =="
+echo 'edited' >> CONVENTIONS.md
+DIRTY="$(bash "$MIGRATE" --apply 2>&1)"
+assert "REFUSED on a dirty tracked tree" "$(printf '%s' "$DIRTY" | grep -q 'REFUSED.*tracked tree is dirty' && echo 0 || echo 1)"
+git add -A && git -c user.email=a@b -c user.name=a commit -qm edit
+: > untracked-scratch.md
+CLEANISH="$(bash "$MIGRATE" 2>&1)"
+assert "untracked dirt is NOT a refusal"  "$(printf '%s' "$CLEANISH" | grep -q 'REFUSED' && echo 1 || echo 0)"
+rm -f untracked-scratch.md
+
+echo "== --apply moves, rewrites the ignores and relinks =="
+OUT="$(bash "$MIGRATE" --apply 2>&1)"
+assert "SCHEMA.md is at its new path"     "$([[ -f $AB_SCHEMA && ! -e SCHEMA.md ]] && echo 0 || echo 1)"
+assert "git still tracks it there"        "$(git ls-files --error-unmatch -- "$AB_SCHEMA" >/dev/null 2>&1 && echo 0 || echo 1)"
+assert "the gitignored file moved too"    "$([[ -f $AB_AWAITING && ! -e AWAITING.md ]] && echo 0 || echo 1)"
+assert "…and git does not track THAT"     "$(git ls-files --error-unmatch -- "$AB_AWAITING" >/dev/null 2>&1 && echo 1 || echo 0)"
+assert "no symlink was left behind"       "$([[ -z "$(find . -maxdepth 1 -type l)" ]] && echo 0 || echo 1)"
+assert "the root ignore lines are gone"   "$(grep -qxE '/?(AWAITING\.md|\.board-live/|\.tick-lock)' .gitignore && echo 1 || echo 0)"
+assert "a human's own ignore line stayed" "$(grep -qx 'node_modules/' .gitignore && echo 0 || echo 1)"
+assert "the task doc's links were rewritten" \
+  "$(grep -q "(/$AB_SCHEMA)" projects/p/tasks/task-001-x.md && grep -q "(/$AB_CONVENTIONS)" projects/p/tasks/task-001-x.md && echo 0 || echo 1)"
+
+echo "== the layout step is idempotent =="
+AGAIN="$(bash "$MIGRATE" 2>&1)"
+assert "a migrated bundle says nothing about the layout" \
+  "$(printf '%s' "$AGAIN" | grep -q 'pre-3.0 layout' && echo 1 || echo 0)"
+
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

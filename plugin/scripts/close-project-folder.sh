@@ -89,8 +89,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || {
-  echo "close-project-folder: run from a control-panel instance root ($AB_SCHEMA + instance.config.json)." >&2
+ab_is_bundle . || {
+  echo "close-project-folder: run from a control-panel instance root (instance.config.json)." >&2
   exit 2
 }
 [[ -n "$SLUG" ]] || { echo "usage: $0 <slug> [--apply]" >&2; exit 2; }
