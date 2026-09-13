@@ -511,7 +511,8 @@ assert "…and that fingerprint is non-empty, so the comparison above is not two
 # 73 -> 74: plugin/scripts/normalise-config.sh (ai-bridge-2x/task-003), same reason.
 # 74 -> 75: plugin/scripts/kb-sweep-due.sh (ai-bridge-2x/task-010), same reason.
 # 75 -> 76: plugin/scripts/decision-stamp.sh (ai-bridge-2x/task-011), same reason.
-EXPECTED_ASSERTIONS=76
+# 76 -> 77: plugin/scripts/agent-usage.sh (ai-bridge-v3/task-001), same reason.
+EXPECTED_ASSERTIONS=77
 TOTAL=$((pass + fail))
 # EXPECTED_ASSERTIONS is a running counter whose comment history is longer than the value
 # it annotates, so a merge can plausibly keep the annotations and lose the assignment —
