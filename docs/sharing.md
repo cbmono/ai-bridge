@@ -1,8 +1,35 @@
-# Sharing one instance between two humans
+# Sharing one bundle — the front door for multi-person use
 
-An ai-bridge bundle can be shared by two humans, each with their own clone and their
-own `/ai-bridge:dispatch` loop. Both see one set of projects and one knowledge base, and either can hand
-a project or a single task across.
+**Start here for anything with more than one human in it.** One organisation has **one**
+OKF knowledge bundle: a single repo, cloned once per person, each clone running its own
+`/ai-bridge:dispatch` loop. Everyone sees one set of projects and one knowledge base, and
+anyone can hand a project or a single task across.
+
+## Step 0 — the bundle is the org's repo
+
+```sh
+/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group> --org <org>
+```
+
+The **first** person runs it and gets `<org>/<org>-okf` created private, seeded and
+pushed. **Everyone after them runs the same command** and gets a clone of it. The name is
+`<org>-okf` because the repo *is* the org's Open Knowledge Format bundle (`--name <repo>`
+overrides it).
+
+| It says | What happened |
+|---|---|
+| `create <org>/<org>-okf (private)` | you are an org admin; this is the org's bundle |
+| `bundle <you>/<org>-okf is under YOUR account` | creating it in the org was refused — **the normal path when you are not an admin**. The stamp and push are identical; it prints the `gh repo transfer` line for an admin to run later |
+| `clone <org>/<org>-okf -> …` | it was already there |
+
+Two refusals, and both are the point. It **will not create** until your access to `<org>`
+is established (`gh api orgs/<org>/memberships/<you>`), because the host answers the same
+404 for *absent* and for *private and invisible to you* — and seeding a fresh bundle over
+the org's real one is not recoverable. And it **refuses by name** when `<org>/<name>`
+exists but is not a bundle (no `instance.config.json`, no `SCHEMA.md`): pick another
+`--name`.
+
+The rest of this page is what the humans do around that repo.
 
 **The board is not shared either — each clone renders its own, and that costs nothing.**
 There is no published page to share: every `/ai-bridge:dispatch` tick renders
@@ -38,14 +65,25 @@ gitignored file on their machine, which `/ai-bridge:init` writes there.
 
 ## Do it in this order
 
-**The second human's own machine is three commands**, and the last one writes their
-per-machine config for them:
+**The second human's own machine is two commands**, and the last one clones the bundle
+*and* writes their per-machine config for them:
 
 ```sh
-git clone <bundle-remote> _ai-bridge-<group>
 # in Claude Code, once per machine:
 #   /plugin marketplace add cbmono/ai-bridge
 #   /plugin install ai-bridge@ai-bridge
+/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group> --org <org>
+```
+
+They get the clone with the **tracked** config — `people`, `defaultOwner`, `org` — already
+in it, and their **own** gitignored `instance.config.local.json`, which nobody else's clone
+can carry because it is never committed.
+
+**Already cloned it by hand?** Then it is three commands and the stamp is the same one:
+
+```sh
+git clone <bundle-remote> _ai-bridge-<group>
+cd _ai-bridge-<group>
 /ai-bridge:init .
 ```
 

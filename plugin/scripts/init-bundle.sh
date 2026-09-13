@@ -11,6 +11,10 @@
 #     init-bundle.sh --owner LOGIN --email ADDR --repos-root DIR [TARGET]
 #                                       # supply any of this clone's three per-machine
 #                                       # identity values instead of deriving them (4c)
+#     init-bundle.sh --org ORG [--name REPO] [TARGET]
+#                                       # the ORG'S bundle: clone <ORG>/<REPO> when it is
+#                                       # there, else create it private and push (step 0).
+#                                       # REPO defaults to <ORG>-okf
 #     init-bundle.sh --config           # link config/required/ into ~/.claude (CLAUDE_CONFIG_DIR wins)
 #     init-bundle.sh --uninstall [TARGET]  # remove the repos/ view and any legacy machinery links
 #     init-bundle.sh --config --uninstall   # remove only the config-layer symlinks this created
@@ -135,6 +139,10 @@ NORMALISE_CONFIG=0
 ID_OWNER_FLAG=""
 ID_EMAIL_FLAG=""
 ID_REPOS_FLAG=""
+# The ORGANISATION whose bundle this is, and the repo name under it. Empty means the old
+# behaviour exactly: a local folder, no host call, no remote.
+ORG_FLAG=""
+ORG_NAME_FLAG=""
 # A while/shift loop rather than `for arg in "$@"`, because three of these flags take a
 # value. Both spellings are accepted: `--owner x` and `--owner=x`.
 while [ "$#" -gt 0 ]; do
@@ -163,19 +171,23 @@ while [ "$#" -gt 0 ]; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/config-layer.test.sh asserts the flags appear in the output, which is
       # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,67p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,71p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
-    --owner|--email|--repos-root)
+    --owner|--email|--repos-root|--org|--name)
       [ "$#" -ge 2 ] || { echo "error: $arg needs a value" >&2; exit 2; }
       case "$arg" in
         --owner)      ID_OWNER_FLAG="$2" ;;
         --email)      ID_EMAIL_FLAG="$2" ;;
         --repos-root) ID_REPOS_FLAG="$2" ;;
+        --org)        ORG_FLAG="$2" ;;
+        --name)       ORG_NAME_FLAG="$2" ;;
       esac
       shift ;;
     --owner=*)      ID_OWNER_FLAG="${arg#*=}" ;;
     --email=*)      ID_EMAIL_FLAG="${arg#*=}" ;;
     --repos-root=*) ID_REPOS_FLAG="${arg#*=}" ;;
+    --org=*)        ORG_FLAG="${arg#*=}" ;;
+    --name=*)       ORG_NAME_FLAG="${arg#*=}" ;;
     -*) echo "error: unknown flag '$arg'" >&2; exit 2 ;;
     *)
       [ -z "$TARGET" ] || { echo "error: multiple target directories given" >&2; exit 2; }
@@ -186,6 +198,18 @@ done
 if [ "$LAYER" = "config" ] && [ -n "$TARGET" ]; then
   echo "error: --config takes no target directory (it links into" >&2
   echo "       \${CLAUDE_CONFIG_DIR:-\$HOME/.claude}); got '$TARGET'" >&2
+  exit 2
+fi
+if [ "$LAYER" = "config" ] && [ -n "$ORG_FLAG$ORG_NAME_FLAG" ]; then
+  echo "error: --org/--name are about a bundle repo; they do not apply to --config" >&2
+  exit 2
+fi
+if [ -n "$ORG_NAME_FLAG" ] && [ -z "$ORG_FLAG" ]; then
+  echo "error: --name needs --org (the repo is <org>/<name>)" >&2
+  exit 2
+fi
+if [ "$MODE" = "uninstall" ] && [ -n "$ORG_FLAG" ]; then
+  echo "error: --org creates or clones a bundle; it does not apply to --uninstall" >&2
   exit 2
 fi
 
@@ -1026,6 +1050,127 @@ fi
 TARGET="$(cd "$_want" 2>/dev/null && pwd || true)"
 [ -n "$TARGET" ] || { echo "error: target directory does not exist" >&2; exit 2; }
 [ -d "$SEED_SRC" ] || { echo "error: template missing $SEED_SRC" >&2; exit 2; }
+
+# =========================================================================================
+# 0. THE ORG'S BUNDLE (--org) — clone <org>/<name>, or create it private and push.
+# =========================================================================================
+#
+# One organisation, one OKF knowledge bundle, and a clone of it per person. Without --org
+# this whole block is skipped and a bundle is what it always was: a local folder somebody
+# pushes wherever they like — which is also why nothing here is gated on a TTY the way the
+# roster prompt is: the EXPLICIT flag is the consent, and upgrade.sh, a background agent
+# and every other caller pass no such flag, so none of them can reach a host call.
+#
+# THE NAME DEFAULTS TO `<org>-okf` because the repo IS the org's Open Knowledge Format
+# bundle — OKF names the whole repository the bundle, so the name says what the repo is
+# rather than which tool stamped it, and it does not collide with a product repo.
+#
+# A 404 FROM `gh repo view` IS NOT "DOES NOT EXIST". The host answers the same 404 for a
+# repo that is absent and for a private one the caller cannot yet see, so taking it as
+# absence seeds a fresh bundle over the org's real one — for the second person, on their
+# first command. The create path is therefore entered only after the caller's ACCESS is
+# established by a second, positive probe (`gh api orgs/<org>/memberships/<me>`, or the
+# org being the caller's own account). Probe unanswered ⇒ refuse and say so; the safe
+# direction is "ask for access", never "seed".
+#
+# AND AN EXISTING REPO THAT IS NOT A BUNDLE IS REFUSED BY NAME. `<org>-okf` may already be
+# somebody's unrelated repo; stamping seed docs into it is the same accident one step
+# later. `instance.config.json` or `SCHEMA.md` is the marker. A repo with NO COMMITS is
+# neither — it is an empty repo somebody made for this, so it is seeded and pushed like a
+# fresh one.
+#
+# NOT BEING AN ORG ADMIN IS THE DOCUMENTED PATH, NOT A FAILURE. When `gh repo create
+# <org>/<name>` is refused, the repo is created under the CALLER's account instead,
+# stamped and pushed exactly as it would have been, and the `gh repo transfer` command
+# that moves it to the org is printed. The stamp succeeds either way, and says which of
+# the two it did.
+ORG_SLUG=""      # <owner>/<name> this bundle belongs to
+ORG_HOST=""      # org | user | existing — which of the three step 7 reports
+ORG_REMOTE=""    # the URL step 7 pushes to
+ORG_PUSH=no      # does this run owe a first commit and a push?
+ORG_NAME=""
+
+# A GitHub owner or repository name. Deliberately narrow: the value is interpolated into a
+# slug, a URL and a shell word, and every name the host actually issues fits this.
+org_valid_name() { # <value>
+  case "$1" in
+    ''|*[!A-Za-z0-9._-]*) return 1 ;;
+    -*|.*) return 1 ;;
+  esac
+  [ "${#1}" -le 100 ]
+}
+
+if [ -n "$ORG_FLAG" ]; then
+  org_valid_name "$ORG_FLAG" || { echo "error: --org '$ORG_FLAG' is not a GitHub owner name" >&2; exit 2; }
+  ORG_NAME="${ORG_NAME_FLAG:-$ORG_FLAG-okf}"
+  org_valid_name "$ORG_NAME" || { echo "error: --name '$ORG_NAME' is not a GitHub repo name" >&2; exit 2; }
+  ORG_SLUG="$ORG_FLAG/$ORG_NAME"
+
+  command -v gh >/dev/null 2>&1 || {
+    echo "error: --org needs the GitHub CLI. Install gh, run 'gh auth login', and re-run." >&2; exit 3; }
+  command -v git >/dev/null 2>&1 || { echo "error: --org needs git." >&2; exit 3; }
+  gh auth status >/dev/null 2>&1 || {
+    echo "error: gh is not authenticated, so nothing about $ORG_SLUG can be established." >&2
+    echo "       Run 'gh auth login' and re-run — this refuses rather than seeding blind." >&2; exit 3; }
+  if [ -n "$(ls -A "$TARGET" 2>/dev/null)" ]; then
+    echo "error: --org needs an empty or absent directory; $TARGET has content." >&2
+    echo "       A bundle that is already here is refreshed by: /ai-bridge:init $TARGET" >&2; exit 3
+  fi
+
+  if gh repo view "$ORG_SLUG" --json name >/dev/null 2>&1; then
+    echo "  clone $ORG_SLUG -> $TARGET"
+    gh repo clone "$ORG_SLUG" "$TARGET" -- --quiet >/dev/null 2>&1 \
+      || { echo "error: could not clone $ORG_SLUG" >&2; exit 3; }
+    ORG_HOST=existing
+    ORG_REMOTE="$(git -C "$TARGET" remote get-url origin 2>/dev/null || true)"
+    if [ -e "$TARGET/instance.config.json" ] || [ -e "$TARGET/SCHEMA.md" ]; then
+      :
+    elif [ -z "$(git -C "$TARGET" rev-parse --verify HEAD 2>/dev/null || true)" ]; then
+      echo "  empty $ORG_SLUG has no commits — seeding it as this org's bundle"
+      ORG_PUSH=yes
+    else
+      echo "error: $ORG_SLUG exists and is not an ai-bridge bundle" >&2
+      echo "       (no instance.config.json, no SCHEMA.md). Refusing to stamp over it." >&2
+      echo "       Pick another name: --org $ORG_FLAG --name <repo>" >&2
+      echo "       The clone is at $TARGET — remove it if you did not want it:" >&2
+      echo "         rm -rf $TARGET" >&2
+      exit 3
+    fi
+  else
+    org_me="$(gh api user --jq .login 2>/dev/null || true)"
+    org_access=""
+    if [ -n "$org_me" ] && [ "$ORG_FLAG" = "$org_me" ]; then
+      org_access="it is your own account (gh api user)"
+    elif [ -n "$org_me" ]; then
+      org_state="$(gh api "orgs/$ORG_FLAG/memberships/$org_me" --jq .state 2>/dev/null || true)"
+      case "$org_state" in
+        active|pending) org_access="gh api orgs/$ORG_FLAG/memberships/$org_me -> $org_state" ;;
+      esac
+    fi
+    if [ -z "$org_access" ]; then
+      echo "error: $ORG_SLUG did not resolve, and your access to $ORG_FLAG could not be" >&2
+      echo "       established (gh api orgs/$ORG_FLAG/memberships/<you>). A 404 means" >&2
+      echo "       'absent' OR 'private, and you cannot see it yet' — so this refuses" >&2
+      echo "       rather than seeding a fresh bundle over the org's real one." >&2
+      echo "       Ask for membership of $ORG_FLAG, then re-run this command." >&2
+      exit 3
+    fi
+    echo "  access $ORG_FLAG — $org_access"
+    if gh repo create "$ORG_SLUG" --private >/dev/null 2>&1; then
+      ORG_HOST=org
+    else
+      ORG_SLUG="$org_me/$ORG_NAME"
+      gh repo create "$ORG_SLUG" --private >/dev/null 2>&1 || {
+        echo "error: could not create $ORG_FLAG/$ORG_NAME or $ORG_SLUG." >&2
+        echo "       Nothing was stamped. Create the repo by hand and re-run." >&2; exit 3; }
+      ORG_HOST=user
+    fi
+    ORG_PUSH=yes
+    ORG_REMOTE="$(gh repo view "$ORG_SLUG" --json sshUrl --jq .sshUrl 2>/dev/null || true)"
+    [ -n "$ORG_REMOTE" ] || ORG_REMOTE="https://github.com/$ORG_SLUG.git"
+    echo "  create $ORG_SLUG (private)"
+  fi
+fi
 
 # Name the seeded workspace file after the group so an open editor window is
 # identifiable (VS Code shows the .code-workspace *filename* — there's no top-level
@@ -2740,4 +2885,50 @@ if [ -f "$BIN_DIR/validate-bundle.sh" ]; then
     echo "Note: this bundle has schema errors. To see and repair them, run:"
     echo "      /ai-bridge:welcome check   (or: bash $BIN_DIR/validate-bundle.sh from $TARGET)"
   fi
+fi
+
+# ===========================================================================
+# 7. THE ORG BUNDLE'S FIRST COMMIT — only when step 0 created or found an empty repo.
+# ===========================================================================
+#
+# Last, because everything it commits is what the steps above just wrote. A clone of a
+# bundle that already has commits reaches here with ORG_PUSH=no and does nothing.
+if [ "$ORG_PUSH" = yes ]; then
+  echo
+  if [ ! -d "$TARGET/.git" ]; then
+    git -C "$TARGET" init --quiet >/dev/null 2>&1 || true
+  fi
+  git -C "$TARGET" remote get-url origin >/dev/null 2>&1 \
+    || git -C "$TARGET" remote add origin "$ORG_REMOTE" >/dev/null 2>&1 || true
+  org_rc=0
+  git -C "$TARGET" add -A >/dev/null 2>&1 || org_rc=1
+  git -C "$TARGET" commit --quiet -m "chore: stamp the $ORG_FLAG OKF knowledge bundle" >/dev/null 2>&1 || org_rc=1
+  [ "$org_rc" != 0 ] || git -C "$TARGET" push --quiet -u origin HEAD >/dev/null 2>&1 || org_rc=1
+  if [ "$org_rc" = 0 ]; then
+    echo "  pushed $ORG_SLUG — the first commit is on the default branch"
+  else
+    echo "  warn  the first commit was not pushed. From $TARGET, finish it by hand:" >&2
+    echo "          git add -A && git commit -m 'chore: stamp the bundle' && git push -u origin HEAD" >&2
+  fi
+  # WHICH OF THE TWO IT DID — said on every path, because "it worked" is not the answer to
+  # "is this the org's bundle yet?".
+  case "$ORG_HOST" in
+    org)  echo "  bundle $ORG_SLUG is the organisation's — everyone clones this." ;;
+    user) cat <<ORGNOTE
+  bundle $ORG_SLUG is under YOUR account: creating $ORG_FLAG/$ORG_NAME was refused,
+         which is the normal path for anyone who is not an org admin. The stamp is
+         complete. Move it to $ORG_FLAG when an admin can:
+           gh repo transfer $ORG_SLUG $ORG_FLAG
+           # or: gh api -X POST repos/$ORG_SLUG/transfer -f new_owner=$ORG_FLAG
+         Then every clone re-points with: git remote set-url origin <new url>
+ORGNOTE
+    ;;
+    *)    echo "  bundle $ORG_SLUG was empty and is now this org's bundle." ;;
+  esac
+  echo "  note  \"org\" in instance.config.json names the org whose PRODUCT repos the tasks"
+  echo "        target — a separate value from --org, which is who hosts this bundle."
+fi
+if [ -n "$ORG_SLUG" ]; then
+  echo "  note  everyone else on this bundle starts here:"
+  echo "        https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md"
 fi

@@ -1,7 +1,7 @@
 ---
 name: init
 description: Create a new AI Bridge bundle, refresh an existing one, or convert a symlink-era bundle in place. Data only — a bundle it stamps carries no machinery and no link into any checkout.
-argument-hint: "<dir>  [--refresh-seeds] [--with-objectives] [--normalise-config] [--owner L] [--email A] [--repos-root D]"
+argument-hint: "<dir>  [--org O [--name R]] [--refresh-seeds] [--with-objectives] [--normalise-config] [--owner L] [--email A] [--repos-root D]"
 disable-model-invocation: true
 allowed-tools: Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh:*), Bash(pwd), Bash(ls:*), Read, Glob
 ---
@@ -12,7 +12,8 @@ Run this, from anywhere, and **relay its output verbatim**:
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh $ARGUMENTS
 ```
 
-`$ARGUMENTS` is the bundle directory, optionally followed by `--refresh-seeds`,
+`$ARGUMENTS` is the bundle directory, optionally followed by `--org <org>` (see "One org,
+one bundle"), `--refresh-seeds`,
 `--with-objectives`, `--normalise-config`, or one of `--owner <login>` / `--email
 <address>` / `--repos-root <dir>` (see "When it says `needs`"). No directory means the
 current one. That is the whole skill: every
@@ -36,6 +37,28 @@ and a plugin update is what updates it.
 
 **The only symlinks a stamped bundle holds are under `repos/`**, and those point at the
 group's product repos, never at a checkout of this repo.
+
+## One org, one bundle — `--org <org> [--name <repo>]`
+
+The bundle is the **organisation's repo**, and everyone clones the same one.
+`/ai-bridge:init <dir> --org <org>` resolves `<org>/<org>-okf` (`--name` overrides the
+name) and does exactly one of three things, saying which:
+
+| | |
+|---|---|
+| **Clones** it | the repo is there and is a bundle — the tracked config comes with it, and this clone's own gitignored `instance.config.local.json` is written by the step below |
+| **Creates** it | private, seeded, first commit pushed — only after your access to `<org>` is established, never off a bare 404 |
+| **Creates it under YOU** | when creating it in `<org>` is refused because you are not an org admin. Same stamp, same push; it prints the `gh repo transfer` line that moves it to the org later |
+
+**Two refusals, both deliberate.** It refuses when your access to `<org>` cannot be
+established — a 404 means *absent* or *private and invisible to you*, and seeding over the
+org's real bundle is not recoverable — and it refuses **by name** when `<org>/<name>`
+exists and is not a bundle. Relay either verbatim; the fix is membership, or another
+`--name`.
+
+**The second person runs the same command.** They get the clone, and the `needs` flow
+below is how their `ownerGithubUser` is asked for. The full order is `docs/sharing.md` in
+the template, whose URL the stamp prints on its last line.
 
 ## The first stamp asks one question
 
