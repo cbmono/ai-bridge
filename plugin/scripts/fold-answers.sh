@@ -107,7 +107,7 @@ def scan_flow(text, i):
                     if i + 1 >= n:
                         die(3, "trailing escape")
                     nxt = text[i + 1]
-                    # ONLY THE ESCAPES emit() CAN REPRODUCE. `☺` would otherwise read
+                    # ONLY THE ESCAPES emit() CAN REPRODUCE. A `\u263A` would otherwise read
                     # as `u263A` and re-parse to `u263A`, so the round-trip guard — which
                     # uses this same scanner — cannot see that the backslash was dropped.
                     if nxt not in ESCAPES:
