@@ -10,6 +10,9 @@
 # Exit: 0 always (a status line never fails a session), 3 usage.
 # Reasoning: ai-bridge-v3/task-025.
 set -uo pipefail
+# `|| exit 0`, not the house `|| exit 2`: the exit contract above wins — a status line
+# never fails a session, even when its own resolver is gone.
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 0
 
 INST=""; COLOR=auto
 while [ $# -gt 0 ]; do
@@ -95,28 +98,28 @@ fi
 # Deletable by design, so absent is NOT zero — nothing can be established about the queue
 # from a file that is not there.
 awaiting="$UNKNOWN"
-if [ -r "$root/AWAITING.md" ]; then
+if [ -r "$root/$AB_AWAITING" ]; then
   awaiting="$(awk '
     /^##[[:space:]].*Awaiting you/ { inblk = 1; next }
     inblk && /^##[[:space:]]/      { exit }
     inblk && /^[[:space:]]*\* /    { n++ }
     END { print n + 0 }
-  ' "$root/AWAITING.md" 2>/dev/null)" || awaiting="$UNKNOWN"
+  ' "$root/$AB_AWAITING" 2>/dev/null)" || awaiting="$UNKNOWN"
   [ -n "$awaiting" ] || awaiting="$UNKNOWN"
 fi
 
 # --- the lock: one `[ -f ]`, never a call into tick-lock.sh ------------------------------
 lock=free
-[ -f "$root/.tick-lock" ] && lock=held
+[ -f "$root/$AB_LOCK" ] && lock=held
 
 # --- last tick: log.md's last `* TICK` line ---------------------------------------------
 # NOT `.tick-state`: tick-delta.sh refuses to stamp it while any task is in-progress, so it
 # is guaranteed stale exactly while `in flight` is non-zero. An `open:` line counts — a tick
 # that started and has not closed is still the last tick.
 last="$UNKNOWN"
-if [ -r "$root/log.md" ]; then
+if [ -r "$root/$AB_LEDGER" ]; then
   ts="$(awk '/^\* TICK [0-9][0-9][0-9][0-9]-[0-9][0-9]-/ { t = $3 } END { print t }' \
-        "$root/log.md" 2>/dev/null)"
+        "$root/$AB_LEDGER" 2>/dev/null)"
   if [ -n "$ts" ]; then
     # The stamp is UTC and the reader is not. BSD first — it needs `-u` on the PARSE and a
     # second call to print local, and GNU `date` has no `-j` to be confused by.
