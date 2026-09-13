@@ -41,10 +41,10 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: read
-    # MEASURED, not guessed (ai-bridge-v3/task-038): 111 harnesses, all green, 6m 15s
-    # in a pool of 11 on an M3 Pro — against 29m 45s sequential on run 34774374082, of
-    # which ~7 minutes was the paid eval that now runs nightly in tests-deep.yml. The
-    # ceiling is set at roughly twice the expected CI figure, not at a round 30.
+    # MEASURED, not guessed (ai-bridge-v3/task-038): 111 harnesses in 10m 35s here (this
+    # runner has 3 CPUs and the pool uses all of them) and 6m 15s in a pool of 11 on an
+    # M3 Pro — against 29m 45s sequential on run 34774374082, of which ~7 minutes was the
+    # paid eval that now runs nightly in tests-deep.yml. 15 is ~1.4x the measured figure.
     timeout-minutes: 15
     steps:
       - name: Checkout

@@ -233,7 +233,10 @@ assert "the run says how it was split"                        "$(has "$P_OUT" 's
 assert "…with the serial harness counted as serial"           "$(has "$P_OUT" '1 serial,')"
 assert "…and a pool of the size asked for"                    "$(has "$P_OUT" 'in a pool of 4')"
 assert "…and every harness still ran green"                   "$(has "$P_OUT" 'ok: all')"
-ORD="$(grep -o '^== tests/[A-Za-z0-9_.-]*\.test\.sh' <<<"$P_OUT" | sed 's/^== //')"
+# Both header forms: the fixture run inherits GITHUB_ACTIONS from a CI job, and there the
+# runner emits `::group::<file>` instead of `== <file>`. Matching only one reads as a
+# failure of the ORDER on every CI run — measured on run 34782353871.
+ORD="$(grep -oE '^(== |::group::)tests/[A-Za-z0-9_.-]*\.test\.sh' <<<"$P_OUT" | sed -E 's/^(== |::group::)//')"
 assert "…and the per-harness output is replayed in file order, never completion order" \
   "$([ -n "$ORD" ] && [ "$ORD" == "$(printf '%s\n' "$ORD" | sort)" ] && echo 0 || echo 1)"
 assert "…and the tally is still exact (one pass per fixture harness)" \

@@ -32,7 +32,8 @@ Everything else runs in a bounded pool, output replayed in file order.
 Measured on an M3 Pro, 2026-09-13, `claude` masked off PATH: a one-line edit to
 `plugin/scripts/commit-as.sh` selects 18 harnesses and takes **1m 21s** (was 2m 25s
 sequential, and 9m 12s with the eval in the core); all 111 take **6m 15s** in a pool of
-11, against **39m 47s** sequential.
+11, against **39m 47s** sequential. In CI, where the runner has 3 CPUs: **10m 35s**,
+against 29m 45s sequential (run 34774374082).
 
 The full suite is CI's job: `harness suite` is a required check with `strict=true`, and it
 runs everything against the merged base. Locally the same loop measured **39m 47s and
