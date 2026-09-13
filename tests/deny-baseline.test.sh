@@ -33,6 +33,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 HOOK="$REPO/plugin/hooks/deny-destructive.sh"
 HOOKSJSON="$REPO/plugin/hooks/hooks.json"
 SETTINGS="$REPO/plugin/seed/.claude/settings.json"
@@ -529,9 +531,9 @@ echo "== rule 10: launcher_diagnoses_nothing — the main thread, in a bundle ro
 # carries only the config (it is `$CLAUDE_PROJECT_DIR`, where the guard tests one marker), and
 # `$BUNDLE` deliberately has no `SCHEMA.md`. A third fixture, therefore, and `$GITREPO` stays
 # the not-a-bundle partner every allow case below is written against.
-CPROOT="$WORK/cproot"; mkdir -p "$CPROOT/projects"
+CPROOT="$WORK/cproot"; mkdir -p "$CPROOT/projects" "$CPROOT/$AB_DIR"
 printf '{}\n' > "$CPROOT/instance.config.json"
-printf '# schema\n' > "$CPROOT/SCHEMA.md"
+printf '# schema\n' > "$CPROOT/$AB_SCHEMA"
 CPROOT="$(res "$CPROOT")"
 
 # `verdict` sends no agent_id AND no agent_type — that IS the main thread. `verdict_agent`
@@ -623,7 +625,7 @@ ok "…and cats a build artifact" \
    "$(verdict "$GITREPO" 'cat dist/main.js')" "allow"
 # `instance.config.json` alone is NOT the pair this rule keys on — that marker arms the
 # hook's own guard, and reusing it here would fire in a target repo that happens to hold one.
-ok "…instance.config.json without SCHEMA.md is not a bundle root" \
+ok "…instance.config.json without .ai-bridge/SCHEMA.md is not a bundle root" \
    "$(verdict "$BUNDLE" 'kubectl get pods -n staging')" "allow"
 
 # --- ALLOW HALF C: the main thread, IN the bundle root, doing its actual job. If any of

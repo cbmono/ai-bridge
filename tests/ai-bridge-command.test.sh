@@ -38,6 +38,8 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 SH="$TPL/plugin/scripts/ai-bridge.sh"
 BANNER="$TPL/plugin/hooks/session-banner.sh"
 CMD="$TPL/plugin/skills/welcome/SKILL.md"
@@ -71,9 +73,9 @@ sha() { # <file> — a content fingerprint that is the same on macOS and Linux
 
 # mkinstance <dir> — a git-tracked instance with the two files the banner's own gate wants.
 mkinstance() {
-  mkdir -p "$1/.claude/agents" "$1/scripts"
+  mkdir -p "$1/.claude/agents" "$1/scripts" "$1/$AB_DIR"
   printf '{\n  "org": "example-org",\n  "maxPrLoc": 2000,\n  "maxAgentsInFlight": 8\n}\n' > "$1/instance.config.json"
-  printf 'stub\n' > "$1/SCHEMA.md"
+  printf 'stub\n' > "$1/$AB_SCHEMA"
   GIT -C "$1" init -q 2>/dev/null || GIT init -q "$1"
   GIT -C "$1" add -A
   GIT -C "$1" commit -qm "instance"
@@ -349,8 +351,8 @@ cp "$TPL/plugin/scripts/tick-lock.sh" "$INST3/scripts/tick-lock.sh"
 cp "$TPL/plugin/scripts/bundle-paths.sh" "$INST3/scripts/bundle-paths.sh"
 old="$(date -u -r $(( $(date +%s) - 7200 )) +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
        || date -u -d '-2 hours' +%Y-%m-%dT%H:%M:%SZ)"
-printf 'timestamp: %s\nagent: project-manager\n' "$old" > "$INST3/.tick-lock"
-printf 'timestamp: %s\nagent: project-manager\n' "$old" > "$INST3/.tick-lock.claim"
+printf 'timestamp: %s\nagent: project-manager\n' "$old" > "$INST3/$AB_LOCK"
+printf 'timestamp: %s\nagent: project-manager\n' "$old" > "$INST3/$AB_LOCK_CLAIM"
 # Same non-vacuity guard as §4: one machinery link, so `fix` really acts on the idempotent
 # tier in the same run that must leave the lock alone.
 ln -s "$SRC/plugin/scripts/commit-as.sh" "$INST3/scripts/commit-as.sh"
@@ -361,8 +363,8 @@ lockrc=0; lockout="$(bash "$INST3/scripts/tick-lock.sh" status --instance "$INST
 ok "the planted lock really is STALE to tick-lock.sh"      "$(printf '%s\n' "$lockout" | grep -c '^STALE' | tr -d ' ')" 1
 ok "…which tick-lock.sh reports as exit 2"                 "$lockrc" 2
 
-lock_before="$(sha "$INST3/.tick-lock")"
-claim_before="$(sha "$INST3/.tick-lock.claim")"
+lock_before="$(sha "$INST3/$AB_LOCK")"
+claim_before="$(sha "$INST3/$AB_LOCK_CLAIM")"
 CHK3="$(bash "$SH" check --instance "$INST3" --template "$SRC" 2>&1)"
 ok "check SEES the stale lock"                             "$(printf '%s\n' "$CHK3" | grep -c 'tick lock needs YOUR decision' | tr -d ' ')" 1
 ok "…and names release as the human's override"            "$(printf '%s\n' "$CHK3" | grep -c 'release --instance' | tr -d ' ')" 1
@@ -372,10 +374,10 @@ ok "fix reported it at the human tier"                     "$(printf '%s\n' "$FI
 # Same non-vacuity guard as §4: the lock survived a run that was acting, not one that
 # happened to be unable to act.
 ok "…in a run that DID act on the idempotent tier"         "$(printf '%s\n' "$FIX3" | grep -c 'running: bash .*init-bundle.sh' | tr -d ' ')" 1
-ok ".tick-lock still exists after fix"                     "$(yn test -f "$INST3/.tick-lock")" yes
-ok "…byte-identical"                                       "$(sha "$INST3/.tick-lock")" "$lock_before"
-ok ".tick-lock.claim still exists after fix"               "$(yn test -f "$INST3/.tick-lock.claim")" yes
-ok "…byte-identical"                                       "$(sha "$INST3/.tick-lock.claim")" "$claim_before"
+ok ".tick-lock still exists after fix"                     "$(yn test -f "$INST3/$AB_LOCK")" yes
+ok "…byte-identical"                                       "$(sha "$INST3/$AB_LOCK")" "$lock_before"
+ok ".tick-lock.claim still exists after fix"               "$(yn test -f "$INST3/$AB_LOCK_CLAIM")" yes
+ok "…byte-identical"                                       "$(sha "$INST3/$AB_LOCK_CLAIM")" "$claim_before"
 # And the lock is still doing its job: a dispatch after `fix` must still be refused.
 arc=0; bash "$INST3/scripts/tick-lock.sh" acquire --instance "$INST3" >/dev/null 2>&1 || arc=$?
 ok "…and the lock still refuses an acquire, so fix did not defeat it" \

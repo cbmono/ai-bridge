@@ -90,6 +90,14 @@ INSTANCE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 INSTANCE_ROOT="$(cd "$INSTANCE_ROOT" 2>/dev/null && pwd -P || printf '%s' "$INSTANCE_ROOT")"
 [ -f "$INSTANCE_ROOT/instance.config.json" ] || exit 0
 
+# The layout resolver, from the plugin this hook ships in. Unreachable ⇒ fail OPEN, the
+# same direction the missing-jq branch below takes: a guard that cannot read the layout
+# must not start denying by accident.
+_self="${BASH_SOURCE[0]:-$0}"; case "$_self" in /*) ;; *) _self="$PWD/$_self" ;; esac
+[ -L "$_self" ] && _self="$(readlink "$_self" 2>/dev/null || printf '%s' "$_self")"
+# shellcheck source=../scripts/bundle-paths.sh
+. "${CLAUDE_PLUGIN_ROOT:-${_self%/hooks/*}}/scripts/bundle-paths.sh" 2>/dev/null || exit 0
+
 # ------------------------------------------------------------------------------- payload
 payload="$(cat 2>/dev/null || true)"
 [ -n "$payload" ] || exit 0
@@ -281,14 +289,17 @@ default_branch() {
   printf '%s' "$_default_branch"
 }
 
-# Is the SESSION's cwd a control-panel instance root? `instance.config.json`, the one marker
-# the block at the top of this file names — deliberately the payload's `cwd` and NOT
-# `$INSTANCE_ROOT`, which is `$CLAUDE_PROJECT_DIR` and stays the bundle even for an agent
-# whose cwd is a worktree. Cached: it is a stat in front of every Bash call.
+# Is the SESSION's cwd a control-panel instance root? The `$AB_SCHEMA` +
+# `instance.config.json` pair `skills/dispatch/SKILL.md` precondition 1 checks —
+# deliberately the payload's `cwd` and NOT `$INSTANCE_ROOT`, which is `$CLAUDE_PROJECT_DIR`
+# and stays the bundle even for an agent whose cwd is a worktree. It stays a PAIR rather
+# than becoming the hook's own one-marker guard above: a target repo that happens to hold
+# an `instance.config.json` would otherwise arm this rule inside it.
+# Cached: it is two stats in front of every Bash call.
 _cwd_instance=""
 cwd_is_instance_root() {
   if [ -z "$_cwd_instance" ]; then
-    if [ -f "$CWD/instance.config.json" ]; then _cwd_instance=yes
+    if [ -f "$CWD/instance.config.json" ] && [ -f "$CWD/$AB_SCHEMA" ]; then _cwd_instance=yes
     else _cwd_instance=no; fi
   fi
   [ "$_cwd_instance" = yes ]

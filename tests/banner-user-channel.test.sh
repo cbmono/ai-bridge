@@ -56,7 +56,10 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+
 TPL="$(cd "$HERE/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
 # The four ai-bridge hooks are registered by the PLUGIN since task-013.
 SETTINGS="$TPL/plugin/hooks/hooks.json"
@@ -162,7 +165,7 @@ user_visible() { # <stdout> <needle> -> 0 when the needle is in the field a HUMA
 # install.sh stamps it, so the registered command below resolves the way it does live.
 INST="$TMP/_ai-bridge-fixture"
 mkdir -p "$INST/.claude/agents" "$INST/.claude/hooks"
-printf 'stub\n' > "$INST/SCHEMA.md"
+printf 'stub\n' > "$INST/$AB_SCHEMA"
 ln -s "$HOOK" "$INST/.claude/hooks/session-banner.sh"
 cat > "$INST/instance.config.json" <<'EOF'
 {
@@ -214,8 +217,8 @@ export CLAUDE_PLUGIN_ROOT="$PLUGROOT"
 hook_run() { OUT="$(CLAUDE_PLUGIN_ROOT="$PLUGROOT" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>"$TMP/stderr")"; RC=$?
              ERR="$(cat "$TMP/stderr" 2>/dev/null || true)"; }
 
-mkdir -p "$INST/.board-live"; printf '<!doctype html>\n' > "$INST/.board-live/board.html"
-printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
+mkdir -p "$INST/$AB_BOARD_DIR"; printf '<!doctype html>\n' > "$INST/$AB_BOARD_DIR/board.html"
+printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/$AB_AWAITING"
 hook_run
 assert "the registered command exits 0"                "$(eq "$RC" 0)"
 assert "…with nothing on stderr"                       "$(eq "$ERR" '')"
@@ -229,7 +232,7 @@ assert "…and it carries the identity line"             "$(user_visible "$OUT" 
 # THE LINK THE HUMAN DID NOT GET. The measured failure lost the board link specifically, so
 # it is asserted on the human's channel by name rather than left to the comparison below.
 assert "…and the board path, the line the human never saw" \
-  "$(user_visible "$OUT" "$INST/.board-live/board.html")"
+  "$(user_visible "$OUT" "$INST/$AB_BOARD_DIR/board.html")"
 assert "…and the awaiting nudge"                       "$(user_visible "$OUT" '1 item needs you')"
 
 # CHARACTER FOR CHARACTER, not "contains the important lines". A field carrying a summary, a
@@ -290,7 +293,7 @@ echo "== 2. the check DISCRIMINATES — it fails the two shapes a content grep p
 STDOUT_ONLY="$TEXT"
 assert "a stdout-only banner contains the text…"       "$(has 'AI-Bridge' "$STDOUT_ONLY")"
 assert "…which is exactly why the OLD content grep passed it" \
-  "$(has "$INST/.board-live/board.html" "$STDOUT_ONLY")"
+  "$(has "$INST/$AB_BOARD_DIR/board.html" "$STDOUT_ONLY")"
 assert "…yet it does not parse as hook JSON"           "$(eq "$(parses "$STDOUT_ONLY")" 1)"
 assert "…and reaches no user-visible field"            "$(eq "$(user_visible "$STDOUT_ONLY" 'AI-Bridge')" 1)"
 
@@ -322,7 +325,7 @@ echo "== 3. nothing a task document or a config can contain may break the envelo
 # one that fences it. An envelope carrying hostile bytes in `additionalContext` alone still
 # has to parse, so this section's original job is unchanged.
 HOSTILE="a \"quoted\" \\ back\\slash, a tab>${TAB}<, a bell>${BEL}<, unicode → · ─, and \"}{\"forged\":1"
-printf '## 🔴 Awaiting you (1)\n* %s\n' "$HOSTILE" > "$INST/AWAITING.md"
+printf '## 🔴 Awaiting you (1)\n* %s\n' "$HOSTILE" > "$INST/$AB_AWAITING"
 hook_run
 assert "hostile awaiting text: still exit 0"           "$(eq "$RC" 0)"
 assert "…still one parseable JSON object"              "$(parses "$OUT")"
@@ -345,14 +348,14 @@ assert "…and NONE of it reached the human's channel" \
 assert "…nor did the forged brace or the quoted run"   "$(hasnt 'forged' "$SM")"
 assert "…and the user-visible copy still equals the text banner" \
   "$(eq "$(strip_sgr "$SM")" "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)")"
-printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
+printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/$AB_AWAITING"
 
 # =======================================================================================
 echo "== 4. the missing-file cases — the channel stays well formed, or stays silent =="
 # =======================================================================================
 # Every optional input gone at once. The banner is allowed to lose sections; it is not
 # allowed to emit half an object, and it is not allowed to exit non-zero.
-rm -rf "$INST/.board-live" "$INST/AWAITING.md" "$INST/SNAPSHOT.json" "$INST/projects"
+rm -rf "$INST/$AB_BOARD_DIR" "$INST/$AB_AWAITING" "$INST/$AB_SNAPSHOT" "$INST/projects"
 hook_run
 assert "no AWAITING.md, no SNAPSHOT.json, no board.html: exit 0" "$(eq "$RC" 0)"
 assert "…still valid JSON"                             "$(parses "$OUT")"
@@ -365,16 +368,16 @@ assert "…on the model's channel as well" \
 
 # One at a time, so a single guard cannot answer for all three.
 for missing in AWAITING.md SNAPSHOT.json .board-live/board.html; do
-  mkdir -p "$INST/.board-live"
-  printf '<!doctype html>\n' > "$INST/.board-live/board.html"
-  printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
-  printf '{ "projects": [] }\n' > "$INST/SNAPSHOT.json"
+  mkdir -p "$INST/$AB_BOARD_DIR"
+  printf '<!doctype html>\n' > "$INST/$AB_BOARD_DIR/board.html"
+  printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/$AB_AWAITING"
+  printf '{ "projects": [] }\n' > "$INST/$AB_SNAPSHOT"
   rm -rf "${INST:?}/$missing"
   hook_run
   assert "$missing missing on its own: exit 0 and valid JSON" \
     "$([ "$RC" = 0 ] && [ "$(parses "$OUT")" = 0 ] && echo 0 || echo 1)"
 done
-rm -rf "$INST/.board-live" "$INST/AWAITING.md" "$INST/SNAPSHOT.json"
+rm -rf "$INST/$AB_BOARD_DIR" "$INST/$AB_AWAITING" "$INST/$AB_SNAPSHOT"
 
 # A config file that is present but says nothing. The instance test still passes, so the
 # banner runs — with almost every section empty.
@@ -550,7 +553,7 @@ STUBBIN="$TMP/stubbin"; mkdir -p "$STUBBIN"
 # §4 emptied the fixture. The awaiting queue is put back because these fallbacks are also
 # where the model's copy has to survive, and an absent AWAITING.md would make that half of
 # the section vacuously true.
-printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
+printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/$AB_AWAITING"
 
 # BOTH FALLBACKS PRODUCE ONE STREAM, AND THAT STREAM'S READER IS THE MODEL — this is the
 # stdout settings.json aimed at the session's context, so what it must carry is the MODEL's
@@ -640,8 +643,8 @@ hasnt_sm() { # <stdout> <needle> -> 0 when the needle is NOT in the field a HUMA
   local sm; sm="$(field "$1" systemMessage)"
   printf '%s\n' "$sm" | grep -qF -- "$2" && echo 1 || echo 0
 }
-BOARD_DIR="$INST/.board-live"
-printf '## 🔴 Awaiting you (2)\n* ✅ **approve** — a thing\n* ❓ **answer** — another\n' > "$INST/AWAITING.md"
+BOARD_DIR="$INST/$AB_BOARD_DIR"
+printf '## 🔴 Awaiting you (2)\n* ✅ **approve** — a thing\n* ❓ **answer** — another\n' > "$INST/$AB_AWAITING"
 
 # --- state 1: enabled and rendered. UNCHANGED, pinned against a literal fixture ---------
 mkdir -p "$BOARD_DIR"; printf '<!doctype html>\n<h1>board</h1>\n' > "$BOARD_DIR/board.html"
@@ -782,11 +785,11 @@ AC="$(field "$OUT" hookSpecificOutput.additionalContext)"
 # NON-VACUITY FOR THE EQUALITY ABOVE: the banner is not simply constant. AWAITING.md still
 # moves it, so "nothing changed" is a statement about task documents and not about a hook
 # that has stopped reading anything.
-printf '## 🔴 Awaiting you (3)\n* a\n* b\n* c\n' > "$INST/AWAITING.md"
+printf '## 🔴 Awaiting you (3)\n* a\n* b\n* c\n' > "$INST/$AB_AWAITING"
 hook_run
 assert "…while AWAITING.md still moves the human's copy" \
   "$([ "$(field "$OUT" systemMessage)" != "$SM" ] && echo 0 || echo 1)"
-printf '## 🔴 Awaiting you (2)\n* ✅ **approve** — a thing\n* ❓ **answer** — another\n' > "$INST/AWAITING.md"
+printf '## 🔴 Awaiting you (2)\n* ✅ **approve** — a thing\n* ❓ **answer** — another\n' > "$INST/$AB_AWAITING"
 hook_run
 SM="$(field "$OUT" systemMessage)"
 AC="$(field "$OUT" hookSpecificOutput.additionalContext)"
@@ -814,7 +817,7 @@ assert "…which is a real comparison — the two copies genuinely differ" \
   "$(printf '%s\n' "$DIFF_HM" | grep -q '^> ' && echo 0 || echo 1)"
 assert "…and the fence is still on the model's channel" "$(has '--- BEGIN AWAITING ITEMS (untrusted data) ---' "$AC")"
 assert "…and still absent from the human's"             "$(hasnt '--- BEGIN AWAITING ITEMS' "$SM")"
-rm -rf "$INST/projects" "$INST/AWAITING.md"
+rm -rf "$INST/projects" "$INST/$AB_AWAITING"
 
 # =======================================================================================
 echo "== 9. ONE leading blank line, and it belongs to the BANNER — not to systemMessage =="

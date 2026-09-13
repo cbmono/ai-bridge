@@ -43,6 +43,9 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 TPL="$(cd "$HERE/.." && pwd)"
 WRITER="$TPL/plugin/scripts/write-snapshot.sh"
 BOARD="$TPL/plugin/scripts/build-board.sh"
@@ -141,8 +144,8 @@ TMP="$(cd "$TMP" && pwd)"
 trap 'rm -rf "$TMP"' EXIT
 
 INST="$TMP/_ai-bridge-fixture"
-mkdir -p "$INST"
-: > "$INST/SCHEMA.md"
+mkdir -p "$INST" "$INST/$AB_DIR"
+: > "$INST/$AB_SCHEMA"
 cat > "$INST/instance.config.json" <<CFG
 { "org": "fixture-org", "reposRoot": "$TMP/repos", "worktreeRoot": "$TMP/wt",
   "authorEmail": "nobody@example.com" }
@@ -271,7 +274,7 @@ for s in "${SHAPES[@]}"; do
   } > "$INST/projects/$slug/project.md"
 done
 
-: > "$INST/SNAPSHOT.json"
+: > "$INST/$AB_SNAPSHOT"
 W_RC=0
 W_ERR="$( cd "$INST" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" --quiet 2>&1 )" || W_RC=$?
 assert "the writer exits 0 over every shape at once" "$(eq "$W_RC" 0)"

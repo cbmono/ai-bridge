@@ -41,6 +41,9 @@
 set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 SCRIPTS="$TPL/plugin/scripts"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/config-override.XXXXXX")" || {
   echo "config-override.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -61,7 +64,7 @@ TRACKED_ROOT="$TMP/tracked-repos"; mkdir -p "$TRACKED_ROOT/repo-t/.git"
 LOCAL_ROOT="$TMP/local-repos";     mkdir -p "$LOCAL_ROOT/repo-l/.git"
 
 INST="$TMP/_ai-bridge-fixture"; mkdir -p "$INST"
-printf 'stub\n' > "$INST/SCHEMA.md"
+printf 'stub\n' > "$INST/$AB_SCHEMA"
 tracked() { printf '{\n  "org": "o",\n  "reposRoot": "%s"\n}\n' "$TRACKED_ROOT" > "$INST/instance.config.json"; }
 local_cfg() { printf '%s\n' "$1" > "$INST/instance.config.local.json"; }
 no_local() { rm -f "$INST/instance.config.local.json"; }
@@ -127,7 +130,7 @@ if command -v python3 >/dev/null 2>&1; then
   # (the masthead title is derived and title-cased), so a bare `has '<group>'` on an
   # empty snapshot would be asserting against a page the group never reaches — green
   # whichever list won.
-  mk_inst() { mkdir -p "$1"; printf '{"group":"%s","counts":{"projects":1,"tasks":0,"awaiting":0},"projects":[{"slug":"p","title":"%s","status":"active","tasks":[]}]}\n' "$2" "$2" > "$1/SNAPSHOT.json"; }
+  mk_inst() { mkdir -p "$1/$AB_DIR"; printf '{"group":"%s","counts":{"projects":1,"tasks":0,"awaiting":0},"projects":[{"slug":"p","title":"%s","status":"active","tasks":[]}]}\n' "$2" "$2" > "$1/$AB_SNAPSHOT"; }
   mk_inst "$TMP/inst-tracked" tracked-group
   mk_inst "$TMP/inst-local"   local-group
   printf '{\n  "org": "o",\n  "boardInstances": ["%s"]\n}\n' "$TMP/inst-tracked" > "$INST/instance.config.json"
@@ -359,8 +362,8 @@ assert "resolve-config.sh reports which file won, per leaf" \
 # output, which is the same two-sided shape that caught `board` shipping inert once
 # already (a reader that always answers "default" passes any one-sided test).
 BANNER="$TPL/plugin/hooks/session-banner.sh"
-BINST="$TMP/_board-gate"; mkdir -p "$BINST/.claude/agents" "$BINST/.board-live"
-printf '<!doctype html>\n' > "$BINST/.board-live/board.html"
+BINST="$TMP/_board-gate"; mkdir -p "$BINST/.claude/agents" "$BINST/$AB_BOARD_DIR"
+printf '<!doctype html>\n' > "$BINST/$AB_BOARD_DIR/board.html"
 banner_out() { CLAUDE_PROJECT_DIR="$BINST" bash "$BANNER" 2>&1; }
 
 printf '{ "org": "o", "board": true }\n'  > "$BINST/instance.config.json"

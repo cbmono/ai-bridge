@@ -48,6 +48,13 @@ export AB_KEYS
 # and no reader would say why.
 ab_is_bundle() { [ -f "${1:-.}/instance.config.json" ]; }
 
+# Every AB_* path now has a PARENT DIRECTORY, which the pre-3.0 root spellings did not.
+# A writer that skipped this reported "the instance root is not writable" on a perfectly
+# writable bundle, so it is the resolver's job rather than each caller's.
+ab_ensure_dir() { # <root>
+  mkdir -p "${1:-.}/$AB_DIR" 2>/dev/null
+}
+
 # THE SEED STAYS FLAT; this is the mapping onto the bundle.
 #
 # `plugin/seed/` ships `SCHEMA.md` and friends at its top level and keeps `seed-base/`

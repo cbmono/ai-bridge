@@ -18,6 +18,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 SRC="$REPO/plugin/scripts/tick-delta.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/tickdelta.XXXXXX")" || {
   echo "tick-delta.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -49,7 +52,7 @@ task "$INST/projects/proj-a/tasks/t1.md" ready
 task "$INST/projects/proj-a/tasks/t2.md" in-review "https://github.com/example-org/example-repo/pull/7"
 # The real instance gitignores the fingerprint (install.sh's guard block); without this,
 # `git add -A` below would COMMIT .tick-state and every later record would dirty the tree.
-printf '/.tick-state\n' > "$INST/.gitignore"
+printf '/%s\n' "$AB_STATE_DIR" > "$INST/.gitignore"
 GIT -C "$INST" init -q
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm init
 
@@ -77,7 +80,7 @@ run() { # <check|record> -> "rc:<n> first-line"
 
 echo "== no record yet: doubt resolves to the full tick, never to IDLE =="
 ok "check before any record is exit 2"          "$(run check)" "rc:2 CANNOT ANSWE"
-WITH record; ok "record writes the state file"  "$([ -f "$INST/.tick-state" ] && echo yes || echo no)" yes
+WITH record; ok "record writes the state file"  "$([ -f "$INST/$AB_STATE_DIR" ] && echo yes || echo no)" yes
 
 echo "== the idle direction: only a byte-for-byte match says IDLE =="
 ok "record then check is IDLE (exit 0)"          "$(run check)" "rc:0 IDLE: finger"
@@ -114,17 +117,17 @@ ok "…so is a review decision"                   "$(run check)" "rc:1 DELTA: th
 printf 'OPEN abc1234 NONE\n' > "$GHDIR/7"
 ok "…and the original PR facts restore IDLE"    "$(run check)" "rc:0 IDLE: finger"
 
-touch "$INST/AWAITING.md"
+touch "$INST/$AB_AWAITING"
 ok "a touched AWAITING.md (queue re-enable) is a DELTA" "$(run check)" "rc:1 DELTA: the f"
-rm -f "$INST/AWAITING.md"
+rm -f "$INST/$AB_AWAITING"
 
 echo "== a poisoned fingerprint is no answer at all — and record refuses to write it =="
 touch "$GHDIR/7.fail"
 ok "an unreadable PR makes check exit 2"         "$(run check)" "rc:2 CANNOT ANSWE"
-before="$(cat "$INST/.tick-state")"
+before="$(cat "$INST/$AB_STATE_DIR")"
 WITH record 2>/dev/null; rc=$?
 ok "…and record refuses (exit 2)"               "$rc" 2
-ok "…leaving the previous record untouched"     "$([ "$(cat "$INST/.tick-state")" = "$before" ] && echo yes || echo no)" yes
+ok "…leaving the previous record untouched"     "$([ "$(cat "$INST/$AB_STATE_DIR")" = "$before" ] && echo yes || echo no)" yes
 rm -f "$GHDIR/7.fail"
 
 # HERMETIC: a bin dir holding every tool the script needs and NOTHING else — a bare
@@ -140,10 +143,10 @@ ok "no gh on PATH is exit 2, never IDLE"         "$(PATH="$NOGH" "$SH" check --i
 # pre-check: a record built over the unreadable file would be the hole a later check
 # "matches".
 chmod 000 "$INST/projects/proj-a/tasks/t1.md"
-before2="$(cat "$INST/.tick-state")"
+before2="$(cat "$INST/$AB_STATE_DIR")"
 WITH record 2>/dev/null; rc2=$?
 ok "record over an unreadable task file refuses (exit 2)"       "$rc2" 2
-ok "…leaving the record untouched"              "$([ "$(cat "$INST/.tick-state")" = "$before2" ] && echo yes || echo no)" yes
+ok "…leaving the record untouched"              "$([ "$(cat "$INST/$AB_STATE_DIR")" = "$before2" ] && echo yes || echo no)" yes
 chmod 644 "$INST/projects/proj-a/tasks/t1.md"
 ok "…and readable again restores IDLE"          "$(run check)" "rc:0 IDLE: finger"
 
@@ -160,7 +163,7 @@ task "$INST/projects/done-proj/tasks/old.md" done
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm done-proj
 ok "a done project is skipped at its frontmatter in the digest" \
    "$(WITH digest | grep -c 'done-proj/tasks')" 0
-ok "…and in the probe walk too"                 "$(WITH record; grep -c 'done-proj/tasks' "$INST/.tick-state")" 0
+ok "…and in the probe walk too"                 "$(WITH record; grep -c 'done-proj/tasks' "$INST/$AB_STATE_DIR")" 0
 ok "…while its project line still shows in the digest" "$(WITH digest | grep -c 'project done-proj status=done')" 1
 
 mkdir -p "$INST/projects/broken/tasks"
