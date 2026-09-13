@@ -113,18 +113,23 @@ echo "== 1. the bare form INVOKES the banner — it does not reproduce it =="
 #
 # AND `--no-logo`, WHICH IS THE ONE THING IT SUBTRACTS (task-006): the ship renders on the
 # SessionStart channel alone, so the hook is asked for the same on both sides here too.
+#
+# AND `--full`, WHICH IS THE ONE THING IT ADDS (task-025): the SessionStart banner holds 12
+# lines and drops the two tables; a human who typed the command asked to look, and
+# `skills/welcome/SKILL.md` documents `welcome` BY those tables. Same identity assertion —
+# the hook is asked for the same flags on both sides.
 # tests/banner-logo.test.sh §5 is where that subtraction is measured; this stays an
 # identity assertion about the wrapper.
 INST1="$TMP/inst1"; mkinstance "$INST1"
 a="$(CLAUDE_PROJECT_DIR="$INST1" bash "$SH" 2>&1)"; arc=$?
-b="$(CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" --format md --no-logo 2>&1)"; brc=$?
+b="$(CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" --format md --no-logo --full 2>&1)"; brc=$?
 ok "bare /ai-bridge output is byte-identical to the hook's" "$([ "$a" = "$b" ] && echo yes || echo no)" yes
 ok "…and so is its exit status"                            "$arc" "$brc"
 ok "…and it is not empty (the comparison is not vacuous)"   "$([ -n "$a" ] && echo yes || echo no)" yes
 # THE RENDERING IS A CHOICE ABOUT THE READER, NOT A NEW BANNER: strip the emphasis markers
 # and it is the hook's plain text output, byte for byte. A second renderer here would fail
 # this on the first line either one changed.
-btxt="$(CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" --no-logo 2>&1)"
+btxt="$(CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" --no-logo --full 2>&1)"
 ok "…and minus its \`**\` markers it is the hook's plain banner" \
   "$([ "$(printf '%s\n' "$a" | sed 's/\*\*//g')" = "$btxt" ] && echo yes || echo no)" yes
 ok "…which is a real difference, not an equality dressed up" \
@@ -133,7 +138,7 @@ ok "…which is a real difference, not an equality dressed up" \
 # `**bold**` as bold, emphasis is that reader's colour — so the opt-out hands back the plain
 # banner rather than holding on two channels out of three.
 nc="$(NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST1" bash "$SH" 2>&1)"
-ncb="$(NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" --no-logo 2>&1)"
+ncb="$(NO_COLOR=1 CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" --no-logo --full 2>&1)"
 ok "NO_COLOR=1: the bare form is the hook's plain banner"   "$([ "$nc" = "$ncb" ] && echo yes || echo no)" yes
 # `banner` spelled out, and an unknown flag, both reach the same hook rather than being
 # re-parsed here: the banner owns its own options.

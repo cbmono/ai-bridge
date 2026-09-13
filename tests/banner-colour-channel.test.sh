@@ -261,9 +261,16 @@ assert "…and that line is coloured" \
 
 # THE OTHER HALF. A settings row is a fact that is TRUE and must be quiet — this is what
 # stops the feature from being "colour every row by what kind of row it is".
-assert "the settings table fired"                  "$(has 'maxAgentsInFlight' "$SM")"
+# THE TABLES ARE `--full` SINCE task-025 — the SessionStart banner holds 12 lines and drops
+# them, `/ai-bridge:welcome` asks for them by name. The colour discipline they demonstrate is
+# unchanged, so it is asserted where they actually render.
+SM_FULL="$(field "$(CLAUDE_PLUGIN_ROOT="$TPL/plugin" CLAUDE_PROJECT_DIR="$INST" \
+  bash "$HOOK" --format json --full 2>/dev/null)" systemMessage)"
+assert "the settings table fired"                  "$(has 'maxAgentsInFlight' "$SM_FULL")"
 assert "…and its rows are NOT coloured" \
-  "$(no_esc "$(grep -E '^(owner|maxAgentsInFlight|maxPrLoc|software-engineer|cataloguer) ' <<<"$SM")")"
+  "$(no_esc "$(grep -E '^(owner|maxAgentsInFlight|maxPrLoc|software-engineer|cataloguer) ' <<<"$SM_FULL")")"
+assert "…and the SessionStart banner carries no table at all" \
+  "$(hasnt 'maxAgentsInFlight' "$SM")"
 # Read from the MODEL's copy, where the items are since task-021 — on the human's channel
 # `grep` would match nothing and the assertion would pass vacuously.
 assert "…nor are the awaiting ITEMS, which are quoted data" \
@@ -306,7 +313,9 @@ assert "--color never turns it off through the JSON path too" \
 # THE CONTENT MUST NOT DEPEND ON THE COLOUR — the assertion that catches an escape leaking
 # into a padded field, which would silently shift a column while every content grep passed.
 SM="$(field "$OUT" systemMessage)"
-cols="$(strip_sgr "$SM" | python3 -c '
+SM_FULL="$(field "$(CLAUDE_PLUGIN_ROOT="$TPL/plugin" CLAUDE_PROJECT_DIR="$INST" \
+  bash "$HOOK" --format json --full 2>/dev/null)" systemMessage)"
+cols="$(strip_sgr "$SM_FULL" | python3 -c '
 import sys
 cols = {line.index("FROM") for line in sys.stdin.read().splitlines()
         if line.startswith("SETTING ") or line.startswith("ROLE ")}

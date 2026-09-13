@@ -284,6 +284,33 @@ assert "…and no item line"                             "$(hasnt '  • ' "$SM"
 n_out="$(printf '%s\n' "$OUT" | grep -c .)"
 assert "the envelope is a single line (saw $n_out)"    "$(eq "$n_out" 1)"
 
+# TWELVE LINES, ON THIS CHANNEL AND NOT THE MODEL'S (ai-bridge-v3/task-025). The ceiling
+# binds what the HUMAN reads; `additionalContext` is a machine's field and is deliberately
+# not capped. It is the tables that pay for it, and they are not lost — `--full` still
+# prints them, which is what `/ai-bridge:welcome` asks for.
+#
+# IT BOUNDS THE STANDING BANNER, NOT AN ALARM. This fixture is deliberately unconverted, so
+# §8's `ai-bridge check` block fires — and a block that exists to shout about a broken bundle
+# is the one thing a line budget must never silence. Measured to the last non-empty line
+# above it, which is the whole banner on a healthy instance.
+SM_STANDING="$(printf '%s\n' "$SM" | sed '/ai-bridge check — state worth a look/,$d')"
+sm_lines="$(printf '%s\n' "$SM_STANDING" | awk 'NF { last = NR } END { print last + 0 }')"
+assert "the human's standing banner is at most 12 lines (saw $sm_lines)" \
+  "$([ "$sm_lines" -le 12 ] && echo 0 || echo 1)"
+assert "…and it is not empty, so the ceiling is not met by printing nothing" \
+  "$([ "$sm_lines" -ge 6 ] && echo 0 || echo 1)"
+assert "…the alarm really was excluded, so the cut is not vacuous" \
+  "$(has 'ai-bridge check — state worth a look' "$SM")"
+assert "…the tables are what went"                     "$(hasnt 'maxAgentsInFlight' "$SM")"
+SM_FULL_TXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --full 2>/dev/null)"
+assert "…and \`--full\` still has them"                "$(has 'maxAgentsInFlight' "$SM_FULL_TXT")"
+# The two greps the queue is written against are untouched by the cut — the items left the
+# human's channel in task-021, not in task-025, and nothing here moves the extraction.
+assert "the awaiting heading grep is unchanged" \
+  "$([ "$(grep -c 'Awaiting you' "$HOOK")" -gt 0 ] && echo 0 || echo 1)"
+assert "…and the model still gets more than the human" \
+  "$([ "$(printf '%s\n' "$AC" | grep -c '')" -gt "$sm_lines" ] && echo 0 || echo 1)"
+
 # =======================================================================================
 echo "== 2. the check DISCRIMINATES — it fails the two shapes a content grep passes =="
 # =======================================================================================
@@ -478,10 +505,13 @@ echo "== 6. /ai-bridge INVOKES this hook, it does not reproduce it =="
 AB="$TPL/plugin/scripts/ai-bridge.sh"
 if [ -f "$AB" ]; then
   AB_OUT="$( cd "$INST" && CLAUDE_PROJECT_DIR="$INST" bash "$AB" 2>/dev/null )"
-  AB_MD="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md --no-logo 2>/dev/null)"
-  AB_TXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --no-logo 2>/dev/null)"
-  MD_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"
-  TXT_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"
+  AB_MD="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md --no-logo --full 2>/dev/null)"
+  AB_TXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --no-logo --full 2>/dev/null)"
+  # `--full` ON BOTH SIDES (task-025). The wrapper adds that flag and nothing else: the
+  # SessionStart banner holds 12 lines and drops the two tables, `/ai-bridge:welcome` asks
+  # for them. The emphasis claims below are about the tables, so they run on it too.
+  MD_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md --full 2>/dev/null)"
+  TXT_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --full 2>/dev/null)"
   assert "the /ai-bridge bare form prints a banner" "$(has 'AI-Bridge' "$AB_OUT")"
   assert "…byte for byte the RELAYED rendering this hook prints" "$(eq "$AB_OUT" "$AB_MD")"
   assert "…and carries no banner text of its own" \

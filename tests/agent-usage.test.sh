@@ -246,6 +246,17 @@ ok "the report gains at most one cost line"       "$(has "$PM" 'At most ONE cost
 ok "…and none at all on an empty tick"          "$(has "$PM" 'dispatched nothing and merged nothing prints no')" yes
 ok "the audit reads the ledger offline"           "$(has "$REPO/plugin/agents/auditor.md" 'agent-usage.sh series')" yes
 ok "…and converts nothing to money"             "$(has "$REPO/plugin/agents/auditor.md" 'never convert to money')" yes
+
+# THE TICK REPORT'S FOOTER (ai-bridge-v3/task-025) — the launcher's instruction, and the
+# only thing about it a harness CAN fail: its caller is a model, so nothing here can go red
+# when the launcher forgets to print it. Said plainly rather than pretended otherwise.
+LA="$REPO/plugin/skills/dispatch/SKILL.md"
+ok "the launcher ends a tick report with the one form" "$(has "$LA" 'agent-usage.sh fmt')" yes
+ok "…from this tick's notification numbers"          "$(has "$LA" '--tokens <subagent_tokens> --tools <tool_uses> --duration-ms <duration_ms>')" yes
+ok "…with no model name, which has no producer"      "$(has "$LA" 'There is no model name in it')" yes
+ok "…and no footer at all when it is UNKNOWN"        "$(has "$LA" '`usage UNKNOWN` ⇒ print no footer at all')" yes
+ok "…on the TICK report only, never a role result"   "$(has "$LA" 'The tick report ONLY')" yes
+
 ok "both scripts ship executable"                 "$(cd "$REPO" && git ls-files -s plugin/scripts/agent-usage.sh plugin/scripts/tick-delta.sh | awk '{print $1}' | sort -u | tr '\n' ' ')" "100755 "
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"

@@ -1502,6 +1502,67 @@ SNAPSHOT
   echo "  seed  $AB_SNAPSHOT (on the board; set \"board\": false to opt out)"
 fi
 
+# 1d. THE STATUS LINE — into the BUNDLE's own .claude/settings.json, never the user's.
+#
+# PROJECT settings, so the install is scoped to this bundle and touches no file in
+# ${CLAUDE_CONFIG_DIR:-~/.claude}. That is also why it needs no ask: nothing outside the
+# bundle moves. It runs on every stamp rather than only the first, because the seed copy
+# above is copy-if-absent — an already-stamped bundle has a settings.json and would
+# otherwise never receive the key.
+#
+# AND PROJECT SETTINGS OVERRIDE USER SETTINGS FOR THE SAME KEY, so a `statusLine` the human
+# already has is SHADOWED here for every session opened in this bundle. Shadowed, not
+# changed — their file is untouched — but they are told, by name, rather than finding out.
+#
+# The command is written as an ABSOLUTE path to a seeded shim and not to the plugin: a
+# `statusLine` command gets no `${CLAUDE_PLUGIN_ROOT}` expansion, and a version-scoped
+# cache path rots on the next plugin update. The shim resolves the plugin at run time.
+#
+# The insert is jq-free (nothing in this plugin may need jq) and FAILS CLOSED: it goes in
+# directly under a top-level `{` on its own line, and a settings.json shaped any other way
+# is reported for the human to edit rather than rewritten by a guess.
+SL_SETTINGS="$TARGET/.claude/settings.json"
+SL_SHIM="$TARGET/.claude/ai-bridge-statusline.sh"
+if [ ! -f "$SL_SETTINGS" ]; then
+  echo "  skip  statusLine (no $SL_SETTINGS to write it into)"
+elif grep -q '"statusLine"' "$SL_SETTINGS"; then
+  echo "  keep  statusLine (this bundle's .claude/settings.json already has one)"
+elif [ "$(sed -n '/[^[:space:]]/{p;q;}' "$SL_SETTINGS")" != "{" ]; then
+  echo "  warn  statusLine not installed: $SL_SETTINGS does not open with a bare \`{\`." >&2
+  echo "        Add it by hand: \"statusLine\": {\"type\": \"command\", \"command\": \"bash $SL_SHIM\", \"refreshInterval\": 5000}" >&2
+else
+  sl_cmd="$(printf '%s' "bash $SL_SHIM" | sed 's/["\\]/\\&/g')"
+  sl_tmp="$SL_SETTINGS.statusline.$$"
+  # `refreshInterval`, not triggers: the documented update events go quiet exactly while a
+  # coordinator waits on background subagents, which is the dispatch loop in its steady state.
+  CMD="$sl_cmd" awk '
+    !ins && /^[[:space:]]*\{[[:space:]]*$/ {
+      print
+      print "  \"statusLine\": {"
+      print "    \"type\": \"command\","
+      print "    \"command\": \"" ENVIRON["CMD"] "\","
+      print "    \"refreshInterval\": 5000"
+      print "  },"
+      ins = 1
+      next
+    }
+    { print }
+  ' "$SL_SETTINGS" > "$sl_tmp" 2>/dev/null
+  if [ -s "$sl_tmp" ] && grep -q '"statusLine"' "$sl_tmp"; then
+    mv "$sl_tmp" "$SL_SETTINGS"
+    echo "  wrote statusLine into .claude/settings.json (AI Bridge · in flight · need you · lock · last tick)"
+    sl_user="$CONFIG_DEST/settings.json"
+    if [ -f "$sl_user" ] && grep -q '"statusLine"' "$sl_user"; then
+      echo "  note  PROJECT settings win, so this shadows the statusLine in $sl_user"
+      echo "        for sessions in this bundle. That file is untouched; drop the block"
+      echo "        from .claude/settings.json to get yours back."
+    fi
+  else
+    rm -f "$sl_tmp" 2>/dev/null
+    echo "  warn  statusLine not installed: could not rewrite $SL_SETTINGS." >&2
+  fi
+fi
+
 # 2. RETIRE the managed machinery block from the bundle's .gitignore.
 #
 # The block used to be REWRITTEN on every stamp from the list of files this template
