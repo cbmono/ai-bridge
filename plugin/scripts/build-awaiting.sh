@@ -26,6 +26,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$HERE/bundle-paths.sh" || exit 2
 usage() { echo "Usage: $(basename "$0") [--instance DIR] [--out FILE] [--trailer PATH=TEXT]... [--merge PATH=LINK]..." >&2; exit 2; }
 fail3() { echo "build-awaiting: $1" >&2; exit 3; }
 
@@ -46,7 +47,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 inst="$(cd "$inst" 2>/dev/null && pwd)" || fail3 "no such instance directory"
-[ -n "$out" ] || out="$inst/AWAITING.md"
+[ -n "$out" ] || out="$inst/$AB_AWAITING"
 
 # Resolve every caller-supplied path the same way the walk resolves the ones it finds.
 # Without this, `/var/…` and `/private/var/…` are two spellings of one file and a --trailer
