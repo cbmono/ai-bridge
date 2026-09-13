@@ -244,6 +244,7 @@
 # the first such test would exit the script with a success-looking code. Every failure
 # path below is explicit.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 # --- table 1: what a TL;DR marker line looks like -----------------------------
 # One POSIX ERE per line, matched case-insensitively against the fence-stripped body.
@@ -900,7 +901,7 @@ report_rows() { # <scan> <label> -> 0 clear, 3 at least one row outside the boun
   [ -n "$offenders" ] || return 0
   n="$(printf '%s\n' "$offenders" | grep -c '^')"
   echo "refuse: $label carries both structural elements, but $n acceptance-criteria" >&2
-  echo "        row(s) fall outside the two-sided bound CONVENTIONS.md puts on the" >&2
+  echo "        row(s) fall outside the two-sided bound $AB_CONVENTIONS puts on the" >&2
   echo "        EVIDENCE column — floor $CRITERIA_EVIDENCE_FLOOR bytes, ceiling $CRITERIA_EVIDENCE_CEILING bytes:" >&2
   # `set -u` is on and a short line would leave a field unset, so every field is read
   # through a default. The emitted lines always carry five, but a refusal that aborted the
@@ -928,7 +929,7 @@ report_rows() { # <scan> <label> -> 0 clear, 3 at least one row outside the boun
 $offenders
 EOF
   echo "        This bounds ONE CELL of ONE ROW. The body's own ceiling is a separate" >&2
-  echo "        check with a separate code (4). See CONVENTIONS.md, 'The criteria table" >&2
+  echo "        check with a separate code (4). See $AB_CONVENTIONS, 'The criteria table" >&2
   echo "        is the merge gate'." >&2
   return 3
 }
@@ -947,7 +948,7 @@ report_concision() { # <raw-body> <notes-scan> <label> -> 0 clear, 4 over a ceil
   if [ "$chars" -gt "$BODY_CEILING_CHARS" ]; then
     rc=4
     echo "refuse: $label carries every required element, and it is $chars authored" >&2
-    echo "        characters — over the $BODY_CEILING_CHARS-character ceiling CONVENTIONS.md sets in" >&2
+    echo "        characters — over the $BODY_CEILING_CHARS-character ceiling $AB_CONVENTIONS sets in" >&2
     echo "        'Write less'. A marked reviewer block is not counted, up to $GENERATED_CEILING" >&2
     echo "        characters; a larger one is counted in full, markers or no markers." >&2
     echo "        Keep the TL;DR line, the Verified line and the criteria table. Move the" >&2
@@ -956,7 +957,7 @@ report_concision() { # <raw-body> <notes-scan> <label> -> 0 clear, 4 over a ceil
   fi
   if [ "$notes" -gt "$NOTES_CEILING" ]; then
     rc=4
-    echo "refuse: $label carries $notes Notes bullets — over the $NOTES_CEILING CONVENTIONS.md allows." >&2
+    echo "refuse: $label carries $notes Notes bullets — over the $NOTES_CEILING $AB_CONVENTIONS allows." >&2
     echo "        A note is for something a reviewer cannot see from the diff. Past three" >&2
     echo "        it is the essay the section replaced, arriving under another heading." >&2
   fi
@@ -1002,11 +1003,11 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
     echo "ok: $label carries a TL;DR line and a well-formed acceptance-criteria" >&2
     echo "    table, a Verified line that cites something, a heading tally that matches" >&2
     echo "    the rows, claim-first notes where it has any, and is inside the" >&2
-    echo "    CONVENTIONS.md concision ceilings." >&2
+    echo "    $AB_CONVENTIONS concision ceilings." >&2
     return 0
   fi
 
-  echo "refuse: $label does not carry the shape CONVENTIONS.md requires of a PR body." >&2
+  echo "refuse: $label does not carry the shape $AB_CONVENTIONS requires of a PR body." >&2
   rc=1
   [ "$tldr" -eq 0 ] || {
     echo "        MISSING: the TL;DR line. One sentence — what changes, and why it is" >&2
@@ -1032,7 +1033,7 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
     unmarked)
       echo "        MISSING: the acceptance-criteria table. A well-formed table is here," >&2
       echo "        but no row of it carries a '✓' or a '✗' — that column IS the checkbox" >&2
-      echo "        state SCHEMA.md clause 7 and AUTONOMY.md read, so as written there is" >&2
+      echo "        state $AB_SCHEMA clause 7 and AUTONOMY.md read, so as written there is" >&2
       echo "        nothing for the merge gate to consult." >&2 ;;
   esac
   case "$tkind" in
@@ -1045,7 +1046,7 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
       echo "        MISSING: the tally on the criteria heading, which reads:" >&2
       echo "          \"$(printf '%s\n' "$tally" | cut -f3)\"" >&2
       echo "        Write the counts into it — '### Criteria (10 ✓ / 8 ✗ — every ✗ is a" >&2
-      echo "        later slice)'. SCHEMA.md clause 7 makes an unverified criterion block" >&2
+      echo "        later slice)'. $AB_SCHEMA clause 7 makes an unverified criterion block" >&2
       echo "        clearance, so the counts are the first thing a reader needs." >&2 ;;
     mismatch)
       echo "        WRONG: the criteria heading claims $(printf '%s\n' "$tally" | cut -f3) ✓ / $(printf '%s\n' "$tally" | cut -f4) ✗, and the table" >&2
@@ -1058,7 +1059,7 @@ decide() { # <raw-body> <rendered-body> <label> -> 0 clear, 1, 2, 3 a row, 4 too
     unexplained)
       echo "        MISSING: the reason for the $(printf '%s\n' "$tally" | cut -f3) ✗ on the criteria heading, which reads:" >&2
       echo "          \"$(printf '%s\n' "$tally" | cut -f4)\"" >&2
-      echo "        SCHEMA.md clause 7 makes an unverified criterion block clearance, so a" >&2
+      echo "        $AB_SCHEMA clause 7 makes an unverified criterion block clearance, so a" >&2
       echo "        table with ✗ in it looks alarming until the heading says why. Put the" >&2
       echo "        reason after the tally — '(10 ✓ / 8 ✗ — every ✗ is a later slice or" >&2
       echo "        task-001)'. Whether the reason is a good one is the reviewer's call," >&2
@@ -1079,7 +1080,7 @@ EOF
     echo "        alone. The section is optional; a note that buries its claim is not." >&2
   fi
   echo "        This is the STRUCTURE refusal. Length is a separate check with a" >&2
-  echo "        separate code (4). See CONVENTIONS.md, 'The PR body has a required" >&2
+  echo "        separate code (4). See $AB_CONVENTIONS, 'The PR body has a required" >&2
   echo "        shape'." >&2
   return "$rc"
 }

@@ -136,6 +136,7 @@
 # positive case). Run it after any change here — like the pruner, this script
 # cannot be exercised safely by hand.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 CONFIG="instance.config.json"
 LOCAL_CONFIG="instance.config.local.json"
@@ -165,8 +166,8 @@ refuse() { printf 'refuse: %s\n' "$*" >&2; exit 1; }
 noop()   { printf 'noop: %s\n' "$*"; exit 3; }
 fatal()  { printf 'error: %s\n' "$*" >&2; exit 2; }
 
-[ -f SCHEMA.md ] && [ -f "$CONFIG" ] \
-  || fatal "run from a control-panel instance root (SCHEMA.md + $CONFIG)."
+[ -f "$AB_SCHEMA" ] && [ -f "$CONFIG" ] \
+  || fatal "run from a control-panel instance root ($AB_SCHEMA + $CONFIG)."
 
 # --- readers -----------------------------------------------------------------
 

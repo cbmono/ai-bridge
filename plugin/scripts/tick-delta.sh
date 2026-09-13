@@ -80,8 +80,9 @@
 # GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; no org, repo or path literals.
 # Verified by tests/tick-delta.test.sh.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
-STATE_NAME=".tick-state"
+STATE_NAME="$AB_STATE_DIR"
 
 usage() {
   echo "Usage: $(basename "$0") check|record|digest [--instance DIR] [--gap TEXT]" >&2
@@ -225,8 +226,8 @@ fingerprint() { # <probe|digest>
   local mode="$1"
   printf 'head %s\n' "$(git -C "$inst" rev-parse HEAD)"
 
-  [ -f "$inst/AWAITING.md" ]   && printf 'queue present\n'    || printf 'queue absent\n'
-  [ -f "$inst/SNAPSHOT.json" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
+  [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
+  [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
   local p d pst f st prs url inflight=0 urls=""
   for d in "$inst"/projects/*/; do

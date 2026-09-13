@@ -70,6 +70,7 @@
 # Idempotent: re-running seeds nothing new and reports what is already in place.
 # Backs up any conflicting real file as <name>.bak.<epoch> before writing.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 # WHERE THE PLUGIN IS — ONE RULE FOR BOTH LAYOUTS, and that is the whole of task-022.
 # `source: ./plugin` in the marketplace manifest means an INSTALLED plugin is the CONTENTS
@@ -1415,8 +1416,8 @@ fi
 # what FIRST_STAMP guards. It's also gitignored, so this never becomes tracked
 # state. Content is a valid empty queue, so session-banner.sh stays silent until
 # the first tick fills it in.
-if [ "$FIRST_STAMP" = yes ] && [ ! -e "$TARGET/AWAITING.md" ]; then
-  cat > "$TARGET/AWAITING.md" <<'AWAITING'
+if [ "$FIRST_STAMP" = yes ] && [ ! -e "$TARGET/$AB_AWAITING" ]; then
+  cat > "$TARGET/$AB_AWAITING" <<'AWAITING'
 # Awaiting you
 
 Derived and gitignored — **do not hand-edit**. Rewritten from `projects/*/tasks/*.md`
@@ -1426,9 +1427,9 @@ the loop never recreates it. Last refreshed: never (no tick has run yet).
 ## 🔴 Awaiting you (0)
 _None._
 AWAITING
-  echo "  seed  AWAITING.md (queue on; delete it to turn the startup nudge off)"
-elif [ "$FIRST_STAMP" = no ] && [ ! -e "$TARGET/AWAITING.md" ]; then
-  echo "  skip  AWAITING.md (absent by choice — run 'touch AWAITING.md' to re-enable)"
+  echo "  seed  $AB_AWAITING (queue on; delete it to turn the startup nudge off)"
+elif [ "$FIRST_STAMP" = no ] && [ ! -e "$TARGET/$AB_AWAITING" ]; then
+  echo "  skip  $AB_AWAITING (absent by choice — run 'touch $AB_AWAITING' to re-enable)"
 fi
 
 # 1c. The board snapshot, created ONLY on the first stamp — same contract, same
@@ -1482,9 +1483,9 @@ fi
 # on a brand-new instance that has done nothing wrong.
 BOARD_OPT="$(cfg_bool board true "$TARGET/instance.config.json")"
 if [ "$BOARD_OPT" = false ]; then
-  echo "  skip  SNAPSHOT.json (board: false in instance.config.json)"
-elif [ ! -e "$TARGET/SNAPSHOT.json" ]; then
-  cat > "$TARGET/SNAPSHOT.json" <<'SNAPSHOT'
+  echo "  skip  $AB_SNAPSHOT (board: false in instance.config.json)"
+elif [ ! -e "$TARGET/$AB_SNAPSHOT" ]; then
+  cat > "$TARGET/$AB_SNAPSHOT" <<'SNAPSHOT'
 {
   "_schema": "ai-bridge board snapshot v1",
   "_sensitivity": "Derived and gitignored. Rewritten by write-snapshot.sh each /ai-bridge:dispatch tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
@@ -1494,7 +1495,7 @@ elif [ ! -e "$TARGET/SNAPSHOT.json" ]; then
   "projects": []
 }
 SNAPSHOT
-  echo "  seed  SNAPSHOT.json (on the board; set \"board\": false to opt out)"
+  echo "  seed  $AB_SNAPSHOT (on the board; set \"board\": false to opt out)"
 fi
 
 # 2. RETIRE the managed machinery block from the bundle's .gitignore.
@@ -1522,7 +1523,7 @@ gi="$TARGET/.gitignore"
 GI_ADDITIONS="# Instance additions (kept across seed refreshes)"
 gi_add() {          # stdin -> the end of the instance block, creating its heading if absent
   grep -qxF "$GI_ADDITIONS" "$gi" || printf '\n%s\n' "$GI_ADDITIONS" >> "$gi"
-  cat >> "$gi"
+  ab_expand >> "$gi"
 }
 gi_add_before() {   # stdin -> immediately before that heading; at EOF when there is none
   local ln tmp
@@ -1566,32 +1567,32 @@ fi
 # same reason as /repos/ and instance.config.local.json below: seed content is copied
 # only when ABSENT, so an instance stamped before this directory existed — which is
 # every instance in existence — would otherwise commit a generated HTML page.
-if ! grep -qE '^/?\.board-live/?$' "$gi"; then
+if ! grep -qE "^/?${AB_BOARD_DIR//./\\.}/?$" "$gi"; then
   gi_add <<'GI'
 
 # The local live board page (watch-board.sh). Derived output, regenerated on
 # every task-document change, and per-machine. Delete it freely.
-/.board-live/
+/__AB_BOARD_DIR__/
 GI
 fi
 
 # The board's other-owners cache (build-board.sh), appended for exactly the same
 # reason: every instance in existence was stamped before this file existed, and a derived
 # cache of committed state has no business being committed back.
-if ! grep -qE '^/?\.board-others\.json$' "$gi"; then
+if ! grep -qE "^/?${AB_BOARD_OTHERS//./\\.}$" "$gi"; then
   gi_add <<'GI'
 
 # The board's other-owners cache (build-board.sh) — the second half of the page,
 # read from the tracked documents at HEAD and stored against the SHA it was computed for.
 # Derived and per-machine. Delete it freely; the next render rebuilds it.
-/.board-others.json
+/__AB_BOARD_OTHERS__
 GI
 fi
 
 # The PM dispatch lock (tick-lock.sh), appended for the third time for exactly the
 # same reason: every instance in existence was stamped before this file existed, and a lock
 # that got committed would stop being per-clone — which is the one property it has.
-if ! grep -qE '^/?\.tick-lock$' "$gi"; then
+if ! grep -qE "^/?${AB_LOCK//./\\.}$" "$gi"; then
   gi_add <<'GI'
 
 # The PM dispatch lock (tick-lock.sh) — written by /ai-bridge:dispatch
@@ -1600,7 +1601,7 @@ if ! grep -qE '^/?\.tick-lock$' "$gi"; then
 # memory. PER CLONE and never committed: two humans sharing one bundle work from two
 # clones and each dispatches independently, which a shared lock would break. Derived and
 # safe to delete when no tick is running.
-/.tick-lock
+/__AB_LOCK__
 GI
 fi
 
@@ -1609,7 +1610,7 @@ fi
 # stamped since the lock shipped already carries `/.tick-lock`, so the guard above is
 # satisfied and would never append a line added to its heredoc. A second file needs a second
 # guard, or the ignore silently reaches nobody who has the first one.
-if ! grep -qE '^/?\.tick-lock\.claim$' "$gi"; then
+if ! grep -qE "^/?${AB_LOCK_CLAIM//./\\.}$" "$gi"; then
   gi_add <<'GI'
 
 # The tick's claim on the dispatch lock (tick-lock.sh) — the tick checks the lock on
@@ -1617,7 +1618,7 @@ if ! grep -qE '^/?\.tick-lock\.claim$' "$gi"; then
 # tells "held by the launcher that dispatched me" from "held by another tick". Per clone and
 # derived exactly like the lock beside it, and removed with it by
 # `tick-lock.sh release`.
-/.tick-lock.claim
+/__AB_LOCK_CLAIM__
 GI
 fi
 
@@ -1626,13 +1627,13 @@ fi
 # above, so a line added to their heredocs reaches nobody. Per clone and derived: a full
 # tick records it, the next tick's probe compares against it, and deleting it costs one
 # full tick, never correctness.
-if ! grep -qE '^/?\.tick-state$' "$gi"; then
+if ! grep -qE "^/?${AB_STATE_DIR//./\\.}$" "$gi"; then
   gi_add <<'GI'
 
 # The idle-tick fingerprint (tick-delta.sh) — written at the end of a FULL tick,
 # compared by the next tick's fast-path probe. PER CLONE and never committed; delete
 # freely (absence = the next tick runs in full).
-/.tick-state
+/__AB_STATE_DIR__
 GI
 fi
 
@@ -1752,7 +1753,7 @@ cat > "$idxbody" <<'GI'
 # Git applies .gitignore patterns in file order, so a LATER negation overrides an
 # earlier blanket pattern; putting the override before the two blanket lines below,
 # or inside this block, does not survive the next `/ai-bridge:init` run.
-/index.md
+/__AB_INDEX__
 /projects/*/index.md
 GI
 
@@ -1782,7 +1783,7 @@ if [ -n "$idx_begin_line" ]; then
     echo "warn  $gi carries an index-ignore BEGIN marker ('$IDX_BEGIN_MARK') with no" >&2
     echo "      matching END marker after it. Left UNCHANGED rather than risk dropping" >&2
     echo "      everything after the BEGIN line. Fix by hand: add '$IDX_END_MARK' right" >&2
-    echo "      after the two blanket rule lines (/index.md, /projects/*/index.md), or" >&2
+    echo "      after the two blanket rule lines (/$AB_INDEX, /projects/*/index.md), or" >&2
     echo "      remove the stray BEGIN line — then re-run." >&2
   else
     tmp="$gi.tmp.$$"
@@ -1820,7 +1821,7 @@ else
       break
     fi
   done <<EOF
-$(grep -nxF '/index.md' "$gi" | cut -d: -f1)
+$(grep -nxF "/$AB_INDEX" "$gi" | cut -d: -f1)
 EOF
   if [ -n "$idxline" ]; then
     start="$idxline"
@@ -1858,7 +1859,7 @@ rm -f "$idxbody"
 # other clone then pulls (which deletes their copy until the next tick or install
 # re-creates it). Report-only, like RETIRED and prune-worktrees.sh.
 if [ -d "$TARGET/.git" ] || [ -f "$TARGET/.git" ]; then
-  tracked_idx="$( ( cd "$TARGET" && git ls-files -- index.md 'projects/*/index.md' 2>/dev/null ) || true )"
+  tracked_idx="$( ( cd "$TARGET" && git ls-files -- "$AB_INDEX" 'projects/*/index.md' 2>/dev/null ) || true )"
   if [ -n "$tracked_idx" ]; then
     echo "Derived indexes are still tracked here (now gitignored, so the ignore is inert):"
     while IFS= read -r ti; do
@@ -1868,7 +1869,7 @@ if [ -d "$TARGET/.git" ] || [ -f "$TARGET/.git" ]; then
 $tracked_idx
 EOF
     echo "        To untrack them (keeps the files on disk), from $TARGET:"
-    echo "          git rm --cached -- index.md 'projects/*/index.md'"
+    echo "          git rm --cached -- $AB_INDEX 'projects/*/index.md'"
     echo "        …then commit. Needed only if this bundle is shared by more than one human."
   fi
 fi
@@ -2227,7 +2228,7 @@ if [ "${team_state:-}" = write ]; then
     fi
   done < "$TEAM_ROSTER"
 
-  team_note="Collected by /ai-bridge:init when this bundle was stamped: GitHub login -> commit email, for THIS instance. The address is PER-INSTANCE, not per-person -- it says which entity the work belongs to -- so never derive it from the login, and never move it into instance.config.local.json (that file says which login this clone IS). Read by commit-as.sh via ownerGithubUser; see SCHEMA.md 'Per-machine config overrides' and docs/sharing.md. Edit by hand to add or remove someone."
+  team_note="Collected by /ai-bridge:init when this bundle was stamped: GitHub login -> commit email, for THIS instance. The address is PER-INSTANCE, not per-person -- it says which entity the work belongs to -- so never derive it from the login, and never move it into instance.config.local.json (that file says which login this clone IS). Read by commit-as.sh via ownerGithubUser; see $AB_SCHEMA 'Per-machine config overrides' and docs/sharing.md. Edit by hand to add or remove someone."
 
   # Temp file BESIDE the target, carrying the target's mode: mktemp creates 0600, so a
   # rename from $TMPDIR would silently make this config 0600, and a cross-filesystem mv
@@ -2303,7 +2304,7 @@ if [ "${team_state:-}" = write ]; then
     team_ltmp="$TEAM_LCFG.tmp.$$"
     {
       echo "{"
-      echo "  \"\$schema\": \"Per-machine overrides for THIS clone -- gitignored, never committed. Which GitHub login this clone is, what each model tier costs THIS human, plus any absolute path or address that cannot be right on both machines. See SCHEMA.md, 'Per-machine config overrides'.\","
+      echo "  \"\$schema\": \"Per-machine overrides for THIS clone -- gitignored, never committed. Which GitHub login this clone is, what each model tier costs THIS human, plus any absolute path or address that cannot be right on both machines. See $AB_SCHEMA, 'Per-machine config overrides'.\","
       printf '  "ownerGithubUser": "%s"\n' "$TEAM_OWNER"
       echo "}"
     } > "$team_ltmp"
@@ -2335,10 +2336,10 @@ fi
 # 4e's normaliser owns its shape, and a file already carrying the three keys makes this
 # step print nothing at all.
 ID_LCFG="$TARGET/instance.config.local.json"
-ID_NOTE="Per-machine overrides for THIS clone -- gitignored, never committed. Which GitHub login this clone is, what each model tier costs THIS human, plus any absolute path or address that cannot be right on both machines. See SCHEMA.md, 'Per-machine config overrides'."
+ID_NOTE="Per-machine overrides for THIS clone -- gitignored, never committed. Which GitHub login this clone is, what each model tier costs THIS human, plus any absolute path or address that cannot be right on both machines. See $AB_SCHEMA, 'Per-machine config overrides'."
 
 id_manual_note() {
-  echo "        Set them by hand instead (SCHEMA.md → 'Per-machine config overrides'):"
+  echo "        Set them by hand instead ($AB_SCHEMA → 'Per-machine config overrides'):"
   echo "          instance.config.local.json  { \"ownerGithubUser\": \"<login>\","
   echo "                                        \"authorEmail\": \"<address>\","
   echo "                                        \"reposRoot\": \"<absolute path>\" }"
@@ -2554,7 +2555,7 @@ SPEND_TCFG="$TARGET/instance.config.json"
 SPEND_LCFG="$TARGET/instance.config.local.json"
 
 spend_manual_note() {
-  echo "        Set them by hand instead (SCHEMA.md → 'Per-machine config overrides'):"
+  echo "        Set them by hand instead ($AB_SCHEMA → 'Per-machine config overrides'):"
   echo "          instance.config.local.json  { \"models\": { \"deep\": \"opus\", … },"
   echo "                                        \"roleTiers\": { \"software-engineer\": \"deep\", … } }"
 }
@@ -2595,8 +2596,8 @@ DEFAULTS = {
 SCHEMA_NOTE = (
     "Per-machine overrides for THIS clone -- gitignored, never committed. Which GitHub "
     "login this clone is, what each model tier costs THIS human, plus any absolute path "
-    "or address that cannot be right on both machines. See SCHEMA.md, 'Per-machine "
-    "config overrides'."
+    "or address that cannot be right on both machines. See " + os.environ["AB_SCHEMA"]
+    + ", 'Per-machine config overrides'."
 )
 
 

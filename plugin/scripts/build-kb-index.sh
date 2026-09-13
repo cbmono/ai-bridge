@@ -10,6 +10,7 @@
 # section. A broken link in knowledge/** WARNs, and so does a dangling `source:`.
 # Reasoning and the defect list: ai-bridge-next/task-007, task-019.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 MODE=build; STRICT=0
 while [ $# -gt 0 ]; do
@@ -102,11 +103,13 @@ render_rows() { # <kind> <want-superseded 0|1> <last-column: status|superseded_b
 }
 
 generate() {
-  cat <<'EOF'
+  # The heredoc is QUOTED (its markdown is full of backticks), so the one path in it is
+  # substituted afterwards rather than expanded in place.
+  cat <<'EOF' | sed "s|__AB_SCHEMA__|$AB_SCHEMA|g"
 # Knowledge Base — index
 
 Compact catalog of this control panel's OKF knowledge base (`Service`s, `Finding`s,
-`Runbook`s, `Team`s, `Reference`s — types in `/SCHEMA.md`). **This index is the KB's lookup
+`Runbook`s, `Team`s, `Reference`s — types in `/__AB_SCHEMA__`). **This index is the KB's lookup
 surface:** scan it to find prior work, then open only the specific doc(s) you need —
 **don't bulk-read `knowledge/`**.
 
@@ -233,7 +236,7 @@ check_docs() {
         *) err "$f" "status '$st' is outside {${FINDING_STATUSES// /, }}" ;;
       esac
       n=$(grep -c '' "$f")
-      [ "$n" -le "$FINDING_MAX_LINES" ] || warn "$f" "Finding is $n lines; CONVENTIONS.md 'Write less' caps it at $FINDING_MAX_LINES"
+      [ "$n" -le "$FINDING_MAX_LINES" ] || warn "$f" "Finding is $n lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES"
       if [ -z "$(field "$fmv" lesson)" ]; then
         warn "$f" "no one-line 'lesson:' — the index row falls back to description:"
       elif [ "$(printf '%s' "$(summary_of "$fmv")" | wc -c | tr -d ' ')" -gt "$SUMMARY_MAX" ]; then
@@ -309,7 +312,7 @@ check_source() {
           */../*) warn "$f" "source: escapes the bundle root: $tok"; continue ;;
         esac
         if [ ! -e ".$tok" ]; then
-          warn "$f" "source: resolves to nothing: $tok — SCHEMA.md wants the task's PR URL, or a blob/<sha> permalink when there is no PR"
+          warn "$f" "source: resolves to nothing: $tok — $AB_SCHEMA wants the task's PR URL, or a blob/<sha> permalink when there is no PR"
           continue
         fi
         # A committed symlink spells no `..` and still leaves the bundle, so

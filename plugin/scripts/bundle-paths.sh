@@ -31,6 +31,12 @@ AB_KEYS="AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_
 AB_STATE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM"
 export AB_KEYS
 
+ab_expand() {   # stdin -> stdout, __AB_SCHEMA__ and friends replaced by their values.
+  local k; local -a e=()
+  for k in $AB_KEYS; do e+=(-e "s|__${k}__|${!k}|g"); done
+  sed "${e[@]}"
+}
+
 # Sourced ⇒ stop here. Executed ⇒ answer, so a harness, a doc or a non-bash reader gets
 # the same answer as a script does.
 (return 0 2>/dev/null) && return 0
