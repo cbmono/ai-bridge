@@ -828,11 +828,17 @@ state, and act only on deltas.
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh record --close "<your one-line summary>" \
+     --tick <the ISO timestamp of the open line you wrote in step 0.9> \
      --tokens <subagent_tokens> --tools <tool_uses> --duration-ms <duration_ms>
    ```
 
-   It finds your own `open:` line, copies its timestamp and its `by <login>`, and appends
-   the `close:` line **beside** it — the open line stays, so the pair is the tick's wall
+   **`--tick` names WHICH entry you are closing** — your own timestamp, matched exactly.
+   Pass it always: without it the script closes the only open entry and refuses when
+   there are two, and two open entries is precisely the case (a second loop, a missing
+   lock) where guessing closes the other tick's entry under your summary.
+
+   The script finds the entry, copies its timestamp and its `by <login>`, and appends the
+   `close:` line **beside** it — the open line stays, so the pair is the tick's wall
    duration. **The three numbers are the ones the completion notifications handed you**
    (`subagent_tokens`, `tool_uses`, `duration_ms`, summed over this tick's dispatches);
    **never reformat them and never compose the `usage …` fragment yourself** — the script

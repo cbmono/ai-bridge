@@ -129,8 +129,14 @@ case "$cmd" in
       function shape(n, k) {
         return n > 0 ? sprintf("usage tokens=%d tools=%d ms=%d", tok[k], tol[k], dur[k]) : "usage UNKNOWN"
       }
-      $0 ~ /^\* TICK [0-9][0-9][0-9][0-9]-[0-9][0-9]-/ && $0 !~ / open:/ {
-        m = substr($3, 1, 7); tick[m]++; tickm[m] += acc("t", m, $0); seen[m] = 1; next
+      # Whichever marker comes FIRST decides the line — the same rule tick-delta.sh
+      # closes by. A close summary is free prose and may quote the other word.
+      $0 ~ /^\* TICK [0-9][0-9][0-9][0-9]-[0-9][0-9]-/ {
+        o = index($0, " open: "); c = index($0, " close: ")
+        if (o == 0 || (c > 0 && c < o)) {
+          m = substr($3, 1, 7); tick[m]++; tickm[m] += acc("t", m, $0); seen[m] = 1
+        }
+        next
       }
       $0 ~ /^\* DISPATCH [0-9][0-9][0-9][0-9]-[0-9][0-9]-/ {
         m = substr($3, 1, 7); disp[m]++; dispm[m] += acc("d", m, $0); seen[m] = 1

@@ -500,7 +500,10 @@ appended beside the open one at the same timestamp, and the wall duration is the
 The three usage numbers ride on it (`subagent_tokens`, `tool_uses`, `duration_ms`, exactly
 as the completion notification hands them over) in a form `tick-delta.sh record --close`
 composes and the model never types — a number a model formats is a number nobody can sum
-later. The same three go on each task per dispatch, and their sum against the merged PR at
+later. The tick NAMES the entry it closes (`--tick <its own open timestamp>`) rather than
+taking the newest open one: two loops on one `log.md` — the case a missing `.tick-lock`
+allows — would otherwise let the first to finish close the second's entry under its own
+summary, and an unnamed close is refused when two are open rather than guessed. The same three go on each task per dispatch, and their sum against the merged PR at
 reflect time; `/audit` reads those two surfaces and nothing else. **Tokens, never money**:
 there is no price table here to maintain and no USD figure anywhere in the feature, so a
 reader who wants money converts it with today's prices rather than last quarter's.

@@ -4,7 +4,7 @@
 #
 #   Usage: tick-delta.sh check  [--instance DIR] [--gap TEXT]
 #          tick-delta.sh record [--instance DIR]
-#          tick-delta.sh record --close TEXT [--tokens N] [--tools N] [--duration-ms N]
+#          tick-delta.sh record --close TEXT [--tick ISO] [--tokens N] [--tools N] [--duration-ms N]
 #          tick-delta.sh digest [--instance DIR]
 #
 # `record --close TEXT` IS THE LEDGER HALF, AND IT TOUCHES NO FINGERPRINT. It appends
@@ -12,6 +12,11 @@
 # so the pair at one timestamp is the tick's wall duration. The three usage flags append
 # the one fixed form `agent-usage.sh fmt` prints; without them the line closes exactly as
 # it always did. Offline — no git, no gh — and a second close for one tick is refused.
+# `--tick <ISO>` names WHICH entry to close — the timestamp the caller wrote on its own
+# open line — and is matched exactly. Without it the close is only taken when exactly one
+# entry is open; two open entries (two ticks racing a missing lock) are refused rather
+# than guessed, because guessing the newest closes the other tick's entry under your
+# summary and leaves yours open forever.
 #
 # WHY THIS EXISTS. A tick re-derives everything every time — full task walk, a live
 # read of every open PR — which is correct and stays the default. But measured on a
@@ -82,7 +87,7 @@ STATE_NAME=".tick-state"
 
 usage() {
   echo "Usage: $(basename "$0") check|record|digest [--instance DIR] [--gap TEXT]" >&2
-  echo "       $(basename "$0") record --close TEXT [--tokens N] [--tools N] [--duration-ms N]" >&2
+  echo "       $(basename "$0") record --close TEXT [--tick ISO] [--tokens N] [--tools N] [--duration-ms N]" >&2
   exit 3
 }
 
@@ -91,14 +96,17 @@ case "$cmd" in check|record|digest) ;; *) usage ;; esac
 
 inst="."
 gap=""
-close=""; tokens=""; tools=""; ms=""
+close=""; close_set=0; tick=""; tokens=""; tools=""; ms=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --close|--tokens|--tools|--duration-ms)
+    --close|--tick|--tokens|--tools|--duration-ms)
       [ "$cmd" = record ] || { echo "tick-delta: $1 is a \`record\` flag" >&2; exit 3; }
       [ $# -ge 2 ] || { echo "tick-delta: $1 needs a value" >&2; exit 3; }
       case "$1" in
-        --close)       close="$2" ;;
+        # `--close ""` is a caller who MEANT to close: the flag decides the path, never
+        # its value, or an empty summary silently writes a fingerprint instead.
+        --close)       close="$2"; close_set=1 ;;
+        --tick)        tick="$2" ;;
         --tokens)      tokens="$2" ;;
         --tools)       tools="$2" ;;
         --duration-ms) ms="$2" ;;
@@ -125,10 +133,10 @@ fail2() { echo "CANNOT ANSWER: $1 — run the full tick." >&2; exit 2; }
 # --- the ledger half ---------------------------------------------------------------------
 # Beside the open line, never over it. Everything here is file reads and one insert: a tick
 # that cannot reach git or gh must still be able to close its own entry.
-if [ -z "$close" ] && { [ -n "$tokens" ] || [ -n "$tools" ] || [ -n "$ms" ]; }; then
+if [ "$close_set" -eq 0 ] && { [ -n "$tick" ] || [ -n "$tokens" ] || [ -n "$tools" ] || [ -n "$ms" ]; }; then
   echo "tick-delta: the usage flags go on --close, so they need one" >&2; exit 3
 fi
-if [ -n "$close" ]; then
+if [ "$close_set" -eq 1 ]; then
   LOG="$inst/log.md"
   [ -f "$LOG" ] && [ -w "$LOG" ] || fail2 "no writable $LOG"
   close="$(printf '%s' "$close" | tr '\n\t' '  ' | sed -e 's/  */ /g' -e 's/^ //' -e 's/ $//')"
@@ -138,20 +146,29 @@ if [ -n "$close" ]; then
   esac
   # Whichever marker comes FIRST decides the line. A summary is free prose and may quote
   # the other word, so a plain substring test misfiles the entry it is reading.
-  found="$(awk '
+  found="$(WANT="$tick" awk '
     /^\* TICK / {
       o = index($0, " open: "); c = index($0, " close: ")
       if (c > 0 && (o == 0 || c < o)) { closed[$3] = 1; next }
       if (o > 0) { n++; ts[n] = $3; at[n] = NR }
     }
     END {
-      for (i = n; i >= 1; i--) if (!(ts[i] in closed)) { print at[i] " " ts[i]; exit }
-      print (n > 0 ? "CLOSED" : "NOOPEN")
+      want = ENVIRON["WANT"]
+      for (i = n; i >= 1; i--) {
+        if (ts[i] in closed) continue
+        if (want != "" && ts[i] != want) continue
+        if (++open_n == 1) hit = at[i] " " ts[i]
+      }
+      if (open_n > 1)  { print "AMBIGUOUS"; exit }
+      if (open_n == 1) { print hit; exit }
+      print (n > 0 ? (want != "" ? "NOMATCH" : "CLOSED") : "NOOPEN")
     }
   ' "$LOG")" || fail2 "could not read $LOG"
   case "$found" in
     NOOPEN) echo "REFUSED: no \`open:\` TICK entry in $LOG." >&2; exit 1 ;;
     CLOSED) echo "REFUSED: every open TICK entry already carries a close — not double-writing." >&2; exit 1 ;;
+    NOMATCH) echo "REFUSED: no open TICK entry at \`$tick\` in $LOG — it is already closed, or was never opened." >&2; exit 1 ;;
+    AMBIGUOUS) echo "REFUSED: $LOG has more than one open TICK entry — pass \`--tick <the timestamp of the open line you wrote>\`; closing the newest could close another tick's entry." >&2; exit 1 ;;
   esac
   at="${found%% *}"; ts="${found#* }"
   by="$(sed -n "${at}p" "$LOG")"; by="${by#\* TICK "$ts"}"; by="${by%% open:*}"

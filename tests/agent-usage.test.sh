@@ -112,6 +112,26 @@ cp "$TMP/i4/log.md" "$TMP/log.tilde"
 ok "a summary naming a path under ~ is refused"   "$("$TD" record --instance "$TMP/i4" --close 'read ~/.claude/projects for the numbers' >/dev/null 2>&1; echo $?)" 1
 ok "…and that ledger is untouched"              "$(diff -q "$TMP/i4/log.md" "$TMP/log.tilde" >/dev/null && echo yes || echo no)" yes
 
+echo "== WHICH entry a close lands on is named, never guessed =="
+mkdir -p "$TMP/i8"
+{ printf '* TICK 2026-09-20T01:00:00Z by cbmono open: the first loop\n'
+  printf '* TICK 2026-09-20T02:00:00Z by other open: the second loop\n'
+} > "$TMP/i8/log.md"
+cp "$TMP/i8/log.md" "$TMP/log.two-open"
+out="$("$TD" record --instance "$TMP/i8" --close "whoever I am" 2>&1)"; rc=$?
+ok "two open entries and no --tick is refused"    "$rc" 1
+ok "…and names the flag that disambiguates"     "$(printf '%s' "$out" | grep -c -- '--tick')" 1
+ok "…leaving both entries untouched"            "$(diff -q "$TMP/i8/log.md" "$TMP/log.two-open" >/dev/null && echo yes || echo no)" yes
+ok "a --tick naming no open entry is refused"     "$("$TD" record --instance "$TMP/i8" --close "x" --tick 2026-09-19T00:00:00Z >/dev/null 2>&1; echo $?)" 1
+"$TD" record --instance "$TMP/i8" --close "the first loop, closing its own" --tick 2026-09-20T01:00:00Z >/dev/null
+ok "--tick closes the entry it NAMES"             "$(awk '/01:00:00Z by cbmono open:/{n=NR} /close: the first loop/{c=NR} END{print c-n}' "$TMP/i8/log.md")" 1
+ok "…and the other tick is still open"          "$(count "$TMP/i8/log.md" '2026-09-20T02:00:00Z by other close:')" 0
+
+echo "== --close with an empty summary is a usage error, not a fingerprint =="
+mkdir -p "$TMP/i9"; printf '* TICK 2026-09-21T00:00:00Z by cbmono open: go\n' > "$TMP/i9/log.md"
+ok "an empty --close is usage (3)"                "$("$TD" record --instance "$TMP/i9" --close "" >/dev/null 2>&1; echo $?)" 3
+ok "…and no .tick-state was written"            "$([ -e "$TMP/i9/.tick-state" ] && echo yes || echo no)" no
+
 echo "== the close path is offline: gh and git are traps =="
 mkdir -p "$TMP/i5"; printf '* TICK 2026-09-02T00:00:00Z by cbmono open: go\n' > "$TMP/i5/log.md"
 rc=$(OFFLINE "$TD" record --instance "$TMP/i5" --close "offline close" --tokens 9 --tools 9 --duration-ms 9 >/dev/null 2>&1; echo $?)
@@ -193,16 +213,21 @@ gaps="$("$AU" series --instance "$TMP/i6")"
 ok "every month between the two is present"       "$(printf '%s\n' "$gaps" | wc -l | tr -d ' ')" 4
 ok "…and the empty ones read UNKNOWN"           "$(printf '%s\n' "$gaps" | grep -c '^2026-0[23] · ticks 0 (0 measured) usage UNKNOWN · dispatches 0 (0 measured) usage UNKNOWN$')" 2
 ok "a year boundary is counted, not wrapped"      "$(printf '* TICK 2025-12-01T00:00:00Z close: a\n* TICK 2026-01-01T00:00:00Z close: b\n' > "$TMP/i6/log.md"; "$AU" series --instance "$TMP/i6" | wc -l | tr -d ' ')" 2
+mkdir -p "$TMP/i10"
+{ printf '* TICK 2026-03-01T00:00:00Z by a open: go\n'
+  printf '* TICK 2026-03-01T00:00:00Z by a close: left a task open: task-004 · usage tokens=7 tools=1 ms=9\n'
+} > "$TMP/i10/log.md"
+ok 'a close summary quoting open: still counts'  "$("$AU" series --instance "$TMP/i10" | grep -c '^2026-03 · ticks 1 (1 measured) usage tokens=7 tools=1 ms=9')" 1
 mkdir -p "$TMP/i7"; : > "$TMP/i7/log.md"
 ok "an empty ledger says UNKNOWN, not nothing"    "$("$AU" series --instance "$TMP/i7" | grep -c '^UNKNOWN — no TICK or DISPATCH lines')" 1
 ok "no readable log.md is exit 2"                 "$("$AU" series --instance "$TMP/i7/nope" >/dev/null 2>&1; echo $?)" 2
 
 echo "== tokens, never money — and no transcript on this path =="
-FEATURE="$AU $TD $REPO/plugin/agents/auditor.md"
+FEATURE=("$AU" "$TD" "$REPO/plugin/agents/auditor.md")
 # `cost` as a word is allowed (it names the subject); a PRICE is what may not appear.
 money='USD\|EUR\|\$[0-9]\|price\|pricing\|per million\|per 1M\|cents'
-ok "no price, no currency, no pricing source"     "$(grep -ic "$money" $FEATURE | awk '{s+=$1} END{print s+0}')" 0
-ok "no transcript path on the tick path"          "$(grep -c 'claude/projects\|\.jsonl' $FEATURE | awk '{s+=$1} END{print s+0}')" 0
+ok "no price, no currency, no pricing source"     "$(grep -ic "$money" "${FEATURE[@]}" | awk '{s+=$1} END{print s+0}')" 0
+ok "no transcript path on the tick path"          "$(grep -c 'claude/projects\|\.jsonl' "${FEATURE[@]}" | awk '{s+=$1} END{print s+0}')" 0
 ok "agent-usage.sh calls no gh"                   "$(grep -c '^[^#]*[^a-z]gh ' "$AU" | tr -d ' ')" 0
 ok "…and the close path calls none either"      "$(sed -n '/--- the ledger half/,/^command -v git/p' "$TD" | grep -v '^[[:space:]]*#' | grep -c '[^a-z]gh ' | tr -d ' ')" 0
 
@@ -210,6 +235,7 @@ echo "== the instructions that drive it say the same thing =="
 PM="$REPO/plugin/agents/project-manager.md"
 ok "step 8 appends beside, never rewrites"        "$(has "$PM" 'appends its `close:` line **beside** this one')" yes
 ok "step 8 closes via the script"                 "$(has "$PM" 'tick-delta.sh record --close')" yes
+ok "…naming the entry it closes, not guessing"   "$(has "$PM" '--tick <the ISO timestamp of the open line you wrote')" yes
 ok "the numbers are the notification's"           "$(has "$PM" '`subagent_tokens`, `tool_uses`, `duration_ms`')" yes
 ok "a dispatch is recorded per role dispatch"     "$(has "$PM" 'agent-usage.sh dispatch <task-path>')" yes
 ok "reflect sums against the merged PR"           "$(has "$PM" 'agent-usage.sh total <task-path> --pr <merged-pr-url>')" yes
