@@ -1737,7 +1737,7 @@ fi
 IDX_BEGIN_MARK="# >>> ai-bridge index ignore >>>"
 IDX_END_MARK="# <<< ai-bridge index ignore <<<"
 idxbody="$(mktemp)"
-cat > "$idxbody" <<'GI'
+cat <<'GI' | ab_expand > "$idxbody"
 # Derived navigation indexes — the root one and each project's, rewritten by every
 # /ai-bridge:dispatch tick from the documents they summarise. A view, not source: on
 # a bundle shared by more than one human it would otherwise conflict on every push.

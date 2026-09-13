@@ -1504,9 +1504,9 @@ def explain(verb, p, t, hint):
         return ("There %s %d open question%s on this task, and an unanswered question blocks "
                 "promotion — the loop will not dispatch it. The board never carries question "
                 "text; use the Q button in the task table to copy a prompt that opens "
-                "%s, or read " + AB_AWAITING + ", which does carry %s."
+                "%s, or read %s, which does carry %s."
                 % ("is" if one else "are", n, "" if one else "s",
-                   "it" if one else "them", "it" if one else "them"))
+                   "it" if one else "them", AB_AWAITING, "it" if one else "them"))
     if verb == "merge":
         prs = [todict(x) for x in tolist(t.get("prs"))]
         nums = ", ".join("#%s" % x.get("number") for x in prs)
@@ -1684,9 +1684,9 @@ def render_table():
 
     for d, msg in broken:
         o.append('<div class="snapnote"><strong>Unreadable snapshot.</strong> '
-                 '<code>%s/' + e(AB_SNAPSHOT) + '</code> could not be parsed, so that instance is '
+                 '<code>%s/%s</code> could not be parsed, so that instance is '
                  'not on the board. Re-run <code>write-snapshot.sh</code> there. '
-                 '<br>%s</div>' % (e(d), e(msg)))
+                 '<br>%s</div>' % (e(d), e(AB_SNAPSHOT), e(msg)))
 
     # ---- one project's decision rail: one click copies a complete prompt ----
     #
