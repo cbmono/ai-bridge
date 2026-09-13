@@ -34,6 +34,9 @@ set -uo pipefail
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 TPLSRC="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/index-ignore-fixture.XXXXXX")" || {
   echo "index-ignore-restamp.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -68,7 +71,7 @@ bash "$TPL/plugin/scripts/init-bundle.sh" "$INST" >"$TMP/out1" 2>&1
 assert "a fresh instance stamps"                    "$(yes_if test -f "$INST/instance.config.json")"
 assert "…and gets the index-ignore BEGIN marker"    "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$INST/.gitignore")"
 assert "…and the END marker"                        "$(yes_if grep -qxF '# <<< ai-bridge index ignore <<<' "$INST/.gitignore")"
-assert "…and /index.md is actually ignored"         "$(yes_if git_check_ignore "$INST" index.md)"
+assert "…and the derived index is actually ignored" "$(yes_if git_check_ignore "$INST" "$AB_INDEX")"
 assert "…and a project's index.md is ignored too"   "$(yes_if git_check_ignore "$INST" projects/demo/index.md)"
 
 # ---------------------------------------------------------------------------------
@@ -110,7 +113,7 @@ assert "a local edit BEFORE the block survives byte-for-byte" "$(yes_if grep -qx
 assert "…and unrelated lines are untouched"                   "$(yes_if grep -qxF '.DS_Store' "$LEGACY/.gitignore")"
 assert "a retained project's negation still wins (check-ignore)" "$(no_if git_check_ignore "$LEGACY" projects/retained-example/index.md)"
 assert "…while an ordinary project is still ignored"          "$(yes_if git_check_ignore "$LEGACY" projects/other-project/index.md)"
-assert "…root index.md is still ignored"                      "$(yes_if git_check_ignore "$LEGACY" index.md)"
+assert "…the derived index is still ignored"                  "$(yes_if git_check_ignore "$LEGACY" "$AB_INDEX")"
 # Order is the mechanism: the negation line must still appear strictly AFTER the two
 # blanket rule lines (i.e. after the block's END marker), not before or inside it.
 neg_line="$(grep -nxF '!projects/retained-example/index.md' "$LEGACY/.gitignore" | head -1 | cut -d: -f1)"
@@ -164,8 +167,8 @@ cp "$INST3/.gitignore" "$TMP/inst3.before"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$INST3" >"$TMP/out3b" 2>&1
 assert "a decoy resembling the marker does not block migration" \
   "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$INST3/.gitignore")"
-assert "…root index.md is ignored after migrating past the decoy" \
-  "$(yes_if git_check_ignore "$INST3" index.md)"
+assert "…the derived index is ignored after migrating past the decoy" \
+  "$(yes_if git_check_ignore "$INST3" "$AB_INDEX")"
 assert "…the decoy line itself survives untouched"  \
   "$(yes_if grep -qF 'a note that mentions' "$INST3/.gitignore")"
 
@@ -271,8 +274,10 @@ assert "install.sh exits 0 with an earlier unrelated /index.md line present" \
   "$([[ $? -eq 0 ]] && echo 0 || echo 1)"
 assert "the REAL index-ignore pair is migrated to the marker pair (not the decoy)" \
   "$(yes_if grep -qxF '# >>> ai-bridge index ignore >>>' "$INST6/.gitignore")"
+# ONE since the block's own rule line is `/.ai-bridge/index.md`: the decoy is the only
+# `/index.md` left, which is exactly the line that had to survive.
 assert "the earlier unrelated /index.md rule is untouched" \
-  "$([[ "$(grep -cxF '/index.md' "$INST6/.gitignore")" -eq 2 ]] && echo 0 || echo 1)"
+  "$([[ "$(grep -cxF '/index.md' "$INST6/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"
 assert "…exactly ONE index-ignore block was created, not a duplicate at EOF" \
   "$([[ "$(grep -cxF '# >>> ai-bridge index ignore >>>' "$INST6/.gitignore")" -eq 1 ]] && echo 0 || echo 1)"
 assert "a retained project's negation still wins (check-ignore) despite the decoy" \

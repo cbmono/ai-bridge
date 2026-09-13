@@ -225,7 +225,7 @@ if [[ -n "$PENDING" ]]; then
     # appends the new ones, so this only has to drop the stale root spellings.
     if [[ -f .gitignore ]]; then
       tmp="$(temp_beside .gitignore)" \
-        && grep -vxE '/?(AWAITING\.md|SNAPSHOT\.json|index\.md|\.tick-state|\.board-live/?|\.board-others\.json|\.tick-lock|\.tick-lock\.claim)' .gitignore > "$tmp" \
+        && grep -vxE '/?(AWAITING\.md|SNAPSHOT\.json|\.tick-state|\.board-live/?|\.board-others\.json|\.tick-lock|\.tick-lock\.claim)' .gitignore > "$tmp" \
         && mv "$tmp" .gitignore \
         && echo "  REWROTE  .gitignore (the root spellings of the derived files are gone)"
     fi

@@ -1825,7 +1825,7 @@ else
       break
     fi
   done <<EOF
-$(grep -nxF "/$AB_INDEX" "$gi" | cut -d: -f1)
+$(grep -nxE "/(${AB_INDEX//./\\.}|index\.md)" "$gi" | cut -d: -f1)
 EOF
   if [ -n "$idxline" ]; then
     start="$idxline"

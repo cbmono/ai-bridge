@@ -118,7 +118,7 @@ ok "…and it names the probe that allowed it"  "$(saw "$LAST_OUT" 'gh api orgs/
 ok "the seed landed"                          "$([ -f "$T1/$AB_SCHEMA" ] && echo yes || echo no)" yes
 ok "it says the bundle is the org's"          "$(saw "$LAST_OUT" "bundle acme/acme-okf is the organisation's")" yes
 ok "the first commit is pushed"               "$(git -C "$GHFIX/bare/acme_acme-okf.git" rev-list --count HEAD 2>/dev/null || echo 0)" 1
-ok "…and it carries the seed"                 "$(git -C "$GHFIX/bare/acme_acme-okf.git" ls-tree -r --name-only HEAD | grep -cx 'SCHEMA.md')" 1
+ok "…and it carries the seed"                 "$(git -C "$GHFIX/bare/acme_acme-okf.git" ls-tree -r --name-only HEAD | grep -cx "$AB_SCHEMA")" 1
 ok "…and NOT this clone's local config"       "$(git -C "$GHFIX/bare/acme_acme-okf.git" ls-tree -r --name-only HEAD | grep -cx 'instance.config.local.json')" 0
 ok "the local config is this machine's"       "$(saw "$T1/instance.config.local.json" '"ownerGithubUser": "example-user-007"')" yes
 
@@ -205,7 +205,7 @@ T6="$TMP/w6/_ai-bridge-acme"; mkdir -p "$T6"
 rc="$(run "$T6" --org acme --name acme-notes)"
 ok "exit 3 — it refuses"                      "$rc" 3
 ok "…by name"                                 "$(saw "$LAST_OUT" 'acme/acme-notes exists and is not an ai-bridge bundle')" yes
-ok "…naming the two markers it looked for"    "$(saw "$LAST_OUT" 'no instance.config.json, no SCHEMA.md')" yes
+ok "…naming the two markers it looked for"    "$(saw "$LAST_OUT" "no instance.config.json, no $AB_SCHEMA")" yes
 ok "it did NOT stamp the seed over it"        "$([ -e "$T6/$AB_SCHEMA" ] && echo yes || echo no)" no
 ok "…and the repo's own content is intact"    "$(saw "$T6/README.md" "someone else's repo")" yes
 

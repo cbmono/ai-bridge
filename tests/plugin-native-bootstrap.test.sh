@@ -197,7 +197,8 @@ printf 'the log\n' > "$LEG/log.md"
 DATA_BEFORE="$(cat "$LEG/projects/demo/index.md" "$LEG/projects/demo/tasks/task-001-x.md" \
                    "$LEG/knowledge/findings/f.md" "$LEG/log.md")"
 for p in SCHEMA.md CONVENTIONS.md AUTONOMY.md; do ln -s "$OLD/symlink/$p" "$LEG/$p"; done
-ln -s "$OLD/symlink/$AB_ROSTER" "$LEG/$AB_ROSTER"
+# The legacy links sat at the PRE-3.0 root, which is what makes this a legacy bundle.
+ln -s "$OLD/symlink/agents/index.md" "$LEG/agents/index.md"
 ln -s "$OLD/symlink/scripts/commit-as.sh" "$LEG/scripts/commit-as.sh"
 ln -s "$OLD/symlink/.claude/hooks/push-state.sh" "$LEG/.claude/hooks/push-state.sh"
 ln -s "$TMP/never-existed/x.sh" "$LEG/scripts/dead.sh"
