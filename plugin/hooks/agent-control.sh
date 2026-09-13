@@ -92,9 +92,10 @@
 # Same tool, same arguments, N consecutive times is an agent that has stopped making
 # progress, and this hook already sees every call WITH an `agent_id`. It is OPT-IN on
 # `maxRepeatedToolCalls`: absent from both config layers ⇒ nothing is hashed, counted or
-# written, so an armed bundle that never set the key behaves exactly as before. The limit
-# is cached beside the counters and re-read only when a config file is NEWER than that
-# cache, so the steady cost is a `read` builtin and no fork.
+# written beyond the one cache line below, so an armed bundle that never set the key
+# behaves as before. The limit is cached beside the counters and refreshed when a config
+# file is newer than that cache OR the cached answer is stale, so the steady cost of
+# knowing the answer is a `read` builtin and no fork.
 #
 # A breach is a `deny`, never a kill, for the reason at the top of this file. It names the
 # tool and the counter and NEVER the arguments: only a fingerprint of them is stored.
