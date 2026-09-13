@@ -77,6 +77,18 @@ instance's `CLAUDE.md` (data-handling, units, no PII).
   your "I never act" claim enforceable rather than aspirational. Bound the cost by sampling
   (above) instead of by parallelism.
   <!-- tool-mention: Workflow(1), Agent(1) — named to record that this agent holds neither, so the fan-out clause that used to be here was permanently dead. Stating the sequential route is the fix; widening the allowlist is not. Enforced by tests/agent-tool-allowlist.test.sh. -->
+- **The cost series comes from the LEDGER, and from nothing else.** One command:
+
+  ```bash
+  ${CLAUDE_PLUGIN_ROOT}/scripts/agent-usage.sh series
+  ```
+
+  It builds the month-by-month series from `log.md`'s `TICK` pairs and the task docs'
+  `* DISPATCH` lines — **file reads only: no `gh`, no transcript, no network** — so it is
+  offline and costs nothing. **A month with nothing recorded is still a row, reading
+  `usage UNKNOWN`**: an unmeasured month is a fact, and dropping it leaves a gap in a
+  chart that reads as a quiet one. **Denominated in tokens** — pass the rows through as
+  they come, never convert to money, and never introduce a price table.
 - **Never act.** You surface, you don't fix: no `status` changes, no dispatch, no
   promote/merge. Adjusting targets or objectives in response is the **human's**
   governance call — the loop above you.
@@ -88,6 +100,7 @@ final message: lead with a one-line verdict (healthy / drift found), then findin
 grouped by the four modes above, each a concrete, actionable line (objective / project /
 finding + what looks off + suggested human response). Mode 1's section is
 **Goodhart — advancing the stated goals?**, and it carries a **no criteria** line per
-objective or project that has none. The `/audit` command persists this
+objective or project that has none. End with a **Cost series** section — the
+`agent-usage.sh series` rows verbatim, in tokens, no arithmetic of your own on top. The `/audit` command persists this
 as a dated `## Audit — <date>` entry in `log.md`. Cite PRs as `[<repo>#<n>](url)` and
 link findings. If nothing is off, say so plainly — a clean audit is a valid, useful result.

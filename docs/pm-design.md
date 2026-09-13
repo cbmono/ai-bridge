@@ -293,8 +293,8 @@ is the launcher.
 **Why the ledger entry opens first, not as part of curation.** A tick that dies
 mid-flight — compaction, a crash, a killed session — otherwise leaves *no* record that
 it ever dispatched, and the next tick cannot tell "dispatched, waiting for a
-notification" from "never ran". An open `TICK` line with no matching close is exactly
-that missing signal.
+notification" from "never ran". An `open:` line whose timestamp carries no `close:` line
+beside it is exactly that missing signal.
 
 **What the open entry proves, precisely.** It proves a tick started and did not finish.
 It does **not** prove the agents it dispatched are still alive — nothing on disk can,
@@ -491,6 +491,19 @@ bundle, permanently, which is a trigger that means nothing.
 
 <a id="step-8"></a>
 ### Step 8 — curation, the queue, the board, and the lock
+
+**Why the open line is no longer rewritten, and why a script writes the close.** Until
+ai-bridge-v3/task-001 step 8 *replaced* the `open:` line with the closed summary, so the
+one number the ledger was already carrying — when the tick started — was destroyed at the
+moment it became useful, and 136 lines yielded 6 measurable pairs. The close line is now
+appended beside the open one at the same timestamp, and the wall duration is the pair.
+The three usage numbers ride on it (`subagent_tokens`, `tool_uses`, `duration_ms`, exactly
+as the completion notification hands them over) in a form `tick-delta.sh record --close`
+composes and the model never types — a number a model formats is a number nobody can sum
+later. The same three go on each task per dispatch, and their sum against the merged PR at
+reflect time; `/audit` reads those two surfaces and nothing else. **Tokens, never money**:
+there is no price table here to maintain and no USD figure anywhere in the feature, so a
+reader who wants money converts it with today's prices rather than last quarter's.
 
 **Why the ledger close line is reconstructible, not descriptive**: "Refined two tasks,
 dispatched work" is useless to the next tick; "dispatched task-004, task-007; reflected
