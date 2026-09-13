@@ -168,7 +168,11 @@ echo "== 2. the FROM column: both directions, one instance =="
 INST="$TMP/_ai-bridge-fixture"
 mkdir -p "$INST/.claude/agents"
 printf 'stub\n' > "$INST/SCHEMA.md"          # task-owner.sh's instance-root test
-run() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1)"; RC=$?; }
+# `--full` (ai-bridge-v3/task-025): this file is the FULL banner's test — the two tables and
+# their columns are most of what it asserts. The SessionStart default drops them to hold 12
+# lines and §14 is where that cut is pinned; everything else here asks for the rendering
+# `/ai-bridge:welcome` gets.
+run() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --full 2>&1)"; RC=$?; }
 # `run` IS THE HUMAN'S CHANNEL, and since task-023 that is a real restriction rather than a
 # detail of the harness. With no `--format json` the hook has ONE stream whose reader is a
 # human, so `model_only` blocks are dropped outright — every "no such line" assertion below
@@ -294,7 +298,7 @@ cc_write() { # <dir> <json>
   mkdir -p "$1"; printf '%s\n' "$2" > "$1/.claude.json"
 }
 run_cc() { OUT="$(CLAUDE_PROJECT_DIR="$INST" CLAUDE_CONFIG_DIR="$CCD" HOME="$CCHOME" \
-                  bash "$HOOK" 2>&1)"; RC=$?; }
+                  bash "$HOOK" --full 2>&1)"; RC=$?; }
 
 cc_write "$CCD" '{"oauthAccount":{"emailAddress":"session-user@example.com","accountUuid":"11111111-2222-3333-4444-555555555555","organizationName":"Example Org"}}'
 run_cc
@@ -311,7 +315,7 @@ run_cc
 assert "CLAUDE_CONFIG_DIR wins over \$HOME"      "$(eq "$(value claudeAccount)" 'session-user@example.com')"
 assert "…and the \$HOME address never appears"   "$(hasnt 'home-user@example.com' "$OUT")"
 
-OUT="$(CLAUDE_PROJECT_DIR="$INST" HOME="$CCHOME" env -u CLAUDE_CONFIG_DIR bash "$HOOK" 2>&1)"; RC=$?
+OUT="$(CLAUDE_PROJECT_DIR="$INST" HOME="$CCHOME" env -u CLAUDE_CONFIG_DIR bash "$HOOK" --full 2>&1)"; RC=$?
 assert "no CLAUDE_CONFIG_DIR: \$HOME answers"    "$(eq "$(value claudeAccount)" 'home-user@example.com')"
 
 cc_write "$CCD" '{"numStartups":41}'
@@ -331,7 +335,7 @@ assert "no .claude.json at all: still no row"    "$(eq "$(row claudeAccount)" ''
 assert "…and still exit 0"                       "$(eq "$RC" 0)"
 # Neither variable set: the path must not fall together as `/.claude.json` and read a
 # root-level file this hook has no business in.
-OUT="$(CLAUDE_PROJECT_DIR="$INST" env -u CLAUDE_CONFIG_DIR -u HOME bash "$HOOK" 2>&1)"; RC=$?
+OUT="$(CLAUDE_PROJECT_DIR="$INST" env -u CLAUDE_CONFIG_DIR -u HOME bash "$HOOK" --full 2>&1)"; RC=$?
 assert "no CLAUDE_CONFIG_DIR and no \$HOME: no row" "$(eq "$(row claudeAccount)" '')"
 assert "…the settings block still prints"        "$(has 'maxPrLoc' "$OUT")"
 assert "…and exit 0"                             "$(eq "$RC" 0)"
@@ -506,7 +510,7 @@ cp "$HOOK" "$FAKETPL/session-banner.sh"
 # this copy — otherwise "the rest of the banner is intact" would pass for a banner that
 # lost its settings block for an unrelated reason.
 cp "$SCRIPTS/resolve-config.sh" "$TMP/faketpl/plugin/scripts/"
-vrun() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/session-banner.sh" 2>&1)"; RC=$?; }
+vrun() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/session-banner.sh" --full 2>&1)"; RC=$?; }
 rm -f "$TMP/faketpl/VERSION"
 vrun
 assert "no VERSION file: still exit 0"            "$(eq "$RC" 0)"
@@ -772,7 +776,7 @@ env.pop("NO_COLOR", None)
 if nocolor:
     env["NO_COLOR"] = nocolor
 main, sub = pty.openpty()
-proc = subprocess.Popen(["bash", hook], stdout=sub, stderr=subprocess.DEVNULL, env=env)
+proc = subprocess.Popen(["bash", hook, "--full"], stdout=sub, stderr=subprocess.DEVNULL, env=env)
 os.close(sub)
 buf = b""
 while True:
@@ -829,7 +833,7 @@ print(len(cols))
 assert "SETTING and ROLE put FROM in the same column"  "$(eq "$cols" 1)"
 
 # The explicit switch, for a human piping the banner somewhere that renders escapes.
-OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --color always 2>&1)"
+OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --color always --full 2>&1)"
 assert "--color always colours a pipe"                 "$(coloured "$OUT")"
 assert "…and an unknown argument is ignored, not fatal" \
   "$(eq "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --wat >/dev/null 2>&1; echo $?)" 0)"
@@ -957,8 +961,8 @@ tracked_cfg
 printf '{ "maxAgentsInFlight": 2, "ownerGithubUser": "example-user-007" }\n' \
   > "$INST/instance.config.local.json"
 for loc in en_US.UTF-8 C; do
-  TXT="$(LC_ALL="$loc" CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"
-  MD="$(LC_ALL="$loc" CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"
+  TXT="$(LC_ALL="$loc" CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --full 2>/dev/null)"
+  MD="$(LC_ALL="$loc" CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md --full 2>/dev/null)"
   assert "LC_ALL=$loc: the banner still prints both tables" \
     "$([ "$(has 'SETTING ' "$TXT")" = 0 ] && [ "$(has 'AGENT ' "$TXT")" = 0 ] && echo 0 || echo 1)"
   assert "…and after the renderer's transform, ONE FROM offset across both tables (text)" \
@@ -1061,7 +1065,7 @@ json.dump({
 PY
 rm -f "$INST/instance.config.local.json"
 run
-MD_H="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md 2>/dev/null)"
+MD_H="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md --full 2>/dev/null)"
 STX="$(printf '\002')"
 assert "a link/code-span/marker config: still exit 0"  "$(eq "$RC" 0)"
 assert "…and the banner still prints its tables"       "$(has 'AGENT (role)' "$OUT")"
@@ -1266,6 +1270,26 @@ assert "§0 ABOVE THE HEADER: the identity line stops sitting three lines under 
 assert "…and the alarm, not the header, is what the label now prefixes — still one blank line" \
   "$(eq "$(head_no "$DANG")" 2)"
 rm -rf "$MUTTPL" "$DANGLING"
+
+# =======================================================================================
+echo "== 13. \`--full\` is a FLAG, so the SessionStart default is the short banner =="
+# =======================================================================================
+# `run()` above passes `--full` for every other section in this file, which means nothing
+# here would notice if the flag quietly became the default again — and the 12-line ceiling
+# (ai-bridge-v3/task-025) is exactly that regression. So the default is asserted directly.
+SHORT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --color never 2>/dev/null)"
+LONG="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --color never --full 2>/dev/null)"
+assert "the default carries no SETTING table"      "$(hasnt 'SETTING ' "$SHORT")"
+assert "…and no AGENT table"                       "$(hasnt 'AGENT (role)' "$SHORT")"
+assert "…while --full carries both"                \
+  "$([ "$(has 'SETTING ' "$LONG")" = 0 ] && [ "$(has 'AGENT (role)' "$LONG")" = 0 ] && echo 0 || echo 1)"
+assert "…and the default still says who this is"   "$(has 'AI-Bridge' "$SHORT")"
+assert "…and is strictly shorter"                  \
+  "$([ "$(printf '%s\n' "$SHORT" | grep -c '')" -lt "$(printf '%s\n' "$LONG" | grep -c '')" ] && echo 0 || echo 1)"
+# The one python3 call on this path is gated too: a table that does not print must not cost
+# a process per session start.
+assert "…and --full gates the claudeAccount probe, not just its row" \
+  "$(has 'FULL" -eq 1 ] && [ -n "$dump"' "$(cat "$HOOK")")"
 
 echo
 printf 'pass=%d fail=%d skipped=%d\n' "$pass" "$fail" "$skipped"
