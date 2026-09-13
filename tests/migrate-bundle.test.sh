@@ -192,6 +192,10 @@ echo '# Conventions' > CONVENTIONS.md
 printf 'AWAITING.md\n/.board-live/\n/.tick-lock\nnode_modules/\n' > .gitignore
 doc projects/p/tasks/task-001-x.md '---' 'type: Task' 'title: T' 'status: draft' "timestamp: $TS" '---' \
   'See [SCHEMA](/SCHEMA.md) and [CONVENTIONS](/CONVENTIONS.md).'
+# BOTH FORMS, in one bundle: a document written before the move and one written after it.
+doc knowledge/findings/both.md '---' 'type: Finding' 'title: F' 'status: current' \
+  'lesson: one line' "timestamp: $TS" '---' \
+  'Root form [S](/SCHEMA.md); new form [C](/.ai-bridge/CONVENTIONS.md).'
 git init -q -b main . && git add -A && git -c user.email=a@b -c user.name=a commit -qm init
 : > AWAITING.md   # gitignored, so git mv would refuse it
 
@@ -230,6 +234,14 @@ assert "the root ignore lines are gone"   "$(grep -qxE '/?(AWAITING\.md|\.board-
 assert "a human's own ignore line stayed" "$(grep -qx 'node_modules/' .gitignore && echo 0 || echo 1)"
 assert "the task doc's links were rewritten" \
   "$(grep -q "(/$AB_SCHEMA)" projects/p/tasks/task-001-x.md && grep -q "(/$AB_CONVENTIONS)" projects/p/tasks/task-001-x.md && echo 0 || echo 1)"
+
+echo "== and the link checker is clean on a bundle that carried both forms =="
+set +e; LV="$(bash "$VALIDATE" 2>&1)"; LV_RC=$?; set -e
+assert "validate-bundle reports 0 errors"  "$(printf '%s' "$LV" | grep -q ', 0 errors,' && echo 0 || echo 1)"
+assert "…and exits 0"                      "$([[ $LV_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "no link still names the old root"  "$(grep -rq '(/SCHEMA\.md\|(/CONVENTIONS\.md' projects knowledge && echo 1 || echo 0)"
+assert "…and the already-new form is untouched" \
+  "$(grep -q "(/$AB_CONVENTIONS)" knowledge/findings/both.md && echo 0 || echo 1)"
 
 echo "== the layout step is idempotent =="
 AGAIN="$(bash "$MIGRATE" 2>&1)"

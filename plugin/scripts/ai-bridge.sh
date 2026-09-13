@@ -113,6 +113,7 @@ set -uo pipefail
 # must happen before re-stamping from it, or the stamp is taken from the stale tree — the
 # exact failure that produced this file.
 CHECKS='template-behind|idempotent|no
+bundle-unmigrated|human|yes
 bundle-unconverted|idempotent|yes
 seed-drift|idempotent|no
 config-uncommitted|ambiguous|yes
@@ -559,6 +560,28 @@ EOF
   note "the machinery ships in the plugin now; a link into a checkout is frozen there"
   hint "/ai-bridge:init $ROOT"
   return "$_warned"
+}
+
+# check_bundle_unmigrated — plugin-owned files still sitting at the bundle ROOT.
+#
+# HUMAN TIER, and that is the whole point: the repair MOVES tracked files, which is not an
+# idempotent repair this pass may make on its own. It names every file and prints the one
+# command. Between a plugin update and the migration every reader looks at a path that is
+# not there, and each of them treats absence as an off switch — so an un-migrated bundle
+# reads as a switched-off one unless something says otherwise. This is that something.
+check_bundle_unmigrated() {
+  if ! ab_unmigrated "$ROOT"; then
+    good "the 3.0 layout: plugin-owned files are under $AB_DIR/"
+    return 0
+  fi
+  local pair old
+  warn "plugin-owned files are still at the bundle root — this bundle predates the 3.0 layout"
+  for pair in $AB_MOVES; do
+    old="${pair%%:*}"; [ -e "$ROOT/$old" ] && printf '    %s -> %s\n' "$old" "${pair#*:}"
+  done
+  note "every reader looks at the new path, and an absent one reads as 'switched off'"
+  hint "cd $ROOT && migrate-bundle.sh        # then again with --apply"
+  return 1
 }
 
 # fix_bundle_unconverted — run the bundle installer this plugin ships.

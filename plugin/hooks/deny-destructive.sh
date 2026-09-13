@@ -601,6 +601,15 @@ EOT
         printf '`rm -r %s` is at or above the root of the working tree (`%s`) — it would take uncommitted and unpushed work, and anything alongside it. Deleting a path INSIDE the tree (build output, node_modules, a scratch dir) is allowed.' "$p" "$root"
         return 0
       fi
+      # THE BUNDLE'S PLUGIN-OWNED DIRECTORY, AS A PREFIX — not a list of filenames, so a
+      # file the layout gains later is covered the day it lands. A recursive delete at or
+      # above it takes SCHEMA.md, CONVENTIONS.md, the tick ledger and the roster together.
+      # Deleting ONE derived file inside it stays allowed: the seed .gitignore tells a
+      # human to do exactly that to turn the queue or the board off.
+      if covers "$p" "$(phys "$INSTANCE_ROOT/$AB_DIR")"; then
+        printf '`rm -r %s` is at or above `%s`, the bundle'"'"'s plugin-owned directory — it would take SCHEMA.md, CONVENTIONS.md, the tick ledger and the roster with it. Deleting one derived file inside it (the awaiting queue, the board cache) is allowed.' "$p" "$AB_DIR"
+        return 0
+      fi
     done <<EOT
 $(tokens_of "$stage")
 EOT

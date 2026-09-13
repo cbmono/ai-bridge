@@ -75,7 +75,7 @@ OUTSIDE="$WORK/notarepo"; mkdir -p "$OUTSIDE"
 # a vacuous pass. Deliberately NOT a git repo: `subagent_push_default` exempts the repo
 # whose root IS the instance root, and a fixture where that comparison could fire by
 # accident would silently disarm the one rule that reads this value.
-INSTROOT="$WORK/instroot"; mkdir -p "$INSTROOT"
+INSTROOT="$WORK/instroot"; mkdir -p "$INSTROOT" "$INSTROOT/$AB_DIR"
 printf '{}\n' > "$INSTROOT/instance.config.json"
 INSTROOT="$(res "$INSTROOT")"
 
@@ -222,6 +222,13 @@ ok "…a non-recursive rm is not this rule's business" \
    "$(verdict "$GITREPO" 'rm -f config.json')" "allow"
 ok "…and a glob below the root" \
    "$(verdict "$GITREPO" 'rm -rf coverage/*')" "allow"
+# THE BUNDLE'S PLUGIN-OWNED DIRECTORY, protected as a PREFIX — ai-bridge-v3/task-031.
+ok "rm -r of the bundle's .ai-bridge/ is refused" \
+   "$(verdict "$GITREPO" "rm -rf $INSTROOT/$AB_DIR")" "deny:rm_rf_repo_root"
+ok "…while a subdirectory INSIDE it is still allowed" \
+   "$(verdict "$GITREPO" "rm -rf $INSTROOT/$AB_DIR/seed-base")" "allow"
+ok "…while deleting ONE derived file inside it stays allowed" \
+   "$(verdict "$GITREPO" "rm -f $INSTROOT/$AB_AWAITING")" "allow"
 
 echo "== rule 6: force_push_protected — the default branch, not every branch"
 ok "force-push to main is refused" \

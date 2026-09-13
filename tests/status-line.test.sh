@@ -18,6 +18,9 @@
 # Reasoning: ai-bridge-v3/task-025.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SL="$REPO/plugin/scripts/status-line.sh"
 [ -f "$SL" ] || { echo "status-line.test: missing $SL" >&2; exit 2; }
@@ -44,7 +47,7 @@ plain() { run --instance "$1" --color never; }
 # ------------------------------------------------------------------- the fixture bundle
 mk() { # <dir> — a bundle with 2 in-flight tasks, 3 awaiting items, a closed tick, no lock
   local d="$1"
-  mkdir -p "$d/projects/proj-a/tasks" || return 1
+  mkdir -p "$d/projects/proj-a/tasks" "$d/$AB_DIR" || return 1
   printf '{ "org": "acme" }\n' > "$d/instance.config.json"
   local i
   for i in 1 2; do
@@ -53,7 +56,7 @@ mk() { # <dir> — a bundle with 2 in-flight tasks, 3 awaiting items, a closed t
   done
   printf -- '---\nstatus: ready\n---\n'  > "$d/projects/proj-a/tasks/task-003.md"
   printf -- '---\nstatus: done\n---\n'   > "$d/projects/proj-a/tasks/task-004.md"
-  cat > "$d/AWAITING.md" <<'EOF'
+  cat > "$d/$AB_AWAITING" <<'EOF'
 # Awaiting you
 
 *Derived and gitignored.*
@@ -66,7 +69,7 @@ mk() { # <dir> — a bundle with 2 in-flight tasks, 3 awaiting items, a closed t
 ## Something else
 * not an awaiting item
 EOF
-  cat > "$d/log.md" <<'EOF'
+  cat > "$d/$AB_LEDGER" <<'EOF'
 # Log
 
 * TICK 2026-09-12T07:00:00Z by cbmono close: an older tick
@@ -87,33 +90,33 @@ echo
 echo "== 1. the whole line, character for character =="
 ok "the healthy bundle" "$(plain "$INST")" \
    "AI Bridge · 2 in flight · 3 need you · lock free · last tick $HM"
-: > "$INST/.tick-lock"
+: > "$INST/$AB_LOCK"
 ok "…and with a tick holding the lock" "$(plain "$INST")" \
    "AI Bridge · 2 in flight · 3 need you · lock held · last tick $HM"
-rm -f "$INST/.tick-lock"
+rm -f "$INST/$AB_LOCK"
 ok "exactly one line of output" "$(plain "$INST" | wc -l | tr -d ' ')" 1
 
 echo
 echo "== 2. it read the files that carry the facts, and no others =="
 ok 'an `open:` TICK is still the last tick (it is the newest)' \
    "$(printf '%s' "$(plain "$INST")" | grep -c "last tick $HM")" 1
-printf '{"counts":{"awaiting":99}}\n' > "$INST/SNAPSHOT.json"
-printf 'recorded: 2001-01-01T00:00:00Z\n'    > "$INST/.tick-state"
+printf '{"counts":{"awaiting":99}}\n' > "$INST/$AB_SNAPSHOT"
+printf 'recorded: 2001-01-01T00:00:00Z\n'    > "$INST/$AB_STATE_DIR"
 ok "SNAPSHOT.json and .tick-state change nothing" "$(plain "$INST")" \
    "AI Bridge · 2 in flight · 3 need you · lock free · last tick $HM"
 ok "…and neither is named in the source" \
    "$(grep -c 'SNAPSHOT\.json\|\.tick-state' "$SL" | tr -d ' ')" 2
 ok "…which is twice, in comments saying why not" \
    "$(grep -v '^[[:space:]]*#' "$SL" | grep -c 'SNAPSHOT\.json\|\.tick-state' | tr -d ' ')" 0
-rm -f "$INST/SNAPSHOT.json" "$INST/.tick-state"
+rm -f "$INST/$AB_SNAPSHOT" "$INST/$AB_STATE_DIR"
 
 echo
 echo "== 3. every absent input renders \`?\`, never \`0\` =="
-D="$TMP/d1"; mk "$D"; rm -f "$D/AWAITING.md"
+D="$TMP/d1"; mk "$D"; rm -f "$D/$AB_AWAITING"
 ok "no AWAITING.md ⇒ the queue is unknown" "$(plain "$D" | sed 's/.*· \([^·]*need you\) ·.*/\1/')" "? need you"
-D="$TMP/d2"; mk "$D"; rm -f "$D/log.md"
+D="$TMP/d2"; mk "$D"; rm -f "$D/$AB_LEDGER"
 ok "no log.md ⇒ the time is unknown"       "$(plain "$D" | sed 's/.*· //')" "last tick ?"
-D="$TMP/d3"; mk "$D"; printf '# Log\n\nnothing yet\n' > "$D/log.md"
+D="$TMP/d3"; mk "$D"; printf '# Log\n\nnothing yet\n' > "$D/$AB_LEDGER"
 ok "a log with no TICK line ⇒ unknown"     "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d4"; mk "$D"; rm -rf "$D/projects"
 ok "no projects/ ⇒ in-flight is unknown"   "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "? in flight"
@@ -124,7 +127,7 @@ D="$TMP/d5"; mk "$D"
 for f in "$D"/projects/proj-a/tasks/*.md; do printf -- '---\nstatus: ready\n---\n' > "$f"; done
 ok "no task in progress ⇒ 0, not ?" "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
 D="$TMP/d6"; mk "$D"
-printf '# Awaiting you\n\n## 🔴 Awaiting you (0)\n\n*nothing waits*\n' > "$D/AWAITING.md"
+printf '# Awaiting you\n\n## 🔴 Awaiting you (0)\n\n*nothing waits*\n' > "$D/$AB_AWAITING"
 ok "an empty queue ⇒ 0, not ?"      "$(plain "$D" | sed 's/.*· \([^·]*need you\) ·.*/\1/')" "0 need you"
 D="$TMP/d7"; mk "$D"; rm -f "$D"/projects/proj-a/tasks/*.md
 ok "a project with no tasks ⇒ 0"    "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
@@ -133,10 +136,10 @@ D="$TMP/d9"; mk "$D"; chmod 000 "$D/projects/proj-a/tasks/task-001.md"
 ok "an UNREADABLE task doc ⇒ ?, never a quiet undercount" \
    "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "? in flight"
 chmod 644 "$D/projects/proj-a/tasks/task-001.md"
-D="$TMP/d10"; mk "$D"; chmod 000 "$D/AWAITING.md"
+D="$TMP/d10"; mk "$D"; chmod 000 "$D/$AB_AWAITING"
 ok "…and an unreadable AWAITING.md too" \
    "$(plain "$D" | sed 's/.*· \([^·]*need you\) ·.*/\1/')" "? need you"
-chmod 644 "$D/AWAITING.md"
+chmod 644 "$D/$AB_AWAITING"
 
 echo
 echo "== 5. a \`status:\` in the BODY is not frontmatter =="
@@ -179,9 +182,9 @@ C="$(run --instance "$INST" --color always)"
 ok "work in flight is cyan"                "$(sgr_of "$C" '2 in flight')" 36
 ok "a queue that needs you is yellow"       "$(sgr_of "$C" '3 need you')" 33
 ok "a free lock is dim, not shouting"       "$(sgr_of "$C" 'lock free')" 2
-: > "$INST/.tick-lock"
+: > "$INST/$AB_LOCK"
 ok "…and a held one is yellow"              "$(sgr_of "$(run --instance "$INST" --color always)" 'lock held')" 33
-rm -f "$INST/.tick-lock"
+rm -f "$INST/$AB_LOCK"
 Z="$(run --instance "$TMP/d5" --color always)"
 ok "zero in flight goes dim, not cyan"      "$(sgr_of "$Z" '0 in flight')" 2
 U="$(run --instance "$TMP/d1" --color always)"
@@ -233,11 +236,11 @@ D="$TMP/m1"; mk "$D"; printf -- '---\nstatus: in-progress\n---\n' > "$D/projects
 ok "a third in-progress task moves the number" \
    "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "3 in flight"
 D="$TMP/m2"; mk "$D"
-printf '%s\n' '* ❓ **answer** — [d](/projects/proj-a/tasks/task-002.md)' >> "$D/AWAITING.md"
+printf '%s\n' '* ❓ **answer** — [d](/projects/proj-a/tasks/task-002.md)' >> "$D/$AB_AWAITING"
 ok "…and an item outside the block does NOT" \
    "$(plain "$D" | sed 's/.*· \([^·]*need you\) ·.*/\1/')" "3 need you"
 D="$TMP/m3"; mk "$D"
-printf '* TICK 2026-09-13T18:00:00Z by cbmono open: newer\n' >> "$D/log.md"
+printf '* TICK 2026-09-13T18:00:00Z by cbmono open: newer\n' >> "$D/$AB_LEDGER"
 ok "a newer TICK line moves the clock" \
    "$([ "$(plain "$D" | sed 's/.*· //')" != "last tick $HM" ] && echo yes || echo no)" yes
 
