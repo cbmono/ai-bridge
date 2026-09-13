@@ -298,13 +298,16 @@ else
   # go red", not a statistically stable score, and each extra run and each baseline arm is
   # another paid model run. The suite's own prompt.md files declare runs: 2 for a
   # by-hand `claude plugin eval ./plugin`, which is the higher-fidelity form.
-  # --max-cost-usd is a ceiling, not a budget: it aborts (exit 2) rather than overrun. 7,
-  # not the old 6, because a fourth pattern case took the suite from 7 cases to 8 — four
-  # now carry an `llm` grader and one dispatches a subagent whose own run is billed.
+  # --max-cost-usd is a ceiling, not a budget: it aborts (exit 2) rather than overrun. 7
+  # against a measured $2.14 for the twelve cases (2026-09-13, 2.1.270), which leaves room
+  # for a case that dispatches a subagent whose own run is billed.
   # --judge-model sonnet: the default judge is haiku, and the CLI's own authoring guidance
-  # is that a small judge misses the distinctions a rubric turns on. All four rubrics here
-  # turn on one (a conclusion asserted vs. withheld), so the judge is sized to it.
-  out="$(claude plugin eval "$PLUGIN" --runs 1 --ablation none --no-publish \
+  # is that a small judge misses the distinctions a rubric turns on. The rubrics here turn
+  # on one (a conclusion asserted vs. withheld), so the judge is sized to it.
+  # --trust-plugin: the first run in an untrusted plugin directory PROMPTS, and a harness
+  # that waits for an answer nobody is there to give hangs instead of failing. The plugin
+  # is this checkout's own.
+  out="$(claude plugin eval "$PLUGIN" --runs 1 --ablation none --no-publish --trust-plugin \
     --judge-model sonnet --max-cost-usd 7 2>&1)"
   rc=$?
   ok "claude plugin eval passes every case in plugin/evals/" "$rc" 0

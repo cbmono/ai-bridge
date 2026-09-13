@@ -96,7 +96,9 @@ claude plugin eval ./plugin --case dispatch-is-human-gated
 **Measured 2026-09-13 on Claude Code 2.1.270, the whole suite, through the harness**
 (`--runs 1 --ablation none --judge-model sonnet`, serial): **12 cases, $2.14, 443 s.**
 Concurrency is what wall time turns on — the same 12 cases at `-j 4` took **119 s for
-$2.29**. The earlier figure, for scale: 4 cases × 2 runs, $1.23, 127 s (2026-09-05).
+$2.29**. `aggregate-result.json` reports **cost and duration, never tokens** — there is no
+token count to record. The earlier figure, for scale: 4 cases × 2 runs, $1.23, 127 s
+(2026-09-05).
 `tests/plugin-eval.test.sh` runs it at `--runs 1 --ablation none --judge-model sonnet` and
 a `--max-cost-usd` ceiling — the question it asks is "did any case go red", not "what is
 the stable score". The judge is sonnet rather than the default haiku because a small judge
