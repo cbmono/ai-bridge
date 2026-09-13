@@ -35,7 +35,7 @@ ln -s "$P" "$B/repos/product"
 emit() { cat > "$LAB/create.sh" <<HOOK
 #!/usr/bin/env bash
 payload="\$(cat)"
-printf '%s %s\n' "\$(date -u +%FT%T)" "\$payload" >> "$LAB/log/create.jsonl"
+printf '%s %s\n' "\$(date -u +%FT%T.%N)" "\$payload" >> "$LAB/log/create.jsonl"
 name="\$(printf '%s' "\$payload" | sed -n 's/.*"name":"\([^"]*\)".*/\1/p')"
 git -C "$P" worktree add -q "$LAB/wtroot/\$name" -b "\$name" trunk 2>/dev/null || true
 $1
@@ -44,12 +44,12 @@ chmod +x "$LAB/create.sh"; }
 emit 'printf "%s\n" "'"$LAB"'/wtroot/$name"'
 cat > "$LAB/remove.sh" <<HOOK
 #!/usr/bin/env bash
-{ printf '%s ' "\$(date -u +%FT%T)"; cat; printf '\n'; } >> "$LAB/log/remove.jsonl"
+{ printf '%s ' "\$(date -u +%FT%T.%N)"; cat; printf '\n'; } >> "$LAB/log/remove.jsonl"
 exit 1
 HOOK
 cat > "$LAB/pretool.sh" <<HOOK
 #!/usr/bin/env bash
-{ printf '%s ' "\$(date -u +%FT%T)"; cat; printf '\n'; } >> "$LAB/log/pretool.jsonl"
+{ printf '%s ' "\$(date -u +%FT%T.%N)"; cat; printf '\n'; } >> "$LAB/log/pretool.jsonl"
 HOOK
 chmod +x "$LAB/remove.sh" "$LAB/pretool.sh"
 settings() { cat > "$LAB/settings.json" <<JSON
@@ -123,7 +123,11 @@ run 300 "$B" --settings "$LAB/settings.json" --worktree task-033 \
   'Run these as separate commands, report raw output only: pwd ; git rev-parse --abbrev-ref HEAD ; git worktree list --porcelain'
 say "7: session cwd" "$(grep -o "$LAB/wtroot/task-033\$" "$LAB/out" | head -1)"
 say "7b: branch" "$(grep -ox 'task-033' "$LAB/out" | head -1)"
-say "7c: locked while it ran" "$(grep -c 'locked' "$LAB/out" | tr -d ' ')"
+# Its OWN stanza only: probe 6c left a genuinely locked hookless tree in the same repo,
+# and a bare `grep locked` over the listing counts that one instead.
+say "7c: its own tree locked while it ran" \
+  "$(awk '/^worktree .*wtroot\/task-033$/{f=1;next} /^worktree /{f=0} f&&/^locked/{print "yes"}' \
+     "$LAB/out" | head -1 | grep -q yes && echo yes || echo no)"
 
 # --- 8. a SUBAGENT lands there too, but the payload cannot name the task ---------
 rm -f "$LAB/log/pretool.jsonl"
@@ -133,12 +137,12 @@ run 420 "$B" --settings "$LAB/settings.json" \
 say "8: subagent worktree names" "$(sed -n 's/.*"name":"\(agent-[^"]*\)".*/\1/p' "$LAB/log/create.jsonl" | tail -2 | tr '\n' ' ')"
 say "8b: distinct prompt_ids over both" \
   "$(sed -n 's/.*"prompt_id":"\([^"]*\)".*/\1/p' "$LAB/log/create.jsonl" | tail -2 | sort -u | wc -l | tr -d ' ')"
-say "8c: both Agent calls before either create" \
+say "8c: hook order over one turn (unstable — seen both ways)" \
   "$( { cut -d' ' -f1 "$LAB/log/pretool.jsonl" | sed 's/$/ pretool/'
        cut -d' ' -f1 "$LAB/log/create.jsonl" | tail -2 | sed 's/$/ create/'; } |
      sort | awk '{printf "%s ", $2}')"
 
 # --- 9. WorktreeRemove ----------------------------------------------------------
 say "9: WorktreeRemove fired" "$([ -s "$LAB/log/remove.jsonl" ] && echo yes || echo no)"
-say "9b: trees alive after every session" \
-  "$(git -C "$P" worktree list --porcelain | grep -c '^worktree ' | tr -d ' ')"
+say "9b: the session's own tree survived" \
+  "$(git -C "$P" worktree list | grep -c 'wtroot/task-033' | tr -d ' ')"
