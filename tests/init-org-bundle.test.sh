@@ -232,6 +232,7 @@ echo "== 9. the refusals and the flag are documented where a human looks =="
 ok "--help lists --org"                       "$(bash "$SCRIPT" --help | grep -c -- '--org ORG \[--name REPO\]')" 1
 ok "the skill carries the flag"               "$(saw "$SKILL" '## One org, one bundle — `--org <org> [--name <repo>]`')" yes
 ok "…and the non-admin path as normal"        "$(saw "$SKILL" 'when creating it in `<org>` is refused because you are not an org admin')" yes
+ok "…and carries no host literal (plugin rule)" "$(grep -c -E 'cbmono|/Users/|github\.com' "$SKILL" | tr -d ' ')" 0
 ok "sharing.md is the front door"             "$(saw "$SHARING" '# Sharing one bundle — the front door for multi-person use')" yes
 ok "…and carries the --org step"              "$(saw "$SHARING" '--org <org>')" yes
 ok "the seed README links it"                 "$(saw "$SEED_README" 'https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md')" yes

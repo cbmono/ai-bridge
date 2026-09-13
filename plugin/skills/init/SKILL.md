@@ -57,8 +57,8 @@ exists and is not a bundle. Relay either verbatim; the fix is membership, or ano
 `--name`.
 
 **The second person runs the same command.** They get the clone, and the `needs` flow
-below is how their `ownerGithubUser` is asked for. Full order:
-[docs/sharing.md](https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md).
+below is how their `ownerGithubUser` is asked for. The full order is `docs/sharing.md` in
+the template, whose URL the stamp prints on its last line.
 
 ## The first stamp asks one question
 
