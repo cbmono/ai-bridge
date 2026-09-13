@@ -247,6 +247,25 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    leaves the lock to age out into step 1's case 2, where a human sees it — the
    intended failure, not a leak.
 
+   **And end the report you relay with ONE metadata footer, printed by a script.** Its last
+   line is the output of
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/agent-usage.sh fmt \
+     --tokens <subagent_tokens> --tools <tool_uses> --duration-ms <duration_ms>
+   ```
+
+   — the three numbers straight off **this tick's** notification, never reformatted and
+   never composed by you: `agent-usage.sh` owns the one usage form, and a second spelling of
+   the same numbers is what makes two reports impossible to compare.
+   **There is no model name in it**: the notification carries none, so there is nothing to
+   print that would not be a guess.
+   **`usage UNKNOWN` ⇒ print no footer at all.** A notification without the fields is a tick
+   nobody measured, and a zero is a claim nothing supports.
+   **The tick report ONLY.** A role agent's result is consumed by the tick, not by you, and
+   its numbers are already on the task document as a `* DISPATCH` line
+   (`project-manager.md` step 3) — a footer there would be the same figure twice.
+
    **After a compaction, the in-flight memory is gone — and the answer is still not
    yours to look up.** That is what `.tick-lock` is for, and you consult it in exactly
    one way: by taking it in step 1. **Do not read the disk here to reconstruct

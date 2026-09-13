@@ -542,6 +542,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) — pass `.` to render THIS instance only | yes, the output file |
 | `print-board.sh` | prints the board in the terminal | no |
+| `status-line.sh` | the bundle's Claude Code `statusLine`: one coloured line — `AI Bridge · <n> in flight · <n> need you · lock free\|held · last tick <hh:mm>` — from task frontmatter, `AWAITING.md`, `.tick-lock` and `log.md`'s last `* TICK`. No `jq`, no `gh`, no model; a number it cannot establish renders `?`, and outside a bundle it prints nothing. `/ai-bridge:init` installs it into the BUNDLE's `.claude/settings.json` and never the user's | no |
 | `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
 | `board-serve.sh` | serves `.board-live/` on `127.0.0.1:<boardPort>` and re-renders it when `SNAPSHOT.json` changes — one process per bundle | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |

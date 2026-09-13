@@ -310,11 +310,23 @@ RFRESH="$TMP/_ai-bridge-from-repo"
 bash "$INIT" "$RFRESH" >"$TMP/repo-layout.out" 2>&1
 ok "the checkout layout stamps its own control bundle" "$?" 0
 ok "the two layouts stamp identical seed content" \
-   "$(yn bash -c 'diff -r -q --exclude=.git --exclude=instance.config.local.json --exclude=SNAPSHOT.json --exclude=.board-live --exclude=*.code-workspace "$1" "$2" >/dev/null' _ "$RFRESH" "$CFRESH")" yes
+   "$(yn bash -c 'diff -r -q --exclude=.git --exclude=instance.config.local.json --exclude=SNAPSHOT.json --exclude=.board-live --exclude=*.code-workspace --exclude=settings.json "$1" "$2" >/dev/null' _ "$RFRESH" "$CFRESH")" yes
+# `.claude/settings.json` JOINS THE PER-BUNDLE EXCLUSIONS (ai-bridge-v3/task-025): its
+# `statusLine.command` names the bundle's own absolute path, so two bundles at two paths
+# differ there by construction, exactly as the workspace file does. Excluding it would
+# blind the comparison to a real settings difference, so the file is compared with each
+# bundle's own root substituted out — same content, same one varying value.
+ok "…and settings.json matches once each bundle's own root is substituted" \
+   "$(yn bash -c 'diff -q <(sed "s#$1#__ROOT__#g" "$1/.claude/settings.json") \
+                          <(sed "s#$2#__ROOT__#g" "$2/.claude/settings.json") >/dev/null' \
+      _ "$RFRESH" "$CFRESH")" yes
+ok "…and it really does carry that root, so the substitution is not a no-op" \
+   "$(grep -cF "$RFRESH" "$RFRESH/.claude/settings.json" | tr -d ' ')" 1
+
 # …and the same comparison sees a difference when there is one.
 printf 'planted\n' >> "$CFRESH/CLAUDE.md"
 ok "…and that comparison catches a planted difference" \
-   "$(yn bash -c 'diff -r -q --exclude=.git --exclude=instance.config.local.json --exclude=SNAPSHOT.json --exclude=.board-live --exclude=*.code-workspace "$1" "$2" >/dev/null' _ "$RFRESH" "$CFRESH")" no
+   "$(yn bash -c 'diff -r -q --exclude=.git --exclude=instance.config.local.json --exclude=SNAPSHOT.json --exclude=.board-live --exclude=*.code-workspace --exclude=settings.json "$1" "$2" >/dev/null' _ "$RFRESH" "$CFRESH")" no
 
 # NON-VACUITY, by mutation: the derivation is VERIFIED, not assumed. Take `seed/` away and
 # the same run must refuse rather than stamp an empty bundle — which is what tells this

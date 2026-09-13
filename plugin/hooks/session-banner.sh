@@ -253,6 +253,7 @@ set -uo pipefail
 COLOR=auto
 FORMAT=text
 LOGO=1
+FULL=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --color) shift; COLOR="${1:-auto}"; shift || true ;;
@@ -263,6 +264,10 @@ while [ $# -gt 0 ]; do
     # `ai-bridge.sh` passes this on its no-argument branches: a relayed banner is markdown,
     # which drops the leading space of the ship's first line and carries no SGR at all.
     --no-logo) LOGO=0; shift ;;
+    # THE TWO TABLES, WHICH THE SESSION-START BANNER NO LONGER PRINTS. The human's channel
+    # is capped at 12 lines and the tables are 17 of the 29 it used to spend; `welcome` asks
+    # for them by name, because they are the surface its own SKILL.md documents it by.
+    --full) FULL=1; shift ;;
     # An unknown argument is IGNORED rather than fatal. This is a SessionStart hook: if a
     # future settings.json passes it something it does not know, printing the banner is
     # still the better outcome than exiting 2 at every session start.
@@ -1123,7 +1128,9 @@ cc_dir="${CLAUDE_CONFIG_DIR:-${HOME:-}}"
 # `-n "$dump"` though this value is in neither config file: §6 withholds the WHOLE settings
 # block when the resolver is missing, and one row under its header reads as a table that
 # lost its config.
-if [ -n "$dump" ] && [ -n "$cc_dir" ] && [ -f "$cc_dir/.claude.json" ] \
+# `--full` gates the PROBE and not just the row: this is the one python3 call on the path,
+# and spending it at every session start for a table that no longer prints is pure cost.
+if [ "$FULL" -eq 1 ] && [ -n "$dump" ] && [ -n "$cc_dir" ] && [ -f "$cc_dir/.claude.json" ] \
    && command -v python3 >/dev/null 2>&1; then
   cc_email="$(python3 -c 'import json, sys
 try:
@@ -1191,8 +1198,15 @@ table() { # <header-label> <header-value> <rows>
     printf '%s  %s  %s\n' "$(pad "$k" 20)" "$(pad "$v" "$vw")" "$s"
   done
 }
-[ -n "$rows" ]  && table SETTING VALUE "$rows"
-[ -n "$trows" ] && table 'AGENT (role)' "$thead" "$trows"
+# `--full` ONLY. The human's banner is capped at 12 lines (ai-bridge-v3/task-025) and these
+# two tables are 17 of the 29 it used to spend — the largest block by far, and the one a
+# human re-reads least, because it answers a configuration question and not "what now".
+# Nothing is lost: `/ai-bridge:welcome` asks for `--full`, and it is the surface
+# `skills/welcome/SKILL.md` documents `welcome` by.
+if [ "$FULL" -eq 1 ]; then
+  [ -n "$rows" ]  && table SETTING VALUE "$rows"
+  [ -n "$trows" ] && table 'AGENT (role)' "$thead" "$trows"
+fi
 
 # ---------------------------------------------------------------------------------------
 # 4b. ACCOUNT — three renderings, because two states that print nothing are one state.
