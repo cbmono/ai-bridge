@@ -52,7 +52,7 @@ ok "…over an overrides block worth scanning" \
    "$([ "$(jq -r '.overrides | keys | length' "$THEME")" -ge 10 ] && echo yes || echo no)" yes
 
 echo "== 2. both scanners catch what they exist to catch =="
-jq '.overrides.notAToken = "#5ea2ff" | .overrides.claude = "blue"' "$THEME" > "$TMP/mutant.json"
+jq '.overrides.notAToken = "#abcdef" | .overrides.claude = "blue"' "$THEME" > "$TMP/mutant.json"
 ok "an undocumented token is named"   "$(bad_tokens "$TMP/mutant.json")" "notAToken"
 ok "a value that is not #rrggbb is named" "$(bad_values "$TMP/mutant.json")" "claude"
 
