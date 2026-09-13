@@ -25,7 +25,7 @@ and a `done`/`cancelled` task is finished.
    `worktree:` (absolute) and `branch:` on the task — **both, or neither** — before
    any target-repo work, so an interrupted session still leaves the record the
    reclaim machinery depends on. Commit that edit by explicit path:
-   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human 'chore: start <task-id> in-session' -- <task-path>`.
+   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human 'chore: start <task-id> in-session' --stage -- <task-path>`.
 3. For a **build** task: create the worktree explicitly —
    `git worktree add <worktreeRoot>/<slug> -b <branch> origin/<default-branch>`
    (detect the default branch; `worktreeRoot` from `instance.config.json`, absent ⇒

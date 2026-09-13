@@ -198,7 +198,7 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    the per-agent helper, naming **every** path steps 5 and 6 touched — the scaffold
    and its registration belong in one commit, or the tree records a project that
    nothing links to:
-   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human "feat: add <slug> project" -- projects/<slug> log.md objectives/<objective>.md`
+   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh human "feat: add <slug> project" --stage -- projects/<slug> log.md objectives/<objective>.md`
    (drop `objectives/<objective>.md` where there is no objective, or where step 3 left
    it untouched). The root and
    per-project `index.md` are **not** in that list — they are derived and gitignored,

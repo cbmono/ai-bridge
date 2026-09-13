@@ -320,7 +320,7 @@ is, while the log entry still names the human who decided.
      user to re-stamp: an index the tick will never regenerate and git will never
      carry exists on exactly one machine.
 
-   Commit via `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "chore: close <slug> project" -- <path>...`,
+   Commit via `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "chore: close <slug> project" --stage -- <path>...`,
    naming every path — including `projects/<slug>` and `projects/CLOSED.md`. **Author it
    as `project-manager`, never as `human`**: `human` is the one role every guard trusts
    (it skips the promotion-authority check and the explicit-path requirement), and an
