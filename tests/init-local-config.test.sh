@@ -228,9 +228,24 @@ BASE="$(git -C "$REPO" merge-base origin/main HEAD 2>/dev/null || true)"
 if [ -n "$BASE" ]; then
   # The MERGE BASE, not `origin/main`: main carries its own bump commits, and diffing
   # against its tip would report those as this branch's.
-  ok "no version file differs from the merge base" \
+  ok "no VERSION file differs from the merge base" \
      "$(git -C "$REPO" diff --name-only "$BASE" HEAD -- VERSION plugin/VERSION \
-          plugin/.claude-plugin/plugin.json .claude-plugin/marketplace.json | wc -l | tr -d ' ')" 0
+          | wc -l | tr -d ' ')" 0
+  # THE TWO MANIFESTS ARE READ FOR THEIR VERSION STRINGS, NOT COMPARED AS FILES. They carry
+  # the number and everything else the plugin declares, so a file-identity check refuses any
+  # manifest edit at all — it turned #218 red for adding `experimental.themes`, which moves
+  # no version. What this section asserts is that the branch carries no version CHANGE, so
+  # that is what is read: every `"version": "…"` in the file, in order.
+  vers() { # <rev> <path>
+    git -C "$REPO" show "$1:$2" 2>/dev/null \
+      | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | tr '\n' ' '
+  }
+  for m in plugin/.claude-plugin/plugin.json .claude-plugin/marketplace.json; do
+    ok "$m carries the merge base's version" "$(vers HEAD "$m")" "$(vers "$BASE" "$m")"
+    # Two empty reads compare equal, which is how a renamed path would pass this vacuously.
+    ok "…and that read found a version at all" \
+       "$([ -n "$(vers "$BASE" "$m")" ] && echo yes || echo no)" yes
+  done
 else
   echo "  SKIP  no merge base with origin/main to compare against"
 fi
