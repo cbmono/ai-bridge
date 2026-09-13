@@ -204,7 +204,11 @@ MENTION_RE="\`($VOCAB)\`"
 # `Explore` is a harness SUBAGENT TYPE, not a tool: it is dispatched through `Agent`, which
 # is already in `VOCAB` and checked. Added with the mentions that justify it —
 # `seed/CONVENTIONS.md`'s broad-read rule and `skills/fanout/SKILL.md`.
-NOT_A_TOOL='SessionStart|PreToolUse|UserPromptSubmit|WorktreeCreate|WorktreeRemove|Makefile|Explore'
+# `SubagentStop` joined them in ai-bridge-v3/task-003 on exactly the `UserPromptSubmit`
+# precedent above: `agent-control.sh` is now registered on that event as well, so
+# `plugin/README.md` names it. It had zero mentions before and was correctly a mutant in
+# the un-earned group below; it has one now and is correctly here.
+NOT_A_TOOL='SessionStart|PreToolUse|UserPromptSubmit|SubagentStop|WorktreeCreate|WorktreeRemove|Makefile|Explore'
 
 # Rule 2, DERIVED: OKF's document types, from the schema that defines them. `seed/SCHEMA.md`
 # writes each as a `## type: <Name>` heading, so the registry is machine-readable and a new
@@ -964,7 +968,9 @@ ok "a declared non-tool stays quiet"         "$v" 0
 # NOT_A_TOOL above), so it would now classify and could no longer prove anything. It is
 # replaced by `SessionEnd` — still un-earned — rather than dropped, because the strength
 # of this group is the number of distinct shapes it reproduces, not the names it uses.
-for hallucinated in Notification SessionEnd PreCompact SubagentStop; do
+# `SubagentStop` was the fourth name here until ai-bridge-v3/task-003 earned its entry, the
+# same way `PreToolUse` did before it. Replaced by `SubagentStart`, still un-earned.
+for hallucinated in Notification SessionEnd PreCompact SubagentStart; do
   body="Use the \`${hallucinated}\` tool to alert the team."
   fixture "hallucinated_${hallucinated}" 'Read, Grep' "$body"
   read -r v d s r <<<"$(run_fx "hallucinated_${hallucinated}")"
@@ -1027,7 +1033,7 @@ NOT_A_TOOL_TREE=("${SAVED_NOT_A_TOOL_TREE[@]}")
 # `push-state.sh` became a plugin hook, so `plugin/README.md` now names its event. The
 # other seven still have zero mentions, and the pair of changes is the check working as
 # designed rather than an exception to it.
-for unearned in SessionEnd PostToolUse SubagentStart SubagentStop PreCompact InstructionsLoaded Notification; do
+for unearned in SessionEnd PostToolUse SubagentStart PreCompact InstructionsLoaded Notification; do
   ok "removed entry \`$unearned\` had zero real mentions" "$(not_a_tool_uses "$unearned")" 0
 done
 
