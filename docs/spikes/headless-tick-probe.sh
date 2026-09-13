@@ -33,7 +33,7 @@ say "2 --json-schema keeps a \$schema draft key" \
 PP="$LAB/probe-plugin"
 mkdir -p "$PP/.claude-plugin" "$PP/hooks" "$PP/skills/slash-only"
 printf '{"name":"spikeprobe","version":"0.0.1","description":"throwaway probe plugin"}\n' > "$PP/.claude-plugin/plugin.json"
-printf -- '---\nname: slash-only\ndisable-model-invocation: true\ndescription: probe skill, slash-invocable only\n---\nReply with the literal token SLASH_OK.\n' > "$PP/skills/slash-only/SKILL.md"
+printf -- '---\nname: slash-only\ndisable-model-invocation: true\ndescription: probe skill, slash-invocable only\n---\nRun the Bash tool once, on the command: echo SLASH_PROBE\nThen reply with the literal token SLASH_OK.\n' > "$PP/skills/slash-only/SKILL.md"
 cat > "$PP/hooks/mark.sh" <<'HOOK'
 #!/usr/bin/env bash
 printf '%s\n' "${1:-?}" >> "$SPIKE_HOOK_LOG"
@@ -48,13 +48,23 @@ cat > "$PP/hooks/hooks.json" <<'HOOK'
 "Stop":[{"hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/hooks/mark.sh Stop"}]}]}}
 HOOK
 
+AP="$LAB/ai-bridge"
+mkdir -p "$AP/.claude-plugin" "$AP/agents"
+printf '{"name":"ai-bridge","version":"0.0.1","description":"throwaway probe plugin"}\n' > "$AP/.claude-plugin/plugin.json"
+# Same prompt as probe 8's inline agent, so 8 and 9 differ only in inline vs plugin.
+printf -- '---\nname: project-manager\ndescription: probe agent\ntools: Read\n---\nYou are terse.\n' > "$AP/agents/project-manager.md"
+
 export SPIKE_HOOK_LOG="$LAB/hooks.log"
 cd "$LAB" || exit
 C=(claude -p --model haiku --output-format json --permission-prompts none --max-budget-usd 0.5)
 
 "${C[@]}" --plugin-dir "$PP" -- '/spikeprobe:slash-only' </dev/null > "$LAB/p3.json" 2>/dev/null
 say "3 a disable-model-invocation skill, as the -p prompt" "$(res "$LAB/p3.json")"
-say "4 plugin hooks that fired" "$(sort -u "$LAB/hooks.log" 2>/dev/null | tr '\n' ' ')"
+FIRED="$(sort -u "$LAB/hooks.log" 2>/dev/null | tr '\n' ' ')"
+case " $FIRED " in
+  *" PreToolUse "*) say "4 plugin hooks that fired" "$FIRED" ;;
+  *) say "4 plugin hooks that fired" "FAIL no PreToolUse entry (fired: ${FIRED:-<none>})" ;;
+esac
 
 "${C[@]}" --safe-mode --plugin-dir "$PP" -- '/spikeprobe:slash-only' </dev/null > "$LAB/p5.json" 2>/dev/null
 say "5 CONTROL: the same under --safe-mode" "$(res "$LAB/p5.json")"
@@ -69,7 +79,7 @@ say "7 Write, --allowedTools Write" "$(res "$LAB/p7.json")"
 Q='Report an idle tick as structured output: status idle.'
 "${C[@]}" --json-schema "$SCHEMA" --agents '{"tiny":{"description":"probe","prompt":"You are terse."}}' --agent tiny -- "$Q" </dev/null > "$LAB/p8.json" 2>/dev/null
 say "8 --json-schema under an inline --agents agent" "$(res "$LAB/p8.json")"
-"${C[@]}" --json-schema "$SCHEMA" --agent ai-bridge:project-manager -- "$Q" </dev/null > "$LAB/p9.json" 2>/dev/null
+"${C[@]}" --json-schema "$SCHEMA" --plugin-dir "$AP" --agent ai-bridge:project-manager -- "$Q" </dev/null > "$LAB/p9.json" 2>/dev/null
 say "9 --json-schema under a PLUGIN --agent" "$(res "$LAB/p9.json")"
 
 "${C[@]}" --max-budget-usd 0.0001 -- "$Q" </dev/null > "$LAB/p10.json" 2>/dev/null
