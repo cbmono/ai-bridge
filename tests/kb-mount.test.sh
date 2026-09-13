@@ -210,11 +210,67 @@ ok "…and is named as read-only" "$(has "$out" 'read-only')" yes
 rc=0; bash "$SYNC" --instance "$RO" commit --message m -- knowledge-sources/shared/x.md >/dev/null 2>&1 || rc=$?
 ok "a write against a read-only mount is refused" "$rc" 1
 
+echo "== the KB journals shard per month once shared; the bundle ledger does not =="
+
+PC="$REPO/plugin/scripts/papercuts.sh"
+J="$TMP/journal"; make_bundle "$J"
+( cd "$J" && bash "$PC" add --task p/task-1 --surface script:x --note "the flat record is what an unmounted bundle keeps" --date 2026-08-04 ) >/dev/null
+ok "unmounted, an entry lands in the flat record" \
+  "$([ -f "$J/knowledge/papercuts.md" ] && echo yes || echo no)" yes
+mkdir -p "$J/.ai-bridge/kb.git"
+out="$( cd "$J" && bash "$PC" add --task p/task-2 --surface script:x --note "mounted, the record shards by month" --date 2026-09-05 )"
+ok "mounted, the entry lands in this month's shard" \
+  "$([ -f "$J/knowledge/papercuts/2026-09.md" ] && echo yes || echo no)" yes
+ok "…and a different month is a different file" \
+  "$( cd "$J" && bash "$PC" add --task p/task-3 --surface script:y --note "a month file goes cold on its own" --date 2026-10-02 >/dev/null; [ -f "$J/knowledge/papercuts/2026-10.md" ] && echo yes || echo no)" yes
+ok "…and every reader sees the flat file AND the shards" \
+  "$( cd "$J" && bash "$PC" check 2>/dev/null | sed -n 's/papercuts: \([0-9]*\) entries.*/\1/p')" 3
+ok "…with report grouping the three across two surfaces" \
+  "$( cd "$J" && bash "$PC" report --all 2>/dev/null | sed -n 's/^== \(.*\) · all time$/\1/p')" \
+  "3 entries · 2 surfaces"
+ok "the bundle-root log.md is NOT sharded by any of this" \
+  "$(grep -c 'bundle-root `log.md`' "$SEED/SCHEMA.md" | tr -d ' ')" 1
+mkdir -p "$J/knowledge/log"; : > "$J/knowledge/log/2026-09.md"
+ok "the index footer follows the journal that exists" \
+  "$( cd "$J" && bash "$REPO/plugin/scripts/build-kb-index.sh" --print | grep -c '/knowledge/log/' | tr -d ' ')" 1
+
+echo "== index.md is derived, and a hand-written row is reported =="
+
+V="$REPO/plugin/scripts/validate-bundle.sh"
+D="$TMP/derived"; make_bundle "$D"
+ok "a generated index validates clean" \
+  "$( cd "$D" && bash "$V" 2>&1 | grep -c 'never hand-edited' | tr -d ' ')" 0
+printf '| made up | a row the generator would not produce | `/knowledge/findings/alpha.md` | current |\n' >> "$D/knowledge/index.md"
+ok "…and a hand-written row WARNs" \
+  "$( cd "$D" && bash "$V" 2>&1 | grep -c 'never hand-edited' | tr -d ' ')" 1
+ok "…without failing the bundle over it" "$( cd "$D" && bash "$V" >/dev/null 2>&1; echo $?)" 0
+
+echo "== author: is accepted by both validators =="
+ok "build-kb-index accepts a login" \
+  "$( cd "$D" && bash "$REPO/plugin/scripts/build-kb-index.sh" --check 2>&1 | grep -c "is not a GitHub login" | tr -d ' ')" 0
+sed -i.bak 's/^author: example-user-007$/author: Not A Login!/' "$D/knowledge/findings/alpha.md"; rm -f "$D/knowledge/findings/alpha.md.bak"
+ok "…and warns on something that is not one" \
+  "$( cd "$D" && bash "$REPO/plugin/scripts/build-kb-index.sh" --check 2>&1 | grep -c "is not a GitHub login" | tr -d ' ')" 1
+ok "…as does validate-bundle" \
+  "$( cd "$D" && bash "$V" 2>&1 | grep -c "is not a GitHub login" | tr -d ' ')" 1
+
 echo "== push-state.sh was NOT extended for any of this =="
 ok "push-state.sh names no KB sync" \
   "$(grep -c 'kb-sync' "$REPO/plugin/hooks/push-state.sh" | tr -d ' ')" 0
 ok "the SessionStart fast-forward sits in hooks.json instead" \
   "$(grep -c 'kb-sync.sh pull' "$REPO/plugin/hooks/hooks.json" | tr -d ' ')" 1
+ok "…carrying its own bound, so a session start cannot hang on it" \
+  "$(grep -c 'kb-sync.sh pull --timeout' "$REPO/plugin/hooks/hooks.json" | tr -d ' ')" 1
+ok "…and it cannot fail a session start either" \
+  "$(grep -c 'kb-sync.sh pull --timeout 10 || true' "$REPO/plugin/hooks/hooks.json" | tr -d ' ')" 1
+ok "the tick fast-forwards at its start" \
+  "$(grep -c 'kb-sync.sh pull' "$REPO/plugin/agents/project-manager.md" | tr -d ' ')" 1
+ok "/ai-bridge:init WARNs on unpushed KB commits" \
+  "$(grep -c 'kb-sync.sh\" --instance \"\$TARGET\" status' "$REPO/plugin/scripts/init-bundle.sh" | tr -d ' ')" 1
+ok "…and never pushes them itself" \
+  "$(grep -c 'kb-sync.sh" --instance "$TARGET" commit' "$REPO/plugin/scripts/init-bundle.sh" | tr -d ' ')" 0
+ok "…and ignores the mount only where one is configured" \
+  "$(grep -c 'knowledge repo' "$REPO/plugin/scripts/init-bundle.sh" | tr -d ' ')" 1
 
 echo
 echo "pass=$pass fail=$fail"
