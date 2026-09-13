@@ -88,6 +88,19 @@
 #
 # `steer`, by contrast, IS consumed — one note at one boundary, as specified.
 #
+# ------------------------------------------------------- WHY THE DOOM LOOP IS HERE
+# Same tool, same arguments, N consecutive times is an agent that has stopped making
+# progress, and this hook already sees every call WITH an `agent_id`. It is OPT-IN on
+# `maxRepeatedToolCalls`: absent from both config layers ⇒ nothing is hashed, counted or
+# written, so an armed bundle that never set the key behaves exactly as before. The limit
+# is cached beside the counters and re-read only when a config file is NEWER than that
+# cache, so the steady cost is a `read` builtin and no fork.
+#
+# A breach is a `deny`, never a kill, for the reason at the top of this file. It names the
+# tool and the counter and NEVER the arguments: only a fingerprint of them is stored.
+# Read-only WAITS (`gh pr checks`, `gh run watch`, …) are a legitimate poll, so the list in
+# `REPEAT_SKIP` is transparent to the counter however often it repeats.
+#
 # ------------------------------------------------------------------------ BOUNDED
 # Unbounded per-call state in front of every tool call is its own hazard, so the
 # directive scan stops at `CONTROL_MAX` records (default 20) and SAYS what it did
@@ -157,8 +170,15 @@ CTL="$root/.claude/control"
 DIRECTIVES="$CTL/directives"
 ROSTER="$CTL/agents"
 ACTIONLOG="$CTL/control.log"
+REPEATS="$CTL/repeats"
+REPEAT_CACHE="$CTL/repeat-limit"
+REPEAT_TTL=1800
+REPEAT_SKIP='^(gh (pr (checks|view)|run (view|watch|list))|sleep )'
 
-now="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
+stamp="$(date -u +'%Y-%m-%dT%H:%M:%SZ %s' 2>/dev/null || echo 'unknown 0')"
+now="${stamp%% *}"
+epoch="${stamp##* }"
+case "$epoch" in ''|*[!0-9]*) epoch=0 ;; esac
 
 # Every write to the action log is best-effort: a full disk or a read-only mount
 # must not turn this hook into a blocker.
@@ -167,6 +187,38 @@ now="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
 # field per argument, which also means a message containing no tab stays one field.
 note() {
   { printf '%s' "$now"; printf '\t%s' "$@"; printf '\n'; } >> "$ACTIONLOG" 2>/dev/null || true
+}
+
+# `off` unless BOTH config layers are consulted and one carries a usable number. The
+# `-nt` tests are bash conditionals, so an unchanged config costs no process at all.
+REPEAT_N=off
+repeat_limit_load() {
+  local cfg="$root/instance.config.json" loc="$root/instance.config.local.json" n layers
+  if [ ! -e "$REPEAT_CACHE" ] || [ "$cfg" -nt "$REPEAT_CACHE" ] \
+     || { [ -e "$loc" ] && [ "$loc" -nt "$REPEAT_CACHE" ]; }; then
+    layers=("$cfg"); [ -f "$loc" ] && layers=("$loc" "$cfg")
+    n="$(jq -s -r '[.[] | .maxRepeatedToolCalls? | numbers] | (.[0] // "off") | tostring' \
+         "${layers[@]}" 2>/dev/null)" || n=off
+    case "$n" in ''|*[!0-9]*) n=off ;; esac
+    [ "$n" = off ] || [ "$n" -ge 2 ] || n=off
+    printf '%s\n' "$n" > "$REPEAT_CACHE" 2>/dev/null || { REPEAT_N="$n"; return 0; }
+  fi
+  IFS='' read -r REPEAT_N < "$REPEAT_CACHE" 2>/dev/null || REPEAT_N=off
+  case "$REPEAT_N" in ''|*[!0-9]*) REPEAT_N=off ;; esac
+}
+
+# One file per agent_id. Two ids that sanitise to the same name do not SHARE a counter:
+# the record carries the raw id, and a mismatch restarts the count rather than inheriting
+# it — a collision costs a reset, never a cross-agent deny.
+repeat_file() {
+  local safe="${agent_id//[!A-Za-z0-9._-]/_}"
+  printf '%s/%s' "$REPEATS" "${safe:0:64}"
+}
+
+repeat_forget() {
+  [ -d "$REPEATS" ] || return 0
+  [ -z "$agent_id" ] || rm -f "$(repeat_file)" 2>/dev/null || true
+  find "$REPEATS" -type f -mmin +60 -delete 2>/dev/null || true
 }
 
 # CONTROL_MAX normalised to base 10 BEFORE any arithmetic. `CONTROL_MAX=08` is
@@ -205,17 +257,27 @@ command -v jq >/dev/null 2>&1 || {
 # TRAILING newlines, which is harmless here: only `tool_name` is last, it is used
 # for the log alone, and `read` leaves it empty in that case anyway.
 fields="$(printf '%s' "$payload" \
-  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // "")] | .[]' 2>/dev/null)" || fields=""
+  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.hook_event_name // "")] | .[]' 2>/dev/null)" || fields=""
 [ -n "$fields" ] || { note "fail-open: unparseable PreToolUse payload"; exit 0; }
 
-agent_id=""; agent_type=""; tool_name=""
+agent_id=""; agent_type=""; tool_name=""; hook_event=""
 {
   IFS='' read -r agent_id || true
   IFS='' read -r agent_type || true
   IFS='' read -r tool_name || true
+  IFS='' read -r hook_event || true
 } <<EOF
 $fields
 EOF
+
+# SubagentStop is the counter's reset, and nothing else in this file runs on it — the
+# roster and the directives are both about a tool call. It is ahead of the `agent_id`
+# guard on purpose: the stop event may not carry one, and the age sweep still has to run.
+case "${hook_event:-PreToolUse}" in
+  PreToolUse) ;;
+  SubagentStop) repeat_forget; exit 0 ;;
+  *) exit 0 ;;
+esac
 
 # No agent_id ⇒ the PARENT session's own tool call. Never gate, never halt, never
 # even record it. This is the property that keeps a directive from taking the
@@ -247,6 +309,64 @@ if [ ! -e "$ROSTER" ] || ! awk -F'\t' -v id="$agent_id" '$1==id { found=1; exit 
       mv "$tmp" "$ROSTER" 2>/dev/null || rm -f "$tmp" 2>/dev/null || true
     else
       rm -f "$tmp" 2>/dev/null || true
+    fi
+  fi
+fi
+
+# ------------------------------------------------------------- the doom-loop counter
+# Ahead of the directives block because that block exits on an armed-but-empty instance.
+repeat_limit_load
+if [ "$REPEAT_N" != off ]; then
+  probe="$(printf '%s' "$payload" | jq -r --arg skip "$REPEAT_SKIP" '
+    ((.tool_input.command // "") | sub("^\\s+"; "")) as $c
+    | (if (.tool_name // "") == "Bash" and ($c | test($skip)) then "1" else "0" end),
+      (.tool_name // ""),
+      (.tool_input | tojson)' 2>/dev/null)" || probe=""
+  if [ -z "$probe" ]; then
+    note "fail-open: could not fingerprint this call — repeat detection skipped"
+  else
+    poll=""; rtool=""; rargs=""
+    {
+      IFS='' read -r poll || true
+      IFS='' read -r rtool || true
+      IFS='' read -r rargs || true
+    } <<EOF
+$probe
+EOF
+    # A whitelisted poll is transparent: not counted, and it does not reset a count either.
+    if [ "$poll" != 1 ] && [ -n "$rtool" ]; then
+      hasher=(cksum)
+      command -v shasum >/dev/null 2>&1 && hasher=(shasum -a 256)
+      fp="$(printf '%s' "$rargs" | "${hasher[@]}" 2>/dev/null)" || fp=""
+      fp="${fp%%[![:xdigit:]]*}"; fp="${fp:0:16}"
+      cfile="$(repeat_file)"
+      pid=""; ptool=""; pfp=""; pcount=0; pwhen=0
+      if [ -r "$cfile" ]; then
+        IFS=$'\t' read -r pid ptool pfp pcount pwhen < "$cfile" 2>/dev/null || pid=""
+        case "${pcount}${pwhen}" in ''|*[!0-9]*) pid="" ;; esac
+      fi
+      count=1
+      if [ -n "$fp" ] && [ "$pid" = "$agent_id" ] && [ "$ptool" = "$rtool" ] && [ "$pfp" = "$fp" ] \
+         && [ "$((epoch - pwhen))" -lt "$REPEAT_TTL" ]; then
+        count=$((pcount + 1))
+      fi
+      if [ -n "$fp" ]; then
+        mkdir -p "$REPEATS" 2>/dev/null || true
+        printf '%s\t%s\t%s\t%s\t%s\n' "$agent_id" "$rtool" "$fp" "$count" "$epoch" \
+          > "$cfile" 2>/dev/null || true
+      fi
+      if [ -n "$fp" ] && [ "$count" -ge "$REPEAT_N" ]; then
+        note repeat-loop "$agent_id" "$agent_type" "$rtool" "count=$count limit=$REPEAT_N fingerprint=$fp"
+        body="DOOM-LOOP GUARD: this is call $count of $rtool with identical arguments, and the limit (maxRepeatedToolCalls) is $REPEAT_N. Repeating it will not change the answer. Stop, and report what you were trying to do and what you have — or take a different approach. Do not retry this call."
+        jq -n --arg r "$body" '{
+          hookSpecificOutput: {
+            hookEventName: "PreToolUse",
+            permissionDecision: "deny",
+            permissionDecisionReason: $r
+          }
+        }'
+        exit 0
+      fi
     fi
   fi
 fi
