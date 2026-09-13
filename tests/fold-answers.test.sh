@@ -129,6 +129,52 @@ ok "…and an absent key prints nothing, at exit 0" \
    "$(bash "$SH" --list "$H" no_such_key; echo "rc=$?")" "rc=0"
 
 echo
+echo "== an escape it cannot reproduce is refused, not silently dropped =="
+# `\u263A` used to scan to `u263A` and re-parse to `u263A`, so the round-trip guard — which
+# runs this same scanner — could not see that the backslash was gone.
+X1="$TMP/x1.md"; doc "$X1" '"c1"' '"Q1: \u263A --- yes"' ''
+cp "$X1" "$TMP/x1.before"
+ok "--list refuses the unsupported escape (exit 3)" \
+   "$(bash "$SH" --list "$X1" open_questions >/dev/null 2>&1; echo $?)" 3
+ok "…the fold refuses it too"   "$(bash "$SH" "$X1" >/dev/null 2>&1; echo $?)" 3
+ok "…and nothing was written"   "$(cmp -s "$X1" "$TMP/x1.before" && echo yes || echo no)" yes
+F2="$TMP/f2.md"; doc "$F2" '"c1"' '"Q1: he said \"hi\" c:\\tmp --- yes"' ''
+ok "the escapes emit() can reproduce still read" \
+   "$(bash "$SH" "$F2" >/dev/null 2>&1; echo $?)" 0
+ok "…and the entry survived the round trip verbatim" \
+   "$(bash "$SH" --list "$F2" answered_questions | sed 's/^[^·]*· //')" 'Q1: he said "hi" c:\tmp --- yes'
+
+echo
+echo "== the document is replaced, never truncated in place =="
+ok "it writes beside the document and renames" "$(grep -c 'os.replace' "$SH" | tr -d ' ')" 1
+ok "…and never opens the document for writing" "$(grep -c 'open(path, "w"' "$SH" | tr -d ' ')" 0
+I2="$TMP/i2.md"; doc "$I2" '"c1"' '"Q1: colour? --- blue"' ''
+chmod 604 "$I2"
+bash "$SH" "$I2" >/dev/null 2>&1
+ok "…keeping the document's own mode" \
+   "$(ls -l "$I2" | cut -c1-10)" "-rw----r--"
+ok "…and leaving no temporary beside it" \
+   "$(find "$TMP" -name '.fold-answers.*' | grep -c . | tr -d ' ')" 0
+
+echo
+echo "== the login: a COMMITTED answer never stamps this clone's owner =="
+# `--author` unresolved used to fall back to `--self`, which attributes someone else's
+# committed answer to whoever's loop happened to fold it.
+R2="$TMP/repo"; mkdir -p "$R2"
+( cd "$R2" && git init -q . \
+  && git config user.email nobody@example.invalid && git config user.name Nobody ) >/dev/null 2>&1
+printf '{ "ownerGithubUser": "octocat" }\n' > "$R2/instance.config.json"
+J="$R2/j.md"; doc "$J" '"c1"' '"Q1: colour? --- blue"' ''
+( cd "$R2" && git add -A . && git commit -qm answer ) >/dev/null 2>&1
+bash "$SH" --instance "$R2" "$J" >/dev/null 2>&1
+ok "an unresolvable commit author stays <unknown>" \
+   "$(bash "$SH" --list "$J" answered_questions | sed 's/^[^ ]* by \([^ ]*\) .*/\1/')" "<unknown>"
+K="$R2/k.md"; doc "$K" '"c1"' '"Q1: colour? --- blue"' ''
+bash "$SH" --instance "$R2" "$K" >/dev/null 2>&1
+ok "…while an answer only in the working tree is this session's" \
+   "$(bash "$SH" --list "$K" answered_questions | sed 's/^[^ ]* by \([^ ]*\) .*/\1/')" "octocat"
+
+echo
 echo "== usage =="
 ok "no argument is exit 2" "$(bash "$SH" >/dev/null 2>&1; echo $?)" 2
 ok "an unreadable path is exit 2" "$(bash "$SH" "$TMP/nope.md" >/dev/null 2>&1; echo $?)" 2

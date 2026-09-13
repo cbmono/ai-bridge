@@ -237,12 +237,24 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 # A ` --- `-answered entry inside the open_questions block. The digest's `q=` count says
 # how many questions there are and never whether one has been answered, which is the only
 # thing that names step 2 on a task that is not a draft.
+# The cheap range is a PREFIX of the block (it ends at the first `]`, which a quoted
+# question can carry), so a hit is always genuine and a miss never is — hence the fall
+# through to fold-answers.sh's parser, the one reader of this shape that round-trips.
+# Exit 2 is UNKNOWN, not "no": the caller poisons the fingerprint on it rather than let a
+# parser it could not run read as a task with nothing answered.
+FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
 answered_open() { # <file>
-  sed -n '/^open_questions:/,/\]/p' "$1" 2>/dev/null | grep -qF -- ' --- '
+  sed -n '/^open_questions:/,/\]/p' "$1" 2>/dev/null | grep -qF -- ' --- ' && return 0
+  local parsed
+  parsed="$(bash "$FOLD" --list "$1" open_questions 2>/dev/null)" || return 2
+  printf '%s\n' "$parsed" | grep -qF -- ' --- '
 }
 
+# NO DIRECTORY IS NOT AN EMPTY LINE. `steps:` with nothing after it means "this tick has
+# work for no step"; a tick-steps directory the walk cannot find means the opposite, and
+# the core's "any digest exit but 0 ⇒ read ALL of them" is the rule that then applies.
 steps_line() {
-  [ -n "$STEPS_DIR" ] && [ -d "$STEPS_DIR" ] || { printf 'steps:\n'; return; }
+  [ -n "$STEPS_DIR" ] && [ -d "$STEPS_DIR" ] || return 1
   local out=""
   [ "$step2" = 1 ] && out="$out $STEPS_DIR/step-2-refine-drafts.md"
   [ "$step3" = 1 ] && out="$out $STEPS_DIR/step-3-dispatch.md"
@@ -299,7 +311,7 @@ fingerprint() { # <probe|digest>
           in-review)   step4=1; step5=1 ;;
           done|cancelled) nterm=$((nterm + 1)) ;;
         esac
-        answered_open "$f" && step2=1
+        answered_open "$f"; case $? in 0) step2=1 ;; 2) return 1 ;; esac
       fi
       if [ "$st" = "in-review" ]; then
         prs="$(grep -m1 '^pr:' "$f" 2>/dev/null | grep -oE 'https://[^"[:space:]]+/pull/[0-9]+' || true)"
@@ -329,7 +341,7 @@ $prs"
   done
   # Emitted from INSIDE the walk: the caller reads this function through a command
   # substitution, so a flag set here never survives to the caller's scope.
-  [ "$mode" = digest ] && steps_line
+  [ "$mode" = digest ] && { steps_line || return 1; }
   return 0
 }
 

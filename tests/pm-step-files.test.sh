@@ -104,8 +104,14 @@ ok "an all-terminal project names step 6" "$(steps_for "$T")" "step-6-close-proj
 # The digest carries open-question COUNTS and never whether one was ANSWERED, which is the
 # only thing that names step 2 on a task past draft. So the predicate reads the entry.
 A="$TMP/answered"; inst "$A" in-review '"Q1: colour? --- blue"'
-ok "a ` --- `-answered entry names step 2 too" \
+ok 'a ` --- `-answered entry names step 2 too' \
    "$(steps_for "$A" | grep -c 'step-2-refine-drafts.md' | tr -d ' ')" 1
+# A `]` INSIDE an earlier question ends a sed range before the answer that follows it, so
+# step 2 went unnamed — the flow-list truncation fold-answers.sh exists to refuse. The
+# predicate reads through that parser, which makes the bracket data.
+B="$TMP/bracket"; inst "$B" in-review '"Q1: [a] or [b]?", "Q2: colour? --- blue"'
+ok "a ] inside an earlier question does not hide the answer" \
+   "$(steps_for "$B" | grep -c 'step-2-refine-drafts.md' | tr -d ' ')" 1
 C="$TMP/cancel";   inst "$C" cancelled
 ok "nothing owed names nothing…"    "$(steps_for "$C")" "step-6-close-projects.md "
 ok "…and the line is always present, even when empty" \
@@ -133,6 +139,17 @@ ok "…and step 0.9 is what skips 1-7"       "$(has "$CORE" '**Skip steps 1–7.
 bash "$DELTA" record --instance "$T" >/dev/null 2>&1
 ok "the probe prints no steps: line, ever" \
    "$(bash "$DELTA" check --instance "$T" 2>/dev/null | grep -c '^steps:' | tr -d ' ')" 0
+
+# An empty `steps:` line says "no step is owed". A tick-steps directory the walk cannot
+# find says the opposite, so the digest refuses rather than print a line that reads as the
+# first — the core's "any exit but 0 reads ALL of them" is what then applies.
+NOSTEPS="$TMP/nosteps"; mkdir -p "$NOSTEPS/scripts"
+cp "$REPO/plugin/scripts/tick-delta.sh" "$REPO/plugin/scripts/bundle-paths.sh" \
+   "$REPO/plugin/scripts/fold-answers.sh" "$NOSTEPS/scripts/"
+ok "no tick-steps directory is exit 2, not an empty steps: line" \
+   "$(bash "$NOSTEPS/scripts/tick-delta.sh" digest --instance "$T" >/dev/null 2>&1; echo $?)" 2
+ok "…and no steps: line is printed at all" \
+   "$(bash "$NOSTEPS/scripts/tick-delta.sh" digest --instance "$T" 2>/dev/null | grep -c '^steps:' | tr -d ' ')" 0
 
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

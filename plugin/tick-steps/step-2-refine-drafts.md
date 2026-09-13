@@ -51,10 +51,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    propose; the human decides**, exactly as with every other refinement, and a task the
    human leaves whole is dispatched whole: this is the same suggest-never-block heuristic
    role agents apply to a PR, moved one step earlier because before dispatch is the only
-   point at which the split is cheap. **`maxPrFiles` is the number the reviewer
-   enforces** — a free-plan CodeRabbit refuses a pull request over 100 files outright and
-   reviews none of it, so a task that has to land as one 147-file PR is a task whose PR
-   can never clear the merge gate.
+   point at which the split is cheap. **`maxPrFiles` is this instance's reviewability
+   threshold** — propose the split before a task exceeds it, and let the human decide
+   whether to keep the work together.
 
    **Approach critique — MANDATORY on its trigger, advisory in what it may decide.**
    For a genuinely complex **`kind: build`** task — spans multiple files/services, or

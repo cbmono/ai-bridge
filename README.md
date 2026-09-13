@@ -334,7 +334,7 @@ When a `draft` is blocked it lists numbered `open_questions` (`Q1:`, `Q2:`, …)
 Answering in chat during a session works too (`/ai-bridge:answer`).
 
 The cleared entry is **moved, not deleted** — it lands in `answered_questions` as one flat
-line, `<ISO 8601> · <the entry verbatim>`. It is a human audit record: nothing reads it and
+line, `<ISO 8601> by <login> · <the entry verbatim>`. It is a human audit record: nothing reads it and
 no gate consults it. **No customer PII in an answer** — unlike the question you clear, this
 list persists for the life of the repo.
 

@@ -35,17 +35,25 @@ done
 # other human, not to whoever's loop folded it in), `--self` where the answer was given in
 # session. Unattributable prints `<unknown>` and is written as-is — an omitted stamp is
 # indistinguishable from a decision nobody made. `SCHEMA.md` → "Decisions name the human".
+#
+# WHICH OF THE TWO IS DECIDED FROM THE DOCUMENT, never as a fallback from the other: an
+# answer already in the COMMITTED copy belongs to that commit's author, and an unresolvable
+# one stays `<unknown>` rather than being stamped with whoever's loop is folding it. Only an
+# answer that exists in the working tree alone was given in this session.
 login="<unknown>"
 if [ -z "$list_key" ] && [ -x "$HERE/decision-stamp.sh" ]; then
-  login="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --author "$doc" 2>/dev/null || true)"
-  case "$login" in ""|"<unknown>")
-    login="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --self 2>/dev/null || true)" ;;
-  esac
+  if git -C "$(dirname "$doc")" show "HEAD:./$(basename "$doc")" 2>/dev/null | grep -qF -- ' --- '; then
+    login="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --author "$doc" 2>/dev/null || true)"
+  else
+    login="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --self 2>/dev/null || true)"
+  fi
   [ -n "$login" ] || login="<unknown>"
 fi
 
 python3 - "$doc" "$list_key" "$login" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" <<'PY'
-import re, sys
+import os, re, sys, tempfile
+
+ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
 
 path, list_key, login, stamp = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 src = open(path, encoding="utf-8").read()
@@ -99,7 +107,12 @@ def scan_flow(text, i):
                     if i + 1 >= n:
                         die(3, "trailing escape")
                     nxt = text[i + 1]
-                    buf.append({"n": "\n", "t": "\t"}.get(nxt, nxt))
+                    # ONLY THE ESCAPES emit() CAN REPRODUCE. `☺` would otherwise read
+                    # as `u263A` and re-parse to `u263A`, so the round-trip guard — which
+                    # uses this same scanner — cannot see that the backslash was dropped.
+                    if nxt not in ESCAPES:
+                        die(3, "unsupported escape \\%s in %s" % (nxt, list_key or "the list"))
+                    buf.append(ESCAPES[nxt])
                     i += 2
                     continue
                 if c == '"':
@@ -209,6 +222,21 @@ back_a, _, _ = read("answered_questions")
 if back_o != keep or back_a != new_ans:
     die(3, "the re-parse does not match; nothing written")
 
-open(path, "w", encoding="utf-8").write(out)
+# Written beside the document and renamed over it: opening `path` for writing truncates it
+# first, so an interrupted write leaves a task document with half its frontmatter.
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=".fold-answers.")
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(out)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+    os.replace(tmp, path)
+except BaseException:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+    raise
 print("folded: %d entr%s -> answered_questions" % (len(moved), "y" if len(moved) == 1 else "ies"))
 PY

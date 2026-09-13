@@ -68,8 +68,10 @@ fmfirst() { sed -n "s/^$2:[[:space:]]*\([^[:space:]].*\)/\1/p" "$1" | head -n1; 
 # Entries of a `key: [ ... ]` flow list, one per line. Delegated rather than re-implemented:
 # these lists carry backticks, commas, ` --- ` and square brackets, and a second parser is a
 # second place for them to be cut in half. fold-answers.sh owns the one that round-trips.
+# A parser failure is NOT an empty list: swallowing it renders a draft as a clean
+# `approve` row while its unresolved questions are still on the page. Exit 3 instead.
 entries() { # <file> <key>
-  bash "$HERE/fold-answers.sh" --list "$1" "$2" 2>/dev/null || true
+  bash "$HERE/fold-answers.sh" --list "$1" "$2" 2>/dev/null
 }
 
 title_of() { # <file>
@@ -146,6 +148,7 @@ for pm in "$inst"/projects/*/project.md; do
     # UNANSWERED questions only: an entry carrying ` --- ` is answered and belongs to
     # step 2's fold, not to the human's queue.
     qs=""; qn=0
+    qlist="$(entries "$f" open_questions)" || fail3 "cannot read open_questions in $rel"
     while IFS= read -r e; do
       [ -n "$e" ] || continue
       case "$e" in *' --- '*) continue ;; esac
@@ -153,7 +156,7 @@ for pm in "$inst"/projects/*/project.md; do
       is_grant "$e" && { add "🧰" grant "$t" "$rel" "${trail:-$e}"; continue; }
       qs="${qs:+$qs; }$e"
     done <<EOF
-$(entries "$f" open_questions)
+$qlist
 EOF
     [ -n "$qs" ] && add "❓" answer "$t" "$rel" "${trail:-$qs}"
 
@@ -164,7 +167,8 @@ EOF
       draft)
         # A draft with questions is already queued above as answer/grant; only a CLEAN
         # refined draft is the human's promote.
-        if [ "$qn" = 0 ] && [ -n "$(entries "$f" acceptance_criteria)" ]; then
+        crit="$(entries "$f" acceptance_criteria)" || fail3 "cannot read acceptance_criteria in $rel"
+        if [ "$qn" = 0 ] && [ -n "$crit" ]; then
           add "✅" approve "$t" "$rel" "${trail:-$DEF_APPROVE}"
         fi ;;
       blocked)

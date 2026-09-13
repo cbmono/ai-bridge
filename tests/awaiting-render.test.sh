@@ -130,5 +130,17 @@ bash "$SH" --instance "$G" >/dev/null 2>&1
 ok "an entry with brackets and commas survives whole" \
    "$(grep -c '❓ \*\*answer\*\*.*Q1: is a \] fine, really?$' "$G/AWAITING.md" | tr -d ' ')" 1
 
+# A LIST IT CANNOT PARSE IS NOT AN EMPTY LIST. Swallowing the parser's exit renders the
+# draft as a clean `approve` row with its unresolved questions still on the page, which is
+# the one row a human acts on without reading further.
+H="$TMP/unparsable"; inst "$H"; : > "$H/AWAITING.md"
+task "$H" task-001-a "Broken" draft '"x"' '"Q1: unterminated'
+cp "$H/AWAITING.md" "$TMP/unparsable.before"
+ok "an unreadable open_questions list is exit 3" \
+   "$(bash "$SH" --instance "$H" >/dev/null 2>&1; echo $?)" 3
+ok "…and never an approve row"  "$(grep -c 'approve' "$H/AWAITING.md" | tr -d ' ')" 0
+ok "…leaving the page as it was" \
+   "$(cmp -s "$H/AWAITING.md" "$TMP/unparsable.before" && echo yes || echo no)" yes
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
