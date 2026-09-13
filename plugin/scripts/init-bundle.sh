@@ -2932,6 +2932,31 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
   elif [ -f "$BIN_DIR/refresh-seeds.sh" ]; then
     bash "$BIN_DIR/refresh-seeds.sh" "$TARGET" --apply || true
   fi
+  # 5a. ONE COPY OF EACH MANAGED IGNORE LINE, and the order is why this exists at all.
+  # The guards above run BEFORE this pass, so on a bundle whose copy of a seed-managed
+  # line had been deleted they append it — and then the seed-drift resolver restores the
+  # seed's own copy, because a seed-managed line is exactly what it takes the seed side
+  # for. Two identical lines, harmless to git and a defect to anyone reading the file.
+  # Keeps the FIRST occurrence, so the seed's placement wins over the appended one.
+  #
+  # SPACE-SEPARATED, NOT NEWLINE. `awk -v` refuses a value containing a newline
+  # ("newline in string") and the whole tidy then silently did nothing. Every path here is
+  # a resolver constant, so none can contain a space.
+  if [ -f "$gi" ]; then
+    gi_managed="/$AB_LOCK /$AB_LOCK_CLAIM /$AB_STATE_DIR /$AB_BOARD_OTHERS"
+    gi_managed="$gi_managed /$AB_BOARD_DIR/ /$AB_AWAITING /$AB_SNAPSHOT"
+    tmp="$gi.tmp.$$"
+    if awk -v managed="$gi_managed" '
+         BEGIN { n = split(managed, m, " "); for (i = 1; i <= n; i++) if (m[i] != "") mine[m[i]] = 1 }
+         ($0 in mine) && seen[$0]++ { next }
+         { print }
+       ' "$gi" > "$tmp" && ! cmp -s "$tmp" "$gi"; then
+      mv "$tmp" "$gi"
+      echo "  tidy  .gitignore (a managed ignore line appeared twice)"
+    else
+      rm -f "$tmp"
+    fi
+  fi
 fi
 
 # 5b. The plugin version this stamp ran with, tracked with the rest of the record. The
