@@ -268,5 +268,71 @@ printf 'edited but never staged\n' > mine.txt
 raw "nothing staged under the named paths -> refused" block project-manager -- mine.txt
 
 echo
+echo "== --stage: the documented one-command form =="
+
+# The six skill call sites document `commit-as.sh <role> "<msg>" -- <paths>` as ONE
+# command; without --stage the caller has to `git add` first or take the exit-4 refusal
+# above. --stage closes that gap and must not widen the selected index by a single path.
+
+rc_of() { # <name> <expected-rc> <role> [args...]
+  local name="$1" want="$2" role="$3"; shift 3
+  local out rc
+  out="$("$SCRIPT" "$role" "test: $name" "$@" 2>&1)"; rc=$?
+  LAST_OUT="$out"
+  if [ "$rc" -eq "$want" ]; then
+    printf '  PASS  %-52s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
+  else
+    printf '  FAIL  %-52s expected rc=%s got rc=%s\n' "$name" "$want" "$rc"
+    printf '        output: %s\n' "$(printf '%s' "$out" | head -4 | tr '\n' '|')"
+    fail=$((fail+1))
+  fi
+}
+
+said() { # <name> <substring> — against the previous rc_of()'s output
+  if printf '%s' "$LAST_OUT" | grep -Fq -- "$2"; then
+    printf '  PASS  %-52s\n' "$1"; pass=$((pass+1))
+  else
+    printf '  FAIL  %-52s missing [%s] in: %s\n' "$1" "$2" \
+      "$(printf '%s' "$LAST_OUT" | head -4 | tr '\n' '|')"; fail=$((fail+1))
+  fi
+}
+
+# 1. It commits a path that was never `git add`ed — the papercut this flag closes.
+setup
+printf 'never staged\n' > mine.txt
+rc_of "--stage commits an unstaged named path" 0 software-engineer --stage -- mine.txt
+eq "…and its content is in HEAD" "never staged" "$(git show HEAD:mine.txt 2>/dev/null)"
+
+# 2. A sibling agent's files — one staged, one not — are outside the pathspec, so
+#    neither may ride along. This is the guarantee --stage is not allowed to weaken.
+setup
+printf 'mine\n' > mine.txt
+printf 'sibling staged\n' > sib-staged.txt; git add sib-staged.txt >/dev/null
+printf 'sibling unstaged\n' > sib-dirty.txt
+rc_of "--stage with a sibling's files around it" 0 software-engineer --stage -- mine.txt
+eq "…commits only the named path" "mine.txt" \
+   "$(git show --name-only --format= HEAD | tr -d ' ')"
+eq "…the sibling's staged file is still staged" "sib-staged.txt" \
+   "$(git diff --cached --name-only)"
+eq "…the sibling's unstaged file is still untracked" "?? sib-dirty.txt" \
+   "$(git status --short sib-dirty.txt)"
+
+# 3. Nothing to stage when the whole index is being committed.
+setup
+printf 'mine\n' > mine.txt; git add mine.txt >/dev/null
+rc_of "--stage plus --all-staged -> refused" 2 software-engineer --stage --all-staged
+said "…saying there is nothing for it to do" "nothing for it to do"
+rc_of "--stage with no paths -> refused" 2 software-engineer --stage
+
+# 4. WITHOUT the flag, nothing moved: the same unstaged path is still exit 4, and the
+#    refusal now names the one-command form.
+setup
+printf 'never staged\n' > mine.txt
+rc_of "no flag: an unstaged named path is still exit 4" 4 software-engineer -- mine.txt
+said "…still saying nothing is staged"  "nothing staged under the named path(s)"
+said "…and now naming --stage"          "--stage -- <path>..."
+eq "…and nothing was committed" "" "$(git show --name-only --format= HEAD | grep mine.txt || true)"
+
+echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
