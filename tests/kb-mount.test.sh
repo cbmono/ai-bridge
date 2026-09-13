@@ -257,12 +257,14 @@ ok "…as does validate-bundle" \
 echo "== push-state.sh was NOT extended for any of this =="
 ok "push-state.sh names no KB sync" \
   "$(grep -c 'kb-sync' "$REPO/plugin/hooks/push-state.sh" | tr -d ' ')" 0
-ok "the SessionStart fast-forward sits in hooks.json instead" \
-  "$(grep -c 'kb-sync.sh pull' "$REPO/plugin/hooks/hooks.json" | tr -d ' ')" 1
-ok "…carrying its own bound, so a session start cannot hang on it" \
-  "$(grep -c 'kb-sync.sh pull --timeout' "$REPO/plugin/hooks/hooks.json" | tr -d ' ')" 1
-ok "…and it cannot fail a session start either" \
-  "$(grep -c 'kb-sync.sh pull --timeout 10 || true' "$REPO/plugin/hooks/hooks.json" | tr -d ' ')" 1
+# It rides the existing SessionStart hook rather than registering a second one: a bundle
+# with no mount then pays nothing, and no hook counter moves.
+ok "the SessionStart fast-forward sits beside the banner" \
+  "$(grep -c 'kb-sync.sh\" --instance \"$root\" --timeout 10 pull' "$REPO/plugin/hooks/session-banner.sh" | tr -d ' ')" 1
+ok "…and registers no second SessionStart hook" \
+  "$(grep -c 'kb-sync' "$REPO/plugin/hooks/hooks.json" | tr -d ' ')" 0
+ok "…with its output on stderr, so --format json stays parseable" \
+  "$(grep -c 'pull >&2 2>&1 || true' "$REPO/plugin/hooks/session-banner.sh" | tr -d ' ')" 1
 ok "the tick fast-forwards at its start" \
   "$(grep -c 'kb-sync.sh pull' "$REPO/plugin/agents/project-manager.md" | tr -d ' ')" 1
 ok "/ai-bridge:init WARNs on unpushed KB commits" \

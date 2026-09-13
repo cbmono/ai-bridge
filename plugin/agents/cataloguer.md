@@ -32,10 +32,10 @@ data-handling, units, and where to route authoritative data questions.
 `knowledge: { repo, path, ref? }` in `instance.config.json` (`SCHEMA.md` → "A mounted
 knowledge base") means several people write this KB. Absent the key nothing below applies.
 
-- **Pull before you write a `Service` doc** — `scripts/kb-sync.sh pull`. Two people
+- **Pull before you write a `Service` doc** — `${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh pull`. Two people
   re-cataloguing one service is the single genuine content conflict, so take the current
   text before you rewrite it, and keep `Service` docs short.
-- **Sync after you write** — `scripts/kb-sync.sh commit --role cataloguer --message "<msg>"
+- **Sync after you write** — `${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh commit --role cataloguer --message "<msg>"
   -- knowledge/<paths>`. That is the only writer: it regenerates the index, commits,
   pushes and retries once. `commit-as.sh` refuses a path under the mount by name.
 - **Never edit `knowledge/index.md` by hand**, mounted or not. It is derived;
