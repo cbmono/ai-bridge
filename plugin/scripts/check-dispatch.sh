@@ -51,6 +51,10 @@
 # exists, and uselessly, in the sense that none was due. The verdict is about a dispatch,
 # not about a document sitting in the queue.
 #
+# IT READS `session:` BUT NEVER JUDGES BY IT. A task dispatched to a `claude --bg` role
+# agent records the session id; on the PARKED verdict this adds one line saying what that
+# session is doing. The exit codes are exactly the ones above, with or without the field.
+#
 # THE PARKED CATCH NEEDS NO NETWORK, on purpose: an unmoved status with an empty `pr:` is
 # decided from the document alone, before the host is consulted at all, so an offline
 # machine, a missing CLI or a rate limit cannot silence the one verdict this exists for.
@@ -348,10 +352,31 @@ case "$status" in
   *)                       advanced=yes ;;
 esac
 
+# The `claude --bg` session the tick spawned, when the task records one (SCHEMA.md).
+# It NEVER moves a verdict: a live agent and a dead one leave the same document behind,
+# so the exit code is what it always was. It says WHICH of the two a human is looking at,
+# which is the difference between waiting and recovering.
+session_note() {
+  local sid st here
+  sid="$(field session)"
+  [ -n "$sid" ] || return 0
+  here="$(dirname "${BASH_SOURCE[0]:-$0}")"
+  st="$(bash "$here/agent-sessions.sh" state "$sid" 2>/dev/null)" || st="unknown"
+  case "$st" in
+    working) echo "        SESSION $sid is WORKING — it has not parked; give it time." >&2 ;;
+    blocked) echo "        SESSION $sid is BLOCKED on a prompt nobody can answer, and it" >&2
+             echo "        holds a maxAgentsInFlight slot until \`claude stop $sid\`." >&2 ;;
+    done)    echo "        SESSION $sid has EXITED without opening the pull request." >&2 ;;
+    gone)    echo "        SESSION $sid is not listed: it never started, or was removed." >&2 ;;
+    *)       echo "        SESSION $sid: state unknown — \`claude agents\` did not answer." >&2 ;;
+  esac
+}
+
 # --- the parked signature, decided from the document alone --------------------------
 # Deliberately before the host is consulted: this verdict must survive an offline machine.
 if [ "$advanced" = "no" ] && [ -z "$claim" ]; then
   echo "PARKED: $TASK is still at status: $status and names no pull request." >&2
+  session_note
   echo "        The agent reported, but nothing it promised is on the host. Read its" >&2
   echo "        final message: the work is often already committed, sometimes already" >&2
   echo "        pushed, and one message asking it to open the PR recovers it." >&2

@@ -240,6 +240,15 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    done for *hours* is not done until its notification arrives. Don't poll; a quiet
    repo proves nothing.
 
+   **That notification now means the tick's OWN exit, and a tick is minutes.** The
+   harness withholds a parent's notification until every background child has stopped,
+   so while role agents were `Agent`-tool children of the tick, this step waited for the
+   slowest one and the lock below was held for the whole wave — measured 2026-09-13,
+   ticks of 49, 75, 84 and 125 minutes that had each finished dispatching inside ~5. Role
+   agents are detached `claude --bg` sessions now (`project-manager.md` step 3) and are
+   nobody's children, so nothing here changed except the number. **A tick still running
+   after an hour is a tick to look at, not a wave to wait out.**
+
    **When that notification arrives, release the lock** — run
    `${CLAUDE_PLUGIN_ROOT}/scripts/tick-lock.sh release` before you schedule the gap. That is the only place
    it is released in the normal path; releasing on anything weaker hands the next tick

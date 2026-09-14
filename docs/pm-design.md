@@ -415,6 +415,54 @@ expectations, but carrying them in the brief is what makes the role agent act on
 reuse prior work instead of re-researching, and fill the KB as a byproduct rather than
 only via the cataloguer.
 
+<a id="step-3-background"></a>
+### Step 3 — why a role agent is a detached session, and what that cost
+
+**The coupling, measured 2026-09-13.** The harness withholds a parent's completion
+notification until every background child has stopped, so an `Agent`-tool role agent made
+`tick duration = slowest role agent`. Four ticks that day ran **49, 75, 84 and 125
+minutes** and each had finished its own work inside about five; three sibling PRs sat
+CONFLICTING through it with nothing able to dispatch a rebase, because the launcher
+releases the dispatch lock on that notification. `claude --bg` puts the agent outside the
+tick's process tree, which is the whole fix — the lock contract, `tick-lock.sh` and the
+launcher's release point are untouched.
+
+**The flags, each one a run to find (Claude Code 2.1.270, `docs/spikes/bg-dispatch-probe.sh`).**
+
+| | Measured |
+|---|---|
+| `claude --bg -p …` | **refused**, exit 1: *"--bg and --print conflict"*. The prompt is positional |
+| `claude --bg "…"` | **exit 0 in ~1s**, prints `backgrounded · <8-hex id>`, stdout not held |
+| `--session-id <uuid>` beside `--bg` | **ignored**, with a warning — `--bg` mints its own |
+| `claude agents --json` `state` | `working` · `blocked` · `done`; `--all` keeps a finished session listed |
+| `sessionId` vs the printed id | the id is `sessionId`'s first field, so one recorded value matches both |
+| plugin hooks under `--bg` | fire — four `Stop` hooks ran in the probe |
+| `claude logs <id>` | a raw **TUI screen dump**, ANSI and all: readable by a human, not by a script |
+
+**Three prices, paid knowingly.**
+
+1. **`session:` is written AFTER the spawn**, because `--bg` mints the id. The window is
+   the second the spawn takes, and it is covered from the other side: `worktree:` is
+   written *before* it and is unique per task, so `claude agents --json --cwd <worktree>`
+   finds an orphan. That is why the pre-spawn write of `worktree:`/`branch:` is the
+   load-bearing one and this field is not.
+2. **The usage numbers are gone.** They came off the `<task-notification>`, and a detached
+   session sends none; `claude agents` carries no cost or token figure. The `* DISPATCH`
+   line records `usage UNKNOWN` — the honest answer, and not a zero.
+3. **`agent-control.sh` no longer reaches a role agent.** It keys on `agent_id`, which is
+   present only on a subagent's tool call, and a `--bg` session is top-level. Operator
+   `halt`/`gate`/`steer` therefore apply to nothing the tick dispatches. The blunt
+   replacement is `claude stop <id>`, which the human runs; keying the hook on the
+   recorded `session:` id is now *possible* — a background session's `session_id` is its
+   own, which was never true of a subagent's — and is deliberately left to its own change.
+
+**Why `bypassPermissions` and not an allowlist.** task-026 measured that a prefix
+allowlist cannot cover a real tick and that hooks fire regardless, leaving
+`--permission-mode bypassPermissions` plus `deny-destructive.sh` as the only posture that
+works. For a `--bg` session there is a second reason: a mode that can prompt parks the
+agent in `state: blocked` with nobody to answer, holding a `maxAgentsInFlight` slot
+indefinitely. This machine still lists two such sessions from August.
+
 <a id="step-4"></a>
 ### Step 4 — verification, priced
 

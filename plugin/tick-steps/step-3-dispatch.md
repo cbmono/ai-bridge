@@ -18,40 +18,87 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Gate 3 in the core is the ownership check this step depends on** — run
    `task-owner.sh` and take exit 0 as the only clearance before anything below.
 
+   **A ROLE AGENT IS A DETACHED SESSION, NEVER YOUR CHILD.** Do not use the `Agent`
+   tool here. Claude Code withholds a parent's completion notification until every
+   background child has stopped, so an `Agent`-tool dispatch makes `tick duration =
+   slowest role agent` and the launcher's lock is held for the whole wave — measured
+   2026-09-13, ticks of 49, 75, 84 and 125 minutes that had each finished their own
+   work inside ~5. `claude --bg` leaves your process tree, so the tick ends when its
+   dispatches are recorded (`docs/pm-design.md#step-3-background`).
+
    For each **build** `ready` task whose `depends_on` are all `done`, that clears the
    ownership check, and that is not already in-progress: set `assignee` +
    `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the
-   task — both, or neither** (`reclaim-worktree.sh` refuses a path with no branch).
+   task — both, or neither** (`SCHEMA.md`: a recorded path with no recorded branch is a
+   refusal, and the `WorktreeCreate` hook reads both).
    Write them BEFORE spawning, so a tick that dies mid-dispatch still leaves the
-   record. Then spawn the role with the Agent tool, **namespaced**:
-   `subagent_type: ai-bridge:<assignee>`, passing the absolute task path and its
-   `target_repo`. **The namespace is not optional** — the role agents ship in the
-   `ai-bridge` plugin and a bare agent name does NOT resolve (measured 2026-09-02); a
-   bare `subagent_type` fails with "no such agent", never with "you forgot the
-   namespace". **It applies to every one of the eight** — `ai-bridge:cataloguer`,
-   `ai-bridge:advisor`, `ai-bridge:qa-reviewer` and the rest, wherever this document
-   tells you to dispatch one. The three USER-level agents `init-bundle.sh --config` puts in
-   `~/.claude/agents/` — `code-architect`, `deep-bug-scan`, `plan-architect` — are not
-   plugin agents and stay BARE. Respect the concurrency cap
-   **`maxAgentsInFlight`**, resolved with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-max-agents.sh` rather than
-   read from memory (local file first, tracked second — the cap is **this machine's**
-   capacity, `SCHEMA.md` → "Per-machine config overrides"); it prints nothing and
-   exits 1 when neither file sets the key — fall back to 4 then, the seeded, measured
-   default (SCHEMA.md). Leave the rest `ready` for the next tick. Send independent
-   dispatches in one message so they run concurrently.
+   record. Then spawn the role in its own worktree:
+
+   ```bash
+   cd <worktree> && claude --bg "<the whole brief>" \
+     --agent ai-bridge:<assignee> --model <the alias you resolved> \
+     --permission-mode bypassPermissions --add-dir <bundle root> < /dev/null
+   ```
+
+   It returns in about a second printing `backgrounded · <id>`. **Record that id as
+   `session:` on the task as the very next thing you do** (`SCHEMA.md`), then move on.
+
+   **This is the form for EVERY role agent this document tells you to dispatch** — the
+   `qa-reviewer` at step 4, the `cataloguer` at step 7, a rebase round, a resume —
+   because each of them would hold the tick open exactly as a first dispatch does. The
+   two exceptions are the `advisor` and the `plan-architect` critique: they are short,
+   they produce no artifact, and you read their answer inside the tick, so they stay
+   `Agent`-tool dispatches.
+
+   Six things about that command line, each of which costs a wave if you get it wrong:
+   - **`--bg` and `-p` conflict** and the CLI refuses the pair at exit 1 — the prompt is
+     positional, so drop `--print`.
+   - **`--session-id` is ignored beside `--bg`**, which mints its own; that is why the
+     id is recorded after the spawn and not before it.
+   - **`--permission-mode bypassPermissions` with the plugin's `deny-destructive.sh`
+     PreToolUse hook is the only posture measured to work.** Hooks fire in a `--bg`
+     session. A mode that can prompt parks the agent in `state: blocked` with nobody to
+     answer, and it holds its slot until `claude stop` — this machine still lists two
+     such sessions from August.
+   - **`--add-dir <bundle root>`**, or the agent cannot reach its own task document: its
+     cwd is the worktree, and the bundle is outside it.
+   - **The namespace is not optional** — the role agents ship in the `ai-bridge` plugin
+     and a bare agent name does NOT resolve (measured 2026-09-02); it fails with "no
+     such agent", never with "you forgot the namespace". **It applies to every one of
+     the eight** — `ai-bridge:cataloguer`, `ai-bridge:advisor`, `ai-bridge:qa-reviewer`
+     and the rest, wherever this document tells you to dispatch one. The three
+     USER-level agents `init-bundle.sh --config` puts in `~/.claude/agents/` —
+     `code-architect`, `deep-bug-scan`, `plan-architect` — are not plugin agents, stay
+     BARE, and are still `Agent`-tool dispatches because they are advisory and short.
+   - **`< /dev/null`**, so the spawn cannot inherit and hold your stdin.
+
+   **The cap counts SESSIONS, and you read it rather than remember it.** The ceiling is
+   **`maxAgentsInFlight`**, resolved with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-max-agents.sh` (local file
+   first, tracked second — the cap is **this machine's** capacity, `SCHEMA.md` →
+   "Per-machine config overrides"); it prints nothing and exits 1 when neither file
+   sets the key — fall back to 4 then, the seeded, measured default (SCHEMA.md). What
+   fills it is `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh in-flight <bundle root>`, which counts the
+   `session:` ids recorded on `in-progress` tasks that are still `working` or
+   `blocked`; **exit 2 is unknown, and unknown is not a free slot** — dispatch nothing
+   this tick and say so. Leave the rest `ready` for the next tick.
 
    **A spawn that FAILS is a rollback, not a report — the other half of the window the
-   pre-spawn write opens.** If the `Agent` call errors or returns no agent, put that
+   pre-spawn write opens.** If the command exits non-zero or prints no id, put that
    task back to `status: ready`, clear `assignee`, and leave `worktree:`/`branch:`
-   standing — a re-dispatch reuses that worktree, and `reclaim-worktree.sh` refuses a
-   path with no branch. Say so in the tick report. Left alone, the task claims a
+   standing — a re-dispatch reuses that worktree, and a recorded path with no recorded
+   branch is a refusal. Say so in the tick report. Left alone, the task claims a
    `maxAgentsInFlight` slot forever with nothing behind it, and step 4's sweep can only
    name it, never decide it.
+   **Exit 0 is not proof the agent lives** — `--bg` returns before the session has done
+   anything, so one that dies on plugin load looks identical here. That is step 4's
+   question, asked from `agent-sessions.sh`, and not one to hold this tick open for.
 
-   **A dispatch you send is not finished when the agent says so.** Whatever you
-   dispatch here, you check when it reports — `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>`,
-   per step 4. Note it now, because the completion notice is exactly what cannot be
-   trusted (`docs/pm-design.md#step-3`).
+   **A dispatch you send is finished when the ARTIFACT says so, and you will never be
+   told.** A detached session sends you no notification at all, so every dispatch made
+   here is checked by a LATER tick —
+   `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>`, per step 4. Note it now: waiting for
+   a report is the coupling this whole step exists to remove, and the report was never
+   trustworthy anyway (`docs/pm-design.md#step-3`).
 
    **Isolation (required for parallel safety).** If the product repos are a *single
    shared clone over one package store*, concurrent agents otherwise corrupt each
@@ -115,20 +162,21 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    `roleTiers.explorer`; seed default)"* — so the reader can tell a chosen tier from an
    unset one.
 
-   **When each dispatched agent reports, record what it cost — one line, written by the
-   script, before you do anything else with the report:**
+   **Record the dispatch the moment the id comes back — one line, written by the
+   script, before you dispatch the next task:**
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/agent-usage.sh dispatch <task-path> \
-     --role <assignee> --model <the alias you dispatched on> \
-     --tokens <subagent_tokens> --tools <tool_uses> --duration-ms <duration_ms>
+     --role <assignee> --model <the alias you dispatched on>
    ```
 
-   The three numbers come **from that agent's `<task-notification>`** — never from a
-   transcript, never estimated, never rounded. It appends to the task's `# Notes`, so a
-   **re-dispatch adds a second line** and the rounds stay countable; **you never compose
-   the line yourself**. A notification that carried no usage ⇒ drop the three flags and
-   the line records `usage UNKNOWN`, which is the honest answer and not a zero.
+   It appends to the task's `# Notes`, so a **re-dispatch adds a second line** and the
+   rounds stay countable; **you never compose the line yourself**.
+   **The three usage numbers are gone with the notification, and the line says so.** A
+   detached session reports nothing back and `claude agents` carries no cost, so drop
+   `--tokens`/`--tools`/`--duration-ms` and let the line record `usage UNKNOWN` —
+   the honest answer, and not a zero. That is the price of the decoupling, paid
+   knowingly (`docs/pm-design.md#step-3-background`).
 
 
 <!-- end of step 3 -->

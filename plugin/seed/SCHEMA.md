@@ -169,6 +169,25 @@ branch:   <branch-name>                # optional, BUILD only. MACHINE-READ. Req
 # NOTHING DELETES A WORKTREE AUTOMATICALLY. `WorktreeRemove` has never fired (measured
 # again 2026-09-14 on 2.1.270: 5 sessions, 5 trees, 0 events), so reclamation is
 # `prune-worktrees.sh` printing `git worktree remove` commands and a human running them.
+session: <id>                          # optional, BUILD only. MACHINE-READ by scripts/agent-sessions.sh.
+# The `claude --bg` background session running this task's role agent — the id that
+# `claude agents`, `attach`, `logs` and `stop` take. Written by the project-manager
+# IMMEDIATELY AFTER the spawn, because `--bg` MINTS the id and prints it (`--session-id` is
+# ignored alongside `--bg`, measured on CLI 2.1.270) — so it cannot be pre-written the way
+# `worktree:`/`branch:` are, and the window it leaves is the ~1 second the spawn takes.
+#
+# A tick that dies inside that window is still recoverable, and NOT from this field: the
+# worktree path was written before the spawn and is unique per task, so
+# `claude agents --json --cwd <worktree>` finds the orphan. That is why the pre-write of
+# the other two fields is the load-bearing one.
+#
+# It is read for two things and judges nothing: `agent-sessions.sh in-flight` counts the
+# recorded ids that still hold a `maxAgentsInFlight` slot, and `check-dispatch.sh` names
+# the state beside a PARKED verdict. A stale id reads as `gone`, which is not an error —
+# `claude rm` removes a session record, and a merged task's id is expected to disappear.
+#
+# NEVER run `claude rm` on one of these: it deletes a session AND its worktree, while a
+# role agent's worktree belongs to `prune-worktrees.sh` and the human who runs it.
 interfaces:                           # optional, BUILD-shaped. NOT machine-read.
   consumes: [ "<exact name/signature this task depends on>", ... ]
   produces: [ "<exact name/signature this task exposes>", ... ]
