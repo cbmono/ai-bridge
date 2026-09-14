@@ -199,7 +199,7 @@ EOF
 # `prod` as the subcommand (so no rule fired at all), and `kubectl delete -n infra pvc x`
 # read `infra` as the resource kind (so the irreversible-kind list never matched). Extend
 # this list when you teach a rule a new tool.
-VALUE_FLAGS="-n --namespace --context --kube-context --kubeconfig -f --filename -l --selector --field-selector -o --output --grace-period --timeout --as --cluster --user --server --token --chunk-size -h --host --hostname -p --port -U --username -d --dbname -c --command -e --execute -S --chdir --set --values --repo --version -var -var-file -state -out -target"
+VALUE_FLAGS="-n --namespace --context --kube-context --kubeconfig -f --filename -l --selector --field-selector -o --output --grace-period --timeout --as --cluster --user --server --token --chunk-size -h --host --hostname -p --port -U --username -d --dbname -c --command -e --execute -S --chdir --set --values --repo --version -var -var-file -state -out -target --match-head-commit --body-file --subject"
 
 # The first non-flag token after <word>, skipping any flag's value. `kubectl delete` ⇒ the
 # resource kind. Comparison is on the BASENAME, so `/usr/local/bin/kubectl` is `kubectl`.
@@ -775,25 +775,85 @@ EOF
 # --- subagent_merge ------------------------------------------------------------------ #
 # JUSTIFIED BY: under `gated` — the default, fail-closed mode — the human owns the merge and
 # the approval, and this is the one place a prose rule ("never merge") was the only thing
-# stopping a dispatched agent from running `gh pr merge` itself. It is AGENT-SCOPED, the sole
-# rule here that reads `agent_id`: it fires only for a dispatched subagent, so the human's OWN
-# session (no `agent_id`) merges and approves freely — that human, in their own session, IS
-# the escape hatch this baseline always relies on. NARROW ENOUGH TO KEEP: only the three
-# shapes that CONSUMMATE a merge or MANUFACTURE an approval are refused — `gh pr merge`, the
-# REST merge endpoints via `gh api` (`.../pulls/N/merge`, `.../merges`), and
-# `gh pr review --approve`. Everything else an agent does with `gh` is untouched: opening a
-# PR, pushing a branch, `gh pr view`, `gh pr comment`, and `gh pr review --request-changes`
-# (the review verbs `qa-reviewer.md` actually tells it to use). Pushing to a product repo's
-# default branch is a NEIGHBOURING gap left for a follow-up, because the `project-manager`
-# tick legitimately pushes the BUNDLE's default branch and telling the two apart needs the
-# instance-root comparison this rule deliberately does not yet make.
+# stopping a dispatched agent from running `gh pr merge` itself. NARROW ENOUGH TO KEEP: only
+# the three shapes that CONSUMMATE a merge or MANUFACTURE an approval are refused —
+# `gh pr merge`, the REST merge endpoints via `gh api` (`.../pulls/N/merge`, `.../merges`),
+# and `gh pr review --approve`. Everything else an agent does with `gh` is untouched: opening
+# a PR, pushing a branch, `gh pr view`, `gh pr comment`, and `gh pr review --request-changes`
+# (the review verbs `qa-reviewer.md` actually tells it to use).
 #
-# WHERE yolo FITS: under `yolo` the merge is performed by the `project-manager` TICK, which is
-# itself a dispatched subagent, so this rule would refuse it too. That is acceptable while
-# yolo is set aside; re-enabling it means giving the tick a carve-out here (e.g. gated on
-# `AUTONOMY.md`), never widening the rule to all subagents.
+# THE MERGE HALF IS NOT AGENT-SCOPED, and that is deliberate (ai-bridge-v3/task-044): a rule
+# keyed on `agent_id` never fires for the MAIN thread, which is where task-035's headless
+# tick runs the project-manager — so the mode, receipt and SHA checks would be skipped by
+# exactly the caller they most need to bind. The approval half stays agent-scoped: an
+# approval is the human's to give in their own session. The escape hatch is unchanged and is
+# the one every rule here relies on — a human running the command in their own terminal.
+#
+# WHERE yolo FITS: the ONE permitted shape is the merge `AUTONOMY.md` tells the tick to run,
+# `gh pr merge --squash --match-head-commit <sha>`, and `merge-permit.sh` decides it from the
+# bundle — the owning project's mode, the caller's role and a clearance record at that exact
+# SHA. Nothing in the command, the environment or the PR can assert any of that, and every
+# unknown refuses.
+GH_MERGE_VALUE_FLAGS="--match-head-commit --body --body-file --subject --author-email -R --repo"
+
+# `<owner>/<name>` for the repo the session's cwd is in — the last two path components of
+# origin, for both the SSH and the HTTPS spelling.
+_origin_nwo=""; _origin_nwo_done=0
+origin_nwo() {
+  if [ "$_origin_nwo_done" = 0 ]; then
+    _origin_nwo_done=1
+    local u o n
+    u="$(git -C "$CWD" remote get-url origin 2>/dev/null || true)"
+    u="${u%.git}"; u="${u%/}"
+    o="${u%/*}"; o="${o##*/}"; o="${o##*:}"
+    n="${u##*/}"
+    [ -n "$o" ] && [ -n "$n" ] && [ "$o" != "$u" ] && _origin_nwo="$o/$n"
+  fi
+  printf '%s' "$_origin_nwo"
+}
+
+# The PR a `gh pr merge` names, as a number — a URL counts, a flag's value never does.
+merge_pr_operand() { # <stage>
+  local w f seen=0 skipv=0 op=""
+  while IFS= read -r w; do
+    if [ "$seen" = 0 ]; then [ "$w" = merge ] && seen=1; continue; fi
+    if [ "$skipv" = 1 ]; then skipv=0; continue; fi
+    case "$w" in
+      -*) for f in $GH_MERGE_VALUE_FLAGS; do [ "$w" = "$f" ] && { skipv=1; break; }; done
+          continue ;;
+      *) op="$w" ;;
+    esac
+  done <<EOF
+$(tokens_of "$1")
+EOF
+  op="${op##*/}"
+  case "$op" in ''|*[!0-9]*) return 1 ;; esac
+  printf '%s' "$op"
+}
+
+_merge_why=""
+merge_permitted() { # <stage> -> 0 when this exact merge is delegated in this bundle
+  local sha pr repo helper
+  _merge_why="only \`gh pr merge --squash --match-head-commit <sha> <pr>\` is ever delegated"
+  has_token "$1" --squash || return 1
+  has_token "$1" --merge && return 1
+  has_token "$1" --rebase && return 1
+  sha="$(flag_value "$1" --match-head-commit || true)"
+  case "$sha" in *[!0-9a-fA-F]*|"") return 1 ;; esac
+  [ "${#sha}" -ge 7 ] || return 1
+  pr="$(merge_pr_operand "$1")" || return 1
+  repo="$(flag_value "$1" --repo -R || true)"
+  [ -n "$repo" ] || repo="$(origin_nwo)"
+  case "$repo" in */*) ;; *) _merge_why="the repository this merge names cannot be resolved"; return 1 ;; esac
+  helper="${CLAUDE_PLUGIN_ROOT:-${_self%/hooks/*}}/scripts/merge-permit.sh"
+  [ -f "$helper" ] || { _merge_why="merge-permit.sh is not installed beside this hook"; return 1; }
+  _merge_why="$(bash "$helper" --bundle "$INSTANCE_ROOT" --repo "$repo" --pr "$pr" \
+                     --head "$sha" --role "$AGENT_TYPE" 2>/dev/null)" && return 0
+  [ -n "$_merge_why" ] || _merge_why="merge-permit.sh could not answer"
+  return 1
+}
+
 rule_subagent_merge() {
-  [ -n "$AGENT_ID" ] || return 1          # the human's own session is never gated here
   case "$1" in *gh*) ;; *) return 1 ;; esac
   local stage c sub next
   while IFS= read -r stage; do
@@ -805,19 +865,30 @@ rule_subagent_merge() {
       pr)
         next="$(word_after "$stage" pr || true)"
         if [ "$next" = merge ]; then
-          printf 'A dispatched agent may not merge a pull request — under `gated` the merge is the human'"'"'s. Open the PR and leave it; the human merges it (or, where yolo is enabled, the tick does). Running `gh pr merge` yourself in your own terminal is unaffected.'
+          merge_permitted "$stage" && continue
+          printf 'Refusing this merge: %s. The merge is the human'"'"'s under `gated` — open the PR and leave it. Where `AUTONOMY.md` delegates it, the project-manager tick merges with `gh pr merge --squash --match-head-commit <sha> <pr>` once every clearance precondition is recorded at that SHA. Running `gh pr merge` yourself in your own terminal is unaffected.' "$_merge_why"
           return 0
         fi
+        [ -n "$AGENT_ID" ] || continue     # the approval half stays agent-scoped
         if [ "$next" = review ] && has_token "$stage" --approve; then
           printf '`gh pr review --approve` from a dispatched agent manufactures the approval the merge gate is meant to get from a human or an external reviewer. Post a comment or `--request-changes` instead — an approval is the human'"'"'s to give.'
           return 0
         fi
         ;;
       api)
-        # PUT /repos/O/R/pulls/N/merge and POST /repos/O/R/merges both land a merge.
+        # PUT /repos/O/R/pulls/N/merge and POST /repos/O/R/merges both land a merge. The
+        # first is refused in every session — it is the way round `gh pr merge`, so leaving
+        # it agent-scoped would leave the delegated shape optional. The second stays
+        # agent-scoped: merging a branch is not this gate's subject.
         case "$stage" in
-          *pulls/*/merge*|*/merges*)
-            printf 'A dispatched agent may not merge via `gh api` — the `/pulls/N/merge` and `/merges` endpoints consummate a merge the human owns under `gated`. Open the PR instead.'
+          *pulls/*/merge*)
+            printf 'The `/pulls/N/merge` endpoint consummates a merge no clearance record can pin — `gh api` carries no `--match-head-commit`. The human merges under `gated`, and where `AUTONOMY.md` delegates it the tick uses `gh pr merge --squash --match-head-commit <sha>`. Open the PR instead.'
+            return 0 ;;
+        esac
+        [ -n "$AGENT_ID" ] || continue
+        case "$stage" in
+          */merges*)
+            printf 'A dispatched agent may not merge via `gh api` — the `/merges` endpoint consummates a merge the human owns under `gated`. Open the PR instead.'
             return 0 ;;
         esac
         ;;

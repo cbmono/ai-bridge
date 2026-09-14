@@ -205,6 +205,16 @@ Then merge that exact commit:
 drift. Re-checking here matters: comments and checks can change after verification
 without the head moving.
 
+**That exact shape is also the only one the harness permits, and it reads the four
+preconditions off disk rather than trusting the caller.** Each of `required-checks.sh`,
+`review-clearance.sh`, `pr-body-clearance.sh` and `pr-verdict-clearance.sh` records its own
+exit 0 against the PR and the head it read, and the PreToolUse hook permits the merge only
+for the `project-manager`, only where this file defines the owning project's mode as
+delegating the merge, and only at the SHA all four name. A review receipt alone is
+precondition 2's first half and never a merge permit. Anything missing — no companion, no
+owning project, two projects in different modes, a record at an earlier head — refuses, and
+the refusal names what is missing.
+
 **Only after confirming the merge succeeded** (exit 0 / `gh pr view <pr> --json state` is
 `MERGED`) set the task `done`. If it aborted, leave it `in-review` and re-verify the new
 head next tick.
@@ -220,8 +230,8 @@ precondition — always keep `--match-head-commit`.
 ## Preflight: is the merge authority even exercisable?
 
 **Run this once per tick per `yolo` build project, and at `/new-project` when `yolo` is
-chosen.** Two common configurations make the merge precondition **unsatisfiable by
-construction**, and discovering that mid-run wastes a whole session:
+chosen.** Three things make the merge **unsatisfiable by construction** — two
+configurations and the harness itself — and discovering that mid-run wastes a whole session:
 
 1. **Single identity.** GitHub will not record an `APPROVED` review on a PR authored by
    the same account, and every agent in this instance shares one `gh` login. So if the
@@ -234,7 +244,25 @@ construction**, and discovering that mid-run wastes a whole session:
    running `scripts/required-checks.sh <pr>` against any open PR: **exit 3 is exactly
    this condition**, and it names the file it looked for.
 
-**When either holds, say so plainly and once** — in the project's `# Notes` and on the
+3. **The destructive-action baseline itself.** `plugin/hooks/deny-destructive.sh` (rule
+   `subagent_merge`) sits in front of the merge and refuses everything but the one shape
+   below, decided from this file, the owning project's `autonomy`, the caller's role and a
+   clearance record at the exact SHA. On 2026-09-14 a tick reached all four preconditions
+   on two PRs and was refused here; a human merged both by hand. **Probe it with the REAL
+   command and nothing merges** — the payload is a decision, not an invocation:
+
+   ```sh
+   jq -n --arg d "$PWD" --arg c "gh pr merge --squash --match-head-commit $SHA $PR" \
+     '{cwd:$d, hook_event_name:"PreToolUse", tool_name:"Bash", agent_id:"probe",
+       agent_type:"project-manager", tool_input:{command:$c}}' \
+     | CLAUDE_PROJECT_DIR="$PWD" bash "$AB/../hooks/deny-destructive.sh" \
+     | jq -e '.hookSpecificOutput.permissionDecision != "deny"'   # 0 = the merge would run
+   ```
+
+   A non-zero exit prints the hook's own reason, which names the precondition that is
+   missing. `gh pr merge --help` is not a probe: the rule matches the invocation.
+
+**When any of them holds, say so plainly and once** — in the project's `# Notes` and on the
 board:
 
 > `<project>`: merge authority delegated but not exercisable (<reason>). Every PR will be

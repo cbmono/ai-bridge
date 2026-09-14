@@ -1358,8 +1358,18 @@ printf '%s' "$raw" | jq -j '.body // ""' > "$TMPD/body" 2>/dev/null || {
 report_length "$TMPD/body" "PR $pr body"
 
 render_body "$TMPD/body" "$TMPD/rendered"
-decide "$TMPD/body" "$TMPD/rendered" "the body of PR $pr ($url)"
-exit $?
+decide "$TMPD/body" "$TMPD/rendered" "the body of PR $pr ($url)"; drc=$?
+
+# The clearance record the PreToolUse hook reads offline (ai-bridge-v3/task-044). It is
+# written, never read, here — and it can only ever fail silently, so it cannot change the
+# answer this script just gave.
+if [ "$drc" -eq 0 ]; then
+  "$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record pr-body-clearance.sh \
+    --repo "$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')" \
+    --pr "$(printf '%s' "$raw" | jq -r '.number // ""' 2>/dev/null)" \
+    --head "$head_sha" >/dev/null 2>&1 || true
+fi
+exit $drc
 
 # --- completeness sentinel — THIS MUST REMAIN THE LAST LINE OF THIS FILE -------
 # `--self-test` asserts that the last line of this file is exactly the line below, which

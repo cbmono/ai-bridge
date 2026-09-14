@@ -20,7 +20,7 @@ ok() { # <name> <actual> <expected>
 
 # The keys ai-bridge-v3/task-031 names, plus the three the triage folded in.
 KEYS="AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
-AB_STATE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM"
+AB_STATE_DIR AB_RECEIPTS AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM"
 
 echo
 echo "== 1. every key resolves, three ways =="
@@ -45,7 +45,7 @@ echo
 echo "== 3. the layout is spelled in ONE file =="
 # A literal assignment of one of these names is the shape that forks the layout. The
 # grep is the criterion's own, narrowed to an assignment so a comment is not a failure.
-NAMES='SCHEMA\.md|CONVENTIONS\.md|SNAPSHOT\.json|AWAITING\.md|\.tick-state|\.board-live|\.tick-lock|\.board-others\.json'
+NAMES='SCHEMA\.md|CONVENTIONS\.md|SNAPSHOT\.json|AWAITING\.md|\.tick-state|\.tick-receipts|\.board-live|\.tick-lock|\.board-others\.json'
 spellers="$(grep -lE "^[A-Za-z_]+=\"?(\\\$AB_DIR/)?($NAMES)\"?$" "$SCRIPTS"/*.sh | xargs -n1 basename | sort | tr '\n' ' ')"
 ok "only bundle-paths.sh assigns a layout literal" "$spellers" "bundle-paths.sh "
 

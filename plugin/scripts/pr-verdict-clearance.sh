@@ -316,7 +316,7 @@ else
     echo "error: jq is not installed, so the comment list cannot be read — unknown." >&2
     exit 2; }
   # shellcheck disable=SC2054  # --json takes ONE comma-separated argument
-  ARGS=(pr view "$PR" --json body,author,comments)
+  ARGS=(pr view "$PR" --json body,author,comments,url,headRefOid)
   [ -n "$REPO" ] && ARGS+=(--repo "$REPO")
   META="$(gh "${ARGS[@]}" 2>/dev/null)" || {
     echo "error: gh could not read PR $PR — unknown, never clearance." >&2; exit 2; }
@@ -351,7 +351,17 @@ fi
 
 render "$TMPD/body" "$TMPD/rbody"
 render "$TMPD/chk" "$TMPD/rchk"
-decide "$(scan "$TMPD/rbody" worker)" "$(scan "$TMPD/rchk" checker)" "$CLOGIN" "$ALOGIN"
-exit $?
+decide "$(scan "$TMPD/rbody" worker)" "$(scan "$TMPD/rchk" checker)" "$CLOGIN" "$ALOGIN"; DRC=$?
+
+# The clearance record the PreToolUse hook reads offline (ai-bridge-v3/task-044). Host mode
+# only — a draft comparison says nothing about any pull request — and silent on any failure.
+HEAD_SHA="$(printf '%s' "${META:-}" | jq -r '.headRefOid // ""' 2>/dev/null)" || HEAD_SHA=""
+URL="$(printf '%s' "${META:-}" | jq -r '.url // ""' 2>/dev/null)" || URL=""
+if [ "$DRC" -eq 0 ] && [ -n "$HEAD_SHA" ] && [ -n "$URL" ]; then
+  "$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record pr-verdict-clearance.sh \
+    --repo "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')" \
+    --pr "${URL##*/}" --head "$HEAD_SHA" >/dev/null 2>&1 || true
+fi
+exit $DRC
 
 #EOF: pr-verdict-clearance.sh is complete to here

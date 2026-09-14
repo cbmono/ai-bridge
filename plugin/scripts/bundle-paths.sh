@@ -20,6 +20,8 @@ AB_ROSTER="$AB_DIR/agents/index.md"
 # A FILE, not a directory, despite the name — tick-delta.sh writes one fingerprint line
 # to it. The key is named in ai-bridge-v3/task-031's criteria, so it is spelled as filed.
 AB_STATE_DIR="$AB_DIR/.tick-state"
+# A DIRECTORY, unlike the fingerprint above: one file per PR and head (ai-bridge-v3/task-044).
+AB_RECEIPTS="$AB_DIR/.tick-receipts"
 AB_BOARD_DIR="$AB_DIR/.board-live"
 AB_BOARD_OTHERS="$AB_DIR/.board-others.json"
 AB_LOCK="$AB_DIR/.tick-lock"
@@ -34,10 +36,10 @@ index.md:$AB_INDEX .tick-state:$AB_STATE_DIR .board-live:$AB_BOARD_DIR \
 .board-others.json:$AB_BOARD_OTHERS"
 
 export AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER
-export AB_STATE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM AB_MOVES
+export AB_STATE_DIR AB_RECEIPTS AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM AB_MOVES
 
 AB_KEYS="AB_DIR AB_SCHEMA AB_CONVENTIONS AB_SNAPSHOT AB_AWAITING AB_LEDGER AB_INDEX AB_ROSTER \
-AB_STATE_DIR AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM"
+AB_STATE_DIR AB_RECEIPTS AB_BOARD_DIR AB_BOARD_OTHERS AB_LOCK AB_LOCK_CLAIM"
 export AB_KEYS
 
 # Is <root> a bundle, and has it been migrated to the 3.0 layout?
