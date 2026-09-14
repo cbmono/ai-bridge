@@ -365,10 +365,10 @@ session_note() {
   case "$st" in
     working) echo "        SESSION $sid is WORKING — it has not parked; give it time." >&2 ;;
     blocked) echo "        SESSION $sid is BLOCKED on a prompt nobody can answer, and it" >&2
-             echo "        holds a maxAgentsInFlight slot until \`claude stop $sid\`." >&2 ;;
+             echo "        holds a maxAgentsInFlight slot until somebody stops it." >&2 ;;
     done)    echo "        SESSION $sid has EXITED without opening the pull request." >&2 ;;
     gone)    echo "        SESSION $sid is not listed: it never started, or was removed." >&2 ;;
-    *)       echo "        SESSION $sid: state unknown — \`claude agents\` did not answer." >&2 ;;
+    *)       echo "        SESSION $sid: state unknown — the session list did not answer." >&2 ;;
   esac
 }
 
