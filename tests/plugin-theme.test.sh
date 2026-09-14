@@ -3,11 +3,10 @@
 # plugin-theme.test.sh — the theme the plugin ships is SHAPE-legal, and nothing here
 # selects it for the human.
 #
-# IT ASSERTS NO COLOUR, DELIBERATELY. The palette is a placeholder until the owner's
-# Claude Design work lands (ai-bridge-v3/task-034), so a hex pinned here would turn the
-# suite red on a branding change that is none of this harness's business. What it pins is
-# the shape a bad edit actually breaks: it parses, `base` is a base, every override names
-# a token Claude Code documents, and every value is `#rrggbb`.
+# IT PINS THE SHAPE, AND SINCE loopd/task-005 THE PALETTE TOO. The owner's design handoff
+# landed, so the colours are no longer a placeholder: §6 holds every override to the
+# palette in tests/fixtures/theme-palette.txt and the duotone keys to their exact hex. A
+# third accent and a silently missing key are the two failures nobody notices by looking.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
@@ -15,6 +14,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 THEME="$REPO/plugin/themes/ai-bridge.json"
 TOKENS="$REPO/tests/fixtures/theme-tokens.txt"
+PALETTE="$REPO/tests/fixtures/theme-palette.txt"
 PJ="$REPO/plugin/.claude-plugin/plugin.json"
 
 pass=0; fail=0
@@ -84,6 +84,44 @@ echo "== 5. nothing the plugin ships writes the user's theme key =="
 ok "no shipped file spells the settings key" "$(files_naming "$REPO/plugin" '"theme"')" 0
 printf '{"theme": "custom:ai-bridge:ai-bridge"}\n' > "$TMP/settings.json"
 ok "…and the same scanner finds it when it is there" "$(files_naming "$TMP" '"theme"')" 1
+
+echo "== 6. the palette is the handoff's, and the duotone keys carry their own hex =="
+palette()    { grep -oE '^#[0-9a-f]{6}' "$PALETTE"; }
+off_palette() { # <theme.json> -> the override keys whose colour is not a palette value
+  jq -r '.overrides | to_entries[] | "\(.key)\t\(.value|ascii_downcase)"' "$1" \
+    | awk -F'\t' 'NR==FNR { p[$1]=1; next } !($2 in p) { printf "%s ", $1 }' <(palette) - \
+    | sed 's/ $//'
+}
+off_duotone() { # <theme.json> -> "<key>=<got>" for each required key absent or off-value
+  local k want got
+  while read -r k want; do
+    [ -n "$k" ] || continue
+    got="$(jq -r --arg k "$k" '.overrides[$k] // "MISSING"' "$1")"
+    [ "$got" = "$want" ] || printf '%s=%s ' "$k" "$got"
+  done <<'REQ'
+claude                  #5ea2ff
+promptBorder            #5ea2ff
+briefLabelClaude        #5ea2ff
+blue_FOR_SUBAGENTS_ONLY #5ea2ff
+success                 #5ea2ff
+warning                 #ff7ac2
+error                   #ff7ac2
+permission              #ff7ac2
+pink_FOR_SUBAGENTS_ONLY #ff7ac2
+inactive                #6c7488
+subtle                  #262c37
+text                    #e9edf4
+REQ
+}
+ok "the palette file is long enough to be the palette" \
+   "$([ "$(palette | grep -c .)" -ge 15 ] && echo yes || echo no)" yes
+ok "every override colour is a palette value" "$(off_palette "$THEME")" ""
+ok "every duotone key carries its handoff hex" "$(off_duotone "$THEME" | sed 's/ $//')" ""
+
+jq 'del(.overrides.claude) | .overrides.warning = "#00ff00"' "$THEME" > "$TMP/offbrand.json"
+ok "a third accent is named"        "$(off_palette "$TMP/offbrand.json")" "warning"
+ok "a missing key and an off hex are named" "$(off_duotone "$TMP/offbrand.json" | sed 's/ $//')" \
+   "claude=MISSING warning=#00ff00"
 
 echo
 echo "pass=$pass fail=$fail"
