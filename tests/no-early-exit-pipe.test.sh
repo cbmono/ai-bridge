@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: tests
 # no-early-exit-pipe.test.sh — no test feeds `grep -q` through a pipe.
 # Under `set -o pipefail` a pipe into an early-exiting reader reports a MATCH as a failure
 # at random (knowledge: grep-q-under-pipefail-reports-a-match-as-a-failure). The fix is a

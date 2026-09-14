@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin-yolo/companion/AUTONOMY.md plugin/agents/project-manager.md plugin/scripts/required-checks.sh plugin/scripts/review-clearance.sh plugin/scripts/review-rounds.sh plugin/skills/new-project/SKILL.md
 #
 # reviewer-fallback-spend.test.sh — an unavailable external reviewer is FOUR conditions,
 # and only one of them may spend a deep-tier `qa-reviewer` session.

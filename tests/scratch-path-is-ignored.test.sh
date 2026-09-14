@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/seed/CONVENTIONS.md
 #
 # scratch-path-is-ignored.test.sh — the scratch path CONVENTIONS.md names must RESOLVE to
 # something git-ignored, and nothing tracked may live under it.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/operations.md plugin/agents/project-manager.md plugin/scripts/tick-lock.sh plugin/seed/CLAUDE.md plugin/seed/CONVENTIONS.md plugin/skills/dispatch/SKILL.md
 #
 # subagent-resume-rule.test.sh — the resume rule is stated ONCE, reaches every dispatcher
 # word for word, and does not claim coverage it has not got.

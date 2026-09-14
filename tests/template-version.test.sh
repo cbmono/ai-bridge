@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude-plugin/marketplace.json .claude/rules/installer.md .claude/rules/machinery.md docs/conventions.md plugin/.claude-plugin/plugin.json plugin/hooks/session-banner.sh plugin/README.md plugin/scripts/check-template-version.sh plugin/scripts/resolve-config.sh plugin/seed/CONVENTIONS.md plugin/VERSION
 #
 # template-version.test.sh — the version is ONE string, the docs that show it agree with
 # it, and the drift check speaks only when it is actually behind.

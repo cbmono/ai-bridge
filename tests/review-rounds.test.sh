@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/agents/qa-reviewer.md plugin/scripts/review-clearance.sh plugin/scripts/review-rounds.sh plugin/seed/CONVENTIONS.md tests/fixtures/reviewer
 #
 # review-rounds.test.sh — the two-round cap, at its boundary.
 #

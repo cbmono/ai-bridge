@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/tick-delta.sh
 #
 # tick-delta.test.sh — the idle-tick fast-path probe: `plugin/scripts/tick-delta.sh`.
 #

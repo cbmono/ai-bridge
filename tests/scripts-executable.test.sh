@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks plugin/scripts scripts tests
 #
 # scripts-executable.test.sh — every plugin/scripts/*.sh, every plugin/hooks/*.sh
 # AND every plugin/hooks/*.sh

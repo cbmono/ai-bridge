@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .github/workflows/tests-deep.yml .github/workflows/tests.yml plugin/evals tests/plugin-skills.test.sh tests/run.sh
 #
 # plugin-eval.test.sh — the `claude plugin eval` suite under plugin/evals/: its shape,
 # its tie back to the skills it grades, and (where the CLI supports it) an actual run.
