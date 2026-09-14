@@ -936,11 +936,22 @@ above it so none may grow its share.
   — outside any synced folder; **never** inside `reposRoot`. Absent that key, fall
   back to `<reposRoot>/_wt`) and a **private package
   store** (e.g. `pnpm install --store-dir <worktree>/.pnpm-store`), and pushes
-  early. Create the worktree explicitly with `git worktree add <path> -b <branch>
-  origin/<default-branch>` — don't rely on the `EnterWorktree` tool, which may be
-  unavailable to you as a subagent. (`settings.json` sets `worktree.bgIsolation:
-  none` so the control panel manages worktrees itself; harness isolation would
-  only isolate this repo, not the product repos.)
+  early.
+  **THE HOOK CREATES IT — CHECK BEFORE YOU CREATE ONE.** A session started as
+  `claude --worktree <task-id>` is placed by `plugin/hooks/worktree-create.sh` in
+  `<worktreeRoot>/<task-id>` of your `target_repo`, on the task's `branch:`, and that is
+  your cwd from the first turn. `pwd` and `git rev-parse --abbrev-ref HEAD` answer it in
+  two commands. Already there ⇒ **do not add a second worktree** — you will branch off
+  your own branch and open a PR against it.
+  **Only when it did not**, which is every in-session `Agent` dispatch (the hook's payload
+  carries `agent-<opaque-id>`, never the task, so it cannot place one for you):
+  `git worktree add <path> -b <branch> origin/<default-branch>`. Don't rely on the
+  `EnterWorktree` tool, which may be unavailable to you as a subagent.
+  (`settings.json` sets `worktree.bgIsolation: none` so the control panel manages
+  worktrees itself; harness isolation would only isolate this repo, not the product repos.)
+  **Nothing deletes your worktree while you are in it, or after.** `WorktreeRemove` has
+  never fired and `prune-worktrees.sh` only ever prints removal commands, so leaving work
+  uncommitted costs you nothing — but nothing tidies up for you either.
   **Scratch files go in `<worktree>/tmp/`, never a shared scratchpad.** Mutation
   scripts, probe output and throwaway configs collide when several agents run at once.
   Keep them inside your own worktree — verified working with three concurrent agents on

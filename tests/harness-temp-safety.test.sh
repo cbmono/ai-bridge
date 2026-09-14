@@ -385,7 +385,7 @@ fx_trap() { printf 'trap %s EXIT\n' "'rm -rf \"\$FTMP\"'"; }
   fx_trap; } > "$FX/bad-unguarded.test.sh"
 
 # (c) the idiom this repo already uses in prune-worktrees.test.sh and
-#     reclaim-worktree.test.sh: guard first, canonicalise second.
+#     worktree-create-hook.test.sh: guard first, canonicalise second.
 { fx_head
   printf 'FTMP="$(mktemp -d "${TMPDIR:-/tmp}/fx.XXXXXX")" || { echo "fx: mktemp -d failed" >&2; exit 2; }\n'
   printf 'FTMP="$(cd "$FTMP" && pwd)"\n'

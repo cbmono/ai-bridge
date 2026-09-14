@@ -42,7 +42,6 @@ BASELINE='577 plugin/hooks/agent-control.sh
 423 plugin/scripts/pr-body-clearance.sh
 448 plugin/scripts/pr-comment-clearance.sh
 493 plugin/scripts/prune-worktrees.sh
-417 plugin/scripts/reclaim-worktree.sh
 337 plugin/scripts/refresh-seeds.sh
 436 plugin/scripts/required-checks.sh
 541 plugin/scripts/resolve-autonomy.sh

@@ -148,21 +148,27 @@ objective: /objectives/<slug>.md
 phase: /projects/<slug>/phases/<n>-<slug>.md          # optional, links task to its phase
 depends_on: [ /projects/<slug>/tasks/<id>.md, ... ]   # optional
 acceptance_criteria: [ "<testable outcome>", ... ]    # PM fills/expands during refine
-worktree: /abs/path/to/worktree        # optional, BUILD only. MACHINE-READ by scripts/reclaim-worktree.sh.
+worktree: /abs/path/to/worktree        # optional, BUILD only. MACHINE-READ by the WorktreeCreate hook.
 branch:   <branch-name>                # optional, BUILD only. MACHINE-READ. Required whenever `worktree:` is set.
-# Both are written by the project-manager AT DISPATCH, and read only when the task
-# reaches `done`, to reclaim that one worktree. They are machine-read — unlike
-# `interfaces:` below — so keep them exact: an absolute path and the literal branch name.
+# Both are written by the project-manager AT DISPATCH, and read by
+# `plugin/hooks/worktree-create.sh` when a session starts as `claude --worktree <task-id>`:
+# the hook places that path, on that branch, in a worktree of `target_repo`. They are
+# machine-read — unlike `interfaces:` below — so keep them exact: an absolute path and the
+# literal branch name. Absent, the hook falls back to `<worktreeRoot>/<task-id>` on a branch
+# named for the task.
 #
-# Why they exist at all: reclaiming a worktree by SCANNING a directory destroyed three
-# running agents' work, because a scan cannot tell a fresh dispatch that has not committed
-# from an already-merged branch — in git they are identical. The task record can, because
-# it was written at dispatch by the thing doing the dispatching. So the reclaim is driven
-# by these two fields or it does not happen: no `worktree:`, no removal, ever.
+# Why they exist at all: a worktree mechanism that INFERS a task from a directory destroyed
+# three running agents' work, because a scan cannot tell a fresh dispatch that has not
+# committed from an already-merged branch — in git they are identical. The task record can,
+# because it was written at dispatch by the thing doing the dispatching.
 #
 # `worktree:` set while `branch:` is absent is a REFUSAL, not a licence to skip the check
 # — a recorded path with no recorded branch cannot be proven to still be the worktree this
 # task created, and a worktree path can be recycled.
+#
+# NOTHING DELETES A WORKTREE AUTOMATICALLY. `WorktreeRemove` has never fired (measured
+# again 2026-09-14 on 2.1.270: 5 sessions, 5 trees, 0 events), so reclamation is
+# `prune-worktrees.sh` printing `git worktree remove` commands and a human running them.
 interfaces:                           # optional, BUILD-shaped. NOT machine-read.
   consumes: [ "<exact name/signature this task depends on>", ... ]
   produces: [ "<exact name/signature this task exposes>", ... ]
