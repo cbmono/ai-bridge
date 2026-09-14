@@ -79,6 +79,12 @@
 #      happens to mention, which is the property THE TRAP below gives the refusal too. What
 #      makes it survivable is that the pin cannot act alone: the refusal tiers run first,
 #      and the machine marker must be there as well.
+#      AND IT IS THE CHANNEL OF LAST RESORT, NOT A SECOND OPINION: it is consulted only
+#      for an account with NO review object on the PR at all. The comment is one body the
+#      vendor EDITS in place across rounds, so it names the current head whatever it last
+#      reviewed — on #227 it named the head while the reviewer's only review object sat two
+#      commits back, and that cleared. Where the structured channel has spoken for an
+#      account, the structured channel decides.
 #
 # THE TABLES CAN NO LONGER CAUSE A CLEARANCE. Every vendor string lives in REVIEWERS
 # (whose artifacts count, and what its check is called), REFUSALS_SENTINEL / NOT_YET /
@@ -425,6 +431,39 @@ REVIEW_SENTINEL='
 ^[[:space:]]*(>[[:space:]]*)*<!--[[:space:]]*final_review_risk_start[[:space:]]*-->[[:space:]]*$
 '
 
+# --- table 3b: the reviewer ACKNOWLEDGING A COMMAND, which is not a review ----
+# Matched against a COMMENT only (a review object carries its own state and commit_id, so
+# it is never reached through here), and consulted after every refusal tier — a rate limit
+# quoted inside an acknowledgement is still a refusal, and exit 1 says more than exit 4.
+#
+# WHAT THIS IS. `@coderabbitai review` is answered immediately by an auto-generated reply
+# — "✅ Action performed / Review finished", or "⚠️ Action not completed" — which names the
+# head it was invoked at and is posted whether or not a review follows. Measured on #227:
+# the reply at 11:03:30Z is the whole of what that PR got at head 711c755c, while the
+# reviewer's only review object sits at 6d954b42. An acknowledgement is a receipt for a
+# command, so it is never evidence here, at any head.
+#
+# NEITHER A REFUSAL NOR A REVIEW, deliberately. Calling it a refusal would report exit 1
+# ("DECLINED") over a PR whose real state is a real review at an older commit, which is
+# exit 4 and a different instruction to the caller.
+#
+# PROSE IS ALLOWED HERE, unlike table 3, because this tier only ever REFUSES: the marker
+# rows are the vendor's own, and the two prose rows cost at most a human glance at a PR
+# that was in fact reviewed. Anchored where the prose is a whole line of its own.
+INVOCATION_ACK='
+<!--[[:space:]]*coderabbit review command invocation:
+<!--[[:space:]]*this is an auto-generated reply by coderabbit
+action (performed|not completed)
+^[[:space:]]*(>[[:space:]]*)*review finished\.?[[:space:]]*$
+'
+
+# The reviewer explaining that a plain review request cannot produce a review at this head.
+# Surfaced in the exit-4 message, with the command that can — see `incremental_note`.
+INCREMENTAL_NOTE='
+does not re-?review already reviewed commits
+incremental review system
+'
+
 # --- tier 4: an artifact that declares itself a review, structurally ----------
 # The `okf-verdict` trailer (`SCHEMA.md` → "A verdict is a structured claim, not prose")
 # is the fallback reviewer's own machine-readable output, and it outranks EVERY refusal
@@ -519,7 +558,8 @@ all_patterns() {
   rows "$REVIEWERS" | awk '{print $1; print $2}'
   rows "$REFUSALS_SENTINEL"; rows "$NOT_YET"
   rows "$REFUSALS";          rows "$REVIEW_SENTINEL"
-  rows "$REFUSALS_TERMINAL"
+  rows "$REFUSALS_TERMINAL"; rows "$INVOCATION_ACK"
+  rows "$INCREMENTAL_NOTE"
 }
 
 # Compile every row before anything is classified with it. A table that will not compile
@@ -639,6 +679,16 @@ if [ "${1:-}" = "--self-test" ]; then
   if [ -n "$(hits "$REFUSALS_TERMINAL" "$TMPD/probe")" ]; then
     echo "self-test: the terminal-refusal table matches an ordinary rate limit, which" >&2
     echo "           would ask a human every time the reviewer pauses" >&2; exit 2
+  fi
+  # An acknowledgement must be recognised, and the review it is a receipt for must not be:
+  # a table that matched the walkthrough would refuse every real review.
+  printf '<!-- CodeRabbit review command invocation: v2:deadbeef -->\n' > "$TMPD/probe"
+  [ -n "$(hits "$INVOCATION_ACK" "$TMPD/probe")" ] || {
+    echo "self-test: the acknowledgement table does not match an invocation reply" >&2; exit 2; }
+  printf '<!-- walkthrough_start -->\n' > "$TMPD/probe"
+  if [ -n "$(hits "$INVOCATION_ACK" "$TMPD/probe")" ]; then
+    echo "self-test: the acknowledgement table matches a review marker, which would" >&2
+    echo "           refuse every review this reviewer publishes" >&2; exit 2
   fi
   [ -s "$TMPD/grep-fatal" ] && exit 2
   printf '%s\n' "$SELFTEST_OK"
@@ -828,6 +878,18 @@ gh api "/repos/$nwo/issues/$pr_number/comments?per_page=100" --paginate \
   echo "error: could not read the comments on PR $pr ($nwo) — refusing. A refusal this" >&2
   echo "       script cannot see is a refusal that did not happen, and that is a merge." >&2
   exit 2
+}
+
+# --- WHICH ACCOUNTS ANSWER THROUGH THE STRUCTURED CHANNEL --------------------
+# Every login with at least one review object on this PR, in any state, at any commit.
+# Route C (the vendor's review marker in a COMMENT) is consulted only for an account that
+# appears nowhere in this list — see TEST 2. Read once, before the loop, so the answer
+# does not depend on the order the host streamed the artifacts in.
+review_object_logins="$(jq -r '.login // empty' "$TMPD/reviews.ndjson" 2>/dev/null \
+                        | while IFS= read -r l; do norm "$l"; echo; done | sort -u)"
+
+has_review_object() { # <login>
+  printf '%s\n' "$review_object_logins" | grep -Fqx "$(norm "$1")"
 }
 
 # The verified head the caller pinned must still be the PR's head; if it is not, every
@@ -1345,7 +1407,8 @@ n=0; considered=0; refusal_body=""; refusal_from=""; refusal_kind=""
 terminal_body=""; terminal_from=""
 stale_from=""; stale_at=""; unproven_from=""
 refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
-cleared_msg=""
+cleared_msg=""; ack_from=""; incremental_from=""; marker_outranked=""
+self_artifacts=0; self_at_head=0
 while IFS=$'\t' read -r kind login state commit; do
   n=$((n + 1))
   body="$TMPD/body.$n"
@@ -1363,6 +1426,18 @@ while IFS=$'\t' read -r kind login state commit; do
     exit 2
   }
 
+  # THE PR'S OWN AUTHOR IS NEVER ITS INDEPENDENT REVIEWER (SCHEMA.md clause 8), and this
+  # is asked BEFORE the reviewer tables rather than after them. An author who is not a
+  # vendor used to be dropped by the identity test as "not a reviewer", so its own review
+  # objects at the head were invisible rather than refused: #227 carries two of them,
+  # `COMMENTED` at the exact head, and nothing anywhere said why they did not count.
+  if [ "$(norm "$login")" = "$(norm "$pr_author")" ]; then
+    self_artifacts=$((self_artifacts + 1))
+    [ "$kind" = "review" ] && [ "$commit" = "$head_sha" ] \
+      && self_at_head=$((self_at_head + 1))
+    continue
+  fi
+
   # Whose opinion counts, in three narrowing steps. --for-check restricts to the reviewer
   # that OWNS the required check being cleared, so one vendor's review cannot clear
   # another's; --reviewer names one account outright; with neither, the REVIEWERS table
@@ -1375,8 +1450,6 @@ while IFS=$'\t' read -r kind login state commit; do
   else
     match_reviewer "$login" || continue
   fi
-  # An author's own artifact is never independent, whichever table matched.
-  [ "$(norm "$login")" = "$(norm "$pr_author")" ] && continue
 
   considered=$((considered + 1))
   render_body "$body" "$TMPD/stripped" "$TMPD/strict"
@@ -1436,6 +1509,18 @@ while IFS=$'\t' read -r kind login state commit; do
     fatal_grep
     continue
   fi
+
+  # TEST 1b — is this comment the reviewer's RECEIPT FOR A COMMAND rather than a review?
+  # An acknowledgement names the head it was invoked at and says nothing about whether a
+  # review followed, so it is dropped here: it reaches neither the evidence tests below
+  # nor the refusal tiers above, and clears nothing at any head (table 3b).
+  if [ "$kind" != "review" ] && [ -n "$(hits "$INVOCATION_ACK" "$TMPD/stripped")" ]; then
+    [ -n "$ack_from" ] || ack_from="$login"
+    [ -n "$(hits "$INCREMENTAL_NOTE" "$TMPD/stripped")" ] && incremental_from="$login"
+    fatal_grep
+    continue
+  fi
+  fatal_grep
 
   # A review object is evidence only in one of the API's three SUBMITTED states, compared
   # against its own spellings. Anything else — PENDING, DISMISSED, a casing variant, a
@@ -1497,6 +1582,20 @@ while IFS=$'\t' read -r kind login state commit; do
   fi
   if [ -n "$(hits "$REVIEW_SENTINEL" "$TMPD/strict")" ]; then
     fatal_grep
+    # ROUTE C IS THE FALLBACK CHANNEL, NOT A SECOND OPINION. Where this account has a
+    # review object on the PR at all, the structured channel is live for it and decides:
+    # `user.login` is the reviewer and `commit_id` is the head, neither of them prose.
+    # The comment this would otherwise read is a SINGLE comment the vendor EDITS in place
+    # across rounds, so it names the current head whatever it last reviewed — on #227 it
+    # named 711c755c while the only review object sat at 6d954b42, and that cleared.
+    #
+    # THE COST, stated rather than hidden: a genuinely clean re-review at the new head
+    # leaves no review object of its own (see the KB finding on that), so where an OLDER
+    # object exists it now lands on exit 4 instead of clearing. That is a human glance.
+    if has_review_object "$login"; then
+      [ -n "$marker_outranked" ] || marker_outranked="$login"
+      continue
+    fi
     if names_head "$TMPD/strict"; then
       [ -n "$cleared_msg" ] || cleared_msg="ok: $login's own review marker in a comment names head $head_sha on PR $pr"
       continue
@@ -1696,6 +1795,33 @@ fi
 # of control characters before they reach a terminal, so a body cannot repaint the
 # operator's screen or hide the rest of this message behind an escape sequence.
 #
+# WHAT WAS EXCLUDED IS SAID OUT LOUD, FIRST. Both of these are artifacts an operator can
+# see in the browser, and a refusal that does not mention them reads as "the script did not
+# look". Printed on every non-clearing path below, before the answer itself.
+if [ "$self_artifacts" -gt 0 ]; then
+  echo "note: $self_artifacts artifact(s) on PR $pr are authored by $pr_author, the PR's OWN" >&2
+  echo "      author, $self_at_head of them review object(s) at this head. An author is never its" >&2
+  echo "      own independent reviewer ($AB_SCHEMA, clause 8), so they are REFUSED as" >&2
+  echo "      evidence whatever their state, not merely uncounted." >&2
+fi
+if [ -n "$marker_outranked" ]; then
+  echo "note: $marker_outranked's review marker in a comment names this head, and did NOT" >&2
+  echo "      clear: that account has review object(s) on this PR, so the structured" >&2
+  echo "      channel decides and the comment is not consulted." >&2
+fi
+
+# WHICH COMMAND CAN STILL PRODUCE A REVIEW AT THIS HEAD. Printed on the exit-4 paths, where
+# the answer is "ask again" and the obvious ask is the one that cannot work: the reviewer's
+# own reply says it does not re-review commits it has already reviewed, so `@coderabbitai
+# review` returns another acknowledgement. Two rounds of the 09-14 tick went that way.
+incremental_note() {
+  [ -n "$incremental_from" ] || return 0
+  echo "        $incremental_from's own reply says it is an INCREMENTAL review system and does" >&2
+  echo "        not re-review already reviewed commits — so \`@coderabbitai review\` will" >&2
+  echo "        acknowledge and stop. Ask for \`@coderabbitai full review\` to get a review" >&2
+  echo "        at this head." >&2
+}
+
 # THE TERMINAL REFUSAL IS REPORTED FIRST AND SEPARATELY, because it is the one refusal that
 # is not about this pull request. Waiting cannot fix it and no other PR will fare better,
 # so the message says so out loud rather than leaving a reader to infer it from a quote.
@@ -1753,6 +1879,7 @@ if [ -n "$empty_from" ]; then
   echo "        read anything: the host mints one for any inline comment or thread reply, so" >&2
   echo "        the claim, where there is one, is the body. Ask for a review at this head," >&2
   echo "        or look." >&2
+  incremental_note
   exit 4
 fi
 
@@ -1763,6 +1890,19 @@ if [ -n "$stale_from" ]; then
   echo "        re-review on every push (CodeRabbit's \`auto_incremental_review: false\`):" >&2
   echo "        the review is real and it is not of this commit. Ask for a review at this" >&2
   echo "        head, or look." >&2
+  incremental_note
+  exit 4
+fi
+
+# The reviewer answered a command and nothing else. Its own shape, because the operator is
+# looking at "✅ Action performed / Review finished" in the browser and has every reason to
+# read it as a review having happened.
+if [ -n "$ack_from" ]; then
+  echo "refuse: the only artifact on PR $pr from $ack_from is its AUTO-GENERATED REPLY to a" >&2
+  echo "        review command — \"Action performed / Review finished\" — which it posts" >&2
+  echo "        whether or not a review follows, and which names the head it was invoked" >&2
+  echo "        at. A receipt for a command is not a review. Ask at this head, or look." >&2
+  incremental_note
   exit 4
 fi
 
@@ -1778,6 +1918,7 @@ if [ -n "$unproven_from" ]; then
   echo "        own review markers. A reviewer posting on a PR is not a reviewer having" >&2
   echo "        read it (the 'currently processing' placeholder is on nearly every PR)." >&2
   echo "        Ask for a review at this head, or look." >&2
+  incremental_note
   exit 4
 fi
 

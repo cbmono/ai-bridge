@@ -40,6 +40,7 @@ SCRIPTS="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts"
 FIXTURES="$(cd "$(dirname "$0")" && pwd)/fixtures/reviewer"
 CLEAN="$FIXTURES/clean-review.pr29.md"
 REFUSAL="$FIXTURES/rate-limit-refusal.pr30.md"
+ACK="$FIXTURES/ack-invocation.pr227.md"
 CLEAN_HEAD="8f40f2ed565a31e141f5ae54a6935ad0810314c4"
 REFUSAL_HEAD="88c106a8dd2b9ae14e001918022d4909e5357460"
 OTHER_SHA="0123456789abcdef0123456789abcdef01234567"
@@ -175,12 +176,39 @@ write_pr() {
        {pageInfo:{hasNextPage:$more}, nodes:$t}}}}}' > "$FIX/threads_json"
 }
 
+# A WHOLE PR AS THE HOST SERVED IT, rather than assembled from the builders above: the
+# three endpoints come out of one recorded file (tests/fixtures/reviewer/*.api.json). No
+# threads, because clause 9 is asked only on the clearing path and these do not clear.
+load_recorded() { # <fixture.api.json>
+  rm -rf "$FIX"; mkdir -p "$FIX"
+  "$REAL_JQ" '.pr'       "$1" > "$FIX/pr_json"
+  "$REAL_JQ" '.reviews'  "$1" > "$FIX/reviews_json"
+  "$REAL_JQ" '.comments' "$1" > "$FIX/comments_json"
+  "$REAL_JQ" -n '{data:{repository:{pullRequest:{reviewThreads:
+                  {pageInfo:{hasNextPage:false}, nodes:[]}}}}}' > "$FIX/threads_json"
+}
+
 # --- assertions ---------------------------------------------------------------
 expect() { # <name> <expected-rc> [args to the script...]
   write_pr
   local name="$1" want="$2"; shift 2
   local out rc
   out="$("$SCRIPT" 42 "$@" 2>&1)"; rc=$?
+  if [ "$rc" -eq "$want" ]; then
+    printf '  PASS  %-58s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
+  else
+    printf '  FAIL  %-58s expected rc=%s got rc=%s\n' "$name" "$want" "$rc"
+    printf '        output: %s\n' "$(printf '%s' "$out" | head -3 | tr '\n' '|')"
+    fail=$((fail+1))
+  fi
+  LAST_OUT="$out"
+}
+
+# The same assertion over a load_recorded() fixture: no write_pr, and the PR's own number.
+expect_recorded() { # <name> <expected-rc> <pr-number> [args to the script...]
+  local name="$1" want="$2" num="$3"; shift 3
+  local out rc
+  out="$("$SCRIPT" "$num" "$@" 2>&1)"; rc=$?
   if [ "$rc" -eq "$want" ]; then
     printf '  PASS  %-58s (rc=%s)\n' "$name" "$rc"; pass=$((pass+1))
   else
@@ -2049,6 +2077,148 @@ expect "tick 3: rebased -> clears again, from the host each time" 0
 assert "nothing in the script stores a mergeability answer" \
   "$(grep -qE 'mergeab|mergeState' "$SCRIPT" && \
      ! grep -vE '^[[:space:]]*#' "$SCRIPT" | grep -qE '(cache|CACHE)[^)]*merge' && echo 0 || echo 1)"
+
+echo
+echo "== an ACKNOWLEDGEMENT is not a review =="
+# `@coderabbitai review` is answered immediately by an auto-generated reply that names the
+# head it was invoked at — "✅ Action performed / Review finished" — and is posted whether
+# or not a review follows. ACK is that reply, verbatim from #227 at 2026-09-14T11:03:30Z.
+assert "the recorded acknowledgement exists" "$(yes_if test -s "$ACK")"
+assert "…and carries the invocation marker a real review never does" \
+  "$(yes_if grep -Fq '<!-- CodeRabbit review command invocation:' "$ACK")"
+
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$ACK"
+expect "the acknowledgement alone -> refuse, not clear" 4
+says   "  ...and says what it is" "AUTO-GENERATED REPLY"
+says   "  ...and names the command that can review this head" "@coderabbitai full review"
+
+# At ANY head, including one it names itself: the reply's whole content is that a command
+# was received. Its own head is the PR head here, which is the case that cleared on #227.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$ACK"
+expect "…and at another head too" 4
+
+# The ack does not outrank a real refusal, so a rate limit quoted inside one still reports
+# exit 1 — the acknowledgement tier is consulted only after every refusal tier.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$(body_file \
+  '<!-- CodeRabbit review command invocation: v2:abc -->' \
+  '⚠️ Action not completed' 'Review limit reached.')"
+expect "an acknowledgement quoting a rate limit is still the refusal" 1
+
+echo
+echo "== the REVIEW OBJECT is preferred over a comment marker =="
+# A review object carries `user.login` and `commit_id`; the comment is a single body the
+# vendor EDITS in place across rounds, so it names the current head whatever it last read.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_review coderabbitai COMMENTED "$OTHER_SHA" "$(body_file '**Actionable comments posted: 1**')"
+expect "a marker comment at the head + a review object elsewhere -> stale" 4
+says   "  ...naming the commit the review object was made at" "$OTHER_SHA"
+says   "  ...and saying the comment was not consulted" "not consulted"
+
+# THE CARVE-OUT THAT MUST SURVIVE: a review with nothing to say creates no review object at
+# all (knowledge/findings/a-clean-coderabbit-review-leaves-no-entry-in-the-reviews-api.md),
+# so with no object from that account the comment marker is still the evidence.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+expect "…while with no review object at all the marker still clears" 0
+
+# Scoped to the ACCOUNT, not to the PR: another reviewer's object says nothing about this
+# one's channel.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+add_review sourcery-ai COMMENTED "$OTHER_SHA" "$(body_file 'Sourcery had a look.')"
+expect "…and another account's review object does not disarm it" 0
+
+echo
+echo "== the AUTHOR's own login never clears, and is now named =="
+setup "$CLEAN_HEAD"; AUTHOR="dev"
+add_review dev APPROVED "$CLEAN_HEAD" "$(body_file 'Looks good to me.')"
+add_review dev COMMENTED "$CLEAN_HEAD" "$EMPTY_BODY"
+expect "two of the author's own review objects at the head -> no review" 3
+says   "  ...refusing them by name rather than ignoring them" "the PR's OWN"
+says   "  ...and citing the clause" "clause 8"
+
+# The same, when the author IS a reviewer account: neither table rescues it.
+setup "$CLEAN_HEAD"; AUTHOR="coderabbitai"
+add_review coderabbitai APPROVED "$CLEAN_HEAD" "$(body_file 'Fine by me.')"
+expect "…and a reviewer account reviewing its own PR clears nothing" 3
+
+echo
+echo "== the two recorded PRs: #227 and #228, from the host's own payloads =="
+# Recorded API fixtures (tests/fixtures/reviewer/README.md) — the whole of what the host
+# served for each PR, so this needs no network. Both cleared at exit 0 before this change,
+# and #227's clearance is what produced a MERGE-CLEAR on an unreviewed head.
+for rec in 227 228; do
+  load_recorded "$FIXTURES/pr$rec.api.json"
+  expect_recorded "#$rec at its recorded head -> stale review, not clearance" 4 "$rec"
+  says "  ...#$rec: the reviewer's only review object is at an older commit" "is stale"
+  says "  ...#$rec: and the incremental-review note is surfaced" "@coderabbitai full review"
+done
+
+echo
+echo "== NO WIDENING: nothing that refused before now clears =="
+# `was` is the exit code the script on origin/main gave this shape, measured by running
+# THIS file against `git show origin/main:plugin/scripts/review-clearance.sh`. The rule is
+# one-directional — a shape that refused may never now clear — and every shape whose answer
+# DID change must be named in CHANGED below, so a widening cannot arrive as a quiet edit.
+CHANGED="marker-plus-stale-object ack-plus-marker-plus-stale-object"
+build_shape() { # <id> — each leaves the builders holding one input shape
+  case "$1" in
+    clean-marker-comment) setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN" ;;
+    review-object-at-head) setup "$CLEAN_HEAD"
+      add_review coderabbitai COMMENTED "$CLEAN_HEAD" "$(body_file 'One nit.')" ;;
+    stale-review-object) setup "$CLEAN_HEAD"
+      add_review coderabbitai COMMENTED "$OTHER_SHA" "$(body_file 'One nit.')" ;;
+    refusal-comment) setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL" ;;
+    terminal-refusal) setup "$CLEAN_HEAD"
+      add_comment coderabbitai "$(body_file 'No review credits remaining on this account.')" ;;
+    not-yet-placeholder) setup "$CLEAN_HEAD"
+      add_comment coderabbitai "$(body_file 'Currently processing new changes in this PR.')" ;;
+    empty-commented-at-head) setup "$CLEAN_HEAD"
+      add_review coderabbitai COMMENTED "$CLEAN_HEAD" "$EMPTY_BODY" ;;
+    no-artifacts) setup "$CLEAN_HEAD" ;;
+    ack-only) setup "$CLEAN_HEAD"; add_comment coderabbitai "$ACK" ;;
+    author-own-review-at-head) setup "$CLEAN_HEAD"; AUTHOR="dev"
+      add_review dev APPROVED "$CLEAN_HEAD" "$(body_file 'Looks good to me.')" ;;
+    marker-plus-stale-object) setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+      add_review coderabbitai COMMENTED "$OTHER_SHA" "$(body_file 'One nit.')" ;;
+    ack-plus-marker-plus-stale-object) setup "$CLEAN_HEAD"
+      add_comment coderabbitai "$CLEAN"; add_comment coderabbitai "$ACK"
+      add_review coderabbitai COMMENTED "$OTHER_SHA" "$(body_file 'One nit.')" ;;
+    *) echo "  FAIL  unknown shape $1"; fail=$((fail+1)); return 1 ;;
+  esac
+}
+# id was now
+while read -r id was now; do
+  [ -n "$id" ] || continue
+  build_shape "$id" || continue
+  write_pr
+  out="$("$SCRIPT" 42 2>&1)"; rc=$?
+  if [ "$rc" != "$now" ]; then
+    printf '  FAIL  %-58s expected rc=%s got rc=%s\n' "$id" "$now" "$rc"; fail=$((fail+1))
+    continue
+  fi
+  if [ "$was" != 0 ] && [ "$rc" = 0 ]; then
+    printf '  FAIL  %-58s refused before (rc=%s) and clears now\n' "$id" "$was"; fail=$((fail+1))
+    continue
+  fi
+  if [ "$was" = 0 ] && [ "$rc" != 0 ] \
+     && ! printf ' %s ' "$CHANGED" | grep -Fq " $id "; then
+    printf '  FAIL  %-58s cleared before and refuses now, unannounced\n' "$id"; fail=$((fail+1))
+    continue
+  fi
+  printf '  PASS  %-58s (was=%s now=%s)\n' "$id" "$was" "$rc"; pass=$((pass+1))
+done <<'SHAPES'
+clean-marker-comment              0 0
+review-object-at-head             0 0
+stale-review-object               4 4
+refusal-comment                   1 1
+terminal-refusal                  5 5
+not-yet-placeholder               4 4
+empty-commented-at-head           4 4
+no-artifacts                      3 3
+ack-only                          4 4
+author-own-review-at-head         3 3
+marker-plus-stale-object          0 4
+ack-plus-marker-plus-stale-object 0 4
+SHAPES
 
 echo
 echo "pass=$pass fail=$fail"
