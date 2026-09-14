@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/evals/dormant-side-effect-is-not-a-decision plugin/scripts/normalise-config.sh plugin/scripts/prune-worktrees.sh plugin/seed/CLAUDE.md plugin/seed/CONVENTIONS.md plugin/seed/instance.config.json plugin/seed/SCHEMA.md
 #
 # seed-promoted-rules.test.sh — the three rules four stamped bundles had each written by
 # hand now ship in the seed, and each one stays in the file that OWNS it.

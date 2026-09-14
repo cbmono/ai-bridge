@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/cataloguer.md plugin/agents/project-manager.md plugin/scripts/papercuts.sh plugin/seed/CONVENTIONS.md plugin/seed/knowledge/papercuts.md plugin/skills/close-project/SKILL.md
 #
 # papercuts-record.test.sh — the papercut entry shape, and the four documents that
 # promise it.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/migrate-bundle.sh plugin/scripts/validate-bundle.sh
 #
 # Exercises plugin/scripts/migrate-bundle.sh. The properties that matter most are
 # the negative ones: the default run must change nothing on disk, a missing timestamp

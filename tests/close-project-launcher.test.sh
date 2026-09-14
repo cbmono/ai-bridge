@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/skills/close-project/SKILL.md plugin/skills/dispatch/SKILL.md
 #
 # close-project-launcher.test.sh — `/ai-bridge:close-project` does its two preconditions
 # and dispatches; steps 1-7 belong to one background agent, and the two human-gated

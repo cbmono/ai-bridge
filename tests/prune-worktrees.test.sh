@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/prune-worktrees.sh
 # Exercises plugin/scripts/prune-worktrees.sh — the worktree CLASSIFIER.
 # It is report-only since ai-bridge v2: it never removes, it prints commands.
 #

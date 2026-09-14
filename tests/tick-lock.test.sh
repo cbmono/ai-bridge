@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/operations.md plugin/agents/project-manager.md plugin/scripts/init-bundle.sh plugin/scripts/tick-lock.sh plugin/seed/.gitignore plugin/skills/dispatch/SKILL.md
 #
 # tick-lock.test.sh — the dispatch lock has a REAL reader, and this is it.
 #

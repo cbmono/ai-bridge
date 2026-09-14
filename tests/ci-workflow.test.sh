@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .github/required-checks.txt .github/workflows tests/fixtures/reviewer/record-host-rendering.sh tests/plugin-manifest.test.sh tests/run.sh
 #
 # ci-workflow.test.sh — the workflow that runs `tests/*.test.sh` in CI must actually
 # exist, be valid YAML, and invoke the FULL suite on the events this task exists to

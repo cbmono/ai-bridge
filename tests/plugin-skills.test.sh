@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/.claude-plugin/plugin.json plugin/skills
 #
 # plugin-skills.test.sh — the plugin skills: shape, safety split, and the pins that
 # keep each skill's contract from drifting away from the machinery it fronts.

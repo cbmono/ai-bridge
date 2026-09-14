@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/build-board.sh plugin/scripts/init-bundle.sh plugin/seed/.gitignore plugin/skills/board/SKILL.md plugin/skills/dispatch/SKILL.md
 #
 # board-in-repo.test.sh — `/board.html` is NOT tracked, and the migration that took it
 # out of the bundles is asserted behaviourally rather than by grepping for prose.

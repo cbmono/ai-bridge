@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/pm-design.md plugin/agents/cataloguer.md plugin/agents/project-manager.md plugin/scripts/build-kb-index.sh plugin/scripts/kb-sweep-due.sh
 #
 # kb-sweep-trigger.test.sh — the idle tick's KB sweep: `kb-sweep-due.sh` fires on exactly
 # one situation, and the two documents that act on it say the same thing it does.

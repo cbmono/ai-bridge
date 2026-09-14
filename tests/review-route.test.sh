@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/qa-reviewer.md
 #
 # review-route.test.sh — the CodeRabbit-less second opinion must stay CHEAP BY DEFAULT,
 # and getting it must never widen a role agent's `tools:` allowlist.

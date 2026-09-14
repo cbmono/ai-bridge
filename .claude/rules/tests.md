@@ -54,7 +54,8 @@ the harnesses whose declaration intersects the diff, plus the core below; **a ha
 always covers itself**, so editing one runs it, and **a harness that declares nothing is
 selected by every change** — a missing header costs time, never coverage.
 `tests/run.sh --lint` refuses a harness with no header, or one naming a path that is no
-longer in the tree.
+longer in the tree, and `tests/test-runner.test.sh` runs that lint over this checkout — so
+a rename that leaves a harness unreachable fails the suite.
 
 **Declared, not derived from the text** (ai-bridge-v3/task-038, Q2). Selection used to be
 `grep -lF` over each harness's whole text, so a harness that merely *mentioned* a path in

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/hooks/session-banner.sh plugin/scripts/init-bundle.sh
 # Exercises the AWAITING section of the SessionStart banner (session-banner.sh).
 #
 # WAS AGAINST `show-awaiting.sh`, a hook of its own. That hook is deleted: it,

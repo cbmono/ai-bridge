@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks/hooks.json plugin/hooks/push-state.sh plugin/seed/.claude/settings.json
 #
 # Exercises the UserPromptSubmit current-state injection in push-state.sh.
 #

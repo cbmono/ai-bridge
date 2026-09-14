@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .github/required-checks.txt plugin/scripts/required-checks.sh
 # Exercises the delegated merge gate's precondition 1 — plugin/scripts/required-checks.sh.
 #
 # `gh` is replaced by a stub on PATH that answers from fixture files, so the whole

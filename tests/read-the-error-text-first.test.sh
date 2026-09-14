@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/failure-analyst.md plugin/seed/CONVENTIONS.md
 #
 # read-the-error-text-first.test.sh — the two clauses of the cheapest rule on the
 # `launcher-verification-contract` list survive in BOTH files that carry them, and each

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/commit-as.sh plugin/scripts/resolve-autonomy.sh
 # Exercises the autonomy-aware draft->ready guard in commit-as.sh.
 #
 # Delegation requires AUTONOMY.md at the repo root (the capability file). setup()

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/check-dispatch.sh plugin/seed/CONVENTIONS.md
 #
 # check-dispatch.test.sh — exercises plugin/scripts/check-dispatch.sh, the two-second
 # question a dispatch report cannot be trusted to answer about itself: **did the PR the

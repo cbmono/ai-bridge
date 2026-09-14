@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/build-board.sh plugin/scripts/write-snapshot.sh
 #
 # deliverable-paths-vs-yaml.test.sh — the deliverables panel, measured against a REAL
 # YAML PARSER rather than against anyone's reading of the spec.

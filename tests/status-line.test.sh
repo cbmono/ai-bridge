@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/status-line.sh
 #
 # status-line.test.sh — `plugin/scripts/status-line.sh`, the bundle's `statusLine`.
 #

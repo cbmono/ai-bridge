@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/skills/dispatch/SKILL.md
 #
 # shared-bundle-sync.test.sh — a tick pulls before it reads and pushes after it
 # commits, on a bundle that HAS a remote; a bundle with none does neither, silently;

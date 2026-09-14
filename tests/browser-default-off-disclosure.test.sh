@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin-yolo/companion/AUTONOMY.md plugin/scripts/resolve-autonomy.sh plugin/seed/CONVENTIONS.md plugin/seed/SCHEMA.md plugin/skills/new-project/SKILL.md
 #
 # browser-default-off-disclosure.test.sh — `browser:` stays OFF by default, the same fact
 # is written in three files, the DISCLOSURE of what granting it means ships, and the write

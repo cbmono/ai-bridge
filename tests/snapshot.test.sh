@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/build-board.sh plugin/scripts/init-bundle.sh plugin/scripts/write-snapshot.sh plugin/seed/SCHEMA.md
 #
 # Exercises the board pair: scripts/write-snapshot.sh (writer) and
 # scripts/build-board.sh (renderer).

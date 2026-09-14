@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/init-bundle.sh plugin/scripts/status-line.sh plugin/seed/.claude/ai-bridge-statusline.sh
 #
 # statusline-install.test.sh — `/ai-bridge:init` puts the status line in the BUNDLE's own
 # `.claude/settings.json` and never in the user's. ai-bridge-v3/task-025.

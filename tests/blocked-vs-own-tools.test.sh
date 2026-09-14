@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/check-dispatch.sh plugin/seed/CONVENTIONS.md
 #
 # blocked-vs-own-tools.test.sh — a task that reports `blocked` for a reason naming a tool
 # the agent's OWN `tools:` list already grants is the record contradicting itself, and

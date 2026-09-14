@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: tests
 #
 # harness-temp-safety.test.sh — no harness in this directory may `rm -rf` a path it did
 # not create.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/build-board.sh plugin/scripts/write-snapshot.sh plugin/seed/.gitignore
 #
 # per-owner-board.test.sh — the board is PER OWNER: your own projects come from this
 # clone's SNAPSHOT.json, and every other owner's come from the TRACKED task documents at

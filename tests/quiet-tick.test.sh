@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/bundle-paths.sh plugin/scripts/tick-delta.sh
 #
 # quiet-tick.test.sh — a tick that changed nothing prints ONE line and touches nothing.
 #

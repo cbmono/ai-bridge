@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/ai-bridge.sh plugin/scripts/watch-board.sh plugin/seed/CONVENTIONS.md tests/artifact-board.test.sh tests/board-renderers.test.sh tests/tick-lock.test.sh
 #
 # background-teardown.test.sh — the reader for `CONVENTIONS.md` → "Anything you background
 # must be reaped by something that outlives YOU", and the reader for the `/ai-bridge check`

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents plugin/seed/CLAUDE.md plugin/seed/CONVENTIONS.md plugin/seed/SCHEMA.md
 #
 # agent-tool-allowlist.test.sh — an agent file, or a shared conventions doc an agent
 # reads, must not name a tool that is absent from the addressed agent's `tools:` list.

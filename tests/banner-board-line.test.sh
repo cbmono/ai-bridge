@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks/hooks.json plugin/hooks/session-banner.sh plugin/scripts/init-bundle.sh plugin/seed/instance.config.json
 #
 # banner-board-line.test.sh — the BOARD section of the SessionStart banner.
 #

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/close-project-folder.sh plugin/scripts/validate-bundle.sh plugin/seed/SCHEMA.md plugin/skills/close-project/SKILL.md
 #
 # close-project-folder.test.sh — the folder half of closeout, which is the one step of
 # it that DELETES FILES.
