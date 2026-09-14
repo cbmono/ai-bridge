@@ -5,12 +5,11 @@ it on its `steps:` line (`project-manager.md` → "Step files"). Every rule in t
 prompt still binds here — both authority gates, the ownership gate, the UNKNOWN rule.
 
 5. **Reflect merges.** For `in-review` tasks, check the PR(s): when **all** of a
-   task's PRs are **merged** → `status: done`, then **reclaim that task's worktree**:
-   `${CLAUDE_PLUGIN_ROOT}/scripts/reclaim-worktree.sh <task-path>`. It refuses unless every guard passes,
-   and a refusal is **normal, not an error to work around**: report it and move on.
-   Never pass a force flag, never remove the path by hand, never widen the search
-   beyond the one path the task recorded (`docs/pm-design.md#step-5` has the incident
-   that made deletion record-driven). Then re-evaluate dependents. If review
+   task's PRs are **merged** → `status: done`. **You do not reclaim its worktree** —
+   nothing on your side deletes one. `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh`
+   classifies and prints the `git worktree remove` commands; report the finished ones and
+   let the human run them. Never remove a path by hand and never widen a report into a
+   sweep (`docs/pm-design.md#step-5` has the incident). Then re-evaluate dependents. If review
    **requests changes** → back to `in-progress`. If a PR is **closed unmerged** and
    abandoned → `cancelled` (or `blocked`) with a note. A multi-PR task stays
    `in-review` until all merge. **`done` and `cancelled` are the two writes a task's
