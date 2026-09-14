@@ -41,11 +41,14 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: read
-    # MEASURED, not guessed (ai-bridge-v3/task-038): 111 harnesses in 10m 35s here (this
-    # runner has 3 CPUs and the pool uses all of them) and 6m 15s in a pool of 11 on an
-    # M3 Pro — against 29m 45s sequential on run 34774374082, of which ~7 minutes was the
-    # paid eval that now runs nightly in tests-deep.yml. 15 is ~1.4x the measured figure.
-    timeout-minutes: 15
+    # MEASURED, not guessed (ai-bridge-v3/task-040): the worst case since the pool landed
+    # is 879s of suite (111 harnesses, pass=8581, run 34788244534 attempt 1; #211 has since
+    # taken the suite to 114) — which was
+    # CANCELLED at 15 anyway, as were three other first attempts inside one hour. 25 is
+    # ~1.7x that worst case, and it is also 879s plus one harness dying at the 600s
+    # HARNESS_TIMEOUT in tests/run.sh, which is the case this ceiling must survive to
+    # report. It is a backstop now, not the instrument: the per-harness bound is.
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
