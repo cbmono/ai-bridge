@@ -106,6 +106,27 @@ worktree: $WT/task-013-explicit
 branch: task-013"
 ok "an in-root worktree: is honoured" "$(hook 'task-013')" "0 $WT/task-013-explicit"
 
+task "task-015-x.md" "target_repo: o/product
+worktree: $WT/task-015"
+ok "worktree: with no branch: refuses"  "$(hook 'task-015')" "1 "
+ok "…and places nothing"                "$([ -e "$WT/task-015" ] && echo yes || echo no)" no
+
+# --- a path that exists is reused only if it is still THIS tree -------------------
+mkdir -p "$WT/task-016"
+task "task-016-x.md" "target_repo: o/product"
+ok "an ordinary directory in the way"   "$(hook 'task-016')" "1 "
+
+git -C "$LAB/repos/product" worktree add -q "$WT/task-017" -b someone-elses origin/trunk
+task "task-017-x.md" "target_repo: o/product
+worktree: $WT/task-017
+branch: task-017-real"
+ok "an existing tree on another branch" "$(hook 'task-017')" "1 "
+
+mkdir -p "$LAB/elsewhere/task-018"
+ln -s "$LAB/elsewhere/task-018" "$WT/task-018"
+task "task-018-x.md" "target_repo: o/product"
+ok "a symlink out of worktreeRoot"      "$(hook 'task-018')" "1 "
+
 # --- a pre-existing dirty tree is reused, never cleaned ----------------------
 echo scratch > "$WT/task-010/uncommitted.txt"
 ok "a dirty tree is reused"          "$(hook 'task-010')" "0 $WT/task-010"

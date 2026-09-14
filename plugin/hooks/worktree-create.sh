@@ -34,8 +34,15 @@ fm="$(awk 'NR==1 && $0!="---" { exit } NR>1 && $0=="---" { exit } NR>1' "$DOC")"
 field() { printf '%s\n' "$fm" | sed -n "s/^$1:[[:space:]]*//p" | head -1 | sed 's/^"//; s/"$//; s/[[:space:]]*$//'; }
 
 TARGET="$(field target_repo)"
-BRANCH="$(field branch)"; [ -n "$BRANCH" ] || BRANCH="$id"
 [ -n "$TARGET" ] || abort "$id records no target_repo"
+
+# `worktree:` and `branch:` are written together or not at all (SCHEMA.md): a recorded
+# path with no recorded branch cannot be proven to still be this task's tree, and paths
+# get recycled. Only the both-absent case falls back.
+REC_WT="$(field worktree)"
+BRANCH="$(field branch)"
+[ -n "$BRANCH" ] || [ -z "$REC_WT" ] || abort "$id records a worktree but no branch"
+[ -n "$BRANCH" ] || BRANCH="$id"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 cfg() { # <key> — the two-file precedence, delegated; grep is the no-python3 fallback.
@@ -59,7 +66,7 @@ git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1 || abort "$TARGET is not clon
 
 # The task may already name the tree (the PM writes `worktree:` before dispatch). Honour
 # it only inside a configured root: the document is text several agents edit.
-WT="$(field worktree)"; [ -n "$WT" ] || WT="$WT_ROOT/$id"
+WT="$REC_WT"; [ -n "$WT" ] || WT="$WT_ROOT/$id"
 case "$WT" in
   /*) ;; *) abort "$id records a relative worktree: '$WT'" ;;
 esac
@@ -69,7 +76,28 @@ case "$WT" in
   *) abort "$id records a worktree outside $WT_ROOT: '$WT'" ;;
 esac
 
-if [ ! -d "$WT" ]; then
+common() { # <dir> — the absolute .git of the repo <dir> belongs to, or nothing
+  local d; d="$(git -C "$1" rev-parse --git-common-dir 2>/dev/null)" || return 1
+  case "$d" in /*) ;; *) d="$1/$d" ;; esac
+  (cd "$d" 2>/dev/null && pwd -P)
+}
+
+if [ -d "$WT" ]; then
+  # Reuse only a tree that is STILL this repo's worktree on this branch. The path check
+  # above is textual, so a symlink can leave the root without containing '..'.
+  phys="$(cd "$WT" 2>/dev/null && pwd -P)" || phys=""
+  [ -n "$phys" ] || abort "cannot resolve $WT"
+  ok=0
+  for r in "$WT_ROOT" "$REPOS_ROOT/_wt"; do
+    rp="$(cd "$r" 2>/dev/null && pwd -P)" || continue
+    case "$phys" in "$rp"/*) ok=1 ;; esac
+  done
+  [ "$ok" -eq 1 ] || abort "$WT resolves to '$phys', outside $WT_ROOT"
+  c="$(common "$WT")"
+  [ -n "$c" ] && [ "$c" = "$(common "$REPO")" ] || abort "$WT is not a worktree of $REPO"
+  head="$(git -C "$WT" symbolic-ref --short -q HEAD)"
+  [ "$head" = "$BRANCH" ] || abort "$WT is on '${head:-a detached HEAD}', not $BRANCH"
+else
   mkdir -p "$(dirname "$WT")" || abort "cannot create $(dirname "$WT")"
   if git -C "$REPO" show-ref --verify --quiet "refs/heads/$BRANCH"; then
     git -C "$REPO" worktree add -q "$WT" "$BRANCH" 2>/dev/null || abort "worktree add on existing branch $BRANCH failed"
