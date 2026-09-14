@@ -40,7 +40,7 @@ GIT() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git \
 
 # ------------------------------------------------------------------- the fixture
 INST="$TMP/inst"
-mkdir -p "$INST/projects/quiet-proj/tasks" "$INST/scripts"
+mkdir -p "$INST/projects/quiet-proj/tasks" "$INST/scripts" "$INST/$AB_DIR"
 cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
 # The mutants and copies run from a staged directory, and the script sources its sibling
 # resolver (ai-bridge-v3/task-031) — without it they exit 2 before reaching their subject.

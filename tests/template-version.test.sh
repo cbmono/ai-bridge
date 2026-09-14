@@ -609,7 +609,7 @@ echo "== 6. the banner prints it, under the header, and only when it is true =="
 # The line has to reach a human, and the banner is the surface: end to end here, through
 # the real hook, in a fake instance whose template is a real behind-the-remote clone.
 INST="$TMP/inst"
-mkdir -p "$INST/.claude/agents"
+mkdir -p "$INST/.claude/agents" "$INST/$AB_DIR"
 printf 'stub\n' > "$INST/$AB_SCHEMA"
 printf '{ "org": "example-org" }\n' > "$INST/instance.config.json"
 

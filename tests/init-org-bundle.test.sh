@@ -149,7 +149,7 @@ echo "== 4. the repo exists and is a bundle — the second person's clone =="
 BARE4="$GHFIX/bare/initech_initech-okf.git"
 git init --bare --quiet "$BARE4"
 git -C "$BARE4" symbolic-ref HEAD refs/heads/main
-SEEDW="$TMP/seedwork"; mkdir -p "$SEEDW"
+SEEDW="$TMP/seedwork"; mkdir -p "$SEEDW/$AB_DIR"
 git -C "$SEEDW" init --quiet
 cat > "$SEEDW/instance.config.json" <<'CFG'
 {

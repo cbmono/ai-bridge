@@ -164,7 +164,7 @@ user_visible() { # <stdout> <needle> -> 0 when the needle is in the field a HUMA
 # `.claude/hooks/session-banner.sh` is a real symlink to the template's file, exactly as
 # install.sh stamps it, so the registered command below resolves the way it does live.
 INST="$TMP/_ai-bridge-fixture"
-mkdir -p "$INST/.claude/agents" "$INST/.claude/hooks"
+mkdir -p "$INST/.claude/agents" "$INST/.claude/hooks" "$INST/$AB_DIR"
 printf 'stub\n' > "$INST/$AB_SCHEMA"
 ln -s "$HOOK" "$INST/.claude/hooks/session-banner.sh"
 cat > "$INST/instance.config.json" <<'EOF'

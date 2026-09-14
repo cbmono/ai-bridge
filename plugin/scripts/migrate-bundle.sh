@@ -69,7 +69,9 @@ fixed=0; skipped=0; human=0; failed=0
 #
 # TWO REFUSALS AND NO OTHERS: a live `.tick-lock`, or a dirty TRACKED tree. Untracked dirt
 # is deliberately NOT a refusal — a bundle carries untracked derived files on any day a
-# tick has run, and refusing those would refuse every real bundle.
+# tick has run, and refusing those would refuse every real bundle. An occupied destination
+# is not a third refusal: it says the bundle is already HALF-MIGRATED, and the step stops
+# before the first move rather than declining a migration it could otherwise do.
 #
 # `git mv` for what git tracks, plain `mv` for the five derived files it does not. It is
 # allowed to stop short: a refusal prints the commands instead, which is a finished answer
@@ -92,18 +94,38 @@ layout_refusal() { # prints the reason, or nothing
   return 0
 }
 
+layout_cmd() { # <old> — the command that can move it: git mv only for what git tracks
+  git ls-files --error-unmatch -- "$1" >/dev/null 2>&1 && printf 'git mv' || printf 'mv'
+}
+
 layout_move() { # <old> <new> — git mv when tracked, plain mv when not
   local old="$1" new="$2"
   mkdir -p "$(dirname "$new")"
-  if git ls-files --error-unmatch -- "$old" >/dev/null 2>&1; then
+  if [[ "$(layout_cmd "$old")" == "git mv" ]]; then
     git mv -- "$old" "$new"
   else
     mv -- "$old" "$new"
   fi
 }
 
+# Every destination is checked BEFORE the first move, not inside layout_move: a plain `mv`
+# onto an occupied path overwrites a file or buries the source inside an existing directory
+# (`.board-live` -> `.ai-bridge/.board-live/.board-live`), and a per-path guard would only
+# catch the collision after the earlier paths had already moved. This is not one of the two
+# refusals — it says the bundle is HALF-MIGRATED, which a human resolves pair by pair.
+layout_conflicts() { # <pending> — prints "<old> -> <new>" per occupied destination
+  local old new
+  while IFS=$'\t' read -r old new; do
+    [[ -n "$new" && -e "$new" ]] && printf '%s -> %s\n' "$old" "$new"
+  done <<< "$1"
+  return 0
+}
+
 # Links INSIDE the bundle are rewritten in the same step, or they rot: a task document or
 # a Finding pointing at `/SCHEMA.md` names a path that no longer exists.
+#
+# `-type f` is load-bearing: `find` emits SYMLINKS that match `*.md` too, and the rename
+# below replaces one with a regular file whether or not the content changed.
 layout_relink() {
   local f tmp
   while IFS= read -r f; do
@@ -113,7 +135,7 @@ layout_relink() {
         -e 's|(/CONVENTIONS\.md|(/'"$AB_CONVENTIONS"'|g' \
         -e 's|^\([[:space:]-]*\)/agents/index\.md|\1/'"$AB_ROSTER"'|' \
         -e 's|(/agents/index\.md|(/'"$AB_ROSTER"'|g' "$f" > "$tmp" && mv "$tmp" "$f"
-  done < <(find ./projects ./knowledge -name '*.md' 2>/dev/null || true)
+  done < <(find ./projects ./knowledge -type f -name '*.md' 2>/dev/null || true)
 }
 
 
@@ -209,11 +231,17 @@ PENDING="$(layout_pending)"
 if [[ -n "$PENDING" ]]; then
   echo "layout: this bundle is on the pre-3.0 layout."
   refusal="$(layout_refusal)"
-  if [[ -n "$refusal" ]]; then
+  conflicts="$(layout_conflicts "$PENDING")"
+  if [[ -n "$conflicts" ]]; then
+    echo "  STOPPED  this bundle is half-migrated — a destination is already occupied, so"
+    echo "           nothing was moved. Resolve each pair by hand, then re-run:"
+    while IFS= read -r pair; do echo "             $pair"; done <<< "$conflicts"
+    human=$((human+1))
+  elif [[ -n "$refusal" ]]; then
     echo "  REFUSED  $refusal"
     echo "           Run these by hand once it clears, from $(pwd):"
     echo "             mkdir -p $AB_DIR $(dirname "$AB_ROSTER")"
-    while IFS=$'\t' read -r old new; do echo "             git mv $old $new"; done <<< "$PENDING"
+    while IFS=$'\t' read -r old new; do echo "             $(layout_cmd "$old") $old $new"; done <<< "$PENDING"
     echo "           …then re-run this script. docs/operations.md carries the full list."
   elif [[ $APPLY -eq 0 ]]; then
     while IFS=$'\t' read -r old new; do echo "  WOULD MOVE $old -> $new"; done <<< "$PENDING"

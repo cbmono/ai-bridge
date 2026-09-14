@@ -63,7 +63,7 @@ hasnt()  { printf '%s\n' "$2" | grep -- "$1" >/dev/null && echo 1 || echo 0; }
 TRACKED_ROOT="$TMP/tracked-repos"; mkdir -p "$TRACKED_ROOT/repo-t/.git"
 LOCAL_ROOT="$TMP/local-repos";     mkdir -p "$LOCAL_ROOT/repo-l/.git"
 
-INST="$TMP/_ai-bridge-fixture"; mkdir -p "$INST"
+INST="$TMP/_ai-bridge-fixture"; mkdir -p "$INST/$AB_DIR"
 printf 'stub\n' > "$INST/$AB_SCHEMA"
 tracked() { printf '{\n  "org": "o",\n  "reposRoot": "%s"\n}\n' "$TRACKED_ROOT" > "$INST/instance.config.json"; }
 local_cfg() { printf '%s\n' "$1" > "$INST/instance.config.local.json"; }

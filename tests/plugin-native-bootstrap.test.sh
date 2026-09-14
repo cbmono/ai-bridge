@@ -179,7 +179,7 @@ echo "== 4. a symlink-era bundle converts in place, and its data survives =="
 # The fixture is stamped the way the retired install.sh stamped: absolute symlinks into a
 # template checkout, a managed .gitignore block, and real data beside them.
 OLD="$TMP/oldtpl"
-mkdir -p "$OLD/seed" "$OLD/symlink/scripts" "$OLD/symlink/.claude/hooks" "$OLD/symlink/agents"
+mkdir -p "$OLD/seed" "$OLD/symlink/scripts" "$OLD/symlink/.claude/hooks" "$(dirname "$OLD/symlink/$AB_ROSTER")"
 printf '0.20.0\n' > "$OLD/VERSION"; printf '{}\n' > "$OLD/seed/instance.config.json"
 for f in SCHEMA.md CONVENTIONS.md AUTONOMY.md; do printf 'old %s\n' "$f" > "$OLD/symlink/$f"; done
 printf 'old roster\n' > "$OLD/symlink/$AB_ROSTER"
