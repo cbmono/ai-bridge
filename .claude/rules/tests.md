@@ -29,6 +29,9 @@ header to run alone, and `# deep` to leave the merge gate altogether — `--deep
 nightly `tests-deep.yml` are the only things that run a `# deep` harness, and every other
 mode puts a refusing shim in front of `claude` so no gate run can spend a paid eval.
 Everything else runs in a bounded pool, output replayed in file order.
+**Each harness is also bounded in wall clock** (`HARNESS_TIMEOUT`, 600s; 1800s under
+`--deep`): the pool replays nothing until every worker is done, so a harness that never
+returns would otherwise take the whole job down with an empty log — ai-bridge-v3/task-040.
 Measured on an M3 Pro, 2026-09-13, `claude` masked off PATH: a one-line edit to
 `plugin/scripts/commit-as.sh` selects 18 harnesses and takes **1m 21s** (was 2m 25s
 sequential, and 9m 12s with the eval in the core); all 111 take **6m 15s** in a pool of
