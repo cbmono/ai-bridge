@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: tests/run.sh
 #
 # test-runner.test.sh — tests/run.sh, the ONE implementation of the harness selection
 # CI and a local shell both use (ai-bridge-v3/task-028). It is EXECUTED against fixture
@@ -60,22 +61,30 @@ build() {
   mkdir -p "$root/base/tests" "$root/base/plugin/scripts" "$root/base/plugin/agents"
   cp "$RUNNER" "$root/base/tests/run.sh"
   for h in $core_names; do
-    printf '#!/usr/bin/env bash\necho "pass=1 fail=0"\n' > "$root/base/$h"
+    printf '#!/usr/bin/env bash\n# covers: README.md\necho "pass=1 fail=0"\n' > "$root/base/$h"
   done
-  # NAMES the guard's path and is on no list — it must be selected by DERIVATION.
-  printf '#!/usr/bin/env bash\n# reads "$REPO/plugin/scripts/commit-as.sh"\necho "pass=1 fail=0"\n' \
-    > "$root/base/tests/fp-names-the-guard.test.sh"
-  # Names nothing that changes below — it must NOT be selected, which is what tells a
+  # DECLARES the guard's path and is on no list — it must be selected by DERIVATION.
+  printf '#!/usr/bin/env bash\n# covers: plugin/scripts/commit-as.sh\necho "pass=1 fail=0"\n' \
+    > "$root/base/tests/fp-covers-the-guard.test.sh"
+  # Covers nothing that changes below — it must NOT be selected, which is what tells a
   # real derivation from a selector that simply runs everything.
-  printf '#!/usr/bin/env bash\necho "pass=1 fail=0"\n' \
-    > "$root/base/tests/fp-names-nothing.test.sh"
+  printf '#!/usr/bin/env bash\n# covers: README.md\necho "pass=1 fail=0"\n' \
+    > "$root/base/tests/fp-covers-nothing.test.sh"
+  # MENTIONS the guard's path in its prose and covers something else. The substring
+  # selector this replaced could not tell it from the declaring harness above; it is why
+  # a change to one seed document used to select half the suite.
+  printf '#!/usr/bin/env bash\n# covers: README.md\n# prose about plugin/scripts/commit-as.sh\necho "pass=1 fail=0"\n' \
+    > "$root/base/tests/fp-mentions-the-guard.test.sh"
+  # Covers a DIRECTORY: a change to any file under it selects this harness.
+  printf '#!/usr/bin/env bash\n# covers: plugin/scripts\necho "pass=1 fail=0"\n' \
+    > "$root/base/tests/fp-covers-a-directory.test.sh"
   # The three tier/pool fixtures. Each PRINTS what it saw, so the assertions below read a
   # real run rather than the runner's own announcement of what it meant to do.
-  printf '#!/usr/bin/env bash\n# deep — costs money, gate tiers must not reach it\necho "deep ran tier=${AB_TIER:-unset}"\necho "pass=1 fail=0"\n' \
+  printf '#!/usr/bin/env bash\n# covers: README.md\n# deep — costs money, gate tiers must not reach it\necho "deep ran tier=${AB_TIER:-unset}"\necho "pass=1 fail=0"\n' \
     > "$root/base/tests/fp-deep.test.sh"
-  printf '#!/usr/bin/env bash\n# serial — must never run beside another harness\necho "pass=1 fail=0"\n' \
+  printf '#!/usr/bin/env bash\n# covers: README.md\n# serial — must never run beside another harness\necho "pass=1 fail=0"\n' \
     > "$root/base/tests/fp-serial.test.sh"
-  printf '#!/usr/bin/env bash\necho "tier=${AB_TIER:-unset} claude=$(command -v claude || echo none)"\necho "pass=1 fail=0"\n' \
+  printf '#!/usr/bin/env bash\n# covers: README.md\necho "tier=${AB_TIER:-unset} claude=$(command -v claude || echo none)"\necho "pass=1 fail=0"\n' \
     > "$root/base/tests/fp-tier.test.sh"
   printf '#!/bin/sh\n' > "$root/base/plugin/scripts/commit-as.sh"
   # path-scan: absent — fixture content, deliberately named by no harness in this repo
@@ -96,16 +105,23 @@ run_ci()      { ( cd "$1" && GITHUB_EVENT_NAME=pull_request GITHUB_BASE_REF=main
                     bash "${2:-$1/tests/run.sh}" --ci 2>&1 ) ; }            # <workdir> [runner]
 run_changed() { ( cd "$1" && bash "$1/tests/run.sh" --changed --base main 2>&1 ) ; }
 
-echo "== --changed derives from a COMMITTED diff: the core plus what names a changed path =="
+echo "== --changed derives from a COMMITTED diff: the core plus what COVERS a changed path =="
 A="$TMP/a"; mkdir -p "$A"; build "$A"
 commit_on_branch "$A/work" plugin/scripts/commit-as.sh
 A_OUT="$(run_changed "$A/work")"
 assert "it announces a changed-path selection"                "$(has "$A_OUT" 'changed-path selection')"
 assert "…names the changed path"                              "$(has "$A_OUT" '  changed: plugin/scripts/commit-as.sh')"
-assert "…runs the core's commit-as-guard.test.sh"             "$(has "$A_OUT" '  harness: tests/commit-as-guard.test.sh')"
-assert "…and a harness that merely NAMES it, on no list"      "$(has "$A_OUT" '  harness: tests/fp-names-the-guard.test.sh')"
-assert "…and NOT one that names nothing (it derives, it does not run everything)" \
-  "$(lacks "$A_OUT" '  harness: tests/fp-names-nothing.test.sh')"
+assert "…runs the core's plugin-manifest.test.sh"             "$(has "$A_OUT" '  harness: tests/plugin-manifest.test.sh')"
+assert "…and a harness that DECLARES it, on no list"          "$(has "$A_OUT" '  harness: tests/fp-covers-the-guard.test.sh')"
+assert "…and one whose covers name the DIRECTORY it sits in"  "$(has "$A_OUT" '  harness: tests/fp-covers-a-directory.test.sh')"
+assert "…and NOT one that covers nothing (it derives, it does not run everything)" \
+  "$(lacks "$A_OUT" '  harness: tests/fp-covers-nothing.test.sh')"
+assert "…and NOT one that only MENTIONS the path in its prose — the substring era is over" \
+  "$(lacks "$A_OUT" '  harness: tests/fp-mentions-the-guard.test.sh')"
+printf '#!/usr/bin/env bash\necho "pass=1 fail=0"\n' > "$A/work/tests/fp-declares-nothing.test.sh"
+assert "…and a harness with NO header, which every change selects until it declares" \
+  "$(has "$(run_changed "$A/work")" '  harness: tests/fp-declares-nothing.test.sh')"
+rm -f "$A/work/tests/fp-declares-nothing.test.sh"
 assert "…and the selected harnesses actually ran green"       "$(has "$A_OUT" 'ok: all')"
 
 echo "== --changed also sees an UNCOMMITTED edit — the local case CI never has =="
@@ -113,21 +129,24 @@ B="$TMP/b"; mkdir -p "$B"; build "$B"
 edit "$B/work" plugin/scripts/commit-as.sh
 B_OUT="$(run_changed "$B/work")"
 assert "an uncommitted edit is a changed path"                "$(has "$B_OUT" '  changed: plugin/scripts/commit-as.sh')"
-assert "…and selects the harness that names it"               "$(has "$B_OUT" '  harness: tests/fp-names-the-guard.test.sh')"
+assert "…and selects the harness that covers it"              "$(has "$B_OUT" '  harness: tests/fp-covers-the-guard.test.sh')"
+printf '# edited\n' >> "$B/work/tests/fp-covers-nothing.test.sh"
+assert "…and a harness edited on its own selects ITSELF, whatever it covers" \
+  "$(has "$(run_changed "$B/work")" '  harness: tests/fp-covers-nothing.test.sh')"
 
 echo "== the EMPTY case: no changed paths runs the core, and says so =="
 C="$TMP/c"; mkdir -p "$C"; build "$C"
 C_OUT="$(run_changed "$C/work")"
 assert "it says there were no changed paths"                  "$(has "$C_OUT" 'no changed paths against main')"
-assert "…and runs the core anyway"                            "$(has "$C_OUT" '  harness: tests/commit-as-guard.test.sh')"
-assert "…exactly the core, nothing derived"                   "$(lacks "$C_OUT" '  harness: tests/fp-names-the-guard.test.sh')"
+assert "…and runs the core anyway"                            "$(has "$C_OUT" '  harness: tests/plugin-manifest.test.sh')"
+assert "…exactly the core, nothing derived"                   "$(lacks "$C_OUT" '  harness: tests/fp-covers-the-guard.test.sh')"
 assert "…and the harness count printed is the core count"     "$(has "$C_OUT" "ok: all $core_count harnesses passed")"
 
 echo "== the UNMATCHED case: a path no harness names runs the core AND says so — never zero =="
 D="$TMP/d"; mkdir -p "$D"; build "$D"
 commit_on_branch "$D/work" plugin/agents/unread-by-any-harness.md
 D_OUT="$(run_changed "$D/work")"
-assert "it names the paths no harness covers"                 "$(has "$D_OUT" 'no harness names these changed paths')"
+assert "it names the paths no harness covers"                 "$(has "$D_OUT" 'no harness covers these changed paths')"
 assert "…and names them, so the gap is actionable"            "$(has "$D_OUT" 'plugin/agents/unread-by-any-harness.md')"
 assert "…and points at --all before the PR"                   "$(has "$D_OUT" '--all')"
 assert "…and still ran the core, not zero harnesses"          "$(has "$D_OUT" "ok: all $core_count harnesses passed")"
@@ -136,37 +155,36 @@ assert "…so no run reports a pass having run nothing"         "$(lacks "$D_OUT
 echo "== --ci keeps the workflow's own verdict, which FAILS TOWARD THE FULL SUITE =="
 E_OUT="$(run_ci "$A/work")"
 assert "a plugin-only diff takes the fast path"               "$(has "$E_OUT" 'plugin-only diff — running')"
-assert "…selecting tests/commit-as-guard.test.sh — the harness #124 left behind" \
-  "$(has "$E_OUT" '  harness: tests/commit-as-guard.test.sh')"
-assert "…and tests/companion-plugins.test.sh"                 "$(has "$E_OUT" '  harness: tests/companion-plugins.test.sh')"
-assert "…and the derived one"                                 "$(has "$E_OUT" '  harness: tests/fp-names-the-guard.test.sh')"
-assert "…and not the one that names nothing"                  "$(lacks "$E_OUT" '  harness: tests/fp-names-nothing.test.sh')"
+assert "…selecting the core"                                  "$(has "$E_OUT" '  harness: tests/plugin-manifest.test.sh')"
+assert "…and the declaring harness — the #124 case, now carried by the header" \
+  "$(has "$E_OUT" '  harness: tests/fp-covers-the-guard.test.sh')"
+assert "…and not the one that covers nothing"                 "$(lacks "$E_OUT" '  harness: tests/fp-covers-nothing.test.sh')"
 
 F_OUT="$(run_ci "$D/work")"
 assert "a plugin path NO harness names buys the FULL suite in CI, unlike --changed" \
   "$(has "$F_OUT" 'running the FULL suite')"
 assert "…and that full suite includes the harness the fast path leaves out" \
-  "$(has "$F_OUT" 'tests/fp-names-nothing.test.sh')"
+  "$(has "$F_OUT" 'tests/fp-covers-nothing.test.sh')"
 
 G="$TMP/g"; mkdir -p "$G"; build "$G"
 commit_on_branch "$G/work" README.md
 G_OUT="$(run_ci "$G/work")"
 assert "ONE path outside plugin/ and .claude-plugin/ and the fast path is off" \
   "$(lacks "$G_OUT" 'plugin-only diff')"
-assert "…so every harness runs"                               "$(has "$G_OUT" 'tests/fp-names-nothing.test.sh')"
+assert "…so every harness runs"                               "$(has "$G_OUT" 'tests/fp-covers-nothing.test.sh')"
 
 echo "== PROVING THE CORE IS READ: strike a name out of it and the same fixture stops running it =="
 # Inside the fixture's tests/, because run.sh resolves the repo it verifies from its
 # OWN location — a mutant left in $TMP would exercise $TMP, not the fixture.
 MUT_CORE="$A/work/tests/run-no-guard.sh"
-grep -vF 'tests/commit-as-guard.test.sh' "$RUNNER" > "$MUT_CORE"
+grep -vF 'tests/plugin-manifest.test.sh' "$RUNNER" > "$MUT_CORE"
 assert "the removal mutant dropped exactly one line" \
   "$([ "$(( $(wc -l < "$RUNNER") - $(wc -l < "$MUT_CORE") ))" -eq 1 ] && echo 0 || echo 1)"
 MUT_CORE_OUT="$(run_ci "$A/work" "$MUT_CORE")"
 assert "…the mutant still fast-paths (the difference is the selection, not a crash)" \
   "$(has "$MUT_CORE_OUT" 'plugin-only diff — running')"
-assert "…and no longer runs the guard's harness (removal bites)" \
-  "$(lacks "$MUT_CORE_OUT" '  harness: tests/commit-as-guard.test.sh')"
+assert "…and no longer runs the struck harness (removal bites)" \
+  "$(lacks "$MUT_CORE_OUT" '  harness: tests/plugin-manifest.test.sh')"
 
 echo "== a harness that dies before printing a summary is a FAILURE, never a pass =="
 H="$TMP/h"; mkdir -p "$H"; build "$H"
@@ -191,11 +209,32 @@ assert "the mutant that drops the guard falsely passes (proves the pin bites)" \
 assert "…reporting the all-clear banner it should not"        "$(has "$MUT_SUM_OUT" 'ok: all')"
 rm -f "$H/work/tests/run-mutant.sh" "$H/work/tests/silent-death.test.sh"
 
+echo "== --lint: the covers header is mandatory, and its paths must exist =="
+# Selection is only as good as the declarations, and a harness with no header is
+# unreachable by every changed path — invisible, because it still passes under --all.
+L="$TMP/l"; mkdir -p "$L"; build "$L"
+printf '#!/usr/bin/env bash\necho "pass=1 fail=0"\n' > "$L/work/tests/fp-declares-nothing.test.sh"
+L_BAD_OUT="$( cd "$L/work" && bash tests/run.sh --lint 2>&1 )"; L_BAD_RC=$?
+assert "one harness with no header refuses the whole lint" \
+  "$([ "$L_BAD_RC" -eq 1 ] && echo 0 || echo 1)"
+assert "…naming it"                                           "$(has "$L_BAD_OUT" 'tests/fp-declares-nothing.test.sh')"
+assert "…and what it is missing"                              "$(has "$L_BAD_OUT" "declares no '# covers:' header")"
+rm -f "$L/work/tests/fp-declares-nothing.test.sh"
+L_OUT="$( cd "$L/work" && bash tests/run.sh --lint 2>&1 )"; L_RC=$?
+assert "…and clears once every harness declares"              "$([ "$L_RC" -eq 0 ] && echo 0 || echo 1)"
+assert "…saying so, with the count it checked"                "$(has "$L_OUT" "declare '# covers:'")"
+printf '#!/usr/bin/env bash\n# covers: plugin/scripts/gone-in-a-rename.sh\necho "pass=1 fail=0"\n' \
+  > "$L/work/tests/fp-covers-a-moved-path.test.sh"
+L_MV_OUT="$( cd "$L/work" && bash tests/run.sh --lint 2>&1 )"; L_MV_RC=$?
+assert "a declared path that is NOT in the tree is refused too" \
+  "$([ "$L_MV_RC" -eq 1 ] && echo 0 || echo 1)"
+assert "…naming the path, so the rename is actionable"        "$(has "$L_MV_OUT" 'plugin/scripts/gone-in-a-rename.sh')"
+
 echo "== --all, the default, and the refusals =="
 ALL_OUT="$( cd "$A/work" && bash tests/run.sh --all 2>&1 )"
-assert "--all runs the harness no changed path names"         "$(has "$ALL_OUT" 'tests/fp-names-nothing.test.sh')"
+assert "--all runs the harness no changed path names"         "$(has "$ALL_OUT" 'tests/fp-covers-nothing.test.sh')"
 BARE_OUT="$( cd "$A/work" && bash tests/run.sh 2>&1 )"
-assert "…and no flag at all behaves as --all"                 "$(has "$BARE_OUT" 'tests/fp-names-nothing.test.sh')"
+assert "…and no flag at all behaves as --all"                 "$(has "$BARE_OUT" 'tests/fp-covers-nothing.test.sh')"
 
 ( cd "$A/work" && bash tests/run.sh --nonsense >/dev/null 2>&1 ); UNK_RC=$?
 assert "an unknown flag is refused at exit 2"                 "$([ "$UNK_RC" -eq 2 ] && echo 0 || echo 1)"

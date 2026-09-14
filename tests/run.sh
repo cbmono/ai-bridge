@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 #
 # run.sh — the ONE implementation of this repo's harness selection. CI calls it too.
-#   --changed [--base <ref>]  the core harnesses plus every harness naming a changed path
+#   --changed [--base <ref>]  the core plus every harness whose `# covers:` header
+#                             declares a changed path, or a directory holding one
 #   --all                     every tests/*.test.sh (the default)
 #   --ci                      the workflow entry: the fast path on a plugin-only PR diff,
 #                             the full suite on anything else
 #   --deep                    ONLY the harnesses marked `# deep` — they spawn the claude
 #                             CLI and cost money; no other mode runs them or reaches it
 #   --jobs N                  harnesses in parallel (default: CPUs); `# serial` runs alone
+#   --lint                    every harness declares `# covers:`, and each path exists
+# Exit: 0 all green · 1 a harness failed or the lint refused · 2 refused (no harnesses,
+# or a dead checkout). Why, the core list and the measured numbers: .claude/rules/tests.md.
 # Each harness is bounded by HARNESS_TIMEOUT seconds (600, 1800 under --deep): one that
 # never returns is killed and fails as ITSELF, and the rest of the suite still reports.
-# Exit: 0 all green · 1 a harness failed · 2 refused (no harnesses, or a dead checkout).
-# Why, the core list and the measured numbers: .claude/rules/tests.md.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)" || { echo "run.sh: cannot locate self" >&2; exit 2; }
@@ -26,17 +28,16 @@ unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
       GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_NAMESPACE \
       GIT_CONFIG GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT
 
-# Harnesses no changed path can be expected to name, because they read plugin/ wholesale
-# or reach their subject indirectly. .claude/rules/tests.md, "The core", says why each.
+# The harnesses that read a tree WHOLESALE, so no single changed path is their subject.
+# Every other harness is selected by its own `# covers:` header — including the four that
+# used to sit here, which now declare the paths that were the reason they did.
 CORE=(
   tests/plugin-manifest.test.sh
   tests/plugin-skills.test.sh
   tests/plugin-agents.test.sh
-  tests/deny-baseline.test.sh
-  tests/agent-control.test.sh
-  tests/commit-as-guard.test.sh
-  tests/companion-plugins.test.sh
   tests/harness-read-paths.test.sh
+  tests/scripts-executable.test.sh
+  tests/concision-contract.test.sh
 )
 
 # The per-harness wall-clock bound, in seconds, named once for the whole suite. The slowest
@@ -59,6 +60,7 @@ while [ $# -gt 0 ]; do
     --changed) mode=changed ;;
     --ci)      mode=ci ;;
     --deep)    mode=deep ;;
+    --lint)    mode=lint ;;
     --jobs)    shift; jobs="${1:-}" ;;
     --run-one) shift; one="${1:-}"; mode=run-one ;;   # internal: one harness, for the pool
     --base)    shift; base="${1:-}" ;;
@@ -145,31 +147,64 @@ default_base() {
 
 # select_derived <newline-separated paths> — sets SELECTED and UNNAMED. Not a function
 # that prints, because a $( ) subshell would lose UNNAMED, which is half the answer.
-# A harness is selected because it NAMES a changed path, or a >=2-component suffix of one
-# (so "$REPO/scripts/foo.sh" style references still match; never a bare basename, which
-# would match half the suite) — never because somebody remembered to add a line.
+# A harness is selected because it DECLARES a changed path in its own `# covers:` header,
+# or a directory holding one — never because its text happens to mention one, which is how
+# a change to SCHEMA.md used to select half the suite. `--lint` keeps every harness
+# declaring; a harness always covers ITSELF, since editing it is a reason to run it.
+# A harness that declares NOTHING is selected by every change, so a missing header costs
+# time and never coverage — `--lint` is what keeps that from being the normal case.
 select_derived() {
-  local changed="$1" p suffix m hits derived=""
+  local changed="$1" f p cov hits derived="" decls="" undeclared=""
   UNNAMED=""
+  for f in tests/*.test.sh; do
+    cov="$(head -20 "$f" | sed -n 's/^# covers:[[:space:]]*//p' | tr '\n' ' ')"
+    [ -n "$cov" ] || undeclared="${undeclared}${f}"$'\n'
+    decls="${decls}$(printf '%s %s %s' "$f" "$f" "$cov")"$'\n'
+  done
   while IFS= read -r p; do
     [ -n "$p" ] || continue
-    hits=""; suffix="$p"
-    while : ; do
-      m="$(grep -lF -e "$suffix" tests/*.test.sh 2>/dev/null || true)"
-      [ -z "$m" ] || hits="${hits}${m}"$'\n'
-      case "$suffix" in
-        */*/*) suffix="${suffix#*/}" ;;
-        *)     break ;;
-      esac
-    done
+    hits="$(awk -v p="$p" \
+      '{ for (i = 2; i <= NF; i++) if (p == $i || index(p, $i "/") == 1) { print $1; break } }' \
+      <<<"$decls")"
     if [ -z "$hits" ]; then
       UNNAMED="${UNNAMED:+$UNNAMED }$p"
     else
-      derived="${derived}${hits}"
+      derived="${derived}${hits}"$'\n'
     fi
   done <<<"$changed"
-  SELECTED="$(printf '%s\n' "${CORE[@]}" "$derived" | grep -v '^[[:space:]]*$' | sort -u)"
+  SELECTED="$(printf '%s\n' "${CORE[@]}" "$derived" "$undeclared" | grep -v '^[[:space:]]*$' | sort -u)"
 }
+
+# lint — a declaration nobody checks decays into a harness no changed path can reach, so
+# the header is mandatory and every path it names must still exist in the tree.
+lint() {
+  local f cov e bad=0 n=0
+  for f in tests/*.test.sh; do
+    n=$((n + 1))
+    cov="$(head -20 "$f" | sed -n 's/^# covers:[[:space:]]*//p')"
+    if [ -z "$cov" ]; then
+      fatal "$f declares no '# covers:' header in its first 20 lines — no changed path can select it"
+      bad=$((bad + 1))
+      continue
+    fi
+    for e in $cov; do
+      if [ ! -e "$e" ]; then
+        fatal "$f covers '$e', which is not in this tree — a moved path leaves a harness unreachable"
+        bad=$((bad + 1))
+      fi
+    done
+  done
+  if [ "$bad" -gt 0 ]; then
+    echo "run.sh --lint: $bad problem(s) across $n harnesses"
+    return 1
+  fi
+  echo "ok: all $n harnesses declare '# covers:', and every declared path exists"
+}
+
+if [ "$mode" = lint ]; then
+  lint
+  exit $?
+fi
 
 files_from_selection() {
   files=()
@@ -209,8 +244,8 @@ case "$mode" in
     else
       select_derived "$changed"
       files_from_selection
-      announce "changed-path selection — the ${#CORE[@]} core harnesses plus every harness that names a changed path:" "$changed"
-      [ -z "$UNNAMED" ] || echo "no harness names these changed paths, so they selected nothing beyond the core — verify with --all before the PR: $UNNAMED"
+      announce "changed-path selection — the ${#CORE[@]} core harnesses plus every harness that covers a changed path:" "$changed"
+      [ -z "$UNNAMED" ] || echo "no harness covers these changed paths, so they selected nothing beyond the core — verify with --all before the PR: $UNNAMED"
     fi
     ;;
 
@@ -225,10 +260,10 @@ case "$mode" in
       if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qvE '^(plugin/|\.claude-plugin/)'; then
         select_derived "$changed"
         if [ -n "$UNNAMED" ]; then
-          echo "plugin-only diff, but no harness names these paths — running the FULL suite: $UNNAMED"
+          echo "plugin-only diff, but no harness covers these paths — running the FULL suite: $UNNAMED"
         else
           files_from_selection
-          announce "plugin-only diff — running the core plugin harnesses plus every harness that names a changed path:" "$changed"
+          announce "plugin-only diff — running the core plugin harnesses plus every harness that covers a changed path:" "$changed"
         fi
       fi
     fi
