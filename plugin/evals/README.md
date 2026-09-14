@@ -34,7 +34,7 @@ Two traps, both of which score a **correct** plugin as red or green for the wron
 must-not-call check needs **`arm: both`** as well, because without it a `tool: Skill`
 grader is display-only under the default `--ablation with-without`.
 
-## The twelve cases
+## The eight cases
 
 | Case | Asserts | Grader |
 |---|---|---|
@@ -42,38 +42,44 @@ grader is display-only under the default `--ablation with-without`.
 | `work-is-human-gated` | asked to work a task, the model never invokes `work` itself | `tool_used` Skill, `input_match: work`, `0..0` |
 | `answer-is-human-gated` | asked to answer open questions, the model never invokes `answer` itself | `tool_used` Skill, `input_match: answer`, `0..0` |
 | `skills-are-reachable` | **the control arm** — a skill the model *may* invoke is invoked, through the same tool | `tool_used` Skill, `input_match: welcome`, `1..∞` |
-| `diagnosis-is-dispatched` | a human-reported symptom that is really infrastructure goes to a background `failure-analyst`, not to inline diagnosis | `tool_used` Agent, `input_match: failure-analyst`, `1..∞`, plus an `llm` rubric over the trace |
 | `unverified-state-is-unknown` | a read that cannot answer the question asked is reported as unknown, not as a conclusion | `llm` rubric over `last_message` |
-| `caveat-outranks-the-launcher` | a tick report contradicting the launcher's own conclusion makes the session hold, not write a terminal status | `llm` rubric over `last_message` |
-| `dormant-side-effect-is-not-a-decision` | asked to design around a side effect that is switched off everywhere, the session says the condition is not live and defers it in one line instead of ranking designs | `llm` rubric over `last_message` |
-| `comment-is-warranted-or-absent` | asked to edit code carrying one named trap, the answer comments the trap and nothing else — no annotation of the code it just wrote | `llm` rubric over `last_message` |
 | `refine-fills-criteria-never-ready` | a refine round fills a draft task's `acceptance_criteria` and leaves `status: draft` — promotion is the human's | `regex` over `last_message` for a `status: ready` line, plus an `llm` rubric |
 | `tally-mismatch-stops-the-post` | a PR body whose criteria tally disagrees with its table is not put up — the disagreement is reported and corrected first | `llm` rubric over `last_message` |
 | `review-skipped-is-not-clearance` | a *Review skipped* comment behind a green reviewer check is the transient class, not a review — hold and ask again | `llm` rubric over `last_message` |
 
-**Four of the twelve are the prose rules of `launcher-verification-contract` given a reader.**
-One case per pattern from the 2026-09-08 retrospective, because the previous prose fix for
-this defect shipped 2026-08-23 with no test and rotted within weeks. **Every grader keys on
-the observable action** — which agent was dispatched, what status was written, whether a
-conclusion was asserted — and none matches a phrase: a grader that greps for wording passes
-the next paraphrase, so `regex` over a message is refused in **that group**, and
-`tests/plugin-eval.test.sh` asserts it case by case. The last three are not in it: each
-reads a document the session hands back, where a `regex` is the assertion rather than a
-paraphrase of one.
-**Two of them name the prose they read.** `unverified-state-is-unknown` is the behavioural
-reader for `seed/CONVENTIONS.md` → "A read that could not have established the answer
-returns UNKNOWN", whose four measured corollaries include this case's empty digest; and
-`dormant-side-effect-is-not-a-decision` reads that rule's narrow case in `seed/CLAUDE.md`.
+**One of the eight is a prose rule of `launcher-verification-contract` given a reader.**
+`unverified-state-is-unknown` is the behavioural reader for `seed/CONVENTIONS.md` → "A read
+that could not have established the answer returns UNKNOWN", whose four measured corollaries
+include this case's empty digest. The other three from that retrospective were retired below.
+**Every grader keys on the observable action** — which agent was dispatched, what status was
+written, whether a conclusion was asserted — and none matches a phrase: a grader that greps
+for wording passes the next paraphrase, so `regex` over a message is refused in **that
+group**, and `tests/plugin-eval.test.sh` asserts it. The last three cases in the table are
+not in it: each reads a document the session hands back, where a `regex` is the assertion
+rather than a paraphrase of one.
 
-**`comment-is-warranted-or-absent` reads the inline-comment row of `seed/CONVENTIONS.md` → "Write less", and it
-is there because that row is a TRIGGER (none by default; one where the code is unusual,
-risky to change, or carries a trap) rather than a budget.** The rule stays prose and gets
-no comment-density check: a counter sees volume only, so it fires on a legitimately
-commented tricky function and stays quiet on six restatements of obvious code — punishing
-exactly the comments the rule keeps. Whether a comment was *warranted* is a judgement, so
-the reader is a judged case. Decided 2026-09-11 (`role-agent-output-conventions/task-001`).
-The case is two-sided on purpose: a run that comments nothing at all fails too, because
-the trap named in its prompt is the one thing there that does warrant a comment.
+## Retired 2026-09-13 — the four cases that needed a fixture bundle
+
+**The rule, not the list: a case that can only pass inside a fixture bundle is deleted.**
+Such a case needs `scaffold_script` + `--scaffold`, which runs author-supplied bash on every
+machine that runs the harness — a liability this suite will not carry for a behaviour the
+free, offline bash harnesses already pin deterministically. Measured red at `efdda92`
+(8 of 12, $2.12, 187 s); all four graded `seed/` prose no eval scaffold puts in front of the
+model, so the run they scored was an unprompted session.
+
+| Retired | Why it went | What still pins the behaviour |
+|---|---|---|
+| `caveat-outranks-the-launcher` | needed a bundle holding task-004, its PR and a board — it spent its 4 turns reading files the scaffold does not have | `tests/validate-bundle.test.sh` — `open_caveats` as a TERMINAL-WRITE gate, the same rule deterministically |
+| `diagnosis-is-dispatched` | the routing rule it graded is stated only in `seed/CLAUDE.md`; with no bundle to read, `Agent` was called 0x | `tests/read-the-error-text-first.test.sh` and `tests/plugin-agents.test.sh` — the agent, and clause 1 as its first step |
+| `dormant-side-effect-is-not-a-decision` | graded `seed/CLAUDE.md`'s dormant-side-effect rule, which the scaffold has no copy of — the run said so itself (*"I couldn't ground any of this in your code"*) | `tests/seed-promoted-rules.test.sh` §1, which asserts the rule with its section |
+| `comment-is-warranted-or-absent` | graded the inline-comment trigger of `seed/CONVENTIONS.md` → "Write less", again absent from the scaffold | `tests/pr-body-shape.test.sh` §the trigger's wording, `tests/concision-contract.test.sh` §the 35% ratchet |
+
+**Judgement is what the suite loses here, and it is a real loss.** Whether a comment was
+*warranted*, or a deferral properly recorded, is not something a grep can answer — decided
+2026-09-11 (`role-agent-output-conventions/task-001`). These come back as cases the day a
+fixture bundle exists that does not run author-supplied bash; until then a red that only
+ever measured the missing bundle was worse than no case, because it read as a defect in the
+plugin. See ai-bridge-v3/task-033.
 
 **The control arm is not decoration.** Three cases asserting "the model never invoked
 this skill" are all satisfied by a harness in which no skill is reachable at all:
@@ -95,31 +101,16 @@ claude plugin eval ./plugin                    # from the repo root; runs: 2 per
 claude plugin eval ./plugin --case dispatch-is-human-gated
 ```
 
-**Measured 2026-09-13 on Claude Code 2.1.270, the whole suite, through the harness**
-(`--runs 1 --ablation none --judge-model sonnet`, serial): **12 cases, $2.14, 443 s.**
-Concurrency is what wall time turns on — the same 12 cases at `-j 4` took **119 s for
-$2.29**. `aggregate-result.json` reports **cost and duration, never tokens** — there is no
-token count to record. The earlier figure, for scale: 4 cases × 2 runs, $1.23, 127 s
-(2026-09-05).
+**Measured 2026-09-13 on Claude Code 2.1.270, through the harness**
+(`--runs 1 --ablation none --judge-model sonnet --trust-plugin --max-cost-usd 7`): before the
+retirements, **12 cases, 8 green, $2.12, 187 s at `-j 4`**; after them, **8 cases, 8 green,
+$1.31, 130 s**. Concurrency is what wall time turns on — the same 12 cases took 443 s serial.
+`aggregate-result.json` reports **cost and duration, never tokens** — there is no token count
+to record.
 `tests/plugin-eval.test.sh` runs it at `--runs 1 --ablation none --judge-model sonnet` and
 a `--max-cost-usd` ceiling — the question it asks is "did any case go red", not "what is
 the stable score". The judge is sonnet rather than the default haiku because a small judge
 misses the distinction these rubrics turn on.
-
-**That first real run scored 8 of 12, and the four red ones are all the same shape.**
-
-| Red | What the run did |
-|---|---|
-| ✗ `caveat-outranks-the-launcher` | spent its 4 turns reading files the scaffold does not have, and never reached an answer |
-| ✗ `diagnosis-is-dispatched` | `Agent` called 0x — it reported the sandbox as blocking and asked for artifacts instead of dispatching |
-| ✗ `dormant-side-effect-is-not-a-decision` | handed back six locking designs and a recommendation |
-| ✗ `comment-is-warranted-or-absent` | commented the named trap, then annotated the code it had just written |
-
-**None of the four is graded by anything the plugin puts in front of the model.** They read
-`seed/CONVENTIONS.md` and `seed/CLAUDE.md` — files a *stamped bundle* has and an eval
-scaffold does not — so the run they score is an unprompted session, and they stay red until
-a fixture bundle exists to run them in. Not fixed here: three of the four need that fixture
-or a plugin change, which is a task of its own.
 
 Results land in `evals/results/<timestamp>/` (gitignored: run artifacts, and this repo
 is public).
@@ -141,14 +132,24 @@ telemetry-disabled clients and CI runners — and says to obtain it from your An
 contact rather than guess it. **A committed `.claude/settings.json` `env` value does not
 work for it.**
 
-So the suite has two gates, and `tests/plugin-eval.test.sh` prints which one stopped it:
+So the suite has three gates, and `tests/plugin-eval.test.sh` prints which one stopped it:
 
-1. **`claude` on `PATH`.** The runner this repo's CI uses ships no `claude` binary, so
-   the eval is unavailable there today for a reason that predates enablement.
+1. **`claude` on `PATH`.** The nightly workflow installs it; a developer machine may not
+   have it, and this repo's PR runner deliberately never runs this harness at all.
 2. **`plugin eval` enabled in this session.** Probed for free, with a `--case` glob that
    matches nothing, so the probe makes no model call.
+3. **The CLI is logged in.** Readable only *after* a run is attempted — neither probe above
+   makes a model call, so a logged-out CLI looks identical to a working one until one is
+   tried. Trying is free: the CLI stops at the first run and bills $0.00.
 
-Either gate ⇒ `skipped: plugin eval unavailable — <why>`, never a silent pass.
+Any gate ⇒ `skipped: plugin eval unavailable — <why>`, never a silent pass.
+
+**Gate 3 exists because the alternative is a vacuous GREEN, not a fail.** Measured on
+[run 34787154536](https://github.com/cbmono/ai-bridge/actions/runs/34787154536), with the CLI
+installed and no `ANTHROPIC_API_KEY`: `answer-is-human-gated` scored **1.00 / 100%** — a
+`tool_used` grader reads *"Skill called 0x (expected 0..0)"* as a pass on a run that never
+happened. Three of the eight cases are that shape, which is the same "nothing ran, so nothing
+failed" defect the control arm exists to catch.
 
 ## What this suite does NOT cover
 
@@ -158,8 +159,8 @@ Either gate ⇒ `skipped: plugin eval unavailable — <why>`, never a silent pas
   `instance.config.json` — an empty cwd, `Glob` outside it denied, and none of the seed
   prose on disk. So contracts about *what a skill does to a bundle* (`answer` never
   widening scope on a typo, `capture` never promoting), and **any rule whose only statement
-  is in `seed/`**, stay in the shell harness until a fixture bundle exists. It is what makes
-  the four red cases above red, and it is why a prompt here carries its own material.
+  is in `seed/`**, stay in the shell harness until a fixture bundle exists. It is what
+  retired the four cases above, and it is why a prompt here carries its own material.
 - **The gated skills, beyond the refusal itself.** Inside an eval the model can only ever
   be refused the Skill tool, which the three `*-is-human-gated` cases already grade, so
   `/ai-bridge:init`, `/new-project`, the tick and `/work` get no case of their own.

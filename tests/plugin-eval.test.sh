@@ -23,21 +23,17 @@
 #   tests/plugin-eval.test.sh     this file: the eval suite's own shape, always; and
 #                                 the run itself, when the CLI supports it.
 #
-# EIGHT OF THE TWELVE CASES GRADE THE MAIN THREAD, not a skill. Four are the reader for the
-# prose rules of `launcher-verification-contract` — dispatch-vs-inline-diagnosis, unverified
-# state, a tick caveat outranking the launcher's own conclusion, and a decision manufactured
-# out of a side effect that is not live yet — and they exist because the previous prose fix
-# for that defect shipped 2026-08-23 with no test and rotted in weeks. The fifth is the
-# reader for `CONVENTIONS.md` -> "Write less": its inline-comment row is a trigger, and
-# whether a comment was WARRANTED is a judgement no counter can make — a density check
-# fires on the legitimately commented tricky function and stays quiet on six restatements
-# of obvious code, so the rule stays prose and this case is what reads it.
-# Section 4 asserts the one property that keeps them from rotting the same way: a grader
-# keyed on WORDING passes the next paraphrase, so `regex` over a message is refused there.
+# FOUR OF THE EIGHT CASES GRADE THE MAIN THREAD, not a skill. One is the reader for a prose
+# rule of `launcher-verification-contract` — unverified state — and it exists because the
+# previous prose fix for that defect shipped 2026-08-23 with no test and rotted in weeks.
+# Section 4 asserts the one property that keeps it from rotting the same way: a grader keyed
+# on WORDING passes the next paraphrase, so `regex` over a message is refused there.
 # The other three grade an artifact the session hands back — a refined task document, a PR
 # body, a reviewer verdict — so a deterministic grader can read it and section 4 is not
 # theirs: `refine-fills-criteria-never-ready` pins `status: ready` with a regex over the
 # document itself, which is the assertion, not a paraphrase of one.
+#
+# FOUR MORE were RETIRED 2026-09-13 — see $RETIRED and evals/README.md.
 #
 # THE NON-VACUITY ARM IS NOT OPTIONAL. Three cases asserting "the model never invoked
 # this skill" are ALL satisfied by a harness in which no skill is reachable at all —
@@ -90,11 +86,15 @@ fm() {
 # moment it lands, and only a case wanting a group's extra assertions is named here.
 GATED="dispatch work answer"
 CONTROL="skills-are-reachable"
-# One case per pattern from the 2026-09-08 retrospective (launcher-verification-contract),
-# plus the inline-comment trigger's own reader. They grade the MAIN THREAD rather than a
-# skill, so they share none of the assertions in section 3; section 4 is theirs.
-PATTERNS="diagnosis-is-dispatched unverified-state-is-unknown caveat-outranks-the-launcher
-dormant-side-effect-is-not-a-decision comment-is-warranted-or-absent"
+# RETIRED 2026-09-13 (ai-bridge-v3/task-033): four cases that could only ever pass inside a
+# fixture bundle. `scaffold_script` + `--scaffold` runs author-supplied bash on every machine
+# that runs this harness, and the bash harnesses named in evals/README.md already pin those
+# behaviours for free. Section 6 below refuses a suite that deletes them without the reason.
+RETIRED="caveat-outranks-the-launcher comment-is-warranted-or-absent
+diagnosis-is-dispatched dormant-side-effect-is-not-a-decision"
+# What survives of that group: it grades the MAIN THREAD rather than a skill, so it shares
+# none of the assertions in section 3; section 4 is where it is asserted.
+PATTERNS="unverified-state-is-unknown"
 
 # =======================================================================================
 echo "== 1. the eval suite ships where the CLI looks for it =="
@@ -131,6 +131,20 @@ for c in $CONTROL $PATTERNS $(for s in $GATED; do echo "$s-is-human-gated"; done
   case " $CASES " in *" $c "*) ;; *) missing="$missing $c" ;; esac
 done
 ok "…and every case this file groups by name is still there" "${missing:-none}" none
+
+# A RETIREMENT CARRIES ITS REASON, or it is indistinguishable from someone deleting a red
+# case to get a green run. Both halves are asserted: the case is gone AND the README says
+# why it went. Re-adding one without a fixture bundle turns the first half red.
+R="$EVALS/README.md"
+back=""; unexplained=""
+for c in $RETIRED; do
+  [ -d "$EVALS/$c" ] && back="$back $c"
+  grep -qF "\`$c\`" "$R" || unexplained="$unexplained $c"
+done
+ok "…and no retired case is back without a fixture bundle" "${back:-none}" none
+ok "…each retirement's reason is written in the README"    "${unexplained:-none}" none
+ok "…under a heading that says they were retired and why"  \
+  "$(grep -c '^## Retired .* the four cases that needed a fixture bundle' "$R" | tr -d ' ')" 1
 
 # =======================================================================================
 echo "== 2. every case is well-formed the way the CLI parses it =="
@@ -241,19 +255,6 @@ $(fm "$g" type)"
   done
 done
 
-# The launcher-diagnosis case is the one with a DETERMINISTIC arm, and it is also this
-# suite's control arm for the Agent tool: `min: 1` cannot pass in a run where nothing was
-# dispatched, so the case goes red rather than quiet when dispatch stops working.
-DG="$EVALS/diagnosis-is-dispatched/graders/failure-analyst-was-dispatched.md"
-ok "the diagnosis case grades the dispatch itself" "$(fm "$DG" type)" "tool_used"
-ok "…through the Agent tool"                       "$(fm "$DG" tool)" "Agent"
-ok "…scoped to the failure-analyst"                "$(fm "$DG" input_match)" "failure-analyst"
-ok "…with a lower bound of 1, so it cannot pass vacuously" "$(fm "$DG" min)" "1"
-# The tie back to the plugin, the same shape as section 3's: the eval grades an effect
-# whose cause is a file. An eval naming an agent the plugin does not ship grades nothing.
-ok "…and the agent it names ships in the plugin" \
-  "$(fm "$PLUGIN/agents/failure-analyst.md" name)" "failure-analyst"
-
 # =======================================================================================
 echo "== 5. the file harness keeps its pins — this suite replaces none of them =="
 # =======================================================================================
@@ -285,7 +286,7 @@ ok "…and the PR workflow calls the runner that excludes it" \
 # =======================================================================================
 echo "== 6. the run itself — where the CLI supports it, and a LOUD skip where it does not =="
 # =======================================================================================
-# Two gates, and each one prints WHY. `claude plugin eval` runs ungated on 2.1.270 and was
+# THREE gates, and each one prints WHY. `claude plugin eval` runs ungated on 2.1.270 and was
 # early access up to 2.1.263, where it refuses to run unless the account or the session is
 # enabled for it — so "the binary is there" is not the question, and the probe stays for
 # every build older than the one this was measured on. The probe is free — a --case glob
@@ -312,7 +313,7 @@ else
   # another paid model run. The suite's own prompt.md files declare runs: 2 for a
   # by-hand `claude plugin eval ./plugin`, which is the higher-fidelity form.
   # --max-cost-usd is a ceiling, not a budget: it aborts (exit 2) rather than overrun. 7
-  # against a measured $2.14 for the twelve cases (2026-09-13, 2.1.270), which leaves room
+  # against a measured $1.31 for the eight cases (2026-09-13, 2.1.270), which leaves room
   # for a case that dispatches a subagent whose own run is billed.
   # --judge-model sonnet: the default judge is haiku, and the CLI's own authoring guidance
   # is that a small judge misses the distinctions a rubric turns on. The rubrics here turn
@@ -323,8 +324,21 @@ else
   out="$(claude plugin eval "$PLUGIN" --runs 1 --ablation none --no-publish --trust-plugin \
     --judge-model sonnet --max-cost-usd 7 2>&1)"
   rc=$?
-  ok "claude plugin eval passes every case in plugin/evals/" "$rc" 0
-  [ "$rc" -eq 0 ] || printf '%s\n' "$out" | sed 's/^/        /'
+  # GATE 3 — AUTHENTICATION, and it is readable only AFTER the run. Neither probe above
+  # makes a model call, so a logged-out CLI is indistinguishable from a working one until
+  # a run is attempted; attempting one is free, because the CLI stops at the first failure
+  # and bills $0.00. Measured on run 34787154536, where this gate did not yet exist: with
+  # the CLI installed and no credential, `answer-is-human-gated` scored 1.00/100% — a
+  # `tool_used` grader reads "Skill called 0x (expected 0..0)" as a PASS on a run that
+  # never happened. So a silent fail here is not the worst case; a vacuous GREEN is.
+  case "$out" in
+    *"Not logged in"*|*"authentication failed"*)
+      skipped "skipped: plugin eval unavailable — the claude CLI here is not logged in"
+      skipped "…so plugin/evals/ was NOT run here; its shape above is all that was checked" ;;
+    *)
+      ok "claude plugin eval passes every case in plugin/evals/" "$rc" 0
+      [ "$rc" -eq 0 ] || printf '%s\n' "$out" | sed 's/^/        /' ;;
+  esac
 fi
 
 printf '\npass=%s fail=%s skip=%s\n' "$pass" "$fail" "$skip"

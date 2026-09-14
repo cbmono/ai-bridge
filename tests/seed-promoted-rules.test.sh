@@ -31,7 +31,8 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SEED="$REPO/plugin/seed/CLAUDE.md"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
 PRUNE="$REPO/plugin/scripts/prune-worktrees.sh"
-EVALCASE="$REPO/plugin/evals/dormant-side-effect-is-not-a-decision"
+EVALS_DIR="$REPO/plugin/evals"
+EVALS_README="$REPO/plugin/evals/README.md"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/seed-promoted-rules.XXXXXX")" || {
   echo "seed-promoted-rules.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -108,12 +109,19 @@ ok "…and 'do NOT pre-build X' is recorded" "$(saw "$ADHOC" "$R1PREBUILD")" yes
 # carries the rule, never that bundle's sandbox canary.
 ok "…with no borrowed example carried over" "$(saw "$ADHOC" 'sandbox canary')" no
 
-# Rule 1 is the one of the three whose effect a grep cannot see, so it also ships a case in
-# the eval suite (`plugin-eval.test.sh` asserts that suite's own shape).
-ok "rule 1 has an eval case beside the prose" \
-   "$([ -f "$EVALCASE/prompt.md" ] && echo yes || echo no)" yes
-ok "…with a grader that grades the run"    \
-   "$([ -n "$(find "$EVALCASE/graders" -name '*.md' 2>/dev/null)" ] && echo yes || echo no)" yes
+# Rule 1's effect a grep cannot see, so it used to ship an eval case too. That case was
+# RETIRED 2026-09-13 (ai-bridge-v3/task-033): it graded seed prose an eval scaffold never
+# puts in front of the model, so it measured the missing bundle and read as a plugin defect.
+# The prose above is now its only reader, which is exactly why this section asserts the rule
+# WITH ITS SECTION rather than as a sentence — and the retirement stays written down, so the
+# case is not quietly re-added in the same shape.
+# Asked of the evals DIRECTORY and a bare case name, never as a root-rooted path to the
+# case: harness-read-paths.test.sh proves such a path and fails it for not resolving, which
+# is right for every harness but one asserting a deliberate ABSENCE.
+ok "rule 1's eval case is retired, not silently dropped" \
+   "$(ls "$EVALS_DIR" | grep -cx 'dormant-side-effect-is-not-a-decision' | tr -d ' ')" 0
+ok "…and the eval README says why it went" \
+   "$(grep -c 'dormant-side-effect-is-not-a-decision' "$EVALS_README" | tr -d ' ')" 1
 
 # NON-VACUITY: the same question, of a seed with the rule removed, must answer no.
 strip_range "$SEED" "$R1" '**Ad-hoc batches:**' > "$TMP/seed-no-r1.md"
