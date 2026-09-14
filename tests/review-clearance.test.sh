@@ -2020,6 +2020,34 @@ assert "required-checks.sh tells a 7 to rebase, not to request a review" \
 assert "the exit-code table documents 7" \
   "$(grep -q '^#   7  the PR CANNOT MERGE' "$SCRIPT" && echo 0 || echo 1)"
 
+PM="$SCRIPTS/../agents/project-manager.md"
+assert "the PM prompt routes a 7 to a rebase round, not a merge row" \
+  "$(grep -q 'EXIT 7 IS NOT ABOUT THE REVIEWER AT ALL' "$PM" && echo 0 || echo 1)"
+assert "…and records it as a conflict blocker" \
+  "$(grep -q 'stall-counter.sh record <task-doc>' "$PM" && echo 0 || echo 1)"
+# THE ESCALATION criterion 3 PROMISES IS ONLY REACHABLE IF --progress STAYS OFF. The
+# counter resets on PR activity the tick observed, and a rebase push IS that activity, so
+# a conflict round that passed --progress would reset the count it exists to accumulate
+# and two rebases in a row would never reach the cap.
+assert "…and forbids --progress on a conflict round, or the cap is unreachable" \
+  "$(grep -q 'Never pass `--progress` on this round' "$PM" && echo 0 || echo 1)"
+
+echo
+echo "== the answer is re-read every run, never cached =="
+# The 2026-09-13 failure was a verdict computed against the PREVIOUS default-branch head.
+# Mergeability changes with no commit on the PR, so the same PR at the same head must be
+# free to answer differently on the next call — back-to-back here, because `watch-board`
+# and the tick both re-enter this file rather than reading a stored answer.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+expect "tick 1: the base has not moved -> clear" 0
+MERGEABLE=CONFLICTING; MERGE_STATE=DIRTY
+expect "tick 2: same PR, same head, base moved -> 7" 7
+MERGEABLE=MERGEABLE; MERGE_STATE=CLEAN
+expect "tick 3: rebased -> clears again, from the host each time" 0
+assert "nothing in the script stores a mergeability answer" \
+  "$(grep -qE 'mergeab|mergeState' "$SCRIPT" && \
+     ! grep -vE '^[[:space:]]*#' "$SCRIPT" | grep -qE '(cache|CACHE)[^)]*merge' && echo 0 || echo 1)"
+
 echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
