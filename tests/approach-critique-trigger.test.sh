@@ -24,8 +24,10 @@
 #      marker turns every tick into a fresh APEX-tier session on the same draft — the
 #      most expensive failure this change could introduce. The instruction has to name
 #      the receipt a tick reads before dispatching, and it does: an `advisor_notes`
-#      entry, or an `advisor:` line in `answered_questions` for a critique that raised
-#      none.
+#      entry per concern, or one `advisor_notes` line for a critique that raised none.
+#      BOTH receipts live in `advisor_notes` because only `fold-answers.sh` writes
+#      `answered_questions`, and it writes only what an answered `open_questions` entry
+#      gave it — which a no-concerns critique never produces.
 #   3. A MISSING OPTIONAL AGENT IS STILL NOT A FAILURE. Mandatory-on-trigger must not
 #      become mandatory-to-exist: absent `~/.claude/agents/plan-architect.md` the PM
 #      skips SILENTLY. And `plan-architect` stays OUT of `roles` while staying in
@@ -154,8 +156,10 @@ ok "…refusing to lean on refine-once alone" "$(in_block 'do not lean on that a
 ok "…naming the cost of no marker"        "$(in_block 'a fresh apex-tier session on the same draft')" yes
 ok "the receipt is read BEFORE dispatching" "$(in_block 'read BEFORE dispatching')" yes
 ok "…concerns ⇒ advisor_notes entries"    "$(in_block 'concerns raised ⇒ one `advisor_notes` entry each')" yes
-ok '…none ⇒ an advisor: answered_questions line' \
-   "$(in_block 'none raised ⇒ one `answered_questions` line')" yes
+ok '…none ⇒ an advisor: advisor_notes line' \
+   "$(in_block 'none raised ⇒ one `advisor_notes` line')" yes
+ok "…and the receipt is NOT sent to answered_questions" \
+   "$(in_block 'not `answered_questions`')" yes
 ok "…and the check is stated as an instruction" \
    "$(in_block 'means the critique has run: do not dispatch it again')" yes
 ok "…while the receipt is not made a gate" "$(in_block 'they are a receipt')" yes

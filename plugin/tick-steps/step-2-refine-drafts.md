@@ -76,9 +76,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    once-only, but do not lean on that alone: a mandatory dispatch with no marker turns
    every tick into a fresh apex-tier session on the same draft. So the critique always
    leaves a trace, and the trace is what you read BEFORE dispatching: concerns raised ⇒
-   one `advisor_notes` entry each; none raised ⇒ one `answered_questions` line,
+   one `advisor_notes` entry each; none raised ⇒ one `advisor_notes` line,
    `<ISO 8601> · advisor: approach critique — no concerns`. **Either marker means the
    critique has run: do not dispatch it again.** Neither is a gate — they are a receipt.
+   **The no-concerns receipt goes in `advisor_notes`, not `answered_questions`**, which
+   only `fold-answers.sh` writes and only from an answered `open_questions` entry — a
+   critique that raised nothing has no such entry, so the receipt had nowhere it was
+   allowed to be written.
    Its model comes from `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh plan-architect` — `roleTiers`
    (`apex`) through `models` — never a hard-coded alias; and `plan-architect` stays out
    of `roles`.
