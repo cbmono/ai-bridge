@@ -85,3 +85,15 @@ suite from the main working tree, or from a fresh clone. None of the four needs 
 from a real checkout all 111 pass in the pool (measured 2026-09-13, 8,581 assertions, 0
 failed). If you are working in a worktree,
 clone to a temp directory to verify.
+
+## The 256-descriptor cliff — why `harness-read-paths` hangs, and how to re-measure it
+
+`/bin/bash` 3.2.57 leaks one file descriptor per `< <( )`. `harness-read-paths.test.sh`
+runs two of them per harness inside `REAL="$(scan …)"`, so the capture holds **255**
+descriptors by the last of the 112 — and at the next one a `fork()` never returns: the
+child spins at 100% CPU in `_notify_fork_child`, holding the capture's stdout, so every
+ancestor blocks. Two inherited descriptors are enough to cross it.
+
+`tests/tools/fd-cliff.sh` measures the margin in about two minutes (exit 1 while the
+harness still hangs, 0 once it clears). It is deliberately not a `*.test.sh`: it fails
+today. Measurements and the sampled stack: ai-bridge-v3/task-042.
