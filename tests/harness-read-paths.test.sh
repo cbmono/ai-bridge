@@ -100,6 +100,9 @@ pass=0; fail=0
 assert() { if [[ "$2" == 0 ]]; then printf '  PASS  %s\n' "$1"; pass=$((pass+1));
            else printf '  FAIL  %s\n' "$1"; fail=$((fail+1)); fi; }
 eq()     { [ "$1" = "$2" ] && echo 0 || echo 1; }
+# Sets FDN to this shell's open-descriptor count. A glob rather than `$(ls /dev/fd|wc -l)`:
+# no fork, and no pipe of its own to count.
+fd_count() { local a; a=(/dev/fd/*); FDN="${#a[@]}"; }
 
 # ---------------------------------------------------------------------------------------
 # The scanner.
@@ -222,38 +225,59 @@ CANDIDATES_AWK='
 # unexamined, reported as though covered. The names are enumerated rather than inferred
 # because a variable holding a runtime fixture path is spelled exactly the same way.
 ROOT_VARS="TPL REPO TPLSRC"
+
+# NO PROCESS SUBSTITUTION, AND NO FORK PER ROOT NAME — one awk pass answers for all four.
+# bash 3.2 keeps one descriptor per `< <( )` for the life of the enclosing shell, and the
+# five this function used to open per harness put `REAL="$(scan …)"` at 255 open fds by the
+# 112th file, one short of a cliff where fork() never returns and the child spins in
+# _notify_fork_child holding the capture's stdout. Control panel:
+# knowledge/findings/bash-3-2-leaks-an-fd-per-process-substitution-and-fork-spins-at-256.
 # `export`/`local`/`readonly`/`declare` count as assignments. Missing them failed TOWARD
 # trusting the file, which is the wrong direction for every check in here.
-assign_lines() { grep -E "^[[:space:]]*(export |local |readonly |declare )?$2=" "$1" 2>/dev/null || true; }
+CLASSIFY_AWK='
+BEGIN { nn = split(names, nm, /[ \t]+/) }
+{
+  for (i = 1; i <= nn; i++) {
+    n = nm[i]
+    if ($0 !~ "^[[:space:]]*(export |local |readonly |declare )?" n "=") continue
+    seen[n] = 1
+    if (n == "HERE") { if (index($0, here_idiom) == 0) bad[n] = 1 }
+    else if (index($0, root_idiom) > 0) { }
+    else if (index($0, derived_idiom) > 0) { derived[n] = 1 }
+    else bad[n] = 1
+  }
+}
+END {
+  for (i = 1; i <= nn; i++) {
+    n = nm[i]
+    if (seen[n]) print n, (bad[n] ? 0 : 1), (derived[n] ? 1 : 0)
+  }
+}
+'
 
 # classify_roots <file> — sets here_ok, ok_vars (",A,B,") and untrusted (a name list).
+# HERE is emitted first, so a root derived from it is judged against a settled here_ok.
 classify_roots() {
-  local f="$1" v l ok derived
+  local f="$1" name ok derived verdicts
   here_ok=0; ok_vars=","; untrusted=""
-  if [ -n "$(assign_lines "$f" HERE)" ]; then
-    ok=1
-    while IFS= read -r l; do
-      case "$l" in *'cd "$(dirname "$0")" && pwd'*) ;; *) ok=0 ;; esac
-    done < <(assign_lines "$f" HERE)
-    here_ok="$ok"
-    [ "$ok" = 1 ] || untrusted="$untrusted HERE"
-  fi
-  for v in $ROOT_VARS; do
-    [ -n "$(assign_lines "$f" "$v")" ] || continue
-    ok=1; derived=0
-    while IFS= read -r l; do
-      case "$l" in
-        *'cd "$(dirname "$0")/.." && pwd'*) ;;
-        *'cd "$HERE/.." && pwd'*) derived=1 ;;
-        *) ok=0 ;;
-      esac
-    done < <(assign_lines "$f" "$v")
+  verdicts="$(awk -v names="HERE $ROOT_VARS" \
+                  -v here_idiom='cd "$(dirname "$0")" && pwd' \
+                  -v root_idiom='cd "$(dirname "$0")/.." && pwd' \
+                  -v derived_idiom='cd "$HERE/.." && pwd' \
+                  "$CLASSIFY_AWK" "$f" 2>/dev/null)"
+  while read -r name ok derived; do
+    [ -n "${name:-}" ] || continue
+    if [ "$name" = HERE ]; then
+      here_ok="$ok"
+      [ "$ok" = 1 ] || untrusted="$untrusted HERE"
+      continue
+    fi
     # A ROOT DERIVED FROM $HERE IS ONLY AS TRUSTWORTHY AS $HERE. Twenty harnesses spell
     # TPL="$(cd "$HERE/.." && pwd)", so a fixture-bound HERE would otherwise hand back a
     # fixture-bound root wearing the canonical idiom.
     [ "$derived" = 1 ] && [ "$here_ok" != 1 ] && ok=0
-    if [ "$ok" = 1 ]; then ok_vars="$ok_vars$v,"; else untrusted="$untrusted $v"; fi
-  done
+    if [ "$ok" = 1 ]; then ok_vars="$ok_vars$name,"; else untrusted="$untrusted $name"; fi
+  done <<< "$verdicts"
 }
 
 # resolves <path> — plain existence, or, for a path carrying a glob metacharacter, at
@@ -276,9 +300,15 @@ resolves() {
 # exactly one of three buckets there — checked, partly out of reach, or contributing
 # nothing — because a file that quietly contributes nothing is the failure this whole
 # harness is about, one level up.
+#
+# It also reports its own descriptor growth there, as FDGROWTH, and the real-tree run
+# asserts on it: this loop is the one that reached the bash-3.2 fd cliff, so the guard
+# belongs inside the subshell that leaked, where a count taken by the caller would see
+# nothing.
 scan() {
-  local root="$1" tdir="$2" f base rel kind ln _file
+  local root="$1" tdir="$2" f base rel kind ln _file cands fd0 fd1
   local here_ok ok_vars untrusted
+  fd_count; fd0="$FDN"
   for f in "$tdir"/*.test.sh; do
     [ -e "$f" ] || continue
     base="${f##*/}"
@@ -288,6 +318,7 @@ scan() {
     elif [ "$ok_vars" = "," ] && [ "$here_ok" = 0 ]; then
       printf 'NOROOT  %s (binds no checked-in root variable — contributes no candidates)\n' "$base" >&3 2>/dev/null || true
     fi
+    cands="$(awk -v here_ok="$here_ok" -v ok_vars="$ok_vars" "$CANDIDATES_AWK" "$f")"
     while IFS='|' read -r _file ln kind rel; do
       [ -n "${rel:-}" ] || continue
       case "$kind" in
@@ -295,8 +326,11 @@ scan() {
         HERE)             resolves "$tdir/$rel"  && continue ;;
       esac
       printf '%s:%s  [%s]  %s\n' "$base" "$ln" "$kind" "$rel"
-    done < <(awk -v here_ok="$here_ok" -v ok_vars="$ok_vars" "$CANDIDATES_AWK" "$f")
+    done <<< "$cands"
   done
+  fd_count; fd1="$FDN"
+  printf 'FDGROWTH %s (%s open descriptors before the loop, %s after)\n' \
+    "$(( fd1 - fd0 ))" "$fd0" "$fd1" >&3 2>/dev/null || true
 }
 
 # =======================================================================================
@@ -471,6 +505,11 @@ sed 's/^/    /' "$TMP/real-skips.txt"
 if [ -n "$REAL" ]; then printf '%s\n' "$REAL" | sed 's/^/    UNRESOLVED: /'; fi
 assert "no harness reads a literal root-rooted path that does not resolve" \
   "$(eq "$(printf '%s' "$REAL" | grep -c .)" 0)"
+# THE GUARD, not a nicety: this scan used to open five `< <( )` per harness and reach 255
+# open descriptors here, one below the fork cliff that hung the suite. Growth of anything
+# but 0 means a per-item redirection is back.
+assert "the scan over every harness leaks no descriptor (bash $BASH_VERSION)" \
+  "$(grep -q '^FDGROWTH 0 ' "$TMP/real-skips.txt" && echo 0 || echo 1)"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

@@ -263,6 +263,8 @@ destroyed=""
 first_notrun=""
 start_ts=$(date +%s)
 
+# Which bash — the harnesses are spawned as `bash "$f"`, and 3.2 leaks an fd per `< <( )`.
+echo "== $(bash --version | head -1) at $(command -v bash); this runner is $BASH_VERSION =="
 echo "== ${#files[@]} harness(es): ${#serial[@]} serial, ${#par[@]} in a pool of $jobs =="
 if [ "${#serial[@]}" -gt 0 ]; then
   for f in "${serial[@]}"; do run_one "$f"; done

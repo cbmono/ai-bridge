@@ -5,7 +5,7 @@
 #    past ~254 of them a fork stops returning. B. the margin: the smallest number of
 #    INHERITED fds that makes the real harness hang. C. the stack of the spinning child.
 # Exit: 0 the harness clears the cliff · 1 it still hangs · 2 refused.
-# Not a `*.test.sh`: it FAILS today by design. Measurements: ai-bridge-v3/task-042.
+# Not a `*.test.sh`: part A fails on any bash 3.2 by design. Measurements: ai-bridge-v3/task-042.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -70,7 +70,7 @@ for n in $SPARES; do
   start=$(date +%s)
   wait "$pid" 2>/dev/null
   kill "$wd" 2>/dev/null
-  if grep -q 'rc=0 pass=17 fail=0' "$TMP/out.$n" 2>/dev/null; then
+  if grep -qE 'rc=0 pass=[0-9]+ fail=0' "$TMP/out.$n" 2>/dev/null; then
     printf '  %2s spare fds -> green in %ss\n' "$n" "$(( $(date +%s) - start ))"
   else
     printf '  %2s spare fds -> HUNG past %ss\n' "$n" "$BOUND"
