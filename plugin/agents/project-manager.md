@@ -280,7 +280,15 @@ state, and act only on deltas.
    unchanged head, comment prose — defers to the next real delta, which is safe under
    `gated` because nothing merges on an idle verdict (`docs/pm-design.md#step-0-9`).
 
-1. **Orient — one digest, then open only what you act on.** Read `index.md`, then run
+1. **Orient — one digest, then open only what you act on.** First, fast-forward the
+   knowledge base if one is mounted — it is bounded and never fatal, so a slow or
+   unreachable remote costs you the timeout and nothing else:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh pull   # exit 3 = no `knowledge` key, nothing to do
+   ```
+
+   Then read `index.md`, and run
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh digest
@@ -880,6 +888,19 @@ state, and act only on deltas.
    `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<conventional message>" -- <path>...`
    (stage by explicit path, then name those same paths). Never use the helper in
    target product repos.
+
+   **A path under a MOUNTED `knowledge/` goes to `kb-sync.sh`, not to `commit-as.sh`** —
+   which refuses it by name (`SCHEMA.md` → "A mounted knowledge base"). You are the only
+   KB writer: a `Finding` an agent returned in its result is committed by you, here.
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh commit --role project-manager \
+     --message "<conventional message>" -- knowledge/<path>...
+   ```
+
+   It regenerates the index, commits as the human with the tool as co-author, pushes and
+   retries once; if it stops, it says so and leaves no rebase behind. Absent the key it
+   exits 3 and `commit-as.sh` is the route as before.
 
    **Then sync, if this bundle has a remote.** If step 0 deferred its pull, do it now —
    but **re-check the tree first, do not assume your commit cleaned it** —
