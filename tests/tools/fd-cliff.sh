@@ -48,6 +48,15 @@ if out="$(bash "$h" 2>&1)"; then rc=0; else rc=$?; fi
 printf 'rc=%s %s\n' "$rc" "$(printf '%s\n' "$out" | tail -1)"
 INNER
 
+# snapshot <n> <pgid> — the tree, and a sample of whatever in it is burning a core.
+snapshot() {
+  ps -axo pid,ppid,pgid,stat,%cpu,etime,command | awk -v g="$2" '$3==g' > "$TMP/tree.$1"
+  command -v sample >/dev/null 2>&1 || return 0
+  awk '$4 ~ /R/ {print $1}' "$TMP/tree.$1" | while read -r q; do
+    sample "$q" 2 -f "$TMP/sample.$1.$q" >/dev/null 2>&1
+  done
+}
+
 echo "== B. the real harness, $BOUND s bound, killed by process GROUP =="
 first_hang=""
 sig=""
@@ -56,15 +65,9 @@ for n in $SPARES; do
   # harness's shell — knowledge/findings/a-per-harness-bound-must-kill-the-process-group.
   perl -e 'setpgrp(0,0); exec @ARGV' bash "$TMP/inner.sh" "$n" "$HARNESS" > "$TMP/out.$n" 2>&1 &
   pid=$!
-  ( sleep "$BOUND"
-    kill -0 "$pid" 2>/dev/null || exit 0
-    ps -axo pid,ppid,pgid,stat,%cpu,etime,command | awk -v g="$pid" '$3==g' > "$TMP/tree.$n"
-    if command -v sample >/dev/null 2>&1; then
-      awk '$4 ~ /R/ {print $1}' "$TMP/tree.$n" | while read -r q; do
-        sample "$q" 2 -f "$TMP/sample.$n.$q" >/dev/null 2>&1
-      done
-    fi
-    kill -9 -"$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  # One line, and it stays one: tests/background-teardown.test.sh reads a watchdog only
+  # where the sleep, the kill and the `>/dev/null` sit on the spawn's own logical line.
+  ( sleep "$BOUND"; kill -0 "$pid" 2>/dev/null && snapshot "$n" "$pid"; kill -9 -"$pid" 2>/dev/null ) >/dev/null 2>&1 &
   wd=$!
   disown "$wd" 2>/dev/null
   start=$(date +%s)
