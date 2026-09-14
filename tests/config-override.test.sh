@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/hooks/session-banner.sh plugin/scripts/init-bundle.sh plugin/seed/SCHEMA.md plugin/skills/dispatch/SKILL.md plugin/skills/new-project/SKILL.md
 #
 # config-override.test.sh — instance.config.local.json overrides the TRACKED config,
 # for the documented set of per-machine keys, in every script that reads one.

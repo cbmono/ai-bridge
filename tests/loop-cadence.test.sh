@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/operations.md docs/pm-design.md plugin/scripts/tick-lock.sh plugin/seed/.gitignore plugin/skills/audit/SKILL.md plugin/skills/dispatch/SKILL.md
 #
 # loop-cadence.test.sh — the tick cadence runs on the first-party `/loop`, and a firing
 # that lands mid-tick is a clean skip rather than a fault.

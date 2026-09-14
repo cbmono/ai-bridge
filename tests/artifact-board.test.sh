@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/build-board.sh
 #
 # artifact-board.test.sh — `scripts/build-board.sh` renders an Artifact page BODY, from
 # the snapshot only, and leaks nothing the snapshot does not carry.

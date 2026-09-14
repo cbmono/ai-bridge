@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks/hooks.json plugin/hooks/session-banner.sh plugin/scripts/ai-bridge.sh plugin/skills/welcome/SKILL.md
 #
 # banner-colour-channel.test.sh — the emphasis must land on the channel that RENDERS it,
 # and there are two channels with opposite answers.

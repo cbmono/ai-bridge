@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/init-bundle.sh plugin/seed/.gitignore plugin/seed/index.md
 #
 # derived-indexes.test.sh — the `index.md` files are derived, so they are gitignored;
 # `knowledge/index.md` is NOT, and that exclusion is the interesting half.

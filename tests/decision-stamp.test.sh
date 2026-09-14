@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/sharing.md plugin/agents/project-manager.md plugin/scripts/decision-stamp.sh plugin/seed/CLAUDE.md plugin/seed/README.md plugin/seed/SCHEMA.md plugin/skills/answer/SKILL.md plugin/skills/close-project/SKILL.md plugin/skills/dispatch/SKILL.md
 #
 # decision-stamp.test.sh — the three stamps that name the human behind a recorded
 # decision, driven against fixtures with TWO DIFFERENT GIT AUTHORS.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/build-kb-index.sh plugin/scripts/commit-as.sh plugin/scripts/kb-migrate.sh plugin/scripts/kb-sync.sh plugin/seed/SCHEMA.md
 #
 # kb-sync-write.test.sh — the KB write transaction, against a fixture KB repo: one bare
 # repo and two bundles that both write to it.

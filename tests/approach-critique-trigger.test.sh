@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/resolve-model.sh plugin/scripts/validate-bundle.sh plugin/scripts/write-snapshot.sh plugin/seed/instance.config.json plugin/seed/SCHEMA.md
 #
 # approach-critique-trigger.test.sh — the PM's `plan-architect` approach critique is
 # MANDATORY ON ITS TRIGGER and ADVISORY IN WHAT IT MAY DECIDE, and neither half is

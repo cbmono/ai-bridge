@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude-plugin/marketplace.json config/required/agents/plan-architect.md plugin/scripts/bundle-paths.sh plugin/scripts/init-bundle.sh plugin/seed/instance.config.json plugin/seed/SCHEMA.md plugin/VERSION
 #
 # installer-worktree-guard.test.sh — the config layer may not be linked from a git
 # worktree, and a BUNDLE STAMP no longer cares.

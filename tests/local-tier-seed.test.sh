@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/operations.md plugin/agents/project-manager.md plugin/hooks/session-banner.sh plugin/scripts/init-bundle.sh plugin/seed/CONVENTIONS.md plugin/seed/instance.config.json plugin/seed/SCHEMA.md plugin/skills/audit/SKILL.md plugin/skills/dispatch/SKILL.md plugin/skills/fanout/SKILL.md
 #
 # local-tier-seed.test.sh — `install.sh` seeds `models` and `roleTiers` into the
 # per-machine `instance.config.local.json`, never overwrites one a human already set,

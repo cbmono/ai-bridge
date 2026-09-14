@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks plugin/scripts plugin/seed/CONVENTIONS.md
 #
 # concision-contract.test.sh — the reader for `CONVENTIONS.md` -> "Write less".
 #

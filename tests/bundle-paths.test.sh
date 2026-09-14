@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/bundle-paths.sh
 #
 # bundle-paths.test.sh — the resolver answers the same sourced, executed and per key, and
 # plugin/scripts/ spells the layout nowhere else.

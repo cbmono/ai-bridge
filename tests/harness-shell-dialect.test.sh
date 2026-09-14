@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude/rules/tests.md tests
 #
 # harness-shell-dialect.test.sh — the shell dialect `.coderabbit.yaml` declares for
 # `tests/**/*.sh` and the shell dialect the files under `tests/` actually use must not

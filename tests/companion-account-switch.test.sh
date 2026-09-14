@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude-plugin/marketplace.json plugin-accounts/companion/accounts.md plugin/hooks/session-banner.sh plugin/scripts/resolve-account.sh plugin/seed/instance.config.json
 #
 # companion-account-switch.test.sh — the `ai-bridge-accounts` companion: which account a
 # bundle is on, the three renderings that answer says, the launcher's refusals, and the

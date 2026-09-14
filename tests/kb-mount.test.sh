@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/hooks/hooks.json plugin/hooks/push-state.sh plugin/hooks/session-banner.sh plugin/scripts/build-kb-index.sh plugin/scripts/init-bundle.sh plugin/scripts/kb-sync.sh plugin/scripts/papercuts.sh plugin/scripts/validate-bundle.sh plugin/seed/SCHEMA.md
 #
 # kb-mount.test.sh — `knowledge/` mounted from another repository: the absent-key no-op,
 # the mount itself, the bounded reads, and the refusals.

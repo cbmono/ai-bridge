@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/cataloguer.md plugin/agents/project-manager.md plugin/scripts/cite-check.sh plugin/seed/CONVENTIONS.md tests/fixtures/cite-check
 #
 # cite-check.test.sh — the reader for `CONVENTIONS.md` → cite knowledge as
 # `[[finding-slug]]`, and a behavioural drive of `plugin/scripts/cite-check.sh`.

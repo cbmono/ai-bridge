@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/scripts/do-not-repeat.sh plugin/scripts/validate-bundle.sh plugin/seed/CONVENTIONS.md plugin/seed/SCHEMA.md
 #
 # do-not-repeat.test.sh — a failed round's dead end reaches the NEXT dispatch's brief,
 # verbatim.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/sharing.md plugin/scripts/init-bundle.sh plugin/seed/README.md plugin/skills/init/SKILL.md
 #
 # init-org-bundle.test.sh — `plugin/scripts/init-bundle.sh --org <org> [--name <repo>]`,
 # the step that makes a bundle the ORGANISATION'S repo instead of a folder somebody

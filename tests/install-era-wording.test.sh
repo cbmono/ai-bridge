@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude/rules docs plugin
 #
 # install-era-wording.test.sh — every surviving mention of `install.sh`, `upgrade.sh` or
 # `symlink/` in the shipped surface is DECLARED, nothing may tell a reader to run either

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/build-board.sh plugin/scripts/init-bundle.sh plugin/scripts/print-board.sh plugin/scripts/watch-board.sh plugin/scripts/write-snapshot.sh plugin/seed/.gitignore
 #
 # board-renderers.test.sh — the two renderers added over the SAME snapshot the HTML
 # board already reads: scripts/print-board.sh (terminal) and scripts/watch-board.sh

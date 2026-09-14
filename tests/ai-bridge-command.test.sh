@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks/session-banner.sh plugin/scripts/ai-bridge.sh plugin/scripts/bundle-paths.sh plugin/scripts/commit-as.sh plugin/scripts/init-bundle.sh plugin/scripts/tick-lock.sh plugin/skills/welcome/SKILL.md
 #
 # ai-bridge-command.test.sh — `/ai-bridge`: one banner, one list of checks, and two
 # non-actions that are the reason the command exists.

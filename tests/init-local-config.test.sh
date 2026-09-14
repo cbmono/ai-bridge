@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude-plugin/marketplace.json docs/sharing.md plugin/.claude-plugin/plugin.json plugin/scripts/init-bundle.sh plugin/skills/init/SKILL.md plugin/VERSION
 #
 # init-local-config.test.sh — `/ai-bridge:init` writes this clone's
 # `instance.config.local.json` when there is none, DERIVING what the machine already knows
