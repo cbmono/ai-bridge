@@ -573,6 +573,16 @@ else
   exit 0
 fi
 ab_unmigrated "$root" && ab_unmigrated_notice "$root"
+
+# THE KB FAST-FORWARD, HERE RATHER THAN AS A SECOND SessionStart HOOK. It rides this one
+# because a bundle with no mount must pay nothing for it: kb-sync.sh exits 3 on an absent
+# `knowledge` key before it opens anything. It is bounded (git has no timeout of its own
+# and macOS ships no `timeout`), its output goes to stderr so it cannot corrupt --format
+# json, and a failure is REPORTED and never fatal — knowledge is not a lock.
+if [ -n "$bin" ] && [ -x "$bin/kb-sync.sh" ]; then
+  bash "$bin/kb-sync.sh" --instance "$root" --timeout 10 pull >&2 || true
+fi
+
 # The template checkout around the plugin, when there is one — it names the version-drift
 # comparison and nothing else. A plugin installed from a marketplace has one; a plugin
 # vendored some other way may not, and that is reported as "cannot compare", never guessed.

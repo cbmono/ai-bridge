@@ -7,6 +7,7 @@
 #
 #   Usage: review-clearance.sh <pr> [--repo <owner>/<name>] [--head <sha>]
 #                                           [--reviewer <login>] [--for-check <name>]
+#                                           [--no-merge-check]
 #          review-clearance.sh --match-check <check-name>
 #          review-clearance.sh --self-test
 #
@@ -154,6 +155,33 @@
 #      reviewer, its URL and its opening line), because "clause 9 failed" that does not say
 #      WHICH thread is an instruction to go and look rather than one to go and act.
 #      DO NOT ANSWER THIS BY REQUESTING A REVIEW: there already is one
+#   7  the PR CANNOT MERGE: the host reports `mergeable` CONFLICTING or
+#      `mergeStateStatus` DIRTY at the current head. Nothing about the review was read.
+#      ANSWER IT BY REBASING, never by requesting a review — see below
+#
+# MERGEABILITY IS THE FIRST CHECK, AND IT IS ITS OWN CODE (7). On 2026-09-13 three pull
+# requests were presented as merge rows while the host reported all three CONFLICTING /
+# DIRTY: they had been cleared against the PREVIOUS default-branch head, and four sibling
+# merges moved it underneath them with no commit on any of the three. A verdict about a
+# review is not a verdict about a merge, so this file now asks the host the merge question
+# FIRST — before the artifact reads, and before the `--head` staleness test, because a
+# rebase re-answers both. IT IS NOT EXIT 6: clause 9 means a review completed and you owe
+# it a reply; 7 means nobody's review is the problem. The two send a caller to opposite
+# places, which is the test a new code has to pass.
+#
+# UNKNOWN IS A HOLD (EXIT 2), NEVER A PASS. The host computes `mergeStateStatus` lazily and
+# answers UNKNOWN for seconds after the base moves — exactly the window this exists for —
+# so an unreadable, empty or unrecognised value is unknown state and fails closed like
+# every other one here. THE TRAP: `mergeStateStatus` is only populated for a token with
+# PUSH access, so a read-only token holds at 2 forever rather than clearing. That is the
+# correct direction (the gate merges, so it needs that token anyway) and it is stated
+# because a permanent 2 otherwise looks like a broken script.
+#
+# `--no-merge-check` SUPPRESSES IT, FOR ONE CALLER AND ONE REASON. `review-rounds.sh` asks
+# "did a review happen at commit X", which is a question about the past and has no merge in
+# it; left on, every conflicting PR would answer 7 there and land in its fatal `*` arm,
+# turning "this PR has a conflict" into "the round count is unknown". The flag is opt-OUT
+# rather than opt-in so a caller that forgets it gets a refusal, never a clearance.
 #
 # WHY 1 AND 5 ARE TWO CODES, WHICH IS THE ONLY REASON THIS SPLIT EXISTS. The caller's next
 # action differs, and it differs by a whole review session. A transient refusal is answered
@@ -434,6 +462,7 @@ SUBMITTED_STATES="APPROVED CHANGES_REQUESTED COMMENTED"
 usage() {
   echo "Usage: $(basename "$0") <pr> [--repo <owner>/<name>] [--head <sha>]" >&2
   echo "                       [--reviewer <login>] [--for-check <check-name>]" >&2
+  echo "                       [--no-merge-check]   (round counting only, never a gate)" >&2
   echo "       $(basename "$0") --match-check <check-name>   (0 a reviewer's, 1 not)" >&2
   echo "       $(basename "$0") --self-test                  (prove this script RUNS)" >&2
   exit 2
@@ -616,7 +645,7 @@ if [ "${1:-}" = "--self-test" ]; then
   exit 0
 fi
 
-pr=""; repo=""; want_head=""; want_reviewer=""; for_check=""
+pr=""; repo=""; want_head=""; want_reviewer=""; for_check=""; skip_merge_check=""
 if [ "${1:-}" = "--match-check" ]; then
   [ -n "${2:-}" ] && [ "$#" -eq 2 ] || usage
   # A table that will not compile answers "not a reviewer's check" to every name, which
@@ -632,6 +661,7 @@ while [ "$#" -gt 0 ]; do
     --head)     want_head="${2:-}";      [ -n "$want_head" ] || usage; shift 2 ;;
     --reviewer) want_reviewer="${2:-}";  [ -n "$want_reviewer" ] || usage; shift 2 ;;
     --for-check) for_check="${2:-}";     [ -n "$for_check" ] || usage; shift 2 ;;
+    --no-merge-check) skip_merge_check=yes; shift ;;
     -h|--help)  usage ;;
     -*) echo "error: unknown option '$1'" >&2; usage ;;
     *) [ -z "$pr" ] || { echo "error: unexpected argument '$1'" >&2; usage; }
@@ -695,18 +725,23 @@ R=()
 # `/repos/{owner}/{repo}/pulls/{n}/reviews` does expose it, alongside the review's
 # `state`, so the two API calls below are what make routes A and B structural.
 raw="$(gh pr view "$pr" ${R[@]+"${R[@]}"} \
-       --json url,number,headRefOid,author 2>/dev/null)" || {
+       --json url,number,headRefOid,author,mergeable,mergeStateStatus 2>/dev/null)" || {
   echo "error: could not read PR $pr${repo:+ in $repo} — refusing (fail closed)" >&2
   exit 2
 }
 
+# Every column is emitted unconditionally (`// ""`, never `// empty`): a jq array element
+# that vanishes shifts every field after it one left, and `cut -f` reads the wrong one.
 meta="$(printf '%s' "$raw" \
-        | jq -r '[.url, .headRefOid, (.author.login // ""), (.number // "" | tostring)] | @tsv' \
+        | jq -r '[.url, .headRefOid, (.author.login // ""), (.number // "" | tostring),
+                  (.mergeable // ""), (.mergeStateStatus // "")] | @tsv' \
           2>/dev/null)" || meta=""
 url="$(printf '%s' "$meta" | cut -f1)"
 head_sha="$(printf '%s' "$meta" | cut -f2)"
 pr_author="$(printf '%s' "$meta" | cut -f3)"
 pr_number="$(printf '%s' "$meta" | cut -f4)"
+mergeable="$(printf '%s' "$meta" | cut -f5)"
+merge_state="$(printf '%s' "$meta" | cut -f6)"
 nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
 [ -n "$url" ] && [ -n "$head_sha" ] && [ -n "$pr_number" ] && [ "$nwo" != "$url" ] || {
   echo "error: could not resolve the head SHA / repo of PR $pr — refusing (fail closed)" >&2
@@ -726,6 +761,48 @@ nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.
   echo "       that cannot be applied is not a rule that passes. Refusing (fail closed)." >&2
   exit 2
 }
+
+# --- THE FIRST CHECK: can this PR merge at all? -------------------------------
+# Before any artifact is read, because no review makes a conflicting PR mergeable. See
+# "MERGEABILITY IS THE FIRST CHECK" in the header for the incident and for why UNKNOWN
+# holds. `mergeable` ∈ MERGEABLE|CONFLICTING|UNKNOWN; `mergeStateStatus` ∈ CLEAN|BLOCKED|
+# DIRTY|UNSTABLE|BEHIND|HAS_HOOKS|DRAFT|UNKNOWN. Only DIRTY/CONFLICTING is a conflict;
+# BEHIND matters only under strict up-to-date, which is the merge gate's question and not
+# this one.
+if [ -z "$skip_merge_check" ]; then
+  case "$mergeable" in
+    CONFLICTING)
+      echo "refuse: PR $pr cannot merge — the host reports mergeable=CONFLICTING at" >&2
+      echo "        $head_sha (mergeStateStatus=${merge_state:-unreported}). Rebase it" >&2
+      echo "        onto the default branch and push; do NOT request a review for this." >&2
+      exit 7 ;;
+  esac
+  case "$merge_state" in
+    DIRTY)
+      echo "refuse: PR $pr cannot merge — the host reports mergeStateStatus=DIRTY at" >&2
+      echo "        $head_sha (mergeable=${mergeable:-unreported}), which is conflicts." >&2
+      echo "        Rebase it onto the default branch and push; do NOT request a review." >&2
+      exit 7 ;;
+  esac
+  case "$mergeable" in
+    MERGEABLE) ;;
+    *)
+      echo "error: PR $pr reports mergeable='${mergeable:-}' at $head_sha, which is not a" >&2
+      echo "       usable answer. The host computes this lazily and says UNKNOWN for" >&2
+      echo "       seconds after the base moves — so this is unknown state, and unknown" >&2
+      echo "       fails closed. Ask again next tick." >&2
+      exit 2 ;;
+  esac
+  case "$merge_state" in
+    CLEAN|BLOCKED|UNSTABLE|BEHIND|HAS_HOOKS|DRAFT) ;;
+    *)
+      echo "error: PR $pr reports mergeStateStatus='${merge_state:-}' at $head_sha, which" >&2
+      echo "       is not a usable answer — UNKNOWN while the host recomputes, empty for a" >&2
+      echo "       token without push access, or a value this script has not been taught." >&2
+      echo "       Unknown state, and unknown fails closed. Ask again next tick." >&2
+      exit 2 ;;
+  esac
+fi
 
 # AN ARTIFACT LIST THIS SCRIPT CANNOT READ IS UNKNOWN REVIEWER STATE, NOT AN EMPTY ONE:
 # reading a transient 5xx as "no reviews" is a refusal today, and would be a clearance the

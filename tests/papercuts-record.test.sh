@@ -157,6 +157,12 @@ ok "…and the bounds it enforces are the documented ones" \
    "$(yn grep -qE '^NOTE_MIN=15$' "$PC"; )" yes
 ok "…ceiling too"                           "$(yn grep -qE '^NOTE_MAX=160$' "$PC")" yes
 
+echo "== an explicit --file path with whitespace stays one path =="
+SP="$TMP/my records.md"
+bash "$PC" add --file "$SP" --task p/t-9 --surface script:papercuts.sh \
+  --note 'a --file path carrying a space must not word-split' >/dev/null 2>&1
+ok "check reads the spaced record"          "$(bash "$PC" check --file "$SP" 2>/dev/null | sed -n 's/papercuts: \([0-9]*\) entries.*/\1/p')" 1
+
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

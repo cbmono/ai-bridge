@@ -231,6 +231,12 @@ if [[ -n "$PENDING" ]]; then
     fi
     layout_relink
     echo "  RELINKED projects/ and knowledge/ links to $AB_SCHEMA and $AB_CONVENTIONS"
+    # A MOUNTED knowledge base is another repository's worktree, so the relink leaves it
+    # dirty and this script must not commit it — kb-sync.sh is the only KB writer.
+    if [[ -d "$AB_DIR/kb.git" ]]; then
+      echo "           knowledge/ is MOUNTED: its relinked files are uncommitted in that"
+      echo "           repository. Review and push them with: kb-sync.sh commit"
+    fi
     echo "           Now run /ai-bridge:init to re-seed the ignore lines at their new paths."
   fi
   echo "---"

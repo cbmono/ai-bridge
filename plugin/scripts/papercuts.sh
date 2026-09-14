@@ -31,8 +31,20 @@ while [ $# -gt 0 ]; do
     *) echo "papercuts: unknown argument '$1'" >&2; usage; exit 2 ;;
   esac
 done
-[ -n "$FILE" ] || FILE="knowledge/papercuts.md"
 [ -n "$DATE" ] || DATE="$(date -u +%Y-%m-%d)"
+# Shared, the record shards per month so a month goes cold on its own; a single-writer
+# bundle keeps the flat file. Readers take BOTH, so neither form loses an entry.
+DIR="knowledge/papercuts"
+GIVEN="$FILE"
+[ -n "$FILE" ] || FILE="knowledge/papercuts.md"
+if [ -z "$GIVEN" ] && { [ -d "$DIR" ] || [ -d ".ai-bridge/kb.git" ]; }; then
+  FILE="$DIR/${DATE%-*}.md"
+fi
+sources() {
+  [ -n "$GIVEN" ] && { printf '%s\n' "$GIVEN"; return; }
+  [ -r "knowledge/papercuts.md" ] && printf '%s\n' "knowledge/papercuts.md"
+  find "$DIR" -maxdepth 1 -type f -name '*.md' 2>/dev/null | LC_ALL=C sort
+}
 printf '%s' "$EVERY" | grep -qE '^[0-9]+$' || { echo "papercuts: --every wants days" >&2; exit 2; }
 printf '%s' "$DATE" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' \
   || { echo "papercuts: --date wants YYYY-MM-DD" >&2; exit 2; }
@@ -57,8 +69,18 @@ bad_entry() {
   [ "$b" -le "$NOTE_MAX" ] || { printf 'field 4 is %s bytes, over the %s ceiling — one line, not a paragraph' "$b" "$NOTE_MAX"; return; }
 }
 
-# Everything below `## Entries`: candidate lines, blanks and pass markers dropped.
-region() { awk '/^## Entries[[:space:]]*$/ { f=1; next } f' "$FILE" 2>/dev/null; }
+# Everything below `## Entries`, across every shard in name order: candidate lines,
+# blanks and pass markers dropped.
+region() {
+  while IFS= read -r s; do
+    [ -n "$s" ] || continue
+    awk '/^## Entries[[:space:]]*$/ { f=1; next } f' "$s" 2>/dev/null
+  done <<EOF
+$(sources)
+EOF
+}
+newest() { sources | tail -1; }
+have_record() { [ -n "$(sources)" ]; }
 candidates() { region | grep -vE '^[[:space:]]*(<!--|$)' || true; }
 since_pass() { region | awk '/^[[:space:]]*<!-- pass /{ n=0; next } { a[n++]=$0 } END{ for(i=0;i<n;i++) print a[i] }' \
                | grep -vE '^[[:space:]]*$' || true; }
@@ -93,8 +115,16 @@ case "$CMD" in
     echo "papercuts: appended to $FILE"
     ;;
   check)
-    [ -r "$FILE" ] || { echo "papercuts: cannot read '$FILE'" >&2; exit 2; }
-    grep -qE '^## Entries[[:space:]]*$' "$FILE" || { echo "papercuts: '$FILE' has no '## Entries' heading" >&2; exit 2; }
+    have_record || { echo "papercuts: no record to read (looked at $FILE and $DIR/)" >&2; exit 2; }
+    heading=no
+    while IFS= read -r s; do
+      [ -n "$s" ] || continue
+      grep -qE '^## Entries[[:space:]]*$' "$s" 2>/dev/null && { heading=yes; break; }
+    done <<EOF
+$(sources)
+EOF
+    [ "$heading" = yes ] \
+      || { echo "papercuts: no '## Entries' heading in any record" >&2; exit 2; }
     n=0; bad=0
     while IFS= read -r l; do
       [ -n "$l" ] || continue
@@ -106,7 +136,7 @@ case "$CMD" in
     [ "$bad" -eq 0 ] || exit 1
     ;;
   report)
-    [ -r "$FILE" ] || { echo "papercuts: cannot read '$FILE'" >&2; exit 2; }
+    have_record || { echo "papercuts: no record to read (looked at $FILE and $DIR/)" >&2; exit 2; }
     if [ "$ALL" -eq 1 ]; then
       src="$(candidates)"; scope="all time"
     else
@@ -129,7 +159,7 @@ $surfaces
 EOF
     ;;
   due)
-    [ -r "$FILE" ] || { echo "papercuts: no record at '$FILE' — nothing to group"; exit 1; }
+    have_record || { echo "papercuts: no record at '$FILE' — nothing to group"; exit 1; }
     pending="$(since_pass | grep -c . || true)"
     lp="$(last_pass)"
     if [ "$pending" -eq 0 ]; then echo "papercuts: 0 entries since the last pass — not due"; exit 1; fi
@@ -144,12 +174,13 @@ EOF
     fi
     ;;
   pass)
-    [ -w "$FILE" ] || { echo "papercuts: cannot write '$FILE'" >&2; exit 2; }
+    target="$(newest)"; [ -n "$target" ] || target="$FILE"
+    [ -w "$target" ] || { echo "papercuts: cannot write '$target'" >&2; exit 2; }
     src="$(since_pass)"
     n="$(printf '%s' "$src" | grep -c . || true)"
     m="$(printf '%s\n' "$src" | grep . | awk -F'|' '{ gsub(/[ \t]/, "", $3); print $3 }' | sort -u | grep -c . || true)"
-    [ -z "$(tail -c 1 "$FILE")" ] || printf '\n' >> "$FILE"
-    printf '<!-- pass %s — %s entries, %s surfaces -->\n' "$DATE" "$n" "$m" >> "$FILE"
+    [ -z "$(tail -c 1 "$target")" ] || printf '\n' >> "$target"
+    printf '<!-- pass %s — %s entries, %s surfaces -->\n' "$DATE" "$n" "$m" >> "$target"
     echo "papercuts: marked a pass at $DATE over $n entries, $m surfaces"
     ;;
   *) usage; exit 2 ;;

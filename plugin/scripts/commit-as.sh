@@ -269,6 +269,31 @@ EOF
   exit 4
 fi
 
+# The knowledge/ route (SCHEMA.md, "A mounted knowledge base"). Mounted, those paths
+# belong to another repository and this script would commit NOTHING for them — silently,
+# because the selected index is built from THIS repo's HEAD. So refuse by name. Not
+# mounted, knowledge/ is the bundle's own folder and the derived index is regenerated
+# here rather than hand-edited by whoever staged a Finding.
+kb_paths=()
+for p in ${paths[@]+"${paths[@]}"}; do
+  case "$p" in knowledge|knowledge/*|./knowledge|./knowledge/*) kb_paths+=("$p") ;; esac
+done
+if [ "${#kb_paths[@]}" -gt 0 ]; then
+  if [ -d "$repo_root/$AB_DIR/kb.git" ]; then
+    echo "error: knowledge/ is a MOUNTED knowledge base — these paths are tracked in" >&2
+    echo "       another repository, and committing them here would commit nothing:" >&2
+    for p in "${kb_paths[@]}"; do printf '         %s\n' "$p" >&2; done
+    echo "       The tick is the only KB writer. Use:" >&2
+    echo "         kb-sync.sh commit --role $role --message \"$message\" -- <path>..." >&2
+    exit 5
+  fi
+  kb_index="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/build-kb-index.sh"
+  if [ -x "$kb_index" ] && ( cd "$repo_root" && bash "$kb_index" >/dev/null 2>&1 ); then
+    ( cd "$repo_root" && git add -- knowledge/index.md ) >/dev/null 2>&1 || true
+    paths+=("knowledge/index.md")
+  fi
+fi
+
 # Build the SELECTED INDEX: HEAD, plus exactly the staged entries for the named
 # paths. This is deliberately NOT `git commit -- <paths>`, git's pathspec commit
 # form, for two reasons:

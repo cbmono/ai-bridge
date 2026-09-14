@@ -280,7 +280,15 @@ state, and act only on deltas.
    unchanged head, comment prose — defers to the next real delta, which is safe under
    `gated` because nothing merges on an idle verdict (`docs/pm-design.md#step-0-9`).
 
-1. **Orient — one digest, then open only what you act on.** Read `index.md`, then run
+1. **Orient — one digest, then open only what you act on.** First, fast-forward the
+   knowledge base if one is mounted — it is bounded and never fatal, so a slow or
+   unreachable remote costs you the timeout and nothing else:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh pull   # exit 3 = no `knowledge` key, nothing to do
+   ```
+
+   Then read `index.md`, and run
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh digest
@@ -598,6 +606,27 @@ state, and act only on deltas.
      explains. **Exit 4 is the common answer and it is not exit 1**: a real review of
      an *earlier* commit — surface as "reviewed at `<sha>`, head has moved — ask for a
      review at this head", never as "the reviewer declined".
+   - **EXIT 7 IS NOT ABOUT THE REVIEWER AT ALL: the PR CONFLICTS, so it is a REBASE
+     ROUND and never a merge row.** The same call answers it first, because a
+     conflicting PR cannot merge whatever the review says. On 2026-09-13 three PRs
+     were presented as "merge — verified, CLEAN" while GitHub reported them
+     CONFLICTING/DIRTY: four sibling merges had moved the default branch underneath
+     them, with no commit on any of the three. What you do:
+     * **Dispatch a fresh round to the task's own agent** — rebase onto the default
+       branch, resolve, `--force-with-lease` with explicit arguments, re-run the body
+       gate, and record the new verified SHA. Never re-request a review for a 7.
+     * **Leave the task `in-progress`.** It is being worked, not waiting on you; that
+       is also what keeps it off `AWAITING.md`, whose merge verb only ever fires for
+       `in-review`.
+     * **Count it:** `${CLAUDE_PLUGIN_ROOT}/scripts/stall-counter.sh record <task-doc>
+       --blocker conflict`. **Never pass `--progress` on this round** — the rebase push
+       IS the PR activity `--progress` means, so passing it resets the counter every
+       time and the escalation below can never be reached. Exit 1 means the cap: run
+       `stall-counter.sh escalate <task-doc>` instead of dispatching again, and a
+       second conflict in a row goes to the human.
+     * **Re-ask every tick, and never cache the answer.** Mergeability changes when the
+       default branch moves with no commit on the PR, so a 7 from last tick is not an
+       answer this tick and neither is a 0.
    - **A refusal is FOUR classes, and the ask fires on the SPEND, never on the
      hiccup.** The PM never needs permission to WAIT; it needs permission to SPEND
      (a `qa-reviewer` session). Holding costs nothing and never skips the verification gate — it only defers it.
@@ -859,6 +888,19 @@ state, and act only on deltas.
    `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<conventional message>" -- <path>...`
    (stage by explicit path, then name those same paths). Never use the helper in
    target product repos.
+
+   **A path under a MOUNTED `knowledge/` goes to `kb-sync.sh`, not to `commit-as.sh`** —
+   which refuses it by name (`SCHEMA.md` → "A mounted knowledge base"). You are the only
+   KB writer: a `Finding` an agent returned in its result is committed by you, here.
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh commit --role project-manager \
+     --message "<conventional message>" -- knowledge/<path>...
+   ```
+
+   It regenerates the index, commits as the human with the tool as co-author, pushes and
+   retries once; if it stops, it says so and leaves no rebase behind. Absent the key it
+   exits 3 and `commit-as.sh` is the route as before.
 
    **Then sync, if this bundle has a remote.** If step 0 deferred its pull, do it now —
    but **re-check the tree first, do not assume your commit cleaned it** —

@@ -159,6 +159,28 @@ names every open thread** — and 2 is a reviewer state it could not read — un
 a pass. It answers *whether* a review happened and, on 6, whether the reviewer's own
 threads were answered; the other clauses above still decide whether that review **cleared**.
 
+**And its FIRST question is not about the review at all: can this PR merge?** It asks the
+host for `mergeable` / `mergeStateStatus` before it reads one artifact, because no review
+makes a conflicting PR mergeable. CONFLICTING or DIRTY is **exit 7** — a rebase round, never
+a merge row and never a review request. **UNKNOWN is exit 2, a hold**: the host computes
+that value lazily and answers UNKNOWN for seconds after the base moves, which is exactly
+the window that produced the failure this exists for. On 2026-09-13 three pull requests
+were presented as merge rows — review at head, CI green — while GitHub reported all three
+CONFLICTING/DIRTY, because four sibling merges had moved the default branch underneath them
+with no commit on any of the three. The value is re-read **every** tick for that reason;
+last tick's answer is not this tick's. The full table:
+
+| Exit | Means | Next |
+|---|---|---|
+| **0** | a review artifact evidences a completed review of this head | the only clearance |
+| **1** | transient refusal — rate limit, quota, placeholder | wait; it reopens by itself |
+| **2** | unknown state, including an UNKNOWN mergeability | hold, re-ask next tick |
+| **3** | no reviewer signal on this PR | hold |
+| **4** | an artifact that is stale or evidences nothing | ask for a review at this head |
+| **5** | terminal refusal — credits, billing, auth | a human fixes the reviewer |
+| **6** | a review at this head, refused by clause 9 (open threads) | answer the threads; do **not** re-request |
+| **7** | the PR CONFLICTS with its base | rebase; do **not** re-request a review |
+
 **4 and 6 send you in opposite directions, which is why they are two codes.** Exit 4 means
 **ask for a review** — the one you have is stale or evidences nothing. Exit 6 means
 **do not**: a review completed at this exact head, and what is outstanding is your reply to
