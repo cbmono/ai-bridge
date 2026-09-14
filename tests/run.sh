@@ -8,6 +8,8 @@
 #   --deep                    ONLY the harnesses marked `# deep` — they spawn the claude
 #                             CLI and cost money; no other mode runs them or reaches it
 #   --jobs N                  harnesses in parallel (default: CPUs); `# serial` runs alone
+# Each harness is bounded by HARNESS_TIMEOUT seconds (600, 1800 under --deep): one that
+# never returns is killed and fails as ITSELF, and the rest of the suite still reports.
 # Exit: 0 all green · 1 a harness failed · 2 refused (no harnesses, or a dead checkout).
 # Why, the core list and the measured numbers: .claude/rules/tests.md.
 set -uo pipefail
@@ -37,7 +39,15 @@ CORE=(
   tests/harness-read-paths.test.sh
 )
 
-usage() { sed -n '3,12p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; }
+# The per-harness wall-clock bound, in seconds, named once for the whole suite. The slowest
+# gating harness is review-clearance: 311s in a pool of 3 on run 34783957083, and 455s
+# standalone after #226 grew it — though that figure shared a machine with a sibling suite,
+# so treat it as an upper bound. Re-measure it in CI before trimming 600. A `# deep`
+# harness spawns a paid CLI call and measures ~10m.
+HARNESS_TIMEOUT="${HARNESS_TIMEOUT:-600}"
+HARNESS_TIMEOUT_DEEP="${HARNESS_TIMEOUT_DEEP:-1800}"
+
+usage() { sed -n '3,14p' "$0" | sed 's/^#\{1,\} \{0,1\}//'; }
 
 mode=all
 base=""
@@ -58,6 +68,9 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+[ "$mode" != deep ] || HARNESS_TIMEOUT="$HARNESS_TIMEOUT_DEEP"
+export HARNESS_TIMEOUT   # the pool re-enters this script as --run-one, which reads it here
+
 group()    { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::group::$1"; else echo "== $1"; fi; }
 endgroup() { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::endgroup::"; fi; return 0; }
 fatal()    { if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::error::$1"; else echo "run.sh: $1" >&2; fi; }
@@ -76,6 +89,18 @@ verify_checkout() {
 # `# serial` (never run beside another harness) or `# deep` (spawns the claude CLI).
 declares() { head -20 "$2" 2>/dev/null | grep -qE "^# $1( |$)"; }
 
+# bounded <harness> — the harness under a HARNESS_TIMEOUT-second wall clock, exiting 142
+# when it trips. The bound has to kill the process GROUP, not the harness: a harness
+# blocked in a child leaves that child holding the capture's pipe, so `out="$( )"` below
+# goes on blocking past the bound (measured: 60s under a 3s bound). `perl`, not
+# `timeout(1)`, because macos-latest ships the first and not the second; and the exit
+# status is re-encoded because a bare `$?>>8` turns every signal death into 0.
+bounded() {
+  command -v perl >/dev/null 2>&1 || { bash "$1"; return; }
+  perl -e '$t=shift; $p=fork; exit 127 unless defined $p; if(!$p){setpgrp(0,0); exec @ARGV; exit 127} $SIG{ALRM}=sub{kill "KILL",-$p; waitpid $p,0; exit 142}; alarm $t; waitpid $p,0; $s=$?; exit(($s & 127) ? 128+($s & 127) : ($s>>8))' \
+    "$HARNESS_TIMEOUT" bash "$1"
+}
+
 # run_one <harness> — writes <basename>.out and "<rc> <secs> <state>" into
 # $RUN_OUT_DIR/<basename>.meta, and always exits 0: the meta file is the verdict, never
 # this process. State is the checkout probe, and it has THREE values on purpose —
@@ -91,7 +116,8 @@ run_one() {
     return 0
   fi
   s=$(date +%s)
-  if out="$(bash "$f" 2>&1)"; then rc=0; else rc=$?; fi
+  if out="$(bounded "$f" 2>&1)"; then rc=0; else rc=$?; fi
+  [ "$rc" -ne 142 ] || out="$out"$'\n'"run.sh: KILLED at the ${HARNESS_TIMEOUT}s per-harness bound — $f never returned"
   printf '%s\n' "$out" > "$RUN_OUT_DIR/$b.out"
   if verify_checkout; then state=intact; else state=broken; fi
   s=$(( $(date +%s) - s ))
@@ -263,6 +289,8 @@ destroyed=""
 first_notrun=""
 start_ts=$(date +%s)
 
+# Which bash — the harnesses are spawned as `bash "$f"`, and 3.2 leaks an fd per `< <( )`.
+echo "== $(bash --version | head -1) at $(command -v bash); this runner is $BASH_VERSION =="
 echo "== ${#files[@]} harness(es): ${#serial[@]} serial, ${#par[@]} in a pool of $jobs =="
 if [ "${#serial[@]}" -gt 0 ]; then
   for f in "${serial[@]}"; do run_one "$f"; done

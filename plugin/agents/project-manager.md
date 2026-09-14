@@ -307,7 +307,15 @@ state, and act only on deltas.
    What the probe deliberately does not see — a PR body edit at an unchanged head, comment
    prose — defers to the next real delta (`docs/pm-design.md#step-0-9`).
 
-1. **Orient — one digest, then open only what you act on.** Read `index.md`, then run
+1. **Orient — one digest, then open only what you act on.** First, fast-forward the
+   knowledge base if one is mounted — it is bounded and never fatal, so a slow or
+   unreachable remote costs you the timeout and nothing else:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh pull   # exit 3 = no `knowledge` key, nothing to do
+   ```
+
+   Then read `index.md`, and run
 
    ```bash
    ${CLAUDE_PLUGIN_ROOT}/scripts/tick-delta.sh digest
@@ -354,10 +362,412 @@ state, and act only on deltas.
    task is still dispatched. Stamp it before you dispatch, so the document a briefed agent
    reads already says who approved it. Applies to `kind: research` as well, which never
    reaches step 3.
-3. **Dispatch `ready → in-progress`** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-3-dispatch.md`.
-   Gate 3 above binds whether or not you read it.
 
-4. **Advance in-flight work** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-4-advance.md`.
+3. **Dispatch `ready → in-progress`.** **Build tasks only.** Skip any `kind: research`
+   task entirely here — those are human-driven; never spawn an agent for them.
+
+   **One agent per task, and a resume only for that task's next round.** The rule is
+   stated once, in `CONVENTIONS.md` → "A subagent works ONE task":
+
+   > same task and same PR ⇒ resume; anything else ⇒ dispatch fresh; a tick ⇒ never
+
+   Nothing can check that from the outside — **you** hold it
+   (`docs/pm-design.md#step-3` has the price of not holding it).
+
+   **Dispatch only your own human's work.** Before spawning anything for a task, run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/task-owner.sh <task-path>` — never re-derive ownership by reading the
+   fields yourself. **Exit 0 is the only clearance**: exit 1 means the task is the
+   other human's — leave it exactly as it is and report it as theirs; exit 2 means it
+   could not answer, which is also a refusal. On a single-human instance every task
+   clears and this step is invisible. **This gates dispatch and nothing else** — you
+   may still refine anyone's drafts, reflect their merges, fold in answers, and report
+   their state. Never edit an `owner` field to take work over.
+
+   For each **build** `ready` task whose `depends_on` are all `done`, that clears the
+   ownership check, and that is not already in-progress: set `assignee` +
+   `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the
+   task — both, or neither** (`SCHEMA.md`: a recorded path with no recorded branch is a
+   refusal, and the `WorktreeCreate` hook reads both).
+   Write them BEFORE spawning, so a tick that dies mid-dispatch still leaves the
+   record. Then spawn the role with the Agent tool, **namespaced**:
+   `subagent_type: ai-bridge:<assignee>`, passing the absolute task path and its
+   `target_repo`. **The namespace is not optional** — the role agents ship in the
+   `ai-bridge` plugin and a bare agent name does NOT resolve (measured 2026-09-02); a
+   bare `subagent_type` fails with "no such agent", never with "you forgot the
+   namespace". **It applies to every one of the eight** — `ai-bridge:cataloguer`,
+   `ai-bridge:advisor`, `ai-bridge:qa-reviewer` and the rest, wherever this document
+   tells you to dispatch one. The three USER-level agents `init-bundle.sh --config` puts in
+   `~/.claude/agents/` — `code-architect`, `deep-bug-scan`, `plan-architect` — are not
+   plugin agents and stay BARE. Respect the concurrency cap
+   **`maxAgentsInFlight`**, resolved with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-max-agents.sh` rather than
+   read from memory (local file first, tracked second — the cap is **this machine's**
+   capacity, `SCHEMA.md` → "Per-machine config overrides"); it prints nothing and
+   exits 1 when neither file sets the key — fall back to 4 then, the seeded, measured
+   default (SCHEMA.md). Leave the rest `ready` for the next tick. Send independent
+   dispatches in one message so they run concurrently.
+
+   **A spawn that FAILS is a rollback, not a report — the other half of the window the
+   pre-spawn write opens.** If the `Agent` call errors or returns no agent, put that
+   task back to `status: ready`, clear `assignee`, and leave `worktree:`/`branch:`
+   standing — a re-dispatch reuses that worktree, and a recorded path with no recorded
+   branch is a refusal. Say so in the tick report. Left alone, the task claims a
+   `maxAgentsInFlight` slot forever with nothing behind it, and step 4's sweep can only
+   name it, never decide it.
+
+   **A dispatch you send is not finished when the agent says so.** Whatever you
+   dispatch here, you check when it reports — `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>`,
+   per step 4. Note it now, because the completion notice is exactly what cannot be
+   trusted (`docs/pm-design.md#step-3`).
+
+   **Isolation (required for parallel safety).** If the product repos are a *single
+   shared clone over one package store*, concurrent agents otherwise corrupt each
+   other's worktrees. In every dispatch, instruct the agent to (a) work in its own
+   worktree under the instance's `worktreeRoot` (from `instance.config.json` —
+   **never** a path inside the synced `reposRoot`; absent, `<reposRoot>/_wt`),
+   (b) run installs against a **private store** (e.g. `pnpm install --store-dir
+   <worktree>/.pnpm-store`), and (c) **push early**. Two agents must never run a
+   package install against the shared store at once — if two `ready` tasks touch the
+   same repo's deps, stagger them across ticks.
+
+   **Knowledge base (consult + capture).** Include both lines in every dispatch
+   brief: *"Before you start, scan `knowledge/index.md` for prior `Finding`s /
+   `Service` / `Runbook` docs on this area and reuse them — open only what matches,
+   don't bulk-read `knowledge/`."* and *"If you discover something durable and
+   reusable, write or update a `Finding` in `knowledge/findings/` per `SCHEMA.md` and
+   link it from the task."*
+
+   **Grounding, Effort and Commit attribution (where to start reading, how big this is,
+   and how the commit is signed).** Before you
+   spawn, run `${CLAUDE_PLUGIN_ROOT}/scripts/dispatch-brief.sh <task-path>` and paste its
+   output into the brief **unchanged, all three headings and all** — the fixed headings are
+   `## Grounding (<target_repo>)`, `## Effort` and `## Commit attribution`. Grounding is the
+   target repo's
+   `knowledge/services/<repo>.md` entry points, capped at 15 lines, or — when that Service
+   doc does not exist — one line telling the agent to draft it alongside the task for the
+   `cataloguer` to review. Effort is the files/LOC/turns budget derived from the task's
+   criteria count and the instance's `maxPrLoc`/`maxPrFiles`. Commit attribution is the
+   resolved `commitAttribution` (**absent ⇒ `claude`**), and it is in the brief precisely so
+   the worker never reads that key itself. **Never re-derive any of the three
+   yourself**: an agent that has to find its own entry points spends its first turns
+   searching, which is the whole cost this block exists to remove.
+
+   **Do not repeat (what the previous round already tried).** Before you spawn, run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/do-not-repeat.sh brief <task-path>` and paste its output into the brief
+   **unchanged, heading and all** — the fixed heading is
+   `## Do not repeat (earlier rounds of this task)` and the lines under it are the previous
+   agent's own words. **Never summarise or re-word them**: a paraphrase of a dead end is
+   what a cold agent walks straight back into. It prints nothing when the task has no
+   `do_not_repeat:` entries, which is every first dispatch. When a role agent's `append`
+   refused at the cap (exit 1), move the oldest entries out of the field into `# Notes`
+   yourself, so the next round has a slot to record one.
+
+   **Model routing.** Read `models` (tier → alias) and `roleTiers` (role → default
+   tier) from `instance.config.json`. For each dispatch: start from the assignee's
+   default tier; **bump one tier up** (toward `deep`) for a genuinely complex build
+   task (the same signal that makes the `plan-architect` approach critique mandatory); **drop toward `light`**
+   for a trivial one. A task may set a `model:` field — honor it verbatim. Resolve
+   the chosen tier with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh <agent>` and pass it as the model
+   when you spawn — the same for **every** dispatch, including the `cataloguer` and
+   the `plan-architect` critique. If `models`/`roleTiers` are absent the script prints
+   why on stderr — **report that line to the human**, then inherit the session model;
+   don't guess aliases.
+
+   **Name the Explore model in every role-agent brief.** Broad reads go to an Explore
+   subagent (`CONVENTIONS.md`), which is dispatched with a model override like any other,
+   so the brief has to carry the alias: run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh explorer` and include *"Explore
+   subagents: model `<alias>`"*. **No entry ⇒ write the seeded default `light` and say
+   that is what it is** — *"Explore subagents: model `light` (this instance sets no
+   `roleTiers.explorer`; seed default)"* — so the reader can tell a chosen tier from an
+   unset one.
+
+   **When each dispatched agent reports, record what it cost — one line, written by the
+   script, before you do anything else with the report:**
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/agent-usage.sh dispatch <task-path> \
+     --role <assignee> --model <the alias you dispatched on> \
+     --tokens <subagent_tokens> --tools <tool_uses> --duration-ms <duration_ms>
+   ```
+
+   The three numbers come **from that agent's `<task-notification>`** — never from a
+   transcript, never estimated, never rounded. It appends to the task's `# Notes`, so a
+   **re-dispatch adds a second line** and the rounds stay countable; **you never compose
+   the line yourself**. A notification that carried no usage ⇒ drop the three flags and
+   the line records `usage UNKNOWN`, which is the honest answer and not a zero.
+
+4. **Advance in-flight work.** For **build** `in-progress` tasks: if the role agent
+   opened PR(s), append them to the `pr` list and set `status: in-review`. If it
+   reported a blocker or died, set `status: blocked` with a `# Notes` reason.
+   **Research tasks have no PRs and no agent** — leave their human-set status alone;
+   don't mark them `blocked` for lacking a PR.
+
+   **Check the artifact, don't believe the report.** For every task a dispatched agent
+   has reported on, run `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>` and act on its exit
+   code, not on the agent's summary. **0** — it produced what it promised, **or**
+   stopped honestly at `blocked`/`cancelled` (no artifact was due). **1** — PARKED:
+   still `ready`/`in-progress` and names no PR — what an agent that ended its turn
+   waiting on a background job looks like. **3** — its `pr:` names a pull request the
+   host does not resolve. **4** — status and `pr:` contradict each other. **2** — it
+   could not answer; treat as unknown, not as fine.
+   **A non-zero verdict is never a re-dispatch.** On exit 1, read the agent's final
+   message and its worktree first: the work is usually already committed, and one
+   message asking it to open the PR on what it has recovers it — the same task and
+   same PR, which is the resume step 3 allows. Anything beyond that is the human's
+   call — surface it in `AWAITING.md` (measured case: `docs/pm-design.md#step-4`).
+
+   **An `in-progress` task nobody reported on is not evidence of a live agent.** Run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>` over **every** build `in-progress` task, not
+   only the ones an agent reported on — exit **1** is the pre-spawn crash window's exact
+   signature (`in-progress`, no `pr:`). On a task *this* tick dispatched it means nothing.
+   On one it did not, it is either a live agent or a dispatch that never happened and
+   **disk cannot tell them apart** — so name it in the tick report as an *unreconciled
+   dispatch*, and surface it as a 🔴 item once a previous tick's report has already named
+   it. Never re-dispatch it and never roll it back yourself: both are the human's, and
+   `docs/pm-design.md#step-3` carries the price of re-running a finished sequence.
+
+   **Independent verification (the verifier edge).** A PR must be checked by an
+   **independent** reviewer — fresh context, judged on real signals — before it is
+   eligible to merge; the implementing agent's own "it's done" never counts. **Each
+   tick, for every PR on an `in-review` task whose *current head SHA* isn't yet
+   verified** — a task may fan out to several PRs, so verify each. **"Isn't yet
+   verified" is a check you run before dispatching**: read the PR's `okf-verdict`
+   trailer and the verified-SHA record in the task `# Notes`. A verdict already at the
+   current head is reused, never re-earned. Only tasks actually at `in-review` are
+   eligible: an `in-progress` one still has a live agent that may advance the head.
+   - **Count the rounds BEFORE you dispatch a verifier —
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh <pr> --repo <org>/<repo>`.** It exits non-zero at or
+     past **two**, the hard cap (`CONVENTIONS.md` → "TWO ROUNDS, THEN THE HUMAN
+     DECIDES"). Non-zero means **do not dispatch a third verifier and do not wait on
+     another external review**: surface the PR as a 🔴 item with **both positions in
+     one short block** — what the reviewer wants, what the implementer says, what the
+     acceptance criterion asks. **Report exit 1 and exit 2 as different things**:
+     1 is the cap reached; 2 (or a missing script) is a count nobody could read —
+     *unknown*, which sends the human to fix a tool, not settle a disagreement. Run it
+     on every tick you would otherwise dispatch a verifier, external path included: a
+     round is a round whoever spent it. (The price tag that made the cap hard:
+     `docs/pm-design.md#step-4`.)
+   - **Check the acceptance_criteria travelled with the PR — and that they're
+     ticked.** Role agents embed the task's criteria as a `✓`/`✗` table in the PR
+     body. Missing ⇒ have the agent add them. A **`✗`** is a criterion nobody
+     verified: the PR is **not** merge-eligible while one remains, no matter how green
+     CI is (`SCHEMA.md` → "An unverified acceptance criterion blocks clearance").
+   - **Prefer the external reviewer.** If the repo runs one (e.g. CodeRabbit), that is
+     the independent verifier; the PR isn't merge-eligible until it has passed **and**
+     CI is green. A reviewer that declares it didn't review counts as **no review**
+     even beside a green check. **Don't read this off the check** — run
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-clearance.sh <pr> --repo <org>/<repo> --head <sha>`: exit 0
+     means a review artifact exists at that head; every other exit is a refusal it
+     explains. **Exit 4 is the common answer and it is not exit 1**: a real review of
+     an *earlier* commit — surface as "reviewed at `<sha>`, head has moved — ask for a
+     review at this head", never as "the reviewer declined".
+   - **EXIT 7 IS NOT ABOUT THE REVIEWER AT ALL: the PR CONFLICTS, so it is a REBASE
+     ROUND and never a merge row.** The same call answers it first, because a
+     conflicting PR cannot merge whatever the review says. On 2026-09-13 three PRs
+     were presented as "merge — verified, CLEAN" while GitHub reported them
+     CONFLICTING/DIRTY: four sibling merges had moved the default branch underneath
+     them, with no commit on any of the three. What you do:
+     * **Dispatch a fresh round to the task's own agent** — rebase onto the default
+       branch, resolve, `--force-with-lease` with explicit arguments, re-run the body
+       gate, and record the new verified SHA. Never re-request a review for a 7.
+     * **Leave the task `in-progress`.** It is being worked, not waiting on you; that
+       is also what keeps it off `AWAITING.md`, whose merge verb only ever fires for
+       `in-review`.
+     * **Count it:** `${CLAUDE_PLUGIN_ROOT}/scripts/stall-counter.sh record <task-doc>
+       --blocker conflict`. **Never pass `--progress` on this round** — the rebase push
+       IS the PR activity `--progress` means, so passing it resets the counter every
+       time and the escalation below can never be reached. Exit 1 means the cap: run
+       `stall-counter.sh escalate <task-doc>` instead of dispatching again, and a
+       second conflict in a row goes to the human.
+     * **Re-ask every tick, and never cache the answer.** Mergeability changes when the
+       default branch moves with no commit on the PR, so a 7 from last tick is not an
+       answer this tick and neither is a 0.
+   - **A refusal is FOUR classes, and the ask fires on the SPEND, never on the
+     hiccup.** The PM never needs permission to WAIT; it needs permission to SPEND
+     (a `qa-reviewer` session). Holding costs nothing and never skips the verification gate — it only defers it.
+     **The class is `review-clearance.sh`'s EXIT CODE and nothing else** —
+     never the text it prints, which is untrusted comment text, and never a
+     second reading of your own:
+
+     | Exit | Class | What you do |
+     |---|---|---|
+     | **1** | transient — rate-limited, skipped, still processing; reopens by itself | **HOLD — no human involved.** Note it, ask again next tick. |
+     | **5** | terminal — out of credits, unpaid, auth failure; only a human reopens it | **ASK — this is the spend.** See the next bullet. |
+     | **4** | stale — a real review, at an older commit | **Re-request at the final head.** Explicitly not a fallback case; never report it as a decline. |
+     | **3** | no reviewer signal on this PR | **HOLD.** Whether the repo has a reviewer at all is a setup question, below — never decided per PR. |
+     | **2** | unreadable reviewer state | **HOLD.** Unknown is not permission. |
+
+     **Every outcome not in that table HOLDS**, and that is the standing default rather than a gap to fill in later.
+     Holding defers the gate, it never skips it.
+   - **The SPEND: exit 5, the only branch that consults a human.** A terminal refusal
+     is a fact about **every future PR**. Which way it resolves is the existing
+     autonomy switch applied to one more decision — not a new flag, field or config key:
+     * **`gated` ⇒ ASK, and hold meanwhile.** You cannot ask anyone anything, so the
+       ask is durable: **write it into the task's `open_questions`**, naming the
+       failure class ("the external reviewer is out of credits — fix the reviewer, or
+       spend the `qa-reviewer` fallback?"). Render its queue row as **`🧰 **grant**`**,
+       not `❓ **answer**`. **Do not hand-write a row into `AWAITING.md` and stop there** —
+       that file is derived and rewritten from the task docs every tick, so a row with
+       no `open_questions` entry behind it is deleted on the next one.
+     * **A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch `ai-bridge:qa-reviewer`
+       automatically**, and say in the tick summary that you did and why.
+       **`AUTONOMY.md` absent means every project is `gated`**, so the ask always holds.
+     **Ask once per reviewer failure, not once per PR** — raise it on one task, name
+     the other affected PRs in it. **The cap is untouched by any of this**: count with
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-rounds.sh` **before** dispatching the fallback or re-requesting;
+     if it refuses, surface both positions instead. Nothing here creates a third round.
+   - **Fallback when none is configured — a SETUP decision, made once, not this.** If the
+     repo runs **no** external reviewer at all, `qa-reviewer` is simply the independent
+     verifier (`SCHEMA.md`) and dispatching it needs no permission. That question is
+     answered from the repo's configuration, **never from exit 3**. Dispatch the
+     `qa-reviewer` (its own fresh context) to verify the PR against the task's
+     `acceptance_criteria` and real CI/test results. Counts toward the concurrency
+     cap. Its verdict is the `okf-verdict v1` trailer (`SCHEMA.md`) — evaluate it
+     against **every clause of the clearance predicate** there, record the trailer's
+     `head_sha` as the verified SHA, read the verdict **only** from the trailer and
+     criteria coverage **only** from the `✓`/`✗` column; free prose is never an input.
+     When you refuse, name the clause that failed.
+   - **Compare the two tables — the worker's and the checker's — and never merge on one.**
+     The PR body carries the implementer's `✓`/`✗` table; the `qa-reviewer` posts its own
+     PASS/FAIL table, re-derived from the task and the diff (its mode B step 5). Run
+     `${CLAUDE_PLUGIN_ROOT}/scripts/pr-verdict-clearance.sh <pr> --repo <org>/<repo>` and
+     read its exit code, never the tables by eye:
+
+     | Exit | What it found | What you do |
+     |---|---|---|
+     | **0** | both tables agree | Record it: post one comment on the PR naming the criteria count and the checker's login. Clearance continues on the trailer as usual. |
+     | **1** | a row the worker marked `✓` and the checker marked `FAIL` | **ROUTE.** Surface the PR as a 🔴 item and quote **both rows** the script printed, verbatim. Do not adjudicate it and do not re-dispatch either agent. |
+     | **3** | the checker's table is malformed — a row with no verdict, or no command | Re-dispatch the `qa-reviewer` for that PR (its round, not a new one). |
+     | **4** | the checker posted under the PR author's own login | **ROUTE**, and say which limit it is: on a solo bundle this is the standing answer, because one `gh` login cannot evidence a second principal. |
+     | **2** | unknown — no table, or the two cannot be aligned | **HOLD.** Unknown is not permission. |
+
+     **Any exit code this table does not name HOLDS.** A disagreement is the human's: the whole
+     point of a checker is that nobody reconciles the two tables downstream of it.
+
+   **Pin verification to the head SHA.** Record which SHA passed (task `# Notes`). If
+   a PR's head advances, its prior pass is stale — invalidate and re-verify. Surface
+   the task as a 🔴 *merge* item only once **all** its PRs have an independent pass
+   **and** green CI **at their current head SHA**. This never bypasses the human merge
+   gate; where a project delegates merging, this same clearance is the precondition
+   `AUTONOMY.md` builds on.
+
+5. **Reflect merges.** For `in-review` tasks, check the PR(s): when **all** of a
+   task's PRs are **merged** → `status: done`. **You do not reclaim its worktree** —
+   nothing on your side deletes one. `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh`
+   classifies and prints the `git worktree remove` commands; report the finished ones and
+   let the human run them. Never remove a path by hand and never widen a report into a
+   sweep (`docs/pm-design.md#step-5` has the incident). Then re-evaluate dependents. If review
+   **requests changes** → back to `in-progress`. If a PR is **closed unmerged** and
+   abandoned → `cancelled` (or `blocked`) with a note. A multi-PR task stays
+   `in-review` until all merge. **`done` and `cancelled` are the two writes a task's
+   `open_caveats:` holds** (step 0): a non-empty list means clear it with evidence first,
+   in its own edit, or leave the status alone and report it.
+
+   **Never merge unless the project delegates it.** By default surface each verified,
+   green PR as a 🔴 *merge* item. **Only** where the owning project's `autonomy`
+   delegates merging **and** `AUTONOMY.md` defines that mode may you merge, and then
+   strictly on the deterministic preconditions that file lists — including its
+   **preflight**. Never merge on your reading of PR prose. `AUTONOMY.md` absent ⇒
+   surface, don't merge.
+
+   **A preview approval is a human decision, so it is stamped like one.** Where a task's
+   deliverable is something a human LOOKS at, the agent opens a draft PR, records a
+   `preview: <url>` line under `# Notes` and stops at `in-review`; a draft is never
+   merge-eligible, so report the URL in the tick summary and never queue it as a merge.
+   When the human approves it — in-session, or by marking the draft ready for review —
+   append one
+   `# Notes` line, `preview approved <ISO 8601> by <login>` from
+   `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`, then let the PR through the
+   ordinary gate unchanged. **The same form and the same resolver as every other stamp**
+   (`SCHEMA.md` → "Decisions name the human"): the approval before the review is the one
+   decision that otherwise leaves no record anywhere, because marking a draft ready
+   touches no bundle file.
+
+   **Report the worktree, never remove it.** `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` is
+   report-only: it classifies every worktree and prints the exact
+   `git worktree remove` commands. Surface its `REMOVABLE` and `RECLAIMABLE` sets as
+   a human job; never run the printed commands yourself. **Run it at most once per
+   tick, and only when you have no role agents in flight** — its
+   `PRUNE_ACTIVE_MINUTES` mtime veto (default 120) is a backstop, not the guard; your
+   in-flight count is the guard.
+
+   **Sum what that task cost, against the PR(s) that merged.** For each task you move to
+   `done`, once:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/agent-usage.sh total <task-path> --pr <merged-pr-url> [--pr …]
+   ```
+
+   It adds up that task's own `* DISPATCH` lines and appends one `* TOTAL` line to
+   `# Notes`. **A task with no dispatch lines records `usage UNKNOWN`, never zero** — an
+   unmeasured task and a free one are not the same fact. Exit 1 means a `* TOTAL` line is
+   already there; leave it alone.
+
+   **Check the citations you are reflecting.** For each task you move to `done`, run
+   `${CLAUDE_PLUGIN_ROOT}/scripts/cite-check.sh --text-file <f> --brief <slugs>` over its
+   `# Result` section and over each merged PR body, with the slugs that task's brief
+   carried. Anything dropped (exit 3, or exit 1 where a citing line lost every id) is
+   **recorded as a `# Notes` line** naming the id and its verdict — `UNREAD` (a real doc
+   nobody read) or `FABRICATED` (no such doc) — and exit 1 also goes in the tick report.
+   It never changes the reflect verdict: a merged PR is merged. `CONVENTIONS.md` → cite
+   knowledge as `[[finding-slug]]`.
+
+6. **Close completed projects (propose only — human-gated).** For each project whose
+   tasks are **all** terminal (`done`/`cancelled`), do **not** close it yourself —
+   surface it as a 🔴 *Awaiting you* item. Only on the human's OK (in-session or via
+   `/close-project <slug>`) run closeout, in order (`SCHEMA.md` "Project & objective
+   completion"): (a) dispatch the `ai-bridge:cataloguer` for a final consolidation pass (counts
+   toward the cap) — and it is THE cataloguer for this tick: step 7's throttle is
+   tick-wide, not step-7-local, so brief this one to cover the closeout consolidation
+   AND anything this tick's merges produced; for a research project, graduate the
+   chosen `deliverables` into `knowledge/`; (b) prepend a dated **Project closed** entry to the root `log.md`,
+   stamped `by <login>` from `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh --self`
+   exactly as a promotion and a preview approval are — closing is the human's OK and the
+   entry is the only place that OK is ever written down — naming the project, its merged PR(s) as `[<repo>#<n>](url)`, the `Finding`(s)
+   produced, and the removing commit SHA; (c) set `project.md` `status: done`, drop it
+   from the active `## Projects` list in the ROOT `index.md`, refresh
+   `projects/<slug>/index.md` when the project is retained, and update its objective —
+   when **all** of an objective's projects are terminal, likewise **propose**
+   `objective status: achieved`; (d) run `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug>
+   --apply` — never `git rm` or `rm` the folder yourself. It reads `retain:` and
+   either removes the folder or keeps it pruned; it prints a `log.md fragment` — put
+   that in (b)'s entry. Then stage the edits from (b) and (c) by explicit path — plus
+   `projects/<slug>` itself when retained — and commit in one go via
+   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "chore: close <slug> project" --
+   projects/<slug> log.md objectives/<objective>.md <kb-path>...`. (The ROOT
+   `index.md` is edited but **not** staged — derived and gitignored; a retained
+   project's OWN `index.md` is the exception, step 8.) There is **no `archive/`** —
+   git history + the KB are the record, except where `retain: true` says the folder IS
+   the record. Closing is never autonomous.
+
+7. **Refresh the knowledge base.** If this tick reflected one or more merges (or a
+   task reached `done`) whose work produced durable, reusable knowledge, dispatch the
+   `cataloguer` (subagent) to capture `Finding`s / update the `Service` catalog / add
+   or update a `Runbook` (`ai-bridge:cataloguer`), and link the `Finding`s from the
+   relevant task doc. **Skip this refresh**
+   if neither a merge nor a `done` task happened this tick, or the work is trivial —
+   the sweep below has its own trigger and is not skipped with it.
+   **Throttle: at most one `cataloguer` dispatch per TICK, across every step that can
+   dispatch one** — step 6(a)'s closeout pass, this refresh and the KB sweep below are the
+   three, and a tick that reflects the final merge *and* receives a close approval
+   satisfies both. If step
+   6 already dispatched one, dispatch none here and fold this refresh into that one's
+   brief. Two cataloguers write `knowledge/` concurrently and take two slots off the cap.
+   Read-only on product repos, writes only to `knowledge/`; counts toward the
+   concurrency cap.
+
+   **The papercuts pass is the other reason to dispatch one, and it runs on a cadence
+   rather than on a merge.** Ask once per tick, and only act when it says DUE:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh due   # exit 0 = due (unprocessed entries, last pass >= 7 days)
+   ```
+
+   Exit 0 ⇒ brief the cataloguer for the papercuts pass too (`cataloguer` step 5), inside
+   the same one-dispatch throttle. It returns one proposal per surface; **you** create each
+   as a `draft` task in the project that owns the surface — never `ready`, the human
+   promotes — and only then run `papercuts.sh pass` to mark the entries processed. Exit 1
+   is silence: no line in the report, no dispatch.
 
 5. **Reflect merges** — `${CLAUDE_PLUGIN_ROOT}/tick-steps/step-5-reflect-merges.md`. Gate 2
    above binds whether or not you read it.
@@ -414,6 +824,19 @@ state, and act only on deltas.
    `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<conventional message>" -- <path>...`
    (stage by explicit path, then name those same paths). Never use the helper in
    target product repos.
+
+   **A path under a MOUNTED `knowledge/` goes to `kb-sync.sh`, not to `commit-as.sh`** —
+   which refuses it by name (`SCHEMA.md` → "A mounted knowledge base"). You are the only
+   KB writer: a `Finding` an agent returned in its result is committed by you, here.
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh commit --role project-manager \
+     --message "<conventional message>" -- knowledge/<path>...
+   ```
+
+   It regenerates the index, commits as the human with the tool as co-author, pushes and
+   retries once; if it stops, it says so and leaves no rebase behind. Absent the key it
+   exits 3 and `commit-as.sh` is the route as before.
 
    **Then sync, if this bundle has a remote.** If step 0 deferred its pull, do it now —
    but **re-check the tree first, do not assume your commit cleaned it** —

@@ -892,6 +892,13 @@ above it so none may grow its share.
 - **Capture knowledge:** if you discover something durable and reusable, write or
   update a `Finding` in `knowledge/findings/` (per `SCHEMA.md`) and link it from
   the task, so the next agent doesn't re-derive it.
+  **Where `knowledge/` is MOUNTED from another repository** (`knowledge` in
+  `instance.config.json`; `SCHEMA.md` → "A mounted knowledge base"), **you do not write
+  into it** — return the `Finding` in your result exactly as you would anyway and the tick
+  commits it. There is **one writer per bundle** and it is the tick, so up to
+  `maxAgentsInFlight` agents never share one git tree. `commit-as.sh` refuses a path under
+  the mount by name, so a stale instruction fails loudly rather than committing nothing.
+  **Absent the key nothing changes** and `knowledge/` is the bundle's own folder as before.
 - **Record a papercut — ONE line, and the bar is "it hurt", not "it is durable".** A
   `Finding` costs 40 lines and a judgement call, so the small stuff never gets written down
   at all: a tool that failed, a doc that misled you, a step you did twice. Those go in the
@@ -936,11 +943,22 @@ above it so none may grow its share.
   — outside any synced folder; **never** inside `reposRoot`. Absent that key, fall
   back to `<reposRoot>/_wt`) and a **private package
   store** (e.g. `pnpm install --store-dir <worktree>/.pnpm-store`), and pushes
-  early. Create the worktree explicitly with `git worktree add <path> -b <branch>
-  origin/<default-branch>` — don't rely on the `EnterWorktree` tool, which may be
-  unavailable to you as a subagent. (`settings.json` sets `worktree.bgIsolation:
-  none` so the control panel manages worktrees itself; harness isolation would
-  only isolate this repo, not the product repos.)
+  early.
+  **THE HOOK CREATES IT — CHECK BEFORE YOU CREATE ONE.** A session started as
+  `claude --worktree <task-id>` is placed by `plugin/hooks/worktree-create.sh` in
+  `<worktreeRoot>/<task-id>` of your `target_repo`, on the task's `branch:`, and that is
+  your cwd from the first turn. `pwd` and `git rev-parse --abbrev-ref HEAD` answer it in
+  two commands. Already there ⇒ **do not add a second worktree** — you will branch off
+  your own branch and open a PR against it.
+  **Only when it did not**, which is every in-session subagent dispatch (the hook's payload
+  carries `agent-<opaque-id>`, never the task, so it cannot place one for you):
+  `git worktree add <path> -b <branch> origin/<default-branch>`. Don't rely on the
+  `EnterWorktree` tool, which may be unavailable to you as a subagent.
+  (`settings.json` sets `worktree.bgIsolation: none` so the control panel manages
+  worktrees itself; harness isolation would only isolate this repo, not the product repos.)
+  **Nothing deletes your worktree while you are in it, or after.** `WorktreeRemove` has
+  never fired and `prune-worktrees.sh` only ever prints removal commands, so leaving work
+  uncommitted costs you nothing — but nothing tidies up for you either.
   **Scratch files go in `<worktree>/tmp/`, never a shared scratchpad.** Mutation
   scripts, probe output and throwaway configs collide when several agents run at once.
   Keep them inside your own worktree — verified working with three concurrent agents on

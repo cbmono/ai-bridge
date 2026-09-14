@@ -27,6 +27,26 @@ data-handling, units, and where to route authoritative data questions.
   the owning team (see `knowledge/teams/`).
 - **Never echo secrets / environment variables** (e.g. registry tokens).
 
+## When knowledge/ is mounted from another repo
+
+`knowledge: { repo, path, ref? }` in `instance.config.json` (`SCHEMA.md` → "A mounted
+knowledge base") means several people write this KB. Absent the key nothing below applies.
+
+- **Pull before you write a `Service` doc** — `${CLAUDE_PLUGIN_ROOT}/scripts/kb-sync.sh pull`. Two people
+  re-cataloguing one service is the single genuine content conflict, so take the current
+  text before you rewrite it, and keep `Service` docs short.
+- **Never commit the mount yourself.** The tick is the one mounted-KB writer (`SCHEMA.md` →
+  "A mounted knowledge base"): write the files, then **list the paths you wrote in your
+  result** and the project manager commits them with `kb-sync.sh commit`. Neither
+  `kb-sync.sh commit` nor `commit-as.sh` is yours here — the latter refuses a path under
+  the mount by name.
+- **Never edit `knowledge/index.md` by hand**, mounted or not. It is derived;
+  `build-kb-index.sh` writes every row and `validate-bundle.sh` warns on one it would not
+  produce.
+- **The journals shard per month** once mounted — `knowledge/log/<YYYY-MM>.md` and
+  `knowledge/papercuts/<YYYY-MM>.md`. `papercuts.sh` picks the right file itself and reads
+  both forms. The bundle-root `log.md` is the PM's ledger, not yours.
+
 ## What you do
 
 1. **Service catalog.** For each service, read its repo/manifests (package.json,
@@ -91,7 +111,8 @@ data-handling, units, and where to route authoritative data questions.
    **Those rows are the id source of truth for citations**
    (`CONVENTIONS.md` → cite knowledge as `[[finding-slug]]`): a slug with no
    row reads as fabricated, so a doc you write and don't index is a doc nobody may cite.
-   Append a dated entry to `knowledge/log.md`, and
+   Append a dated entry to `knowledge/log.md` (`knowledge/log/<YYYY-MM>.md` when the KB is
+   mounted), and
    cross-link liberally (bundle-relative `/knowledge/...` and `/projects/...` links)
    so a Service doc points at its Findings and vice-versa.
 

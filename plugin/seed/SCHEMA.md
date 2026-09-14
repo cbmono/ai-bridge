@@ -148,21 +148,27 @@ objective: /objectives/<slug>.md
 phase: /projects/<slug>/phases/<n>-<slug>.md          # optional, links task to its phase
 depends_on: [ /projects/<slug>/tasks/<id>.md, ... ]   # optional
 acceptance_criteria: [ "<testable outcome>", ... ]    # PM fills/expands during refine
-worktree: /abs/path/to/worktree        # optional, BUILD only. MACHINE-READ by scripts/reclaim-worktree.sh.
+worktree: /abs/path/to/worktree        # optional, BUILD only. MACHINE-READ by the WorktreeCreate hook.
 branch:   <branch-name>                # optional, BUILD only. MACHINE-READ. Required whenever `worktree:` is set.
-# Both are written by the project-manager AT DISPATCH, and read only when the task
-# reaches `done`, to reclaim that one worktree. They are machine-read — unlike
-# `interfaces:` below — so keep them exact: an absolute path and the literal branch name.
+# Both are written by the project-manager AT DISPATCH, and read by
+# `plugin/hooks/worktree-create.sh` when a session starts as `claude --worktree <task-id>`:
+# the hook places that path, on that branch, in a worktree of `target_repo`. They are
+# machine-read — unlike `interfaces:` below — so keep them exact: an absolute path and the
+# literal branch name. Absent, the hook falls back to `<worktreeRoot>/<task-id>` on a branch
+# named for the task.
 #
-# Why they exist at all: reclaiming a worktree by SCANNING a directory destroyed three
-# running agents' work, because a scan cannot tell a fresh dispatch that has not committed
-# from an already-merged branch — in git they are identical. The task record can, because
-# it was written at dispatch by the thing doing the dispatching. So the reclaim is driven
-# by these two fields or it does not happen: no `worktree:`, no removal, ever.
+# Why they exist at all: a worktree mechanism that INFERS a task from a directory destroyed
+# three running agents' work, because a scan cannot tell a fresh dispatch that has not
+# committed from an already-merged branch — in git they are identical. The task record can,
+# because it was written at dispatch by the thing doing the dispatching.
 #
 # `worktree:` set while `branch:` is absent is a REFUSAL, not a licence to skip the check
 # — a recorded path with no recorded branch cannot be proven to still be the worktree this
 # task created, and a worktree path can be recycled.
+#
+# NOTHING DELETES A WORKTREE AUTOMATICALLY. `WorktreeRemove` has never fired (measured
+# again 2026-09-14 on 2.1.270: 5 sessions, 5 trees, 0 events), so reclamation is
+# `prune-worktrees.sh` printing `git worktree remove` commands and a human running them.
 interfaces:                           # optional, BUILD-shaped. NOT machine-read.
   consumes: [ "<exact name/signature this task depends on>", ... ]
   produces: [ "<exact name/signature this task exposes>", ... ]
@@ -261,6 +267,7 @@ lesson: <one line — the takeaway the next agent needs; required, and it become
 category: decision | learning | gotcha
 tags: [ <tag>, ... ]              # from /knowledge/vocab.md ONLY — never a new word
 status: current | superseded | corrected
+author: <github-login>            # who filed it — optional, and provenance that survives a file move
 supersedes: [ <slug>, ... ]       # Findings this one replaces
 superseded_by: <slug>             # set together with status: superseded
 source:                           # where it came from — a DURABLE URL, or a path that resolves TODAY. Never a bare /projects/... path (below).
@@ -274,6 +281,14 @@ Body headings: `# Context`, `# Finding` (or `# Decision`), `# Rationale`,
 **`lesson:` is the index row.** `build-kb-index.sh` copies it into `knowledge/index.md`
 verbatim, so a hand-written summary can no longer drift from the document. Without one the
 row falls back to `description:` and `--check` warns.
+
+**`author:` is provenance, and the path never is.** Findings live in **one** folder with
+**unique slugs** — there are no per-user folders anywhere in the KB, because five
+`deploy-fails-in-a-worktree` files under five logins are five things no agent can cite.
+So two people filing the **same slug** is a **real conflict a human resolves**, not a merge
+accident: `kb-sync.sh` refuses to auto-resolve anything but the derived index and says so.
+`build-kb-index.sh` and `validate-bundle.sh` both accept `author:` and warn when it is not
+a GitHub login.
 
 #### `source:` is a durable URL, not a path into `projects/`
 
@@ -703,7 +718,70 @@ conflict on every push, and the documents it summarises are the source of truth.
 when the KB changes rather than every tick, and an agent told to scan it needs it to exist
 in a fresh clone. It is **derived all the same** — `build-kb-index.sh` rebuilds it from
 frontmatter and `--check` fails when the two disagree, so it is regenerated and committed,
-never hand-edited.
+never hand-edited. **No agent edits it directly** — the `cataloguer` and every role agent
+write documents and let the generator write the row; `commit-as.sh` regenerates and stages
+it whenever a staged path is under `knowledge/`, and `validate-bundle.sh` warns on a row the
+generator would not produce.
+
+## A mounted knowledge base
+
+**Absent a `knowledge` key in `instance.config.json`, nothing here applies**: `knowledge/`
+is a plain folder of this bundle's own repo and every path below stays exactly as it is.
+
+Set, `knowledge: { repo, path, ref? }` mounts an organisation's canonical KB at
+`knowledge/`, so several bundles — and people on other harnesses, who read plain markdown
+and need no plugin — share one copy.
+
+| | |
+|---|---|
+| `repo` | `org/name`. |
+| `path` | `/` for the repo root, or `knowledge` for a top-level folder of that name inside a shared repo. |
+| `ref` | a **BRANCH** (default `main`). A tag or a SHA is refused **by name**: it checks out a detached HEAD the write path cannot push. |
+
+**The mount is a nested clone — not a symlink and not a submodule.** `knowledge/` becomes a
+real directory, gitignored in the bundle, so `find knowledge -type f` descends it exactly as
+it always did and every reader is unchanged. The clone is **per bundle**: two bundles
+pointing at the same KB repo each get their own, so neither can leave the other a dirty tree
+or a half-finished rebase. A fresh clone reaches a populated KB with one command,
+`scripts/kb-sync.sh mount`. Nothing tracked names a per-machine path.
+
+**One writer per bundle, and it is the tick.** No role agent writes into `knowledge/`: they
+return `Finding`s in their result exactly as they do today and the tick commits them through
+`kb-sync.sh`, so agents never share one git tree. `commit-as.sh` **refuses** a path under the
+mount by name rather than silently committing nothing.
+
+**The write path is one bounded transaction** — `kb-sync.sh commit`: rebase, regenerate
+`index.md`, commit, push, **one** retry on a rejected push, then **stop and report**. It
+never force-pushes, never leaves a local KB commit unpushed without saying so, and runs
+`git rebase --abort` itself on every failure path, so no `.git/rebase-merge` is left for the
+next reader. A KB commit is authored as **the human** (name and email from `people[]`) with
+the AI as a `Co-Authored-By:` trailer naming the role and the tool — human author, AI
+co-author, never the reverse, so `git blame` on a KB file attributes to a person.
+
+**`index.md` is never merged.** On a rebase conflict in it the sync takes neither side and
+reruns `build-kb-index.sh`. A conflict in any other file is a real collision and stops for a
+human.
+
+**Reads are bounded and never fatal.** The dispatch tick fast-forwards the mount at its
+start and a `SessionStart` hook does the same; both carry an explicit timeout (git has none
+of its own and macOS ships no `timeout`), and a failed pull is reported, never fatal.
+
+**The KB journals shard per month once shared** — `knowledge/log/<YYYY-MM>.md` and
+`knowledge/papercuts/<YYYY-MM>.md`; readers take the flat file and the shards both, so an
+unmounted bundle keeps `knowledge/papercuts.md`. The **bundle-root `log.md`** — the PM's
+tick ledger — is **not** a KB artifact and is never sharded.
+
+**`knowledgeSources[]`** mounts read-only corpora through the same script and the same
+scheme, at `knowledge-sources/<repo-name>/`; a `path` is checked out sparsely under that
+folder, and two entries whose repo names collide are reported rather than mounted over each
+other. They are never written, never pushed and never index-regenerated.
+
+**Migrating an existing bundle** is `scripts/kb-migrate.sh`: one recorded commit pair —
+`git mv` into the KB repo, `git rm --cached` plus the `/knowledge/` ignore line here. It
+refuses a dirty tree and prints what it moved. A clone that pulls that commit before it has
+synced sees **no** `knowledge/` at all and one instruction naming the sync command; a sync
+that finds a real `knowledge/` folder already there **refuses** and prints the migration
+command rather than cloning over it.
 
 ## Per-machine config overrides
 
