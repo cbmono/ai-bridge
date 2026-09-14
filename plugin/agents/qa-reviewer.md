@@ -77,7 +77,9 @@ no PII/secrets. The role-specific procedure is below.
      one, and route (a) taken on it leaves every commit since unreviewed. Compare the
      review's commit against `gh pr view <pr> --json headRefOid`, or let
      `${CLAUDE_PLUGIN_ROOT}/scripts/review-clearance.sh <pr> --repo <org>/<repo>` classify it — **exit 4 is stale,
-     and stale is not route (a)**. Treat a stale review exactly like (b): report the gate as
+     and stale is not route (a)**. **Exit 7 is a different answer again: the PR CONFLICTS
+     with its base, so it cannot merge whatever you conclude.** Report the gate as unmet,
+     say the PR needs a rebase, and do not spend a review on it. Treat a stale review exactly like (b): report the gate as
      unmet at the current head and let the loop pick it up. Fold its findings in as context
      by all means; do not count it as the independent signal. (`SCHEMA.md` → the external
      reviewer's clause set: "an identity-matched review at the current head".)
