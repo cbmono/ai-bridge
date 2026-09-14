@@ -38,13 +38,20 @@ INST="$TMP/inst"
 mkdir -p "$INST/projects/proj-a/tasks" "$INST/scripts"
 cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
 # tick-delta.sh sources its sibling resolver (ai-bridge-v3/task-031), so the staged copy
-# has to carry it too.
+# has to carry it too — and since task-024 the digest also reads its sibling
+# `fold-answers.sh` and the `../tick-steps` directory, both of which it REFUSES to guess
+# around. A stage missing either is a stage that no longer resembles an install.
 cp "$(dirname "$SRC")/bundle-paths.sh" "$INST/scripts/bundle-paths.sh"
+cp "$(dirname "$SRC")/fold-answers.sh" "$INST/scripts/fold-answers.sh"
+cp -R "$REPO/plugin/tick-steps" "$INST/tick-steps"
 SH="$INST/scripts/tick-delta.sh"
 
+# Delimited frontmatter, not just the keys: the digest reads `open_questions` through
+# fold-answers.sh's parser, which refuses a document it cannot bound.
 task() { # <file> <status> [pr-url]
-  { printf 'type: Task\nkind: build\nstatus: %s\n' "$2"
+  { printf -- '---\ntype: Task\nkind: build\nstatus: %s\n' "$2"
     [ $# -ge 3 ] && printf 'pr: ["%s"]\n' "$3" || printf 'pr: []\n'
+    printf -- '---\n'
   } > "$1"
 }
 printf 'type: Project\nstatus: active\nautonomy: gated\n' > "$INST/projects/proj-a/project.md"

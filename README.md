@@ -334,7 +334,7 @@ When a `draft` is blocked it lists numbered `open_questions` (`Q1:`, `Q2:`, …)
 Answering in chat during a session works too (`/ai-bridge:answer`).
 
 The cleared entry is **moved, not deleted** — it lands in `answered_questions` as one flat
-line, `<ISO 8601> · <the entry verbatim>`. It is a human audit record: nothing reads it and
+line, `<ISO 8601> by <login> · <the entry verbatim>`. It is a human audit record: nothing reads it and
 no gate consults it. **No customer PII in an answer** — unlike the question you clear, this
 list persists for the life of the repo.
 
@@ -517,7 +517,6 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `normalise-config.sh` | `<dir>` — reports what is out of place across the two config files: MISPLACED (a per-machine key in the tracked `instance.config.json`, or a tracked-only key such as `defaultOwner` in `instance.config.local.json`), MISSING (a seed key the tracked file lacks) and ORDER. Values are never changed — only placed, ordered, or added when absent — and the tracked file is left **staged**, never committed. Run by every `/ai-bridge:init` stamp | only with `--apply` |
 | `migrate-bundle.sh` | mechanical schema repairs | only with `--apply` |
 | `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
-| `reclaim-worktree.sh` | removes **one** task's worktree, named by the task itself; refuses unless every guard passes | yes, that one path |
 | `commit-as.sh` | commits as the right agent identity | yes |
 | `required-checks.sh` | resolves a PR's required checks | no |
 | `review-clearance.sh` | asserts an artifact **evidencing a completed review** exists on a PR (never a green check) | no |
@@ -535,6 +534,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `task-owner.sh` | resolves and compares a task's owner | no |
 | `stall-counter.sh` | `record`/`escalate`/`status` — the per-task stall memory: `record <task-doc> --blocker <text>` after each round (`--progress` when the PR moved) counts consecutive rounds on the same blocker and **exits 1 at or past `maxStallRounds`** (absent ⇒ **2**); `escalate` then sets `status: blocked`, notes the blocker and prints the one `⛔ **unblock**` line for `AWAITING.md` | `record`/`escalate` only, that task document |
 | `do-not-repeat.sh` | `append`/`brief` — the per-task memory of DEAD ENDS: `append <task-doc> --line <text>` records one approach an ended round already tried and the evidence it failed on (folded to one line, 200 chars, deduped, **capped at 10** — exit 1 past it, fold the oldest into `# Notes`); `brief` prints those lines verbatim under a fixed heading for the next dispatch's brief, and nothing at all when there are none | `append` only, that task document |
+| `fold-answers.sh` | `<task-doc>` — moves every ` --- `-answered `open_questions` entry into `answered_questions`, stamped `<ISO> by <login> · <entry verbatim>` with the login from `decision-stamp.sh`. Exit 4 rather than leave one entry in both lists, exit 3 rather than emit a list it could not round-trip; `--list <doc> <key>` is the same parser, read-only | yes, that task document |
 | `dispatch-brief.sh` | `<task-doc>` — the two fixed sections the PM pastes into a dispatch brief verbatim: `## Grounding (<target_repo>)`, the target repo's `knowledge/services/<repo>.md` entry points capped at **15 lines** (absent that doc, one line telling the agent to draft it for the `cataloguer`), and `## Effort`, the files/LOC/turns budget derived from the task's criteria count and the instance's `maxPrLoc`/`maxPrFiles` | no |
 | `release-bump.sh` | `<minor\|patch>` — moves the version in the **five** places that carry it (`VERSION`, `plugin/VERSION`, both manifests, and the banner sample, whose `─` rule is re-cut to the new header's width), on the **default branch, after a merge**. Refuses on a feature branch or a dirty tree; commits and prints the push, never pushes | yes, those five |
 | `check-template-version.sh` | is the plugin on this machine older than the remote's default branch — prints a line **only when behind**, silence on every failure | not the instance — `--fetch` (opt-in) updates the template checkout's remote-tracking refs, nothing else |
@@ -547,6 +547,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `board-serve.sh` | serves `.board-live/` on `127.0.0.1:<boardPort>` and re-renders it when `SNAPSHOT.json` changes — one process per bundle | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |
 | `index-kb.sh` | builds local CodeGraph indexes for the group's repos (code intelligence — **not** the knowledge base) | yes |
+| `build-awaiting.sh` | renders `AWAITING.md` — the heading and its count, the `* ` marker `session-banner.sh` greps literally, the glyph, the verb and the link — from the task documents, never `SNAPSHOT.json`. It classifies `grant` against `answer` from the `open_questions` entry itself, narrows to this clone's human with `task-owner.sh`, and takes each row's trailing sentence as a `--trailer`. No `AWAITING.md` ⇒ it writes nothing and exits 0 | yes, that file (gitignored) |
 | `build-kb-index.sh` | regenerates `knowledge/index.md` from document frontmatter; `--check` fails on a doc with no row, a row pointing at no file, an empty summary, an unescaped pipe, a status outside `{current, superseded, corrected}`, a tag outside `knowledge/vocab.md`, a dangling supersession edge, or (as a warning, an error under `--strict`) a bundle-relative link in `knowledge/**` or a `source:` path token that resolves to nothing | yes, that index |
 | `kb-sync.sh` | mounts, reads and writes a knowledge base held in another repository (`knowledge` in `instance.config.json`) — `mount` clones it into `knowledge/` as a nested, gitignored clone, `pull` fast-forwards it under a named timeout, `status` reports unpushed KB commits, and `commit` is the one bounded write transaction: rebase, regenerate the index, commit, push, one retry, then stop and report. Absent the key it exits 3 and touches nothing | yes, the mounted KB (never the bundle) |
 | `kb-migrate.sh` | moves a bundle's own `knowledge/` into the repo `knowledge.repo` names — one recorded commit pair, refuses a dirty tree, prints every path it moved, and seeds the KB repo's harness-neutral reading rule | yes, both repos |

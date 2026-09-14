@@ -217,6 +217,8 @@ echo "== the rule the detector guards must still be in CONVENTIONS.md =="
 # stays green while the sentence it enforces has been edited away, so nobody reads the rule
 # and nobody notices. These are the clauses the acceptance criteria name, asserted verbatim.
 saw() { grep -qF "$2" "$1" && echo yes || echo no; }
+# The same question against a STRING rather than a file, for a live render.
+saw_s() { grep -qF -- "$2" <<<"$1" && echo yes || echo no; }
 # The same question against a whitespace-flattened copy, for a clause the file wraps across
 # two lines. Reflowing a paragraph must not turn a rule's assertion red — that is upkeep
 # masquerading as a finding — so anything spanning a line break is asserted this way.
@@ -295,19 +297,30 @@ ok "mutant: the no-live-channel reason is gone" "$(saw "$TMP/conv-mutant.md" '**
 
 echo
 echo "== AWAITING.md tells 'grant a thing' apart from 'answer a question' =="
-# Criterion 12. The queue layout lives in the project-manager's step 8, and the two asks
-# read identically without a verb of their own — a request to install a CLI looks like a
-# question the human disposes of by typing a sentence.
-ok "the queue layout has a grant verb"     "$(saw "$PM" '* 🧰 **grant** — [<task title>]')" yes
-ok "…distinct from the answer verb"        "$(saw "$PM" '* ❓ **answer** — [<task title>]')" yes
-ok "…and says why they are different asks" "$(saw "$PM" 'are different asks, and that is why `grant` has a glyph of')" yes
-ok "…and that the reply mechanism is unchanged" "$(saw "$PM" '**reply mechanism is the same**')" yes
+# Criterion 12. The queue is RENDERED by build-awaiting.sh since ai-bridge-v3/task-024 —
+# the script owns the glyph so the model can never pick one, and the two asks read
+# identically without a verb of their own: a request to install a CLI looks like a question
+# the human disposes of by typing a sentence. The rows are asserted against a LIVE render
+# rather than against the script's source, which is strictly the stronger claim.
+QUEUE="$REPO/plugin/scripts/build-awaiting.sh"
+ok "the renderer exists"                   "$([ -f "$QUEUE" ] && echo yes || echo no)" yes
+Q="$TMP/queue"; mkdir -p "$Q/projects/p/tasks"
+printf '{ "org": "x" }\n' > "$Q/instance.config.json"; printf '# S\n' > "$Q/SCHEMA.md"; : > "$Q/AWAITING.md"
+printf -- '---\ntype: Project\ntitle: "P"\nstatus: active\n---\n' > "$Q/projects/p/project.md"
+printf -- '---\ntype: Task\ntitle: "T"\nstatus: draft\nacceptance_criteria: [ "x" ]\nopen_questions: [ "Q1: which colour?", "Q2: install the foo CLI" ]\n---\n' \
+  > "$Q/projects/p/tasks/task-001-t.md"
+bash "$QUEUE" --instance "$Q" >/dev/null 2>&1
+RENDER="$(cat "$Q/AWAITING.md" 2>/dev/null || true)"
+ok "the queue layout has a grant verb"     "$(saw_s "$RENDER" '* 🧰 **grant** — [T](/projects/p/tasks/task-001-t.md) · ')" yes
+ok "…distinct from the answer verb"        "$(saw_s "$RENDER" '* ❓ **answer** — [T](/projects/p/tasks/task-001-t.md) · ')" yes
+ok "…and says why they are different asks" "$(saw "$QUEUE" 'are different asks, and that is why `grant` has a glyph of')" yes
+ok "…and that the reply mechanism is unchanged" "$(saw "$QUEUE" '**reply mechanism is the same**')" yes
 # The banner's contract: it greps the heading and a `* ` marker. A verb glyph sits AFTER
 # the marker, so it costs the banner nothing — asserted rather than assumed, because
 # getting this wrong empties the startup nudge silently instead of failing.
-ok "the grant row keeps the '* ' marker"   "$(grep -qE '^   \* 🧰 \*\*grant\*\*' "$PM" && echo yes || echo no)" yes
-ok "…and the heading contract is restated" "$(saw "$PM" 'Keep the `## 🔴 Awaiting you` heading and the `*` marker followed by one space')" yes
-ok "…and the marker/verb split is stated"  "$(saw "$PM" '**A new verb is free; a new marker is not**')" yes
+ok "the grant row keeps the '* ' marker"   "$(printf '%s\n' "$RENDER" | grep -cE '^\* 🧰 \*\*grant\*\*' | tr -d ' ')" 1
+ok "…and the heading contract is restated" "$(saw "$QUEUE" 'Keep the `## 🔴 Awaiting you` heading and the `*` marker followed by one space')" yes
+ok "…and the marker/verb split is stated"  "$(saw "$QUEUE" '**A new verb is free; a new marker is not**')" yes
 
 echo
 echo "== the agent file is resolved from the PLUGIN, not only from the bundle =="

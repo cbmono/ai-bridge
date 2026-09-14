@@ -202,9 +202,15 @@ step0_mentioning_files() {
   grep -rl "step 0" --include="*.md" "$REPO" 2>/dev/null | grep -v "/\.git/" | sed "s#^$REPO/##" | sort
 }
 S0FILES="$(step0_mentioning_files)"
-ok "'step 0' is named in exactly two files" "$(printf '%s\n' "$S0FILES" | grep -c .)" 2
-ok "…the tick…"     "$(printf '%s\n' "$S0FILES" | grep -qx 'plugin/agents/project-manager.md' && echo yes || echo no)" yes
-ok "…and the launcher, nowhere else"  "$(printf '%s\n' "$S0FILES" | grep -qx 'plugin/skills/dispatch/SKILL.md' && echo yes || echo no)" yes
+# The TICK is eight files since ai-bridge-v3/task-024 — the core prompt plus one per
+# on-demand step — so "exactly two files" becomes "the tick's own files and the launcher,
+# nothing else". Asserted as a count of STRANGERS, which is the property: a third document
+# describing step 0 is the drift this catches, and a new step file is not one.
+ok "…the tick's core names it"  "$(printf '%s\n' "$S0FILES" | grep -qx 'plugin/agents/project-manager.md' && echo yes || echo no)" yes
+ok "…and the launcher does"     "$(printf '%s\n' "$S0FILES" | grep -qx 'plugin/skills/dispatch/SKILL.md' && echo yes || echo no)" yes
+ok "…and nothing outside those and the tick-step files" \
+   "$(printf '%s\n' "$S0FILES" | grep -vx 'plugin/agents/project-manager.md' \
+      | grep -vx 'plugin/skills/dispatch/SKILL.md' | grep -vc '^plugin/tick-steps/' | tr -d ' ')" 0
 
 # The launcher's citation of the re-derivation property must point at 0.5, the step
 # it actually lives in now — not the bare "step 0" that would silently mean the new

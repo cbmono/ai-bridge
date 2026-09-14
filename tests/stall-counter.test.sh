@@ -102,7 +102,15 @@ assert "…and the blocker after the · separator"    "$(has "· stalled 2/2 rou
 # The line has to be one AWAITING.md already renders. Read the contract from the shipped
 # document rather than restating it here: a drift on either side then fails, which a
 # hand-copied literal in this file could never catch.
-assert "project-manager.md ships that same row"    "$(has '* ⛔ **unblock** — ' "$(cat "$PM_DOC")")"
+# The queue is RENDERED by build-awaiting.sh since ai-bridge-v3/task-024, so the contract
+# is read off a live render rather than off prose: the row shape is now a thing that runs.
+QI="$TMP/queue-inst"; mkdir -p "$QI/projects/p/tasks"
+printf '{ "org": "x" }\n' > "$QI/instance.config.json"; printf '# S\n' > "$QI/SCHEMA.md"; : > "$QI/AWAITING.md"
+printf -- '---\ntype: Project\ntitle: "P"\nstatus: active\n---\n' > "$QI/projects/p/project.md"
+printf -- '---\ntype: Task\ntitle: "T"\nstatus: blocked\nacceptance_criteria: [ "x" ]\nopen_questions: [ ]\n---\n' \
+  > "$QI/projects/p/tasks/task-001-t.md"
+bash "$REPO/plugin/scripts/build-awaiting.sh" --instance "$QI" >/dev/null 2>&1
+assert "build-awaiting.sh renders that same row"   "$(has '* ⛔ **unblock** — ' "$(cat "$QI/AWAITING.md" 2>/dev/null)")"
 
 echo
 echo "== re-running the escalation is idempotent =="

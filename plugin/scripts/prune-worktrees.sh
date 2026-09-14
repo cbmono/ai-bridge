@@ -16,16 +16,16 @@
 # key must state that fallback: absent `worktreeRoot` means `<reposRoot>/_wt`.
 #
 # WHAT IT DECIDES. Three outcomes, not two:
-#   REMOVE       done automatically, on a PM tick. Permitted ONLY for a worktree
-#                that is all of: on a real branch, tree fully clean, and its PR
+#   REMOVABLE    the `git worktree remove` command is PRINTED for a human to run.
+#                Reached ONLY by a worktree on a real branch, fully clean, with its PR
 #                merged/closed (or its branch already merged into the default
 #                branch — but see the `no commits yet` guard below: "merged into
 #                the default branch" is indistinguishable from "created from the
 #                default branch and has not committed yet", so in practice a
-#                merged/closed PR is the only evidence that reaches REMOVE).
-#   RECLAIMABLE  finished as far as can be told, but NOT removed automatically —
+#                merged/closed PR is the only evidence that reaches REMOVABLE).
+#   RECLAIMABLE  finished as far as can be told, but something still holds it back —
 #                reported so the PM can surface it, and removed only when a human
-#                a human decides, then removes by hand.
+#                decides, then removes by hand.
 #   KEEP         left alone, under every flag.
 #
 # LIVENESS, AND WHY THE CALLER STILL HAS A RULE. An earlier version of this header
@@ -39,7 +39,7 @@
 # and nothing in the filesystem distinguishes that from an abandoned checkout.
 # So the caller-side rule survives as defence in depth, and remains the PRIMARY
 # guard: run this only when your own in-flight count is zero (see the
-# project-manager agent's "Reclaim the worktree"). The mtime veto catches the
+# project-manager agent's "Report the worktree, never remove it"). The mtime veto catches the
 # dispatch you forgot about; your in-flight count is what you actually rely on.
 #
 # THE LIVE-PROCESS SCAN IS A SEPARATE, LOUDER SIGNAL FROM THE MTIME GUARD ABOVE.
@@ -516,7 +516,7 @@ report_live_processes() { # <worktree-path> <label>
 }
 
 # Decide and act on one worktree. Reads the porcelain record vars set by the loop
-# below (wt/head/ref/detached/locked/prunable) plus repo/def.
+# below (wt/head/ref/detached/locked/lockreason/prunable) plus repo/def.
 classify() {
   [[ -n "$wt" ]] || return 0
   in_scan_root "$wt" || return 0
@@ -533,7 +533,7 @@ classify() {
 
   report_live_processes "$wt" "$label"
 
-  if [[ $locked -eq 1 ]]; then keep locked "$label"; return 0; fi
+  if [[ $locked -eq 1 ]]; then keep "locked${lockreason:+: $lockreason}" "$label"; return 0; fi
 
   local tree; tree=$(tree_state "$wt")
   if [[ "$tree" == work ]]; then keep "uncommitted work" "$label"; return 0; fi
@@ -635,14 +635,16 @@ for repo in "$REPOS_ROOT"/*/; do
   # branch it is on: the porcelain reports `detached` explicitly, where
   # `rev-parse --abbrev-ref HEAD` returns the literal string "HEAD" and invites
   # exactly the branch-shaped lookup that never matches.
-  wt=""; head=""; ref=""; detached=0; locked=0; prunable=0
+  wt=""; head=""; ref=""; detached=0; locked=0; lockreason=""; prunable=0
   while IFS= read -r line; do
     case "$line" in
-      "worktree "*) wt=${line#worktree }; head=""; ref=""; detached=0; locked=0; prunable=0 ;;
+      "worktree "*) wt=${line#worktree }; head=""; ref=""; detached=0; locked=0; lockreason=""; prunable=0 ;;
       "HEAD "*)     head=${line#HEAD } ;;
       "branch "*)   ref=${line#branch }; ref=${ref#refs/heads/} ;;
       detached)     detached=1 ;;
-      locked|"locked "*)     locked=1 ;;
+      # The reason is the only thing in the porcelain that says WHO holds the lock.
+      locked)                locked=1 ;;
+      "locked "*)            locked=1; lockreason=${line#locked } ;;
       prunable|"prunable "*) prunable=1 ;;
       "")           classify; wt="" ;;
     esac

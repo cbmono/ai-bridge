@@ -31,7 +31,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CITE="$REPO/plugin/scripts/cite-check.sh"
 FIX="$REPO/tests/fixtures/cite-check"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
-PM="$REPO/plugin/agents/project-manager.md"
+PM="$REPO/plugin/tick-steps/step-5-reflect-merges.md"
 CAT="$REPO/plugin/agents/cataloguer.md"
 BRIEF='worktree-isolation-spike,green-check-from-a-reviewer-that-declined'
 [ -x "$CITE" ] || { echo "cite-check.test: missing or non-executable $CITE" >&2; exit 2; }
@@ -118,11 +118,15 @@ ok "…recording a stripped citation as a # Notes line" \
 ok "the cataloguer owns the id source of truth"  \
    "$(in_file "$CAT" 'row reads as fabricated, so a doc you write and don'"'"'t index')" yes
 # The reflect step is step 5; a move of this paragraph out of it would leave the rule
-# true and the timing wrong, which no other assertion here would see.
-ok "…and the PM's rule sits inside step 5, before step 6" \
-   "$([ "$(awk '/^5\. \*\*Reflect merges/{s=NR} /^6\. \*\*Close completed/{e=NR} \
+# true and the timing wrong, which no other assertion here would see. Since
+# ai-bridge-v3/task-024 each step is its own file, so "inside step 5, before step 6" is the
+# pair of file claims below — the same property, checked one boundary tighter.
+ok "…and the PM's rule sits inside step 5" \
+   "$([ "$(awk '/^5\. \*\*Reflect merges/{s=NR} /^<!-- end of step 5 -->/{e=NR} \
         /scripts\/cite-check\.sh/{c=NR} END{print (s<c && c<e) ? "yes" : "no"}' "$PM")" = yes ] \
       && echo yes || echo no)" yes
+ok "…and NOT in step 6, which runs after it" \
+   "$(grep -qF 'cite-check.sh' "$REPO/plugin/tick-steps/step-6-close-projects.md" && echo yes || echo no)" no
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

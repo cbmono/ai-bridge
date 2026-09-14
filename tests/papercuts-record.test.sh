@@ -24,7 +24,7 @@ PC="$REPO/plugin/scripts/papercuts.sh"
 SEED="$REPO/plugin/seed/knowledge/papercuts.md"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
 CAT="$REPO/plugin/agents/cataloguer.md"
-PM="$REPO/plugin/agents/project-manager.md"
+PM="$REPO/plugin/tick-steps/step-7-knowledge-base.md"
 CLOSE="$REPO/plugin/skills/close-project/SKILL.md"
 [ -x "$PC" ] || { echo "papercuts-record.test: missing or not executable: $PC" >&2; exit 2; }
 

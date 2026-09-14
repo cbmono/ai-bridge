@@ -46,7 +46,10 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
-PM="$REPO/plugin/agents/project-manager.md"
+PM="$REPO/plugin/tick-steps/step-3-dispatch.md"
+# Step 0.5 stayed in the core when steps 2-7 moved out (ai-bridge-v3/task-024): the lock
+# is a gate, and a gate a tick might not have read is not a gate.
+CORE="$REPO/plugin/agents/project-manager.md"
 LOOP="$REPO/plugin/skills/dispatch/SKILL.md"
 SEED="$REPO/plugin/seed/CLAUDE.md"
 OPS="$REPO/docs/operations.md"
@@ -126,10 +129,10 @@ ok "the launcher says a tick is never woken" \
   "$(grep -qF 'never wake a completed tick with a message' "$LOOP" && echo yes || echo no)" yes
 ok "…and spawns a fresh one every time"  "$(has "$LOOP" 'Fresh every time')" yes
 ok "the tick's own step 0.5 has an exit-4 branch" \
-  "$(grep -qE '^   - \*\*4\*\*' "$PM" && echo yes || echo no)" yes
-ok "…saying in those words that a tick is never resumed" "$(has "$PM" 'never resumed')" yes
+  "$(grep -qE '^   - \*\*4\*\*' "$CORE" && echo yes || echo no)" yes
+ok "…saying in those words that a tick is never resumed" "$(has "$CORE" 'never resumed')" yes
 ok "…and telling a refused tick to take no lock of its own" \
-  "$(has "$PM" 'take no lock of your own')" yes
+  "$(has "$CORE" 'take no lock of your own')" yes
 
 echo
 echo "== 3. it says which half has a reader — and the reader is REAL =="

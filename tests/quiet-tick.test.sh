@@ -110,10 +110,15 @@ ok "…and passes the gap so the line can name the next check" \
    "$(grep -c 'tick-delta.sh check --gap' "$PM")" 1
 # ONE subject, not two: the tracked board.html the other gate covered is gone with
 # ai-bridge-next/task-021 — the board is served locally now and never committed.
+# Step 8's render half is its own file since ai-bridge-v3/task-024; the commit-and-sync
+# half and the idle path stayed in the core.
+S8R="$REPO/plugin/tick-steps/step-8-render.md"
+# Flattened: the clause wraps across two lines in the step file, and a reflow must not
+# turn a rule's assertion red.
 ok "step 8 rewrites the queue only on a tick that changed something" \
-   "$(grep -c 'only on a tick that changed something' "$PM")" 1
+   "$(tr '\n' ' ' < "$S8R" | tr -s ' ' | grep -c 'only on a tick that changed something')" 1
 ok "…and says an unchanged queue is left untouched" \
-   "$(grep -c 'noop: true` tick leaves `AWAITING.md` exactly as it is' "$PM")" 1
+   "$(grep -c 'noop: true` tick leaves `AWAITING.md` exactly as it is' "$S8R")" 1
 
 echo "== plumbing =="
 ok "an unknown flag is usage (3)" \
