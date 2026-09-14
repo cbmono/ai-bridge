@@ -21,7 +21,8 @@ HOOK="$TPL/plugin/hooks/session-banner.sh"
 SH="$TPL/plugin/scripts/ai-bridge.sh"
 SKILL="$TPL/plugin/skills/welcome/SKILL.md"
 DOC="$TPL/docs/operations.md"
-for f in "$HOOK" "$SH" "$SKILL" "$DOC"; do
+THEME="$TPL/plugin/scripts/cli-theme.sh"
+for f in "$HOOK" "$SH" "$SKILL" "$DOC" "$THEME"; do
   [ -f "$f" ] || { echo "banner-logo.test: missing $f" >&2; exit 2; }
 done
 command -v python3 >/dev/null 2>&1 || {
@@ -123,10 +124,13 @@ tier() { # <tier name> <blue> <pink> <env…>
   assert "$name: …and stripping the SGR gives the three rows back" \
     "$(eq "$(strip_sgr "$l1")$(strip_sgr "$l2")$(strip_sgr "$l3")" "$L1$L2$L3")"
 }
-# ONE RESET, THE BANNER'S OWN. A second escape spelling would render the same and be a
-# second thing to keep in step, so the hook is asked how many it builds: exactly one.
-assert "the reset after each run is the one the banner already builds" \
-  "$(eq "$(grep -cF -- '${esc}[0m' "$HOOK")" 1)"
+# ONE RESET, AND SINCE loopd/task-004 IT IS THE THEME'S. A second escape spelling would
+# render the same and be a second thing to keep in step, so both files are asked how many
+# they build: the theme exactly one, the hook none at all.
+assert "the reset after each run is the theme's one" \
+  "$(eq "$(grep -cF -- '${esc}[0m' "$THEME")" 1)"
+assert "…and the hook builds no SGR of its own — strip_sgr's ESC matcher aside" \
+  "$(eq "$(grep -cF -- '${esc}[' "$HOOK")" 0)"
 # THE COLOUR COUNT IS STUBBED, NEVER THE HOST'S. `tput colors` answers 0 wherever the
 # terminfo entry cannot be loaded, so a TERM name alone asserts the 16-colour palette as 256.
 stub_tput() { # <count|fail> -> a bin dir whose `tput colors` answers that
@@ -150,14 +154,14 @@ tier 16  '94' '95' COLORTERM= TERM=xterm PATH="$(stub_tput 8):$PATH"
 tier 'no terminfo' '94' '95' COLORTERM= TERM=xterm-256color \
   PATH="$(stub_tput fail):$PATH"
 for code in '[94m' '[95m' '[1;93m'; do
-  assert "the 3/4-bit tier still carries $code" "$(eq "$(grep -cF -- "$code" "$HOOK")" 1)"
+  assert "the 3/4-bit tier still carries $code" "$(eq "$(grep -cF -- "$code" "$THEME")" 1)"
 done
-# EVERY ESCAPE THE HOOK EMITS IS ONE THE THEME DEFINES — no composed colour, in either map.
-assert "every truecolor escape in the hook is a cli-theme.json value" \
-  "$(eq "$(grep -oE '38;2;[0-9;]+' "$HOOK" | sort -u \
+# EVERY ESCAPE THE THEME HELPER SPELLS IS ONE cli-theme.json DEFINES — nothing composed.
+assert "every truecolor escape in cli-theme.sh is a cli-theme.json value" \
+  "$(eq "$(grep -oE '38;2;[0-9;]+' "$THEME" | sort -u \
       | grep -vcE '^(38;2;94;162;255|38;2;255;122;194|38;2;233;237;244|38;2;154;164;181|38;2;108;116;136)$')" 0)"
-assert "every 256-colour escape in the hook is a cli-theme.json value" \
-  "$(eq "$(grep -oE '38;5;[0-9]+' "$HOOK" | sort -u \
+assert "every 256-colour escape in cli-theme.sh is a cli-theme.json value" \
+  "$(eq "$(grep -oE '38;5;[0-9]+' "$THEME" | sort -u \
       | grep -vcE '^38;5;(75|212|255|248|243)$')" 0)"
 
 # =======================================================================================

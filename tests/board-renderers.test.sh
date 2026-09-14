@@ -315,6 +315,13 @@ assert "piped output carries no escape byte" "$(hasnt "$ESC" "$( cd "$ALPHA" && 
 # nothing: forced colour DOES emit one.
 assert "--color always does emit one"        "$(has "$ESC" "$( cd "$ALPHA" && bash "$PRINT" --color always 2>/dev/null )")"
 assert "--no-color suppresses it again"      "$(hasnt "$ESC" "$( cd "$ALPHA" && bash "$PRINT" --color always --no-color 2>/dev/null )")"
+# A truecolor escape is 19 bytes; counted as width, it wrapped the footnote ~15 columns early.
+for w in 100 40; do
+  assert "colour moves no line break: --color always, SGR stripped, is --color never (width $w)" \
+    "$(eq "$( cd "$ALPHA" && COLORTERM=truecolor bash "$PRINT" --color always --width "$w" 2>/dev/null \
+               | LC_ALL=C sed "s/${ESC}\[[0-9;]*m//g" )" \
+          "$( cd "$ALPHA" && bash "$PRINT" --color never --width "$w" 2>/dev/null )")"
+done
 # NO_COLOR can only be observed with a real TTY, since a pipe is already colourless.
 # The pty comes from python3's stdlib rather than script(1): script's arguments differ
 # between BSD and GNU, and whether it can allocate a terminal at all depends on how this

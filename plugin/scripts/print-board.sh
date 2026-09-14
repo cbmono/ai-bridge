@@ -131,7 +131,16 @@ if [[ -z "$WIDTH" ]]; then
   fi
 fi
 
-BOARD_WIDTH="$WIDTH" BOARD_COLOR="$USE_COLOR" python3 - "${DIRS[@]+"${DIRS[@]}"}" <<'PY'
+# A heredoc cannot source bash, so the theme's codes cross into python through ONE env var
+# rather than being spelled a second time in the renderer.
+# shellcheck source=cli-theme.sh
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/cli-theme.sh" 2>/dev/null || true
+command -v ab_theme >/dev/null 2>&1 || ab_theme() { :; }
+ab_theme "$USE_COLOR" auto
+BOARD_SGR="${T_DIM:-}|${T_BOLD:-}|${T_INK:-}|${T_PINK:-}|${T_OFF:-}"
+
+BOARD_WIDTH="$WIDTH" BOARD_COLOR="$USE_COLOR" BOARD_SGR="$BOARD_SGR" \
+  python3 - "${DIRS[@]+"${DIRS[@]}"}" <<'PY'
 import json, os, re, sys, textwrap, unicodedata
 from pathlib import Path
 
@@ -146,7 +155,7 @@ STATUSES = [("draft", "DRAFT"), ("ready", "READY"), ("in-progress", "PROG"),
             ("cancelled", "CANC")]
 VERBS = ("approve", "answer", "merge", "unblock", "close")
 
-DIM, BOLD, RED, YELLOW, OFF = "\033[2m", "\033[1m", "\033[31m", "\033[33m", "\033[0m"
+DIM, BOLD, INK, PINK, OFF = (os.environ.get("BOARD_SGR") or "||||").split("|")
 
 
 def paint(s, code):
@@ -355,17 +364,18 @@ def emit(s=""):
     lines.append(s)
 
 
-def wrap(s, indent="", hang=""):
+def wrap(s, indent="", hang="", code=""):
     """Wrap to the layout width, with an optional hanging indent for the runover.
 
     break_on_hyphens=False: every status in the enum is hyphenated ("in-review"), and
     textwrap's default splits on the hyphen, so a wrapped block would read "in-" /
     "review" — a name a reader cannot search for and a test cannot assert.
+    Colour is painted per line AFTER wrapping: an escape counted as width wraps early.
     """
     w = WIDTH if WIDTH else 100
     for i, ln in enumerate(textwrap.wrap(s, width=max(20, w - len(indent) - len(hang)),
                                          break_on_hyphens=False) or [""]):
-        emit(indent + (hang if i else "") + ln)
+        emit(indent + (hang if i else "") + (paint(ln, code) if code else ln))
 
 
 if rows:
@@ -417,7 +427,7 @@ else:
 # ---------------------------------------------------------------- output
 title = (f"Bridge Board · {len(instances)} instance(s) · {n_projects} project(s) · "
          f"{n_tasks} task(s) · {n_awaiting} awaiting you")
-emit(paint(clip(title, WIDTH), BOLD))
+emit(paint(clip(title, WIDTH), INK))
 emit()
 
 if not rows:
@@ -430,7 +440,7 @@ elif vertical:
     # The narrow fallback: one block per project, never a wrapped table. Only the
     # non-zero statuses are listed — on a narrow screen the zeros are the noise.
     for r in rows:
-        emit(paint(clip(f"{r['inst']} › {r['proj']}", WIDTH), BOLD))
+        emit(paint(clip(f"{r['inst']} › {r['proj']}", WIDTH), INK))
         emit(f"  phases    {r['phases']}")
         # The full enum name here, not the column abbreviation: there is room, and a
         # narrow screen is the worst place to make a reader decode "REVW".
@@ -438,21 +448,21 @@ elif vertical:
                  if k != "await" and toint(r["vals"].get(k))]
         wrap("tasks     " + (" · ".join(parts) if parts else "none"), "  ")
         aw = toint(r["vals"].get("await"))
-        emit("  awaiting  " + (paint(str(aw), BOLD + RED) if aw else "0"))
+        emit("  awaiting  " + (paint(str(aw), BOLD + PINK) if aw else "0"))
         emit()
 else:
     def line(text_cells, num_cells):
         return SEP_T.join(text_cells) + SEP_T + SEP_N.join(num_cells)
 
     emit(paint(line([pad("INSTANCE", iw), pad("PROJECT", pw), pad("PHASES", ph_w)],
-                    [pad(h, numw[k], right=True) for k, h in cols]), DIM))
+                    [pad(h, numw[k], right=True) for k, h in cols]), INK))
     for r in rows:
         nums = []
         for k, _ in cols:
             v = toint(r["vals"].get(k))
             cell = pad(str(v), numw[k], right=True)
             if k == "await" and v:
-                cell = paint(cell, BOLD + RED)
+                cell = paint(cell, BOLD + PINK)
             nums.append(cell)
         emit(line([pad(clip(r["inst"], iw), iw), pad(clip(r["proj"], pw), pw),
                    pad(r["phases"], ph_w)], nums))
@@ -462,26 +472,25 @@ else:
         emit(paint(line([pad("", iw), pad(clip("TOTAL", pw), pw), pad("", ph_w)],
                         [pad(str(TOTALS[k]), numw[k], right=True) for k, _ in cols]), DIM))
     if dropped:
-        wrap(paint("(columns with no tasks in any row, omitted to fit the width: "
-                   + ", ".join(dropped) + ")", DIM))
+        wrap("(columns with no tasks in any row, omitted to fit the width: "
+             + ", ".join(dropped) + ")", code=DIM)
 
 # ---- notes: a broken instance is VISIBLE here, never a silent absence
 if (broken or unknown) and lines and lines[-1] != "":
     emit()
 for name, msg in broken:
-    wrap(paint(f"! {name}: unreadable {AB_SNAPSHOT} — that instance is not on the board. "
-               f"Re-run write-snapshot.sh there. ({msg})", YELLOW), hang="  ")
+    wrap(f"! {name}: unreadable {AB_SNAPSHOT} — that instance is not on the board. "
+         f"Re-run write-snapshot.sh there. ({msg})", hang="  ", code=PINK)
 if unknown:
-    wrap(paint("! task status(es) outside the schema enum, counted under OTHER: "
-               + ", ".join(sorted(unknown))
-               + " — a drifted instance; run validate-bundle.sh there.", YELLOW),
-         hang="  ")
+    wrap("! task status(es) outside the schema enum, counted under OTHER: "
+         + ", ".join(sorted(unknown))
+         + " — a drifted instance; run validate-bundle.sh there.", hang="  ", code=PINK)
 
 if lines and lines[-1] != "":
     emit()
-wrap(paint(f"Read from each instance's {AB_SNAPSHOT} — derived, and as sensitive as the task "
-           "documents it comes from. Instances listed from: "
-           + (source or "command line") + ".", DIM))
+wrap(f"Read from each instance's {AB_SNAPSHOT} — derived, and as sensitive as the task "
+     "documents it comes from. Instances listed from: "
+     + (source or "command line") + ".", code=DIM)
 
 sys.stdout.write("\n".join(lines) + "\n")
 PY
