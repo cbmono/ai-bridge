@@ -7,9 +7,14 @@ name: Tests (deep)
 # nobody is waiting on. `tests/run.sh --deep` is the same selection a local run takes.
 #
 # NOT a required check, and it does not gate anything: the PR job (`harness suite`) is
-# this repo's one required check. THE GITHUB RUNNER SHIPS NO `claude` CLI, so until one
-# is installed here this job exercises the deep harness's shape and reports its own loud
-# skip for the run itself — the gap is visible in the log rather than silently green.
+# this repo's one required check.
+#
+# THE RUNNER SHIPS NO `claude`, so this job installs one (ai-bridge-v3/task-033) and the
+# eval needs a credential to make its model calls. Both are reported, never assumed:
+# `ANTHROPIC_API_KEY` is a repo secret, and while it is unset the harness reaches its own
+# named SKIP — "skipped: plugin eval unavailable — …" — which is the visible-gap behaviour
+# that hid these reds for a month when it was a silent one. A green job with that line in
+# it means "did not run"; a green job without it means "ran and passed".
 on:
   schedule:
     - cron: "17 4 * * *"
@@ -26,11 +31,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Report whether the CLI this tier needs is present
+      - name: Install the claude CLI this tier spawns
         shell: bash
         run: |
-          if command -v claude >/dev/null 2>&1; then claude --version
-          else echo "::warning::no claude CLI on this runner — the deep harnesses will report their own skip, not a result"; fi
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Report the two gates, so a skip is never mistaken for a pass
+        shell: bash
+        run: |
+          command -v claude >/dev/null 2>&1 \
+            && claude --version \
+            || echo "::warning::no claude CLI after install — the deep harnesses will report their own named skip, not a result"
+          [ -n "${ANTHROPIC_API_KEY:-}" ] \
+            || echo "::warning::ANTHROPIC_API_KEY is unset — the eval cannot make a model call, so it will report its own named skip"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Run tests/run.sh --deep
         shell: bash
@@ -38,3 +54,5 @@ jobs:
           export TMPDIR="${RUNNER_TEMP:-/tmp}"
           mkdir -p "$TMPDIR"
           tests/run.sh --deep
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

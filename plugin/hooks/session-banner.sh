@@ -1498,6 +1498,32 @@ if [ "$board_on" -eq 1 ]; then
 fi
 
 # ---------------------------------------------------------------------------------------
+# 5b. THEME — one row, and the human's own next action is what retires it.
+# ---------------------------------------------------------------------------------------
+# The plugin SHIPS a theme and never selects one: `theme` is the human's key, set in
+# /theme and nowhere else (ai-bridge-v3/task-034, Q2). "Once" is bought by the row's own
+# truth condition rather than by state something has to write and remember — it fires only
+# while no AI Bridge theme is selected, so the first /theme that picks one retires it for
+# good. That is "only fire what is true", not an exception to it: what the row asserts is
+# that a theme ships here and this machine is not using it.
+#
+# THE NEEDLE IS THE VALUE, NEVER THE KEY. `custom:ai-bridge` reaches a settings file only
+# as a chosen theme, and reading for it keeps the JSON key this hook must never write out
+# of the shipped tree altogether — the absence tests/plugin-theme.test.sh asserts.
+#
+# `${HOME:-}`, LIKE §4's ACCOUNT ROW: with neither variable set the expansion is unbound
+# and `set -u` kills the hook. A settings file this cannot read is a question it cannot
+# answer, so the row stays silent rather than firing blind.
+theme_settings=""
+if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then theme_settings="$CLAUDE_CONFIG_DIR/settings.json"
+elif [ -n "${HOME:-}" ];            then theme_settings="$HOME/.claude/settings.json"; fi
+if [ -n "$plugin_root" ] && [ -f "$plugin_root/themes/ai-bridge.json" ] && [ -n "$theme_settings" ] &&
+   ! grep -q 'custom:ai-bridge' "$theme_settings" 2>/dev/null; then
+  echo
+  say "$C_DIM" "$(pad Theme "$BOARD_LW")custom:ai-bridge:ai-bridge ships here — select it in /theme"
+fi
+
+# ---------------------------------------------------------------------------------------
 # 6. AWAITING — ONE COUNT LINE FOR THE HUMAN, THE TRANSCRIPT FOR THE MODEL.
 # ---------------------------------------------------------------------------------------
 # Absence is the off switch. No AWAITING.md — because no /ai-bridge:dispatch tick has run yet, or
