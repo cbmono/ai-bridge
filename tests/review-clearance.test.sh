@@ -2092,8 +2092,9 @@ expect "the acknowledgement alone -> refuse, not clear" 4
 says   "  ...and says what it is" "AUTO-GENERATED REPLY"
 says   "  ...and names the command that can review this head" "@coderabbitai full review"
 
-# At ANY head, including one it names itself: the reply's whole content is that a command
-# was received. Its own head is the PR head here, which is the case that cleared on #227.
+# At ANY head: the reply's whole content is that a command was received, so the head the PR
+# happens to be at cannot make it evidence. (The #227 clearance itself came through the
+# vendor's edited-in-place SUMMARY comment, which is the marker-plus-stale-object case.)
 setup "$REFUSAL_HEAD"; add_comment coderabbitai "$ACK"
 expect "…and at another head too" 4
 
@@ -2154,10 +2155,26 @@ done
 
 echo
 echo "== NO WIDENING: nothing that refused before now clears =="
-# `was` is the exit code the script on origin/main gave this shape, measured by running
-# THIS file against `git show origin/main:plugin/scripts/review-clearance.sh`. The rule is
-# one-directional — a shape that refused may never now clear — and every shape whose answer
-# DID change must be named in CHANGED below, so a widening cannot arrive as a quiet edit.
+# `was` is not a claim about history, it is MEASURED: every row below is run twice, once
+# against this script and once against the script as it stood at BASE_SHA, and the two must
+# agree about `was`. The rule is one-directional — a shape that refused may never now clear
+# — and every shape whose answer DID change must be named in CHANGED, so a widening cannot
+# arrive as a quiet edit.
+#
+# PINNED TO A COMMIT, NOT TO `origin/main`. Once this merges, origin/main IS this script,
+# and a baseline that measures itself asserts nothing at all.
+BASE_SHA="b6f0901a0a8b55b1b66120c0db785765765b46e1"
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+BASE=""
+if git -C "$REPO" cat-file -e "$BASE_SHA:plugin/scripts/review-clearance.sh" 2>/dev/null; then
+  mkdir -p "$TMP/base"
+  git -C "$REPO" show "$BASE_SHA:plugin/scripts/review-clearance.sh" > "$TMP/base/review-clearance.sh"
+  git -C "$REPO" show "$BASE_SHA:plugin/scripts/bundle-paths.sh"     > "$TMP/base/bundle-paths.sh"
+  chmod +x "$TMP/base/review-clearance.sh"
+  BASE="$TMP/base/review-clearance.sh"
+else
+  printf '  SKIP  %-58s\n' "the was column is measured — ${BASE_SHA:0:7} not in this clone"
+fi
 CHANGED="marker-plus-stale-object ack-plus-marker-plus-stale-object"
 build_shape() { # <id> — each leaves the builders holding one input shape
   case "$1" in
@@ -2190,6 +2207,13 @@ while read -r id was now; do
   [ -n "$id" ] || continue
   build_shape "$id" || continue
   write_pr
+  if [ -n "$BASE" ]; then
+    "$BASE" 42 >/dev/null 2>&1; base_rc=$?
+    if [ "$base_rc" != "$was" ]; then
+      printf '  FAIL  %-58s was=%s claimed, %s measured %s\n' \
+        "$id" "$was" "${BASE_SHA:0:7}" "$base_rc"; fail=$((fail+1)); continue
+    fi
+  fi
   out="$("$SCRIPT" 42 2>&1)"; rc=$?
   if [ "$rc" != "$now" ]; then
     printf '  FAIL  %-58s expected rc=%s got rc=%s\n' "$id" "$now" "$rc"; fail=$((fail+1))
@@ -2219,6 +2243,18 @@ author-own-review-at-head         3 3
 marker-plus-stale-object          0 4
 ack-plus-marker-plus-stale-object 0 4
 SHAPES
+
+# The two REAL inputs, measured the same way. The synthetic shapes above are a model of
+# #227 and #228; these are the payloads themselves, and exit 0 here at BASE_SHA is the
+# false MERGE-CLEAR the 10:59Z tick acted on. They refuse at exit 4 above.
+if [ -n "$BASE" ]; then
+  for rec in 227 228; do
+    load_recorded "$FIXTURES/pr$rec.api.json"
+    "$BASE" "$rec" >/dev/null 2>&1; base_rc=$?
+    assert "#$rec did clear at ${BASE_SHA:0:7} (rc=0), so the refusal above is a change" \
+      "$([ "$base_rc" -eq 0 ] && echo 0 || echo "1 — measured rc=$base_rc")"
+  done
+fi
 
 echo
 echo "pass=$pass fail=$fail"
