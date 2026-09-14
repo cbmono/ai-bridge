@@ -77,17 +77,9 @@
 # comment anywhere in the API — so it is attributed through the commit its body names, and
 # it is countable only while that commit is still one the host lists. Three things erode
 # that: a force-push can orphan the commit; the vendor keeps ONE summary comment per PR and
-# EDITS it, so its body names only the latest range it read; and the sibling now consults
-# route C only for an account with NO review object on the PR at all, so the moment that
-# account publishes one object, its comment stops counting for every commit. The second and
-# third have nothing to do with force-pushes.
-#
-# ALL THREE COST THE SAME ONE ROUND, which is why the third one did not change this file's
-# bound when it arrived. At most ONE route-C round is ever visible on a PR however many
-# happened — one edited comment, one commit named — so a route-C round that goes uncounted
-# subtracts one from a floor that could already be one low. Where it bites in practice is
-# the common two-round PR (summary comment at the newer head, review object at the older):
-# it counts 1, and the cap allows a third dispatch.
+# EDITS it, naming only the latest range it read; and the sibling consults route C only for
+# an account with NO review object, so one object silences that account's comment. Each
+# costs the SAME one round — route C is worth at most one, ever — so the floor is unchanged.
 #
 # NEITHER IS FIXABLE FROM WHAT THE HOST PUBLISHES, and this was measured rather than
 # assumed, on ai-bridge#34 (29 commits, 2 recorded force-pushes): the REST timeline's
