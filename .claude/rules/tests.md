@@ -88,11 +88,16 @@ clone to a temp directory to verify.
 
 ## The 256-descriptor cliff — why `harness-read-paths` hangs, and how to re-measure it
 
-`/bin/bash` 3.2.57 leaks one file descriptor per `< <( )`. `harness-read-paths.test.sh`
-runs two of them per harness inside `REAL="$(scan …)"`, so the capture holds **255**
-descriptors by the last of the 112 — and at the next one a `fork()` never returns: the
-child spins at 100% CPU in `_notify_fork_child`, holding the capture's stdout, so every
-ancestor blocks. Two inherited descriptors are enough to cross it.
+`/bin/bash` 3.2.57 leaks one file descriptor per `< <( )` **evaluated inside a `$( )`**;
+at top level it leaks none. `harness-read-paths.test.sh` had **five** such sites per
+harness inside `REAL="$(scan …)"` — one for `HERE`, one for each of the three
+`ROOT_VARS`, one for the candidate `awk` pass — but four of the five are guarded by
+`[ -n "$(assign_lines …)" ]`, and most harnesses bind only `HERE`, so **251 of the 560
+possible sites actually fire across the 112 files** (2.24 per harness, 1 fd each). With
+the 5 descriptors already open, the capture holds **256** at the last file — and there
+the next `fork()` never returns: the child spins at 100% CPU in `_notify_fork_child`,
+holding the capture's stdout, so every ancestor blocks. Two inherited descriptors are
+enough to cross it.
 
 `tests/tools/fd-cliff.sh` measures the margin in about two minutes (exit 1 while the
 harness still hangs, 0 once it clears). It is deliberately not a `*.test.sh`: it fails

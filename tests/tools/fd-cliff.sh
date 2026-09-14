@@ -21,8 +21,37 @@ trap 'rm -rf "$TMP"' EXIT
 printf '%s\n' "$(bash --version | head -1) at $(command -v bash) · ulimit -n $(ulimit -n)"
 echo
 
+# snapshot <tag> <pgid> — the tree, and a sample of whatever in it is burning a core.
+snapshot() {
+  ps -axo pid,ppid,pgid,stat,%cpu,etime,command | awk -v g="$2" '$3==g' > "$TMP/tree.$1"
+  command -v sample >/dev/null 2>&1 || return 0
+  awk '$4 ~ /R/ {print $1}' "$TMP/tree.$1" | while read -r q; do
+    sample "$q" 2 -f "$TMP/sample.$1.$q" >/dev/null 2>&1
+  done
+}
+
+# bounded <tag> <outfile> <cmd>... — every probe in here runs through this, because the
+# thing being probed is a fork that never returns and a synchronous call to it would hang
+# this script too. Its own process group, so the deadline reaches the spinning grandchild
+# and not just its shell — knowledge/findings/a-per-harness-bound-must-kill-the-process-group.
+bounded() {
+  local tag="$1" out="$2" pid wd rc
+  shift 2
+  perl -e 'setpgrp(0,0); exec @ARGV' "$@" > "$out" 2>&1 &
+  pid=$!
+  # One line, and it stays one: tests/background-teardown.test.sh reads a watchdog only
+  # where the sleep, the kill and the `>/dev/null` sit on the spawn's own logical line.
+  ( sleep "$BOUND"; kill -0 "$pid" 2>/dev/null && snapshot "$tag" "$pid"; kill -9 -"$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  wd=$!
+  disown "$wd" 2>/dev/null
+  wait "$pid" 2>/dev/null
+  rc=$?
+  kill "$wd" 2>/dev/null
+  return "$rc"
+}
+
 # --- A. the mechanism, standalone ------------------------------------------------------
-echo "== A. one leaked fd per process substitution, and the fork that never returns =="
+echo "== A. one leaked fd per process substitution, $BOUND s bound, killed by process GROUP =="
 cat > "$TMP/leak.sh" <<'LEAK'
 #!/usr/bin/env bash
 f() { local i l
@@ -32,8 +61,9 @@ out="$(f "$1")"; rc=$?
 printf 'open=%-4s capture rc=%s\n' "${out:--}" "$rc"
 LEAK
 for n in 1 64 253 254 300; do
-  printf '  %4s procsubs -> %s' "$n" "$(bash "$TMP/leak.sh" "$n" 2>&1)"
-  echo
+  bounded "A$n" "$TMP/a.$n" bash "$TMP/leak.sh" "$n"
+  line="$(tail -1 "$TMP/a.$n" 2>/dev/null)"
+  printf '  %4s procsubs -> %s\n' "$n" "${line:-HUNG past ${BOUND}s — the fork never returned}"
 done
 echo
 
@@ -48,31 +78,12 @@ if out="$(bash "$h" 2>&1)"; then rc=0; else rc=$?; fi
 printf 'rc=%s %s\n' "$rc" "$(printf '%s\n' "$out" | tail -1)"
 INNER
 
-# snapshot <n> <pgid> — the tree, and a sample of whatever in it is burning a core.
-snapshot() {
-  ps -axo pid,ppid,pgid,stat,%cpu,etime,command | awk -v g="$2" '$3==g' > "$TMP/tree.$1"
-  command -v sample >/dev/null 2>&1 || return 0
-  awk '$4 ~ /R/ {print $1}' "$TMP/tree.$1" | while read -r q; do
-    sample "$q" 2 -f "$TMP/sample.$1.$q" >/dev/null 2>&1
-  done
-}
-
 echo "== B. the real harness, $BOUND s bound, killed by process GROUP =="
 first_hang=""
 sig=""
 for n in $SPARES; do
-  # Its own process group, so the bound reaches the spinning grandchild and not just the
-  # harness's shell — knowledge/findings/a-per-harness-bound-must-kill-the-process-group.
-  perl -e 'setpgrp(0,0); exec @ARGV' bash "$TMP/inner.sh" "$n" "$HARNESS" > "$TMP/out.$n" 2>&1 &
-  pid=$!
-  # One line, and it stays one: tests/background-teardown.test.sh reads a watchdog only
-  # where the sleep, the kill and the `>/dev/null` sit on the spawn's own logical line.
-  ( sleep "$BOUND"; kill -0 "$pid" 2>/dev/null && snapshot "$n" "$pid"; kill -9 -"$pid" 2>/dev/null ) >/dev/null 2>&1 &
-  wd=$!
-  disown "$wd" 2>/dev/null
   start=$(date +%s)
-  wait "$pid" 2>/dev/null
-  kill "$wd" 2>/dev/null
+  bounded "$n" "$TMP/out.$n" bash "$TMP/inner.sh" "$n" "$HARNESS"
   if grep -qE 'rc=0 pass=[0-9]+ fail=0' "$TMP/out.$n" 2>/dev/null; then
     printf '  %2s spare fds -> green in %ss\n' "$n" "$(( $(date +%s) - start ))"
   else
