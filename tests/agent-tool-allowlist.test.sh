@@ -204,7 +204,7 @@ MENTION_RE="\`($VOCAB)\`"
 # `Explore` is a harness SUBAGENT TYPE, not a tool: it is dispatched through `Agent`, which
 # is already in `VOCAB` and checked. Added with the mentions that justify it —
 # `seed/CONVENTIONS.md`'s broad-read rule and `skills/fanout/SKILL.md`.
-NOT_A_TOOL='SessionStart|PreToolUse|UserPromptSubmit|Makefile|Explore'
+NOT_A_TOOL='SessionStart|PreToolUse|UserPromptSubmit|WorktreeCreate|WorktreeRemove|Makefile|Explore'
 
 # Rule 2, DERIVED: OKF's document types, from the schema that defines them. `seed/SCHEMA.md`
 # writes each as a `## type: <Name>` heading, so the registry is machine-readable and a new

@@ -449,15 +449,19 @@ about every future PR, not this one, so working around it per-PR hides a broken
 reviewer behind a per-PR fix and the human never learns it needs fixing.
 
 <a id="step-5"></a>
-### Step 5 — why worktree deletion is record-driven and pruning is report-only
+### Step 5 — why nothing deletes a worktree, and pruning is report-only
 
 The scan-based version of worktree removal destroyed three running agents' worktrees
 before it was deleted, and the states are genuinely ambiguous — a branch with no
 commits of its own is indistinguishable from a live dispatch that hasn't committed yet,
-and a detached HEAD's commits are on no branch ref at all. The whole reason
-`reclaim-worktree.sh` is allowed to delete is that the path comes from the task's own
-record rather than from a guess, verified against the recorded branch, with every guard
-refusing otherwise.
+and a detached HEAD's commits are on no branch ref at all.
+
+`reclaim-worktree.sh` was the one exception: record-driven removal of a single path the
+task itself named. It went with the migration to a `WorktreeCreate` hook
+(ai-bridge-v3/task-032) — the harness creates the tree, so the harness owns its
+lifecycle, and a second reaper on our side is one more thing that can be wrong about a
+live agent. Until `WorktreeRemove` fires (it still does not: measured 2026-09-14 on
+2.1.270, 5 sessions, 5 trees, 0 events), removal is a human's hand on a printed command.
 
 `prune-worktrees.sh`'s liveness check (`PRUNE_ACTIVE_MINUTES`, default 120) is a
 best-effort backstop: an agent that is thinking, waiting on review, or running a long

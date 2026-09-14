@@ -432,7 +432,8 @@ state, and act only on deltas.
    For each **build** `ready` task whose `depends_on` are all `done`, that clears the
    ownership check, and that is not already in-progress: set `assignee` +
    `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the
-   task — both, or neither** (`reclaim-worktree.sh` refuses a path with no branch).
+   task — both, or neither** (`SCHEMA.md`: a recorded path with no recorded branch is a
+   refusal, and the `WorktreeCreate` hook reads both).
    Write them BEFORE spawning, so a tick that dies mid-dispatch still leaves the
    record. Then spawn the role with the Agent tool, **namespaced**:
    `subagent_type: ai-bridge:<assignee>`, passing the absolute task path and its
@@ -454,8 +455,8 @@ state, and act only on deltas.
    **A spawn that FAILS is a rollback, not a report — the other half of the window the
    pre-spawn write opens.** If the `Agent` call errors or returns no agent, put that
    task back to `status: ready`, clear `assignee`, and leave `worktree:`/`branch:`
-   standing — a re-dispatch reuses that worktree, and `reclaim-worktree.sh` refuses a
-   path with no branch. Say so in the tick report. Left alone, the task claims a
+   standing — a re-dispatch reuses that worktree, and a recorded path with no recorded
+   branch is a refusal. Say so in the tick report. Left alone, the task claims a
    `maxAgentsInFlight` slot forever with nothing behind it, and step 4's sweep can only
    name it, never decide it.
 
@@ -697,12 +698,11 @@ state, and act only on deltas.
    `AUTONOMY.md` builds on.
 
 5. **Reflect merges.** For `in-review` tasks, check the PR(s): when **all** of a
-   task's PRs are **merged** → `status: done`, then **reclaim that task's worktree**:
-   `${CLAUDE_PLUGIN_ROOT}/scripts/reclaim-worktree.sh <task-path>`. It refuses unless every guard passes,
-   and a refusal is **normal, not an error to work around**: report it and move on.
-   Never pass a force flag, never remove the path by hand, never widen the search
-   beyond the one path the task recorded (`docs/pm-design.md#step-5` has the incident
-   that made deletion record-driven). Then re-evaluate dependents. If review
+   task's PRs are **merged** → `status: done`. **You do not reclaim its worktree** —
+   nothing on your side deletes one. `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh`
+   classifies and prints the `git worktree remove` commands; report the finished ones and
+   let the human run them. Never remove a path by hand and never widen a report into a
+   sweep (`docs/pm-design.md#step-5` has the incident). Then re-evaluate dependents. If review
    **requests changes** → back to `in-progress`. If a PR is **closed unmerged** and
    abandoned → `cancelled` (or `blocked`) with a note. A multi-PR task stays
    `in-review` until all merge. **`done` and `cancelled` are the two writes a task's

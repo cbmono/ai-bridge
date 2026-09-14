@@ -280,6 +280,12 @@ wt_branch "$WTROOT/branch-locked" feat/locked
 commit_in "$WTROOT/branch-locked" feature.txt 'landed but locked'
 git -C "$REPO" worktree lock "$WTROOT/branch-locked"
 
+# 10b. locked WITH a reason: the reason is the only thing in the porcelain that says who
+# holds it, so the report must carry it rather than flatten every lock to one word.
+wt_branch "$WTROOT/branch-locked-reason" feat/locked-reason
+commit_in "$WTROOT/branch-locked-reason" feature.txt 'landed but locked'
+git -C "$REPO" worktree lock --reason 'task-042 is still in here' "$WTROOT/branch-locked-reason"
+
 # 11 + 12. the LEGACY root is still scanned, for both decision directions.
 S_LEGACY="$(orphan_sha "$LEGACY/legacy-detached-merged" 'legacy squash head')"
 DETACHED+=("$LEGACY/legacy-detached-merged")
@@ -368,6 +374,7 @@ branch feat/untracked-work MERGED
 branch feat/scaff MERGED
 branch feat/nested MERGED
 branch feat/locked MERGED
+branch feat/locked-reason MERGED
 branch feat/legacy MERGED
 sha $S_MERGED MERGED
 sha $S_SCAFFOLD MERGED
@@ -451,6 +458,7 @@ expect "$WTROOT/branch-untracked-work"        '^KEEP \(uncommitted work\)'
 expect "$WTROOT/branch-scaffolding"           '^RECLAIMABLE'
 expect "$WTROOT/branch-nested-activity"       '^REMOVABLE'
 expect "$WTROOT/branch-locked"                '^KEEP \(locked\)'
+expect "$WTROOT/branch-locked-reason"         '^KEEP \(locked: task-042 is still in here\)'
 expect "$LEGACY/legacy-detached-merged"       '^RECLAIMABLE'
 expect "$LEGACY/legacy-branch-merged-pr"      '^REMOVABLE'
 expect "$LEGACY/legacy-detached-ancestor"     '^KEEP \(no commits yet\)'

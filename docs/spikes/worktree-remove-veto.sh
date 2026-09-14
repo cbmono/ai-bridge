@@ -45,7 +45,8 @@ case "$pr" in
 esac
 
 status="$(printf '%s\n' "$fm" | sed -n 's/^status:[[:space:]]*"\{0,1\}\([a-z-]*\).*/\1/p' | head -1)"
-# `done` only, never `cancelled` — reclaim-worktree.sh's G2: a cancelled task's PR was
+# `done` only, never `cancelled` — the retired reclaim-worktree.sh's G2 reason, now kept in
+# docs/pm-design.md#step-5: a cancelled task's PR was
 # closed UNMERGED, so its worktree may hold the only copy of that work.
 case "$status" in
   done) ;;
