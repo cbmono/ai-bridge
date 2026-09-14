@@ -359,8 +359,12 @@ while IFS= read -r sha; do
   [ -n "$sha" ] || continue
   counted=""
 
+  # `--no-merge-check` because this is a question about the PAST — did a review happen at
+  # commit X — and a conflict today says nothing about it. Left on, the sibling's exit 7
+  # would land in the `*` arm below and turn "this PR has a conflict" into "the round count
+  # is unknown", refusing the cap check on every conflicting PR.
   OKF_ROUNDS_HEAD="$sha" PATH="$BIN:$PATH" \
-    "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} >/dev/null 2>&1
+    "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --no-merge-check >/dev/null 2>&1
   rc=$?
   # 5 IS A REFUSAL, LISTED HERE BESIDE THE OTHERS BECAUSE OMITTING IT IS A LIVE BUG, NOT A
   # CONSERVATIVE DEFAULT. The sibling splits its refusal into transient (1) and terminal
@@ -391,7 +395,8 @@ while IFS= read -r sha; do
     while IFS= read -r login; do
       [ -n "$login" ] || continue
       OKF_ROUNDS_HEAD="$sha" OKF_ROUNDS_MASK_AUTHOR="$MASK" PATH="$BIN:$PATH" \
-        "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --reviewer "$login" >/dev/null 2>&1
+        "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --reviewer "$login" --no-merge-check \
+          >/dev/null 2>&1
       rc=$?
       case "$rc" in
         0|6) counted=yes; break ;;   # a completed round, clause 9 notwithstanding — above
