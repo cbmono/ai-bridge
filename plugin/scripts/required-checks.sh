@@ -348,6 +348,13 @@ refuse_clearance() { # <the whole first clause> <exit code of the sibling>
     echo "        A review EXISTS at this head — do NOT request another one. The threads" >&2
     echo "        named above are unanswered: reply to or fix each, resolve it, and push." >&2
   fi
+  # THE SIBLING'S EXIT 7 IS NOT ABOUT THE REVIEW AT ALL. The host says the PR cannot merge
+  # — CONFLICTING / DIRTY — so no review, no check and no green run changes the answer.
+  # This is the refusal that made three PRs read "merge, verified, CLEAN" on 2026-09-13.
+  if [ "$2" -eq 7 ]; then
+    echo "        This PR CONFLICTS with its base — no review changes that. Rebase it onto" >&2
+    echo "        the default branch, push, and ask again; do NOT request a review." >&2
+  fi
   # An unreadable reviewer state (exit 2) is a different refusal from a reviewer that
   # answered and declined — keep the caller's two codes distinguishable. Spelled as an
   # `if` rather than `[ … ] && exit 2`, whose fall-through under `set -e` is a subtlety

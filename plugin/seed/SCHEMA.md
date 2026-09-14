@@ -486,6 +486,16 @@ cannot tell them apart. Unknown or unreadable reviewer state is **unverified**, 
 clearance. `scripts/review-clearance.sh` computes exactly this, and exit 0 is its only
 clearance.
 
+**And merge-eligible means MERGEABLE ON THE HOST, which no review can supply.** A PR the
+host reports `mergeable: CONFLICTING` or `mergeStateStatus: DIRTY` is never merge-eligible
+and never appears under the awaiting-you heading, however green its checks and however
+fresh its review: it is a **rebase round** for its own agent, and its task stays
+`in-progress`. `review-clearance.sh` asks this **first**, before any artifact, and answers
+**exit 7**; an **UNKNOWN** mergeability is **exit 2**, a hold, because the host computes it
+lazily. **The value is re-read every tick and never cached** — it changes when the default
+branch moves with no commit on the PR, which is how three PRs were presented as merge rows
+on 2026-09-13 while GitHub reported all three DIRTY.
+
 **The checker's table is the review artifact when no external reviewer exists, and it is
 NOT the implementer's.** The PR body's `✓`/`✗` table is the *worker's* claim; the
 `qa-reviewer` posts a second table as a PR comment, re-derived from the task's

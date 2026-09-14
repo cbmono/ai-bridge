@@ -132,6 +132,12 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    signal (exit 3), on an artifact that evidences no review or is not of the current head
    (exit 4), and on an unreadable reviewer state (exit 2). Exit 0 is only the *first* half of this precondition: the
    clauses above still decide whether that review **cleared**.
+   **It asks the merge question FIRST, and that one an auto-merge cannot argue with:**
+   a PR the host reports `mergeable: CONFLICTING` / `mergeStateStatus: DIRTY` is **exit 7**
+   and is never auto-merged — it is a rebase round, not a review problem. An **UNKNOWN**
+   mergeability is **exit 2**, a hold, because the host computes it lazily and answers
+   UNKNOWN for seconds after the base moves. Both are re-read every tick: mergeability
+   changes when the default branch moves with no commit on the PR.
    **1 and 5 refuse identically here** — this precondition asks whether a review cleared,
    and neither did. The split decides what the loop does *next*, which is the section
    below, and never whether this gate passes.
