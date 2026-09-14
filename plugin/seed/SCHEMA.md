@@ -181,6 +181,11 @@ session: <id>                          # optional, BUILD only. MACHINE-READ by s
 # `claude agents --json --cwd <worktree>` finds the orphan. That is why the pre-write of
 # the other two fields is the load-bearing one.
 #
+# ONE VALUE: the session working this task NOW. A later round on the same task — a resume
+# under a new id, a rebase round, the `qa-reviewer` — REPLACES it, which is correct because
+# only one of them is ever live at a time. The rounds stay countable on the `* DISPATCH`
+# lines under `# Notes`, which append; this field never becomes a list.
+#
 # It is read for two things and judges nothing: `agent-sessions.sh in-flight` counts the
 # recorded ids that still hold a `maxAgentsInFlight` slot, and `check-dispatch.sh` names
 # the state beside a PARKED verdict. A stale id reads as `gone`, which is not an error —

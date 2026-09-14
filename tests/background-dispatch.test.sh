@@ -73,17 +73,17 @@ mk() { # <name> <status> <session>
     > "$TMP/bundle/projects/p/tasks/$1.md"
 }
 mk live      in-progress aaaa1111
-mk parked    in-progress bbbb2222
+mk reviewing in-review   bbbb2222
 mk finished  in-progress cccc3333
 mk vanished  in-progress deadbeef
-mk queued    ready       aaaa1111
+mk merged    done        aaaa1111
 printf -- '---\ntype: Task\nstatus: in-progress\n---\n' > "$TMP/bundle/projects/p/tasks/nosession.md"
 ok "working + blocked hold a slot; done/gone do not" \
   "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>/dev/null)" 2
-ok "a \`ready\` task holds no slot" \
-  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>/dev/null \
-     | head -1)" 2
-ok "every recorded session is reported by name" \
+ok "a \`done\` task's stale id is history, not a slot" \
+  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>&1 >/dev/null \
+     | grep -c merged)" 0
+ok "every live-eligible session is reported by name" \
   "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>&1 >/dev/null | wc -l | tr -d ' ')" 4
 ok "an empty bundle is 0, not an error" \
   "$(mkdir -p "$TMP/none" && PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/none" 2>/dev/null)" 0

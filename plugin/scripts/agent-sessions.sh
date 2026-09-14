@@ -63,9 +63,11 @@ case "$1" in
     for task in "$root"/projects/*/tasks/*.md; do
       [ -f "$task" ] || continue
       fm="$(awk 'NR==1 && $0!="---" {exit} /^---$/ {n++; if (n==2) exit; next} n==1' "$task")"
+      # Terminal tasks only are skipped, never "not in-progress": a `qa-reviewer` on an
+      # `in-review` task and a rolled-back `ready` task whose spawn actually survived both
+      # hold a real slot, and the SESSION's own state is what decides — not the document's.
       case "$(printf '%s\n' "$fm" | sed -n 's/^status:[[:space:]]*//p' | head -1)" in
-        in-progress) ;;
-        *) continue ;;
+        done|cancelled) continue ;;
       esac
       sid="$(printf '%s\n' "$fm" | sed -n 's/^session:[[:space:]]*//p' | head -1 \
              | tr -d '"'"'"' ' | sed 's/#.*$//')"
