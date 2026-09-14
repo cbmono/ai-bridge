@@ -2168,7 +2168,7 @@ build_shape() { # <id> — each leaves the builders holding one input shape
       add_review coderabbitai COMMENTED "$OTHER_SHA" "$(body_file 'One nit.')" ;;
     refusal-comment) setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL" ;;
     terminal-refusal) setup "$CLEAN_HEAD"
-      add_comment coderabbitai "$(body_file 'No review credits remaining on this account.')" ;;
+      add_comment coderabbitai "$(body_file 'No credits remaining on this account.')" ;;
     not-yet-placeholder) setup "$CLEAN_HEAD"
       add_comment coderabbitai "$(body_file 'Currently processing new changes in this PR.')" ;;
     empty-commented-at-head) setup "$CLEAN_HEAD"
@@ -2211,7 +2211,7 @@ review-object-at-head             0 0
 stale-review-object               4 4
 refusal-comment                   1 1
 terminal-refusal                  5 5
-not-yet-placeholder               4 4
+not-yet-placeholder               1 1
 empty-commented-at-head           4 4
 no-artifacts                      3 3
 ack-only                          4 4

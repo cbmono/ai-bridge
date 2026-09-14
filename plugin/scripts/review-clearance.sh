@@ -885,8 +885,13 @@ gh api "/repos/$nwo/issues/$pr_number/comments?per_page=100" --paginate \
 # Route C (the vendor's review marker in a COMMENT) is consulted only for an account that
 # appears nowhere in this list — see TEST 2. Read once, before the loop, so the answer
 # does not depend on the order the host streamed the artifacts in.
-review_object_logins="$(jq -r '.login // empty' "$TMPD/reviews.ndjson" 2>/dev/null \
-                        | while IFS= read -r l; do norm "$l"; echo; done | sort -u)"
+jq -r '.login // empty' "$TMPD/reviews.ndjson" > "$TMPD/rlogins" 2>/dev/null || {
+  echo "error: could not read who published the review objects on PR $pr — refusing." >&2
+  echo "       An unreadable list would re-arm the comment route it is here to close." >&2
+  exit 2
+}
+review_object_logins="$(while IFS= read -r l; do norm "$l"; echo; done < "$TMPD/rlogins" \
+                        | sort -u)"
 
 has_review_object() { # <login>
   printf '%s\n' "$review_object_logins" | grep -Fqx "$(norm "$1")"
