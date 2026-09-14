@@ -88,3 +88,21 @@ suite from the main working tree, or from a fresh clone. None of the four needs 
 from a real checkout all 111 pass in the pool (measured 2026-09-13, 8,581 assertions, 0
 failed). If you are working in a worktree,
 clone to a temp directory to verify.
+
+## The 256-descriptor cliff — why `harness-read-paths` hangs, and how to re-measure it
+
+`/bin/bash` 3.2.57 leaks one file descriptor per `< <( )` **evaluated inside a `$( )`**;
+at top level it leaks none. `harness-read-paths.test.sh` had **five** such sites per
+harness inside `REAL="$(scan …)"` — one for `HERE`, one for each of the three
+`ROOT_VARS`, one for the candidate `awk` pass — but four of the five are guarded by
+`[ -n "$(assign_lines …)" ]`, and most harnesses bind only `HERE`, so **251 of the 560
+possible sites actually fire across the 112 files** (2.24 per harness, 1 fd each) and the
+capture ends on **256** open descriptors. Standalone the cliff is at ~254 substitutions —
+253 survives, 254 is fatal — so the scan lands right on it, and **two inherited
+descriptors are enough to cross**, which is all the pool has to leave behind. Past it a
+`fork()` never returns: the child spins at 100% CPU in `_notify_fork_child`, holding the
+capture's stdout, so every ancestor blocks.
+
+`tests/tools/fd-cliff.sh` measures the margin in about two minutes (exit 1 while the
+harness still hangs, 0 once it clears). It is deliberately not a `*.test.sh`: it fails
+today. Measurements and the sampled stack: ai-bridge-v3/task-042.
