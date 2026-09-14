@@ -170,7 +170,7 @@
 # message, 0 of 4 ESC bytes survived that relay, and the human is left reading a literal
 # `[1m`. One answer does not fit both channels, which is why each one is asked separately,
 # and colour is not promised there.
-# task-006 SUPERSEDES task-024's "/welcome shows the logo": the ship is THIS channel's alone.
+# task-006 SUPERSEDES task-024's "/welcome shows the logo": the mark is THIS channel's alone.
 #
 # SO THERE ARE THREE RENDERINGS, NOT TWO, AND THE THIRD IS `--format md`. It is the path
 # `/welcome` relays — `ai-bridge.sh` asks for it when its own stdout is a pipe —
@@ -262,7 +262,7 @@ while [ $# -gt 0 ]; do
     --format) shift; FORMAT="${1:-text}"; shift || true ;;
     --format=*) FORMAT="${1#--format=}"; shift ;;
     # `ai-bridge.sh` passes this on its no-argument branches: a relayed banner is markdown,
-    # which drops the leading space of the ship's first line and carries no SGR at all.
+    # which drops the leading space of the mark's first row and carries no SGR at all.
     --no-logo) LOGO=0; shift ;;
     # THE TWO TABLES, WHICH THE SESSION-START BANNER NO LONGER PRINTS. The human's channel
     # is capped at 12 lines and the tables are 17 of the 29 it used to spend; `welcome` asks
@@ -595,7 +595,7 @@ fi
 TAB="$(printf '\t')"
 
 # ---------------------------------------------------------------------------------------
-# COLOUR — eight names, all empty when it is off, so every call site is written once.
+# COLOUR — six names, all empty when it is off, so every call site is written once.
 # ---------------------------------------------------------------------------------------
 # Empty strings rather than an `if` at each site: a banner that has to remember to be
 # colourless is a banner that will one day emit a bare `\033[1m` into a log. `NO_COLOR`'s
@@ -635,34 +635,45 @@ fi
 # `printf` of the same escape, so the byte `cell` filters and the byte `emit_md` reads cannot
 # drift apart.
 [ "$use_emph" -eq 1 ] && EMPH_MARK="$EMPH_MARK_BYTE"
-C_B=""; C_DIM=""; C_RED=""; C_YEL=""; C_OFF=""
-C_WATER=""; C_HULL=""; C_BRIDGE=""
+C_OFF=""; C_BLUE=""; C_PINK=""; C_INK=""; C_MUTED=""; C_DIM=""; C_DIMI=""
 if [ "$use_color" -eq 1 ]; then
   esc="$(printf '\033')"
   # `${esc}[` braced: `"$esc[1m"` is bash's ARRAY-SUBSCRIPT spelling and shellcheck calls
   # it an error (SC1087). It happens to work while `esc` is a scalar, which is exactly the
   # kind of accident that stops working later.
-  C_B="${esc}[1m"; C_DIM="${esc}[2m"; C_RED="${esc}[1;31m"
-  C_YEL="${esc}[1;33m"; C_OFF="${esc}[0m"
-  # THE LOGO'S THREE COLOURS, AND THE ONLY PLACE THIS FILE ASKS HOW MANY COLOURS THERE ARE.
-  # Everything above is 3/4-bit and needs no tier; the ship is drawn from a palette, so it
-  # degrades in two steps rather than being dropped. `COLORTERM` is the terminal's own claim
-  # about truecolor and `tput colors` the terminfo count; neither is asked when `use_color`
-  # is 0, so the opt-outs above stay the single answer to "colour at all".
+  C_OFF="${esc}[0m"
+  # THE PALETTE IS `cli-theme.json`'s AND EVERY CODE BELOW IS COPIED FROM IT, NEVER COMPOSED
+  # — `truecolor` for the first tier, `ansi256` for the second. Two colours carry meaning
+  # and only two: BLUE is the machine's (the mark's tube, agents, refs, running state) and
+  # PINK is the human's (the gate, the exit arrow, anything waiting on a person). `ink` is
+  # weight rather than hue, `muted` is body text and `dim` is chrome; `dim italic` is the
+  # theme's own spelling for a status line, so the italic (SGR 3) rides on the dim code.
+  # THE THIRD TIER IS THE ONE THIS FILE ALREADY HAD (94/95/93) AND IT SURVIVES UNCHANGED:
+  # `cli-theme.json` defines no 3/4-bit tier, so the alternative was inventing codes, which
+  # is the one thing the palette rule forbids. `COLORTERM` is the terminal's own claim about
+  # truecolor and `tput colors` the terminfo count; neither is asked when `use_color` is 0,
+  # so the opt-outs above stay the single answer to "colour at all".
   tc=0
   if command -v tput >/dev/null 2>&1; then tc="$(tput colors 2>/dev/null || echo 0)"; fi
   case "$tc" in ''|*[!0-9]*) tc=0 ;; esac
   case "${COLORTERM:-}" in
     truecolor|24bit)
-      C_WATER="${esc}[38;2;95;168;211m"; C_HULL="${esc}[38;2;239;163;165m"
-      C_BRIDGE="${esc}[38;2;245;215;110m" ;;
+      C_BLUE="${esc}[38;2;94;162;255m"; C_PINK="${esc}[38;2;255;122;194m"
+      C_INK="${esc}[1;38;2;233;237;244m"; C_MUTED="${esc}[38;2;154;164;181m"
+      C_DIM="${esc}[38;2;108;116;136m" ;;
     *)
       if [ "$tc" -ge 256 ]; then
-        C_WATER="${esc}[38;5;74m"; C_HULL="${esc}[38;5;217m"; C_BRIDGE="${esc}[38;5;222m"
+        C_BLUE="${esc}[38;5;75m"; C_PINK="${esc}[38;5;212m"
+        C_INK="${esc}[1;38;5;255m"; C_MUTED="${esc}[38;5;248m"
+        C_DIM="${esc}[38;5;243m"
       else
-        C_WATER="${esc}[94m"; C_HULL="${esc}[95m"; C_BRIDGE="${esc}[93m"
+        C_BLUE="${esc}[94m"; C_PINK="${esc}[95m"
+        C_INK="${esc}[1;93m"; C_MUTED=""; C_DIM="${esc}[2m"
       fi ;;
   esac
+  # Dim italic — the theme's status weight, built from the dim code above so the two can
+  # never disagree. `[2m` at the 3/4-bit tier becomes `[3;2m` by the same substitution.
+  C_DIMI="${esc}[3;${C_DIM#"${esc}["}"
 fi
 
 # say <colour> <text…> — one whole line, coloured end to end. COLOUR NEVER GOES INSIDE A
@@ -682,31 +693,34 @@ say() { local c="$1"; shift; printf '%s%s%s\n' "$c" "$*" "$C_OFF"; }
 # is byte-for-byte `say`.
 say_strong() { local c="$1"; shift; printf '%s%s%s%s\n' "$EMPH_MARK" "$c" "$*" "$C_OFF"; }
 
-# THE LOGO — the ship, kept ONCE and as data. Ten columns, three lines; the docs sample and
-# tests/banner-logo.test.sh are measured against this array rather than carrying a second copy.
-LOGO_LINES=(' █▀█' '▄███▄▄▄▄▄▄' '~▀▀▀▀▀▀▀~~')
+# THE LOOPD MARK — the loop with its gate, kept ONCE and as data, copied glyph for glyph
+# from the design source's `cli-banner.sh`. Three rows, each `indent|pink|blue`: a leading
+# run that carries no colour at all, then the human's span, then the machine's. `|` is the
+# separator because no glyph of the mark is one, and the split is POSITIONAL rather than by
+# glyph class — row 1's first `▄` is the gate and its other three are tube, so the same
+# character is pink in one column and blue in the next.
+#
+# THE TWO PINK SPANS ARE THE WHOLE POINT AND THERE ARE NEVER MORE: the gate on the top edge
+# and the `◀━` exit arrow leaving to the left. Every pink pixel is a decision waiting, so a
+# third one would be a decision that is not there.
+#
+# `◀━` MUST LAND IN A TRUE MONOSPACE FONT or the three rows shear — the arrow is two cells
+# wide and the tube walls below it are aligned to that. Nothing here can check it; it is
+# checked by eye in a real terminal.
+LOGO_ROWS=('   |▄|▄▄▄' '|◀━|▐    ▌' '  ||▝▄▄▄▄▘')
 
-# logo — the three lines, coloured BY GLYPH RATHER THAN BY LINE: a `~` is water wherever it
-# appears, line 1's glyphs are the bridge, every other block is hull. With colour off every
-# name below is empty and this prints the array's bytes and nothing else.
+# logo — the three rows. With colour off every name below is empty and this prints the
+# array's glyphs and nothing else; with colour on it is byte for byte what `cli-banner.sh`
+# emits, ONE reset per row rather than one per span.
 logo() {
   [ "$LOGO" -eq 1 ] || return 0
-  local n=0 ln rest run block
-  for ln in "${LOGO_LINES[@]}"; do
-    n=$((n + 1))
-    if [ "$n" -eq 1 ]; then block="$C_BRIDGE"; else block="$C_HULL"; fi
-    rest="$ln"
-    while [ -n "$rest" ]; do
-      # `~` IS ASCII AND EVERY BYTE OF A BLOCK GLYPH IS >= 0x80, so splitting on it is
-      # multibyte-safe in either locale — the trap `nchars` exists for, avoided rather than
-      # counted around.
-      case "$rest" in
-        '~'*) run="${rest%%[!~]*}"; printf '%s%s%s' "$C_WATER" "$run" "$C_OFF" ;;
-        *)    run="${rest%%~*}";    printf '%s%s%s' "$block"   "$run" "$C_OFF" ;;
-      esac
-      rest="${rest#"$run"}"
-    done
-    printf '\n'
+  local row indent rest pink blue
+  for row in "${LOGO_ROWS[@]}"; do
+    indent="${row%%|*}"; rest="${row#*|}"
+    pink="${rest%%|*}"; blue="${rest#*|}"
+    printf '%s' "$indent"
+    [ -n "$pink" ] && printf '%s%s' "$C_PINK" "$pink"
+    printf '%s%s%s\n' "$C_BLUE" "$blue" "$C_OFF"
   done
 }
 
@@ -728,7 +742,7 @@ logo() {
 emphasise() { # stdin -> stdout
   while IFS= read -r ln; do
     case "$ln" in
-      ⚠*|⬆*) printf '%s  %s%s\n' "$C_YEL" "$ln" "$C_OFF" ;;
+      ⚠*|⬆*) printf '%s  %s%s\n' "$C_PINK" "$ln" "$C_OFF" ;;
       *)      printf '%s\n' "$ln" ;;
     esac
   done
@@ -843,7 +857,7 @@ pad() { local s="$1" n
 # THE HARNESS PREFIXES A LABEL NO PAYLOAD CAN REMOVE. Claude Code renders a SessionStart
 # hook's `systemMessage` as `${hookName} says: ${content}`, and for this event the name is
 # built as `SessionStart:${source}` — so the owner's first line reads
-# `SessionStart:resume says: AI-Bridge 0.13.0 · …`. Measured 2026-08-31 on 2.1.251: the
+# `SessionStart:resume says: loopd 0.13.0 · …`. Measured 2026-08-31 on 2.1.251: the
 # identity line starts 26 characters in while the rule below it — sized from the header and
 # printed at column 0 — does not, and §2's "the rule is what makes this read as a header"
 # does the opposite under the label.
@@ -923,7 +937,7 @@ if [ "$n_legacy" -gt 0 ]; then
   # NOT FENCED AS UNTRUSTED DATA, unlike the awaiting items below, and the reason is that
   # nothing here is bundle-authored: the names come from PROBES (literals in this file)
   # and the paths are this bundle's own root and the checkout it points into.
-  say "$C_RED" "⚠️  this bundle still carries MACHINERY SYMLINKS — ${n_legacy} of ${n_probes} probed paths"
+  say "$C_PINK" "⚠️  this bundle still carries MACHINERY SYMLINKS — ${n_legacy} of ${n_probes} probed paths"
   echo "    are links into a template checkout, and ${n_dangling} of them are already dead."
   echo "    linked: $legacy"
   [ -n "$gone" ] && echo "    pointing into: $gone"
@@ -982,7 +996,7 @@ if [ -n "$ver_src" ]; then
   ver="$(cell "$ver")"
   # The `v` is DISPLAY ONLY and is applied last, to a value that survived the filters
   # above — never to the empty string they leave behind. Prefixing before that check
-  # renders `AI-Bridge v ·` for a VERSION that is missing, empty or junk, which is the
+  # renders `loopd v ·` for a VERSION that is missing, empty or junk, which is the
   # one case those filters exist to make indistinguishable from "no version at all".
   [ -n "$ver" ] && ver="v$ver"
 fi
@@ -993,11 +1007,13 @@ fi
 # instance is this" lie about the answer. A markdown-active byte there costs at worst two
 # characters of a decorative rule; in a table cell it costs a column.
 org="$(cell "$(leaf_value "$(leaf org)")")"
-head_line="AI-Bridge${ver:+ $ver} · $(basename "$root")${org:+ · org: $org}"
-# THE LOGO GOES DIRECTLY ABOVE THE HEADER, not above §0: the machinery alarm keeps its place
-# as the banner's first line whenever it fires, because it is an alarm and the ship is not.
+# THE SHAPE IS LITERAL — `loopd v<VERSION> · <bundle> · org: <org>`, the separators and the
+# `org: ` label included. The brand is always lowercase.
+head_line="loopd${ver:+ $ver} · $(basename "$root")${org:+ · org: $org}"
+# THE MARK GOES DIRECTLY ABOVE THE HEADER, not above §0: the machinery alarm keeps its place
+# as the banner's first line whenever it fires, because it is an alarm and the mark is not.
 logo
-say_strong "$C_B" "$head_line"
+say_strong "$C_INK" "$head_line"
 # THE RULE UNDER IT IS WHAT MAKES THIS READ AS A HEADER WITH COLOUR OFF — which is the
 # normal case for this file, whose stdout is a pipe into Claude Code rather than a terminal.
 # Bold alone would be invisible in exactly the place the banner is actually read.
@@ -1197,14 +1213,22 @@ fi
 # Clamped so one long value cannot push FROM off the screen for every other row.
 [ "$vw" -le 44 ] || vw=44
 # `pad`, not `%-*s`: see its definition — bash pads by bytes and `→` costs three of them.
+# THE SEMANTICS TABLE, APPLIED: `cli-theme.json` says headings are ink bold, body is muted
+# and a status field is dim italic — so the header row is ink, the label and value columns
+# are body, and `FROM`, which reports where a value was resolved from rather than what it
+# is, takes the status weight.
+#
+# THE COLOUR WRAPS AN ALREADY-PADDED FIELD AND NEVER GOES INSIDE ONE — `pad` runs first and
+# the escapes go round its result, so the widths are still counted in characters.
 table() { # <header-label> <header-value> <rows>
   echo
-  # `say_strong`: dim where SGR renders, `**…**` where markdown does, nothing where neither
+  # `say_strong`: ink where SGR renders, `**…**` where markdown does, nothing where neither
   # does. The header of a fixed-width table is one of the three lines a reader should land on
   # first, and on the relayed path it was the only weight available.
-  say_strong "$C_DIM" "$(pad "$1" 20)  $(pad "$2" "$vw")  FROM"
+  say_strong "$C_INK" "$(pad "$1" 20)  $(pad "$2" "$vw")  FROM"
   printf '%s' "$3" | while IFS="$TAB" read -r k v s; do
-    printf '%s  %s  %s\n' "$(pad "$k" 20)" "$(pad "$v" "$vw")" "$s"
+    printf '%s%s  %s%s  %s%s%s\n' \
+      "$C_MUTED" "$(pad "$k" 20)" "$(pad "$v" "$vw")" "$C_OFF" "$C_DIMI" "$s" "$C_OFF"
   done
 }
 # `--full` ONLY. The human's banner is capped at 12 lines (ai-bridge-v3/task-025) and these
@@ -1233,12 +1257,12 @@ if [ -n "$bin" ] && [ -f "$bin/resolve-account.sh" ]; then
        echo "Account ${acct_declared} — active"
        ;;
     3) echo
-       say "$C_RED" "⚠️  WRONG CLAUDE ACCOUNT — this bundle is ${acct_declared}, the session is ${acct_active}"
+       say "$C_PINK" "⚠️  WRONG CLAUDE ACCOUNT — this bundle is ${acct_declared}, the session is ${acct_active}"
        echo "    Everything you run here bills and reads as the wrong organisation. Restart:"
        printf '        %s\n' "$acct_launcher"
        ;;
     4) echo
-       say "$C_YEL" "⚠️  NO CLAUDE ACCOUNT SELECTED — this bundle declares ${acct_declared}"
+       say "$C_PINK" "⚠️  NO CLAUDE ACCOUNT SELECTED — this bundle declares ${acct_declared}"
        echo "    The session was not started by the account launcher. Restart:"
        printf '        %s\n' "$acct_launcher"
        ;;
@@ -1253,7 +1277,7 @@ fi
 if [ -n "${ANTHROPIC_BASE_URL:-}" ]; then
   backend="$(cell "$(printf '%s' "$ANTHROPIC_BASE_URL" | sed -e 's#^[A-Za-z][A-Za-z0-9+.-]*://##' -e 's#[/?].*##')")"
   echo
-  say "$C_RED" "⚠️  NOT ANTHROPIC — this session's model backend is ${backend:-elsewhere}"
+  say "$C_PINK" "⚠️  NOT ANTHROPIC — this session's model backend is ${backend:-elsewhere}"
   echo "    Every prompt, file read and tool result in this session goes there."
   echo "    Confirm this code is cleared to leave before you work in it."
 fi
@@ -1527,7 +1551,7 @@ if [ -f "$awaiting" ]; then
     # there. `/ai-bridge:dispatch` is always available, so it is the half that is always named.
     if [ "$board_shown" -eq 1 ]; then route="see the board above, or run /ai-bridge:dispatch"
     else                              route="run /ai-bridge:dispatch"; fi
-    say "$C_YEL" "🔔 ${subject} you — ${route}"
+    say "$C_PINK" "🔔 ${subject} you — ${route}"
     # THE MODEL'S HALF, AND NOTHING BELOW HERE REACHES THE HUMAN. The item text is derived
     # from task documents, which carry human-written questions, blocker reasons quoting
     # tool output, and PR metadata — none of it authored here, and all of it landing next
