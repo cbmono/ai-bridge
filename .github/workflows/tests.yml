@@ -42,7 +42,8 @@ jobs:
     permissions:
       contents: read
     # MEASURED, not guessed (ai-bridge-v3/task-040): the worst case since the pool landed
-    # is 879s of suite (111 harnesses, pass=8581, run 34788244534 attempt 1) — which was
+    # is 879s of suite (111 harnesses, pass=8581, run 34788244534 attempt 1; #211 has since
+    # taken the suite to 114) — which was
     # CANCELLED at 15 anyway, as were three other first attempts inside one hour. 25 is
     # ~1.7x that worst case, and it is also 879s plus one harness dying at the 600s
     # HARNESS_TIMEOUT in tests/run.sh, which is the case this ceiling must survive to

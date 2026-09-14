@@ -39,9 +39,11 @@ CORE=(
   tests/harness-read-paths.test.sh
 )
 
-# The per-harness wall-clock bound, in seconds, named once for the whole suite. 600 is
-# ~1.9x the slowest gating harness measured post-#216 (review-clearance, 311s in a pool of
-# 3 on run 34783957083); a `# deep` harness spawns a paid CLI call and measures ~10m.
+# The per-harness wall-clock bound, in seconds, named once for the whole suite. The slowest
+# gating harness is review-clearance: 311s in a pool of 3 on run 34783957083, and 455s
+# standalone after #226 grew it — though that figure shared a machine with a sibling suite,
+# so treat it as an upper bound. Re-measure it in CI before trimming 600. A `# deep`
+# harness spawns a paid CLI call and measures ~10m.
 HARNESS_TIMEOUT="${HARNESS_TIMEOUT:-600}"
 HARNESS_TIMEOUT_DEEP="${HARNESS_TIMEOUT_DEEP:-1800}"
 
