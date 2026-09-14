@@ -93,11 +93,12 @@ at top level it leaks none. `harness-read-paths.test.sh` had **five** such sites
 harness inside `REAL="$(scan …)"` — one for `HERE`, one for each of the three
 `ROOT_VARS`, one for the candidate `awk` pass — but four of the five are guarded by
 `[ -n "$(assign_lines …)" ]`, and most harnesses bind only `HERE`, so **251 of the 560
-possible sites actually fire across the 112 files** (2.24 per harness, 1 fd each). With
-the 5 descriptors already open, the capture holds **256** at the last file — and there
-the next `fork()` never returns: the child spins at 100% CPU in `_notify_fork_child`,
-holding the capture's stdout, so every ancestor blocks. Two inherited descriptors are
-enough to cross it.
+possible sites actually fire across the 112 files** (2.24 per harness, 1 fd each) and the
+capture ends on **256** open descriptors. Standalone the cliff is at ~254 substitutions —
+253 survives, 254 is fatal — so the scan lands right on it, and **two inherited
+descriptors are enough to cross**, which is all the pool has to leave behind. Past it a
+`fork()` never returns: the child spins at 100% CPU in `_notify_fork_child`, holding the
+capture's stdout, so every ancestor blocks.
 
 `tests/tools/fd-cliff.sh` measures the margin in about two minutes (exit 1 while the
 harness still hangs, 0 once it clears). It is deliberately not a `*.test.sh`: it fails
