@@ -207,14 +207,29 @@ comment "coderabbitai[bot]" "$REFUSAL_BODY"
 comment "coderabbitai[bot]" "$CLEAN_BODY"
 ok "1 round: a real review + a refusal of another commit counts 1" "$(run)" "0 1"
 
-# 2 — a second, independently pinned review: a submitted review object the HOST stamped
-# against a third commit. Two distinct commits verified ⇒ the cap is reached.
+# 2 — two reviews the HOST itself pinned, against two different commits, with that same
+# refusal still present. Two distinct commits verified ⇒ the cap is reached.
+#
+# BOTH ROUNDS ARE REVIEW OBJECTS, deliberately: the sibling consults a comment marker only
+# for an account with no review object at all, so a route-C round here would be counted or
+# not depending on the OTHER round's channel. The cap's own assertion must not turn on that.
 setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"; commit "$THIRD"
 comment "coderabbitai[bot]" "$REFUSAL_BODY"
-comment "coderabbitai[bot]" "$CLEAN_BODY"
+review "coderabbitai[bot]" "COMMENTED" "$CLEAN_HEAD" \
+  "$(body 'One nit on the helper.')"
 review "coderabbitai[bot]" "CHANGES_REQUESTED" "$THIRD" \
   "$(body 'Two findings on the new guard; see the inline comments.')"
 ok "2 rounds REFUSES — the cap, and the whole point of this file" "$(run)" "1 2"
+
+# THE FLOOR, NAMED. The same two rounds where the newer one arrived as the vendor's edited
+# summary comment count ONE, because that account has a review object and the sibling then
+# decides from the structured channel alone. One low, one extra dispatch — the direction
+# the header commits to, pinned here so it cannot drift to one HIGH unnoticed.
+setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"; commit "$THIRD"
+comment "coderabbitai[bot]" "$CLEAN_BODY"
+review "coderabbitai[bot]" "CHANGES_REQUESTED" "$THIRD" \
+  "$(body 'Two findings on the new guard; see the inline comments.')"
+ok "a route-C round is invisible once that account has a review object" "$(run)" "0 1"
 
 echo
 echo "== what may not become a round =="
@@ -228,9 +243,10 @@ review "coderabbitai[bot]" "COMMENTED" "$CLEAN_HEAD" \
   "$(body 'No actionable comments; details in the summary above.')"
 ok "two artifacts for ONE commit are one round, not two" "$(run)" "0 1"
 
-# An empty COMMENTED object is what the host mints for any inline reply.
+# An empty COMMENTED object is what the host mints for any inline reply. The round it must
+# not become a second of is a review object too, for the reason given at the cap above.
 setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"; commit "$THIRD"
-comment "coderabbitai[bot]" "$CLEAN_BODY"
+review "coderabbitai[bot]" "COMMENTED" "$CLEAN_HEAD" "$(body 'One nit on the helper.')"
 review "coderabbitai[bot]" "COMMENTED" "$THIRD" "$(body '')"
 ok "an empty COMMENTED review object is not a round" "$(run)" "0 1"
 
