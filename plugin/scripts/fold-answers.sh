@@ -36,26 +36,40 @@ done
 # session. Unattributable prints `<unknown>` and is written as-is — an omitted stamp is
 # indistinguishable from a decision nobody made. `SCHEMA.md` → "Decisions name the human".
 #
-# WHICH OF THE TWO IS DECIDED FROM THE DOCUMENT, never as a fallback from the other: an
-# answer already in the COMMITTED copy belongs to that commit's author, and an unresolvable
-# one stays `<unknown>` rather than being stamped with whoever's loop is folding it. Only an
-# answer that exists in the working tree alone was given in this session.
-login="<unknown>"
+# WHICH OF THE TWO IS DECIDED PER ENTRY, never once for the whole document: one fold can
+# carry an answer that arrived in a commit AND one given in this session, and a single
+# document-level test stamps the second with the first one's human. The COMMITTED
+# `open_questions` is the discriminator — an entry already there belongs to that commit's
+# author; one that exists in the working tree alone was answered in this session. An
+# unresolvable author stays `<unknown>` rather than being stamped with whoever's loop is
+# folding it.
+login_self="<unknown>"; login_author="<unknown>"; committed_state="absent"; committed_file=""
 if [ -z "$list_key" ] && [ -x "$HERE/decision-stamp.sh" ]; then
-  if git -C "$(dirname "$doc")" show "HEAD:./$(basename "$doc")" 2>/dev/null | grep -qF -- ' --- '; then
-    login="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --author "$doc" 2>/dev/null || true)"
-  else
-    login="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --self 2>/dev/null || true)"
+  committed_file="$(mktemp -t fold-answers.XXXXXX)"; head_doc="$(mktemp -t fold-answers-head.XXXXXX)"
+  trap 'rm -f "$committed_file" "$head_doc"' EXIT
+  login_self="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --self 2>/dev/null || true)"
+  [ -n "$login_self" ] || login_self="<unknown>"
+  if git -C "$(dirname "$doc")" show "HEAD:./$(basename "$doc")" > "$head_doc" 2>/dev/null; then
+    # Read through this script's own `--list`, so the committed copy is scanned by the one
+    # parser. A list it refuses leaves every entry unattributable rather than mis-attributed.
+    if bash "$HERE/$(basename "$0")" --list "$head_doc" open_questions > "$committed_file" 2>/dev/null; then
+      committed_state="read"
+      login_author="$(bash "$HERE/decision-stamp.sh" --instance "$inst" --author "$doc" 2>/dev/null || true)"
+      [ -n "$login_author" ] || login_author="<unknown>"
+    else
+      committed_state="unknown"
+    fi
   fi
-  [ -n "$login" ] || login="<unknown>"
 fi
 
-python3 - "$doc" "$list_key" "$login" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" <<'PY'
+python3 - "$doc" "$list_key" "$login_self" "$login_author" "$committed_state" \
+         "$committed_file" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" <<'PY'
 import os, re, sys, tempfile
 
 ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\", "/": "/"}
 
-path, list_key, login, stamp = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+path, list_key = sys.argv[1], sys.argv[2]
+login_self, login_author, committed_state, committed_file, stamp = sys.argv[3:8]
 src = open(path, encoding="utf-8").read()
 
 
@@ -176,6 +190,11 @@ def emit(entries):
 if list_key:
     entries, _, _ = read(list_key)
     for e in entries or []:
+        # ONE ENTRY PER LINE IS THE CONTRACT every caller reads this by, and a quoted
+        # scalar may legally span lines — so an entry that would print as two records is
+        # refused here rather than silently counted twice downstream.
+        if "\n" in e:
+            die(3, "an entry contains a newline; cannot print one entry per line")
         print(e)
     sys.exit(0)
 
@@ -190,13 +209,36 @@ answered = [e for e in open_q if " --- " in e]
 if not answered:
     sys.exit(0)
 keep = [e for e in open_q if " --- " not in e]
-moved = ["%s by %s · %s" % (stamp, login, e) for e in answered]
+
+COMMITTED = set()
+if committed_state == "read":
+    COMMITTED = set(open(committed_file, encoding="utf-8").read().splitlines())
+
+
+def login_for(entry):
+    if committed_state == "unknown":
+        return "<unknown>"
+    return login_author if entry in COMMITTED else login_self
+
+
+moved = ["%s by %s · %s" % (stamp, login_for(e), e) for e in answered]
 new_ans = ans_q + moved
 
+STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z by [^\n]*? · ")
+
+
+def question(entry):
+    """An entry's identity: its text before ` --- `, with any stamp prefix removed."""
+    return STAMP.sub("", entry, count=1).split(" --- ", 1)[0].strip()
+
+
 # THE FAILURE THIS SCRIPT EXISTS FOR. An entry left in both lists blocks the draft forever
-# and nothing downstream can see it — so refuse rather than write it.
+# and nothing downstream can see it — so refuse rather than write it. WHOLE ENTRIES, never
+# substrings: an open question that merely appears inside a longer answered one is not a
+# double listing, and `in` refused those folds at exit 4.
+answered_ids = {question(a) for a in new_ans}
 for e in keep:
-    if any(e in a for a in new_ans):
+    if question(e) in answered_ids:
         die(4, "entry would remain in BOTH lists: %s" % e[:80])
 if len(keep) + len(answered) != len(open_q):
     die(4, "entry count does not balance; nothing written")

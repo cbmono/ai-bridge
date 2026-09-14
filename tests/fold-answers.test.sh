@@ -174,6 +174,38 @@ bash "$SH" --instance "$R2" "$K" >/dev/null 2>&1
 ok "…while an answer only in the working tree is this session's" \
    "$(bash "$SH" --list "$K" answered_questions | sed 's/^[^ ]* by \([^ ]*\) .*/\1/')" "octocat"
 
+# ONE FOLD, TWO HUMANS. A document-level test picks one login for every entry, so a
+# session answer folded beside a committed one is stamped with the committed one's author.
+L="$R2/l.md"; doc "$L" '"c1"' '"Q1: committed? --- yes"' ''
+( cd "$R2" && git add -A . && git commit -qm committed ) >/dev/null 2>&1
+doc "$L" '"c1"' '"Q1: committed? --- yes", "Q2: in session? --- yes"' ''
+bash "$SH" --instance "$R2" "$L" >/dev/null 2>&1
+who() { bash "$SH" --list "$1" answered_questions | sed -n "$2s/^[^ ]* by \([^ ]*\) .*/\1/p"; }
+ok "the committed answer keeps the COMMIT's author"  "$(who "$L" 1)" "<unknown>"
+ok "…and the session answer in the SAME fold is this session's" "$(who "$L" 2)" "octocat"
+
+echo
+echo "== a double listing is WHOLE entries, never a substring =="
+# `e in a` read an open question quoted inside a longer answered one as a double listing
+# and refused a valid fold at exit 4.
+M="$TMP/m.md"; doc "$M" '"c1"' '"Q1: colour?", "Q2: which? --- the one from Q1: colour?"' ''
+ok "an open question quoted INSIDE an answered one folds"  "$(bash "$SH" "$M" >/dev/null 2>&1; echo $?)" 0
+ok "…and stays open"        "$(bash "$SH" --list "$M" open_questions)" "Q1: colour?"
+# The real double listing still refuses, whether the copy carries its answer or not.
+M2="$TMP/m2.md"; doc "$M2" '"c1"' '"Q1: a --- yes", "Q2: b"' '"2020-01-01T00:00:00Z by x · Q2: b --- yes"'
+ok "the same question in both lists is still exit 4"       "$(bash "$SH" "$M2" >/dev/null 2>&1; echo $?)" 4
+
+echo
+echo "== --list prints ONE entry per line, or refuses =="
+# A quoted scalar may carry a newline; printed, it becomes two records, and every caller
+# reads this output a line at a time.
+N="$TMP/n.md"; doc "$N" '"c1"' '"Q1: two\nlines --- yes"' ''
+cp "$N" "$TMP/n.before"
+ok "--list refuses an entry that would print as two records" \
+   "$(bash "$SH" --list "$N" open_questions >/dev/null 2>&1; echo $?)" 3
+ok "…the fold refuses it too"  "$(bash "$SH" "$N" >/dev/null 2>&1; echo $?)" 3
+ok "…and nothing was written"  "$(cmp -s "$N" "$TMP/n.before" && echo yes || echo no)" yes
+
 echo
 echo "== usage =="
 ok "no argument is exit 2" "$(bash "$SH" >/dev/null 2>&1; echo $?)" 2
