@@ -131,7 +131,16 @@ if [[ -z "$WIDTH" ]]; then
   fi
 fi
 
-BOARD_WIDTH="$WIDTH" BOARD_COLOR="$USE_COLOR" python3 - "${DIRS[@]+"${DIRS[@]}"}" <<'PY'
+# A heredoc cannot source bash, so the theme's codes cross into python through ONE env var
+# rather than being spelled a second time in the renderer.
+# shellcheck source=cli-theme.sh
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/cli-theme.sh" 2>/dev/null || true
+command -v ab_theme >/dev/null 2>&1 || ab_theme() { :; }
+ab_theme "$USE_COLOR" auto
+BOARD_SGR="${T_DIM:-}|${T_BOLD:-}|${T_INK:-}|${T_PINK:-}|${T_OFF:-}"
+
+BOARD_WIDTH="$WIDTH" BOARD_COLOR="$USE_COLOR" BOARD_SGR="$BOARD_SGR" \
+  python3 - "${DIRS[@]+"${DIRS[@]}"}" <<'PY'
 import json, os, re, sys, textwrap, unicodedata
 from pathlib import Path
 
@@ -146,7 +155,7 @@ STATUSES = [("draft", "DRAFT"), ("ready", "READY"), ("in-progress", "PROG"),
             ("cancelled", "CANC")]
 VERBS = ("approve", "answer", "merge", "unblock", "close")
 
-DIM, BOLD, RED, YELLOW, OFF = "\033[2m", "\033[1m", "\033[31m", "\033[33m", "\033[0m"
+DIM, BOLD, INK, PINK, OFF = (os.environ.get("BOARD_SGR") or "||||").split("|")
 
 
 def paint(s, code):
@@ -417,7 +426,7 @@ else:
 # ---------------------------------------------------------------- output
 title = (f"Bridge Board · {len(instances)} instance(s) · {n_projects} project(s) · "
          f"{n_tasks} task(s) · {n_awaiting} awaiting you")
-emit(paint(clip(title, WIDTH), BOLD))
+emit(paint(clip(title, WIDTH), INK))
 emit()
 
 if not rows:
@@ -430,7 +439,7 @@ elif vertical:
     # The narrow fallback: one block per project, never a wrapped table. Only the
     # non-zero statuses are listed — on a narrow screen the zeros are the noise.
     for r in rows:
-        emit(paint(clip(f"{r['inst']} › {r['proj']}", WIDTH), BOLD))
+        emit(paint(clip(f"{r['inst']} › {r['proj']}", WIDTH), INK))
         emit(f"  phases    {r['phases']}")
         # The full enum name here, not the column abbreviation: there is room, and a
         # narrow screen is the worst place to make a reader decode "REVW".
@@ -438,7 +447,7 @@ elif vertical:
                  if k != "await" and toint(r["vals"].get(k))]
         wrap("tasks     " + (" · ".join(parts) if parts else "none"), "  ")
         aw = toint(r["vals"].get("await"))
-        emit("  awaiting  " + (paint(str(aw), BOLD + RED) if aw else "0"))
+        emit("  awaiting  " + (paint(str(aw), BOLD + PINK) if aw else "0"))
         emit()
 else:
     def line(text_cells, num_cells):
@@ -452,7 +461,7 @@ else:
             v = toint(r["vals"].get(k))
             cell = pad(str(v), numw[k], right=True)
             if k == "await" and v:
-                cell = paint(cell, BOLD + RED)
+                cell = paint(cell, BOLD + PINK)
             nums.append(cell)
         emit(line([pad(clip(r["inst"], iw), iw), pad(clip(r["proj"], pw), pw),
                    pad(r["phases"], ph_w)], nums))
@@ -470,11 +479,11 @@ if (broken or unknown) and lines and lines[-1] != "":
     emit()
 for name, msg in broken:
     wrap(paint(f"! {name}: unreadable {AB_SNAPSHOT} — that instance is not on the board. "
-               f"Re-run write-snapshot.sh there. ({msg})", YELLOW), hang="  ")
+               f"Re-run write-snapshot.sh there. ({msg})", PINK), hang="  ")
 if unknown:
     wrap(paint("! task status(es) outside the schema enum, counted under OTHER: "
                + ", ".join(sorted(unknown))
-               + " — a drifted instance; run validate-bundle.sh there.", YELLOW),
+               + " — a drifted instance; run validate-bundle.sh there.", PINK),
          hang="  ")
 
 if lines and lines[-1] != "":

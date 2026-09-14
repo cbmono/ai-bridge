@@ -20,7 +20,8 @@ HOOK="$TPL/plugin/hooks/session-banner.sh"
 SH="$TPL/plugin/scripts/ai-bridge.sh"
 SKILL="$TPL/plugin/skills/welcome/SKILL.md"
 DOC="$TPL/docs/operations.md"
-for f in "$HOOK" "$SH" "$SKILL" "$DOC"; do
+THEME="$TPL/plugin/scripts/cli-theme.sh"
+for f in "$HOOK" "$SH" "$SKILL" "$DOC" "$THEME"; do
   [ -f "$f" ] || { echo "banner-logo.test: missing $f" >&2; exit 2; }
 done
 command -v python3 >/dev/null 2>&1 || {
@@ -107,10 +108,13 @@ tier() { # <tier name> <water> <hull> <bridge> <env…>
   assert "$name: …and stripping the SGR gives the three lines back" \
     "$(eq "$(strip_sgr "$l1")$(strip_sgr "$l2")$(strip_sgr "$l3")" "$L1$L2$L3")"
 }
-# ONE RESET, THE BANNER'S OWN. A second escape spelling would render the same and be a
-# second thing to keep in step, so the hook is asked how many it builds: exactly one.
-assert "the reset after each run is the one the banner already builds" \
-  "$(eq "$(grep -cF -- '${esc}[0m' "$HOOK")" 1)"
+# ONE RESET, AND SINCE loopd/task-004 IT IS THE THEME'S. A second escape spelling would
+# render the same and be a second thing to keep in step, so both files are asked how many
+# they build: the theme exactly one, the hook none at all.
+assert "the reset after each run is the theme's one" \
+  "$(eq "$(grep -cF -- '${esc}[0m' "$THEME")" 1)"
+assert "…and the hook builds no escape of its own" \
+  "$(eq "$(grep -cF -- '${esc}[' "$HOOK")" 0)"
 # THE COLOUR COUNT IS STUBBED, NEVER THE HOST'S. `tput colors` answers 0 wherever the
 # terminfo entry cannot be loaded, so a TERM name alone asserts the 16-colour palette as 256.
 stub_tput() { # <count|fail> -> a bin dir whose `tput colors` answers that

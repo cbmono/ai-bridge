@@ -176,19 +176,23 @@ sgr_of() { # <output> <segment text> -> the code that opens it
   printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p' | head -n1
 }
 C="$(run --instance "$INST" --color always)"
-ok "work in flight is cyan"                "$(sgr_of "$C" '2 in flight')" 36
-ok "a queue that needs you is yellow"       "$(sgr_of "$C" '3 need you')" 33
+ok "work in flight is the machine's blue"   "$(sgr_of "$C" '2 in flight')" 94
+ok "a queue that needs you is pink"         "$(sgr_of "$C" '3 need you')" 95
 ok "a free lock is dim, not shouting"       "$(sgr_of "$C" 'lock free')" 2
+ok "the last tick is a timestamp: dim italic" "$(sgr_of "$C" 'last tick')" "2;3"
 : > "$INST/.tick-lock"
-ok "…and a held one is yellow"              "$(sgr_of "$(run --instance "$INST" --color always)" 'lock held')" 33
+ok "…and a held one is blue — a tick running is the machine" \
+   "$(sgr_of "$(run --instance "$INST" --color always)" 'lock held')" 94
 rm -f "$INST/.tick-lock"
 Z="$(run --instance "$TMP/d5" --color always)"
-ok "zero in flight goes dim, not cyan"      "$(sgr_of "$Z" '0 in flight')" 2
+ok "zero in flight goes dim, not blue"      "$(sgr_of "$Z" '0 in flight')" 2
 U="$(run --instance "$TMP/d1" --color always)"
-ok "an unknown number is red"               "$(sgr_of "$U" '? need you')" 31
+ok "an unknown number is pink — it needs you" "$(sgr_of "$U" '? need you')" 95
 
 echo
 echo "== 8. 3/4-bit ONLY — no 256-colour, no truecolor, no terminfo probe =="
+# The theme has richer tiers; this file asks for `basic` by name and so reaches none of them.
+ok "the basic rung is asked for by name"  "$(grep -c 'ab_theme "\$use_color" basic' "$SL" | tr -d ' ')" 1
 ok "no \`38;5;\` (256-colour) anywhere"  "$(grep -c '38;5;' "$SL" | tr -d ' ')" 0
 ok "no \`38;2;\` (truecolor) anywhere"   "$(grep -c '38;2;' "$SL" | tr -d ' ')" 0
 ok "COLORTERM is never asked"            "$(grep -v '^[[:space:]]*#' "$SL" | grep -c 'COLORTERM' | tr -d ' ')" 0

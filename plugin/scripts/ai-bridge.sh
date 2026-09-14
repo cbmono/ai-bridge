@@ -328,13 +328,16 @@ else
        fi ;;
   esac
 fi
-# Spelled out with `printf` rather than typed: an ESC in a string literal is invisible in a
-# diff and in a grep, and `${_esc}[` is braced because `"$_esc[1m"` is bash's array-subscript
-# spelling (shellcheck SC1087).
+# The ansi spelling comes from `cli-theme.sh` and nowhere else. `warn` is the one line here
+# that carries emphasis and it is a fact that is false for this reader, so it is pink.
 _B_ON=""; _B_OFF=""
 case "$STYLE" in
   markdown) _B_ON='**'; _B_OFF='**' ;;
-  ansi)     _esc="$(printf '\033')"; _B_ON="${_esc}[1;33m"; _B_OFF="${_esc}[0m" ;;
+  ansi)     # shellcheck source=cli-theme.sh
+            . "$(dirname "${BASH_SOURCE[0]:-$0}")/cli-theme.sh" 2>/dev/null
+            command -v ab_theme >/dev/null 2>&1 || ab_theme() { :; }
+            ab_theme 1 auto
+            _B_ON="${T_BOLD:-}${T_PINK:-}"; _B_OFF="${T_OFF:-}" ;;
 esac
 
 _warned=0

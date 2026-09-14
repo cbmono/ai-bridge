@@ -600,8 +600,6 @@ TAB="$(printf '\t')"
 # Empty strings rather than an `if` at each site: a banner that has to remember to be
 # colourless is a banner that will one day emit a bare `\033[1m` into a log. `NO_COLOR`'s
 # contract is "set and NON-EMPTY disables", hence `-z` rather than a presence test.
-# `$(printf '\033')` rather than `$'\033'` for the same reason print-board.sh spells its
-# escapes out: an escape typed into a string literal is invisible in a diff and in a grep.
 use_color=0
 case "$COLOR" in
   always) use_color=1 ;;
@@ -635,35 +633,17 @@ fi
 # `printf` of the same escape, so the byte `cell` filters and the byte `emit_md` reads cannot
 # drift apart.
 [ "$use_emph" -eq 1 ] && EMPH_MARK="$EMPH_MARK_BYTE"
-C_B=""; C_DIM=""; C_RED=""; C_YEL=""; C_OFF=""
-C_WATER=""; C_HULL=""; C_BRIDGE=""
-if [ "$use_color" -eq 1 ]; then
-  esc="$(printf '\033')"
-  # `${esc}[` braced: `"$esc[1m"` is bash's ARRAY-SUBSCRIPT spelling and shellcheck calls
-  # it an error (SC1087). It happens to work while `esc` is a scalar, which is exactly the
-  # kind of accident that stops working later.
-  C_B="${esc}[1m"; C_DIM="${esc}[2m"; C_RED="${esc}[1;31m"
-  C_YEL="${esc}[1;33m"; C_OFF="${esc}[0m"
-  # THE LOGO'S THREE COLOURS, AND THE ONLY PLACE THIS FILE ASKS HOW MANY COLOURS THERE ARE.
-  # Everything above is 3/4-bit and needs no tier; the ship is drawn from a palette, so it
-  # degrades in two steps rather than being dropped. `COLORTERM` is the terminal's own claim
-  # about truecolor and `tput colors` the terminfo count; neither is asked when `use_color`
-  # is 0, so the opt-outs above stay the single answer to "colour at all".
-  tc=0
-  if command -v tput >/dev/null 2>&1; then tc="$(tput colors 2>/dev/null || echo 0)"; fi
-  case "$tc" in ''|*[!0-9]*) tc=0 ;; esac
-  case "${COLORTERM:-}" in
-    truecolor|24bit)
-      C_WATER="${esc}[38;2;95;168;211m"; C_HULL="${esc}[38;2;239;163;165m"
-      C_BRIDGE="${esc}[38;2;245;215;110m" ;;
-    *)
-      if [ "$tc" -ge 256 ]; then
-        C_WATER="${esc}[38;5;74m"; C_HULL="${esc}[38;5;217m"; C_BRIDGE="${esc}[38;5;222m"
-      else
-        C_WATER="${esc}[94m"; C_HULL="${esc}[95m"; C_BRIDGE="${esc}[93m"
-      fi ;;
-  esac
-fi
+# THE ESCAPES THEMSELVES ARE NOT SPELLED HERE. `cli-theme.sh` holds every code and the
+# tier ladder (truecolor -> ansi256 -> basic); `use_color` above stays the single answer to
+# "colour at all", and a theme that cannot be sourced degrades to no colour rather than
+# taking the banner with it. Blue is the machine, pink is anything waiting on the human.
+# shellcheck source=../scripts/cli-theme.sh
+[ -n "$bin" ] && . "$bin/cli-theme.sh" 2>/dev/null
+command -v ab_theme >/dev/null 2>&1 || ab_theme() { :; }
+ab_theme "$use_color" auto
+C_B="${T_INK:-}"; C_DIM="${T_DIM:-}"; C_RED="${T_PINK:-}"
+C_YEL="${T_PINK:-}"; C_OFF="${T_OFF:-}"
+C_WATER="${T_SHIP_WATER:-}"; C_HULL="${T_SHIP_HULL:-}"; C_BRIDGE="${T_SHIP_BRIDGE:-}"
 
 # say <colour> <text…> — one whole line, coloured end to end. COLOUR NEVER GOES INSIDE A
 # PADDED FIELD: `printf '%-20s'` counts the escape bytes as width and the column silently

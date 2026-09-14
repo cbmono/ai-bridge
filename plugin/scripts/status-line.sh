@@ -57,20 +57,21 @@ done
 # `statusLine` command's stdout is ALWAYS a pipe into Claude Code, which renders the SGR
 # itself — so `[ -t 1 ]` would strip the colour off the one surface that must carry it.
 # `NO_COLOR` and `--color never` are the opt-outs, exactly as everywhere else here.
-# 3/4-bit only: `COLORTERM` and `tput colors` are not reliably inherited by a process
-# Claude Code spawns, and no state below needs more than eight colours.
+# The theme's `basic` rung, ASKED FOR BY NAME rather than resolved: the richer tiers are
+# gated on a terminal's own claim about itself, and neither that claim nor terminfo is
+# reliably inherited by a process Claude Code spawns. So this file probes nothing.
 use_color=0
 case "$COLOR" in
   always) use_color=1 ;;
   never)  use_color=0 ;;
   *)      [ -z "${NO_COLOR:-}" ] && use_color=1 ;;
 esac
-C_B=""; C_DIM=""; C_RED=""; C_YEL=""; C_CYA=""; C_OFF=""
-if [ "$use_color" -eq 1 ]; then
-  esc="$(printf '\033')"
-  C_B="${esc}[1m"; C_DIM="${esc}[2m"; C_RED="${esc}[31m"
-  C_YEL="${esc}[33m"; C_CYA="${esc}[36m"; C_OFF="${esc}[0m"
-fi
+# shellcheck source=cli-theme.sh
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/cli-theme.sh" 2>/dev/null
+command -v ab_theme >/dev/null 2>&1 || ab_theme() { :; }
+ab_theme "$use_color" basic
+C_B="${T_INK:-}"; C_DIM="${T_DIM:-}"; C_DIM_I="${T_DIM_I:-}"
+C_PINK="${T_PINK:-}"; C_BLUE="${T_BLUE:-}"; C_OFF="${T_OFF:-}"
 paint() { printf '%s%s%s' "$1" "$2" "$C_OFF"; }
 
 UNKNOWN='?'
@@ -130,14 +131,14 @@ if [ -r "$root/$AB_LEDGER" ]; then
   fi
 fi
 
-n_colour() { case "$1" in "$UNKNOWN") printf '%s' "$C_RED" ;; 0) printf '%s' "$C_DIM" ;; *) printf '%s' "$2" ;; esac; }
+n_colour() { case "$1" in "$UNKNOWN") printf '%s' "$C_PINK" ;; 0) printf '%s' "$C_DIM" ;; *) printf '%s' "$2" ;; esac; }
 SEP="$(paint "$C_DIM" ' · ')"
 
 printf '%s' "$(paint "$C_B" 'AI Bridge')"
-printf '%s%s' "$SEP" "$(paint "$(n_colour "$inflight" "$C_CYA")" "$inflight in flight")"
-printf '%s%s' "$SEP" "$(paint "$(n_colour "$awaiting" "$C_YEL")" "$awaiting need you")"
-if [ "$lock" = held ]; then printf '%s%s' "$SEP" "$(paint "$C_YEL" 'lock held')"
+printf '%s%s' "$SEP" "$(paint "$(n_colour "$inflight" "$C_BLUE")" "$inflight in flight")"
+printf '%s%s' "$SEP" "$(paint "$(n_colour "$awaiting" "$C_PINK")" "$awaiting need you")"
+if [ "$lock" = held ]; then printf '%s%s' "$SEP" "$(paint "$C_BLUE" 'lock held')"
 else                        printf '%s%s' "$SEP" "$(paint "$C_DIM" 'lock free')"; fi
-if [ "$last" = "$UNKNOWN" ]; then printf '%s%s\n' "$SEP" "$(paint "$C_RED" "last tick $UNKNOWN")"
-else                              printf '%s%s\n' "$SEP" "$(paint "$C_DIM" "last tick $last")"; fi
+if [ "$last" = "$UNKNOWN" ]; then printf '%s%s\n' "$SEP" "$(paint "$C_PINK" "last tick $UNKNOWN")"
+else                              printf '%s%s\n' "$SEP" "$(paint "$C_DIM_I" "last tick $last")"; fi
 exit 0
