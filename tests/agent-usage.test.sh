@@ -237,8 +237,10 @@ ok "step 8 appends beside, never rewrites"        "$(has "$PM" 'appends its `clo
 ok "step 8 closes via the script"                 "$(has "$PM" 'tick-delta.sh record --close')" yes
 ok "…naming the entry it closes, not guessing"   "$(has "$PM" '--tick <the ISO timestamp of the open line you wrote')" yes
 ok "the numbers are the notification's"           "$(has "$PM" '`subagent_tokens`, `tool_uses`, `duration_ms`')" yes
-ok "a dispatch is recorded per role dispatch"     "$(has "$PM" 'agent-usage.sh dispatch <task-path>')" yes
-ok "reflect sums against the merged PR"           "$(has "$PM" 'agent-usage.sh total <task-path> --pr <merged-pr-url>')" yes
+# The dispatch and reflect steps are their own files since ai-bridge-v3/task-024; step 8
+# and the Output section stayed in the core.
+ok "a dispatch is recorded per role dispatch"     "$(has "$REPO/plugin/tick-steps/step-3-dispatch.md" 'agent-usage.sh dispatch <task-path>')" yes
+ok "reflect sums against the merged PR"           "$(has "$REPO/plugin/tick-steps/step-5-reflect-merges.md" 'agent-usage.sh total <task-path> --pr <merged-pr-url>')" yes
 ok "the report gains at most one cost line"       "$(has "$PM" 'At most ONE cost line')" yes
 ok "…and none at all on an empty tick"          "$(has "$PM" 'dispatched nothing and merged nothing prints no')" yes
 ok "the audit reads the ledger offline"           "$(has "$REPO/plugin/agents/auditor.md" 'agent-usage.sh series')" yes

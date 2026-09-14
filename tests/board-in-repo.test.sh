@@ -174,7 +174,7 @@ echo "== 4. the tick's own instructions no longer commit a page =="
 # Text checks, because the tick is a document an agent reads and there is nothing else to
 # execute. Kept to what is load-bearing: the live render it still does, and the two strings
 # whose ABSENCE is this change — a tracked render and a board commit.
-PM="$TPL/plugin/agents/project-manager.md"
+PM="$TPL/plugin/tick-steps/step-8-render.md"
 ok "project-manager.md exists"                          "$(yes_if test -f "$PM")" yes
 ok "…still names the LIVE render" \
   "$(yes_if grep -qF -- '--out .board-live/board.html' "$PM")" yes

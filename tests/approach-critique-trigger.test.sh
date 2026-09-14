@@ -24,8 +24,10 @@
 #      marker turns every tick into a fresh APEX-tier session on the same draft — the
 #      most expensive failure this change could introduce. The instruction has to name
 #      the receipt a tick reads before dispatching, and it does: an `advisor_notes`
-#      entry, or an `advisor:` line in `answered_questions` for a critique that raised
-#      none.
+#      entry per concern, or one `advisor_notes` line for a critique that raised none.
+#      BOTH receipts live in `advisor_notes` because only `fold-answers.sh` writes
+#      `answered_questions`, and it writes only what an answered `open_questions` entry
+#      gave it — which a no-concerns critique never produces.
 #   3. A MISSING OPTIONAL AGENT IS STILL NOT A FAILURE. Mandatory-on-trigger must not
 #      become mandatory-to-exist: absent `~/.claude/agents/plan-architect.md` the PM
 #      skips SILENTLY. And `plan-architect` stays OUT of `roles` while staying in
@@ -47,7 +49,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PM="$REPO/plugin/agents/project-manager.md"
+PM="$REPO/plugin/tick-steps/step-2-refine-drafts.md"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 SEED_CFG="$REPO/plugin/seed/instance.config.json"
 VALIDATOR="$REPO/plugin/scripts/validate-bundle.sh"
@@ -85,7 +87,9 @@ command -v jq >/dev/null 2>&1 || { echo "approach-critique-trigger.test: jq requ
 # rather than grepped file-wide so an assertion cannot be satisfied by some other
 # paragraph that happens to use the same words.
 block_of() { # <file>
-  awk '/^   \*\*Approach critique/ { inb = 1 } inb && /^[0-9]+\. \*\*/ { inb = 0 } inb { print }' "$1"
+  awk '/^   \*\*Approach critique/ { inb = 1 }
+       inb && (/^[0-9]+\. \*\*/ || /^<!-- end of step /) { inb = 0 }
+       inb { print }' "$1"
 }
 BLOCK="$(block_of "$PM")"
 FLAT="$(flatten "$BLOCK")"
@@ -121,8 +125,10 @@ ok "…still heavily-inferred criteria"   "$(in_block '`acceptance_criteria` had
 ok "…and says so explicitly"            "$(in_block 'The trigger itself is unchanged')" yes
 ok "…naming WHEN as the thing that changed" "$(in_block 'WHEN the critique runs, never WHAT it may decide')" yes
 # The model-routing step keys on the SAME signal, so the two must not drift apart.
+# Model routing is step 3's, a different file since ai-bridge-v3/task-024 — the drift this
+# guards against is now a cross-file one, which is exactly what it always meant.
 ok "model routing names the same signal" \
-   "$(hasf "$PM" 'the same signal that makes the `plan-architect` approach')" yes
+   "$(hasf "$REPO/plugin/tick-steps/step-3-dispatch.md" 'the same signal that makes the `plan-architect` approach')" yes
 
 echo
 echo "== 3. ADVISORY in authority — findings go to advisor_notes and nowhere else =="
@@ -150,8 +156,10 @@ ok "…refusing to lean on refine-once alone" "$(in_block 'do not lean on that a
 ok "…naming the cost of no marker"        "$(in_block 'a fresh apex-tier session on the same draft')" yes
 ok "the receipt is read BEFORE dispatching" "$(in_block 'read BEFORE dispatching')" yes
 ok "…concerns ⇒ advisor_notes entries"    "$(in_block 'concerns raised ⇒ one `advisor_notes` entry each')" yes
-ok '…none ⇒ an advisor: answered_questions line' \
-   "$(in_block 'none raised ⇒ one `answered_questions` line')" yes
+ok '…none ⇒ an advisor: advisor_notes line' \
+   "$(in_block 'none raised ⇒ one `advisor_notes` line')" yes
+ok "…and the receipt is NOT sent to answered_questions" \
+   "$(in_block 'not `answered_questions`')" yes
 ok "…and the check is stated as an instruction" \
    "$(in_block 'means the critique has run: do not dispatch it again')" yes
 ok "…while the receipt is not made a gate" "$(in_block 'they are a receipt')" yes

@@ -292,21 +292,26 @@ tick_tools() {
 }
 ok "tick holds no publish tool"          "$(tick_tools | grep -qx 'Artifact' && echo yes || echo no)" no
 ok "…while still holding Bash to render" "$(tick_tools | grep -qx 'Bash' && echo yes || echo no)" yes
-ok "tick re-reads board at tick time"    "$(has "$TICK" 'Read `board` from `instance.config.json`')" yes
-ok "…false skips in silence"             "$(has "$TICK" 'skip the rest of this step in silence')" yes
-ok "…absent or true renders"             "$(has "$TICK" 'Absent or `true`')" yes
-ok "…and it does NOT replace the stamp-time reader" "$(has "$TICK" 'cfg_bool board true')" yes
-ok "…reading the same tracked file"      "$(has "$TICK" '**tracked**')" yes
-ok "tick renders the board"              "$(has "$TICK" 'build-board.sh --standalone --out')" yes
-ok "…to the path watch-board.sh uses"    "$(has "$TICK" '.board-live/board.html')" yes
+# Step 8's render half is its own file since ai-bridge-v3/task-024 — the core keeps the
+# commit-and-sync half, which runs every tick; the board and the queue only run where
+# those artifacts exist.
+TICK_RENDER="$REPO/plugin/tick-steps/step-8-render.md"
+ok "the render half exists"              "$([ -f "$TICK_RENDER" ] && echo yes || echo no)" yes
+ok "tick re-reads board at tick time"    "$(has "$TICK_RENDER" 'Read `board` from `instance.config.json`')" yes
+ok "…false skips in silence"             "$(has "$TICK_RENDER" 'skip the rest of this step in silence')" yes
+ok "…absent or true renders"             "$(has "$TICK_RENDER" 'Absent or `true`')" yes
+ok "…and it does NOT replace the stamp-time reader" "$(has "$TICK_RENDER" 'cfg_bool board true')" yes
+ok "…reading the same tracked file"      "$(has "$TICK_RENDER" '**tracked**')" yes
+ok "tick renders the board"              "$(has "$TICK_RENDER" 'build-board.sh --standalone --out')" yes
+ok "…to the path watch-board.sh uses"    "$(has "$TICK_RENDER" '.board-live/board.html')" yes
 # `--layout` was DELETED, not defaulted away (see build-board.sh's header): a tick that
 # still passed it would exit 2 and render nothing, so its absence is the assertion.
 # tests/artifact-board.test.sh makes the same claim repo-wide; this one keeps it beside
 # the step it is about, where a future edit to the tick would be reviewed.
-ok "…and passes no removed --layout flag" "$(has "$TICK" '--layout')" no
-ok "tick reports the path, once"         "$(has "$TICK" 'BOARD: rendered <path>')" yes
-ok "…and never claims the page is live"  "$(has "$TICK" 'Say the path, never that it is live')" yes
-ok "tick: a render is not a change"      "$(has "$TICK" 'A render is not a state change')" yes
+ok "…and passes no removed --layout flag" "$(has "$TICK_RENDER" '--layout')" no
+ok "tick reports the path, once"         "$(has "$TICK_RENDER" 'BOARD: rendered <path>')" yes
+ok "…and never claims the page is live"  "$(has "$TICK_RENDER" 'Say the path, never that it is live')" yes
+ok "tick: a render is not a change"      "$(has "$TICK_RENDER" 'A render is not a state change')" yes
 # THE KEY IS BACK, AND ITS SHAPE IS WHAT IS ASSERTED NOW. This line used to demand the
 # tick never name it, because publishing had been deleted. `/ai-bridge:board` reinstates
 # publishing PER MACHINE, so the tick may name the key — but only to ask WHICH LAYER
@@ -315,13 +320,13 @@ ok "tick: a render is not a change"      "$(has "$TICK" 'A render is not a state
 # tool search for one returns nothing. So "never names it" becomes "names it through the
 # resolver, acts on `local`, and is told in as many words not to try".
 ok "tick asks the resolver which layer holds the URL key" \
-  "$(has "$TICK" "scripts/resolve-config.sh --source $URL_KEY")" yes
+  "$(has "$TICK_RENDER" "scripts/resolve-config.sh --source $URL_KEY")" yes
 ok "…and prints the refresh line instead of publishing" \
-  "$(has "$TICK" 'BOARD: run /ai-bridge:board publish to refresh the published page')" yes
-ok "…and is told not to attempt one"     "$(has "$TICK" 'not attempt a publish')" yes
+  "$(has "$TICK_RENDER" 'BOARD: run /ai-bridge:board publish to refresh the published page')" yes
+ok "…and is told not to attempt one"     "$(has "$TICK_RENDER" 'not attempt a publish')" yes
 # A `tracked` value is the deleted shape and the banner drops it; the two readers of this
 # key must agree, or one of them is publishing a promise the other silently breaks.
-ok "…and ignores a tracked value, as the banner does" "$(has "$TICK" 'a first field of `tracked`')" yes
+ok "…and ignores a tracked value, as the banner does" "$(has "$TICK_RENDER" 'a first field of `tracked`')" yes
 # The retired renderer must not come back as the thing the tick runs.
 ok "tick names no retired renderer"      "$(has "$TICK" 'build-artifact-board')" no
 ok "launcher names no retired renderer"  "$(has "$LAUNCHER" 'build-artifact-board')" no

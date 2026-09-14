@@ -24,7 +24,7 @@ COMMIT_AS="$REPO/plugin/scripts/commit-as.sh"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
 SEED_CLAUDE="$REPO/plugin/seed/CLAUDE.md"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
-PM="$REPO/plugin/agents/project-manager.md"
+PM="$REPO/plugin/tick-steps/step-3-dispatch.md"
 WORK="$REPO/plugin/skills/work/SKILL.md"
 for f in "$BRIEF" "$SEED_CFG" "$COMMIT_AS" "$CONV" "$SEED_CLAUDE" "$SCHEMA" "$PM" "$WORK"; do
   [ -f "$f" ] || { echo "commit-attribution.test: $f not found" >&2; exit 2; }

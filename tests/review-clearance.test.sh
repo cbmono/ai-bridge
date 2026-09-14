@@ -2020,8 +2020,10 @@ assert "required-checks.sh tells a 7 to rebase, not to request a review" \
 assert "the exit-code table documents 7" \
   "$(grep -q '^#   7  the PR CANNOT MERGE' "$SCRIPT" && echo 0 || echo 1)"
 
-PM="$SCRIPTS/../agents/project-manager.md"
-assert "the PM prompt routes a 7 to a rebase round, not a merge row" \
+# The tick's step 4 carries this, not the core prompt: the exit-7 procedure lives with the
+# rest of the review-clearance reading, which moved out of project-manager.md whole.
+PM="$SCRIPTS/../tick-steps/step-4-advance.md"
+assert "the tick's step 4 routes a 7 to a rebase round, not a merge row" \
   "$(grep -q 'EXIT 7 IS NOT ABOUT THE REVIEWER AT ALL' "$PM" && echo 0 || echo 1)"
 assert "…and records it as a conflict blocker" \
   "$(grep -q 'stall-counter.sh record <task-doc>' "$PM" && echo 0 || echo 1)"

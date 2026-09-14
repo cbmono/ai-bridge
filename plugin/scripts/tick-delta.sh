@@ -64,7 +64,11 @@
 # about what the tick may act on: the digest is the enumeration, never the judgement,
 # and the tick still opens every document it acts on. A `status: done` project is
 # skipped at its frontmatter in BOTH walks, exactly as the tick and write-snapshot.sh
-# already skip it — nothing in a done project can need a tick.
+# already skip it — nothing in a done project can need a tick. Its LAST line is
+# `steps: <path>…`, the tick-step files this tick has work for (2-6 only; step 7's trigger
+# is not on disk before the tick runs, so naming it would be a claim this walk cannot
+# make). Empty means none; no line at all means an instance that predates the split, and
+# the tick then reads every step file.
 #
 # Exit codes — only 0 permits the fast path, and it is never the default:
 #   0  IDLE — matches the record; prints ONE `IDLE:` line, which IS the quiet tick's
@@ -222,6 +226,44 @@ fmcount() { # <file> <key>
   sed -n "/^$2:/,/\]/p" "$1" | sed -e "s/^$2:[[:space:]]*//" -e 's/[][]//g'     | grep -c '[^[:space:]]' || true
 }
 
+# THE `steps:` LINE. The tick's prompt is split into a core and one file per step under
+# `tick-steps/`; a step file is read only when this tick has work for it, and this is where
+# that is decided from state the walk already read. Steps 2-6 only: step 7's trigger (a
+# merge reflected, or a due sweep) is not on disk before the tick runs, and naming it here
+# would be a claim this walk cannot make.
+STEPS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../tick-steps" 2>/dev/null && pwd || true)"
+step2=0 step3=0 step4=0 step5=0 step6=0
+
+# A ` --- `-answered entry inside the open_questions block. The digest's `q=` count says
+# how many questions there are and never whether one has been answered, which is the only
+# thing that names step 2 on a task that is not a draft.
+# The cheap range is a PREFIX of the block (it ends at the first `]`, which a quoted
+# question can carry), so a hit is always genuine and a miss never is — hence the fall
+# through to fold-answers.sh's parser, the one reader of this shape that round-trips.
+# Exit 2 is UNKNOWN, not "no": the caller poisons the fingerprint on it rather than let a
+# parser it could not run read as a task with nothing answered.
+FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
+answered_open() { # <file>
+  sed -n '/^open_questions:/,/\]/p' "$1" 2>/dev/null | grep -qF -- ' --- ' && return 0
+  local parsed
+  parsed="$(bash "$FOLD" --list "$1" open_questions 2>/dev/null)" || return 2
+  printf '%s\n' "$parsed" | grep -qF -- ' --- '
+}
+
+# NO DIRECTORY IS NOT AN EMPTY LINE. `steps:` with nothing after it means "this tick has
+# work for no step"; a tick-steps directory the walk cannot find means the opposite, and
+# the core's "any digest exit but 0 ⇒ read ALL of them" is the rule that then applies.
+steps_line() {
+  [ -n "$STEPS_DIR" ] && [ -d "$STEPS_DIR" ] || return 1
+  local out=""
+  [ "$step2" = 1 ] && out="$out $STEPS_DIR/step-2-refine-drafts.md"
+  [ "$step3" = 1 ] && out="$out $STEPS_DIR/step-3-dispatch.md"
+  [ "$step4" = 1 ] && out="$out $STEPS_DIR/step-4-advance.md"
+  [ "$step5" = 1 ] && out="$out $STEPS_DIR/step-5-reflect-merges.md"
+  [ "$step6" = 1 ] && out="$out $STEPS_DIR/step-6-close-projects.md"
+  printf 'steps:%s\n' "$out"
+}
+
 fingerprint() { # <probe|digest>
   local mode="$1"
   printf 'head %s\n' "$(git -C "$inst" rev-parse HEAD)"
@@ -229,7 +271,7 @@ fingerprint() { # <probe|digest>
   [ -f "$inst/$AB_AWAITING" ]   && printf 'queue present\n'    || printf 'queue absent\n'
   [ -f "$inst/$AB_SNAPSHOT" ] && printf 'snapshot present\n' || printf 'snapshot absent\n'
 
-  local p d pst f st prs url inflight=0 urls=""
+  local p d pst f st prs url inflight=0 urls="" ntask nterm
   for d in "$inst"/projects/*/; do
     [ -d "$d" ] || continue
     p="$d/project.md"
@@ -247,6 +289,7 @@ fingerprint() { # <probe|digest>
     # tick, and the point is the read that never happens.
     [ "$pst" = done ] && continue
 
+    ntask=0; nterm=0
     for f in "$d"tasks/*.md; do
       [ -f "$f" ] || continue
       # An UNREADABLE task file poisons the whole walk rather than degrading to a fake
@@ -259,12 +302,24 @@ fingerprint() { # <probe|digest>
         printf 'task %s %s\n' "${f#"$inst"/}" "${st:-unset}"
       fi
       [ "$st" = "in-progress" ] && inflight=1
+      if [ "$mode" = digest ]; then
+        ntask=$((ntask + 1))
+        case "${st:-unset}" in
+          draft)       step2=1 ;;
+          ready)       step3=1 ;;
+          in-progress) step4=1 ;;
+          in-review)   step4=1; step5=1 ;;
+          done|cancelled) nterm=$((nterm + 1)) ;;
+        esac
+        answered_open "$f"; case $? in 0) step2=1 ;; 2) return 1 ;; esac
+      fi
       if [ "$st" = "in-review" ]; then
         prs="$(grep -m1 '^pr:' "$f" 2>/dev/null | grep -oE 'https://[^"[:space:]]+/pull/[0-9]+' || true)"
         [ -n "$prs" ] && urls="$urls
 $prs"
       fi
     done
+    [ "$mode" = digest ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ] && step6=1
   done
 
   # A live dispatch is owed its monitoring whatever the record says. Signalled as a
@@ -284,6 +339,9 @@ $prs"
       *) return 1 ;;
     esac
   done
+  # Emitted from INSIDE the walk: the caller reads this function through a command
+  # substitution, so a flag set here never survives to the caller's scope.
+  [ "$mode" = digest ] && { steps_line || return 1; }
   return 0
 }
 

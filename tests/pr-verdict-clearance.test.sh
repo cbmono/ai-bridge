@@ -211,7 +211,7 @@ ok "CONTROL: intact, the same fixture is refused" "$(rc_of run "$NO_COMMAND")" 3
 echo
 echo "== the rule is named where the agents read it =="
 QA="$REPO/plugin/agents/qa-reviewer.md"
-PM="$REPO/plugin/agents/project-manager.md"
+PM="$REPO/plugin/tick-steps/step-4-advance.md"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 ok "qa-reviewer.md forbids reading the worker's column" \
    "$(grep -c "never the worker" "$QA")" 1

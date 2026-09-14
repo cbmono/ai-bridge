@@ -49,7 +49,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)" || { echo "check-dispatch.test: cannot loc
 REPO="$(cd "$HERE/.." && pwd)" || { echo "check-dispatch.test: cannot locate repo root" >&2; exit 2; }
 SCRIPT="$REPO/plugin/scripts/check-dispatch.sh"
 CONVENTIONS="$REPO/plugin/seed/CONVENTIONS.md"
-PM="$REPO/plugin/agents/project-manager.md"
+PM="$REPO/plugin/tick-steps/step-4-advance.md"
 
 FIXDIR="$HERE/fixtures/dispatch"
 SUCCESS="$FIXDIR/success.task.md"
@@ -379,8 +379,13 @@ section_of() { # <file> <start-literal-prefix> <end-literal-prefix>
     on { print }
     on && index($0, e) == 1 && index($0, s) != 1 { exit }' "$1"
 }
-PM_DISPATCH="$(section_of "$PM" '3. **Dispatch' '4. **')"
-PM_ADVANCE="$(section_of "$PM" '4. **Advance' '5. **')"
+# The two steps are separate FILES since ai-bridge-v3/task-024, so each block ends at its
+# file's own end sentinel instead of at the next step's number — the same exact-literal
+# terminator, not a looser one.
+S3="$REPO/plugin/tick-steps/step-3-dispatch.md"
+S4="$REPO/plugin/tick-steps/step-4-advance.md"
+PM_DISPATCH="$(section_of "$S3" '3. **Dispatch' '<!-- end of step 3 -->')"
+PM_ADVANCE="$(section_of "$S4" '4. **Advance' '<!-- end of step 4 -->')"
 ok "the PM dispatch step was extractable (or the next assertions are vacuous)" \
    "$([ -n "$PM_DISPATCH" ] && echo yes || echo no)" yes
 ok "the PM advance step was extractable" \

@@ -234,19 +234,25 @@ ok "the answered_questions field carries the by" \
 
 echo
 echo "== the agents and skills that write the stamps are told to =="
-ok "PM folds an answer with a by"     "$(hasf "$PM" '**`by <login>` names the human whose answer it was**')" yes
+# The fold is fold-answers.sh's since ai-bridge-v3/task-024 — the script resolves the login
+# so the model can never compose the stamp — and the preview/closeout stamps moved with
+# their steps.
+FOLD="$REPO/plugin/scripts/fold-answers.sh"
+S5="$REPO/plugin/tick-steps/step-5-reflect-merges.md"
+S6="$REPO/plugin/tick-steps/step-6-close-projects.md"
+ok "the folder stamps the human whose answer it was" "$(hasf "$FOLD" '**`by <login>` names the human whose answer it was**')" yes
 ok "…from the resolver, not its own reading" \
    "$(hasf "$PM" '/scripts/decision-stamp.sh')" yes
 ok "PM stamps promotions, once, before dispatch" \
    "$(hasf "$PM" 'Stamp promotions — every task past `draft`, once')" yes
 ok "…and says a HAND-promotion is attributed too" \
    "$(hasf "$PM" '**So a HAND-promotion is attributed')" yes
-ok "PM stamps a preview approval"     "$(hasf "$PM" '`preview approved <ISO 8601> by <login>`')" yes
+ok "PM stamps a preview approval"     "$(hasf "$S5" '`preview approved <ISO 8601> by <login>`')" yes
 ok "PM's ledger line names the login it ran as" \
    "$(hasf "$PM" '`* TICK <ISO-8601 timestamp> by <login> open:')" yes
 ok "…the idle line too"               "$(hasf "$PM" '`* TICK <ISO-8601> by <login> idle')" yes
 ok "…and the close keeps it"          "$(hasf "$PM" 'copies its timestamp and its `by <login>`')" yes
-ok "PM stamps a project closeout"     "$(hasf "$PM" 'stamped `by <login>` from')" yes
+ok "PM stamps a project closeout"     "$(hasf "$S6" 'stamped `by <login>` from')" yes
 ok "/ai-bridge:answer writes the by"  "$(hasf "$ANSWER" 'then ` by <login> · `')" yes
 ok "…and may actually run the resolver" \
    "$(hasf "$ANSWER" 'scripts/decision-stamp.sh:*)')" yes

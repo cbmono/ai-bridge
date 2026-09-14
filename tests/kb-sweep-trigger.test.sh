@@ -26,7 +26,7 @@ set -uo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 DUE="$REPO/plugin/scripts/kb-sweep-due.sh"
 BUILD="$REPO/plugin/scripts/build-kb-index.sh"
-PM="$REPO/plugin/agents/project-manager.md"
+PM="$REPO/plugin/tick-steps/step-7-knowledge-base.md"
 CAT="$REPO/plugin/agents/cataloguer.md"
 DESIGN="$REPO/docs/pm-design.md"
 README="$REPO/README.md"
@@ -188,9 +188,11 @@ done
 
 echo
 echo "== the ledger names the trigger and the result; AWAITING.md is untouched =="
-ok "the ledger line names trigger and before/after" "$(hasf "$PM" "idle + 35 KB errors → cataloguer; errors 35 → 0")" yes
-ok "both are numbers, said so" "$(hasf "$PM" "its trigger and its result, both")" yes
-ok "the sweep puts nothing in AWAITING.md" "$(hasf "$PM" "It puts nothing in \`AWAITING.md\`")" yes
+# The SUMMARY rules are step 8's, which stayed in the core prompt when step 7 moved out.
+CORE="$REPO/plugin/agents/project-manager.md"
+ok "the ledger line names trigger and before/after" "$(hasf "$CORE" "idle + 35 KB errors → cataloguer; errors 35 → 0")" yes
+ok "both are numbers, said so" "$(hasf "$CORE" "its trigger and its result, both")" yes
+ok "the sweep puts nothing in AWAITING.md" "$(hasf "$CORE" "It puts nothing in \`AWAITING.md\`")" yes
 
 echo
 echo "== the cataloguer knows the pass it is dispatched for =="
