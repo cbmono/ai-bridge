@@ -360,7 +360,7 @@ URL="$(printf '%s' "${META:-}" | jq -r '.url // ""' 2>/dev/null)" || URL=""
 if [ "$DRC" -eq 0 ] && [ -n "$HEAD_SHA" ] && [ -n "$URL" ]; then
   "$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record pr-verdict-clearance.sh \
     --repo "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')" \
-    --pr "${URL##*/}" --head "$HEAD_SHA" >/dev/null 2>&1 || true
+    --pr "$(printf '%s' "$URL" | sed -E 's#^https?://[^/]+/[^/]+/[^/]+/pull/([0-9]+).*#\1#')" --head "$HEAD_SHA" >/dev/null 2>&1 || true
 fi
 exit $DRC
 

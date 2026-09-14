@@ -119,9 +119,11 @@ CMD="$(printf '%s' "$payload" | jq -r '.tool_input.command // ""' 2>/dev/null ||
 # `agent_id` and `agent_type` are present on a DISPATCHED subagent's PreToolUse event and
 # ABSENT on the parent session's own tool call (measured 2026-08-23; see agent-control.sh's
 # WHY agent_id). Most rules below are command-shape rules that apply to every session; the
-# session-scoped ones read these two and say so in their own header — `subagent_merge` and
-# `subagent_push_default` fire only for a dispatched agent, `launcher_diagnoses_nothing`
-# only for the main thread.
+# session-scoped ones read these two and say so in their own header — `subagent_push_default`
+# and `subagent_merge`'s APPROVAL half fire only for a dispatched agent,
+# `launcher_diagnoses_nothing` only for the main thread, and `subagent_merge`'s MERGE half
+# for every caller in a bundle session, reading `agent_type` as the role rather than as a
+# presence test.
 AGENT_ID="$(printf '%s' "$payload" | jq -r '.agent_id // ""' 2>/dev/null || true)"
 AGENT_TYPE="$(printf '%s' "$payload" | jq -r '.agent_type // ""' 2>/dev/null || true)"
 
@@ -845,7 +847,10 @@ merge_permitted() { # <stage> -> 0 when this exact merge is delegated in this bu
   repo="$(flag_value "$1" --repo -R || true)"
   [ -n "$repo" ] || repo="$(origin_nwo)"
   case "$repo" in */*) ;; *) _merge_why="the repository this merge names cannot be resolved"; return 1 ;; esac
-  helper="${CLAUDE_PLUGIN_ROOT:-${_self%/hooks/*}}/scripts/merge-permit.sh"
+  # Resolved HERE and not at the top of the file: that line would cost a subshell in
+  # front of every Bash call in every session on the machine, for a rule that fires on a
+  # merge command and nothing else.
+  helper="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../scripts" 2>/dev/null && pwd)/merge-permit.sh"
   [ -f "$helper" ] || { _merge_why="merge-permit.sh is not installed beside this hook"; return 1; }
   _merge_why="$(bash "$helper" --bundle "$INSTANCE_ROOT" --repo "$repo" --pr "$pr" \
                      --head "$sha" --role "$AGENT_TYPE" 2>/dev/null)" && return 0

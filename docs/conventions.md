@@ -682,7 +682,10 @@ matched no `gh` shape at all, so a dispatched agent could self-merge its own gre
 whose only push rule (`force_push_protected`) let a plain push to `main` through by design.
 Both are hook rules now: **`rule_subagent_merge`** refuses `gh pr merge`,
 `gh pr review --approve` and the REST `/pulls/N/merge` and `/merges` endpoints for a caller
-carrying an `agent_id` ([#93](https://github.com/cbmono/ai-bridge/pull/93)), and
+carrying an `agent_id` ([#93](https://github.com/cbmono/ai-bridge/pull/93)) — and since
+ai-bridge-v3/task-044 the merge half binds every caller in a bundle session, permitting only
+the SHA-pinned squash `AUTONOMY.md` delegates, decided by `plugin/scripts/merge-permit.sh`
+from the bundle's own mode, the caller's role and a clearance record at that SHA — and
 **`rule_subagent_push_default`** refuses a dispatched agent's push to a product repo's
 default branch, exempting the bundle the tick pushes by design
 ([#97](https://github.com/cbmono/ai-bridge/pull/97)). The third strand of the same finding —
