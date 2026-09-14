@@ -374,6 +374,18 @@ ok "project-manager.md names it"      "$(has "$REPO/plugin/agents/project-manage
 ok "the cap is not configurable from the command line" \
    "$(grep -vE '^[[:space:]]*#' "$SCRIPT" | grep -qE -- '--cap' && echo 1 || echo 0)" "0"
 
+
+# A ROUND COUNT IS A QUESTION ABOUT THE PAST, so the sibling's mergeability check is
+# suppressed here. The guard is the FIXTURE above, which reports no `mergeable` at all:
+# drop `--no-merge-check` from either call site and the sibling answers exit 2 (unknown
+# state) for every candidate, which is its fatal `*` arm — so every counting case in this
+# file goes red rather than one assertion. This pins the call sites as well, because the
+# reason is not visible from a passing count.
+ok "both call sites suppress the sibling's merge check" \
+   "$(grep -vE '^[[:space:]]*#' "$SCRIPT" | grep -c -- '--no-merge-check')" "2"
+ok "…and the fixture PR reports no mergeability, so it is the guard" \
+   "$(grep -c 'mergeable' "$FIX/pr_json")" "0"
+
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

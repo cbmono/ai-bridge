@@ -116,10 +116,15 @@ export PATH="$TMP/bin:$PATH"
 
 # --- fixture builders ---------------------------------------------------------
 HEAD=""; AUTHOR=""; REVIEWS=""; COMMENTS=""; THREADS=""; THREADS_MORE=""
+MERGEABLE=""; MERGE_STATE=""
 
 setup() { # start from: a readable PR at <head>, authored by "dev", with no artifacts
   rm -rf "$FIX"; mkdir -p "$FIX"
   HEAD="${1:-$CLEAN_HEAD}"; AUTHOR="dev"; REVIEWS='[]'; COMMENTS='[]'
+  # A MERGEABLE/CLEAN PR is the default, so every case written before the mergeability
+  # check existed keeps asking exactly the question it was written to ask. UNKNOWN holds
+  # at exit 2, so a fixture that simply omitted these would refuse the whole file.
+  MERGEABLE="MERGEABLE"; MERGE_STATE="CLEAN"
   # NO THREADS AND NO FURTHER PAGE is the default, so every case written before clause 9
   # existed keeps asking exactly the question it was written to ask.
   THREADS='[]'; THREADS_MORE=false
@@ -160,8 +165,9 @@ add_thread() { # <isResolved> <path> <line|null> <login|null> <url> <first-line-
 
 write_pr() {
   "$REAL_JQ" -n --arg h "$HEAD" --arg a "$AUTHOR" \
+              --arg m "$MERGEABLE" --arg s "$MERGE_STATE" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-      author:{login:$a}}' > "$FIX/pr_json"
+      author:{login:$a}, mergeable:$m, mergeStateStatus:$s}' > "$FIX/pr_json"
   printf '%s' "$REVIEWS"  > "$FIX/reviews_json"
   printf '%s' "$COMMENTS" > "$FIX/comments_json"
   "$REAL_JQ" -n --argjson t "$THREADS" --argjson more "$THREADS_MORE" \
@@ -1933,6 +1939,86 @@ assert "required-checks.sh tells a 6 not to request another review" \
 # The code is documented where a caller reads it, not only where it is raised.
 assert "the exit-code table documents 6" \
   "$(grep -q '^#   6  a review artifact DOES evidence' "$SCRIPT" && echo 0 || echo 1)"
+
+echo
+echo "== a PR that cannot merge is refused BEFORE anything else is read =="
+# 2026-09-13: #206, #209 and #211 were presented as merge rows — review at head, CI green —
+# while the host reported all three CONFLICTING / DIRTY. Four sibling merges had moved the
+# base underneath them, with no commit on any of the three. A verdict about a review was
+# being read as a verdict about a merge.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGEABLE=CONFLICTING; MERGE_STATE=DIRTY
+expect "a real review at the head, but the PR CONFLICTS -> 7" 7
+says   "  ...naming the state the host reported" "mergeable=CONFLICTING"
+says   "  ...and sending the caller to a rebase, not to a review" "do NOT request a review"
+
+# THE TWO FIELDS ARE READ INDEPENDENTLY. They are computed by different parts of the host
+# and disagree in practice; either one saying "conflict" is a conflict.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGEABLE=CONFLICTING; MERGE_STATE=CLEAN
+expect "mergeable=CONFLICTING alone -> 7" 7
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGEABLE=MERGEABLE; MERGE_STATE=DIRTY
+expect "mergeStateStatus=DIRTY alone -> 7" 7
+says   "  ...and says which field answered" "mergeStateStatus=DIRTY"
+
+# FIRST means first: ahead of the artifact reads and ahead of the `--head` staleness test.
+# A conflicting PR with no artifacts at all is 7, not 3, and a conflicting PR at a moved
+# head is 7, not 4 — one rebase re-answers both, and 3 or 4 would send the caller to a
+# reviewer instead.
+setup "$CLEAN_HEAD"; MERGEABLE=CONFLICTING; MERGE_STATE=DIRTY
+expect "no artifacts at all, but conflicting -> 7, not 3" 7
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGEABLE=CONFLICTING; MERGE_STATE=DIRTY
+expect "a stale --head on a conflicting PR -> 7, not 4" 7 --head "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+
+echo
+echo "== UNKNOWN is a HOLD (exit 2), never a pass =="
+# The host computes mergeStateStatus lazily and answers UNKNOWN for seconds after the base
+# moves — which is exactly the window the incident happened in. Reading UNKNOWN as clean
+# would re-open the hole with a smaller race.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGEABLE=UNKNOWN; MERGE_STATE=UNKNOWN
+expect "both fields UNKNOWN -> 2, not 0 and not 7" 2
+says   "  ...and says to ask again next tick" "Ask again next tick"
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGEABLE=MERGEABLE; MERGE_STATE=UNKNOWN
+expect "mergeStateStatus UNKNOWN alone -> 2" 2
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGEABLE=UNKNOWN; MERGE_STATE=CLEAN
+expect "mergeable UNKNOWN alone -> 2" 2
+# A host that answers neither field — an old `gh`, a token without push access, a shape
+# change. Absent is unknown, and unknown fails closed like every other one here.
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGEABLE=""; MERGE_STATE=""
+expect "neither field reported at all -> 2" 2
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGEABLE=MERGEABLE; MERGE_STATE=SOMETHING_NEW
+expect "a mergeStateStatus this script has not been taught -> 2" 2
+
+echo
+echo "== a MERGEABLE PR still clears, and the states that are not this file's question =="
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+expect "MERGEABLE/CLEAN with a real review -> still clears" 0
+# BLOCKED is a failing or missing required check and UNSTABLE is a red one; both are
+# `required-checks.sh`'s question, not this one. BEHIND matters only under strict
+# up-to-date, which is the merge gate's. None of the three is a conflict.
+for st in BLOCKED UNSTABLE BEHIND HAS_HOOKS DRAFT; do
+  setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGE_STATE="$st"
+  expect "MERGEABLE/$st is not a conflict -> clears on review grounds" 0
+done
+
+echo
+echo "== --no-merge-check suppresses it, for the round counter only =="
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"; MERGEABLE=CONFLICTING; MERGE_STATE=DIRTY
+expect "a conflicting PR with --no-merge-check -> the review answer" 0 --no-merge-check
+setup "$CLEAN_HEAD"; MERGEABLE=CONFLICTING; MERGE_STATE=DIRTY
+expect "…and it suppresses the check, not the rest of the file" 3 --no-merge-check
+
+echo
+echo "== the third part of the three-part change: the callers know code 7 =="
+# Same rule as code 6 below: a new code lands in `review-rounds.sh`'s fatal `*` arm. Here
+# the fix is not a new arm but the opt-out — that file asks about the PAST, where a
+# conflict today is not an answer. Both of its call sites must pass it or every
+# conflicting PR reports "the round count is unknown".
+assert "review-rounds.sh passes --no-merge-check at both call sites" \
+  "$(grep -vE '^[[:space:]]*#' "$ROUNDS" | grep -c -- '--no-merge-check' \
+     | grep -qx 2 && echo 0 || echo 1)"
+assert "required-checks.sh tells a 7 to rebase, not to request a review" \
+  "$(grep -q 'CONFLICTS with its base' "$SCRIPTS/required-checks.sh" && echo 0 || echo 1)"
+assert "the exit-code table documents 7" \
+  "$(grep -q '^#   7  the PR CANNOT MERGE' "$SCRIPT" && echo 0 || echo 1)"
 
 echo
 echo "pass=$pass fail=$fail"

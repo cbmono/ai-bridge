@@ -359,10 +359,8 @@ while IFS= read -r sha; do
   [ -n "$sha" ] || continue
   counted=""
 
-  # `--no-merge-check` because this is a question about the PAST — did a review happen at
-  # commit X — and a conflict today says nothing about it. Left on, the sibling's exit 7
-  # would land in the `*` arm below and turn "this PR has a conflict" into "the round count
-  # is unknown", refusing the cap check on every conflicting PR.
+  # `--no-merge-check`: a conflict today does not un-happen a review at commit X. Left on,
+  # exit 7 lands in the `*` arm and "this PR conflicts" becomes "the rounds are unknown".
   OKF_ROUNDS_HEAD="$sha" PATH="$BIN:$PATH" \
     "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --no-merge-check >/dev/null 2>&1
   rc=$?

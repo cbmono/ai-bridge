@@ -163,7 +163,7 @@ reviewed_pr() {
   [ "$HAVE_JQ" = 1 ] || return 0
   jq -n --arg h "$HEAD_SHA" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-      author:{login:"dev"}}' > "$FIX/pr_json"
+      author:{login:"dev"}, mergeable:"MERGEABLE", mergeStateStatus:"CLEAN"}' > "$FIX/pr_json"
   printf '[]\n' > "$FIX/comments_json"
   jq -n --arg h "$HEAD_SHA" \
     '[{user:{login:"coderabbitai"}, state:"APPROVED", commit_id:$h,
@@ -351,7 +351,7 @@ reviewer_pr() { # <body-file>|"" — the artifacts review-clearance.sh will read
   printf '[]\n' > "$FIX/reviews_json"
   jq -n --arg h "$CR_HEAD" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-      author:{login:"dev"}}' > "$FIX/pr_json"
+      author:{login:"dev"}, mergeable:"MERGEABLE", mergeStateStatus:"CLEAN"}' > "$FIX/pr_json"
   # It moves the head, so the PR-body fixture has to follow it or precondition 3 refuses
   # on a stale head in every case this helper sets up.
   pr_body "$CONFORMING_BODY" "$CR_HEAD"
@@ -607,7 +607,7 @@ two_vendors() { # <coderabbit-body> <sourcery-body>
   printf '[]\n' > "$FIX/reviews_json"
   jq -n --arg h "$CR_HEAD" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-      author:{login:"dev"}}' > "$FIX/pr_json"
+      author:{login:"dev"}, mergeable:"MERGEABLE", mergeStateStatus:"CLEAN"}' > "$FIX/pr_json"
   jq -n --rawfile a "$1" --rawfile b "$2" \
     '[{user:{login:"coderabbitai"}, body:$a},
       {user:{login:"sourcery-ai"},  body:$b}]' > "$FIX/comments_json"
@@ -743,6 +743,28 @@ else
     "$rc" "$(printf '%s' "$out" | head -2 | tr '\n' '|')"
   fail=$((fail+1))
 fi
+
+echo
+echo "== a CONFLICTING PR never clears the merge gate, however green it is =="
+# 2026-09-13: three PRs read "merge — verified, CLEAN" with a review at head and every
+# check green, while the host reported them CONFLICTING/DIRTY. The gate has one job here
+# and it is to say no; the advice is what tells the caller a review would not help.
+conflicting() { # <mergeable> <mergeStateStatus>
+  jq -n --arg h "$HEAD_SHA" --arg m "$1" --arg s "$2" \
+    '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
+      author:{login:"dev"}, mergeable:$m, mergeStateStatus:$s}' > "$FIX/pr_json"
+}
+setup; checks "pass	Build"; declared "Build"; conflicting CONFLICTING DIRTY
+expect "every check green but the PR conflicts -> refuse" 1
+says   "  ...quoting the sibling's own code"       "review-clearance.sh exit 7"
+says   "  ...and sending the caller to a rebase"   "CONFLICTS with its base"
+says   "  ...not to a reviewer"                    "do NOT request a review"
+
+setup; checks "pass	Build"; declared "Build"; conflicting UNKNOWN UNKNOWN
+# 2, not 1: an UNKNOWN mergeability is unreadable state, and this file already keeps that
+# apart from a reviewer that answered and declined. A hold, either way — never a clearance.
+expect "an UNKNOWN mergeability holds the gate too -> unknown" 2
+says   "  ...as unknown state, not as a conflict"  "review-clearance.sh exit 2"
 
 echo
 echo "pass=$pass fail=$fail"
