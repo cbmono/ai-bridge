@@ -1,4 +1,10 @@
-# ai-bridge
+```text
+   ▄▄▄▄
+◀━▐    ▌   loopd — the loop, running
+  ▝▄▄▄▄▘
+```
+
+**You steer. They build. Two gates stay yours.**
 
 **A control panel for running a small team of AI agents on your repositories.**
 
@@ -10,6 +16,10 @@ You act like an engineering manager, not a pair programmer.
 This repo is the **template**. You stamp out one **instance** per group of repos (work, a
 side project, a client). Each instance is its own small git repo that sits beside those
 repos and holds only the state of the work — never application code.
+
+**Two colours, wherever loopd renders.** Blue `#5ea2ff` is the machine's — agents, code,
+refs, running state. Pink `#ff7ac2` is yours — gates, decisions, anything waiting on a
+person. No third accent, no status rainbow.
 
 | | |
 |---|---|
@@ -27,7 +37,7 @@ repos and holds only the state of the work — never application code.
 |---|---|
 | **This page** | setting up, or looking up a command or a config key |
 | [docs/onboarding.md](docs/onboarding.md) | **you are new, or someone is joining you** — one page: install, the seven skills of week one, the two gates that stay yours |
-| [docs/onboarding.md § Plugins that pair well](docs/onboarding.md#plugins-that-pair-well) | you are deciding which **other** plugins to install alongside ai-bridge — four to install, two to skip, and why **`superpowers` must not be installed on a machine that runs the loop** |
+| [docs/onboarding.md § Plugins that pair well](docs/onboarding.md#plugins-that-pair-well) | you are deciding which **other** plugins to install alongside loopd — four to install, two to skip, and why **`superpowers` must not be installed on a machine that runs the loop** |
 | [docs/schema.md](docs/schema.md) | you need to know what a document type holds |
 | [docs/autonomy.md](docs/autonomy.md) | you want the loop to promote or merge without you |
 | [docs/operations.md](docs/operations.md) | installing and upgrading (the plugin half and the bundle half), the board's three renderers, worktrees, editor setup |
@@ -68,6 +78,9 @@ Every command is namespaced: `/ai-bridge:dispatch`, `/ai-bridge:new-project`, an
 the rest of the table [below](#commands); so is every role agent —
 `ai-bridge:software-engineer` and the rest — because a bare agent name does not resolve.
 See [`plugin/README.md`](plugin/README.md).
+
+**The marketplace, the plugin and every command still carry the old name**, and the lines
+above are what resolves today. loopd is the product name; the rename ships on its own.
 
 **Already on `ai-bridge-v2`?** That name is gone in 1.0.0 — [the swap](docs/migrating.md).
 
@@ -427,7 +440,7 @@ clones share) and cached against that SHA. That is why the local board loses not
 shared bundle: the cross-owner half never came from a shared page, it came from git.
 
 **The watcher's cost is the real one, so read it before you pick it.** It needs a
-resident process, and ai-bridge deliberately has none — its agents are ephemeral
+resident process, and loopd deliberately has none — its agents are ephemeral
 subagents inside one session, and nothing here runs between sessions. So the live page
 is a terminal tab you keep open: it stops when you close it, sleep the machine, or lose
 the session, and it gives you nothing to share and no phone access. If any of that
@@ -695,7 +708,7 @@ Agent-facing rules are in [`CLAUDE.md`](CLAUDE.md) and [`.claude/rules/`](.claud
 
 ## Relationship to `ai-setup`
 
-ai-bridge used to live as an `ai-bridge/` subtree inside
+loopd used to live as an `ai-bridge/` subtree inside
 [`ai-setup`](https://github.com/cbmono/ai-setup), the Claude Code defaults repo. **This
 repo is now the canonical copy** — every instance's machinery ships from *this* repo as
 the `ai-bridge` plugin, and `/ai-bridge:init` and `/ai-bridge:welcome fix` here are the
@@ -730,7 +743,7 @@ section is inlined in `plugin/seed/CLAUDE.md`, so nothing can dangle.
 style, skills and `settings.json` all install from there. Run *that* repo's `/ai-bridge:init`
 for those.
 
-ai-bridge installs into that directory too, but only the paths **it probes for**: three
+loopd installs into that directory too, but only the paths **it probes for**: three
 agents (`code-architect`, `deep-bug-scan`, `plan-architect`), so a fresh laptop works after
 one clone and one install without needing a second repo.
 
