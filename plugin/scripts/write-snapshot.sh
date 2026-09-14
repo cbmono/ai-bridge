@@ -48,7 +48,7 @@
 #              by construction; the `restore:` command in CLOSED.md is NOT carried, and
 #              the board applies href()'s http/https rule to the URL like any other.
 #     task:    id, title, kind, status, assignee (a ROLE slug, never a person),
-#              in_flight, awaiting (a verb, not a reason), open_questions (a COUNT),
+#              in_flight, pr_mergeable, awaiting (a verb, not a reason), open_questions (a COUNT),
 #              open_question_ids (one `Q<n>` LABEL per open question, never its text —
 #              read the widening note below before you touch it), prs (repo, number, url)
 #   THE LABELS ARE A DELIBERATE WIDENING OF THIS LIST (2026-08-31), and the shape is
@@ -668,6 +668,11 @@ EOF
     t_status="$(fmenum "$tfm" status)"
     t_kind="$(fmenum "$tfm" kind)"; [[ -n "$t_kind" ]] || t_kind="$p_kind"
     t_assignee="$(fmenum "$tfm" assignee)"
+    # The tick's own mergeability read, persisted by `review-clearance.sh --record`.
+    # Absent is not MERGEABLE: this file is offline by contract, so the only honest answer
+    # about a PR nobody has asked the host about is "not known to be mergeable".
+    t_mergeable="$(fmenum "$tfm" pr_mergeable)"
+    case "$t_mergeable" in MERGEABLE|CONFLICTING) ;; *) t_mergeable="UNKNOWN" ;; esac
     t_phase="$(fmfield "$tfm" phase)"; t_phase="$(basename "$t_phase" 2>/dev/null || true)"
     [[ "$t_phase" == "." ]] && t_phase=""
     oq="$(count_questions "$tfm")"
@@ -701,8 +706,10 @@ $(list_region "$tfm" pr | grep -oE 'https?://[A-Za-z0-9._~:/?#@!$&*+=%-]+/pull/[
 EOF
 
     # in_flight = a role agent is working it. `in-review` is NOT in flight: the agent
-    # has handed over and the PR is waiting on a reviewer or a merge.
+    # has handed over and the PR is waiting on a reviewer or a merge — UNLESS the host
+    # reported it CONFLICTING, which is a rebase round, not a queue position.
     in_flight=false; [[ "$t_status" == "in-progress" ]] && in_flight=true
+    [[ "$t_status" == "in-review" && "$t_mergeable" == "CONFLICTING" ]] && in_flight=true
 
     # depends_on -> a JSON array of IDs. jstr() does the escaping, as everywhere else.
     an="$(advisor_note_count "$tfm")"
@@ -729,7 +736,9 @@ EOF
       draft)
         if [[ "$oq" != 0 ]]; then awaiting="answer"
         elif acceptance_criteria_filled "$tfm"; then awaiting="approve"; fi ;;
-      in-review) [[ -n "$prs_json" ]] && awaiting="merge" ;;
+      # THE MERGE VERB REQUIRES MERGEABLE. On 2026-09-13 three CONFLICTING PRs were
+      # presented as merge rows; `status: in-review` plus a PR link was the whole test.
+      in-review) [[ -n "$prs_json" && "$t_mergeable" == "MERGEABLE" ]] && awaiting="merge" ;;
       blocked)   awaiting="unblock" ;;
     esac
     [[ -n "$awaiting" ]] && awaiting_total=$((awaiting_total+1))
@@ -738,7 +747,7 @@ EOF
     t_count=$((t_count+1)); tasks_total=$((tasks_total+1))
 
     tasks_json="$tasks_json${tasks_json:+,}
-      {\"id\": $(jstr "$t_id"), \"title\": $(jstr "$t_title"), \"kind\": $(jstr "$t_kind"), \"status\": $(jstr "$t_status"), \"assignee\": $(jstr "$t_assignee"), \"phase\": $(jstr "$t_phase"), \"in_flight\": $in_flight, \"awaiting\": $(jstr "$awaiting"), \"open_questions\": $oq, \"open_question_ids\": [$ql_json], \"advisor_notes\": $an${qt_json:+, \"open_question_text\": [$qt_json]}, \"depends_on\": [$dep_json], \"prs\": [$prs_json]}"
+      {\"id\": $(jstr "$t_id"), \"title\": $(jstr "$t_title"), \"kind\": $(jstr "$t_kind"), \"status\": $(jstr "$t_status"), \"assignee\": $(jstr "$t_assignee"), \"phase\": $(jstr "$t_phase"), \"in_flight\": $in_flight, \"pr_mergeable\": $(jstr "$t_mergeable"), \"awaiting\": $(jstr "$awaiting"), \"open_questions\": $oq, \"open_question_ids\": [$ql_json], \"advisor_notes\": $an${qt_json:+, \"open_question_text\": [$qt_json]}, \"depends_on\": [$dep_json], \"prs\": [$prs_json]}"
   done <<EOF
 $(find "$pdir/tasks" -maxdepth 1 -name '*.md' 2>/dev/null | grep -vE '/(index|log)\.md$' | sort || true)
 EOF
@@ -822,7 +831,7 @@ cat > "$tmp" <<JSON
 {
   "_schema": "ai-bridge board snapshot v1",
   "_sensitivity": "Derived and gitignored. AS SENSITIVE AS THE TASK DOCUMENTS IT COMES FROM: titles are human-written free text. No customer PII belongs in a task title, and none belongs here. Delete this file to take this instance off the board for good.",
-  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
+  "_carries": "project title/description/kind/status/autonomy and project owner (a GitHub USERNAME, carried deliberately so a board can separate this clone's projects from the other owner's -- see write-snapshot.sh's header and /knowledge/findings/board-owner-identity-named-not-redacted.md); deliverable_paths verbatim from project.md (closeout-stamped, shape-checked at RENDER time by build-board.sh, not by this file); phase title/order/status; task id/title/kind/status/assignee-ROLE/in_flight/pr_mergeable (MERGEABLE|CONFLICTING|UNKNOWN, the tick's last host read)/awaiting-VERB/open-question COUNT/open_question_ids (one Qn LABEL per open question -- the letter Q plus digits, or empty for a question that names no number; never a byte of the question TEXT)/advisor_notes COUNT/depends_on IDs/PR links; open_question_text ONLY when SNAPSHOT_QUESTION_TEXT=1 (opt-in, off by default). Never: task descriptions, document bodies, question or blocker TEXT, author EMAIL.",
   "group": $(jstr "$GROUP"),
   "generated_at": $(jstr "$NOW"),
   "counts": {"projects": $projects_n, "tasks": $tasks_total, "awaiting": $awaiting_total},

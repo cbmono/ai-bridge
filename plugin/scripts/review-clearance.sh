@@ -7,7 +7,7 @@
 #
 #   Usage: review-clearance.sh <pr> [--repo <owner>/<name>] [--head <sha>]
 #                                           [--reviewer <login>] [--for-check <name>]
-#                                           [--no-merge-check]
+#                                           [--no-merge-check] [--record <task-doc>]
 #          review-clearance.sh --match-check <check-name>
 #          review-clearance.sh --self-test
 #
@@ -542,6 +542,7 @@ usage() {
   echo "Usage: $(basename "$0") <pr> [--repo <owner>/<name>] [--head <sha>]" >&2
   echo "                       [--reviewer <login>] [--for-check <check-name>]" >&2
   echo "                       [--no-merge-check]   (round counting only, never a gate)" >&2
+  echo "                       [--record <task-doc>] persist the mergeability read" >&2
   echo "       $(basename "$0") --match-check <check-name>   (0 a reviewer's, 1 not)" >&2
   echo "       $(basename "$0") --self-test                  (prove this script RUNS)" >&2
   exit 2
@@ -736,6 +737,7 @@ if [ "${1:-}" = "--self-test" ]; then
 fi
 
 pr=""; repo=""; want_head=""; want_reviewer=""; for_check=""; skip_merge_check=""
+record_doc=""
 if [ "${1:-}" = "--match-check" ]; then
   [ -n "${2:-}" ] && [ "$#" -eq 2 ] || usage
   # A table that will not compile answers "not a reviewer's check" to every name, which
@@ -752,6 +754,7 @@ while [ "$#" -gt 0 ]; do
     --reviewer) want_reviewer="${2:-}";  [ -n "$want_reviewer" ] || usage; shift 2 ;;
     --for-check) for_check="${2:-}";     [ -n "$for_check" ] || usage; shift 2 ;;
     --no-merge-check) skip_merge_check=yes; shift ;;
+    --record)   record_doc="${2:-}";     [ -n "$record_doc" ] || usage; shift 2 ;;
     -h|--help)  usage ;;
     -*) echo "error: unknown option '$1'" >&2; usage ;;
     *) [ -z "$pr" ] || { echo "error: unexpected argument '$1'" >&2; usage; }
@@ -872,6 +875,29 @@ mint_receipt() {
 # DIRTY|UNSTABLE|BEHIND|HAS_HOOKS|DRAFT|UNKNOWN. Only DIRTY/CONFLICTING is a conflict;
 # BEHIND matters only under strict up-to-date, which is the merge gate's question and not
 # this one.
+# `--record` PERSISTS THIS READ WHERE THE NO-NETWORK RENDERERS CAN SEE IT. `write-snapshot.sh`
+# is deterministic and offline by contract, so without a record it minted a merge verb from
+# `status: in-review` plus a PR link and nothing else. The value is written HERE, in the call
+# that made the read, so the board cannot disagree with what the gate saw. It is the tick's
+# LAST read, not a cache consulted instead of asking: every tick overwrites it, and a task
+# carrying none is not MERGEABLE, so the verb fails closed.
+if [ -n "$record_doc" ] && [ -f "$record_doc" ]; then
+  rc_state="$mergeable"
+  case "$merge_state" in DIRTY) rc_state=CONFLICTING ;; esac
+  case "$rc_state" in MERGEABLE|CONFLICTING) ;; *) rc_state=UNKNOWN ;; esac
+  rc_tmp="$(mktemp "${TMPDIR:-/tmp}/review-clearance.XXXXXX")" || rc_tmp=""
+  if [ -n "$rc_tmp" ]; then
+    RC_VAL="$rc_state" awk '
+      BEGIN { v = ENVIRON["RC_VAL"] }
+      NR == 1 && $0 == "---" { n = 1; print; next }
+      n == 1 && $0 == "---" { if (!done) { print "pr_mergeable: " v; done = 1 } n = 2; print; next }
+      n == 1 && !done && index($0, "pr_mergeable:") == 1 { print "pr_mergeable: " v; done = 1; next }
+      { print }
+    ' "$record_doc" > "$rc_tmp" && cat "$rc_tmp" > "$record_doc"
+    rm -f "$rc_tmp"
+  fi
+fi
+
 if [ -z "$skip_merge_check" ]; then
   case "$mergeable" in
     CONFLICTING)
