@@ -343,13 +343,13 @@ ok "…so neither hook name appears in it" \
 # `session-banner.sh`; ai-bridge-v2/task-013 moved that one and `push-state.sh` into the
 # PLUGIN beside the two enforcement hooks, because a bundle carries no machinery for a
 # `"$CLAUDE_PROJECT_DIR"/.claude/hooks/…` command to resolve to. So the seeded
-# settings.json registers NO hook of any event, and all four are counted on the plugin
+# settings.json registers NO hook of any event, and all five are counted on the plugin
 # manifest instead. Both halves, so "we deleted the block" cannot pass by deleting the
 # feature.
 ok "…and the seeded settings.json has no hooks key at all" \
    "$(jq -r 'if has("hooks") then "present" else "absent" end' "$SETTINGS")" "absent"
-ok "…while the plugin manifest carries all four" \
-   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "4"
+ok "…while the plugin manifest carries all five" \
+   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "5"
 
 echo "== the permissions.deny block: unconditional shapes only"
 # This block is the SECOND layer — the harness matches it before any hook runs — and every

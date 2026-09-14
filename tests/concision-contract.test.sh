@@ -126,7 +126,7 @@ $BASELINE
 EOF
 ok "every baseline row resolves to a file"  "$stale" 0
 ok "no ratcheted file grew its share"       "$over" 0
-ok "the baseline is the 27 files over the cap" "$checked" 27
+ok "the baseline is the 26 files over the cap" "$checked" 26
 
 # Everything NOT in the table — including every new file — is held to the flat cap.
 newover=0

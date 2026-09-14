@@ -17,8 +17,7 @@
 #
 # WHAT IT DECIDES. Three outcomes, not two:
 #   REMOVABLE    the `git worktree remove` command is PRINTED for a human to run.
-#                Reached ONLY by a worktree that is all of: on a real branch, tree
-#                fully clean, and its PR
+#                Reached ONLY by a worktree on a real branch, fully clean, with its PR
 #                merged/closed (or its branch already merged into the default
 #                branch — but see the `no commits yet` guard below: "merged into
 #                the default branch" is indistinguishable from "created from the
@@ -643,8 +642,7 @@ for repo in "$REPOS_ROOT"/*/; do
       "HEAD "*)     head=${line#HEAD } ;;
       "branch "*)   ref=${line#branch }; ref=${ref#refs/heads/} ;;
       detached)     detached=1 ;;
-      # `locked` alone and `locked <reason>` are both a KEEP; the reason is the only thing
-      # in the porcelain that says WHO holds it, so it is reported rather than dropped.
+      # The reason is the only thing in the porcelain that says WHO holds the lock.
       locked)                locked=1 ;;
       "locked "*)            locked=1; lockreason=${line#locked } ;;
       prunable|"prunable "*) prunable=1 ;;

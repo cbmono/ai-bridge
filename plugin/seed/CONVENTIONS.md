@@ -943,7 +943,7 @@ above it so none may grow its share.
   your cwd from the first turn. `pwd` and `git rev-parse --abbrev-ref HEAD` answer it in
   two commands. Already there ⇒ **do not add a second worktree** — you will branch off
   your own branch and open a PR against it.
-  **Only when it did not**, which is every in-session `Agent` dispatch (the hook's payload
+  **Only when it did not**, which is every in-session subagent dispatch (the hook's payload
   carries `agent-<opaque-id>`, never the task, so it cannot place one for you):
   `git worktree add <path> -b <branch> origin/<default-branch>`. Don't rely on the
   `EnterWorktree` tool, which may be unavailable to you as a subagent.
