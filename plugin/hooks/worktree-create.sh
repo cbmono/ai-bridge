@@ -39,7 +39,7 @@ BRANCH="$(field branch)"; [ -n "$BRANCH" ] || BRANCH="$id"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 cfg() { # <key> — the two-file precedence, delegated; grep is the no-python3 fallback.
-  local v
+  local f v
   v="$(bash "$HERE/../scripts/resolve-config.sh" --instance "$BUNDLE" "$1" 2>/dev/null)" && [ -n "$v" ] && {
     printf '%s' "${v/#\~/$HOME}"; return 0; }
   for f in "$BUNDLE/instance.config.local.json" "$BUNDLE/instance.config.json"; do

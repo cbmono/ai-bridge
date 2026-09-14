@@ -53,7 +53,7 @@ echo "plugin/hooks/worktree-create.sh"
 # --- a name that is not a task id is not this hook's business ----------------
 ok "subagent name passes through"    "$(hook 'agent-a6d376a8ba2cd81fa')" "0 "
 ok "an arbitrary session name"       "$(hook 'scratch')" "0 "
-ok "no name key at all"              "$(printf '{"cwd":"'"$B"'"}' | bash "$HOOK" >/dev/null 2>&1; printf '%s' $?)" 0
+ok "no name key at all"              "$(printf '{"cwd":"%s"}' "$B" | bash "$HOOK" >/dev/null 2>&1; printf '%s' $?)" 0
 ok "a name that merely contains one" "$(hook 'notes-task-001')" "0 "
 
 # --- a task id it cannot resolve ABORTS, it never guesses a path -------------
