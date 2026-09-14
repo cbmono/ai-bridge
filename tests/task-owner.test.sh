@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/task-owner.sh
 #
 # task-owner.test.sh — the ownership gate that lets two humans share one bundle.
 #

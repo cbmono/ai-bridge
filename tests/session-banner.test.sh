@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks/hooks.json plugin/hooks/session-banner.sh plugin/scripts/init-bundle.sh plugin/seed/.claude/settings.json plugin/seed/CLAUDE.md
 #
 # session-banner.test.sh — the SessionStart banner: the consolidation, the FROM column,
 # and the silence.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/hooks/hooks.json plugin/hooks/session-banner.sh plugin/scripts/init-bundle.sh plugin/seed/.claude/settings.json plugin/seed/instance.config.json
 #
 # moved-template.test.sh — a bundle that still carries machinery symlinks must be
 # DETECTED, and converting it must not touch the data.

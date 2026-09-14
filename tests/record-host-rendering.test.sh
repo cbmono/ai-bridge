@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: tests/fixtures/reviewer/record-host-rendering.sh
 #
 # record-host-rendering.test.sh — pins ai-bridge-v4/task-022's fix to
 # tests/fixtures/reviewer/record-host-rendering.sh's `ask()`.

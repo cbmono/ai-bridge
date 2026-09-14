@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/spikes/worktree-remove-veto.sh
 #
 # worktree-remove-veto.test.sh — drives docs/spikes/worktree-remove-veto.sh.
 #

@@ -230,6 +230,13 @@ assert "a declared path that is NOT in the tree is refused too" \
   "$([ "$L_MV_RC" -eq 1 ] && echo 0 || echo 1)"
 assert "…naming the path, so the rename is actionable"        "$(has "$L_MV_OUT" 'plugin/scripts/gone-in-a-rename.sh')"
 
+echo "== and this repo's own harnesses all declare =="
+REAL_LINT="$( cd "$REPO" && bash tests/run.sh --lint 2>&1 )"; REAL_LINT_RC=$?
+assert "tests/run.sh --lint is green on this checkout" \
+  "$([ "$REAL_LINT_RC" -eq 0 ] && echo 0 || echo 1)"
+assert "…having checked every harness in tests/" \
+  "$(has "$REAL_LINT" "all $(find "$REPO/tests" -maxdepth 1 -name '*.test.sh' | grep -c .) harnesses")"
+
 echo "== --all, the default, and the refusals =="
 ALL_OUT="$( cd "$A/work" && bash tests/run.sh --all 2>&1 )"
 assert "--all runs the harness no changed path names"         "$(has "$ALL_OUT" 'tests/fp-covers-nothing.test.sh')"

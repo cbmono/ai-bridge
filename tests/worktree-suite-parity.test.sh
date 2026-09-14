@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/init-bundle.sh tests
 #
 # worktree-suite-parity.test.sh — the suite gives the SAME result from a linked git
 # worktree as from the repository's main tree. Pins ai-bridge-v4/task-029 and its

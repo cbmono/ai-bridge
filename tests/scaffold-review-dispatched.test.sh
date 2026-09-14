@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/skills/new-project/SKILL.md
 #
 # scaffold-review-dispatched.test.sh — `/new-project` step 8 stage 2 (the external-reviewer
 # CLI run) no longer instructs the main session to wait on it.

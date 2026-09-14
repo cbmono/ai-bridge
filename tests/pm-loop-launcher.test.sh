@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/skills/dispatch/SKILL.md
 #
 # pm-loop-launcher.test.sh — the loop launcher does its three preconditions and
 # nothing else, and the crash-recovery property it used to carry lives in the tick.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/README.md plugin/scripts
 #
 # readme-scripts-table.test.sh — README.md's `## Scripts` section and `plugin/scripts/`
 # account for each other, in both directions.

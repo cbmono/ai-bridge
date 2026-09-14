@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/bundle-paths.sh plugin/scripts/init-bundle.sh plugin/scripts/refresh-seeds.sh plugin/scripts/validate-bundle.sh plugin/seed plugin/VERSION
 #
 # Exercises refresh-seeds.sh — what `upgrade.sh` became when the bundle stopped carrying
 # machinery (ai-bridge-v2/task-013). Three of its four stages went with that design:

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/seed
 #
 # seed-size.test.sh — the per-turn instruction cost of `seed/CLAUDE.md`, finally pinned.
 #

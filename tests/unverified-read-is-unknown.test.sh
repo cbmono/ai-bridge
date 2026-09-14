@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/agents/project-manager.md plugin/evals/README.md plugin/evals/unverified-state-is-unknown plugin/seed/CLAUDE.md plugin/seed/CONVENTIONS.md plugin/skills/dispatch/SKILL.md
 #
 # unverified-read-is-unknown.test.sh — the UNKNOWN rule survives in `seed/CONVENTIONS.md`
 # WITH its four measured examples, and stays referenced from the three places that make

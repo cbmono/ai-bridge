@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/validate-bundle.sh plugin/seed/instance.config.json
 #
 # roles-roletiers-asymmetry.test.sh — `roles` and `roleTiers` in
 # `seed/instance.config.json` deliberately do NOT share membership, and this pins

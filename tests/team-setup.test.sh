@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/init-bundle.sh plugin/scripts/refresh-seeds.sh plugin/scripts/task-owner.sh plugin/seed/instance.config.json
 #
 # team-setup.test.sh — install.sh offers the team roster on a first stamp, and every
 # path that is not "a complete, confirmed answer at a terminal" writes NOTHING.

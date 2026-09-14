@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: .claude-plugin/marketplace.json .claude/rules/installer.md .claude/rules/machinery.md docs/conventions.md docs/operations.md plugin/.claude-plugin/plugin.json plugin/scripts/release-bump.sh plugin/seed/CONVENTIONS.md plugin/VERSION
 #
 # release-bump.test.sh — the version moves at MERGE time, on the default branch, and a pull
 # request that touches `plugin/` carries no bump at all.

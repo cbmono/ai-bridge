@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/.claude-plugin/plugin.json plugin/agents plugin/skills/audit/SKILL.md plugin/skills/dispatch/SKILL.md
 #
 # plugin-agents.test.sh — the eight role agents ship in the plugin, and the plugin is
 # now the ONLY place they ship from.

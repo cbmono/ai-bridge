@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/pr-body-clearance.sh
 #
 # pr-body-clearance.test.sh — exercises precondition 3 of the delegated merge gate,
 # plugin/scripts/pr-body-clearance.sh.

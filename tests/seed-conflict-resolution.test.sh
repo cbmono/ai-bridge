@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: docs/operations.md plugin/scripts/ai-bridge.sh plugin/scripts/init-bundle.sh plugin/scripts/refresh-seeds.sh plugin/seed plugin/VERSION
 #
 # seed-conflict-resolution.test.sh — the decidable conflict classes, and the one command
 # that runs them. ai-bridge-2x/task-004.

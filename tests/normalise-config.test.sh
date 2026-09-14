@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# covers: plugin/scripts/init-bundle.sh plugin/scripts/normalise-config.sh plugin/seed/instance.config.json
 #
 # normalise-config.test.sh — `normalise-config.sh` reports the three finding kinds, moves
 # and adds without ever changing a value, and `/ai-bridge:init` runs it on every stamp.
