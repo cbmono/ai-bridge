@@ -15,6 +15,12 @@ and converts one stamped by the retired `install.sh`.
 
 Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplaces.
 
+**It also ships a colour theme.** `themes/ai-bridge.json`, declared by `experimental.themes`
+and listed in `/theme` as `custom:ai-bridge:ai-bridge` — select it there, because nothing
+here writes your `theme` setting. The palette is provisional until the branding work lands;
+the token names a theme file may use are listed once, in
+[`tests/fixtures/theme-tokens.txt`](../tests/fixtures/theme-tokens.txt).
+
 **What ships here, and the one thing that does not.** An installed plugin is the CONTENTS
 of this directory — `agents/ evals/ hooks/ scripts/ skills/` and, since task-022, the three
 files a stamp reads: `seed/`, `RETIRED` and a mirror of the template `VERSION`. So
