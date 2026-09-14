@@ -664,45 +664,28 @@ WORDING = {
 TABLE_HEAD = """<title>__TITLE__</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <style>
-/* THE FULL DARK PALETTE SITS ON BARE :root, because DARK IS THE DEFAULT — no stored
-   choice renders dark whatever the system prefers, so the system preference is never
-   queried here and no colour is defined only inside a [data-theme] block.
+/* THE LOOPD DUOTONE, AND THERE IS ONLY ONE THEME. Every hex below is copied from the
+   brand's tokens.css; the board defines no colour that is not in it, which is what
+   keeps a third accent out. BLUE IS THE MACHINE'S and PINK IS THE HUMAN'S — --accent,
+   --ok and every running/merged/queued state are blue, and --signal/--stop are pink
+   because the only pink pixels on this page are things waiting on a person.
+   loopd is dark-only (tokens.css carries no light ground), so there is no [data-theme]
+   block, no toggle and no stored choice.
    Four background layers do the separating: ground -> surface -> sunk -> inner. */
 :root{
-  --ground:#191c27; --surface:#262a3b; --sunk:#20242f; --inner:#1c1f2c; --raise:#2e3242;
-  --ink:#e8ebf7; --muted:#9da5c0; --dim:#6c7393; --line:#3a3f55;
-  --accent:#89ddff; --signal:#ffcb6b; --signal-ink:#191c27; --seg-on:#3a3f55;
-  --signal-soft:#3c3524; --signal-soft-text:#ffcb6b;
-  --ok:#c3e88d; --ok-soft:#2e3a26; --stop:#ff6e7f; --stop-soft:#42262e;
-  --neutral-soft:#333850; --neutral-soft-text:#d4d9ec;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -16px rgba(0,0,0,.7);
-}
-:root[data-theme="dark"]{
-  --ground:#191c27; --surface:#262a3b; --sunk:#20242f; --inner:#1c1f2c; --raise:#2e3242;
-  --ink:#e8ebf7; --muted:#9da5c0; --dim:#6c7393; --line:#3a3f55;
-  --accent:#89ddff; --signal:#ffcb6b; --signal-ink:#191c27; --seg-on:#3a3f55;
-  --signal-soft:#3c3524; --signal-soft-text:#ffcb6b;
-  --ok:#c3e88d; --ok-soft:#2e3a26; --stop:#ff6e7f; --stop-soft:#42262e;
-  --neutral-soft:#333850; --neutral-soft-text:#d4d9ec;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -16px rgba(0,0,0,.7);
-}
-/* Amber is DEEPENED to #a2701a here, not lightened: #ffcb6b on white is 1.6:1. The
-   filled pill therefore takes white text, while amber TEXT on a pale ground is the
-   darker #7c5410 (--signal-soft-text), which is what the header and the rail label use. */
-:root[data-theme="light"]{
-  --ground:#eef0f6; --surface:#ffffff; --sunk:#e6e9f2; --inner:#f7f8fc; --raise:#f6f6f7;
-  --ink:#232635; --muted:#5f6786; --dim:#8c92ab; --line:#d9dce8;
-  --accent:#2e7cae; --signal:#a2701a; --signal-ink:#ffffff; --seg-on:#e6e9f2;
-  --signal-soft:#f3e7cd; --signal-soft-text:#7c5410;
-  --ok:#55803a; --ok-soft:#e6f0da; --stop:#c94e60; --stop-soft:#f9e4e8;
-  --neutral-soft:#e6e9f2; --neutral-soft-text:#454c68;
-  --shadow:0 1px 2px rgba(20,26,34,.05),0 8px 24px -16px rgba(20,26,34,.22);
+  --ground:#101318; --surface:#171b22; --sunk:#14171c; --inner:#1c212b; --raise:#1c212b;
+  --ink:#e9edf4; --muted:#9aa4b5; --dim:#6c7488; --line:#262c37;
+  --accent:#5ea2ff; --accent-ink:#14171c; --signal:#ff7ac2; --signal-ink:#14171c;
+  --signal-soft:#ff7ac21f; --signal-soft-text:#ff7ac2;
+  --ok:#5ea2ff; --ok-soft:#5ea2ff1f; --stop:#ff7ac2; --stop-soft:#ff7ac21f;
+  --neutral-soft:#1c212b; --neutral-soft-text:#e9edf4;
+  --shadow:0 24px 80px rgba(0,0,0,.5);
 }
 *,*::before,*::after{box-sizing:border-box}
 body{background:var(--ground);color:var(--ink);margin:0;
-  font:400 15px/1.55 "IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  font:400 15px/1.55 'Inter',system-ui,sans-serif;
   -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
 .board{width:min(100% - 2rem, 104rem);margin:0 auto;display:flex;flex-direction:column;
   gap:10px;padding:clamp(1.4rem,3vw,2.6rem) 0 4rem}
@@ -716,7 +699,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
 .tally{display:flex;gap:26px;margin:0;align-items:flex-end}
 .tally div{display:flex;flex-direction:column;text-align:right}
 .tally dt{order:2;font-size:12px;color:var(--muted);margin:0}
-.tally dd{order:1;margin:0;font:700 21px/1.25 "IBM Plex Sans",sans-serif;
+.tally dd{order:1;margin:0;font:700 21px/1.25 'Inter',system-ui,sans-serif;
   color:var(--ink);font-variant-numeric:tabular-nums}
 .tally dd .of{color:var(--dim)}
 .tally .live dd,.tally .live dt{color:var(--signal-soft-text)}
@@ -727,27 +710,20 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
 .tabs{display:flex;gap:8px;align-items:center;margin:22px 0 16px}
 .tabwrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center;min-width:0}
 .tab{border:1px solid var(--line);background:var(--surface);color:var(--muted);
-  font:500 13px/1 "IBM Plex Sans",sans-serif;padding:6px 16px;border-radius:999px;
+  font:500 13px/1 'Inter',system-ui,sans-serif;padding:6px 16px;border-radius:999px;
   cursor:pointer;white-space:nowrap}
 .tab:hover{color:var(--ink)}
 .tab.rest{color:var(--dim)}
-/* Active tab: filled amber. The 1px border stays and keeps its colour, so the active
-   pill is the same box as an inactive one and the row does not shift on a click. */
+/* Active tab: filled BLUE, not pink — which tab you are reading is the machine's
+   state, and pink is reserved for what wants a person. The 1px border stays and keeps
+   its colour, so the active pill is the same box as an inactive one and the row does
+   not shift on a click. */
 .board[data-tab="all"] .tab[data-pick="all"],
 .board[data-tab="you"] .tab[data-pick="you"],
 .board[data-tab="act"] .tab[data-pick="act"],
 .board[data-tab="fin"] .tab[data-pick="fin"],
-.board[data-tab="other"] .tab[data-pick="other"]{background:var(--signal);
-  border-color:var(--signal);color:var(--signal-ink);font-weight:700}
-.seg{margin-left:auto;display:flex;align-items:center;border:1px solid var(--line);
-  background:var(--surface);border-radius:999px;padding:3px;flex-shrink:0}
-.seg button{font-size:12px;line-height:1;padding:4px 10px;border-radius:999px;border:0;
-  background:none;color:var(--dim);margin:0}
-.seg button:hover{color:var(--muted);border-color:transparent}
-/* The active segment is decided by the ROOT ATTRIBUTE, so the control shows the theme
-   the page is actually in without the script touching it. No attribute means dark. */
-:root:not([data-theme="light"]) .seg .moon,
-:root[data-theme="light"] .seg .sun{background:var(--seg-on);color:var(--ink)}
+.board[data-tab="other"] .tab[data-pick="other"]{background:var(--accent);
+  border-color:var(--accent);color:var(--accent-ink);font-weight:700}
 
 /* One wrapper per project row, carrying the facets the tabs filter on. It is a
    SEPARATE attribute rather than more classes on the <details>, so the card's own
@@ -766,7 +742,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
 .rail{background:var(--sunk);border:1px solid var(--line);
   border-left:4px solid var(--signal);border-radius:12px;padding:16px;
   display:flex;flex-direction:column;gap:12px}
-.rail h2{margin:0;font:700 11px/1.4 "IBM Plex Sans",sans-serif;text-transform:uppercase;
+.rail h2{margin:0;font:700 11px/1.4 'Inter',system-ui,sans-serif;text-transform:uppercase;
   letter-spacing:.1em;color:var(--signal-soft-text)}
 .rail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
 /* The decision card, one layer further in. */
@@ -781,7 +757,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
 .what{width:100%;font-size:15px;font-weight:600;line-height:1.45;margin-top:6px;
   color:var(--ink)}
 .line .tid{margin-right:0;font-size:12px;color:var(--muted)}
-.verb{font:600 11px/1.5 "IBM Plex Mono",ui-monospace,monospace;text-transform:uppercase;
+.verb{font:600 11px/1.5 'JetBrains Mono',ui-monospace,Menlo,monospace;text-transform:uppercase;
   letter-spacing:.08em;color:var(--signal-soft-text);white-space:nowrap}
 /* The breadcrumb is --muted, not --dim: --dim under AA at this size on this ground. */
 .where{width:100%;font-size:13px;color:var(--muted);margin-top:4px}
@@ -796,13 +772,13 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
 .why summary:hover .what{color:var(--signal-soft-text)}
 .why p{margin:10px 0 0;color:var(--muted);line-height:1.5;max-width:52rem;
   font-size:13px;border-left:2px solid var(--line);padding-left:10px}
-button{font:500 13px/1 "IBM Plex Sans",sans-serif;cursor:pointer;border-radius:9px;
+button{font:500 13px/1 'Inter',system-ui,sans-serif;cursor:pointer;border-radius:10px;
   padding:9px 16px;border:1px solid var(--line);background:var(--raise);
   color:var(--ink)}
-button:hover{border-color:var(--signal)}
-/* THE ACTION ROW'S FIVE TREATMENTS, one per meaning: amber for a question, green for
-   approve, neutral for discuss and for the ref, red for reject. All soft fills, so no
-   button shouts louder than the amber rail already does. */
+button:hover{border-color:var(--accent)}
+/* THE ACTION ROW, IN TWO COLOURS: pink for the question and for reject, blue for
+   approve, neutral for discuss and for the ref. All soft fills, so no button shouts
+   louder than the pink rail already does. */
 .acts button{border:0;background:var(--neutral-soft);color:var(--neutral-soft-text)}
 .acts button:hover{filter:brightness(1.12)}
 .acts button.go{background:var(--ok-soft);color:var(--ok);font-weight:600;padding:9px 18px}
@@ -810,13 +786,13 @@ button:hover{border-color:var(--signal)}
 .acts button.ghost{background:var(--neutral-soft);color:var(--muted);font-size:13px;
   padding:9px 16px}
 .acts .qbtn{background:var(--signal-soft);color:var(--signal-soft-text);font-weight:600;
-  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;padding:9px 16px}
+  font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:13px;padding:9px 16px}
 .acts .qbtn.nonum{background:var(--neutral-soft);color:var(--muted)}
 
 /* Collapsed by default: no `open` attribute, and no script involved. */
-.proj{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.proj{background:var(--surface);border:1px solid var(--line);border-radius:12px}
 .phead{display:flex;flex-wrap:wrap;gap:16px;align-items:center;cursor:pointer;
-  padding:15px 20px;list-style:none;border-radius:14px}
+  padding:15px 20px;list-style:none;border-radius:12px}
 .phead::-webkit-details-marker{display:none}
 .phead::before{content:"▸";color:var(--dim);font-size:12px;flex-shrink:0}
 .proj[open] .phead::before{content:"▾"}
@@ -855,7 +831,7 @@ button:hover{border-color:var(--signal)}
 /* Another owner's work: the same card, dashed and set in mono, because it is context
    rather than your queue. Its own tab is where it lives now. */
 .proj.other{background:transparent;border-style:dashed}
-.proj.other .ptitle{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:14px;
+.proj.other .ptitle{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:14px;
   color:var(--muted)}
 .proj.other[open] .ptitle{color:var(--ink)}
 /* A project that wants you keeps its title at full weight even under the finished or
@@ -890,7 +866,7 @@ td{padding:0;vertical-align:middle;min-width:0}
 td:not(:first-child){padding-top:19px}
 tr.flight{box-shadow:inset 2px 0 0 var(--accent)}
 .tid{color:var(--dim);font-size:11px;margin-right:.4rem;
-  font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+  font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
 td:first-child{overflow-wrap:break-word}
 
 /* THE TASK CELL IS STACKED AT EVERY WIDTH: filename line 1, title line 2, so every
@@ -906,18 +882,18 @@ td:first-child{overflow-wrap:break-word}
 .tfile>.tid{margin-right:0;min-width:0;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis}
 .tmain{display:flex;flex-direction:column;align-items:flex-start;gap:.22rem;min-width:0}
-.tbtn{background:none;border:0;padding:0;font:400 14px/1.4 "IBM Plex Sans",sans-serif;
+.tbtn{background:none;border:0;padding:0;font:400 14px/1.4 'Inter',system-ui,sans-serif;
   color:var(--ink);text-align:left;border-radius:0}
 .tbtn:hover{color:var(--signal-soft-text)}
 /* THE PROMOTE CHIP RIDES IN THE PR COLUMN, where a draft has no PR to show. It is the
    only chip in the table that asks for something, and it still only COPIES a prompt. */
-.promote{font:600 11px/1.4 "IBM Plex Sans",sans-serif;padding:2px 8px;margin:0;
-  border:0;border-radius:5px;background:var(--ok-soft);color:var(--ok);
+.promote{font:600 11px/1.4 'Inter',system-ui,sans-serif;padding:2px 8px;margin:0;
+  border:0;border-radius:6px;background:var(--ok-soft);color:var(--ok);
   justify-self:start;white-space:nowrap}
 .promote:hover,.promote:focus-visible{filter:brightness(1.15)}
 /* The Q chip. Its TEXT is never on this page — the allowlist forbids question text. */
-.qbtn{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-weight:500;
-  color:var(--signal-soft-text);border:0;border-radius:5px;padding:2px 8px;
+.qbtn{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:11px;font-weight:500;
+  color:var(--signal-soft-text);border:0;border-radius:6px;padding:2px 8px;
   background:var(--signal-soft);font-variant-numeric:tabular-nums}
 .qs{display:inline-flex;gap:4px;flex-wrap:wrap}
 .qbtn:hover{filter:brightness(1.15)}
@@ -926,21 +902,21 @@ td:first-child{overflow-wrap:break-word}
 .qbtn.nonum{color:var(--muted);background:var(--neutral-soft)}
 button.ghost{font-size:13px;color:var(--muted)}
 .deps{white-space:normal}
-button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+button.dep{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px;
   padding:0 4px 0 0;color:var(--muted);background:none;border:0;
   font-variant-numeric:tabular-nums}
 button.dep:hover{color:var(--accent)}
 /* The PR cell wraps rather than stretching the task column: its track is a fixed 90px,
    so nine refs stack instead of taking the width from the task name. */
-td.prs{white-space:normal;font-family:"IBM Plex Mono",ui-monospace,monospace;
+td.prs{white-space:normal;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;
   font-size:13px;overflow-wrap:anywhere}
 .delivs{padding-top:4px}
 .delivs h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;
   color:var(--dim);font-weight:600}
 .delivs ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
-button.dlv{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;
+button.dlv{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px;
   padding:6px 10px;color:var(--muted);background:var(--neutral-soft);border:0;
-  border-radius:9px}
+  border-radius:10px}
 button.dlv:hover{color:var(--ink)}
 /* THE FIVE STATES AND THEIR GLYPHS. The glyph is markup, not a pseudo-element, so a
    status the board has never seen still renders as its own text with no glyph. */
@@ -948,16 +924,16 @@ button.dlv:hover{color:var(--ink)}
 .state.ok{color:var(--ok)} .state.accent{color:var(--accent)}
 .state.stop{color:var(--stop)} .state.dim{color:var(--dim)}
 .dim{color:var(--dim)} .sig{color:var(--signal-soft-text);font-weight:600}
-td.dim{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px}
+td.dim{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px}
 td a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent;
-  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px}
+  font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:13px}
 td a:hover,td a:focus-visible{border-bottom-color:currentColor}
-:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 .toast{position:fixed;left:50%;bottom:1.3rem;transform:translateX(-50%);z-index:9;
   display:flex;gap:.6rem;align-items:flex-start;
   background:var(--ink);color:var(--ground);font-size:13px;padding:.55rem .9rem;
-  border-radius:9px;box-shadow:var(--shadow);max-width:calc(100vw - 2rem);
+  border-radius:10px;box-shadow:var(--shadow);max-width:calc(100vw - 2rem);
   opacity:0;pointer-events:none;transition:opacity .18s}
 .toast.on{opacity:1}
 /* THE FAILURE STATE, and why it is not just a red message. On a `file://` origin the
@@ -966,7 +942,7 @@ td a:hover,td a:focus-visible{border-bottom-color:currentColor}
 .toast.fail{background:var(--stop);color:var(--ground);pointer-events:auto;
   user-select:text;-webkit-user-select:text}
 .toast.fail code{display:block;margin-top:.3rem;padding:.2rem .35rem;font-size:.86em;
-  background:rgba(0,0,0,.28);border-radius:3px;word-break:break-all;
+  background:rgba(0,0,0,.28);border-radius:6px;word-break:break-all;
   user-select:all;-webkit-user-select:all}
 .toast .x{display:none}
 .toast.fail .x{display:block;flex-shrink:0;background:none;border-color:transparent;
@@ -975,7 +951,7 @@ td a:hover,td a:focus-visible{border-bottom-color:currentColor}
 footer{border-top:1px solid var(--line);padding-top:.9rem;margin-top:1rem}
 footer p{margin:0 0 .5rem;font-size:12px;color:var(--dim);max-width:45rem}
 footer p:last-child{margin:0}
-code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.93em}
+code{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:.93em}
 
 /* ---- BELOW 760px: STACKED CARDS, A WRAPPED META LINE, 40px TOUCH TARGETS ----------
    The five-track grid is the one thing that cannot survive a phone, so the row becomes
@@ -993,7 +969,6 @@ code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.93em}
   .tabwrap{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
   .tabwrap::-webkit-scrollbar{display:none}
   .tab{flex:0 0 auto;font-size:12px;padding:6px 14px}
-  .seg button{font-size:11px;padding:3px 8px}
   .phead{padding:16px;gap:8px}
   .ptitle{font-size:14px;flex:1 1 100%}
   .pdate{margin-left:0;font-size:12px}
@@ -1021,32 +996,14 @@ code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.93em}
 </style>"""
 
 TABLE_SCRIPT = r"""<script>
-// The ONLY scripted behaviour: put a button's text on the clipboard, remember the
-// theme, and remember the tab. Everything else — layout, collapse, filtering, which
-// segment looks active — is markup and CSS, so scripting off costs the page nothing
-// but the clipboard and two remembered choices.
+// The ONLY scripted behaviour: put a button's text on the clipboard, and remember the
+// tab. Everything else — layout, collapse, filtering — is markup and CSS, so scripting
+// off costs the page nothing but the clipboard and one remembered choice.
 //
-// THIS SCRIPT IS IN THE HEAD, and that is what makes the theme restore flicker-free:
-// the attribute is on the root element before the first paint. The handler is delegated
-// off `document`, so nothing here needs the body to exist yet.
+// The handler is delegated off `document`, so nothing here needs the body to exist yet.
 (function(){
-  // DARK IS THE DEFAULT AND IT IS THE ABSENCE OF AN ATTRIBUTE — a stored choice is the
-  // only thing that ever writes one, so an unvisited page renders dark whatever the
-  // system prefers, and the moon segment lights up off the same absence.
-  var KEY='ai-bridge-board-theme';
-  try{
-    var saved=localStorage.getItem(KEY);
-    if(saved==='light'||saved==='dark'){ document.documentElement.setAttribute('data-theme',saved); }
-  }catch(err){}
   document.addEventListener('click', function(e){
     if(!e.target.closest) return;
-    var t=e.target.closest('[data-set-theme]');
-    if(t){
-      var v=t.getAttribute('data-set-theme');
-      document.documentElement.setAttribute('data-theme',v);
-      try{ localStorage.setItem(KEY,v); }catch(err){}
-      return;
-    }
     // The tab writes ONE attribute on the board and stops. Every hide is a CSS
     // selector on that attribute, so there is no list of rows to keep in step.
     var p=e.target.closest('[data-pick]');
@@ -1657,7 +1614,7 @@ def render_table():
              % ("live" if asks else "", len(asks)))
     o.append("</dl></header>")
 
-    # ---- the tab row: five filters over the SAME project rows, plus the theme ----
+    # ---- the tab row: five filters over the SAME project rows ----
     #
     # THE TABS ARE FILTERS, NEVER A SECOND VIEW. Each one hides project rows whose
     # wrapper does not carry its facet; nothing is re-derived, re-ordered or re-rendered,
@@ -1673,14 +1630,7 @@ def render_table():
     for pick, label, count in tabs:
         o.append('<button class="tab%s" data-pick="%s">%s · %d</button>'
                  % (" rest" if pick == "other" else "", pick, e(label), count))
-    o.append("</div>")
-    # ONE SEGMENTED CONTROL, and which segment looks active is decided by the root
-    # attribute in CSS — the script writes the attribute and nothing else.
-    o.append('<div class="seg" role="group" aria-label="Theme">'
-             '<button class="sun" data-set-theme="light" title="Light theme" '
-             'aria-label="Light theme">☀</button>'
-             '<button class="moon" data-set-theme="dark" title="Dark theme" '
-             'aria-label="Dark theme">☾</button></div></nav>')
+    o.append("</div></nav>")
 
     for d, msg in broken:
         o.append('<div class="snapnote"><strong>Unreadable snapshot.</strong> '
