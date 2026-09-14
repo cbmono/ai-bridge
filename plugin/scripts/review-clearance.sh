@@ -1413,7 +1413,7 @@ terminal_body=""; terminal_from=""
 stale_from=""; stale_at=""; unproven_from=""
 refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
 cleared_msg=""; ack_from=""; incremental_from=""; marker_outranked=""
-self_artifacts=0; self_at_head=0
+self_reviews=0; self_at_head=0
 while IFS=$'\t' read -r kind login state commit; do
   n=$((n + 1))
   body="$TMPD/body.$n"
@@ -1437,9 +1437,10 @@ while IFS=$'\t' read -r kind login state commit; do
   # objects at the head were invisible rather than refused: #227 carries two of them,
   # `COMMENTED` at the exact head, and nothing anywhere said why they did not count.
   if [ "$(norm "$login")" = "$(norm "$pr_author")" ]; then
-    self_artifacts=$((self_artifacts + 1))
-    [ "$kind" = "review" ] && [ "$commit" = "$head_sha" ] \
-      && self_at_head=$((self_at_head + 1))
+    if [ "$kind" = "review" ]; then
+      self_reviews=$((self_reviews + 1))
+      [ "$commit" = "$head_sha" ] && self_at_head=$((self_at_head + 1))
+    fi
     continue
   fi
 
@@ -1803,9 +1804,9 @@ fi
 # WHAT WAS EXCLUDED IS SAID OUT LOUD, FIRST. Both of these are artifacts an operator can
 # see in the browser, and a refusal that does not mention them reads as "the script did not
 # look". Printed on every non-clearing path below, before the answer itself.
-if [ "$self_artifacts" -gt 0 ]; then
-  echo "note: $self_artifacts artifact(s) on PR $pr are authored by $pr_author, the PR's OWN" >&2
-  echo "      author, $self_at_head of them review object(s) at this head. An author is never its" >&2
+if [ "$self_reviews" -gt 0 ]; then
+  echo "note: $self_reviews review object(s) on PR $pr are authored by $pr_author, the PR's OWN" >&2
+  echo "      author, $self_at_head of them at this head. An author is never its" >&2
   echo "      own independent reviewer ($AB_SCHEMA, clause 8), so they are REFUSED as" >&2
   echo "      evidence whatever their state, not merely uncounted." >&2
 fi
