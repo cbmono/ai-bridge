@@ -1991,8 +1991,9 @@ assert "...and documents 8" \
   "$(grep -q '^#   8  the reviewer SKIPPED this PR' "$SCRIPT" && echo 0 || echo 1)"
 # Both prose readers of exit 1 gained 8 with its remedy, in this same change: a tick that
 # reads an 8 its own table does not define falls through to a standing HOLD, silently.
-for reader in "$REPO_ROOT/plugin/agents/project-manager.md" \
-              "$REPO_ROOT/plugin/tick-steps/step-4-advance.md" \
+# `project-manager.md` is NOT one of them any more — #229 moved step 4's refusal table out
+# of it into the tick-step file, and the agent file only points at it now.
+for reader in "$REPO_ROOT/plugin/tick-steps/step-4-advance.md" \
               "$REPO_ROOT/plugin-yolo/companion/AUTONOMY.md"; do
   assert "$(basename "$reader") documents exit 8 and its remedy" \
     "$(grep -q '@coderabbitai review' "$reader" && grep -qi 'nobody ever asked' "$reader" \
