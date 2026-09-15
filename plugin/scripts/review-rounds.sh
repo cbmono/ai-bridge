@@ -75,11 +75,11 @@
 # THE COUNT IS A FLOOR, AND HERE IS EXACTLY WHERE IT LOSES A ROUND. A round evidenced ONLY
 # by an issue comment (route C) has no host-assigned pin — there is no `commit_id` on a
 # comment anywhere in the API — so it is attributed through the commit its body names, and
-# it is countable only while that commit is still one the host lists. Two things erode
-# that: a force-push can orphan the commit, and the vendor keeps ONE summary comment per
-# PR and EDITS it, so its body names only the latest range it read. The second is the
-# bigger limit and it has nothing to do with force-pushes: at most ONE route-C round is
-# ever visible on a PR, however many happened.
+# it is countable only while that commit is still one the host lists. Three things erode
+# that: a force-push can orphan the commit; the vendor keeps ONE summary comment per PR and
+# EDITS it, naming only the latest range it read; and the sibling consults route C only for
+# an account with NO review object, so one object silences that account's comment. Each
+# costs the SAME one round — route C is worth at most one, ever — so the floor is unchanged.
 #
 # NEITHER IS FIXABLE FROM WHAT THE HOST PUBLISHES, and this was measured rather than
 # assumed, on ai-bridge#34 (29 commits, 2 recorded force-pushes): the REST timeline's

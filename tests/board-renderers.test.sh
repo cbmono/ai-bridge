@@ -496,6 +496,16 @@ wait_for() { # <file> <needle> [max-tries]
   done
   return 1
 }
+wait_for_count() { # <file> <needle> <want> [max-tries] — the needle's Nth occurrence, not its first
+  local file="$1" needle="$2" want="$3" tries="${4:-200}" n=0 have
+  while (( n < tries )); do
+    have="$(grep -cF -- "$needle" "$file" 2>/dev/null || true)"
+    (( ${have:-0} >= want )) && return 0
+    sleep 0.05
+    n=$((n+1))
+  done
+  return 1
+}
 briefly() { # <env-prefix...> -- run the watcher until it announces itself, then stop it
   local log="$TMP/briefly.log"; : > "$log"
   # `exec`, so the background job IS the watcher and a TERM reaches it rather than the
@@ -578,7 +588,12 @@ kind: build
 status: ready
 ---
 TSK
-sleep 4
+# The same defect the two waits above already fixed, in the one hunk that still had it:
+# `sleep 4` is the assertion below turned into a guess about how long a re-render takes,
+# and on a loaded runner it loses — this is the pair that went red in CI at 9fdd8db while
+# passing on every laptop. The watcher writes the page BEFORE it logs `rendered`, so
+# waiting on the count carries the page assertion too.
+wait_for_count "$TMP/watch.log" "rendered" $(( BEFORE + 1 )) 400 || true
 AFTER="$(grep -c 'rendered' "$TMP/watch.log" || true)"
 assert "a task-document write triggers a re-render" "$(yes_if test "$AFTER" -gt "$BEFORE")"
 assert "…and the change is on the page"             "$(fhas 'WATCHED-CHANGE-appeared-while-watching' "$PAGE")"

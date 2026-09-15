@@ -9,6 +9,9 @@ drives the classifier against exactly what the reviewer published.
 |---|---|---|
 | `clean-review.pr29.md` | PR #29, head `8f40f2e` | a real review — "No actionable comments were generated in the recent review" |
 | `rate-limit-refusal.pr30.md` | PR #30, head `88c106a` | a REFUSAL published behind a green status check — "Review limit reached. Next included review available in 44 minutes" |
+| `ack-invocation.pr227.md` | PR #227, 2026-09-14T11:03:30Z | an ACKNOWLEDGEMENT — the auto-generated reply to `@coderabbitai review`, "✅ Action performed / Review finished", posted whether or not a review follows |
+| `pr227.api.json`, `pr228.api.json` | PRs #227 and #228, recorded 2026-09-14 | a whole PR as the host served it: `pulls/<n>` facts, `pulls/<n>/reviews` and `issues/<n>/comments`, so the classifier runs over the real payload offline |
+| `ack-prose.quoted-in-a-review.md` | derived from `ack-invocation.pr227.md` | the acknowledgement's VISIBLE prose with neither machine marker — what lands inside a review body that quotes an ack. The one DERIVED file here: appended to `clean-review.pr29.md` it is a review that reads like an ack, and it must still clear |
 
 The third shape the tests cover — **no reviewer signal at all** — needs no fixture:
 it is the absence of these files, and the test constructs it as an empty artifact list.
@@ -25,6 +28,18 @@ reads "Review limit reached" as clearance. On #30 that is exactly what happened:
 merged unreviewed and shipped a shell script at mode `100644`. Only the refusal
 *language* separates the two files, which is why the classifier tests language first
 and the head second.
+
+## Why #227 and #228 are recorded whole
+
+They are the false MERGE-CLEAR. Both cleared at **exit 0** on the reviewer's own
+review marker in a comment, while the only CodeRabbit review object on either sits at an
+**older** commit and the two review objects at the head are the PR author's own. Nothing
+short of the whole payload shows that: the clearance, the stale object and the author's
+objects are on three different endpoints.
+
+One field in each is **not** recorded — `mergeable`/`mergeStateStatus`, which the host
+reports as `null` once a PR is merged. Both are set to the pre-merge values (`MERGEABLE`,
+`CLEAN`), which is what they were: both PRs merged.
 
 ## Two properties of these files that the tests assert before relying on them
 
