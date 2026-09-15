@@ -292,7 +292,9 @@ pr: []
 # Notes
 $SECRET_BODY
 TSK
-# in-review + a PR  ⇒ awaiting "merge"
+# in-review + a PR + the tick's MERGEABLE read ⇒ awaiting "merge". Without that last
+# term this used to be `status` plus a link, which is how three CONFLICTING pull requests
+# were presented as merge rows on 2026-09-13.
 cat > "$ALPHA/projects/ci/tasks/task-002.md" <<TSK
 ---
 type: Task
@@ -302,7 +304,31 @@ status: in-review
 assignee: software-engineer
 depends_on: [ /projects/ci/tasks/task-001.md ]
 open_questions: []
+pr_mergeable: MERGEABLE
 pr: [ "https://github.com/acme/monorepo/pull/2725" ]
+---
+TSK
+# The same shape the host reported CONFLICTING: a rebase round, never a merge row.
+cat > "$ALPHA/projects/ci/tasks/task-009.md" <<TSK
+---
+type: Task
+title: Widen the retry window
+kind: build
+status: in-review
+assignee: software-engineer
+pr_mergeable: CONFLICTING
+pr: [ "https://github.com/acme/monorepo/pull/2726" ]
+---
+TSK
+# And a PR no tick has asked the host about. Absent is not MERGEABLE.
+cat > "$ALPHA/projects/ci/tasks/task-010.md" <<TSK
+---
+type: Task
+title: Drop the legacy shim
+kind: build
+status: in-review
+assignee: software-engineer
+pr: [ "https://github.com/acme/monorepo/pull/2727" ]
 ---
 TSK
 # blocked  ⇒ awaiting "unblock", the VERB and never the reason
@@ -855,7 +881,7 @@ RUN_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1
 assert "the run reports what it wrote"     "$(has 'SNAPSHOT.json' "$RUN_OUT")"
 assert "…with the project count"           "$(has '16 project(s)' "$RUN_OUT")"
 # 13, not 14: the done project's task is never counted, because it is never read.
-assert "…and the task count"                "$(has '13 task(s)' "$RUN_OUT")"
+assert "…and the task count"                "$(has '15 task(s)' "$RUN_OUT")"
 assert "…and the awaiting count (11 verbs across 5 live projects)" "$(has '11 awaiting' "$RUN_OUT")"
 # The run captures stderr too, and an awk that aborts mid-line says so THERE while still
 # exiting 0 and writing a file — a whole `deliverable_paths` key lost with the evidence
@@ -884,7 +910,7 @@ echo "== the field allowlist =="
 # `owner` is in this set DELIBERATELY and is the only identity field that is — see the
 # header. Removing it here is how the reversal would get silently undone, so the writer's
 # own header, this line, and per-owner-board.test.sh all have to move together.
-ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner deliverable_paths awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions open_question_ids advisor_notes depends_on prs repo number url '
+ALLOWED=' _schema _sensitivity _carries group generated_at counts projects tasks awaiting slug title description kind status autonomy owner deliverable_paths awaiting_close phase_progress done total phases file order id assignee phase in_flight open_questions open_question_ids advisor_notes depends_on prs pr_mergeable repo number url '
 extra_keys() { # <json file> <allowed> -> the keys present but not allowed
   python3 - "$1" "$2" <<'PYK'
 import json, sys
@@ -1081,6 +1107,16 @@ import json,sys
 d=json.load(open(sys.argv[1]))
 t=[t for p in d["projects"] for t in p["tasks"] if t["id"]=="task-002"][0]
 sys.exit(0 if t["in_flight"] is False and t["awaiting"]=="merge" else 1)' "$SNAP")"
+assert "a CONFLICTING in-review PR is a rebase round, not a merge row" "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"]=="task-009"][0]
+sys.exit(0 if t["awaiting"]=="" and t["in_flight"] is True and t["pr_mergeable"]=="CONFLICTING" else 1)' "$SNAP")"
+assert "a PR the tick never asked about gets no merge verb"            "$(yes_if python3 -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+t=[t for p in d["projects"] for t in p["tasks"] if t["id"]=="task-010"][0]
+sys.exit(0 if t["awaiting"]=="" and t["pr_mergeable"]=="UNKNOWN" else 1)' "$SNAP")"
 assert "a refined draft awaits approve"          "$(yes_if python3 -c '
 import json,sys
 d=json.load(open(sys.argv[1]))
@@ -1304,7 +1340,7 @@ sys.exit(0 if set(p["retained"]) == set(p["ci"]) and "owner" in p["retained"] el
 cp -R "$ALPHA/projects/retained" "$ALPHA/projects/notdone"
 sed -i.bak 's/^status: done$/status: active/' "$ALPHA/projects/notdone/project.md" && rm -f "$ALPHA/projects/notdone/project.md.bak"
 CTRL_OUT="$( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-22T00:00:00Z bash "$WRITER" 2>&1 )"
-assert "control: the same task under a LIVE project IS read (14 tasks)" "$(has '14 task(s)' "$CTRL_OUT")"
+assert "control: the same task under a LIVE project IS read (16 tasks)" "$(has '16 task(s)' "$CTRL_OUT")"
 assert "…and its title does reach the snapshot"  "$(fhas 'SENTINEL-DONE-PROJECT-TASK' "$SNAP")"
 # deliverable_paths comes off the SAME frontmatter parse every project already gets, not
 # off the done-project skip specifically — so a LIVE project carrying the key forwards it

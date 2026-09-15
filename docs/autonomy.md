@@ -186,8 +186,30 @@ last tick's answer is not this tick's. The full table:
 | **4** | an artifact that is stale or evidences nothing | ask for a review at this head |
 | **5** | terminal refusal — credits, billing, auth | a human fixes the reviewer |
 | **6** | a review at this head, refused by clause 9 (open threads) | answer the threads; do **not** re-request |
-| **7** | the PR CONFLICTS with its base | rebase; do **not** re-request a review |
+| **7** | the PR CONFLICTS with its base | `rebase-pr.sh` first; do **not** re-request a review |
 | **8** | skipped — auto reviews are off here, so NOBODY EVER ASKED | ask once at this head (`@coderabbitai review`); it never reopens by itself |
+
+**A 7 is tried by a script before it costs an agent.**
+`rebase-pr.sh <pr> --repo <org>/<repo> --dir <clone>` rebases in a throwaway worktree and
+resolves **only** the known merge-magnet shapes — an `EXPECTED_ASSERTIONS=N` counter (the
+three-way sum of both sides' deltas, which is neither side's number), a ratchet row both
+sides lowered (recomputed from the merged file), a comment history (both kept) — asserts
+the result parses and kept exactly one assignment, then pushes with an explicit
+`--force-with-lease=<ref>:<the host's own headRefOid>` and lets CI verify. **Exit 3 — a
+conflict it could not classify, with the file named — is the only exit that earns an agent
+round**, and it is the only one a stall round is recorded for: a rebase the script resolved
+cost nobody anything, so counting it would reach the cap on two clean rebases. Everything
+non-zero leaves the branch and the remote exactly as they were.
+
+**Where the answer is kept so the offline renderers agree with the host.**
+`review-clearance.sh --record <task-doc>` writes the read it just made to the task's
+`pr_mergeable:`. `write-snapshot.sh` is deterministic and no-network by contract, so
+without that record the board and `AWAITING.md` minted the 🔀 **merge** verb from
+`status: in-review` plus a PR link and nothing else. The verb now requires `MERGEABLE`;
+**absent is `UNKNOWN`, which is not mergeable**, and a `CONFLICTING` in-review task renders
+as in flight — a rebase round, not a queue position. It is not a cache consulted instead of
+asking: every tick overwrites it, which is what "re-read every tick" means for a renderer
+that cannot ask.
 
 **4 and 6 send you in opposite directions, which is why they are two codes.** Exit 4 means
 **ask for a review** — the one you have is stale or evidences nothing. Exit 6 means

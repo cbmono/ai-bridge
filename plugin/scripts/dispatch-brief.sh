@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# dispatch-brief.sh — the three fixed sections the PM pastes into a dispatch brief
+# dispatch-brief.sh — the four fixed sections the PM pastes into a dispatch brief
 # verbatim: `## Grounding (<repo>)`, the Service-doc entry points capped at 15 lines (or
 # one line telling the agent to draft the missing doc); `## Effort`, the files/LOC/turns
-# budget; and `## Commit attribution`, the resolved `commitAttribution` — answered here
-# so no agent reads that key itself.
+# budget; `## Commit attribution`, the resolved `commitAttribution` — answered here
+# so no agent reads that key itself; and `## Scratch`, a directory this task alone owns.
 # Usage: dispatch-brief.sh <task-doc> [--instance <bundle>]. Exit: 0 printed, 2 cannot
 # answer (no task doc, unreadable frontmatter). Never fails a dispatch — an absent config
 # key falls back to the documented default. Reasoning: ai-bridge-next/task-017 (bands),
-# task-031 (attribution).
+# task-031 (attribution), ai-bridge-v3/task-053 (scratch).
 set -uo pipefail
 
 GROUNDING_MAX_LINES=15
@@ -17,6 +17,7 @@ GROUNDING_MAX_LINES=15
 GROUNDING_HEADING='## Grounding'
 EFFORT_HEADING='## Effort'
 ATTRIBUTION_HEADING='## Commit attribution'
+SCRATCH_HEADING='## Scratch'
 
 usage() { sed -n '2,10p' "$0" >&2; exit 2; }
 
@@ -41,6 +42,15 @@ count_entries() { # <`[ "a", "b" ]` value> — always a number, so an absent fie
   printf '%s\n' "$1" | awk '
     { n = split($0, a, "\""); c = (n > 1) ? int(n / 2) : 0 }
     END { print c + 0 }'
+}
+
+worktree_path() { # <slug> — the task's recorded worktree, else where it will be created
+  local w r
+  w="$(field worktree "$FM")"
+  [ -n "$w" ] && { printf '%s' "$w"; return; }
+  w="$(cfg worktreeRoot "")"
+  [ -n "$w" ] || { r="$(cfg reposRoot "")"; [ -n "$r" ] && w="$r/_wt"; }
+  printf '%s' "${w:+$w/$1}"
 }
 
 cfg() { # <key> <default>
@@ -86,6 +96,7 @@ REPO="$(field target_repo "$FM")"
 CRITERIA="$(count_entries "$(field acceptance_criteria "$FM")")"
 SERVICE=""
 [ -n "$REPO" ] && [ -n "$INSTANCE" ] && SERVICE="$INSTANCE/knowledge/services/${REPO##*/}.md"
+TARGET_REPO="$REPO"
 [ -n "$REPO" ] || REPO="(no target_repo on the task)"
 
 printf '%s (%s)\n\n' "$GROUNDING_HEADING" "$REPO"
@@ -138,3 +149,29 @@ if [ "$(cfg commitAttribution claude)" = none ]; then
 else
   printf 'commitAttribution: claude — end every target-repo commit with the `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer the harness provides.\n'
 fi
+
+# The task slug is what makes this path unique: a tick spawns several agents into ONE
+# session, so every per-session path they are handed is the same path (ai-bridge-v3/task-053).
+SLUG="$(basename "$TASK" .md)"
+WT="$(worktree_path "$SLUG")"; [ -n "$WT" ] || WT='<worktree>'
+CLONE=""; REPOS_ROOT="$(cfg reposRoot "")"
+[ -n "$TARGET_REPO" ] && [ -n "$REPOS_ROOT" ] && CLONE="$REPOS_ROOT/${TARGET_REPO##*/}"
+
+IGNORED=unknown
+if [ -n "$CLONE" ] && git -C "$CLONE" rev-parse --git-dir >/dev/null 2>&1; then
+  if git -C "$CLONE" check-ignore -q "tmp/$SLUG/draft"; then IGNORED=yes; else IGNORED=no; fi
+fi
+
+case "$IGNORED" in
+  yes) SCRATCH="$WT/tmp/$SLUG"
+       NOTE="$(printf '`%s` ignores `tmp/` (`git check-ignore` in %s), so nothing you write here can reach a commit.' "$TARGET_REPO" "$CLONE")" ;;
+  no)  SCRATCH="${TMPDIR:-/tmp}"; SCRATCH="${SCRATCH%/}/ai-bridge-scratch/$SLUG"
+       NOTE="$(printf '`%s` does NOT ignore `tmp/` (`git check-ignore` in %s), so this path is outside the repo instead.' "$TARGET_REPO" "$CLONE")" ;;
+  *)   SCRATCH="$WT/tmp/$SLUG"
+       NOTE="$(printf 'No clone to check, so whether the repo ignores `tmp/` is UNKNOWN — run `git check-ignore -q tmp/%s` in your worktree before you write, and use a path outside the repo if it says no.' "$SLUG")" ;;
+esac
+
+printf '\n%s\n\n' "$SCRATCH_HEADING"
+printf 'Scratch directory — this task alone owns it. Create it, and keep every draft, probe and throwaway config inside it:\n%s\n' "$SCRATCH"
+printf 'Never the session scratchpad and never a path from another task: one tick spawns several agents into one session, and a shared `pr-body.md` is one a sibling overwrites.\n'
+printf '%s\n' "$NOTE"

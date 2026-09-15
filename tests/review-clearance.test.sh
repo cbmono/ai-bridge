@@ -2106,6 +2106,43 @@ MERGEABLE=CONFLICTING; MERGE_STATE=DIRTY
 expect "tick 2: same PR, same head, base moved -> 7" 7
 MERGEABLE=MERGEABLE; MERGE_STATE=CLEAN
 expect "tick 3: rebased -> clears again, from the host each time" 0
+# --- --record: the persist half, which is what the OFFLINE renderers read -------------
+# `write-snapshot.sh` cannot ask the host, so without a record the board minted a merge
+# verb from `status: in-review` plus a PR link — the 2026-09-13 failure itself. The value
+# is written in the call that made the read, so the two cannot disagree.
+echo
+echo "== --record persists the read where write-snapshot.sh can see it =="
+DOC="$TMP/task-042.md"
+mkdoc() { printf -- '---\ntype: Task\nstatus: in-review\npr: [ x ]\n---\n# Notes\n' > "$DOC"; }
+recorded() { sed -n 's/^pr_mergeable: //p' "$DOC"; }
+
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$CLEAN"
+MERGEABLE=MERGEABLE; MERGE_STATE=CLEAN; mkdoc
+expect "a clearing PR still clears with --record" 0 --record "$DOC"
+assert "…and the doc carries MERGEABLE"    "$([ "$(recorded)" = MERGEABLE ] && echo 0 || echo 1)"
+MERGEABLE=CONFLICTING; MERGE_STATE=DIRTY
+expect "a conflicting PR still answers 7" 7 --record "$DOC"
+assert "…and the SAME doc is overwritten, never appended to" \
+  "$([ "$(recorded)" = CONFLICTING ] && [ "$(grep -c '^pr_mergeable:' "$DOC")" = 1 ] && echo 0 || echo 1)"
+MERGEABLE=MERGEABLE; MERGE_STATE=DIRTY; mkdoc
+expect "mergeable=MERGEABLE with mergeStateStatus=DIRTY is still 7" 7 --record "$DOC"
+assert "…and DIRTY is recorded as CONFLICTING, not as MERGEABLE" \
+  "$([ "$(recorded)" = CONFLICTING ] && echo 0 || echo 1)"
+MERGEABLE=UNKNOWN; MERGE_STATE=UNKNOWN; mkdoc
+expect "an UNKNOWN read holds at 2" 2 --record "$DOC"
+assert "…and records UNKNOWN, which is not MERGEABLE" \
+  "$([ "$(recorded)" = UNKNOWN ] && echo 0 || echo 1)"
+assert "…and the task body is untouched" "$(grep -q '^# Notes' "$DOC" && echo 0 || echo 1)"
+MERGEABLE=MERGEABLE; MERGE_STATE=CLEAN
+expect "a --record naming no file is not a refusal" 0 --record "$TMP/no-such-task.md"
+assert "…and creates nothing" "$([ ! -e "$TMP/no-such-task.md" ] && echo 0 || echo 1)"
+assert "the PM prompt is told --record is not optional" \
+  "$(grep -q -- '--record` is not optional here' "$PM" && echo 0 || echo 1)"
+assert "the PM prompt tries rebase-pr.sh before it spends an agent" \
+  "$(grep -q 'TRY THE SCRIPT BEFORE YOU SPEND AN AGENT' "$PM" && echo 0 || echo 1)"
+assert "…and dispatches only on its exit 3" \
+  "$(grep -q 'Exit 3 is the only one that earns an agent round' "$PM" && echo 0 || echo 1)"
+
 assert "nothing in the script stores a mergeability answer" \
   "$(grep -qE 'mergeab|mergeState' "$SCRIPT" && \
      ! grep -vE '^[[:space:]]*#' "$SCRIPT" | grep -qE '(cache|CACHE)[^)]*merge' && echo 0 || echo 1)"

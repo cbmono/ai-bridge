@@ -348,21 +348,20 @@ ok "…and has no PreToolUse key at all" \
    "$(jq -r 'if (.hooks | has("PreToolUse")) then "present" else "absent" end' "$SETTINGS")" "absent"
 ok "…so neither hook name appears in it" \
    "$(grep -cE 'deny-destructive.sh|agent-control.sh' "$SETTINGS")" "0"
-# 4 -> 2 -> 0: ai-bridge-v5/task-002 consolidated the three SessionStart hooks into one
-# `session-banner.sh`; ai-bridge-v2/task-013 moved that one and `push-state.sh` into the
-# PLUGIN beside the two enforcement hooks, because a bundle carries no machinery for a
-# `"$CLAUDE_PROJECT_DIR"/.claude/hooks/…` command to resolve to. So the seeded
-# settings.json registers NO hook of any event, and every registration is counted on the
-# plugin manifest instead. Both halves, so "we deleted the block" cannot pass by deleting the
-# feature.
+# The seeded settings.json registers NO hook of any event; every hook is counted on the
+# plugin manifest instead. Both halves, so "we deleted the block" cannot pass by deleting
+# the feature. THE SCRIPT COUNT IS DERIVED FROM THE HOOK FILES ON DISK, not typed under a
+# `# N -> N` history — that shape is the merge magnet the Finding
+# `a-running-counter-annotated-by-a-comment-history-is-a-merge-magnet` names, and a hook
+# that ships without a manifest entry is exactly what this row is for. The REGISTRATION
+# total stays a literal on purpose: it counts events, not files, so deriving it from the
+# manifest would leave the row vouching for itself and a dropped `SubagentStop` — the
+# registration that drops a doom-loop counter when the agent ends — would pass.
+N_HOOK_FILES="$(ls -1 "$REPO"/plugin/hooks/*.sh 2>/dev/null | grep -c .)"
 ok "…and the seeded settings.json has no hooks key at all" \
    "$(jq -r 'if has("hooks") then "present" else "absent" end' "$SETTINGS")" "absent"
-# 5 -> 7 registrations across the SAME five scripts: `agent-control.sh` is registered on
-# `SubagentStart` and `SubagentStop` as well as `PreToolUse` — the two events that start and
-# drop its per-agent state. Both numbers are asserted so neither a lost script nor a lost
-# event passes.
-ok "…while the plugin manifest carries all five scripts" \
-   "$(jq -r '[.hooks[][].hooks[].command] | unique | length' "$HOOKSJSON")" "5"
+ok "…while the plugin manifest carries every hook file" \
+   "$(jq -r '[.hooks[][].hooks[].command] | unique | length' "$HOOKSJSON")" "$N_HOOK_FILES"
 ok "…across seven registrations" \
    "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "7"
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# dispatch-brief.test.sh — the two fixed sections a dispatch brief must carry are pinned
+# dispatch-brief.test.sh — the fixed sections a dispatch brief must carry are pinned
 # as GENERATED TEXT, not as a paragraph telling the PM to include them.
 #
 # WHY IT IS THE SCRIPT'S STDOUT. A brief is prose the project-manager composes at spawn
@@ -160,6 +160,59 @@ printf -- '---\ntype: Task\ntarget_repo: acme/widget\n---\n\nx\n' > "$TMP/nocrit
 OUT3="$(run "$TMP/nocrit.md" --instance "$TMP" 2>&1)"
 assert "no acceptance_criteria ⇒ 0, band small" "$(has "Files expected: ~6 (band small — 0 acceptance criteria)" "$OUT3")"
 assert "…and no shell error leaks into the brief" "$(hasnt "integer expression expected" "$OUT3")"
+
+echo "== Scratch is one directory per TASK, on a path the target repo ignores =="
+
+# A task's scratch path is unique because it is keyed on the TASK, so the fixture varies
+# the task and nothing else: same repo, same worktree, two documents.
+scratch_task() { # <doc> <worktree>
+  { printf -- '---\ntype: Task\ntarget_repo: acme/widget\n'
+    printf 'worktree: %s\nbranch: b\nacceptance_criteria: [ "one" ]\n---\n\nx\n' "$2"
+  } > "$1"
+}
+# The path line: the one under the Scratch heading that is not prose.
+scratch_path() { awk '/^## Scratch$/{f=1;next} f&&/^\//{print;exit}' <<<"$1"; }
+# <ignores-tmp?> — a target-repo clone at the reposRoot the fixture config names.
+clone() {
+  rm -rf "$TMP/repos"; mkdir -p "$TMP/repos/widget"
+  [ "$1" = yes ] && printf 'tmp/\n' > "$TMP/repos/widget/.gitignore"
+  git -c init.defaultBranch=main init -q "$TMP/repos/widget"
+  printf '{ "org": "acme", "reposRoot": "%s/repos" }\n' "$TMP" > "$TMP/instance.config.json"
+}
+
+mkdir -p "$TMP/projects/demo/tasks"
+scratch_task "$TMP/projects/demo/tasks/task-101-alpha.md" "$TMP/wt/alpha"
+scratch_task "$TMP/projects/demo/tasks/task-102-beta.md"  "$TMP/wt/beta"
+P1="$(scratch_path "$(run "$TMP/projects/demo/tasks/task-101-alpha.md")")"
+P2="$(scratch_path "$(run "$TMP/projects/demo/tasks/task-102-beta.md")")"
+assert "the Scratch heading carries a path"          "$(has "$TMP/wt/alpha/tmp/task-101-alpha" "$P1")"
+assert "…keyed on the task slug, not the session"    "$(has "task-101-alpha" "$P1")"
+assert "two tasks get two different scratch paths"   "$([ -n "$P1" ] && [ "$P1" != "$P2" ] && echo 0 || echo 1)"
+assert "…and the second names its own task"          "$(has "task-102-beta" "$P2")"
+
+if command -v python3 >/dev/null 2>&1 && command -v git >/dev/null 2>&1; then
+  clone yes
+  OUT4="$(run "$TMP/projects/demo/tasks/task-101-alpha.md" --instance "$TMP")"
+  assert "a repo that ignores tmp/ keeps scratch in the worktree" \
+    "$(eq "$(scratch_path "$OUT4")" "$TMP/wt/alpha/tmp/task-101-alpha")"
+  assert "…and says so, naming git check-ignore"     "$(has 'ignores `tmp/` (`git check-ignore`' "$OUT4")"
+
+  clone no                                  # same fixture, only the .gitignore removed
+  OUT5="$(run "$TMP/projects/demo/tasks/task-101-alpha.md" --instance "$TMP")"
+  assert "a repo that does NOT ignore tmp/ moves scratch out of it" \
+    "$(hasnt "$TMP/wt/alpha" "$(scratch_path "$OUT5")")"
+  assert "…and the path is still the task's alone"   "$(has "task-101-alpha" "$(scratch_path "$OUT5")")"
+  assert "…and the brief says the repo does not ignore it" "$(has 'does NOT ignore `tmp/`' "$OUT5")"
+
+  rm -rf "$TMP/repos"                       # no clone to check ⇒ UNKNOWN, never a claim
+  OUT6="$(run "$TMP/projects/demo/tasks/task-101-alpha.md" --instance "$TMP")"
+  assert "no clone ⇒ the ignore state is reported UNKNOWN" "$(has 'is UNKNOWN' "$OUT6")"
+  assert "…and it never claims the repo ignores it"        "$(hasnt 'ignores `tmp/` (`git check-ignore`' "$OUT6")"
+else
+  echo "  SKIP  check-ignore assertions (no python3 or no git)"
+fi
+
+assert "the PM is told to paste the Scratch heading" "$(has '`## Scratch`' "$(cat "$PM_DOC")")"
 
 echo "== it refuses rather than guessing =="
 
