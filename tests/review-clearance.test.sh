@@ -2155,7 +2155,7 @@ setup "$CLEAN_HEAD"; add_comment coderabbitai "$SKIP"
 expect "the recorded skip notice -> exit 8, not exit 1" 8
 says   "  ...saying nobody ever asked" "NOBODY HAS ASKED"
 says   "  ...and naming the command that asks" "@coderabbitai review"
-says   "  ...and which PR to spend a one-per-window quota on" "carries no"
+says   "  ...and which PR to spend a one-per-window quota on" "criteria table"
 
 # The other three machine notices keep the codes they already had. This is the whole
 # contract in four lines: one notice, one code.

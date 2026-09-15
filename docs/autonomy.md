@@ -155,7 +155,9 @@ reopen time), 5 is a **terminal** one that no waiting reopens (out of credits, u
 auth failure), 3 is no reviewer signal at all, 4 is an artifact that evidences no completed
 review or does not name the current head, **6 is a completed review at the current head
 that clause 9 refuses — a reviewer-authored thread is still unresolved, and the refusal
-names every open thread** — and 2 is a reviewer state it could not read — unverified, never
+names every open thread**, **8 is a skip notice — auto reviews are off on this repository,
+so nobody ever asked and nothing will, and the remedy is one `@coderabbitai review` comment
+at the current head** — and 2 is a reviewer state it could not read — unverified, never
 a pass. It answers *whether* a review happened and, on 6, whether the reviewer's own
 threads were answered; the other clauses above still decide whether that review **cleared**.
 
@@ -180,6 +182,7 @@ last tick's answer is not this tick's. The full table:
 | **5** | terminal refusal — credits, billing, auth | a human fixes the reviewer |
 | **6** | a review at this head, refused by clause 9 (open threads) | answer the threads; do **not** re-request |
 | **7** | the PR CONFLICTS with its base | rebase; do **not** re-request a review |
+| **8** | skipped — auto reviews are off here, so NOBODY EVER ASKED | ask once at this head (`@coderabbitai review`); it never reopens by itself |
 
 **4 and 6 send you in opposite directions, which is why they are two codes.** Exit 4 means
 **ask for a review** — the one you have is stale or evidences nothing. Exit 6 means

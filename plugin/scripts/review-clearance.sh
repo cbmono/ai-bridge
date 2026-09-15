@@ -1924,6 +1924,7 @@ if [ -n "$skip_from" ] && [ -z "$other_refusal" ]; then
   echo "        the PR. A request costs no review round. Where several PRs answer 8 and the" >&2
   echo "        quota is one review per window, spend it on the PR whose criteria table" >&2
   echo "        carries no \`✗\` — only that one can become merge-eligible." >&2
+  incremental_note
   exit 8
 fi
 
