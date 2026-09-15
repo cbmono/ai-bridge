@@ -364,13 +364,13 @@ while IFS= read -r sha; do
   OKF_ROUNDS_HEAD="$sha" PATH="$BIN:$PATH" \
     "$CLEARANCE" "$pr" ${R[@]+"${R[@]}"} --no-merge-check >/dev/null 2>&1
   rc=$?
-  # 5 IS A REFUSAL, LISTED HERE BESIDE THE OTHERS BECAUSE OMITTING IT IS A LIVE BUG, NOT A
-  # CONSERVATIVE DEFAULT. The sibling splits its refusal into transient (1) and terminal
-  # (5); either way NO round happened at that commit, which is exactly what 1, 3 and 4
-  # already mean here. Left off this list, a reviewer that ran out of credits would land in
-  # the `*` arm, and "the reviewer is broken" would read as "the round count is unknown" —
-  # refusing the count on every PR until somebody fixes billing. This file never re-decides
-  # what a review is; it only says a refusal is not a round.
+  # 5 AND 8 ARE REFUSALS, LISTED HERE BESIDE THE OTHERS BECAUSE OMITTING EITHER IS A LIVE
+  # BUG, NOT A CONSERVATIVE DEFAULT. The sibling splits its refusal into transient (1),
+  # terminal (5) and skipped-because-nobody-asked (8); NO round happened at that commit in
+  # any of them, which is exactly what 1, 3 and 4 already mean here. Left off this list, a
+  # reviewer out of credits — or the skip notice every PR carries where auto reviews are
+  # disabled — lands in the `*` arm, and "the reviewer did not review" reads as "the round
+  # count is unknown", refusing the count and unenforcing the cap on every one of them.
   # 6 IS A ROUND, AND IT IS THE ONE CODE ON THIS LIST THAT COUNTS AS ONE. The sibling
   # answers 6 when a review DID complete at that commit and SCHEMA.md clause 9 then refused
   # it — a reviewer-authored thread is still unresolved. A round happened; what is
@@ -382,7 +382,7 @@ while IFS= read -r sha; do
   # one. This is why adding an exit code to the sibling is a three-part change.
   case "$rc" in
     0|6) counted=yes ;;
-    1|3|4|5) ;;
+    1|3|4|5|8) ;;
     *) echo "error: review-clearance.sh exited $rc for PR $pr at $sha, which is neither" >&2
        echo "       a clearance nor one of its refusals. The reviewer state is unknown," >&2
        echo "       so the number of rounds is unknown. Refusing (fail closed)." >&2
@@ -398,7 +398,7 @@ while IFS= read -r sha; do
       rc=$?
       case "$rc" in
         0|6) counted=yes; break ;;   # a completed round, clause 9 notwithstanding — above
-        1|3|4|5) ;;
+        1|3|4|5|8) ;;                # every refusal, 8 (nobody asked) included — above
         # Fatal here for the same reason it is fatal above, and spelled out because the
         # temptation is to shrug it off as "that one account just did not answer": exit 2
         # is UNREADABLE reviewer state, and unreadable is indistinguishable from empty to

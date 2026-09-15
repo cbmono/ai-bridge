@@ -164,6 +164,17 @@
 #   7  the PR CANNOT MERGE: the host reports `mergeable` CONFLICTING or
 #      `mergeStateStatus` DIRTY at the current head. Nothing about the review was read.
 #      ANSWER IT BY REBASING, never by requesting a review — see below
+#   8  the reviewer SKIPPED this PR because reviews are not automatic here, and said so
+#      in its own notice: "Review skipped / Auto reviews are disabled … invoke the
+#      `@coderabbitai review` command". NOBODY EVER ASKED. ANSWER IT BY ASKING, at this
+#      head, once — see table 2e
+#
+# WHY 8 IS NOT 1, WHICH IS THE WHOLE OF THIS CODE. Exit 1 says "wait, it reopens with
+# nobody doing anything", and that is FALSE of a repository with auto reviews off: the
+# notice is posted on every push and no event will ever clear it. Measured 2026-09-15:
+# four PRs held for three consecutive ticks on exit 1, and one `@coderabbitai review`
+# comment was answered "Review triggered" in 4 seconds. Two refusals, opposite remedies,
+# and until now one code.
 #
 # MERGEABILITY IS THE FIRST CHECK, AND IT IS ITS OWN CODE (7). On 2026-09-13 three pull
 # requests were presented as merge rows while the host reported all three CONFLICTING /
@@ -385,6 +396,28 @@ not authenticated
 (repository|organi[sz]ation) is not (connected|authori[sz]ed|enabled)
 '
 
+# --- table 2e: which refusals NOBODY HAS ASKED OUT OF -------------------------
+# A SUB-CLASSIFIER of table 2b, exactly as 2d is of the tiers above it, and its whole
+# effect is exit 8 instead of exit 1. It cannot turn a review into a refusal and it cannot
+# clear anything.
+#
+# IT IS REACHED ONLY THROUGH TABLE 2b, AND THAT PLACEMENT IS THE CORRECTNESS QUESTION.
+# The vendor edits ONE summary comment in place, so this notice and a completed review's
+# walkthrough sit in the SAME body — measured 2026-09-15: #215 carries the skip marker and
+# 2 review objects, #213 the marker and 1. Table 2b is outranked by the review marker
+# (table 3), so a body carrying both is never a refusal here and can never answer 8.
+# Placing this beside the unconditional sentinel tier would tell the loop to ask again for
+# a review it already has — the same wasted round this code exists to stop.
+#
+# THE ROWS ARE THE VENDOR'S OWN NOTICE AND NOTHING ELSE. A notice not matched here keeps
+# exit 1: unknown stays the conservative answer, because 1 costs a tick and 8 costs a
+# request out of a one-review-per-window quota.
+SKIP_NOTICE='
+<!--[^>]*skip review by coderabbit\.ai[^>]*-->
+auto (incremental )?reviews? (are|is|have been) disabled
+to trigger a (single|first) review, invoke
+'
+
 # --- table 3: the reviewer's own MACHINE-EMITTED review marker ----------------
 # A row here outranks table 2b — never table 2a — and it is the evidence half of route C.
 #
@@ -566,7 +599,7 @@ all_patterns() {
   rows "$REFUSALS_SENTINEL"; rows "$NOT_YET"
   rows "$REFUSALS";          rows "$REVIEW_SENTINEL"
   rows "$REFUSALS_TERMINAL"; rows "$INVOCATION_ACK"
-  rows "$INCREMENTAL_NOTE"
+  rows "$INCREMENTAL_NOTE";  rows "$SKIP_NOTICE"
 }
 
 # Compile every row before anything is classified with it. A table that will not compile
@@ -782,7 +815,7 @@ R=()
 # `/repos/{owner}/{repo}/pulls/{n}/reviews` does expose it, alongside the review's
 # `state`, so the two API calls below are what make routes A and B structural.
 raw="$(gh pr view "$pr" ${R[@]+"${R[@]}"} \
-       --json url,number,headRefOid,author,mergeable,mergeStateStatus 2>/dev/null)" || {
+       --json url,number,headRefOid,author,mergeable,mergeStateStatus,commits 2>/dev/null)" || {
   echo "error: could not read PR $pr${repo:+ in $repo} — refusing (fail closed)" >&2
   exit 2
 }
@@ -790,8 +823,12 @@ raw="$(gh pr view "$pr" ${R[@]+"${R[@]}"} \
 # Every column is emitted unconditionally (`// ""`, never `// empty`): a jq array element
 # that vanishes shifts every field after it one left, and `cut -f` reads the wrong one.
 meta="$(printf '%s' "$raw" \
-        | jq -r '[.url, .headRefOid, (.author.login // ""), (.number // "" | tostring),
-                  (.mergeable // ""), (.mergeStateStatus // "")] | @tsv' \
+        | jq -r '. as $p
+                 | [.url, .headRefOid, (.author.login // ""), (.number // "" | tostring),
+                    (.mergeable // ""), (.mergeStateStatus // ""),
+                    ([ (.commits // [])[]
+                       | select(.oid == $p.headRefOid) | (.committedDate // "") ]
+                     | last // "")] | @tsv' \
           2>/dev/null)" || meta=""
 url="$(printf '%s' "$meta" | cut -f1)"
 head_sha="$(printf '%s' "$meta" | cut -f2)"
@@ -799,6 +836,7 @@ pr_author="$(printf '%s' "$meta" | cut -f3)"
 pr_number="$(printf '%s' "$meta" | cut -f4)"
 mergeable="$(printf '%s' "$meta" | cut -f5)"
 merge_state="$(printf '%s' "$meta" | cut -f6)"
+head_date="$(printf '%s' "$meta" | cut -f7)"
 nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
 [ -n "$url" ] && [ -n "$head_sha" ] && [ -n "$pr_number" ] && [ "$nwo" != "$url" ] || {
   echo "error: could not resolve the head SHA / repo of PR $pr — refusing (fail closed)" >&2
@@ -888,7 +926,8 @@ gh api "/repos/$nwo/pulls/$pr_number/reviews?per_page=100" --paginate \
   exit 2
 }
 gh api "/repos/$nwo/issues/$pr_number/comments?per_page=100" --paginate \
-  --jq '.[] | {login: (.user.login // ""), body: (.body // "")}' \
+  --jq '.[] | {login: (.user.login // ""), body: (.body // ""),
+               created: (.created_at // "")}' \
   > "$TMPD/comments.ndjson" 2>/dev/null || {
   echo "error: could not read the comments on PR $pr ($nwo) — refusing. A refusal this" >&2
   echo "       script cannot see is a refusal that did not happen, and that is a merge." >&2
@@ -947,10 +986,11 @@ SEP="okf-$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')"
 jq -rn --arg s "$SEP" --slurpfile rv "$TMPD/reviews.ndjson" \
                        --slurpfile cm "$TMPD/comments.ndjson" '
     ( ($rv[] | {kind:"review",  login:(.login // ""), state:(.state // ""),
-                commit:(.commit // ""), body:(.body // "")}),
+                commit:(.commit // ""), created:"",                body:(.body // "")}),
       ($cm[] | {kind:"comment", login:(.login // ""), state:"",
-                commit:"",              body:(.body // "")}) )
-    | "\($s)\t\(.kind)\t\(.login)\t\(.state)\t\(.commit)", .body
+                commit:"",              created:(.created // ""), body:(.body // "")}) )
+    | "\($s)\u001f\(.kind)\u001f\(.login)\u001f\(.state)\u001f\(.commit)\u001f\(.created)",
+      .body
   ' 2>/dev/null > "$TMPD/stream" || {
   echo "error: could not parse the artifacts on PR $pr — refusing (fail closed)" >&2
   exit 2
@@ -958,7 +998,7 @@ jq -rn --arg s "$SEP" --slurpfile rv "$TMPD/reviews.ndjson" \
 
 : > "$TMPD/index"
 awk -v s="$SEP" -v dir="$TMPD" '
-  substr($0, 1, length(s) + 1) == s "\t" {
+  substr($0, 1, length(s) + 1) == s "\037" {
     if (f) close(f)
     n++
     print substr($0, length(s) + 2) >> (dir "/index")
@@ -1342,6 +1382,25 @@ names_head() {
   grep -qxF -f "$TMPD/prefixes" "$TMPD/toks"
 }
 
+# posted_at_head <artifact created_at> — was this COMMENT written after the current head
+# was pushed? The second half of the exit-8 bound, and the only half that can ever fire
+# against this vendor: CodeRabbit's acknowledgement names NO commit at all — its one hex
+# token is a 64-character invocation hash, which `names_head` rejects by design — so a
+# pin on what the body says would be a bound that reads as implemented and never holds.
+# A comment created at or after the head commit's own date cannot be a receipt for an
+# earlier head. Both timestamps must be the host's RFC 3339 UTC; anything else is unknown
+# and unknown leaves the ask open, which is the cheap direction (one comment, no round).
+stamp() { # <timestamp> -> comparable digits, or nothing at all
+  printf '%s' "$1" | grep -Eqx '[0-9]{4}(-[0-9]{2}){2}T([0-9]{2}:){2}[0-9]{2}Z' || return 1
+  printf '%s' "$1" | tr -cd '0-9'
+}
+head_stamp="$(stamp "$head_date")" || head_stamp=""
+posted_at_head() {
+  [ -n "$head_stamp" ] || return 1
+  posted_stamp="$(stamp "$1")" || return 1
+  [ "$posted_stamp" -ge "$head_stamp" ]
+}
+
 # refusal_concerns_head <stripped-body-file> — is this refusal about the commit being
 # cleared? Consulted only to decide whether a CONTENTLESS review object at the head may
 # outrank it, and only in the closing direction.
@@ -1427,9 +1486,15 @@ n=0; considered=0; refusal_body=""; refusal_from=""; refusal_kind=""
 terminal_body=""; terminal_from=""
 stale_from=""; stale_at=""; unproven_from=""
 refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
-cleared_msg=""; ack_from=""; incremental_from=""; marker_outranked=""
+cleared_msg=""; ack_from=""; ack_at_head=""; incremental_from=""; marker_outranked=""
+skip_from=""; other_refusal=""
 self_reviews=0; self_at_head=0
-while IFS=$'\t' read -r kind login state commit; do
+# THE FIELDS ARE UNIT-SEPARATED, NOT TAB-SEPARATED, and that is not decoration: a tab is
+# IFS WHITESPACE, so `read` collapses a run of them into one delimiter and every empty
+# field shifts the rest left. A comment's empty state and commit used to sit at the end of
+# the row where the loss was invisible; the moment a field followed them, it arrived in
+# `state`. \037 is not whitespace, so an empty field stays an empty field.
+while IFS=$'\037' read -r kind login state commit created; do
   n=$((n + 1))
   body="$TMPD/body.$n"
   [ -f "$body" ] || : > "$body"
@@ -1498,6 +1563,7 @@ while IFS=$'\t' read -r kind login state commit; do
     elif [ -n "$(hits "$REFUSALS" "$TMPD/stripped")" ] \
       && [ -z "$(hits "$REVIEW_SENTINEL" "$TMPD/strict")" ]; then
       refusal=yes; kind_of_refusal=declined
+      [ -n "$(hits "$SKIP_NOTICE" "$TMPD/stripped")" ] && kind_of_refusal=skipped
     fi
   fi
   fatal_grep
@@ -1508,6 +1574,15 @@ while IFS=$'\t' read -r kind login state commit; do
     # same reason. Nothing clears on this answer — it is consulted below only to stop a
     # CONTENTLESS review object from outranking a refusal published at the same commit.
     refusal_concerns_head "$TMPD/stripped" && refusal_at_head=yes
+    # A SKIP NOTICE ONLY ANSWERS 8 WHERE IT IS THE WHOLE STORY. Any other refusal on the
+    # PR means somebody DID ask and the reviewer answered — a rate limit is the ordinary
+    # answer to the very request exit 8 asks for — so it demotes the PR back to exit 1,
+    # whatever order the host streamed the two artifacts in.
+    if [ "$kind_of_refusal" = skipped ]; then
+      [ -n "$skip_from" ] || { skip_from="$login"; cp "$TMPD/stripped" "$TMPD/skip"; }
+    else
+      other_refusal=yes
+    fi
     [ -n "$refusal_body" ] || { refusal_body="$TMPD/refusal"; refusal_from="$login"
                                 refusal_kind="$kind_of_refusal"
                                 cp "$TMPD/stripped" "$TMPD/refusal"; }
@@ -1537,6 +1612,11 @@ while IFS=$'\t' read -r kind login state commit; do
   # nor the refusal tiers above, and clears nothing at any head (table 3b).
   if [ "$kind" != "review" ] && [ -n "$(hits "$INVOCATION_ACK" "$TMPD/stripped")" ]; then
     [ -n "$ack_from" ] || ack_from="$login"
+    # An ack made AT this head is the record that the exit-8 ask has already been made,
+    # and it is what bounds that ask to once per head (see the exit-8 block). Two ways to
+    # be at the head, because the real acknowledgement carries no SHA to name: the body
+    # names it, or the comment was posted after the head commit's own date.
+    { names_head "$TMPD/strict" || posted_at_head "$created"; } && ack_at_head=yes
     [ -n "$(hits "$INCREMENTAL_NOTE" "$TMPD/stripped")" ] && incremental_from="$login"
     fatal_grep
     continue
@@ -1861,6 +1941,34 @@ if [ -n "$terminal_from" ]; then
   echo "        fallback reviewer instead. Either way it is a decision, and it is not this" >&2
   echo "        script's and not the caller's." >&2
   exit 5
+fi
+
+# NOBODY EVER ASKED. Reported before the transient refusal below and separately from it,
+# because the remedy inverts: exit 1 is answered by waiting and this one never reopens on
+# its own. An ack at this head means the ask has already been made, which is a wait after
+# all — so it goes back to exit 1 and the PR is asked once per head, not once per tick.
+if [ -n "$skip_from" ] && [ -z "$other_refusal" ]; then
+  refusal_hits "$TMPD/skip" | tr -d '\000-\010\013-\037' \
+                            | sed -e 's/^[[:space:]]*\(>[[:space:]]*\)*//' \
+                                  -e 's/^[*#[:space:]]*//' -e 's/[*[:space:]]*$//' \
+                                  -e 's/^/          | /' > "$TMPD/skip-quote"
+  if [ -n "$ack_at_head" ]; then
+    echo "refuse: $skip_from skipped PR $pr, and $ack_from has ALREADY been asked for a review" >&2
+    echo "        at head $head_sha — its acknowledgement was posted here. Wait for" >&2
+    echo "        that review; do not ask again at this head. It said:" >&2
+    cat "$TMPD/skip-quote" >&2
+    exit 1
+  fi
+  echo "refuse: $skip_from SKIPPED PR $pr — reviews are not automatic on this repository, so" >&2
+  echo "        NOBODY HAS ASKED for one at head $head_sha and nothing will ever ask. This" >&2
+  echo "        does NOT reopen by itself, which is the whole difference from exit 1. It said:" >&2
+  cat "$TMPD/skip-quote" >&2
+  echo "        Request one review, at THIS head, by commenting \`@coderabbitai review\` on" >&2
+  echo "        the PR. A request costs no review round. Where several PRs answer 8 and the" >&2
+  echo "        quota is one review per window, spend it on the PR whose criteria table" >&2
+  echo "        carries no \`✗\` — only that one can become merge-eligible." >&2
+  incremental_note
+  exit 8
 fi
 
 if [ -n "$refusal_body" ]; then

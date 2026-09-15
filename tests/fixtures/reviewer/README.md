@@ -11,6 +11,8 @@ drives the classifier against exactly what the reviewer published.
 | `rate-limit-refusal.pr30.md` | PR #30, head `88c106a` | a REFUSAL published behind a green status check — "Review limit reached. Next included review available in 44 minutes" |
 | `ack-invocation.pr227.md` | PR #227, 2026-09-14T11:03:30Z | an ACKNOWLEDGEMENT — the auto-generated reply to `@coderabbitai review`, "✅ Action performed / Review finished", posted whether or not a review follows |
 | `pr227.api.json`, `pr228.api.json` | PRs #227 and #228, recorded 2026-09-14 | a whole PR as the host served it: `pulls/<n>` facts, `pulls/<n>/reviews` and `issues/<n>/comments`, so the classifier runs over the real payload offline |
+| `skip-notice.pr229.md` | PR #229, 2026-09-15T00:03Z | a SKIP NOTICE — "Review skipped / Auto reviews are disabled on this repository … To trigger a single review, invoke the `@coderabbitai review` command". Not a quota refusal: nobody ever asked, and it never reopens by itself (exit 8) |
+| `skip-beside-review.pr215.md` | PR #215, head `3e83817` | the SAME skip marker in the SAME body as a completed review's walkthrough — the vendor edits one summary comment in place. #215 carries it beside 2 CodeRabbit review objects, #213 beside 1. A PR that HAS been reviewed must never answer exit 8 |
 | `ack-prose.quoted-in-a-review.md` | derived from `ack-invocation.pr227.md` | the acknowledgement's VISIBLE prose with neither machine marker — what lands inside a review body that quotes an ack. The one DERIVED file here: appended to `clean-review.pr29.md` it is a review that reads like an ack, and it must still clear |
 
 The third shape the tests cover — **no reviewer signal at all** — needs no fixture:

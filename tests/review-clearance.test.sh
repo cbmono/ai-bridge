@@ -37,11 +37,15 @@ set -uo pipefail
 
 SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts/review-clearance.sh"
 SCRIPTS="$(cd "$(dirname "$0")/.." && pwd)/plugin/scripts"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FIXTURES="$(cd "$(dirname "$0")" && pwd)/fixtures/reviewer"
 CLEAN="$FIXTURES/clean-review.pr29.md"
 REFUSAL="$FIXTURES/rate-limit-refusal.pr30.md"
 ACK="$FIXTURES/ack-invocation.pr227.md"
 ACK_PROSE="$FIXTURES/ack-prose.quoted-in-a-review.md"
+SKIP="$FIXTURES/skip-notice.pr229.md"
+SKIP_REVIEWED="$FIXTURES/skip-beside-review.pr215.md"
+SKIP_REVIEWED_HEAD="3e83817779c0cc00b0e7e8f7cc352bd120670444"
 CLEAN_HEAD="8f40f2ed565a31e141f5ae54a6935ad0810314c4"
 REFUSAL_HEAD="88c106a8dd2b9ae14e001918022d4909e5357460"
 OTHER_SHA="0123456789abcdef0123456789abcdef01234567"
@@ -118,11 +122,14 @@ export PATH="$TMP/bin:$PATH"
 
 # --- fixture builders ---------------------------------------------------------
 HEAD=""; AUTHOR=""; REVIEWS=""; COMMENTS=""; THREADS=""; THREADS_MORE=""
-MERGEABLE=""; MERGE_STATE=""
+MERGEABLE=""; MERGE_STATE=""; HEAD_DATE=""
 
-setup() { # start from: a readable PR at <head>, authored by "dev", with no artifacts
+setup() { # start from: a readable PR at <head> [pushed at <date>], authored by "dev"
   rm -rf "$FIX"; mkdir -p "$FIX"
   HEAD="${1:-$CLEAN_HEAD}"; AUTHOR="dev"; REVIEWS='[]'; COMMENTS='[]'
+  # No commit date by default — the PR's commit list is read only to bound the exit-8 ask,
+  # so every case written before that bound existed asks exactly what it was written to ask.
+  HEAD_DATE="${2:-}"
   # A MERGEABLE/CLEAN PR is the default, so every case written before the mergeability
   # check existed keeps asking exactly the question it was written to ask. UNKNOWN holds
   # at exit 2, so a fixture that simply omitted these would refuse the whole file.
@@ -139,6 +146,13 @@ body_file() { # <text...> -> a file holding it, so every artifact arrives the sa
 add_comment() { # <login> <body-file>
   COMMENTS="$("$REAL_JQ" --arg l "$1" --rawfile b "$2" \
               '. + [{user:{login:$l}, body:$b}]' <<<"$COMMENTS")"
+}
+
+# The same comment, with the host's own `created_at` on it — which is what says whether it
+# was written at the current head when its body names no commit.
+add_comment_at() { # <login> <created_at> <body-file>
+  COMMENTS="$("$REAL_JQ" --arg l "$1" --arg t "$2" --rawfile b "$3" \
+              '. + [{user:{login:$l}, body:$b, created_at:$t}]' <<<"$COMMENTS")"
 }
 
 # The host reports no author at all for an artifact from a deleted account, and `gh` passes
@@ -167,9 +181,10 @@ add_thread() { # <isResolved> <path> <line|null> <login|null> <url> <first-line-
 
 write_pr() {
   "$REAL_JQ" -n --arg h "$HEAD" --arg a "$AUTHOR" \
-              --arg m "$MERGEABLE" --arg s "$MERGE_STATE" \
+              --arg m "$MERGEABLE" --arg s "$MERGE_STATE" --arg hd "$HEAD_DATE" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-      author:{login:$a}, mergeable:$m, mergeStateStatus:$s}' > "$FIX/pr_json"
+      author:{login:$a}, mergeable:$m, mergeStateStatus:$s,
+      commits:(if $hd == "" then [] else [{oid:$h, committedDate:$hd}] end)}' > "$FIX/pr_json"
   printf '%s' "$REVIEWS"  > "$FIX/reviews_json"
   printf '%s' "$COMMENTS" > "$FIX/comments_json"
   "$REAL_JQ" -n --argjson t "$THREADS" --argjson more "$THREADS_MORE" \
@@ -1644,10 +1659,12 @@ add_comment coderabbitai "$(body_file "${skip_notice[@]}" \
 expect "refusal prose beside a real review marker -> a review" 0
 
 # ...and the same notice with NOTHING evidencing a review is still a refusal. This is the
-# control: the narrowing keys on the machine marker, not on the word "skipped".
+# control: the narrowing keys on the machine marker, not on the word "skipped". It is
+# exit 8 rather than exit 1 since the skip tier — a refusal either way, and the remedy for
+# this one is to ask (see "a SKIP NOTICE is not a quota refusal").
 setup "$CLEAN_HEAD"
 add_comment coderabbitai "$(body_file "${skip_notice[@]:0:4}" "at $CLEAN_HEAD")"
-expect "…the same notice with no review marker -> still a refusal" 1
+expect "…the same notice with no review marker -> still a refusal" 8
 
 # THE ASYMMETRY THIS FIXES, AND THE ONE IT DOES NOT — corrected from an earlier claim in
 # this file that "every vendor now gets the same answer", which is half true. The
@@ -1952,7 +1969,7 @@ THREADS_MORE=true
 expect "a second page, but page 1 HAS an open thread -> 6" 6
 
 echo
-echo "== the third part of the three-part change: the callers know code 6 =="
+echo "== the third part of the three-part change: the callers know codes 6 and 8 =="
 # ADDING AN EXIT CODE IS A THREE-PART CHANGE AND THE THIRD PART IS THE ONE THAT BREAKS.
 # `review-rounds.sh` lists the sibling's refusals as `1|3|4|5` over a FATAL `*` default, so
 # a new code lands in the default and turns "there is an open thread" into "the round count
@@ -1960,7 +1977,9 @@ echo "== the third part of the three-part change: the callers know code 6 =="
 # PR: these are the two arms, and both must count 6 as a ROUND — a review DID complete.
 ROUNDS="$SCRIPTS/review-rounds.sh"
 assert "review-rounds.sh has no un-updated 1|3|4|5 arm left" \
-  "$(grep -cE '^\s*1\|3\|4\|5\)' "$ROUNDS" | grep -qx 2 && echo 0 || echo 1)"
+  "$([ "$(grep -cE '^\s*1\|3\|4\|5\)' "$ROUNDS")" = 0 ] && echo 0 || echo 1)"
+assert "...and both non-counting arms list 8 — a skip notice is not a round" \
+  "$(grep -cE '^\s*1\|3\|4\|5\|8\)' "$ROUNDS" | grep -qx 2 && echo 0 || echo 1)"
 assert "...and both of its counting arms accept 6 as a completed round" \
   "$(grep -cE '^\s*0\|6\)' "$ROUNDS" | grep -qx 2 && echo 0 || echo 1)"
 assert "required-checks.sh tells a 6 not to request another review" \
@@ -1968,6 +1987,18 @@ assert "required-checks.sh tells a 6 not to request another review" \
 # The code is documented where a caller reads it, not only where it is raised.
 assert "the exit-code table documents 6" \
   "$(grep -q '^#   6  a review artifact DOES evidence' "$SCRIPT" && echo 0 || echo 1)"
+assert "...and documents 8" \
+  "$(grep -q '^#   8  the reviewer SKIPPED this PR' "$SCRIPT" && echo 0 || echo 1)"
+# Both prose readers of exit 1 gained 8 with its remedy, in this same change: a tick that
+# reads an 8 its own table does not define falls through to a standing HOLD, silently.
+# `project-manager.md` is NOT one of them any more — #229 moved step 4's refusal table out
+# of it into the tick-step file, and the agent file only points at it now.
+for reader in "$REPO_ROOT/plugin/tick-steps/step-4-advance.md" \
+              "$REPO_ROOT/plugin-yolo/companion/AUTONOMY.md"; do
+  assert "$(basename "$reader") documents exit 8 and its remedy" \
+    "$(grep -q '@coderabbitai review' "$reader" && grep -qi 'nobody ever asked' "$reader" \
+       && echo 0 || echo 1)"
+done
 
 echo
 echo "== a PR that cannot merge is refused BEFORE anything else is read =="
@@ -2119,6 +2150,92 @@ assert "…and is the acknowledgement's own wording, verbatim" \
 setup "$CLEAN_HEAD"; add_comment coderabbitai "$(cat "$CLEAN" "$ACK_PROSE" > "$TMP/review-plus-ack"; printf '%s' "$TMP/review-plus-ack")"
 expect "a real review that also quotes the ack prose -> still a review" 0
 says   "  ...pinned to the head, not skipped as a receipt" "$CLEAN_HEAD"
+
+echo
+echo "== a SKIP NOTICE is not a quota refusal =="
+# Two refusals with opposite remedies shared exit 1 until now: a rate limit reopens by
+# itself, and "Auto reviews are disabled … invoke the `@coderabbitai review` command" never
+# does. Measured 2026-09-15: four PRs held for three ticks on exit 1 while one comment
+# would have got a review in 4 seconds.
+assert "the recorded skip notice exists" "$(yes_if test -s "$SKIP")"
+assert "…and carries the vendor's own skip marker" \
+  "$(yes_if grep -Fq 'auto-generated comment: skip review by coderabbit.ai' "$SKIP")"
+assert "…and carries NO rate-limit sentinel, so 8 is not rescuing a quota refusal" \
+  "$(yes_if bash -c '! grep -qiE "rate.limited by|limit reached" "$1"' _ "$SKIP")"
+
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$SKIP"
+expect "the recorded skip notice -> exit 8, not exit 1" 8
+says   "  ...saying nobody ever asked" "NOBODY HAS ASKED"
+says   "  ...and naming the command that asks" "@coderabbitai review"
+says   "  ...and which PR to spend a one-per-window quota on" "criteria table"
+
+# The other three machine notices keep the codes they already had. This is the whole
+# contract in four lines: one notice, one code.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"
+expect "…while the recorded rate-limit notice stays exit 1" 1
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$ACK"
+expect "…and the acknowledgement stays exit 4" 4
+
+# THE TIER PLACEMENT, WHICH IS THE CORRECTNESS QUESTION. The vendor edits ONE summary
+# comment in place, so the skip marker and a completed review's walkthrough sit in the same
+# body — #215 carries the marker and 2 review objects, #213 the marker and 1. Exit 8 is
+# reached only through table 2b, which the review marker outranks, so a PR that HAS been
+# reviewed can never be told to ask again.
+assert "the coexistence fixture exists" "$(yes_if test -s "$SKIP_REVIEWED")"
+assert "…and carries the vendor's skip marker" \
+  "$(yes_if grep -Fq "skip review by coderabbit.ai" "$SKIP_REVIEWED")"
+assert "…and the completed review's walkthrough marker, in that same body" \
+  "$(yes_if grep -Fqx "<!-- walkthrough_start -->" "$SKIP_REVIEWED")"
+setup "$SKIP_REVIEWED_HEAD"; add_comment coderabbitai "$SKIP_REVIEWED"
+expect "a skip marker BESIDE a real review -> the review, never 8" 0
+setup "$OTHER_SHA"; add_comment coderabbitai "$SKIP_REVIEWED"
+expect "…and at another head it is STALE, still never 8" 4
+
+# ANY OTHER REFUSAL ON THE PR MEANS SOMEBODY DID ASK. A rate limit is the ordinary answer
+# to the very request exit 8 asks for, so it puts the PR back on exit 1 — wait, do not ask
+# again — whatever order the host streamed the two comments in.
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$SKIP"; add_comment coderabbitai "$REFUSAL"
+expect "a skip notice beside a rate limit -> exit 1, the quota answer" 1
+setup "$REFUSAL_HEAD"; add_comment coderabbitai "$REFUSAL"; add_comment coderabbitai "$SKIP"
+expect "…and the same two in the other order" 1
+
+# WHAT BOUNDS THE ASK TO ONCE PER HEAD. The remedy is otherwise stateless, and four PRs at
+# 8 would produce four requests every tick. An acknowledgement naming THIS head is the
+# record that the ask has already been made.
+ACK_AT_HEAD="$(body_file \
+  '<!-- CodeRabbit review command invocation: v2:abc -->' \
+  '✅ Action performed' "Review triggered for $CLEAN_HEAD.")"
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$SKIP"; add_comment coderabbitai "$ACK_AT_HEAD"
+expect "a skip notice already asked at this head -> hold, not ask again" 1
+says   "  ...and says the ask has been made" "ALREADY been asked"
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$SKIP"
+add_comment coderabbitai "$(body_file \
+  '<!-- CodeRabbit review command invocation: v2:abc -->' \
+  '✅ Action performed' "Review triggered for $OTHER_SHA.")"
+expect "…while an ack for an EARLIER head still asks at this one" 8
+
+# AND THE REAL ACKNOWLEDGEMENT NAMES NO COMMIT AT ALL, so a pin on the body alone is a
+# bound that never fires: measured over five real ones (#227 and four on #234), the only
+# hex token is a 64-character invocation hash, which `names_head` rejects by design. Left
+# there, the skip notice answers 8 on every tick and the caller re-spends the quota every
+# tick. The comment's own created_at against the head commit's date is what binds it.
+assert "the recorded acknowledgement names no commit at all" \
+  "$(yes_if bash -c '! tr -c "0-9A-Za-z_-" "\n" < "$1" | grep -Eqx "[0-9a-fA-F]{7,40}"' _ "$ACK")"
+setup "$CLEAN_HEAD" 2026-09-15T00:10:00Z
+add_comment coderabbitai "$SKIP"; add_comment_at coderabbitai 2026-09-15T00:11:44Z "$ACK"
+expect "a SHA-LESS ack posted at this head -> hold, not ask again every tick" 1
+says   "  ...and says the ask has been made" "ALREADY been asked"
+setup "$CLEAN_HEAD" 2026-09-15T00:10:00Z
+add_comment coderabbitai "$SKIP"; add_comment_at coderabbitai 2026-09-14T23:00:00Z "$ACK"
+expect "…while the same ack posted BEFORE this head still asks" 8
+# Unknown fails toward the ask, which costs one comment and no round — the PR's commit
+# list is not always readable, and a comment the host gave no timestamp is not evidence.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$SKIP"; add_comment_at coderabbitai 2026-09-15T00:11:44Z "$ACK"
+expect "…and with no readable head date, the ask stays open" 8
+setup "$CLEAN_HEAD" 2026-09-15T00:10:00Z
+add_comment coderabbitai "$SKIP"; add_comment_at coderabbitai "not a timestamp" "$ACK"
+expect "…as it does for a timestamp that is not one" 8
 
 echo
 echo "== the REVIEW OBJECT is preferred over a comment marker =="

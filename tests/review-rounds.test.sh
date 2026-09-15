@@ -53,6 +53,8 @@ SCRIPT="$REPO/plugin/scripts/review-rounds.sh"
 FIXTURES="$REPO/tests/fixtures/reviewer"
 CLEAN_BODY="$FIXTURES/clean-review.pr29.md"
 REFUSAL_BODY="$FIXTURES/rate-limit-refusal.pr30.md"
+SKIP_BODY="$FIXTURES/skip-notice.pr229.md"
+ACK_BODY="$FIXTURES/ack-invocation.pr227.md"
 
 # The two commits the recorded bodies name as the head they concern, and a third that
 # neither mentions. The base SHA the two bodies also name (6fca618…) is deliberately NOT a
@@ -200,6 +202,24 @@ ok "0 rounds: an unreviewed PR counts 0 and dispatches" "$(run)" "0 0"
 setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"
 comment "coderabbitai[bot]" "$REFUSAL_BODY"
 ok "0 rounds: a recorded refusal is not a round, at the head it names" "$(run)" "0 0"
+
+# 0 — the recorded SKIP NOTICE, which the sibling answers with its new exit 8. Listed
+# beside its other refusals there and here: unlisted, 8 lands in the fatal `*` arm and this
+# would be "2 <error>" — the round count unreadable and the cap unenforceable on every PR
+# of a repo with auto reviews disabled, which is every PR of this one.
+setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"
+comment "coderabbitai[bot]" "$SKIP_BODY"
+ok "0 rounds: a skip notice is a refusal, not a round (exit 8)" "$(run)" "0 0"
+
+# 0 — AND THE REMEDY FOR AN 8 IS NOT A ROUND EITHER. `@coderabbitai review` leaves an
+# acknowledgement, and a quota-closed window answers it with the rate-limit notice; both
+# were on #230 and #232 at 2026-09-15T00:13Z with the count still 0. Asserted here against
+# the recorded bodies rather than by re-running that measurement.
+setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"
+comment "coderabbitai[bot]" "$SKIP_BODY"
+comment "coderabbitai[bot]" "$ACK_BODY"
+comment "coderabbitai[bot]" "$REFUSAL_BODY"
+ok "0 rounds: asking, and being rate limited, costs no round" "$(run)" "0 0"
 
 # 1 — the recorded clean review of CLEAN_HEAD, with that same refusal still present.
 setup; commit "$CLEAN_HEAD"; commit "$REFUSAL_HEAD"
