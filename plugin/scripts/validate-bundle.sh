@@ -4,8 +4,13 @@
 # alone: every concept document has a known `type`, a `status` in that type's enum,
 # a `timestamp`, and every structural cross-reference resolves.
 #
-#   Usage: validate-bundle.sh [--strict]
+#   Usage: validate-bundle.sh [--strict] [--changed] [<path>...]
 #          --strict   treat warnings as failures too
+#          --changed  only the documents git reports as changed or untracked
+#                     (exit 2 outside a work tree — "no changes" is not an answer
+#                     git could not have given)
+#          <path>...  only the documents named (a path that is not a concept
+#                     document is reported as SKIP, never as an error)
 #
 # WHY THIS EXISTS, AND WHAT IT DELIBERATELY DOES NOT CHECK.
 # Measured across three live instances (2026-08-21, ~570 documents) BEFORE it was
@@ -71,6 +76,11 @@
 # average 110 lines. A warning puts them on the cataloguer's list; an error would fail
 # every bundle that has one, which is every bundle.
 #
+# EVERY CHECK RUNS ON EVERY SCOPE — full bundle, `--changed`, or the paths you name. A
+# scope selects DOCUMENTS, never checks. The Finding cap reached only a full run while
+# nothing else could name one document, so the loop was: write it long, trim it at the
+# next full run. The author now gets the warning at the moment of writing.
+#
 # Run from a control-panel instance root. Generic: no org/repo/path literals.
 # Bash + awk only — no jq, no python — so it ships into every instance unchanged.
 #
@@ -78,12 +88,14 @@
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
-STRICT=0
+STRICT=0; CHANGED=0; NAMED=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --strict) STRICT=1 ;;
+    --changed) CHANGED=1 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit 0 ;;
-    *) echo "usage: $0 [--strict]" >&2; exit 2 ;;
+    -*) echo "usage: $0 [--strict] [--changed] [<path>...]" >&2; exit 2 ;;
+    *) NAMED+=("$1") ;;
   esac
   shift
 done
@@ -145,25 +157,8 @@ refs_for() { # <frontmatter> <key-alternation> <path-regex>
     /^[^[:space:]]/ { inblock=0 }
   ' | grep -oE "$3" | sort -u || true
 }
-# Quoted entries in an inline flow list, counted the way do-not-repeat.sh splits them:
-# a `\"` inside an entry is not a delimiter.
-flow_entries() { # <raw value>
-  printf '%s' "$1" | awk '{
-    n = length($0); inq = 0; c = 0
-    for (i = 1; i <= n; i++) {
-      ch = substr($0, i, 1)
-      if (!inq) { if (ch == "\"") inq = 1; continue }
-      if (ch == "\\") { i++; continue }
-      if (ch == "\"") { inq = 0; c++ }
-    }
-    print c
-  }'
-}
-
 # Entries of a list-valued key, one per line, in BOTH YAML forms — flow
-# (`k: [ a, "b, c" ]`) and block (`k:` then `  - a`), quoted or bare. `flow_entries`
-# above counts only QUOTED flow entries, which is enough for a warning and not for a
-# gate: a form that reads as empty would let the write it holds through in silence.
+# (`k: [ a, "b, c" ]`) and block (`k:` then `  - a`), quoted or bare.
 list_entries() { # <frontmatter> <key>
   printf '%s\n' "$1" | awk -v key="$2" '
     function trim(s) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", s); return s }
@@ -203,6 +198,14 @@ list_entries() { # <frontmatter> <key>
   '
 }
 
+# How many entries a list-valued key holds. `list_entries` is the one splitter, so flow
+# and block form cannot disagree about the same content. It used to count quoted flow
+# entries only, and read a block-form list as zero — a shape that let the write it holds
+# through in silence.
+flow_entries() { # <frontmatter> <key>
+  list_entries "$1" "$2" | awk 'END { print NR }'
+}
+
 fail() { printf '  ERROR  %s\n         %s\n' "$1" "$2"; errors=$((errors+1)); }
 warn() { printf '  WARN   %s\n         %s\n' "$1" "$2"; warns=$((warns+1)); }
 
@@ -215,6 +218,43 @@ collect_files() {
 }
 
 FILE_LIST="$(collect_files | grep -vE '/(index|log)\.md$' | sort -u || true)"
+
+# A scope narrows the SAME list, so `collect_files` stays the one answer to "is this a
+# concept document" and the ignore rules hold on every run.
+HERE="$(pwd -P)"
+# An absolute path and `$PWD` disagree through a symlinked parent (/tmp on macOS), so the
+# form is canonicalised rather than prefix-stripped.
+canon() { # <path> -> ./<path> relative to the bundle root, else unchanged
+  local d b
+  case "$1" in /*) ;; *) printf './%s\n' "${1#./}"; return ;; esac
+  d="$(cd "$(dirname "$1")" 2>/dev/null && pwd -P)" || { printf '%s\n' "$1"; return; }
+  b="$(basename "$1")"
+  case "$d" in
+    "$HERE")   printf './%s\n' "$b" ;;
+    "$HERE"/*) printf './%s\n' "${d#"$HERE"/}/$b" ;;
+    *)         printf '%s\n' "$1" ;;
+  esac
+}
+
+if [[ $CHANGED -eq 1 || ${#NAMED[@]} -gt 0 ]]; then
+  scope=()
+  if [[ $CHANGED -eq 1 ]]; then
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+      echo "validate-bundle: --changed needs a git work tree; without one 'no changes' and 'could not look' are the same answer." >&2
+      exit 2
+    }
+    while IFS= read -r p; do
+      [[ -z "$p" ]] || scope+=("$(canon "$p")")
+    done < <({ git diff --name-only --relative HEAD; git ls-files -o --exclude-standard; } 2>/dev/null || true)
+  fi
+  # A path you NAMED and did not get is worth a line; in --changed every other file is one.
+  for p in ${NAMED[@]+"${NAMED[@]}"}; do
+    scope+=("$(canon "$p")")
+    printf '%s\n' "$FILE_LIST" | grep -qFx "${scope[${#scope[@]}-1]}" \
+      || printf '  SKIP   %s\n         not a concept document — %s names the locations that are\n' "$p" "$AB_SCHEMA"
+  done
+  FILE_LIST="$(printf '%s\n' ${scope[@]+"${scope[@]}"} | sort -u | grep -Fxf <(printf '%s\n' "$FILE_LIST") - || true)"
+fi
 
 while IFS= read -r file; do
   [[ -n "$file" ]] || continue
@@ -282,12 +322,9 @@ while IFS= read -r file; do
   fi
 
   if [[ "$type" == Task ]]; then
-    dnr="$(printf '%s\n' "$fm" | sed -n 's/^do_not_repeat:[[:space:]]*//p' | head -1)"
-    if [[ -n "$dnr" ]]; then
-      n="$(flow_entries "$dnr")"
-      if [[ -n "$n" && "$n" -gt $DO_NOT_REPEAT_MAX ]]; then
-        warn "$rel" "do_not_repeat carries $n entries; $AB_CONVENTIONS caps it at $DO_NOT_REPEAT_MAX — the project-manager folds the oldest into '# Notes'"
-      fi
+    n="$(flow_entries "$fm" do_not_repeat)"
+    if [[ "$n" -gt $DO_NOT_REPEAT_MAX ]]; then
+      warn "$rel" "do_not_repeat carries $n entries; $AB_CONVENTIONS caps it at $DO_NOT_REPEAT_MAX — the project-manager folds the oldest into '# Notes'"
     fi
 
     # `open_caveats` holds a TERMINAL write only — `done`/`cancelled`. Any other status

@@ -150,12 +150,21 @@ task() { # <name> <do_not_repeat value>
 task task-under "$(list 10)"
 task task-over  "$(list 11)"
 task task-escaped '[ "an entry with a \", comma inside" ]'
+# The two YAML shapes, same content: block form read as ZERO entries until the counter
+# was made one splitter, so a list over the cap passed the gate by being written `- a`.
+block() { local n=$1 out="" i; for i in $(seq 1 "$n"); do out="$out
+  - \"entry $i\""; done; printf '%s' "$out"; }
+task task-block-under "$(block 10)"
+task task-block-over  "$(block 11)"
 VBOUT="$(cd "$B" && bash "$VB" 2>&1)"
 assert "a list of 10 is accepted in silence"    "$(hasnt 'task-under' "$VBOUT")"
 assert "…and an escaped quote does not miscount" "$(hasnt 'task-escaped' "$VBOUT")"
 assert "a list of 11 is reported"               "$(has 'do_not_repeat carries 11 entries' "$VBOUT")"
 assert "…as a WARN, not an ERROR"               "$(has 'WARN   projects/demo/tasks/task-over.md' "$VBOUT")"
 assert "…naming the cap and the fold"           "$(has "caps it at 10 — the project-manager folds the oldest into '# Notes'" "$VBOUT")"
+assert "block form of 10 is accepted too"       "$(hasnt 'task-block-under' "$VBOUT")"
+assert "block form of 11 is reported too"       "$(has 'WARN   projects/demo/tasks/task-block-over.md' "$VBOUT")"
+assert "…with the SAME count as the flow form"  "$(eq "$(printf '%s\n' "$VBOUT" | grep -c 'do_not_repeat carries 11 entries')" 2)"
 assert "…and the bundle still exits 0"          "$(cd "$B" && bash "$VB" >/dev/null 2>&1; echo $?)"
 
 echo

@@ -245,6 +245,43 @@ echo "== exit codes =="
 assert "errors make it exit 1"                    "$([[ $RC -eq 1 ]] && echo 0 || echo 1)"
 assert "--strict also exits non-zero"             "$([[ $RC_STRICT -ne 0 ]] && echo 0 || echo 1)"
 
+echo "== a scope selects DOCUMENTS, never checks =="
+# The 40-line Finding cap used to reach a full run only, so a Finding was written long and
+# trimmed later. Naming the document is what makes the cap arrive while it is being written.
+set +e
+ONE="$(bash "$VALIDATOR" knowledge/findings/too-long.md 2>&1)"; ONE_RC=$?
+ONE_STRICT_RC=0; bash "$VALIDATOR" --strict knowledge/findings/too-long.md >/dev/null 2>&1 || ONE_STRICT_RC=$?
+GOOD_ONE="$(bash "$VALIDATOR" ./knowledge/findings/good.md 2>&1)"
+ABS_ONE="$(bash "$VALIDATOR" "$B/knowledge/findings/too-long.md" 2>&1)"
+SKIP_ONE="$(bash "$VALIDATOR" projects/live/HANDOVER.md 2>&1)"; SKIP_RC=$?
+set -e
+one() { printf '%s\n' "$ONE" | grep -q -- "$1" && echo 0 || echo 1; }
+assert "a named Finding is checked on its own"    "$(one 'Finding is 48 lines')"
+assert "…and only it"                             "$(printf '%s\n' "$ONE" | grep -q '1 documents checked' && echo 0 || echo 1)"
+assert "…so another document's error is not reported" "$(printf '%s\n' "$ONE" | grep -q 'unknown type' && echo 1 || echo 0)"
+assert "…and a warning alone still exits 0"       "$([[ $ONE_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "--strict gates the single document"       "$([[ $ONE_STRICT_RC -eq 1 ]] && echo 0 || echo 1)"
+assert "an absolute path names the same document" "$(printf '%s\n' "$ABS_ONE" | grep -q 'Finding is 48 lines' && echo 0 || echo 1)"
+assert "a clean named document is silent"         "$(printf '%s\n' "$GOOD_ONE" | grep -q '0 errors, 0 warnings' && echo 0 || echo 1)"
+assert "a named non-concept file is SKIPped"      "$(printf '%s\n' "$SKIP_ONE" | grep -q 'SKIP   projects/live/HANDOVER.md' && echo 0 || echo 1)"
+assert "…not turned into an error"                "$([[ $SKIP_RC -eq 0 ]] && echo 0 || echo 1)"
+
+echo "== --changed reads git, and refuses when it cannot =="
+# The ceiling keeps the answer the fixture's, not that of whatever TMPDIR sits under.
+set +e; GIT_CEILING_DIRECTORIES="$TMP" bash "$VALIDATOR" --changed >/dev/null 2>&1; NOGIT_RC=$?; set -e
+assert "--changed outside a work tree exits 2"    "$([[ $NOGIT_RC -eq 2 ]] && echo 0 || echo 1)"
+G="$TMP/changed"; mkdir -p "$G/knowledge/findings"; cd "$G"
+echo '{ "org": "x", "reposRoot": "/tmp" }' > instance.config.json; echo '# Schema' > SCHEMA.md
+doc knowledge/findings/committed.md '---' 'type: Finding' 'title: C' 'lesson: l' 'status: current' "timestamp: $TS" '---' 'body'
+git init -q . && git add -A \
+  && git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -qm init
+{ printf -- '---\ntype: Finding\ntitle: N\nlesson: l\nstatus: current\ntimestamp: %s\n---\n' "$TS"
+  for i in $(seq 1 50); do echo "line $i"; done; } > knowledge/findings/just-written.md
+set +e; CH="$(bash "$VALIDATOR" --changed 2>&1)"; set -e
+assert "an untracked over-long Finding is caught" "$(printf '%s\n' "$CH" | grep -q 'just-written.md' && echo 0 || echo 1)"
+assert "…and the committed clean one is not rechecked" "$(printf '%s\n' "$CH" | grep -q '1 documents checked' && echo 0 || echo 1)"
+cd "$B"
+
 echo "== a clean bundle passes, and --strict still passes with no warnings =="
 # task-018/019 stay: they are the two caveat cases that must be CLEAN, not merely unchecked.
 rm -f projects/live/tasks/task-00[2-9]*.md projects/live/tasks/task-01[02]*.md \
