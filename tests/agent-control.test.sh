@@ -114,6 +114,9 @@ run_bare() {
 # Does the hook's JSON refuse the call? Read the FIELD, never grep the blob: a
 # reason string quoting the word "deny" must not read as a decision.
 decision() { printf '%s' "$OUT" | jq -r '.hookSpecificOutput.permissionDecision // "none"' 2>/dev/null || echo unparseable; }
+# An ALLOWED call emits no JSON at all, so `decision` reads an empty blob and prints an
+# empty string. Say "allowed" for that, and keep "none" for JSON carrying no decision.
+verdict() { if [ -z "$OUT" ]; then echo allowed; else decision; fi; }
 continues() { printf '%s' "$OUT" | jq -r 'if has("continue") then (.continue|tostring) else "absent" end' 2>/dev/null || echo unparseable; }
 context()  { printf '%s' "$OUT" | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null || echo ""; }
 reasontxt(){ printf '%s' "$OUT" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null || echo ""; }
@@ -438,6 +441,154 @@ ok "disarmed again: NOTHING recreated"                 "$([ -e "$CTL" ] && echo 
 ok "a second disarm is quiet and still exits 0"        "$(ctl_rc disarm)" 0
 
 echo
+echo "--- the doom loop: same tool, same arguments, N times --------------------"
+# OPT-IN, so the key-absent half comes FIRST: an armed bundle that never set
+# `maxRepeatedToolCalls` must behave exactly as it did before this existed, and every
+# positive case below is paired against it.
+ctl arm >/dev/null 2>&1
+set_limit() { # "" clears the key
+  if [ -z "${1:-}" ]; then printf '{}\n' > "$INST/instance.config.json"
+  else printf '{"maxRepeatedToolCalls": %s}\n' "$1" > "$INST/instance.config.json"; fi
+  rm -f "$CTL/repeat-limit"
+}
+stop_payload() { jq -n --arg a "$1" --arg t "$2" '{
+  session_id: "sess-1", transcript_path: "/tmp/t.jsonl", cwd: "/tmp/wt/repo",
+  permission_mode: "bypassPermissions", hook_event_name: "SubagentStop",
+  stop_hook_active: false, agent_id: $a, agent_type: $t }'; }
+run_stop() { # <agent_id> <agent_type>
+  stop_payload "$1" "$2" > "$TMP/payload"
+  OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" <"$TMP/payload" 2>"$TMP/err")"; RC=$?
+  ERR="$(cat "$TMP/err")"
+}
+# `run` three times with one command, reporting the LAST decision.
+thrice() { # <agent_id> <command>
+  run "$1" software-engineer Bash "$2"; run "$1" software-engineer Bash "$2"
+  run "$1" software-engineer Bash "$2"; decision
+}
+
+set_limit ""
+ok "key absent: 12 identical calls are never denied"  "$(i=1; while [ $i -le 12 ]; do run K1 software-engineer Bash "pnpm build"; i=$((i+1)); done; verdict)" allowed
+ok "key absent: NOTHING is counted — no state at all" "$([ -e "$CTL/repeats" ] && echo yes || echo no)" no
+
+set_limit 3
+ok "three identical calls trip the limit"             "$(thrice D1 "pnpm build")" deny
+rm -rf "$CTL/repeats"
+run D2 software-engineer Bash "pnpm build"; first="$(verdict)"
+run D2 software-engineer Bash "pnpm build"
+ok "…and the FIRST two were allowed"                  "$first$(verdict)" allowedallowed
+run D2 software-engineer Bash "pnpm build"
+ok "the deny message names the counter and the limit" "$(reasontxt | grep -c 'call 3 of Bash with identical arguments, and the limit (maxRepeatedToolCalls) is 3')" 1
+ok "…and it is a plain deny, never a kill"            "$(continues)" absent
+ok "…and control.log records the breach with the agent_id" "$(grep -c $'\trepeat-loop\tD2\t' "$CTL/control.log")" 1
+
+ok "three DIFFERENT calls do not trip"                "$(run D3 software-engineer Bash "one"; run D3 software-engineer Bash "two"; run D3 software-engineer Bash "three"; verdict)" allowed
+ok "a different tool with the same command does not"  "$(run D4 software-engineer Bash "x"; run D4 software-engineer Read "x"; run D4 software-engineer Bash "x"; verdict)" allowed
+ok "…and a repeat AFTER a different call starts over" "$(run D3 software-engineer Bash "two"; run D3 software-engineer Bash "two"; verdict)" allowed
+
+# A LEGITIMATE POLL IS NOT A DOOM LOOP. Twelve identical waits, which is what an agent
+# watching CI actually does, and none of them may be counted.
+ok "12x 'gh pr checks 42' is never denied"            "$(i=1; while [ $i -le 12 ]; do run P1 software-engineer Bash "gh pr checks 42"; i=$((i+1)); done; verdict)" allowed
+ok "…and leaves no counter behind at all"             "$([ -e "$CTL/repeats/P1" ] && echo yes || echo no)" no
+ok "12x 'gh run watch 9' is never denied"             "$(i=1; while [ $i -le 12 ]; do run P2 software-engineer Bash "  gh run watch 9"; i=$((i+1)); done; verdict)" allowed
+# The non-vacuity partner: the whitelist is a PREFIX list, not "anything mentioning gh".
+ok "…while 'gh pr merge' is NOT whitelisted"          "$(thrice P3 "gh pr merge 42")" deny
+
+# THE EXEMPTION IS FOR A WHOLE COMMAND. A poll chained to real work is that work looping.
+ok "'sleep 1; make test' is counted, not exempt"      "$(thrice P4 "sleep 1; make test")" deny
+ok "'gh pr checks && npm test' is counted too"        "$(thrice P5 "gh pr checks && npm test")" deny
+ok "…and so is a poll in a subshell"                  "$(thrice P6 "(gh run watch 9)")" deny
+ok "a bare 'sleep 5' is still exempt 12 times"        "$(i=1; while [ $i -le 12 ]; do run P7 software-engineer Bash "sleep 5"; i=$((i+1)); done; verdict)" allowed
+
+# TWO AGENTS ARE TWO COUNTERS. Interleaved at a limit of 4: each reaches 3 and neither
+# trips, where one shared counter would have reached 6 and denied both.
+set_limit 4
+ok "interleaved to 3 each, neither agent is denied"   "$(i=1; while [ $i -le 3 ]; do run T1 software-engineer Bash "make"; d1="$(verdict)"; run T2 qa-reviewer Bash "make"; i=$((i+1)); done; printf '%s%s' "$d1" "$(verdict)")" allowedallowed
+ok "…and each has its OWN counter file"               "$(ls "$CTL/repeats" | grep -c '^T[12]$')" 2
+ok "…holding its own agent_id in field 1"             "$(awk -F'\t' '{print $1}' "$CTL/repeats/T2")" T2
+ok "…and T1's 4th denies without T2 having moved"     "$(run T1 software-engineer Bash "make"; a="$(decision)"; printf '%s%s' "$a" "$(awk -F'\t' '{print $4}' "$CTL/repeats/T2")")" deny3
+
+# SubagentStop is the reset. Without it a re-used agent_id inherits a stranger's count.
+ok "SubagentStop exits 0 and is silent"               "$(run_stop T1 software-engineer; [ "$RC" = 0 ] && [ -z "$OUT" ] && [ -z "$ERR" ] && echo yes || echo no)" yes
+ok "…and removes that agent's counter"                "$([ -e "$CTL/repeats/T1" ] && echo yes || echo no)" no
+ok "…and leaves the other agent's alone"              "$([ -e "$CTL/repeats/T2" ] && echo yes || echo no)" yes
+ok "…so the next identical call starts from 1"        "$(run T1 software-engineer Bash "make"; verdict)" allowed
+ok "SubagentStop gates NOTHING even for a halted agent" "$(ctl halt T2 x >/dev/null; run_stop T2 qa-reviewer; [ -z "$OUT" ] && echo yes || echo no)" yes
+ctl clear --all >/dev/null
+set_limit 3
+
+# NO ARGUMENT TEXT ANYWHERE. The counter carries a fingerprint; the log carries the tool
+# name and the numbers. A secret in a command line must not become machine-local state.
+run S1 software-engineer Bash "curl -H 'Authorization: Bearer sk-not-a-real-token' https://x"
+run S1 software-engineer Bash "curl -H 'Authorization: Bearer sk-not-a-real-token' https://x"
+run S1 software-engineer Bash "curl -H 'Authorization: Bearer sk-not-a-real-token' https://x"
+ok "the breach denied"                                "$(decision)" deny
+ok "no argument text in the counter file"             "$(grep -c 'sk-not-a-real-token' "$CTL/repeats/S1" || true)" 0
+ok "no argument text in control.log"                  "$(grep -c 'sk-not-a-real-token' "$CTL/control.log" || true)" 0
+ok "no argument text in the deny message"             "$(reasontxt | grep -c 'sk-not-a-real-token' || true)" 0
+ok "the counter file holds 5 tab-separated fields"    "$(awk -F'\t' '{print NF; exit}' "$CTL/repeats/S1")" 5
+
+# The limit is a NUMBER from the config, and an unusable one is off rather than guessed.
+set_limit 2
+ok "maxRepeatedToolCalls=2 trips on the second call"  "$(run L1 software-engineer Bash "z"; run L1 software-engineer Bash "z"; decision)" deny
+set_limit '"three"'
+ok "a non-numeric limit is OFF, never a guess"        "$(i=1; while [ $i -le 6 ]; do run L2 software-engineer Bash "z"; i=$((i+1)); done; verdict)" allowed
+set_limit 1
+ok "a limit below 2 is OFF — it would deny everything" "$(run L3 software-engineer Bash "z"; verdict)" allowed
+# The per-machine layer wins, which is the documented precedence for every other key.
+set_limit ""
+printf '{"maxRepeatedToolCalls": 3}\n' > "$INST/instance.config.local.json"
+rm -f "$CTL/repeat-limit"
+ok "instance.config.local.json can turn it on alone"  "$(thrice V1 "q")" deny
+printf '{"maxRepeatedToolCalls": 9}\n' > "$INST/instance.config.json"
+rm -f "$CTL/repeat-limit"
+ok "…and still wins when the tracked file says 9"     "$(thrice V2 "q")" deny
+# A local `null` UNSETS the inherited key (`SCHEMA.md`) — presence decides the layer, so
+# filtering to numbers first would have left the tracked 3 standing.
+rm -f "$INST/instance.config.local.json"; set_limit 3
+printf '{"maxRepeatedToolCalls": null}\n' > "$INST/instance.config.local.json"
+rm -f "$CTL/repeat-limit"
+ok "a local null turns the tracked 3 back OFF"        "$(i=1; while [ $i -le 12 ]; do run V3 software-engineer Bash "q"; i=$((i+1)); done; verdict)" allowed
+rm -f "$INST/instance.config.local.json"
+set_limit 3
+
+# TWO IDS THAT SANITISE ALIKE ARE STILL TWO AGENTS. `a b` and `a_b` shared one file when
+# the name was sanitised, so each reset the other and SubagentStop deleted both.
+rm -rf "$CTL/repeats"
+run "a b" software-engineer Bash "make"; run "a_b" software-engineer Bash "make"
+ok "colliding ids get two counter files"              "$(ls "$CTL/repeats" | wc -l | tr -d ' ')" 2
+ok "…the safe id keeps its own readable name"         "$([ -e "$CTL/repeats/a_b" ] && echo yes || echo no)" yes
+run_stop "a b" software-engineer
+ok "…SubagentStop on one leaves the other's count"    "$(awk -F'\t' '{print $4}' "$CTL/repeats/a_b")" 1
+ok "…so the other still trips on ITS third call"      "$(run "a_b" software-engineer Bash "make"; run "a_b" software-engineer Bash "make"; decision)" deny
+ok "an id carrying a slash is counted, not a path"    "$(thrice "z/z" "make")" deny
+ok "…and wrote no directory under repeats"            "$(find "$CTL/repeats" -mindepth 2 | wc -l | tr -d ' ')" 0
+rm -rf "$CTL/repeats"
+
+# The cached limit is refreshed by the config's mtime, not by re-arming — and, because an
+# edit landing in the same mtime SECOND is invisible to `-nt`, by the age of the answer too.
+run C1 software-engineer Bash "warm the cache"
+ok "the limit is cached beside the counters"          "$([ -f "$CTL/repeat-limit" ] && echo yes || echo no)" yes
+ok "…with the epoch it was read at, for the backstop" "$(awk '{print (NF == 2 && $2 ~ /^[0-9]+$/) ? "yes" : "no"}' "$CTL/repeat-limit")" yes
+printf '{}\n' > "$INST/instance.config.json"
+touch -t 199001010000 "$CTL/repeat-limit"
+ok "a config newer than the cache turns it back off"  "$(i=1; while [ $i -le 6 ]; do run C2 software-engineer Bash "z"; i=$((i+1)); done; verdict)" allowed
+# The backstop alone: cache NEWER than the config, so only its stored age can refresh it.
+set_limit 3
+printf 'off 1\n' > "$CTL/repeat-limit"
+ok "a stale cached answer is re-read despite its mtime" "$(thrice C3 "z")" deny
+
+# FAIL OPEN, as everywhere else in this file.
+set_limit 3
+printf 'not json at all\n' > "$INST/instance.config.json"; rm -f "$CTL/repeat-limit"
+ok "an unparseable config: detection OFF, work allowed" "$(i=1; while [ $i -le 6 ]; do run F1 software-engineer Bash "z"; i=$((i+1)); done; verdict)" allowed
+set_limit 3
+# An operator directive still wins on an instance that also counts repeats.
+ok "a halt is still honoured while counting"          "$(ctl halt H7 x >/dev/null; run H7 software-engineer Bash "one"; continues)" false
+ctl clear --all >/dev/null
+rm -rf "$CTL/repeats"; set_limit ""
+ctl disarm >/dev/null 2>&1; ctl arm >/dev/null 2>&1
+
+echo
 echo "--- registration: the hook is wired up and shippable --------------------"
 SETTINGS="$REPO/plugin/seed/.claude/settings.json"
 ok "hooks.json is valid JSON"                          "$(jq -e . "$HOOKSJSON" >/dev/null 2>&1 && echo yes || echo no)" yes
@@ -459,6 +610,9 @@ ok "…via the \${CLAUDE_PLUGIN_ROOT} idiom, never a bare relative path" \
 ok "…and settings.json registers no PreToolUse hook at all" \
    "$(jq -r 'if (.hooks | has("PreToolUse")) then "present" else "absent" end' "$SETTINGS")" absent
 ok "…and does not name this hook anywhere"             "$(grep -c 'agent-control' "$SETTINGS")" 0
+# The counter has no reset without this: the same script, on the one event that says an
+# agent is gone. Unmatched too — SubagentStop takes no matcher.
+ok "…and the SAME script is registered on SubagentStop" "$(jq -r '[.hooks.SubagentStop[].hooks[].command | select(test("agent-control[.]sh"))] | length' "$HOOKSJSON")" 1
 ok "the hook file hooks.json names actually exists"    "$([ -f "$HOOK_SRC" ] && echo yes || echo no)" yes
 ok "the operator script is executable-shaped"          "$(head -1 "$CTL_SRC" | grep -c '^#!/usr/bin/env bash$')" 1
 ok "both files pass bash -n"                           "$(bash -n "$HOOK_SRC" && bash -n "$CTL_SRC" && echo yes || echo no)" yes

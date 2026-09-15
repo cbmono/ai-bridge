@@ -421,10 +421,30 @@ the same event.
 interrupt a command already running, and an agent making no tool calls is not reached.
 And the roster only fills while armed, so an agent dispatched on a disarmed instance has
 its id recorded nowhere — which is why arming is a separate act worth doing before you
-need it. **No circuit breaker was built**: the cost-velocity / no-progress escalation
-ladder needs a resident process to run its beat, and ai-bridge has none.
+need it. **No cost-velocity circuit breaker was built**: that escalation ladder needs a
+resident process to run its beat, and ai-bridge has none.
 
-Covered by `tests/agent-control.test.sh` (148 assertions, most of them refusals).
+**One breaker does exist, and it needed no beat — the doom loop.** Same tool name, same
+argument fingerprint, N consecutive times for one `agent_id` is a `deny` naming the tool
+and the counter; N is `maxRepeatedToolCalls`, and **absent from both config layers it is
+off**, so nothing is hashed, counted or written. It rides this hook because the hook
+already sees every call with an `agent_id`, and it needs no beat because every event it
+counts is one it was being handed anyway. Three properties are deliberate. The state is
+one file per `agent_id` under `.claude/control/repeats/`, carrying a **fingerprint and
+never the argument text** — a command line holds tokens, and machine-local state outlives
+the session. A **read-only wait is not a loop**: `gh pr checks`, `gh run view|watch|list`,
+`gh pr view` and `sleep` are transparent to the counter however often they repeat, which
+is the difference between an agent watching CI and an agent stuck — as the WHOLE command,
+since `sleep 1; make test` is a `make test` loop behind a poll's prefix. And the config read is
+off the hot path — the limit is cached beside the counters, refreshed when a config file
+is newer **or** when the cached answer is over a minute old, because `-nt` cannot see an
+edit that lands in the same mtime second. The counter is dropped by the **`SubagentStop`**
+registration of this same script, and an orphan expires by age, so a crashed agent leaves
+nothing. The hook still writes no task document: the breach lands in `control.log` and the
+next `project-manager` tick maps the `agent_id` to a task, writes one `# Notes` line and
+emits at most one queue row.
+
+Covered by `tests/agent-control.test.sh` (188 assertions, most of them refusals).
 
 ## 17. An instruction addressed to an agent is executable only if that agent *holds* the tool
 
