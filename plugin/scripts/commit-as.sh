@@ -279,7 +279,7 @@ for p in ${paths[@]+"${paths[@]}"}; do
   case "$p" in knowledge|knowledge/*|./knowledge|./knowledge/*) kb_paths+=("$p") ;; esac
 done
 if [ "${#kb_paths[@]}" -gt 0 ]; then
-  if [ -d "$repo_root/.ai-bridge/kb.git" ]; then
+  if [ -d "$repo_root/$AB_DIR/kb.git" ]; then
     echo "error: knowledge/ is a MOUNTED knowledge base — these paths are tracked in" >&2
     echo "       another repository, and committing them here would commit nothing:" >&2
     for p in "${kb_paths[@]}"; do printf '         %s\n' "$p" >&2; done

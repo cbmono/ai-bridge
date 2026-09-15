@@ -34,6 +34,9 @@
 # assert(): 0 is a PASS, matching the other harnesses here.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
@@ -167,7 +170,7 @@ echo "== 2. the FROM column: both directions, one instance =="
 # =======================================================================================
 INST="$TMP/_ai-bridge-fixture"
 mkdir -p "$INST/.claude/agents"
-printf 'stub\n' > "$INST/SCHEMA.md"          # task-owner.sh's instance-root test
+printf 'stub\n' > "$INST/$AB_SCHEMA"          # task-owner.sh's instance-root test
 # `--full` (ai-bridge-v3/task-025): this file is the FULL banner's test — the two tables and
 # their columns are most of what it asserts. The SessionStart default drops them to hold 12
 # lines and §14 is where that cut is pinned; everything else here asks for the rendering
@@ -485,7 +488,7 @@ assert "…exactly as wide as the header"      "$(eq "${#h2}" "${#h1}")"
 # together — which is exactly what padding the rule to match the harness's label would break.
 LONGNAME="$TMP/_ai-bridge-fixture-with-a-considerably-longer-directory-name"
 mkdir -p "$LONGNAME/.claude/agents"
-printf 'stub\n' > "$LONGNAME/SCHEMA.md"
+printf 'stub\n' > "$LONGNAME/$AB_SCHEMA"
 cp "$INST/instance.config.json" "$LONGNAME/instance.config.json"
 L_OUT="$(CLAUDE_PROJECT_DIR="$LONGNAME" bash "$HOOK" 2>/dev/null)"
 l1="$(nth "$L_OUT" "$(hdr_no "$L_OUT")")"
@@ -509,7 +512,7 @@ cp "$HOOK" "$FAKETPL/session-banner.sh"
 # The resolver travels with it, so a missing VERSION is the ONLY thing different about
 # this copy — otherwise "the rest of the banner is intact" would pass for a banner that
 # lost its settings block for an unrelated reason.
-cp "$SCRIPTS/resolve-config.sh" "$TMP/faketpl/plugin/scripts/"
+cp "$SCRIPTS/resolve-config.sh" "$SCRIPTS/bundle-paths.sh" "$TMP/faketpl/plugin/scripts/"
 vrun() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/session-banner.sh" --full 2>&1)"; RC=$?; }
 rm -f "$TMP/faketpl/VERSION"
 vrun
@@ -552,7 +555,7 @@ echo "== 4. EVERY optional section stays silent, and each one can still fire =="
 # first-run instance byte-identical to one whose Board line had been dropped in a merge.
 # Both of the other two are asserted below, and tests/banner-board-line.test.sh owns the
 # full three-way case.
-rm -rf "$INST/.board-live" "$INST/AWAITING.md" "$INST/projects"
+rm -rf "$INST/$AB_BOARD_DIR" "$INST/$AB_AWAITING" "$INST/projects"
 python3 - "$INST" <<'PYBOARDOFF'
 import json, os, sys
 p = os.path.join(sys.argv[1], "instance.config.json")
@@ -599,10 +602,10 @@ tracked_cfg
 
 # NON-VACUITY, one section at a time: a hook that had simply stopped printing would pass
 # every assertion above.
-mkdir -p "$INST/.board-live"; printf '<!doctype html>\n' > "$INST/.board-live/board.html"
+mkdir -p "$INST/$AB_BOARD_DIR"; printf '<!doctype html>\n' > "$INST/$AB_BOARD_DIR/board.html"
 run
 assert "…but a rendered board DOES print"     "$(has 'Board   file://' "$OUT")"
-rm -rf "$INST/.board-live"
+rm -rf "$INST/$AB_BOARD_DIR"
 # THE MIDDLE ROW, on the same instance and in the same breath: the board switched back ON
 # with nothing rendered is NOT the silence two lines above, and this pair is what says the
 # three states are three and not two.
@@ -611,10 +614,10 @@ run
 assert "…and the board ON with nothing rendered SPEAKS, it is not silence" \
   "$(has 'Board   enabled, but never rendered' "$OUT")"
 
-printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
+printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/$AB_AWAITING"
 run
 assert "…and an AWAITING item DOES print"     "$(has '🔔 1 item needs you' "$OUT")"
-rm -f "$INST/AWAITING.md"
+rm -f "$INST/$AB_AWAITING"
 
 # =======================================================================================
 echo "== 5. nothing out of a task document reaches the HUMAN — not even a count =="
@@ -672,11 +675,11 @@ assert "…nor its body"                                  "$(hasnt 'LEAK THIS BO
 assert "…nor even the project slug"                     "$(hasnt 'demo' "$OUT")"
 # NON-VACUITY FOR THE WHOLE SECTION: the banner still fires on this same instance, so the
 # eight absences above are absences and not a dead hook.
-printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
+printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/$AB_AWAITING"
 run
 assert "…while the banner is very much alive on the same instance" \
   "$(has '🔔 1 item needs you' "$OUT")"
-rm -f "$INST/AWAITING.md"
+rm -f "$INST/$AB_AWAITING"
 
 # =======================================================================================
 echo "== 6. the settings block degrades, it does not explode =="
@@ -685,9 +688,14 @@ echo "== 6. the settings block degrades, it does not explode =="
 # The banner must lose the block it cannot compute and keep everything else, silently: a
 # hook that printed an interpreter error at every session start would be worse than one
 # that omits a section.
-printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
-cp "$HOOK" "$TMP/orphan-banner.sh"
-OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$TMP/orphan-banner.sh" 2>&1)"; RC=$?
+printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/$AB_AWAITING"
+# The LAYOUT resolver travels with it and resolve-config.sh does not: since 3.0 the hook
+# cannot name one bundle file without bundle-paths.sh, so an orphan with neither would be
+# asserting about a hook that stopped at line one rather than one that lost a block.
+mkdir -p "$TMP/orphan/hooks" "$TMP/orphan/scripts"
+cp "$HOOK" "$TMP/orphan/hooks/session-banner.sh"
+cp "$SCRIPTS/bundle-paths.sh" "$TMP/orphan/scripts/"
+OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$TMP/orphan/hooks/session-banner.sh" 2>&1)"; RC=$?
 assert "no resolver reachable: still exit 0"        "$(eq "$RC" 0)"
 assert "…and the settings block is simply absent"   "$(hasnt 'FROM' "$OUT")"
 # Withheld though `.claude.json` is still readable: a lone row under a full header reads as
@@ -699,8 +707,14 @@ assert "…while the identity line still prints"      "$(has 'AI-Bridge' "$OUT")
 # line is what the sections BELOW the settings block now amount to, so it is the one that
 # says the banner kept going rather than stopping at the block it could not compute.
 assert "…and the awaiting count line still does"    "$(has '🔔 1 item needs you' "$OUT")"
+# …and with NO layout resolver at all it says so and stops, rather than reading whatever
+# root path it happens to find — the half-read the 3.0 layout exists to prevent.
+cp "$HOOK" "$TMP/orphan-banner.sh"
+NOLAYOUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$TMP/orphan-banner.sh" 2>&1)"
+assert "no LAYOUT resolver: it says so and stops"   "$(has 'bundle-paths.sh is unreachable' "$NOLAYOUT")"
+assert "…and names no bundle file at all"           "$(hasnt '🔔' "$NOLAYOUT")"
 assert "…with nothing on stderr"                    "$(hasnt 'Traceback' "$OUT")"
-rm -f "$INST/AWAITING.md"
+rm -f "$INST/$AB_AWAITING"
 
 # =======================================================================================
 echo "== 7. the offer is prose, and it lives where a session will read it =="
@@ -807,12 +821,12 @@ assert "…while an EMPTY NO_COLOR is not an opt-out"  "$(coloured "$(tty_run ''
 run
 assert "not a terminal ⇒ no escapes at all"          "$(plain "$OUT")"
 # Every optional section firing at once — the coloured lines outside the two tables.
-mkdir -p "$INST/.board-live"; printf '<!doctype html>\n' > "$INST/.board-live/board.html"
-printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
+mkdir -p "$INST/$AB_BOARD_DIR"; printf '<!doctype html>\n' > "$INST/$AB_BOARD_DIR/board.html"
+printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/$AB_AWAITING"
 run
 assert "…not even from the board and awaiting sections" "$(plain "$OUT")"
 assert "…which did fire"                                "$(has '🔔 1 item needs you' "$OUT")"
-rm -rf "$INST/.board-live" "$INST/AWAITING.md"
+rm -rf "$INST/$AB_BOARD_DIR" "$INST/$AB_AWAITING"
 
 # THE CONTENT MUST NOT DEPEND ON THE COLOUR. This is the assertion that catches an escape
 # leaking into a padded field, which would silently shift a column.
@@ -1259,8 +1273,9 @@ fi
 # MACHINERY SYMLINKS, dangling or live — a live one resolves into a checkout no plugin
 # update reaches — so the wording it looks for moved with it.
 DANGLING="$TMP/_dangling"
-mkdir -p "$DANGLING/agents"
-printf 'stub\n' > "$DANGLING/SCHEMA.md"
+# The probe list names the PRE-PLUGIN root layout, so the planted link stays a root path.
+mkdir -p "$DANGLING/agents" "$DANGLING/$AB_DIR"
+printf 'stub\n' > "$DANGLING/$AB_SCHEMA"
 printf '{ "org": "example-org" }\n' > "$DANGLING/instance.config.json"
 ln -s "$TMP/never-existed/index.md" "$DANGLING/agents/index.md"
 DANG="$(CLAUDE_PROJECT_DIR="$DANGLING" bash "$HOOK" 2>/dev/null)"

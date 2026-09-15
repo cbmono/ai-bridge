@@ -12,6 +12,8 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
+# shellcheck source=bundle-paths.sh
+. "$HERE/bundle-paths.sh" || exit 2
 inst="."; dry=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -47,8 +49,8 @@ git -C "$INST" rev-parse --git-dir >/dev/null 2>&1 || die "$INST is not a git re
 TRACKED="$(git -C "$INST" ls-files -- knowledge 2>/dev/null)"
 [ -n "$TRACKED" ] || die "git tracks no file under knowledge/ here — this bundle is already migrated."
 
-MOUNT="$INST/.ai-bridge/kb.git"
-[ -d "$MOUNT" ] && die "a KB mount already exists at .ai-bridge/kb.git. Remove it, or this
+MOUNT="$INST/$AB_DIR/kb.git"
+[ -d "$MOUNT" ] && die "a KB mount already exists at $AB_DIR/kb.git. Remove it, or this
        bundle is already migrated."
 
 count="$(printf '%s\n' "$TRACKED" | grep -c .)"

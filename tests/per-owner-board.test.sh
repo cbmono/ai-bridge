@@ -43,6 +43,9 @@
 # assert(): 0 is a PASS, matching the other harnesses here.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
 GEN="$TPL/plugin/scripts/build-board.sh"
 WRITER="$TPL/plugin/scripts/write-snapshot.sh"
@@ -62,8 +65,8 @@ command -v python3 >/dev/null 2>&1 || {
   echo "  (python3 absent — build-board cases cannot run)"; echo "pass=0 fail=0"; exit 0; }
 
 # ---------------------------------------------------------------- the fixture
-INST="$TMP/_ai-bridge-team"; mkdir -p "$INST/projects"
-printf 'stub\n' > "$INST/SCHEMA.md"
+INST="$TMP/_ai-bridge-team"; mkdir -p "$INST/projects" "$INST/$AB_DIR"
+printf 'stub\n' > "$INST/$AB_SCHEMA"
 
 mkproj() { # <slug> <title> <owner-or-empty> <task-status>...
   local slug="$1" title="$2" owner="$3"; shift 3
@@ -105,14 +108,14 @@ git -C "$INST" config user.name  Test
 git -C "$INST" add -A >/dev/null 2>&1
 git -C "$INST" commit -qm "fixture" >/dev/null 2>&1
 
-: > "$INST/SNAPSHOT.json"            # presence is the switch; the writer fills it
+: > "$INST/$AB_SNAPSHOT"            # presence is the switch; the writer fills it
 ( cd "$INST" && SNAPSHOT_NOW=2026-08-26T00:00:00Z bash "$WRITER" --quiet ) >/dev/null 2>&1
 
 echo "== the writer carries owner, deliberately =="
-assert "the snapshot names an owner at all"      "$(fhas '"owner"' "$INST/SNAPSHOT.json")"
-assert "…the value, verbatim"                    "$(fhas '"owner": "bob"' "$INST/SNAPSHOT.json")"
+assert "the snapshot names an owner at all"      "$(fhas '"owner"' "$INST/$AB_SNAPSHOT")"
+assert "…the value, verbatim"                    "$(fhas '"owner": "bob"' "$INST/$AB_SNAPSHOT")"
 assert "…and an unowned project carries an empty one" \
-  "$(fhas '"owner": ""' "$INST/SNAPSHOT.json")"
+  "$(fhas '"owner": ""' "$INST/$AB_SNAPSHOT")"
 # The header's rule and the code must not contradict each other: the file says owner is
 # carried on purpose, and points at the Finding that records the decision.
 assert "the writer's own header says it is carried on purpose" \
@@ -123,7 +126,7 @@ assert "…and no longer lists it as never carried" \
   "$(no_if grep -qE '^#     · .owner:. — on a bundle shared by two humans' "$WRITER")"
 assert "…while authorEmail stays on the never list" \
   "$(fhas 'authorEmail' "$WRITER")"
-assert "the _carries key says so too"            "$(fhas 'project owner' "$INST/SNAPSHOT.json")"
+assert "the _carries key says so too"            "$(fhas 'project owner' "$INST/$AB_SNAPSHOT")"
 
 echo
 echo "== two owners, two sections, and nothing rendered twice =="
@@ -189,7 +192,7 @@ assert "the fragment is non-empty"               "$(yes_if test -s "$TMP/a.frag"
 assert "two runs at one HEAD are byte-identical" "$(yes_if cmp -s "$TMP/a.frag" "$TMP/b.frag")"
 assert "…and the whole page is too"              "$(yes_if cmp -s "$A" "$B")"
 assert "a cache was written, keyed to the SHA" \
-  "$(yes_if grep -qF "$(git -C "$INST" rev-parse HEAD)" "$INST/.board-others.json")"
+  "$(yes_if grep -qF "$(git -C "$INST" rev-parse HEAD)" "$INST/$AB_BOARD_OTHERS")"
 assert "…and it is gitignored by the seed" \
   "$(yes_if grep -qF '.board-others.json' "$TPL/plugin/seed/.gitignore")"
 # Read through the resolver, not for a literal: init-bundle.sh spells the layout as
@@ -210,7 +213,7 @@ assert "…and the recent cached section is served"    "$(fhas '>bob<' "$G")"
 assert "…with no traceback"                          "$(fhasnt 'Traceback (most recent call last)' "$TMP/g.err")"
 # …and it is a fallback, not a schedule: an EXPIRED entry is not served, so nothing here
 # can quietly become a timer-driven refresh.
-python3 - "$INST/.board-others.json" <<'PYX'
+python3 - "$INST/$AB_BOARD_OTHERS" <<'PYX'
 import json, sys
 p = sys.argv[1]
 d = json.load(open(p, encoding="utf-8"))
@@ -252,11 +255,11 @@ assert "…and a named owner is still named"       "$(fhas '>bob<' "$D")"
 
 # A directory that is not a git repository has no HEAD to key on: no second section, no
 # error, and the own half renders exactly as before.
-NOGIT="$TMP/_ai-bridge-solo"; mkdir -p "$NOGIT"
-printf 'stub\n' > "$NOGIT/SCHEMA.md"
+NOGIT="$TMP/_ai-bridge-solo"; mkdir -p "$NOGIT" "$NOGIT/$AB_DIR"
+printf 'stub\n' > "$NOGIT/$AB_SCHEMA"
 cp "$INST/instance.config.json" "$NOGIT/instance.config.json"
 cp -R "$INST/projects" "$NOGIT/projects"
-: > "$NOGIT/SNAPSHOT.json"
+: > "$NOGIT/$AB_SNAPSHOT"
 ( cd "$NOGIT" && SNAPSHOT_NOW=2026-08-26T00:00:00Z bash "$WRITER" --quiet ) >/dev/null 2>&1
 E="$TMP/e.html"; rce=0
 ( cd "$NOGIT" && bash "$GEN" --out "$E" . ) >"$TMP/e.err" 2>&1 || rce=$?

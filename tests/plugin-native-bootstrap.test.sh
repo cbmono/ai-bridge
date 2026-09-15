@@ -23,6 +23,9 @@
 # ok() compares actual to expected, per this directory's convention.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/plugin-native.XXXXXX")" || {
   echo "plugin-native-bootstrap.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -131,9 +134,9 @@ ok "the stamp exits 0"                   "$FRC" 0
 ok "…creating the directory it was given" "$(yn test -d "$FRESH")" yes
 ok "…with instance.config.json"          "$(yn test -f "$FRESH/instance.config.json")" yes
 ok "…and instance.config.local.json"     "$(yn test -f "$FRESH/instance.config.local.json")" yes
-ok "…the seed docs"                      "$(yn bash -c 'test -f "$1/CLAUDE.md" && test -f "$1/SCHEMA.md" && test -f "$1/CONVENTIONS.md" && test -f "$1/agents/index.md"' _ "$FRESH")" yes
+ok "…the seed docs"                      "$(yn bash -c 'test -f "$1/CLAUDE.md" && test -f "$1/$AB_SCHEMA" && test -f "$1/$AB_CONVENTIONS" && test -f "$1/$AB_ROSTER"' _ "$FRESH")" yes
 ok "…its own .claude/settings.json"      "$(yn test -f "$FRESH/.claude/settings.json")" yes
-ok "…the awaiting queue, on a FIRST stamp only" "$(yn test -f "$FRESH/AWAITING.md")" yes
+ok "…the awaiting queue, on a FIRST stamp only" "$(yn test -f "$FRESH/$AB_AWAITING")" yes
 ok "…and a .gitignore with no machinery block" \
    "$(grep -c 'ai-bridge machinery' "$FRESH/.gitignore" | tr -d ' ')" 0
 ok "…and the derived-index ignore block"  "$(grep -c 'ai-bridge index ignore' "$FRESH/.gitignore" | tr -d ' ')" 2
@@ -152,10 +155,10 @@ ok "…while this clone's local config is written" "$(yn test -f "$FRESH/instanc
 ok "…carrying the derived reposRoot"     "$(grep -c '"reposRoot"' "$FRESH/instance.config.local.json" | tr -d ' ')" 1
 # IDEMPOTENT, and the queue's off switch survives it: AWAITING.md is created on a FIRST
 # stamp only, so a deletion must be permanent.
-rm -f "$FRESH/AWAITING.md"
+rm -f "$FRESH/$AB_AWAITING"
 bash "$INIT" "$FRESH" >"$TMP/fresh2.out" 2>&1
 ok "a re-stamp exits 0"                  "$?" 0
-ok "…and does NOT resurrect AWAITING.md" "$(yn test -e "$FRESH/AWAITING.md")" no
+ok "…and does NOT resurrect AWAITING.md" "$(yn test -e "$FRESH/$AB_AWAITING")" no
 ok "…seeding nothing new"                "$(grep -c '^  seed ' "$TMP/fresh2.out" | tr -d ' ')" 0
 
 # =========================================================================================
@@ -179,10 +182,10 @@ echo "== 4. a symlink-era bundle converts in place, and its data survives =="
 # The fixture is stamped the way the retired install.sh stamped: absolute symlinks into a
 # template checkout, a managed .gitignore block, and real data beside them.
 OLD="$TMP/oldtpl"
-mkdir -p "$OLD/seed" "$OLD/symlink/scripts" "$OLD/symlink/.claude/hooks" "$OLD/symlink/agents"
+mkdir -p "$OLD/seed" "$OLD/symlink/scripts" "$OLD/symlink/.claude/hooks" "$(dirname "$OLD/symlink/$AB_ROSTER")"
 printf '0.20.0\n' > "$OLD/VERSION"; printf '{}\n' > "$OLD/seed/instance.config.json"
 for f in SCHEMA.md CONVENTIONS.md AUTONOMY.md; do printf 'old %s\n' "$f" > "$OLD/symlink/$f"; done
-printf 'old roster\n' > "$OLD/symlink/agents/index.md"
+printf 'old roster\n' > "$OLD/symlink/$AB_ROSTER"
 printf '#!/bin/sh\n' > "$OLD/symlink/scripts/commit-as.sh"
 printf '#!/bin/sh\n' > "$OLD/symlink/.claude/hooks/push-state.sh"
 
@@ -197,6 +200,7 @@ printf 'the log\n' > "$LEG/log.md"
 DATA_BEFORE="$(cat "$LEG/projects/demo/index.md" "$LEG/projects/demo/tasks/task-001-x.md" \
                    "$LEG/knowledge/findings/f.md" "$LEG/log.md")"
 for p in SCHEMA.md CONVENTIONS.md AUTONOMY.md; do ln -s "$OLD/symlink/$p" "$LEG/$p"; done
+# The legacy links sat at the PRE-3.0 root, which is what makes this a legacy bundle.
 ln -s "$OLD/symlink/agents/index.md" "$LEG/agents/index.md"
 ln -s "$OLD/symlink/scripts/commit-as.sh" "$LEG/scripts/commit-as.sh"
 ln -s "$OLD/symlink/.claude/hooks/push-state.sh" "$LEG/.claude/hooks/push-state.sh"
@@ -229,9 +233,9 @@ ok "…and a dangling one was retired as such" \
    "$(grep -c 'retire scripts/dead.sh — dangling' "$TMP/convert.out" | tr -d ' ')" 1
 ok "…and a LIVE one as a machinery link" \
    "$(grep -c 'retire scripts/commit-as.sh — machinery link' "$TMP/convert.out" | tr -d ' ')" 1
-ok "SCHEMA.md is a real file now"        "$(yn bash -c 'test -f "$1/SCHEMA.md" && ! test -L "$1/SCHEMA.md"' _ "$LEG")" yes
-ok "CONVENTIONS.md too"                  "$(yn bash -c 'test -f "$1/CONVENTIONS.md" && ! test -L "$1/CONVENTIONS.md"' _ "$LEG")" yes
-ok "agents/index.md too"                 "$(yn bash -c 'test -f "$1/agents/index.md" && ! test -L "$1/agents/index.md"' _ "$LEG")" yes
+ok "SCHEMA.md is a real file now"        "$(yn bash -c 'test -f "$1/$AB_SCHEMA" && ! test -L "$1/$AB_SCHEMA"' _ "$LEG")" yes
+ok "CONVENTIONS.md too"                  "$(yn bash -c 'test -f "$1/$AB_CONVENTIONS" && ! test -L "$1/$AB_CONVENTIONS"' _ "$LEG")" yes
+ok "agents/index.md too"                 "$(yn bash -c 'test -f "$1/$AB_ROSTER" && ! test -L "$1/$AB_ROSTER"' _ "$LEG")" yes
 # AUTONOMY.md is the deliberate exception — absence is the safe default, so it is NOT
 # restored, and the loss is reported loudly with the command to undo it.
 ok "AUTONOMY.md is NOT restored"         "$(yn test -e "$LEG/AUTONOMY.md")" no
@@ -290,7 +294,7 @@ CRC=$?
 ok "the stamp exits 0 from the installed layout" "$CRC" 0
 [ "$CRC" -eq 0 ] || sed 's/^/        /' "$TMP/cache.out" >&2
 ok "…with instance.config.json"                  "$(yn test -f "$CFRESH/instance.config.json")" yes
-ok "…the seed docs"                              "$(yn bash -c 'test -f "$1/CLAUDE.md" && test -f "$1/SCHEMA.md" && test -f "$1/CONVENTIONS.md" && test -f "$1/agents/index.md"' _ "$CFRESH")" yes
+ok "…the seed docs"                              "$(yn bash -c 'test -f "$1/CLAUDE.md" && test -f "$1/$AB_SCHEMA" && test -f "$1/$AB_CONVENTIONS" && test -f "$1/$AB_ROSTER"' _ "$CFRESH")" yes
 ok "…and its own .claude/settings.json"          "$(yn test -f "$CFRESH/.claude/settings.json")" yes
 ok "validate-bundle.sh reports no error" \
    "$( ( cd "$CFRESH" && bash "$CACHE/scripts/validate-bundle.sh" >/dev/null 2>&1 ); echo $? )" 0

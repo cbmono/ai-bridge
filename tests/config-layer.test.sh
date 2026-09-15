@@ -45,6 +45,9 @@
 # instances are never touched.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/configlayer.XXXXXX")" || {
   echo "config-layer.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -256,7 +259,7 @@ ok "…the instance is seeded"              "$(yn test -f "$I/instance.config.js
 # THE BUNDLE HALF NO LONGER LINKS ANYTHING (task-013): SCHEMA.md is seed content copied
 # into the bundle, and a link there would be exactly the symlink-era state /ai-bridge:init
 # converts away from. Both halves are asserted so the change cannot be read as a loss.
-ok "…SCHEMA.md is a real file, not a link"  "$(yn test -f "$I/SCHEMA.md")" yes
+ok "…SCHEMA.md is a real file, not a link"  "$(yn test -f "$I/$AB_SCHEMA")" yes
 ok "…and nothing in the bundle is a symlink" \
    "$([ -z "$(find "$I" -type l 2>/dev/null)" ] && echo yes || echo no)" yes
 ok "--config there says so, exit 2"       "$(run_cfg "$(newdest 7)" "$T4")" 2

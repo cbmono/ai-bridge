@@ -90,6 +90,14 @@ INSTANCE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 INSTANCE_ROOT="$(cd "$INSTANCE_ROOT" 2>/dev/null && pwd -P || printf '%s' "$INSTANCE_ROOT")"
 [ -f "$INSTANCE_ROOT/instance.config.json" ] || exit 0
 
+# The layout resolver, from the plugin this hook ships in. Unreachable ⇒ fail OPEN, the
+# same direction the missing-jq branch below takes: a guard that cannot read the layout
+# must not start denying by accident.
+_self="${BASH_SOURCE[0]:-$0}"; case "$_self" in /*) ;; *) _self="$PWD/$_self" ;; esac
+[ -L "$_self" ] && _self="$(readlink "$_self" 2>/dev/null || printf '%s' "$_self")"
+# shellcheck source=../scripts/bundle-paths.sh
+. "${CLAUDE_PLUGIN_ROOT:-${_self%/hooks/*}}/scripts/bundle-paths.sh" 2>/dev/null || exit 0
+
 # ------------------------------------------------------------------------------- payload
 payload="$(cat 2>/dev/null || true)"
 [ -n "$payload" ] || exit 0
@@ -281,14 +289,17 @@ default_branch() {
   printf '%s' "$_default_branch"
 }
 
-# Is the SESSION's cwd a control-panel instance root? The `SCHEMA.md` + `instance.config.json`
-# pair `skills/dispatch/SKILL.md` precondition 1 checks — deliberately the payload's `cwd` and
-# NOT `$INSTANCE_ROOT`, which is `$CLAUDE_PROJECT_DIR` and stays the bundle even for an agent
-# whose cwd is a worktree. Cached: it is two stats in front of every Bash call.
+# Is the SESSION's cwd a control-panel instance root? The `$AB_SCHEMA` +
+# `instance.config.json` pair `skills/dispatch/SKILL.md` precondition 1 checks —
+# deliberately the payload's `cwd` and NOT `$INSTANCE_ROOT`, which is `$CLAUDE_PROJECT_DIR`
+# and stays the bundle even for an agent whose cwd is a worktree. It stays a PAIR rather
+# than becoming the hook's own one-marker guard above: a target repo that happens to hold
+# an `instance.config.json` would otherwise arm this rule inside it.
+# Cached: it is two stats in front of every Bash call.
 _cwd_instance=""
 cwd_is_instance_root() {
   if [ -z "$_cwd_instance" ]; then
-    if [ -f "$CWD/instance.config.json" ] && [ -f "$CWD/SCHEMA.md" ]; then _cwd_instance=yes
+    if [ -f "$CWD/instance.config.json" ] && [ -f "$CWD/$AB_SCHEMA" ]; then _cwd_instance=yes
     else _cwd_instance=no; fi
   fi
   [ "$_cwd_instance" = yes ]
@@ -588,6 +599,15 @@ EOT
       fi
       if [ -n "$root" ] && covers "$p" "$root"; then
         printf '`rm -r %s` is at or above the root of the working tree (`%s`) — it would take uncommitted and unpushed work, and anything alongside it. Deleting a path INSIDE the tree (build output, node_modules, a scratch dir) is allowed.' "$p" "$root"
+        return 0
+      fi
+      # THE BUNDLE'S PLUGIN-OWNED DIRECTORY, AS A PREFIX — not a list of filenames, so a
+      # file the layout gains later is covered the day it lands. A recursive delete at or
+      # above it takes SCHEMA.md, CONVENTIONS.md, the tick ledger and the roster together.
+      # Deleting ONE derived file inside it stays allowed: the seed .gitignore tells a
+      # human to do exactly that to turn the queue or the board off.
+      if covers "$p" "$(phys "$INSTANCE_ROOT/$AB_DIR")"; then
+        printf '`rm -r %s` is at or above `%s`, the bundle'"'"'s plugin-owned directory — it would take SCHEMA.md, CONVENTIONS.md, the tick ledger and the roster with it. Deleting one derived file inside it (the awaiting queue, the board cache) is allowed.' "$p" "$AB_DIR"
         return 0
       fi
     done <<EOT

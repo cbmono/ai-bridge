@@ -128,6 +128,7 @@ done
 next_check="on the next tick"
 [ -n "$gap" ] && next_check="in $gap"
 [ -d "$inst" ] || { echo "tick-delta: no such instance directory: $inst" >&2; exit 2; }
+ab_ensure_dir "$inst"
 STATE="$inst/$STATE_NAME"
 
 fail2() { echo "CANNOT ANSWER: $1 — run the full tick." >&2; exit 2; }

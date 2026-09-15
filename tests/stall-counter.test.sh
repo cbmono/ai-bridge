@@ -29,6 +29,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$REPO/plugin/scripts/bundle-paths.sh"
 SCRIPT="$REPO/plugin/scripts/stall-counter.sh"
 PM_DOC="$REPO/plugin/agents/project-manager.md"
 [ -f "$SCRIPT" ] || { echo "stall-counter.test: missing $SCRIPT" >&2; exit 2; }
@@ -104,13 +106,13 @@ assert "…and the blocker after the · separator"    "$(has "· stalled 2/2 rou
 # hand-copied literal in this file could never catch.
 # The queue is RENDERED by build-awaiting.sh since ai-bridge-v3/task-024, so the contract
 # is read off a live render rather than off prose: the row shape is now a thing that runs.
-QI="$TMP/queue-inst"; mkdir -p "$QI/projects/p/tasks"
-printf '{ "org": "x" }\n' > "$QI/instance.config.json"; printf '# S\n' > "$QI/SCHEMA.md"; : > "$QI/AWAITING.md"
+QI="$TMP/queue-inst"; mkdir -p "$QI/projects/p/tasks" "$QI/$AB_DIR"
+printf '{ "org": "x" }\n' > "$QI/instance.config.json"; printf '# S\n' > "$QI/$AB_SCHEMA"; : > "$QI/$AB_AWAITING"
 printf -- '---\ntype: Project\ntitle: "P"\nstatus: active\n---\n' > "$QI/projects/p/project.md"
 printf -- '---\ntype: Task\ntitle: "T"\nstatus: blocked\nacceptance_criteria: [ "x" ]\nopen_questions: [ ]\n---\n' \
   > "$QI/projects/p/tasks/task-001-t.md"
 bash "$REPO/plugin/scripts/build-awaiting.sh" --instance "$QI" >/dev/null 2>&1
-assert "build-awaiting.sh renders that same row"   "$(has '* ⛔ **unblock** — ' "$(cat "$QI/AWAITING.md" 2>/dev/null)")"
+assert "build-awaiting.sh renders that same row"   "$(has '* ⛔ **unblock** — ' "$(cat "$QI/$AB_AWAITING" 2>/dev/null)")"
 
 echo
 echo "== re-running the escalation is idempotent =="

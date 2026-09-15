@@ -41,6 +41,9 @@
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
 PM="$REPO/plugin/tick-steps/step-3-dispatch.md"
@@ -152,7 +155,7 @@ INST="$TMP/instance"; mkdir -p "$INST"
 OUT="$(bash "$LOCKSH" acquire --as tick --instance "$INST" 2>&1)"; RC=$?
 ok "a tick nothing dispatched is refused for real" "$RC" 4
 ok "…and the refusal names the resume"   "$(printf '%s' "$OUT" | grep -qF 'never resumed' && echo yes || echo no)" yes
-ok "…leaving no lock behind"             "$([ -e "$INST/.tick-lock" ] && echo yes || echo no)" no
+ok "…leaving no lock behind"             "$([ -e "$INST/$AB_LOCK" ] && echo yes || echo no)" no
 # …and the same command, after a launcher has taken the lock, proceeds — so the refusal is
 # specific to "nobody dispatched you" and has not become a blanket refusal that would
 # deadlock every dispatched tick.

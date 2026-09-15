@@ -40,7 +40,10 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+
 TPL="$(cd "$HERE/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
 AB="$TPL/plugin/scripts/ai-bridge.sh"
 # The four ai-bridge hooks are registered by the PLUGIN since task-013.
@@ -109,7 +112,7 @@ sys.stdout.write(d if isinstance(d, str) else json.dumps(d))
 # own resolved path. A copy would silently lose the settings table and the check block —
 # half the surface this file is about.
 INST="$TMP/_ai-bridge-fixture"
-mkdir -p "$INST/.claude/agents" "$INST/.claude/hooks"
+mkdir -p "$INST/.claude/agents" "$INST/.claude/hooks" "$INST/$AB_DIR"
 ln -s "$HOOK" "$INST/.claude/hooks/session-banner.sh"
 cat > "$INST/instance.config.json" <<'EOF'
 {
@@ -125,8 +128,9 @@ EOF
 # ONE MACHINERY LINK, so §0's red alarm fires. Since task-013 the alarm is about a bundle
 # that still carries machinery symlinks at all — a dangling one is broken and a LIVE one is
 # frozen at whatever checkout it points into — so a dangling SCHEMA.md still trips it.
+# The probe list is the PRE-PLUGIN root layout, so this stays a root path.
 ln -s "$TMP/gone/SCHEMA.md" "$INST/SCHEMA.md"
-printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/AWAITING.md"
+printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — a thing\n' > "$INST/$AB_AWAITING"
 
 # THE COMMAND hooks.json REGISTERS, read out of the file and never retyped here. A
 # harness that ran `--format json` of its own accord would stay green through a

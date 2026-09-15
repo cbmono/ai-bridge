@@ -35,7 +35,7 @@ case "$INTERVAL" in ''|*[!0-9]*|0) echo "board-serve: --interval takes a positiv
 
 # Self-detecting and silent when it does not apply, exactly as watch-board.sh is: this
 # ships into every bundle and will be run from the wrong directory.
-[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || exit 0
+ab_is_bundle . || exit 0
 
 # The PHYSICAL path, so a bundle reached through a symlink (or a `//` in TMPDIR) derives
 # ONE port rather than one per route.

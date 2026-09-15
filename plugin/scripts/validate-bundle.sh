@@ -88,8 +88,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || {
-  echo "validate-bundle: run from a control-panel instance root ($AB_SCHEMA + instance.config.json)." >&2
+ab_is_bundle . || {
+  echo "validate-bundle: run from a control-panel instance root (instance.config.json)." >&2
   exit 2
 }
 
@@ -271,7 +271,7 @@ while IFS= read -r file; do
     author="$(printf '%s\n' "$fm" | sed -n 's/^author:[[:space:]]*//p' | head -1 \
               | sed 's/[[:space:]]*$//; s/^"\(.*\)"$/\1/; s/^'"'"'\(.*\)'"'"'$/\1/')"
     if [[ -n "$author" ]] && ! printf '%s' "$author" | grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'; then
-      warn "$rel" "author: '$author' is not a GitHub login (SCHEMA.md, 'author:')"
+      warn "$rel" "author: '$author' is not a GitHub login ($AB_SCHEMA, 'author:')"
     fi
     # The index row, the tags and the supersession edges are build-kb-index.sh's half of
     # the contract; it reads knowledge/index.md, which is not a concept document.

@@ -50,6 +50,8 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PM="$REPO/plugin/tick-steps/step-2-refine-drafts.md"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 SEED_CFG="$REPO/plugin/seed/instance.config.json"
 VALIDATOR="$REPO/plugin/scripts/validate-bundle.sh"
@@ -204,10 +206,10 @@ ok "validate-bundle.sh mentions advisor_notes nowhere" \
 # second is the CONTROL — it proves the fixture is capable of producing an awaiting verb,
 # so "advisor notes produce none" is a fact about advisor notes and not about the fixture.
 BUNDLE="$TMP/bundle"
-mkdir -p "$BUNDLE/objectives" "$BUNDLE/projects/ci/tasks"
+mkdir -p "$BUNDLE/objectives" "$BUNDLE/projects/ci/tasks" "$BUNDLE/$AB_DIR"
 cp "$SEED_CFG" "$BUNDLE/instance.config.json"
-printf '# Schema\n' > "$BUNDLE/SCHEMA.md"
-: > "$BUNDLE/SNAPSHOT.json"
+printf '# Schema\n' > "$BUNDLE/$AB_SCHEMA"
+: > "$BUNDLE/$AB_SNAPSHOT"
 TS="2026-01-01T00:00:00Z"
 { echo '---'; echo 'type: Objective'; echo 'title: Live'; echo 'status: active'
   echo "timestamp: $TS"; echo '---'; echo 'body'; } > "$BUNDLE/objectives/live.md"
@@ -232,7 +234,7 @@ ok "…and the validator says nothing about it"  "$(saw "$VOUT" 'advisor')" no
 SOUT="$(cd "$BUNDLE" && bash "$WRITER" --quiet 2>&1)"; SRC=$?
 ok "write-snapshot.sh ran"                     "$SRC" 0
 ok "…quietly"                                  "$([ -z "$SOUT" ] && echo yes || echo no)" yes
-SNAP="$BUNDLE/SNAPSHOT.json"
+SNAP="$BUNDLE/$AB_SNAPSHOT"
 jqt() { jq -r --arg id "$1" '.projects[0].tasks[] | select(.id == $id) | '"$2" "$SNAP"; }
 ok "the advisor-note task is counted, 2 notes"  "$(jqt task-001 '.advisor_notes')" 2
 ok "…and awaits NOTHING"                        "$(jqt task-001 '.awaiting')" ""

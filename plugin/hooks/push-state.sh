@@ -15,10 +15,10 @@
 # supersedes whatever came before.
 #
 # SELF-DETECTING. It prints nothing at all unless the root looks like a
-# control-panel instance — `SCHEMA.md` + `instance.config.json`, the same marker
-# every other reader uses. (`.claude/agents` was the third of a triple until the
-# name swap retired it; the role agents ship in the `ai-bridge` plugin now, so a
-# check on that directory would silence this in every instance.) So it is safe to
+# control-panel instance — `instance.config.json`, the same one marker every other
+# reader uses. (`SCHEMA.md` and `.claude/agents` were the other two of a triple;
+# both are machinery paths this migration moves or retires, so keying on either
+# would silence this in every instance.) So it is safe to
 # inherit in any non-bridge project, and safe to run from anywhere.
 #
 # INSIDE an instance it always prints, zeros included. "in-flight 0" is precisely
@@ -44,9 +44,17 @@ set -euo pipefail
 
 root="${CLAUDE_PROJECT_DIR:-$PWD}"
 
+# The layout resolver, from the plugin this hook ships in. `CLAUDE_PLUGIN_ROOT` is
+# set for a plugin hook; the fallback keeps it runnable by hand and by the tests.
+# Unreachable ⇒ silence, never a guess at the pre-3.0 root path.
+self="${BASH_SOURCE[0]:-$0}"; case "$self" in /*) ;; *) self="$PWD/$self" ;; esac
+[ -L "$self" ] && self="$(readlink "$self" 2>/dev/null || printf '%s' "$self")"
+# shellcheck source=../scripts/bundle-paths.sh
+. "${CLAUDE_PLUGIN_ROOT:-${self%/hooks/*}}/scripts/bundle-paths.sh" 2>/dev/null || exit 0
+
 # Not an instance ⇒ silent, zero. Absence of the bundle is the off switch here,
-# the same way an absent AWAITING.md silences session-banner.sh.
-[ -f "$root/SCHEMA.md" ] && [ -f "$root/instance.config.json" ] || exit 0
+# the same way an absent awaiting queue silences session-banner.sh.
+ab_is_bundle "$root" || exit 0
 
 # NORMALISED TO BASE 10 BEFORE ANY ARITHMETIC. The digit check below accepts a
 # leading zero, and bash then reads `08` as OCTAL — where 8 is not a legal digit.
@@ -197,17 +205,17 @@ if [ "${#FILES[@]}" -gt 0 ]; then
 fi
 
 # ---------------------------------------------------------------- awaiting count
-# Counted from AWAITING.md with the same extraction session-banner.sh uses — this
+# Counted from the awaiting queue with the same extraction session-banner.sh uses — this
 # hook only READS that file and never reshapes it. Absent means the human turned
 # the queue off, which is not the same claim as "nothing awaits you", so say so
 # rather than printing a 0 nobody measured.
-awaiting="off (no AWAITING.md)"
-if [ -f "$root/AWAITING.md" ]; then
+awaiting="off (no $AB_AWAITING)"
+if [ -f "$root/$AB_AWAITING" ]; then
   awaiting="$(awk '
     /^##[[:space:]].*Awaiting you/ { inblk=1; next }
     inblk && /^##[[:space:]]/       { exit }
     inblk                           { print }
-  ' "$root/AWAITING.md" 2>/dev/null | grep -cE '^[[:space:]]*\* ' || true)"
+  ' "$root/$AB_AWAITING" 2>/dev/null | grep -cE '^[[:space:]]*\* ' || true)"
   awaiting="${awaiting:-0}"
 fi
 

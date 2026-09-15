@@ -22,6 +22,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 SERVE="$REPO/plugin/scripts/board-serve.sh"
 WRITER="$REPO/plugin/scripts/write-snapshot.sh"
 for f in "$SERVE" "$WRITER"; do
@@ -47,8 +50,8 @@ skipped() { printf '  SKIP  %s\n' "$1"; skip=$((skip+1)); }
 yes_if() { if "$@" >/dev/null 2>&1; then echo yes; else echo no; fi; }
 
 new_instance() { # <dir>
-  mkdir -p "$1/projects/p/tasks"
-  : > "$1/SCHEMA.md"
+  mkdir -p "$1/projects/p/tasks" "$1/$AB_DIR"
+  : > "$1/$AB_SCHEMA"
   cat > "$1/instance.config.json" <<CFG
 { "org": "fixture-org", "reposRoot": "$TMP/repos" }
 CFG
@@ -69,7 +72,7 @@ status: ready
 assignee: software-engineer
 ---
 TSK
-  touch "$1/SNAPSHOT.json"
+  touch "$1/$AB_SNAPSHOT"
   ( cd "$1" && SNAPSHOT_NOW=2026-09-06T00:00:00Z bash "$WRITER" --quiet )
 }
 
@@ -129,10 +132,10 @@ start_server() { # <instance dir> <logfile> — starts, watchdogs, waits for the
   # log (CI run 34032940065), so a timeout prints what the server said.
   deadline=$(( $(date +%s) + 30 ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    [ "$(raw_get "$port" /__bundle)" = "200" ] && [ -f "$1/.board-live/board.html" ] && break
+    [ "$(raw_get "$port" /__bundle)" = "200" ] && [ -f "$1/$AB_BOARD_DIR/board.html" ] && break
     sleep 1
   done
-  [ -f "$1/.board-live/board.html" ] || { echo "  ---- $2 ----"; sed -n '1,20p' "$2"; }
+  [ -f "$1/$AB_BOARD_DIR/board.html" ] || { echo "  ---- $2 ----"; sed -n '1,20p' "$2"; }
   printf '%s' "$p"
 }
 
@@ -171,7 +174,7 @@ echo
 echo "== 2. one process per bundle: a second start says so and exits 0 =="
 SRV_A="$(start_server "$A" "$TMP/a.log")"
 ok "the server came up"                               "$(raw_get "$PA" /__bundle)" 200
-ok "…and the state file names its live pid"          "$(sed -n 2p "$A/.board-live/.serve")" "$SRV_A"
+ok "…and the state file names its live pid"          "$(sed -n 2p "$A/$AB_BOARD_DIR/.serve")" "$SRV_A"
 SECOND="$(cd "$A" && bash "$SERVE" 2>&1; echo "rc=$?")"
 ok "a second start exits 0"                           "$(printf '%s' "$SECOND" | tail -1)" "rc=0"
 ok "…and names the port as already served"            \
@@ -200,7 +203,7 @@ kill -TERM "$FPID" 2>/dev/null; wait "$FPID" 2>/dev/null
 
 echo
 echo "== 3. it serves .board-live/ and nothing else =="
-ln -sf "$A/instance.config.json" "$A/.board-live/leak.json"
+ln -sf "$A/instance.config.json" "$A/$AB_BOARD_DIR/leak.json"
 ok "CONTROL: the board page itself is served"         "$(raw_get "$PA" /board.html)" 200
 ok "…and / is the board page"                         "$(raw_get "$PA" /)" 200
 ok "a raw ../instance.config.json is 404"             "$(raw_get "$PA" /../instance.config.json)" 404
@@ -270,7 +273,7 @@ ok "…and the new title is on the page"                 \
 kill -TERM "$SRV_A" 2>/dev/null
 sleep 1
 ok "stopping it removes the state file the banner reads" \
-  "$(yes_if sh -c '! test -e "$1"' _ "$A/.board-live/.serve")" yes
+  "$(yes_if sh -c '! test -e "$1"' _ "$A/$AB_BOARD_DIR/.serve")" yes
 
 echo
 echo "== 5. the bind waits for nothing on the network =="
@@ -299,7 +302,7 @@ while [ "$(date +%s)" -lt "$DEADLINE" ]; do
   sleep 1
 done
 ok "a stalled reverse-DNS lookup does not delay the bind" "$UP" yes
-ok "…and the state file still lands"                     "$(yes_if test -f "$C/.board-live/.serve")" yes
+ok "…and the state file still lands"                     "$(yes_if test -f "$C/$AB_BOARD_DIR/.serve")" yes
 kill -TERM "$SRV_C" 2>/dev/null
 
 echo

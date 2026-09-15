@@ -45,6 +45,9 @@
 # assert() follows the convention of the other harnesses here: 0 is a PASS.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL="$(cd "$HERE/.." && pwd)"
 WRITER="$TPL/plugin/scripts/write-snapshot.sh"
@@ -134,8 +137,8 @@ ESC="$(printf '\033')"
 
 # ---------------------------------------------------------------- fixture
 new_instance() { # <dir> — the minimum both renderers require of an instance root
-  mkdir -p "$1"
-  : > "$1/SCHEMA.md"
+  mkdir -p "$1" "$1/$AB_DIR"
+  : > "$1/$AB_SCHEMA"
   cat > "$1/instance.config.json" <<CFG
 { "org": "fixture-org", "reposRoot": "$TMP/repos" }
 CFG
@@ -212,15 +215,15 @@ status: active
 ---
 PRJ
 
-touch "$ALPHA/SNAPSHOT.json"
+touch "$ALPHA/$AB_SNAPSHOT"
 ( cd "$ALPHA" && SNAPSHOT_NOW=2026-08-23T00:00:00Z bash "$WRITER" --quiet )
 
-printf '{ this is not json' > "$BETA/SNAPSHOT.json"
+printf '{ this is not json' > "$BETA/$AB_SNAPSHOT"
 
 # The hostile snapshot, written through json.dump so every escape is unambiguous. Each
 # attack gets its OWN project, so one table row per attack and a forged row is visible
 # as a row that does not begin with the instance name.
-python3 - "$DELTA/SNAPSHOT.json" <<'PY'
+python3 - "$DELTA/$AB_SNAPSHOT" <<'PY'
 import json, sys
 
 def proj(slug, title, status="ready"):
@@ -260,7 +263,7 @@ mkdir -p "$TMP/stranger"
 S_OUT="$( cd "$TMP/stranger" && bash "$PRINT" 2>&1 )"; S_RC=$?
 assert "outside an instance root -> exits 0"        "$(eq "$S_RC" 0)"
 assert "…and prints absolutely nothing"             "$(eq "$S_OUT" "")"
-assert "…and creates no file there"                 "$(no_if test -e "$TMP/stranger/SNAPSHOT.json")"
+assert "…and creates no file there"                 "$(no_if test -e "$TMP/stranger/$AB_SNAPSHOT")"
 
 echo
 echo "== print-board: bad flags refuse rather than guess =="
@@ -279,12 +282,12 @@ assert "the healthy instance renders"                  "$(has 'CI hardening' "$O
 assert "…and so does the hostile one beside it"        "$(has 'delta' "$OUT")"
 assert "gamma has no snapshot, so it is absent"        "$(hasnt 'gamma' "$OUT")"
 assert "…and the reason is on stderr, not on the board" "$(has 'off the board' "$ERR")"
-assert "beta is a VISIBLE note, not a silent absence"  "$(has 'unreadable SNAPSHOT.json' "$OUT")"
+assert "beta is a VISIBLE note, not a silent absence"  "$(has "unreadable $AB_SNAPSHOT" "$OUT")"
 assert "…naming the instance by directory NAME"        "$(has '_ai-bridge-beta' "$OUT")"
 assert "…and not by its path"                          "$(hasnt '/_ai-bridge-beta' "$OUT")"
 assert "…telling the human what to re-run"             "$(has 'write-snapshot.sh' "$OUT")"
 assert "no filesystem path reaches the output"         "$(hasnt "$TMP" "$OUT")"
-assert "neither renderer created gamma's snapshot"     "$(no_if test -e "$GAMMA/SNAPSHOT.json")"
+assert "neither renderer created gamma's snapshot"     "$(no_if test -e "$GAMMA/$AB_SNAPSHOT")"
 assert "an out-of-enum status is counted under OTHER"  "$(has 'OTHER' "$OUT")"
 assert "…and named, so drift is visible"               "$(has 'made-up-status' "$OUT")"
 
@@ -364,9 +367,9 @@ echo "== print-board: a drifted snapshot cannot blank the board =="
 # and a bare int() would raise before a single line was printed, taking the healthy
 # instance down too. Both halves are asserted for every case.
 DRIFT="$TMP/group/_ai-bridge-drift"
-mkdir -p "$DRIFT"
+mkdir -p "$DRIFT" "$DRIFT/$AB_DIR"
 drift_case() { # <label> <snapshot json>
-  printf '%s\n' "$2" > "$DRIFT/SNAPSHOT.json"
+  printf '%s\n' "$2" > "$DRIFT/$AB_SNAPSHOT"
   local rc=0 out
   out="$( cd "$ALPHA" && bash "$PRINT" --width 0 "$ALPHA" "$DRIFT" 2>&1 )" || rc=$?
   assert "$1: exits 0"                            "$(eq "$rc" 0)"
@@ -388,7 +391,7 @@ drift_case "a task is a string, not an object" \
   '{"group":"drift","counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","tasks":["oops"]}]}'
 # ANCHORED to the instance column: a bare `has 5` would pass on any board, since the
 # counts alone print plenty of digits.
-printf '%s\n' '{"group":5,"counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","tasks":[]}]}' > "$DRIFT/SNAPSHOT.json"
+printf '%s\n' '{"group":5,"counts":{"tasks":1},"projects":[{"slug":"p","title":"Drifted","status":"active","tasks":[]}]}' > "$DRIFT/$AB_SNAPSHOT"
 D5="$( cd "$ALPHA" && bash "$PRINT" --width 0 "$ALPHA" "$DRIFT" 2>/dev/null )"
 assert "a non-string group becomes the row's instance cell" \
   "$(yes_if sh -c 'printf "%s\n" "$1" | grep -q "^5  *Drifted"' _ "$D5")"
@@ -433,7 +436,7 @@ echo "== watch-board: self-detecting, and silent where it does not apply =="
 W_OUT="$( cd "$TMP/stranger" && bash "$WATCH" --once 2>&1 )"; W_RC=$?
 assert "outside an instance root -> exits 0"  "$(eq "$W_RC" 0)"
 assert "…and prints absolutely nothing"       "$(eq "$W_OUT" "")"
-assert "…and creates no output directory"     "$(no_if test -e "$TMP/stranger/.board-live")"
+assert "…and creates no output directory"     "$(no_if test -e "$TMP/stranger/$AB_BOARD_DIR")"
 for bad in --nope --interval=0 --interval=x; do
   RC=0; ( cd "$ALPHA" && bash "$WATCH" "$bad" >/dev/null 2>&1 ) || RC=$?
   assert "'$bad' exits 2" "$(eq "$RC" 2)"
@@ -442,7 +445,7 @@ done
 echo
 echo "== watch-board --once: one render, into a gitignored directory =="
 O_OUT="$( cd "$ALPHA" && bash "$WATCH" --once "$ALPHA" "$BETA" "$GAMMA" 2>&1 )"; O_RC=$?
-PAGE="$ALPHA/.board-live/board.html"
+PAGE="$ALPHA/$AB_BOARD_DIR/board.html"
 assert "exits 0"                                  "$(eq "$O_RC" 0)"
 assert "…and says what it rendered"               "$(has 'rendered' "$O_OUT")"
 assert "the page is written"                      "$(yes_if test -s "$PAGE")"
@@ -450,9 +453,9 @@ assert "…as a standalone document, openable directly" "$(yes_if sh -c 'head -1
 assert "…rendering the healthy instance"          "$(fhas 'CI hardening' "$PAGE")"
 assert "…and the malformed one as a visible note" "$(fhas 'Unreadable snapshot' "$PAGE")"
 assert "an instance with no snapshot is absent"   "$(fhasnt '_ai-bridge-gamma' "$PAGE")"
-assert "…and its snapshot was NOT created"        "$(no_if test -e "$GAMMA/SNAPSHOT.json")"
-assert "the mtime stamp is cleaned up"            "$(no_if test -e "$ALPHA/.board-live/.watch-stamp")"
-assert "nothing else is left in the output dir"   "$(eq "$(ls -A "$ALPHA/.board-live" | grep -c . )" 1)"
+assert "…and its snapshot was NOT created"        "$(no_if test -e "$GAMMA/$AB_SNAPSHOT")"
+assert "the mtime stamp is cleaned up"            "$(no_if test -e "$ALPHA/$AB_BOARD_DIR/.watch-stamp")"
+assert "nothing else is left in the output dir"   "$(eq "$(ls -A "$ALPHA/$AB_BOARD_DIR" | grep -c . )" 1)"
 # It refreshes the snapshot before rendering, so the page reflects the DOCUMENTS rather
 # than the last /pm-loop tick. A new task must appear without running the writer.
 cat > "$ALPHA/projects/ci/tasks/task-004.md" <<'TSK'
@@ -562,7 +565,7 @@ assert "an unknown WATCH_BOARD_WATCHER refuses rather than guessing" "$(eq "$RC"
 
 echo
 echo "== watch-board: it re-renders on a change, and stops cleanly =="
-rm -rf "$ALPHA/.board-live"
+rm -rf "$ALPHA/$AB_BOARD_DIR"
 # `exec` again: the background job must BE the watcher, or `wait` below reads the
 # subshell's status instead of the watcher's and the exit-0-on-TERM assertion is vacuous.
 ( cd "$ALPHA" && exec bash "$WATCH" --interval 1 "$ALPHA" ) >"$TMP/watch.log" 2>&1 &
@@ -578,7 +581,7 @@ WATCHDOG=$!
 wait_for "$TMP/watch.log" "rendered" 200 || true
 assert "the watcher is running"                 "$(yes_if kill -0 "$WPID")"
 assert "…and has rendered once already"         "$(fhas 'rendered' "$TMP/watch.log")"
-assert "…leaving its stamp file in place"       "$(yes_if test -e "$ALPHA/.board-live/.watch-stamp")"
+assert "…leaving its stamp file in place"       "$(yes_if test -e "$ALPHA/$AB_BOARD_DIR/.watch-stamp")"
 BEFORE="$(grep -c 'rendered' "$TMP/watch.log" || true)"
 cat > "$ALPHA/projects/ci/tasks/task-005.md" <<'TSK'
 ---
@@ -602,25 +605,25 @@ WRC=0; wait "$WPID" 2>/dev/null || WRC=$?
 kill "$WATCHDOG" 2>/dev/null || true
 assert "a TERM exits 0 — stopping a watcher is not a failure" "$(eq "$WRC" 0)"
 assert "…saying the page is still there"            "$(fhas 'stopped. The page is still at' "$TMP/watch.log")"
-assert "…removing its stamp file"                   "$(no_if test -e "$ALPHA/.board-live/.watch-stamp")"
+assert "…removing its stamp file"                   "$(no_if test -e "$ALPHA/$AB_BOARD_DIR/.watch-stamp")"
 assert "…leaving the page it produced"              "$(yes_if test -s "$PAGE")"
 assert "…and no child process behind it"            "$(no_if pgrep -P "$WPID" )"
 
 echo
 echo "== the live page is gitignored — git's own answer, not the pattern text =="
-assert "seed/.gitignore ignores the live directory" "$(yes_if grep -qF '.board-live' "$TPL/plugin/seed/.gitignore")"
+assert "seed/.gitignore ignores the live directory" "$(yes_if grep -qF "$AB_BOARD_DIR" "$TPL/plugin/seed/.gitignore")"
 INST="$TMP/group/_ai-bridge-stamped"
 mkdir -p "$INST"
 ( cd "$INST" && git init -q . ) 2>/dev/null || true
 bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1 </dev/null
-mkdir -p "$INST/.board-live" && : > "$INST/.board-live/board.html" && : > "$INST/.board-live/probe.txt"
+mkdir -p "$INST/$AB_BOARD_DIR" && : > "$INST/$AB_BOARD_DIR/board.html" && : > "$INST/$AB_BOARD_DIR/probe.txt"
 assert "a FRESH stamp ignores the page" \
-  "$(yes_if git -C "$INST" check-ignore -q .board-live/board.html)"
+  "$(yes_if git -C "$INST" check-ignore -q "$AB_BOARD_DIR"/board.html)"
 # The probe file, not board.html: the seed carries a bare `board.html` line that matches
 # at ANY depth, so board.html inside the directory is ignored either way and cannot show
 # whether the DIRECTORY line is present. A test that cannot fail is worse than none.
 assert "…and the whole directory, not just the page" \
-  "$(yes_if git -C "$INST" check-ignore -q .board-live/probe.txt)"
+  "$(yes_if git -C "$INST" check-ignore -q "$AB_BOARD_DIR"/probe.txt)"
 # The case that actually matters: every instance in existence was stamped before this
 # directory existed, so the line has to reach an OLD .gitignore too.
 OLD="$TMP/group/_ai-bridge-old"
@@ -633,11 +636,11 @@ p = sys.argv[1]
 keep = [l for l in open(p).read().splitlines() if ".board-live" not in l]
 open(p, "w").write("\n".join(keep) + "\n")
 PY
-mkdir -p "$OLD/.board-live" && : > "$OLD/.board-live/probe.txt"
+mkdir -p "$OLD/$AB_BOARD_DIR" && : > "$OLD/$AB_BOARD_DIR/probe.txt"
 assert "…and with the line removed, git no longer ignores it" \
-  "$(no_if git -C "$OLD" check-ignore -q .board-live/probe.txt)"
+  "$(no_if git -C "$OLD" check-ignore -q "$AB_BOARD_DIR"/probe.txt)"
 bash "$BRIDGE_INSTALL" "$OLD" >/dev/null 2>&1 </dev/null
-assert "…a re-run of install.sh puts it back"  "$(yes_if git -C "$OLD" check-ignore -q .board-live/probe.txt)"
+assert "…a re-run of install.sh puts it back"  "$(yes_if git -C "$OLD" check-ignore -q "$AB_BOARD_DIR"/probe.txt)"
 assert "…exactly once, not once per run"       "$(eq "$(grep -cF '.board-live' "$OLD/.gitignore")" 1)"
 echo
 echo "== a fresh instance is named by its directory, not \".\" =="
@@ -911,7 +914,7 @@ echo "== the signal pill is LAST on the meta row, whatever else that row carries
 # positioning rule — so the pill's own CSS is pinned below as well.
 ORDER="$TMP/group/_ai-bridge-order"
 new_instance "$ORDER"
-python3 - "$ORDER/SNAPSHOT.json" <<'PY'
+python3 - "$ORDER/$AB_SNAPSHOT" <<'PY'
 import json, sys
 
 def task(i, status, awaiting="", notes=0):
@@ -1019,8 +1022,8 @@ sys.exit(0 if m and 'ANSITITLE' not in m.group(1) and 'FORGEDROW' not in m.group
 echo
 echo "== the board's Closed section =="
 CL="$TMP/group/_ai-bridge-closed"
-mkdir -p "$CL"
-cat > "$CL/SNAPSHOT.json" <<'JSON'
+mkdir -p "$CL" "$CL/$AB_DIR"
+cat > "$CL/$AB_SNAPSHOT" <<'JSON'
 { "_schema": "ai-bridge board snapshot v1", "group": "closed",
   "generated_at": "2026-09-08T00:00:00Z",
   "counts": {"projects": 0, "tasks": 0, "awaiting": 0},
@@ -1059,16 +1062,16 @@ assert "…and the chip counts deliverables, not projects" "$(fhas '<b>2</b> del
 # onto each record these two rows are indistinguishable — which is the whole reason the
 # aggregation carries it.
 CL2="$TMP/group/_ai-bridge-other"
-mkdir -p "$CL2"
-sed 's/"group": "closed"/"group": "other"/' "$CL/SNAPSHOT.json" > "$CL2/SNAPSHOT.json"
+mkdir -p "$CL2" "$CL2/$AB_DIR"
+sed 's/"group": "closed"/"group": "other"/' "$CL/$AB_SNAPSHOT" > "$CL2/$AB_SNAPSHOT"
 TWOH="$TMP/closed-two.html"
 ( cd "$TMP" && bash "$BOARD" --standalone --out "$TWOH" "$CL" "$CL2" >/dev/null 2>&1 )
 assert "two instances, same slug: the first row names its group"  "$(fhas 'ai-bridge-2x <span class="dim">· closed</span>' "$TWOH")"
 assert "…and the second names the other one"                      "$(fhas 'ai-bridge-2x <span class="dim">· other</span>' "$TWOH")"
 
 NOCL="$TMP/group/_ai-bridge-nocl"
-mkdir -p "$NOCL"
-python3 - "$CL/SNAPSHOT.json" "$NOCL/SNAPSHOT.json" <<'PY'
+mkdir -p "$NOCL" "$NOCL/$AB_DIR"
+python3 - "$CL/$AB_SNAPSHOT" "$NOCL/$AB_SNAPSHOT" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8")); d.pop("closed")
 open(sys.argv[2], "w", encoding="utf-8").write(json.dumps(d))

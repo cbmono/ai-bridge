@@ -204,12 +204,10 @@ TARGET="$(cd "${TARGET:-$PWD}" 2>/dev/null && pwd || true)"
 [ -d "$SEED_SRC" ] || {
   echo "refresh-seeds: template is incomplete (expected $SEED_SRC)" >&2; exit 2; }
 
-# A bundle root, or refuse. `-L` is still tested for SCHEMA.md because a bundle that has
-# not been converted yet carries it as a symlink into a template checkout — possibly a
-# BROKEN one, which is exactly a bundle that needs this, not a stranger.
-if [ ! -e "$TARGET/instance.config.json" ] || { [ ! -e "$TARGET/$AB_SCHEMA" ] && [ ! -L "$TARGET/$AB_SCHEMA" ]; }; then
+# A bundle root, or refuse.
+if ! ab_is_bundle "$TARGET"; then
   cat >&2 <<EOF
-refresh-seeds: $TARGET is not an ai-bridge bundle root (expected $AB_SCHEMA + instance.config.json).
+refresh-seeds: $TARGET is not an ai-bridge bundle root (expected instance.config.json).
                To create a NEW bundle, run /ai-bridge:init $TARGET
 EOF
   exit 2
@@ -501,7 +499,9 @@ seed_paths() {
 insync=0; portable=0; ported=0; resolved=0; conflict=0; unknown=0
 while IFS= read -r rel; do
   [ -n "$rel" ] || continue
-  seed_f="$SEED_SRC/$rel"; inst_f="$TARGET/$rel"
+  # The seed is flat and the bundle is not — `$rel` keys the seed, the template history
+  # and the stamped-seed record; only the instance side is mapped.
+  seed_f="$SEED_SRC/$rel"; inst_f="$TARGET/$(ab_seed_dest "$rel")"
 
   # THE CONFIG FILES ARE NEVER MERGED, AND THAT IS A SHIP-BLOCKER, NOT AN OMISSION.
   # `instance.config.json` is the one seed file whose entire purpose is to diverge — it

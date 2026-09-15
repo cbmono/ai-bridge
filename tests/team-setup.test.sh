@@ -39,6 +39,9 @@
 # fixture is copied as readily as a seed file.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/teamsetup.XXXXXX")" || {
   echo "team-setup.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -103,8 +106,8 @@ ok "no identity in instance.config.local.json" "$(no_identity "$I")" yes
 ok "…though step 4c seeded this machine's tiers" "$(yn grep -q '"roleTiers"' "$I/instance.config.local.json")" yes
 # A STAMP DELIVERS SEED CONTENT AND NO LINK (task-013). Both halves, so the change cannot
 # be read as a loss: the document arrived, and it arrived as the bundle's own file.
-ok "the bundle is otherwise stamped"       "$(yn test -f "$I/SCHEMA.md")" yes
-ok "…as a real file, not a link"           "$(yn test -L "$I/SCHEMA.md")" no
+ok "the bundle is otherwise stamped"       "$(yn test -f "$I/$AB_SCHEMA")" yes
+ok "…as a real file, not a link"           "$(yn test -L "$I/$AB_SCHEMA")" no
 ok "…and no machinery came with it"        "$(yn test -e "$I/scripts")" no
 
 # =========================================================================== #

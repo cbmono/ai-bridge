@@ -113,7 +113,7 @@ case "${WATCH_BOARD_WATCHER:-auto}" in auto|poll|fswatch) ;; *) echo "watch-boar
 [[ -n "$OUT_DIR" ]] || { echo "watch-board: --out needs a path" >&2; exit 2; }
 
 # Self-detecting, and silent when it does not apply — see the header.
-[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || exit 0
+ab_is_bundle . || exit 0
 
 # The sibling scripts, found relative to THIS file so it works from the template and
 # from an instance (where both are symlinks in the same scripts/ directory).

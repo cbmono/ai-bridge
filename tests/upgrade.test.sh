@@ -40,6 +40,9 @@
 # assert() follows the convention of the other harnesses here: 0 is a PASS.
 set -euo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TPL_SRC="$HERE/.."
 [[ -f "$TPL_SRC/plugin/scripts/refresh-seeds.sh" ]] || { echo "upgrade.test: not found at $TPL_SRC/plugin/scripts/refresh-seeds.sh" >&2; exit 2; }
@@ -116,7 +119,7 @@ printf -- '---\ntype: Finding\ntitle: F2\nstatus: wibble\ntimestamp: 2026-01-01T
 #   index.md  — untouched, i.e. the seed verbatim          ⇒ portable exactly
 sed 's/^intro line$/intro line — HOUSE EDIT/' "$INST/CLAUDE.md" > "$TMP/c" && mv "$TMP/c" "$INST/CLAUDE.md"
 printf 'INSTANCE TODO\n' >> "$INST/todos.md"
-printf 'an entry the instance wrote\n' >> "$INST/log.md"
+printf 'an entry the instance wrote\n' >> "$INST/$AB_LEDGER"
 # And the config, which every bundle edits: it must be REPORTED and never merged.
 printf '{\n  "org": "this-group"\n}\n' > "$INST/instance.config.json"
 cp "$INST/instance.config.json" "$TMP/config.pristine"
@@ -134,7 +137,7 @@ set +e; bash "$UPGRADE" "$TMP/stranger" > "$TMP/refuse.out" 2>&1; RC=$?; set -e
 assert "exits 2 on a directory that is not an instance" "$([[ $RC -eq 2 ]] && echo 0 || echo 1)"
 assert "says what it expected to find"    "$(has 'instance.config.json' "$(cat "$TMP/refuse.out")")"
 assert "points at /ai-bridge:init for a NEW bundle" "$(has 'ai-bridge:init' "$(cat "$TMP/refuse.out")")"
-assert "it did not stamp the stranger"    "$(yes_if test ! -e "$TMP/stranger/SCHEMA.md")"
+assert "it did not stamp the stranger"    "$(yes_if test ! -e "$TMP/stranger/$AB_SCHEMA")"
 set +e; bash "$UPGRADE" "$TMP/no-such-dir" >/dev/null 2>&1; RC=$?; set -e
 assert "exits 2 on a directory that does not exist" "$([[ $RC -eq 2 ]] && echo 0 || echo 1)"
 
@@ -182,7 +185,7 @@ assert "--apply exits 0 when every write landed" "$([[ $APPLY_RC -eq 0 ]] && ech
 assert "the mode is stated as apply"      "$(has 'mode:     APPLY' "$APPLY")"
 assert "index.md is reported PORTED"      "$(has 'PORTED    index.md' "$APPLY")"
 assert "index.md is now byte-identical to the current seed" \
-  "$(yes_if cmp -s "$TPL/plugin/seed/index.md" "$INST/index.md")"
+  "$(yes_if cmp -s "$TPL/plugin/seed/index.md" "$INST/$AB_INDEX")"
 assert "todos.md is reported PORTED"      "$(has 'PORTED    todos.md' "$APPLY")"
 assert "todos.md gained the seed's new line"  "$(yes_if grep -q '^TOP LINE FROM SEED V2$' "$INST/todos.md")"
 assert "todos.md KEPT the instance's own line" "$(yes_if grep -q '^INSTANCE TODO$' "$INST/todos.md")"
@@ -246,17 +249,17 @@ assert "the run names the record as its source" "$(has "history:  this bundle's 
 assert "…and the drifted file is judged, not UNKNOWN" "$(hasnt 'UNKNOWN   index.md' "$NOGIT_OUT")"
 assert "…and the seed change is portable on that base" "$(has 'PORTABLE  index.md' "$NOGIT_OUT")"
 assert "…and a report run still wrote nothing"  \
-  "$(yes_if cmp -s "$TPL/plugin/seed/index.md" "$INST/index.md")"
+  "$(yes_if cmp -s "$TPL/plugin/seed/index.md" "$INST/$AB_INDEX")"
 
 echo "== no history AND no record: UNKNOWN, naming the fix rather than the symptom =="
 NOREC="$TMP/group/_ai-bridge-norecord"
-cp -R "$INST" "$NOREC" && rm -rf "$NOREC/.ai-bridge"
+cp -R "$INST" "$NOREC" && rm -rf "$NOREC/$AB_DIR/seed-base" "$NOREC/$AB_DIR/refresh"
 NOREC_OUT="$(bash "$NOGIT/plugin/scripts/refresh-seeds.sh" "$NOREC" --apply 2>&1)"
 assert "the history line says there is none"   "$(has 'history:  none' "$NOREC_OUT")"
 assert "a drifted file with no merge base is UNKNOWN" "$(has 'UNKNOWN   index.md' "$NOREC_OUT")"
 assert "…and is not ported"            "$(hasnt 'PORTED    index.md' "$NOREC_OUT")"
 assert "…and index.md was not written" \
-  "$(yes_if cmp -s "$TPL/plugin/seed/index.md" "$NOREC/index.md")"
+  "$(yes_if cmp -s "$TPL/plugin/seed/index.md" "$NOREC/$AB_INDEX")"
 # Criterion 5: the explanation has to be actionable, not just true.
 assert "…and the UNKNOWN names the marketplace clone as a fix" \
   "$(has 'marketplace clone' "$NOREC_OUT")"
@@ -270,12 +273,12 @@ echo "== the four review findings, as refusals =="
 #    remaining file. It must classify this one and carry on.
 DIRCASE="$TMP/group/_ai-bridge-dircase"
 cp -R "$INST" "$DIRCASE"
-rm -f "$DIRCASE/index.md" && mkdir -p "$DIRCASE/index.md/somebody-made-this-a-folder"
+rm -f "$DIRCASE/$AB_INDEX" && mkdir -p "$DIRCASE/$AB_INDEX/somebody-made-this-a-folder"
 DIR_RC=0
 DIR_OUT="$(bash "$TPL/plugin/scripts/refresh-seeds.sh" "$DIRCASE" --apply 2>&1)" || DIR_RC=$?
 assert "a directory at a seeded path is UNKNOWN" "$(has 'UNKNOWN   index.md' "$DIR_OUT")"
 assert "…and is not ported"                      "$(hasnt 'PORTED    index.md' "$DIR_OUT")"
-assert "…and the directory is untouched"         "$(yes_if test -d "$DIRCASE/index.md/somebody-made-this-a-folder")"
+assert "…and the directory is untouched"         "$(yes_if test -d "$DIRCASE/$AB_INDEX/somebody-made-this-a-folder")"
 # The whole point of the guard: one odd path must not cost the report for the others.
 # These assert on work that happens strictly AFTER the loop reaches index.md: the per-stage
 # `summary:` tally is printed once the loop has classified all nine seed files, and
@@ -359,7 +362,7 @@ assert "…and the conflict shows the seed change to port" "$(has 'TEMPLATE V2' 
 MAPPLY="$(bash "$MTPL/plugin/scripts/refresh-seeds.sh" "$MINST" --apply 2>&1)"
 assert "--apply delivers the pre-move seed change"  "$(has 'PORTED    index.md' "$MAPPLY")"
 assert "…so the bundle now matches the moved seed" \
-  "$(yes_if cmp -s "$MTPL/plugin/seed/index.md" "$MINST/index.md")"
+  "$(yes_if cmp -s "$MTPL/plugin/seed/index.md" "$MINST/$AB_INDEX")"
 assert "…and the hand-diverged file was not forced" "$(yes_if grep -q 'HOUSE EDIT' "$MINST/CLAUDE.md")"
 
 echo "== the INSTALL layout: a cache copy with no .git, beside the marketplace clone =="
@@ -404,7 +407,7 @@ assert "…and the marketplace clone beside it is a real git repo" \
 
 # The bundle's own stamped record would answer too, so remove it: this block measures the
 # marketplace path and nothing else.
-rm -rf "$CINST/.ai-bridge"
+rm -rf "$CINST/$AB_DIR/seed-base" "$CINST/$AB_DIR/refresh"
 CACHE_OUT="$(bash "$CACHE/scripts/refresh-seeds.sh" "$CINST" 2>&1)"
 assert "the run names the marketplace clone as its source" "$(has 'history:  marketplace clone' "$CACHE_OUT")"
 assert "…and a diverged seed file reports 0 unknown"  "$(has 'summary: .* 0 unknown' "$CACHE_OUT")"
@@ -480,7 +483,7 @@ GINST="$TMP/group/_ai-bridge-gitignore"
 mkdir -p "$GINST"
 bash "$TPL/plugin/scripts/init-bundle.sh" "$GINST" > "$TMP/gi-stamp.out" 2>&1
 assert "the stamp gives a bundle without the slot one"  "$(yes_if grep -qxF "$GI_HEAD" "$GINST/.gitignore")"
-assert "…and writes its own patterns INTO that block"   "$(gi_where "$GINST/.gitignore" '/.tick-state' after)"
+assert "…and writes its own patterns INTO that block"   "$(gi_where "$GINST/.gitignore" "/$AB_STATE_DIR" after)"
 assert "…with the managed index markers ahead of it"    "$(gi_where "$GINST/.gitignore" '# >>> ai-bridge index ignore >>>' before)"
 assert "…so the instance block is last"                 "$(gi_where "$GINST/.gitignore" '# <<< ai-bridge index ignore <<<' before)"
 

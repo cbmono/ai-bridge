@@ -20,6 +20,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# The fixture ledgers are built from the resolver, never from a root path.
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 AU="$REPO/plugin/scripts/agent-usage.sh"
 TD="$REPO/plugin/scripts/tick-delta.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/agentusage.XXXXXX")" || {
@@ -47,8 +50,8 @@ SENTINEL="$TMP/network-was-touched"
 OFFLINE() { SENTINEL="$SENTINEL" PATH="$BIN:$PATH" "$@"; }
 
 # ------------------------------------------------------------------ the fixture ledger
-INST="$TMP/inst"; mkdir -p "$INST/projects/proj-a/tasks"
-LOG="$INST/log.md"
+INST="$TMP/inst"; mkdir -p "$INST/projects/proj-a/tasks" "$INST/$AB_DIR"
+LOG="$INST/$AB_LEDGER"
 cat > "$LOG" <<'EOF'
 # Log
 
@@ -92,48 +95,48 @@ printf 'type: Task\nstatus: ready\npr: []\n' > "$INST/projects/proj-a/tasks/t1.m
 cp "$LOG" "$TMP/log.plain"
 "$TD" record --instance "$INST" >/dev/null 2>&1; rc=$?
 ok "a bare record still exits 0"                  "$rc" 0
-ok "…writes the fingerprint"                    "$([ -f "$INST/.tick-state" ] && echo yes || echo no)" yes
+ok "…writes the fingerprint"                    "$([ -f "$INST/$AB_STATE_DIR" ] && echo yes || echo no)" yes
 ok "…and never touches the ledger"              "$(diff -q "$LOG" "$TMP/log.plain" >/dev/null && echo yes || echo no)" yes
 
 echo "== a tick whose notification carried no usage still closes =="
 NOUSAGE="$TMP/nousage.md"
 printf '* TICK 2026-09-14T07:00:00Z by cbmono open: a tick with no numbers\n' > "$NOUSAGE"
-mkdir -p "$TMP/i2"; cp "$NOUSAGE" "$TMP/i2/log.md"
+mkdir -p "$TMP/i2/$AB_DIR"; cp "$NOUSAGE" "$TMP/i2/$AB_LEDGER"
 "$TD" record --instance "$TMP/i2" --close "closed with nothing to report" >/dev/null 2>&1
-ok "it closes without the three flags"            "$(has "$TMP/i2/log.md" 'close: closed with nothing to report')" yes
-ok "…and carries no usage fragment at all"      "$(count "$TMP/i2/log.md" 'usage ')" 0
+ok "it closes without the three flags"            "$(has "$TMP/i2/$AB_LEDGER" 'close: closed with nothing to report')" yes
+ok "…and carries no usage fragment at all"      "$(count "$TMP/i2/$AB_LEDGER" 'usage ')" 0
 ok "the usage flags without --close are usage (3)" "$("$TD" record --instance "$TMP/i2" --tokens 5 >/dev/null 2>&1; echo $?)" 3
 
 echo "== no open entry, and no path under ~ on a ledger line =="
-mkdir -p "$TMP/i3"; printf '* TICK 2026-09-01T00:00:00Z close: already closed\n' > "$TMP/i3/log.md"
+mkdir -p "$TMP/i3/$AB_DIR"; printf '* TICK 2026-09-01T00:00:00Z close: already closed\n' > "$TMP/i3/$AB_LEDGER"
 ok "nothing left open is refused (exit 1)"        "$("$TD" record --instance "$TMP/i3" --close "x" >/dev/null 2>&1; echo $?)" 1
-mkdir -p "$TMP/i4"; printf '* TICK 2026-09-01T00:00:00Z by cbmono open: go\n' > "$TMP/i4/log.md"
-cp "$TMP/i4/log.md" "$TMP/log.tilde"
+mkdir -p "$TMP/i4/$AB_DIR"; printf '* TICK 2026-09-01T00:00:00Z by cbmono open: go\n' > "$TMP/i4/$AB_LEDGER"
+cp "$TMP/i4/$AB_LEDGER" "$TMP/log.tilde"
 ok "a summary naming a path under ~ is refused"   "$("$TD" record --instance "$TMP/i4" --close 'read ~/.claude/projects for the numbers' >/dev/null 2>&1; echo $?)" 1
-ok "…and that ledger is untouched"              "$(diff -q "$TMP/i4/log.md" "$TMP/log.tilde" >/dev/null && echo yes || echo no)" yes
+ok "…and that ledger is untouched"              "$(diff -q "$TMP/i4/$AB_LEDGER" "$TMP/log.tilde" >/dev/null && echo yes || echo no)" yes
 
 echo "== WHICH entry a close lands on is named, never guessed =="
-mkdir -p "$TMP/i8"
+mkdir -p "$TMP/i8/$AB_DIR"
 { printf '* TICK 2026-09-20T01:00:00Z by cbmono open: the first loop\n'
   printf '* TICK 2026-09-20T02:00:00Z by other open: the second loop\n'
-} > "$TMP/i8/log.md"
-cp "$TMP/i8/log.md" "$TMP/log.two-open"
+} > "$TMP/i8/$AB_LEDGER"
+cp "$TMP/i8/$AB_LEDGER" "$TMP/log.two-open"
 out="$("$TD" record --instance "$TMP/i8" --close "whoever I am" 2>&1)"; rc=$?
 ok "two open entries and no --tick is refused"    "$rc" 1
 ok "…and names the flag that disambiguates"     "$(printf '%s' "$out" | grep -c -- '--tick')" 1
-ok "…leaving both entries untouched"            "$(diff -q "$TMP/i8/log.md" "$TMP/log.two-open" >/dev/null && echo yes || echo no)" yes
+ok "…leaving both entries untouched"            "$(diff -q "$TMP/i8/$AB_LEDGER" "$TMP/log.two-open" >/dev/null && echo yes || echo no)" yes
 ok "a --tick naming no open entry is refused"     "$("$TD" record --instance "$TMP/i8" --close "x" --tick 2026-09-19T00:00:00Z >/dev/null 2>&1; echo $?)" 1
 "$TD" record --instance "$TMP/i8" --close "the first loop, closing its own" --tick 2026-09-20T01:00:00Z >/dev/null
-ok "--tick closes the entry it NAMES"             "$(awk '/01:00:00Z by cbmono open:/{n=NR} /close: the first loop/{c=NR} END{print c-n}' "$TMP/i8/log.md")" 1
-ok "…and the other tick is still open"          "$(count "$TMP/i8/log.md" '2026-09-20T02:00:00Z by other close:')" 0
+ok "--tick closes the entry it NAMES"             "$(awk '/01:00:00Z by cbmono open:/{n=NR} /close: the first loop/{c=NR} END{print c-n}' "$TMP/i8/$AB_LEDGER")" 1
+ok "…and the other tick is still open"          "$(count "$TMP/i8/$AB_LEDGER" '2026-09-20T02:00:00Z by other close:')" 0
 
 echo "== --close with an empty summary is a usage error, not a fingerprint =="
-mkdir -p "$TMP/i9"; printf '* TICK 2026-09-21T00:00:00Z by cbmono open: go\n' > "$TMP/i9/log.md"
+mkdir -p "$TMP/i9/$AB_DIR"; printf '* TICK 2026-09-21T00:00:00Z by cbmono open: go\n' > "$TMP/i9/$AB_LEDGER"
 ok "an empty --close is usage (3)"                "$("$TD" record --instance "$TMP/i9" --close "" >/dev/null 2>&1; echo $?)" 3
 ok "…and no .tick-state was written"            "$([ -e "$TMP/i9/.tick-state" ] && echo yes || echo no)" no
 
 echo "== the close path is offline: gh and git are traps =="
-mkdir -p "$TMP/i5"; printf '* TICK 2026-09-02T00:00:00Z by cbmono open: go\n' > "$TMP/i5/log.md"
+mkdir -p "$TMP/i5/$AB_DIR"; printf '* TICK 2026-09-02T00:00:00Z by cbmono open: go\n' > "$TMP/i5/$AB_LEDGER"
 rc=$(OFFLINE "$TD" record --instance "$TMP/i5" --close "offline close" --tokens 9 --tools 9 --duration-ms 9 >/dev/null 2>&1; echo $?)
 ok "it closes with gh and git trapped"            "$rc" 0
 ok "…and neither was called"                    "$([ -f "$SENTINEL" ] && echo called || echo no)" no
@@ -205,20 +208,20 @@ ok "…with the dispatch half summed apart"       \
    "$(printf '%s\n' "$series" | grep -c "· dispatches 3 (2 measured) $want\$")" 1
 
 echo "== a month with nothing recorded is a ROW, never a gap =="
-mkdir -p "$TMP/i6"
+mkdir -p "$TMP/i6/$AB_DIR"
 { printf '* TICK 2026-01-05T00:00:00Z by a close: x · usage tokens=10 tools=1 ms=100\n'
   printf '* TICK 2026-04-05T00:00:00Z by a close: y · usage tokens=20 tools=2 ms=200\n'
-} > "$TMP/i6/log.md"
+} > "$TMP/i6/$AB_LEDGER"
 gaps="$("$AU" series --instance "$TMP/i6")"
 ok "every month between the two is present"       "$(printf '%s\n' "$gaps" | wc -l | tr -d ' ')" 4
 ok "…and the empty ones read UNKNOWN"           "$(printf '%s\n' "$gaps" | grep -c '^2026-0[23] · ticks 0 (0 measured) usage UNKNOWN · dispatches 0 (0 measured) usage UNKNOWN$')" 2
-ok "a year boundary is counted, not wrapped"      "$(printf '* TICK 2025-12-01T00:00:00Z close: a\n* TICK 2026-01-01T00:00:00Z close: b\n' > "$TMP/i6/log.md"; "$AU" series --instance "$TMP/i6" | wc -l | tr -d ' ')" 2
-mkdir -p "$TMP/i10"
+ok "a year boundary is counted, not wrapped"      "$(printf '* TICK 2025-12-01T00:00:00Z close: a\n* TICK 2026-01-01T00:00:00Z close: b\n' > "$TMP/i6/$AB_LEDGER"; "$AU" series --instance "$TMP/i6" | wc -l | tr -d ' ')" 2
+mkdir -p "$TMP/i10/$AB_DIR"
 { printf '* TICK 2026-03-01T00:00:00Z by a open: go\n'
   printf '* TICK 2026-03-01T00:00:00Z by a close: left a task open: task-004 · usage tokens=7 tools=1 ms=9\n'
-} > "$TMP/i10/log.md"
+} > "$TMP/i10/$AB_LEDGER"
 ok 'a close summary quoting open: still counts'  "$("$AU" series --instance "$TMP/i10" | grep -c '^2026-03 · ticks 1 (1 measured) usage tokens=7 tools=1 ms=9')" 1
-mkdir -p "$TMP/i7"; : > "$TMP/i7/log.md"
+mkdir -p "$TMP/i7/$AB_DIR"; : > "$TMP/i7/$AB_LEDGER"
 ok "an empty ledger says UNKNOWN, not nothing"    "$("$AU" series --instance "$TMP/i7" | grep -c '^UNKNOWN — no TICK or DISPATCH lines')" 1
 ok "no readable log.md is exit 2"                 "$("$AU" series --instance "$TMP/i7/nope" >/dev/null 2>&1; echo $?)" 2
 

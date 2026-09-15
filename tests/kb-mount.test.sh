@@ -17,6 +17,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 SYNC="$REPO/plugin/scripts/kb-sync.sh"
 SEED="$REPO/plugin/seed"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/kb-mount.XXXXXX")" || exit 2
@@ -60,7 +62,7 @@ make_bundle() { # <dir>
   local d="$1"
   mkdir -p "$d/knowledge/findings" "$d/knowledge/services" "$d/knowledge/runbooks" \
            "$d/knowledge/teams" "$d/knowledge/references" "$d/projects"
-  cp "$SEED/SCHEMA.md" "$d/SCHEMA.md"
+  mkdir -p "$d/$AB_DIR" && cp "$SEED/SCHEMA.md" "$d/$AB_SCHEMA"
   printf '{ "org": "acme", "people": { "example-user-007": "e@example.com" } }\n' > "$d/instance.config.json"
   cp "$SEED/knowledge/vocab.md" "$d/knowledge/vocab.md" 2>/dev/null || true
   : > "$d/knowledge/log.md"
@@ -102,7 +104,7 @@ echo "== the readers produce identical output over a mount and a local KB =="
 
 MOUNTED="$TMP/mounted"
 mkdir -p "$MOUNTED/projects"
-cp "$SEED/SCHEMA.md" "$MOUNTED/SCHEMA.md"
+mkdir -p "$MOUNTED/$AB_DIR" && cp "$SEED/SCHEMA.md" "$MOUNTED/$AB_SCHEMA"
 cat > "$MOUNTED/instance.config.json" <<EOF
 { "org": "acme", "people": { "example-user-007": "e@example.com" },
   "knowledge": { "repo": "$BARE", "path": "/", "ref": "main" } }
@@ -115,7 +117,7 @@ ok "…as a REAL directory, never a symlink" \
 ok "…with no .git inside knowledge/ for a reader to walk into" \
   "$([ -e "$MOUNTED/knowledge/.git" ] && echo yes || echo no)" no
 ok "…and the gitdir lives under .ai-bridge/, per bundle" \
-  "$([ -d "$MOUNTED/.ai-bridge/kb.git" ] && echo yes || echo no)" yes
+  "$([ -d "$MOUNTED/$AB_DIR/kb.git" ] && echo yes || echo no)" yes
 
 # `find knowledge -type f` is the exact call build-kb-index.sh:342 makes; the symlink form
 # returned nothing for it, which is the defect this whole design exists to remove.
@@ -143,7 +145,7 @@ ok "…and leave every file where it was" \
   "$(find "$STALE/knowledge" -name 'alpha.md' | wc -l | tr -d ' ')" 1
 
 BADREF="$TMP/badref"; mkdir -p "$BADREF"
-cp "$SEED/SCHEMA.md" "$BADREF/SCHEMA.md"
+mkdir -p "$BADREF/$AB_DIR" && cp "$SEED/SCHEMA.md" "$BADREF/$AB_SCHEMA"
 sha="$(git -C "$SEEDCLONE" rev-parse HEAD)"
 printf '{ "knowledge": { "repo": "%s", "path": "/", "ref": "%s" } }\n' "$BARE" "$sha" > "$BADREF/instance.config.json"
 out="$(bash "$SYNC" --instance "$BADREF" mount 2>&1)"; rc=$?
@@ -172,7 +174,7 @@ printf '# org home\n' > "$SC2/README.md"
 ( cd "$SC2" && git add -A >/dev/null && git commit -qm seed && git remote add origin "$BARE2" && git push -q origin main )
 
 SHARED="$TMP/shared"; mkdir -p "$SHARED/projects"
-cp "$SEED/SCHEMA.md" "$SHARED/SCHEMA.md"
+mkdir -p "$SHARED/$AB_DIR" && cp "$SEED/SCHEMA.md" "$SHARED/$AB_SCHEMA"
 printf '{ "knowledge": { "repo": "%s", "path": "knowledge", "ref": "main" } }\n' "$BARE2" > "$SHARED/instance.config.json"
 bash "$SYNC" --instance "$SHARED" mount >/dev/null 2>&1
 ok "path: knowledge lands at knowledge/, one level deep" \
@@ -184,10 +186,10 @@ echo "== the reads are bounded and never fatal =="
 
 DEAD="$TMP/dead"; mkdir -p "$DEAD"
 printf '{ "knowledge": { "repo": "https://10.255.255.1/x/y.git", "path": "/", "ref": "main" } }\n' > "$DEAD/instance.config.json"
-mkdir -p "$DEAD/.ai-bridge/kb.git"
-git init --bare --quiet "$DEAD/.ai-bridge/kb.git"
-git --git-dir="$DEAD/.ai-bridge/kb.git" remote add origin https://10.255.255.1/x/y.git
-git --git-dir="$DEAD/.ai-bridge/kb.git" config core.worktree "$DEAD/knowledge"
+mkdir -p "$DEAD/$AB_DIR/kb.git"
+git init --bare --quiet "$DEAD/$AB_DIR/kb.git"
+git --git-dir="$DEAD/$AB_DIR/kb.git" remote add origin https://10.255.255.1/x/y.git
+git --git-dir="$DEAD/$AB_DIR/kb.git" config core.worktree "$DEAD/knowledge"
 start=$(date +%s)
 out="$(bash "$SYNC" --instance "$DEAD" --timeout 3 pull 2>&1)"; rc=$?
 elapsed=$(( $(date +%s) - start ))
@@ -202,7 +204,7 @@ cat > "$RO/instance.config.json" <<EOF
 { "knowledge": { "repo": "$BARE", "path": "/", "ref": "main" },
   "knowledgeSources": [ { "repo": "$BARE2", "path": "/", "ref": "main" } ] }
 EOF
-cp "$SEED/SCHEMA.md" "$RO/SCHEMA.md"
+mkdir -p "$RO/$AB_DIR" && cp "$SEED/SCHEMA.md" "$RO/$AB_SCHEMA"
 out="$(bash "$SYNC" --instance "$RO" mount 2>&1)"
 ok "a knowledgeSources entry is cloned by the same script" \
   "$([ -d "$RO/knowledge-sources/shared" ] && echo yes || echo no)" yes
@@ -210,7 +212,7 @@ ok "…and is named as read-only" "$(has "$out" 'read-only')" yes
 rc=0; bash "$SYNC" --instance "$RO" commit --message m -- knowledge-sources/shared/x.md >/dev/null 2>&1 || rc=$?
 ok "a write against a read-only mount is refused" "$rc" 1
 
-ROP="$TMP/rop"; mkdir -p "$ROP"; cp "$SEED/SCHEMA.md" "$ROP/SCHEMA.md"
+ROP="$TMP/rop"; mkdir -p "$ROP/$AB_DIR"; cp "$SEED/SCHEMA.md" "$ROP/$AB_SCHEMA"
 printf '{ "knowledge": { "repo": "%s", "path": "/", "ref": "main" },\n  "knowledgeSources": [ { "repo": "%s", "path": "knowledge", "ref": "main" } ] }\n' "$BARE" "$BARE2" > "$ROP/instance.config.json"
 bash "$SYNC" --instance "$ROP" mount >/dev/null 2>&1
 ok "a source path: is checked out, not ignored" \
@@ -219,7 +221,7 @@ ok "…so the repo's own root stays out of the mount" \
   "$([ -e "$ROP/knowledge-sources/shared/README.md" ] && echo yes || echo no)" no
 
 mkdir -p "$TMP/dup"; DUP="$TMP/dup/shared.git"; git init --bare --quiet "$DUP"
-ROD="$TMP/rod"; mkdir -p "$ROD"; cp "$SEED/SCHEMA.md" "$ROD/SCHEMA.md"
+ROD="$TMP/rod"; mkdir -p "$ROD/$AB_DIR"; cp "$SEED/SCHEMA.md" "$ROD/$AB_SCHEMA"
 printf '{ "knowledge": { "repo": "%s", "path": "/", "ref": "main" },\n  "knowledgeSources": [ { "repo": "%s" }, { "repo": "%s" } ] }\n' "$BARE" "$BARE2" "$DUP" > "$ROD/instance.config.json"
 out="$(bash "$SYNC" --instance "$ROD" mount 2>&1)"
 ok "two sources with one repo name are reported, not silently skipped" \
@@ -233,7 +235,7 @@ J="$TMP/journal"; make_bundle "$J"
 ( cd "$J" && bash "$PC" add --task p/task-1 --surface script:x --note "the flat record is what an unmounted bundle keeps" --date 2026-08-04 ) >/dev/null
 ok "unmounted, an entry lands in the flat record" \
   "$([ -f "$J/knowledge/papercuts.md" ] && echo yes || echo no)" yes
-mkdir -p "$J/.ai-bridge/kb.git"
+mkdir -p "$J/$AB_DIR/kb.git"
 out="$( cd "$J" && bash "$PC" add --task p/task-2 --surface script:x --note "mounted, the record shards by month" --date 2026-09-05 )"
 ok "mounted, the entry lands in this month's shard" \
   "$([ -f "$J/knowledge/papercuts/2026-09.md" ] && echo yes || echo no)" yes

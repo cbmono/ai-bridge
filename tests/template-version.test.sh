@@ -31,6 +31,9 @@
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
 CHECK="$TPL/plugin/scripts/check-template-version.sh"
 BANNER="$TPL/plugin/hooks/session-banner.sh"
@@ -429,7 +432,7 @@ mkfixture() { # <name> <remote-version> <local-version> [branch]
   GIT clone -q "$bare" "$tpl" 2>/dev/null
   rm -rf "$work"
   mkdir -p "$tpl/plugin/scripts"
-  cp "$CHECK" "$tpl/plugin/scripts/"
+  cp "$CHECK" "$TPL/plugin/scripts/bundle-paths.sh" "$tpl/plugin/scripts/"
   printf '%s\n' "$lver" > "$tpl/VERSION"
   GIT -C "$tpl" add -A >/dev/null 2>&1
   GIT -C "$tpl" commit -qm "local $lver" >/dev/null 2>&1
@@ -546,7 +549,7 @@ ok "…and the line names the template checkout, not a hardcoded project" \
 # 5d. Not a git checkout at all (a template copied, not cloned).
 plain="$TMP/plain"
 mkdir -p "$plain/plugin/scripts"
-cp "$CHECK" "$plain/plugin/scripts/"
+cp "$CHECK" "$TPL/plugin/scripts/bundle-paths.sh" "$plain/plugin/scripts/"
 printf '1.0.0\n' > "$plain/VERSION"
 run_check "$plain"
 ok "not a git checkout: byte-empty"           "$(len)" 0
@@ -571,7 +574,7 @@ GIT -C "$novremote.seed" push -q "$novremote.git" main
 GIT clone -q "$novremote.git" "$novremote" 2>/dev/null
 rm -rf "$novremote.seed"
 mkdir -p "$novremote/plugin/scripts"
-cp "$CHECK" "$novremote/plugin/scripts/"
+cp "$CHECK" "$TPL/plugin/scripts/bundle-paths.sh" "$novremote/plugin/scripts/"
 printf '1.0.0\n' > "$novremote/VERSION"
 run_check "$novremote"
 ok "remote branch has no VERSION: byte-empty"  "$(len)" 0
@@ -606,14 +609,14 @@ echo "== 6. the banner prints it, under the header, and only when it is true =="
 # The line has to reach a human, and the banner is the surface: end to end here, through
 # the real hook, in a fake instance whose template is a real behind-the-remote clone.
 INST="$TMP/inst"
-mkdir -p "$INST/.claude/agents"
-printf 'stub\n' > "$INST/SCHEMA.md"
+mkdir -p "$INST/.claude/agents" "$INST/$AB_DIR"
+printf 'stub\n' > "$INST/$AB_SCHEMA"
 printf '{ "org": "example-org" }\n' > "$INST/instance.config.json"
 
 wire() { # <template-dir> — give a fixture template the hook the banner is
   mkdir -p "$1/plugin/hooks"
   cp "$BANNER" "$1/plugin/hooks/session-banner.sh"
-  cp "$TPL/plugin/scripts/resolve-config.sh" "$1/plugin/scripts/" 2>/dev/null || true
+  cp "$TPL/plugin/scripts/resolve-config.sh" "$TPL/plugin/scripts/bundle-paths.sh" "$1/plugin/scripts/" 2>/dev/null || true
 }
 banner() { # <template-dir>
   OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$1/plugin/hooks/session-banner.sh" 2>&1)"

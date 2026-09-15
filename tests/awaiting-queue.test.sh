@@ -42,6 +42,9 @@ set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
+# Fixture bundles are built from the resolver, so the next move is one line there.
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 command -v python3 >/dev/null 2>&1 || {
   echo "awaiting-queue.test: python3 is required to read the hook's two channels apart" >&2; exit 2; }
 TMP="$(mktemp -d)" || {
@@ -80,7 +83,7 @@ HUMAN=""; MODEL=""; RC=0; ERR=""
 # minimal enough that no other section fires (no board key => on by default, but nothing
 # is rendered; no projects/ => no queue counts).
 setup() {
-  rm -rf "$TMP/inst"; mkdir -p "$TMP/inst/.claude/agents"
+  rm -rf "$TMP/inst"; mkdir -p "$TMP/inst/.claude/agents" "$TMP/inst/$AB_DIR"
   printf '{\n  "org": "example-org"\n}\n' > "$TMP/inst/instance.config.json"
 }
 # A project that is NOT an instance — used to prove the hook is safe to inherit anywhere.
@@ -92,7 +95,7 @@ setup_plain() { rm -rf "$TMP/inst"; mkdir -p "$TMP/inst"; }
 # that rendered identically, and its glyph sits AFTER the `* ` marker — which is exactly
 # why the hook's grep survives a new verb and would not survive a new marker.
 write_queue() {
-  cat > "$TMP/inst/AWAITING.md" <<'EOF'
+  cat > "$TMP/inst/$AB_AWAITING" <<'EOF'
 # Awaiting you
 
 Derived and gitignored — **do not hand-edit**. Rewritten each `/pm-loop` tick
@@ -182,7 +185,7 @@ check "no AWAITING.md -> silent no-op (queue off)" 0
 # signature. Asserted directly rather than through check(), which now only scopes to the
 # awaiting section.
 setup_plain; printf 'unrelated project\n' > "$TMP/inst/README.md"
-printf '## 🔴 Awaiting you (1)\n* an item nobody here should surface\n' > "$TMP/inst/AWAITING.md"
+printf '## 🔴 Awaiting you (1)\n* an item nobody here should surface\n' > "$TMP/inst/$AB_AWAITING"
 out="$(CLAUDE_PROJECT_DIR="$TMP/inst" bash "$HOOK" 2>&1)"
 if [ -z "$out" ]; then
   printf '  PASS  %-52s (no output at all)\n' "non-bridge project -> silent no-op"; pass=$((pass+1))
@@ -200,19 +203,19 @@ check "stale DASHBOARD.md ignored after rename" 0
 setup; write_queue
 check "PM layout -> all six verb items surfaced" 6
 
-setup; printf '# Awaiting you\n\n## 🔴 Awaiting you (0)\n_None._\n' > "$TMP/inst/AWAITING.md"
+setup; printf '# Awaiting you\n\n## 🔴 Awaiting you (0)\n_None._\n' > "$TMP/inst/$AB_AWAITING"
 check "empty queue (_None._) -> silent, not a blank nudge" 0
 
 # Sections after the queue must not bleed in, so a future addition below it
 # can't inflate the startup nudge.
 setup; write_queue
-printf '\n## Notes\n* not an action item\n' >> "$TMP/inst/AWAITING.md"
+printf '\n## Notes\n* not an action item\n' >> "$TMP/inst/$AB_AWAITING"
 check "trailing section not counted as items" 6
 
 # Guards the heading contract: reshape it and the nudge empties silently, which
 # is exactly the failure this test exists to catch.
 setup; write_queue
-sed -i.bak 's/^## 🔴 Awaiting you (6)/## Things To Do/' "$TMP/inst/AWAITING.md"
+sed -i.bak 's/^## 🔴 Awaiting you (6)/## Things To Do/' "$TMP/inst/$AB_AWAITING"
 check "renamed heading -> nudge empties (documents the coupling)" 0
 
 # --- instruction/data boundary -------------------------------------------
@@ -221,7 +224,7 @@ check "renamed heading -> nudge empties (documents the coupling)" 0
 # closing instruction. It must be fenced as data, and an instruction-shaped item
 # must be carried inside that fence rather than presented as a directive.
 setup
-cat > "$TMP/inst/AWAITING.md" <<'EOF'
+cat > "$TMP/inst/$AB_AWAITING" <<'EOF'
 # Awaiting you
 
 ## 🔴 Awaiting you (1)
@@ -235,7 +238,7 @@ check      "malicious item still surfaced, not dropped" 1
 # The fence must wrap the item, not trail after it — otherwise the injected text
 # escapes the boundary it is supposed to sit inside.
 setup
-cat > "$TMP/inst/AWAITING.md" <<'EOF'
+cat > "$TMP/inst/$AB_AWAITING" <<'EOF'
 # Awaiting you
 
 ## 🔴 Awaiting you (1)
@@ -301,9 +304,9 @@ simple_ok "…and the DATA-never-instructions sentence is intact in the model's 
 # input` read the same at one item and at nine, and an "all clear" line would read the same
 # with a queue and without one — which is the wallpaper this banner exists not to print.
 echo "-- the count line at 0, 1 and n"
-setup; printf '## 🔴 Awaiting you (0)\n_None._\n' > "$TMP/inst/AWAITING.md"
+setup; printf '## 🔴 Awaiting you (0)\n_None._\n' > "$TMP/inst/$AB_AWAITING"
 run_banner; HUMAN_0="$HUMAN"
-setup; printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — one thing\n' > "$TMP/inst/AWAITING.md"
+setup; printf '## 🔴 Awaiting you (1)\n* ✅ **approve** — one thing\n' > "$TMP/inst/$AB_AWAITING"
 run_banner; HUMAN_1="$HUMAN"
 setup; write_queue
 run_banner; HUMAN_6="$HUMAN"
@@ -320,7 +323,7 @@ simple_ok "six is plural and says six: '6 items need you'" \
 # a human to one; a rendered board ⇒ it may, and does.
 simple_ok "…and with no board rendered it routes to /ai-bridge:dispatch only" \
   "$(printf '%s' "$HUMAN_6" | grep -qF '🔔 6 items need you — run /ai-bridge:dispatch' && echo 0 || echo 1)"
-mkdir -p "$TMP/inst/.board-live"; printf '<!doctype html>\n' > "$TMP/inst/.board-live/board.html"
+mkdir -p "$TMP/inst/$AB_BOARD_DIR"; printf '<!doctype html>\n' > "$TMP/inst/$AB_BOARD_DIR/board.html"
 run_banner
 simple_ok "…and with one rendered it names the board as well" \
   "$(printf '%s' "$HUMAN" | grep -qF '🔔 6 items need you — see the board above, or run /ai-bridge:dispatch' && echo 0 || echo 1)"
@@ -329,7 +332,7 @@ rm -rf "$TMP/inst/.board-live"
 # AWAITING.md ABSENT is the off switch, and it must leave the human's copy exactly as it is
 # on an instance that never had a queue — not "0 items", not an empty nudge.
 setup; run_banner; NOQUEUE="$HUMAN"
-printf '## 🔴 Awaiting you (0)\n_None._\n' > "$TMP/inst/AWAITING.md"
+printf '## 🔴 Awaiting you (0)\n_None._\n' > "$TMP/inst/$AB_AWAITING"
 run_banner
 simple_ok "no AWAITING.md and an empty AWAITING.md say the same nothing" \
   "$([ "$NOQUEUE" = "$HUMAN" ] && echo 0 || echo 1)"
@@ -376,7 +379,7 @@ simple() { # <name> <actual> <expected>
 
 bash "$BRIDGE_INSTALL" "$inst" >/dev/null 2>&1
 simple "first stamp creates the queue" \
-  "$([ -f "$inst/AWAITING.md" ] && echo yes || echo no)" yes
+  "$([ -f "$inst/$AB_AWAITING" ] && echo yes || echo no)" yes
 
 # A seeded queue must be a VALID EMPTY one — a new instance shouldn't spend
 # session tokens on a nudge listing nothing.
@@ -384,15 +387,15 @@ out="$(CLAUDE_PROJECT_DIR="$inst" bash "$HOOK" --format json 2>/dev/null)"
 simple "seeded queue adds no awaiting section until the first tick" \
   "$(printf '%s' "$out" | grep -qE '🔔|AWAITING ITEMS' && echo noisy || echo silent)" silent
 
-printf 'LOCAL EDIT\n' >> "$inst/AWAITING.md"
+printf 'LOCAL EDIT\n' >> "$inst/$AB_AWAITING"
 bash "$BRIDGE_INSTALL" "$inst" >/dev/null 2>&1
 simple "refresh never clobbers an existing queue" \
-  "$(grep -c 'LOCAL EDIT' "$inst/AWAITING.md")" 1
+  "$(grep -c 'LOCAL EDIT' "$inst/$AB_AWAITING")" 1
 
-rm "$inst/AWAITING.md"
+rm "$inst/$AB_AWAITING"
 bash "$BRIDGE_INSTALL" "$inst" >/dev/null 2>&1
 simple "deletion survives an installer re-run" \
-  "$([ -f "$inst/AWAITING.md" ] && echo resurrected || echo "stays-deleted")" stays-deleted
+  "$([ -f "$inst/$AB_AWAITING" ] && echo resurrected || echo "stays-deleted")" stays-deleted
 
 # WHAT A TICK REPORT'S AWAITING ITEMS MUST CARRY (ai-bridge-v3/task-025). The queue file is
 # one surface; the tick's own report to the human is the other, and it is prose in

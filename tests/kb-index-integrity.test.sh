@@ -18,6 +18,9 @@
 # ok() compares actual to expected, in that order. Seeded ai-bridge-next/task-007.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$REPO/plugin/scripts/build-kb-index.sh"
 CITE="$REPO/plugin/scripts/cite-check.sh"

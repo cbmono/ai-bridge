@@ -522,6 +522,7 @@ if [ "$claimant_given" = yes ] && [ "$cmd" != acquire ]; then
 fi
 
 [ -d "$inst" ] || { echo "tick-lock: no such instance directory: $inst" >&2; exit 3; }
+ab_ensure_dir "$inst"
 LOCK="$inst/$LOCK_NAME"
 CLAIM="$inst/$CLAIM_NAME"
 

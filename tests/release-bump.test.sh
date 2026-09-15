@@ -27,6 +27,9 @@
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 BUMP="$REPO/plugin/scripts/release-bump.sh"
 [ -f "$BUMP" ] || { echo "release-bump.test: missing $BUMP" >&2; exit 2; }

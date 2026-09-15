@@ -17,6 +17,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 SYNC="$REPO/plugin/scripts/kb-sync.sh"
 MIGRATE="$REPO/plugin/scripts/kb-migrate.sh"
 COMMIT_AS="$REPO/plugin/scripts/commit-as.sh"
@@ -72,7 +74,7 @@ cp "$SEED/knowledge/vocab.md" "$SEEDC/vocab.md" 2>/dev/null || true
 bundle() { # <dir> — a bundle whose knowledge/ is mounted from $BARE
   local d="$1"
   mkdir -p "$d/projects"
-  cp "$SEED/SCHEMA.md" "$d/SCHEMA.md"
+  mkdir -p "$d/$AB_DIR" && cp "$SEED/SCHEMA.md" "$d/$AB_SCHEMA"
   cat > "$d/instance.config.json" <<EOF
 { "org": "acme", "ownerGithubUser": "example-user-007",
   "people": { "example-user-007": "seven@example.com" },
@@ -121,7 +123,7 @@ ok "…and the pushed index carries BOTH rows, not one side of a merge" \
 ok "…and no conflict marker reached the index" \
   "$(git --git-dir="$BARE" show main:index.md | grep -c '<<<<<<<' | tr -d ' ')" 0
 ok "…and no rebase was left behind" \
-  "$([ -d "$B/.ai-bridge/kb.git/rebase-merge" ] || [ -d "$B/.ai-bridge/kb.git/rebase-apply" ] && echo yes || echo no)" no
+  "$([ -d "$B/$AB_DIR/kb.git/rebase-merge" ] || [ -d "$B/$AB_DIR/kb.git/rebase-apply" ] && echo yes || echo no)" no
 
 echo "== a same-slug Finding from two clones is a REAL conflict a human resolves =="
 
@@ -134,7 +136,7 @@ ok "the same slug from two clones STOPS" "$rc" 1
 ok "…naming it a collision rather than resolving it" "$(has "$out" 'real collision')" yes
 ok "…naming the conflicted file" "$(has "$out" 'findings/delta.md')" yes
 ok "…and aborting its own rebase, so the next reader is not blocked" \
-  "$([ -d "$B/.ai-bridge/kb.git/rebase-merge" ] || [ -d "$B/.ai-bridge/kb.git/rebase-apply" ] && echo yes || echo no)" no
+  "$([ -d "$B/$AB_DIR/kb.git/rebase-merge" ] || [ -d "$B/$AB_DIR/kb.git/rebase-apply" ] && echo yes || echo no)" no
 ok "…and never force-pushing A's work away" \
   "$(git --git-dir="$BARE" show main:findings/delta.md | grep -c "B's version" | tr -d ' ')" 0
 ok "…leaving B's own commit local and reported as unpushed" \
@@ -159,7 +161,7 @@ EOF
 for spec in "1 0 pushed" "2 1 failed twice"; do
   set -- $spec; refusals=$1; want_rc=$2
   RB="$TMP/retry$refusals.git"; retry_bare "$RB" "$refusals"
-  R="$TMP/r$refusals"; mkdir -p "$R/projects"; cp "$SEED/SCHEMA.md" "$R/SCHEMA.md"
+  R="$TMP/r$refusals"; mkdir -p "$R/projects"; mkdir -p "$R/$AB_DIR" && cp "$SEED/SCHEMA.md" "$R/$AB_SCHEMA"
   printf '{ "ownerGithubUser": "example-user-007", "people": { "example-user-007": "seven@example.com" }, "knowledge": { "repo": "%s", "path": "/", "ref": "main" } }\n' "$RB" > "$R/instance.config.json"
   bash "$SYNC" --instance "$R" mount >/dev/null 2>&1
   finding "$R/knowledge/findings/eta.md" eta "a rejected push is retried once"
@@ -173,7 +175,7 @@ for spec in "1 0 pushed" "2 1 failed twice"; do
       "$(bash "$SYNC" --instance "$R" status >/dev/null 2>&1; echo $?)" 0
   fi
   ok "…and no rebase is left behind" \
-    "$([ -d "$R/.ai-bridge/kb.git/rebase-merge" ] && echo yes || echo no)" no
+    "$([ -d "$R/$AB_DIR/kb.git/rebase-merge" ] && echo yes || echo no)" no
 done
 ok "two rejections stop rather than force" \
   "$(bash "$SYNC" --instance "$TMP/r2" status 2>&1 | grep -c 'UNPUSHED' | tr -d ' ')" 1
@@ -204,7 +206,7 @@ echo "== unmounted, commit-as.sh regenerates and stages the index instead =="
 
 LOCAL="$TMP/local"
 mkdir -p "$LOCAL/knowledge/findings" "$LOCAL/projects"
-cp "$SEED/SCHEMA.md" "$LOCAL/SCHEMA.md"
+mkdir -p "$LOCAL/$AB_DIR" && cp "$SEED/SCHEMA.md" "$LOCAL/$AB_SCHEMA"
 cp "$SEED/knowledge/vocab.md" "$LOCAL/knowledge/vocab.md" 2>/dev/null || true
 : > "$LOCAL/knowledge/log.md"
 printf '{ "org": "acme", "authorEmail": "e@example.com" }\n' > "$LOCAL/instance.config.json"
@@ -226,7 +228,7 @@ echo "== the migration is one recorded commit pair =="
 BARE3="$TMP/kb3.git"; git init --bare --quiet "$BARE3"
 MIG="$TMP/mig"
 mkdir -p "$MIG/knowledge/findings" "$MIG/projects"
-cp "$SEED/SCHEMA.md" "$MIG/SCHEMA.md"
+mkdir -p "$MIG/$AB_DIR" && cp "$SEED/SCHEMA.md" "$MIG/$AB_SCHEMA"
 cp "$SEED/knowledge/vocab.md" "$MIG/knowledge/vocab.md" 2>/dev/null || true
 : > "$MIG/knowledge/log.md"
 printf '{ "org": "acme", "ownerGithubUser": "example-user-007", "people": { "example-user-007": "seven@example.com" }, "knowledge": { "repo": "%s", "path": "/", "ref": "main" } }\n' "$BARE3" > "$MIG/instance.config.json"

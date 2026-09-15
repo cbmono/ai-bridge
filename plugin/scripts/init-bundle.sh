@@ -1374,18 +1374,22 @@ if [ -d "$SEED_SRC" ]; then
       fi
       continue
     fi
-    src="$SEED_SRC/$rel"; dst="$TARGET/$rel"
+    # THE SEED IS FLAT AND THE BUNDLE IS NOT — the mapping happens here, on the copy.
+    # `record_seed_base` is keyed by the SEED path, so `.ai-bridge/seed-base/` stays flat
+    # and refresh-seeds.sh's merge base is unchanged by the move.
+    dest="$(ab_seed_dest "$rel")"
+    src="$SEED_SRC/$rel"; dst="$TARGET/$dest"
     dstdir="$(dirname "$dst")"
     if [ -e "$dst" ]; then
-      echo "  keep  $rel (exists)"
+      echo "  keep  $dest (exists)"
     elif [ "$(basename "$rel")" = ".gitkeep" ] && [ -d "$dstdir" ] && [ -n "$(ls -A "$dstdir" 2>/dev/null)" ]; then
       # The dir already has real content — a placeholder .gitkeep would just be clutter.
-      echo "  skip  $rel (dir already populated)"
+      echo "  skip  $dest (dir already populated)"
     else
       mkdir -p "$dstdir"
       cp "$src" "$dst"
       record_seed_base "$rel" "$src"
-      echo "  seed  $rel"
+      echo "  seed  $dest"
     fi
   done <<EOF
 $(cd "$SEED_SRC" && find . -type f | sed 's#^\./##' | sort)
@@ -1882,7 +1886,7 @@ else
       break
     fi
   done <<EOF
-$(grep -nxF "/$AB_INDEX" "$gi" | cut -d: -f1)
+$(grep -nxE "/(${AB_INDEX//./\\.}|index\.md)" "$gi" | cut -d: -f1)
 EOF
   if [ -n "$idxline" ]; then
     start="$idxline"
@@ -2927,6 +2931,31 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
     AI_BRIDGE_INIT_PASS=1 bash "$BIN_DIR/ai-bridge.sh" fix --instance "$TARGET" || true
   elif [ -f "$BIN_DIR/refresh-seeds.sh" ]; then
     bash "$BIN_DIR/refresh-seeds.sh" "$TARGET" --apply || true
+  fi
+  # 5a. ONE COPY OF EACH MANAGED IGNORE LINE, and the order is why this exists at all.
+  # The guards above run BEFORE this pass, so on a bundle whose copy of a seed-managed
+  # line had been deleted they append it — and then the seed-drift resolver restores the
+  # seed's own copy, because a seed-managed line is exactly what it takes the seed side
+  # for. Two identical lines, harmless to git and a defect to anyone reading the file.
+  # Keeps the FIRST occurrence, so the seed's placement wins over the appended one.
+  #
+  # SPACE-SEPARATED, NOT NEWLINE. `awk -v` refuses a value containing a newline
+  # ("newline in string") and the whole tidy then silently did nothing. Every path here is
+  # a resolver constant, so none can contain a space.
+  if [ -f "$gi" ]; then
+    gi_managed="/$AB_LOCK /$AB_LOCK_CLAIM /$AB_STATE_DIR /$AB_BOARD_OTHERS"
+    gi_managed="$gi_managed /$AB_BOARD_DIR/ /$AB_AWAITING /$AB_SNAPSHOT"
+    tmp="$gi.tmp.$$"
+    if awk -v managed="$gi_managed" '
+         BEGIN { n = split(managed, m, " "); for (i = 1; i <= n; i++) if (m[i] != "") mine[m[i]] = 1 }
+         ($0 in mine) && seen[$0]++ { next }
+         { print }
+       ' "$gi" > "$tmp" && ! cmp -s "$tmp" "$gi"; then
+      mv "$tmp" "$gi"
+      echo "  tidy  .gitignore (a managed ignore line appeared twice)"
+    else
+      rm -f "$tmp"
+    fi
   fi
 fi
 

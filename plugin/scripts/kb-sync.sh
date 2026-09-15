@@ -12,6 +12,8 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
+# shellcheck source=bundle-paths.sh
+. "$HERE/bundle-paths.sh" || exit 2
 inst="."; cmd=""; message=""; role=""; paths=(); TIMEOUT="${AI_BRIDGE_KB_TIMEOUT:-20}"
 need2() { [ "$1" -ge 2 ] || { echo "kb-sync: $2 needs a value" >&2; exit 2; }; }
 seen_dashdash=0
@@ -61,8 +63,8 @@ remote_url() {
   esac
 }
 
-KBGIT="$INST/.ai-bridge/kb.git"
-SRCROOT="$INST/.ai-bridge/kb-src"
+KBGIT="$INST/$AB_DIR/kb.git"
+SRCROOT="$INST/$AB_DIR/kb-src"
 
 # The mount is a real directory, never a symlink, so `find knowledge -type f` behaves
 # exactly as it does over a bundle's own folder. Git cannot re-root a checkout, so the

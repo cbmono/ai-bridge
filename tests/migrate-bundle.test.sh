@@ -180,6 +180,98 @@ mkdir -p "$TMP/x" && cd "$TMP/x"
 set +e; bash "$MIGRATE" >/dev/null 2>&1; RC=$?; set -e
 assert "exits 2 outside an instance root" "$([[ $RC -eq 2 ]] && echo 0 || echo 1)"
 
+# =========================================================================================
+# THE 3.0 LAYOUT STEP — its own bundle, because it moves the fixture out from under itself.
+# =========================================================================================
+. "$HERE/../plugin/scripts/bundle-paths.sh"
+
+L="$TMP/layout"; mkdir -p "$L/projects/p/tasks" "$L/knowledge/findings"; cd "$L"
+echo '{ "org": "x" }' > instance.config.json
+echo '# Schema' > SCHEMA.md
+echo '# Conventions' > CONVENTIONS.md
+printf 'AWAITING.md\n/.board-live/\n/.tick-lock\nnode_modules/\n' > .gitignore
+doc projects/p/tasks/task-001-x.md '---' 'type: Task' 'title: T' 'status: draft' "timestamp: $TS" '---' \
+  'See [SCHEMA](/SCHEMA.md) and [CONVENTIONS](/CONVENTIONS.md).'
+# BOTH FORMS, in one bundle: a document written before the move and one written after it.
+doc knowledge/findings/both.md '---' 'type: Finding' 'title: F' 'status: current' \
+  'lesson: one line' "timestamp: $TS" '---' \
+  'Root form [S](/SCHEMA.md); new form [C](/.ai-bridge/CONVENTIONS.md).'
+git init -q -b main . && git add -A && git -c user.email=a@b -c user.name=a commit -qm init
+: > AWAITING.md   # gitignored, so git mv would refuse it
+# A SYMLINKED document. The relink reads through it and renames a temp file over the
+# target — which turns a human's link into a regular file, whether or not the content
+# had anything to rewrite.
+doc "$TMP/link-target.md" '---' 'type: Task' 'title: L' 'status: draft' "timestamp: $TS" '---' 'Linked.'
+ln -s "$TMP/link-target.md" projects/p/tasks/task-002-linked.md
+
+echo "== the layout step: report-only by default =="
+DRY="$(bash "$MIGRATE" 2>&1)"
+assert "it reports the move"           "$(printf '%s' "$DRY" | grep -q "WOULD MOVE SCHEMA.md -> $AB_SCHEMA" && echo 0 || echo 1)"
+assert "the untracked file too"        "$(printf '%s' "$DRY" | grep -q "WOULD MOVE AWAITING.md -> $AB_AWAITING" && echo 0 || echo 1)"
+assert "nothing actually moved"        "$([[ -f SCHEMA.md && ! -e $AB_SCHEMA ]] && echo 0 || echo 1)"
+
+echo "== it refuses on a live lock, and prints the commands instead =="
+: > .tick-lock
+LOCKED="$(bash "$MIGRATE" --apply 2>&1)"
+assert "REFUSED while a tick holds the lock" "$(printf '%s' "$LOCKED" | grep -q 'REFUSED.*lock' && echo 0 || echo 1)"
+assert "the manual command list is printed"  "$(printf '%s' "$LOCKED" | grep -q "git mv SCHEMA.md $AB_SCHEMA" && echo 0 || echo 1)"
+# `git mv` on a derived file fails with "not under version control", so the printed
+# command has to make the same tracked/untracked decision the apply path makes.
+assert "…with plain mv for the untracked one" "$(printf '%s' "$LOCKED" | grep -q "  mv AWAITING.md $AB_AWAITING" && echo 0 || echo 1)"
+assert "and it moved nothing"                "$([[ -f SCHEMA.md ]] && echo 0 || echo 1)"
+rm -f .tick-lock
+
+echo "== it refuses a dirty TRACKED tree, but not untracked dirt =="
+echo 'edited' >> CONVENTIONS.md
+DIRTY="$(bash "$MIGRATE" --apply 2>&1)"
+assert "REFUSED on a dirty tracked tree" "$(printf '%s' "$DIRTY" | grep -q 'REFUSED.*tracked tree is dirty' && echo 0 || echo 1)"
+git add -A && git -c user.email=a@b -c user.name=a commit -qm edit
+: > untracked-scratch.md
+CLEANISH="$(bash "$MIGRATE" 2>&1)"
+assert "untracked dirt is NOT a refusal"  "$(printf '%s' "$CLEANISH" | grep -q 'REFUSED' && echo 1 || echo 0)"
+rm -f untracked-scratch.md
+
+echo "== --apply moves, rewrites the ignores and relinks =="
+OUT="$(bash "$MIGRATE" --apply 2>&1)"
+assert "SCHEMA.md is at its new path"     "$([[ -f $AB_SCHEMA && ! -e SCHEMA.md ]] && echo 0 || echo 1)"
+assert "git still tracks it there"        "$(git ls-files --error-unmatch -- "$AB_SCHEMA" >/dev/null 2>&1 && echo 0 || echo 1)"
+assert "the gitignored file moved too"    "$([[ -f $AB_AWAITING && ! -e AWAITING.md ]] && echo 0 || echo 1)"
+assert "…and git does not track THAT"     "$(git ls-files --error-unmatch -- "$AB_AWAITING" >/dev/null 2>&1 && echo 1 || echo 0)"
+assert "no symlink was left behind"       "$([[ -z "$(find . -maxdepth 1 -type l)" ]] && echo 0 || echo 1)"
+assert "the root ignore lines are gone"   "$(grep -qxE '/?(AWAITING\.md|\.board-live/|\.tick-lock)' .gitignore && echo 1 || echo 0)"
+assert "a human's own ignore line stayed" "$(grep -qx 'node_modules/' .gitignore && echo 0 || echo 1)"
+assert "the task doc's links were rewritten" \
+  "$(grep -q "(/$AB_SCHEMA)" projects/p/tasks/task-001-x.md && grep -q "(/$AB_CONVENTIONS)" projects/p/tasks/task-001-x.md && echo 0 || echo 1)"
+assert "a symlinked document is still a symlink" \
+  "$([[ -L projects/p/tasks/task-002-linked.md ]] && echo 0 || echo 1)"
+
+echo "== and the link checker is clean on a bundle that carried both forms =="
+set +e; LV="$(bash "$VALIDATE" 2>&1)"; LV_RC=$?; set -e
+assert "validate-bundle reports 0 errors"  "$(printf '%s' "$LV" | grep -q ', 0 errors,' && echo 0 || echo 1)"
+assert "…and exits 0"                      "$([[ $LV_RC -eq 0 ]] && echo 0 || echo 1)"
+assert "no link still names the old root"  "$(grep -rq '(/SCHEMA\.md\|(/CONVENTIONS\.md' projects knowledge && echo 1 || echo 0)"
+assert "…and the already-new form is untouched" \
+  "$(grep -q "(/$AB_CONVENTIONS)" knowledge/findings/both.md && echo 0 || echo 1)"
+
+echo "== the layout step is idempotent =="
+AGAIN="$(bash "$MIGRATE" 2>&1)"
+assert "a migrated bundle says nothing about the layout" \
+  "$(printf '%s' "$AGAIN" | grep -q 'pre-3.0 layout' && echo 1 || echo 0)"
+
+echo "== a half-migrated bundle stops before the FIRST move =="
+# Its own bundle: an occupied destination has to be caught while every source is still
+# at the root, and a per-path guard would only see it after earlier paths had moved.
+H="$TMP/half"; mkdir -p "$H"; cd "$H"
+echo '{ "org": "x" }' > instance.config.json
+echo '# Schema' > SCHEMA.md
+echo '# Conventions' > CONVENTIONS.md
+mkdir -p .board-live "$AB_BOARD_DIR"
+HALF="$(bash "$MIGRATE" --apply 2>&1)"
+assert "it names the occupied destination" \
+  "$(printf '%s' "$HALF" | grep -q 'STOPPED' && printf '%s' "$HALF" | grep -q ".board-live -> $AB_BOARD_DIR" && echo 0 || echo 1)"
+assert "and moved nothing at all"          "$([[ -f SCHEMA.md && -d .board-live && ! -e $AB_SCHEMA ]] && echo 0 || echo 1)"
+assert "no source was nested inside it"    "$([[ ! -e $AB_BOARD_DIR/.board-live ]] && echo 0 || echo 1)"
+
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]

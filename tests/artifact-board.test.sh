@@ -33,6 +33,9 @@
 # assert on forms the live instance does not currently contain.
 set -uo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 # No render below passes a layout flag: there is one page, and `--layout` now exits 2
 # rather than selecting anything.
@@ -54,8 +57,8 @@ eq()     { [[ "$1" == "$2" ]] && echo 0 || echo 1; }
 HOSTILE='Rename <script>alert(1)</script> & "quote" it'
 
 mk() { # <dir> <group> <json-projects>
-  mkdir -p "$1"
-  cat > "$1/SNAPSHOT.json" <<JSON
+  mkdir -p "$1/$AB_DIR"
+  cat > "$1/$AB_SNAPSHOT" <<JSON
 {"_schema":"ai-bridge board snapshot v1","group":"$2",
  "generated_at":"2026-08-23T12:00:00Z","counts":{"projects":1,"tasks":1,"awaiting":0},
  "projects":$3}
@@ -82,7 +85,7 @@ mk "$TMP/alpha" "alpha" '[
   "tasks":[{"id":"task-001","title":"Done","status":"done","assignee":"","awaiting":"",
             "open_questions":0,"advisor_notes":0,"depends_on":[],"in_flight":false,"prs":[]}]}]'
 # substitute the hostile title without fighting JSON quoting in the heredoc
-python3 - "$TMP/alpha/SNAPSHOT.json" "$HOSTILE" <<'PYS'
+python3 - "$TMP/alpha/$AB_SNAPSHOT" "$HOSTILE" <<'PYS'
 import json, sys
 p, hostile = sys.argv[1], sys.argv[2]
 d = json.load(open(p))
@@ -241,7 +244,7 @@ sys.exit(0 if t.index('Two decisions') < t.index('Nothing waiting') else 1)")"
 # the assertion above measures the sort rather than the input's own order.
 assert "…and the snapshot really lists them the other way round" "$(yes_if python3 -c "
 import json, sys
-s = json.load(open('$TMP/board15/SNAPSHOT.json'))
+s = json.load(open('$TMP/board15/$AB_SNAPSHOT'))
 slugs = [p['slug'] for p in s['projects']]
 sys.exit(0 if slugs.index('quiet') < slugs.index('wants-me') else 1)")"
 
@@ -446,7 +449,7 @@ assert "…with no Q1 anywhere in that card"           "$(card "$QN" 'The task-0
 # NON-VACUITY: the count really is 1, so a positional renderer really would say Q1 here.
 assert "…and the fixture's count really is 1"        "$(yes_if python3 -c "
 import json, sys
-s = json.load(open('$TMP/qnum/SNAPSHOT.json'))
+s = json.load(open('$TMP/qnum/$AB_SNAPSHOT'))
 t = s['projects'][0]['tasks'][0]
 sys.exit(0 if t['open_questions'] == 1 and 'Q2' in t['open_question_text'][0] else 1)")"
 
@@ -754,13 +757,13 @@ assert "…and its roles reach no cell either"         "$(card "$OUT" 'Live work
 # case each earlier form of the predicate kept the column for.
 assert "…though 'One handle' really names two roles" "$(yes_if python3 -c "
 import json, sys
-s = json.load(open('$TMP/handle/SNAPSHOT.json'))
+s = json.load(open('$TMP/handle/$AB_SNAPSHOT'))
 pr = [x for x in s['projects'] if x['slug'] == 'gdg'][0]
 sys.exit(0 if sorted({t['assignee'] for t in pr['tasks']} - {''})
          == ['devops-engineer', 'software-engineer'] else 1)")"
 assert "…and 'Live work' names two AND is phased"    "$(yes_if python3 -c "
 import json, sys
-s = json.load(open('$TMP/alpha/SNAPSHOT.json'))
+s = json.load(open('$TMP/alpha/$AB_SNAPSHOT'))
 pr = [x for x in s['projects'] if x['slug'] == 'live-one'][0]
 sys.exit(0 if sorted({t['assignee'] for t in pr['tasks']} - {''})
          == ['qa-reviewer', 'software-engineer'] and pr['phase_progress']['total'] else 1)")"
@@ -1536,12 +1539,12 @@ assert "…while a board with no snapshot exits 0"     "$(eq "$rcd2" 0)"
 assert "…and creates no directory at all"            "$(yes_if test ! -e "$TMP/untouched")"
 
 echo "== one drifted instance must not blank the board =="
-mkdir -p "$TMP/bad"; printf 'not json at all\n' > "$TMP/bad/SNAPSHOT.json"
+mkdir -p "$TMP/bad/$AB_DIR"; printf 'not json at all\n' > "$TMP/bad/$AB_SNAPSHOT"
 rc3=0; bash "$GEN" --out "$TMP/mixed.html" "$TMP/bad" "$TMP/alpha" >/dev/null 2>&1 || rc3=$?
 assert "a broken snapshot is skipped, not fatal"     "$(eq "$rc3" 0)"
 assert "…and the good instance still renders"        "$(fhas 'Alpha Bridge Board' "$TMP/mixed.html")"
 assert "…and it is a VISIBLE note, not a silent absence" "$(fhas 'Unreadable snapshot' "$TMP/mixed.html")"
-assert "…naming the instance by directory NAME"      "$(fhas 'bad/SNAPSHOT.json' "$TMP/mixed.html")"
+assert "…naming the instance by directory NAME"      "$(fhas "bad/$AB_SNAPSHOT" "$TMP/mixed.html")"
 assert "…and never by its path"                      "$(fhasnt "$TMP/bad" "$TMP/mixed.html")"
 # THE OTHER HALF, and the one this layout did not have before the consolidation: valid
 # JSON carrying wrong TYPES. `"tasks":"three"` parses, so nothing above catches it — the
@@ -1551,7 +1554,7 @@ assert "…and never by its path"                      "$(fhasnt "$TMP/bad" "$TM
 # every count and every container here goes through toint()/tolist()/todict().
 mkdir -p "$TMP/drift"
 drift_case() { # <label> <snapshot json>
-  printf '%s\n' "$2" > "$TMP/drift/SNAPSHOT.json"
+  printf '%s\n' "$2" > "$TMP/drift/$AB_SNAPSHOT"
   # Removed first: a page left behind by the previous case would satisfy the
   # "still renders" half even if this case wrote nothing at all.
   rm -f "$TMP/drift.html"

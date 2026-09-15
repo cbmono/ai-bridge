@@ -26,6 +26,8 @@
 set -uo pipefail
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/derived-indexes.XXXXXX")" || {
   echo "derived-indexes.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -90,15 +92,15 @@ echo
 echo "== a live instance: git's own answer, not the pattern text =="
 INST="$TMP/g/_ai-bridge-g"; mkdir -p "$INST"
 bash "$BRIDGE_INSTALL" "$INST" >/dev/null 2>&1
-assert "a FRESH stamp gets the root line"   "$(yes_if grep -qxF '/index.md' "$INST/.gitignore")"
+assert "a FRESH stamp gets the root line"   "$(yes_if grep -qxF "/$AB_INDEX" "$INST/.gitignore")"
 assert "…and the per-project line"          "$(yes_if grep -qxF '/projects/*/index.md' "$INST/.gitignore")"
 ( cd "$INST" && git init -q . && git config user.email t@e.st && git config user.name t )
-mkdir -p "$INST/projects/p1" "$INST/knowledge"
-printf 'root\n'  > "$INST/index.md"
+mkdir -p "$INST/projects/p1" "$INST/knowledge" "$INST/$AB_DIR"
+printf 'root\n'  > "$INST/$AB_INDEX"
 printf 'proj\n'  > "$INST/projects/p1/index.md"
 printf 'kb\n'    > "$INST/knowledge/index.md"
 ignored() { ( cd "$INST" && git check-ignore -q "$1" ); }
-assert "the root index.md is ignored"       "$(yes_if ignored index.md)"
+assert "the root index.md is ignored"       "$(yes_if ignored "$AB_INDEX")"
 assert "a project's index.md is ignored"    "$(yes_if ignored projects/p1/index.md)"
 assert "knowledge/index.md is NOT ignored"  "$(no_if ignored knowledge/index.md)"
 assert "a project's log.md is NOT ignored"  "$(no_if ignored projects/p1/log.md)"
@@ -106,7 +108,7 @@ assert "a project's log.md is NOT ignored"  "$(no_if ignored projects/p1/log.md)
 # and /new-project both rely on when they name a directory as a pathspec.
 ( cd "$INST" && git add -A >/dev/null 2>&1 )
 STAGED="$( cd "$INST" && git diff --cached --name-only )"
-assert "git add -A skips the root index"    "$(hasnt '^index\.md$' "$STAGED")"
+assert "git add -A skips the root index"    "$(hasnt "^$AB_INDEX\$" "$STAGED")"
 assert "…and the project index"             "$(hasnt 'projects/p1/index\.md' "$STAGED")"
 assert "…but stages the KB index"           "$(has 'knowledge/index\.md' "$STAGED")"
 
@@ -114,13 +116,13 @@ echo
 echo "== an instance whose .gitignore predates the lines =="
 OLD="$TMP/g/_ai-bridge-old"; mkdir -p "$OLD"
 bash "$BRIDGE_INSTALL" "$OLD" >/dev/null 2>&1
-grep -vE '^/(index\.md|projects/\*/index\.md)$' "$OLD/.gitignore" > "$OLD/.gi" && mv "$OLD/.gi" "$OLD/.gitignore"
-assert "the lines really were removed"      "$(no_if grep -qxF '/index.md' "$OLD/.gitignore")"
+grep -vE "^/(${AB_INDEX//./\\.}|projects/\*/index\.md)$" "$OLD/.gitignore" > "$OLD/.gi" && mv "$OLD/.gi" "$OLD/.gitignore"
+assert "the lines really were removed"      "$(no_if grep -qxF "/$AB_INDEX" "$OLD/.gitignore")"
 bash "$BRIDGE_INSTALL" "$OLD" >/dev/null 2>&1
-assert "install.sh re-adds the root line"   "$(yes_if grep -qxF '/index.md' "$OLD/.gitignore")"
+assert "install.sh re-adds the root line"   "$(yes_if grep -qxF "/$AB_INDEX" "$OLD/.gitignore")"
 assert "…and the per-project line"          "$(yes_if grep -qxF '/projects/*/index.md' "$OLD/.gitignore")"
 bash "$BRIDGE_INSTALL" "$OLD" >/dev/null 2>&1
-COUNT="$(grep -cxF '/index.md' "$OLD/.gitignore")"
+COUNT="$(grep -cxF "/$AB_INDEX" "$OLD/.gitignore")"
 assert "a re-run does not duplicate them"   "$([[ "$COUNT" == 1 ]] && echo 0 || echo 1)"
 
 echo
@@ -129,25 +131,26 @@ echo "== an already-TRACKED index.md: reported, never touched =="
 # the whole change quietly not happening, so the installer prints the exact command.
 TRK="$TMP/g/_ai-bridge-tracked"; mkdir -p "$TRK/projects/p1"
 bash "$BRIDGE_INSTALL" "$TRK" >/dev/null 2>&1
-printf 'root\n' > "$TRK/index.md"; printf 'proj\n' > "$TRK/projects/p1/index.md"
+mkdir -p "$TRK/$AB_DIR"
+printf 'root\n' > "$TRK/$AB_INDEX"; printf 'proj\n' > "$TRK/projects/p1/index.md"
 ( cd "$TRK" && git init -q . && git config user.email t@e.st && git config user.name t \
-  && git add -f index.md projects/p1/index.md >/dev/null && git commit -qm seed )
+  && git add -f "$AB_INDEX" projects/p1/index.md >/dev/null && git commit -qm seed )
 OUT="$(bash "$BRIDGE_INSTALL" "$TRK" 2>&1)"
-assert "the tracked root index is reported"  "$(has 'tracked index.md' "$OUT")"
+assert "the tracked root index is reported"  "$(has "tracked $AB_INDEX" "$OUT")"
 assert "…and the tracked project index"      "$(has 'tracked projects/p1/index.md' "$OUT")"
 assert "…with the exact rm --cached command" "$(has 'git rm --cached' "$OUT")"
-assert "…and the file is NOT removed"        "$(yes_if grep -q 'root' "$TRK/index.md")"
-assert "…and it is still tracked afterwards" "$(yes_if bash -c "cd '$TRK' && git ls-files --error-unmatch index.md")"
+assert "…and the file is NOT removed"        "$(yes_if grep -q 'root' "$TRK/$AB_INDEX")"
+assert "…and it is still tracked afterwards" "$(yes_if bash -c "cd '$TRK' && git ls-files --error-unmatch '$AB_INDEX'")"
 # Once untracked, the report must go quiet — it is a to-do, not a permanent banner.
-( cd "$TRK" && git rm --cached -q -- index.md 'projects/*/index.md' && git commit -qm untrack )
+( cd "$TRK" && git rm --cached -q -- "$AB_INDEX" 'projects/*/index.md' && git commit -qm untrack )
 OUT2="$(bash "$BRIDGE_INSTALL" "$TRK" 2>&1)"
-assert "after untracking, nothing is reported" "$(hasnt 'tracked index.md' "$OUT2")"
-assert "…and the files survive on disk"        "$(yes_if grep -q 'root' "$TRK/index.md")"
+assert "after untracking, nothing is reported" "$(hasnt "tracked $AB_INDEX" "$OUT2")"
+assert "…and the files survive on disk"        "$(yes_if grep -q 'root' "$TRK/$AB_INDEX")"
 # An instance that is not a git repo at all must not error or report.
 NOGIT="$TMP/g/_ai-bridge-nogit"; mkdir -p "$NOGIT"
 RC=0; OUT3="$(bash "$BRIDGE_INSTALL" "$NOGIT" 2>&1)" || RC=$?
 assert "a non-repo instance exits 0"           "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
-assert "…and reports no tracked indexes"       "$(hasnt 'tracked index.md' "$OUT3")"
+assert "…and reports no tracked indexes"       "$(hasnt "tracked $AB_INDEX" "$OUT3")"
 
 echo
 echo "== a RETAINED project's index.md: committed, and NOT hidden by check-ignore =="

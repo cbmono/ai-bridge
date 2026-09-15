@@ -107,7 +107,7 @@ case "$COLOR" in auto|always|never) ;; *) echo "print-board: --color takes auto|
 # Self-detecting, and silent when it does not apply. Not an error: this script ships in
 # the plugin, serves every instance, and will be run from a product repo, a worktree, or a
 # home directory by accident, and a wall of usage text there is noise.
-[[ -f "$AB_SCHEMA" && -f instance.config.json ]] || exit 0
+ab_is_bundle . || exit 0
 
 TTY=0; [[ -t 1 ]] && TTY=1
 

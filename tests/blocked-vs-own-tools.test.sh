@@ -27,6 +27,8 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$REPO/plugin/scripts/bundle-paths.sh"
 SCRIPT="$REPO/plugin/scripts/check-dispatch.sh"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
 PM="$REPO/plugin/agents/project-manager.md"
@@ -304,13 +306,13 @@ echo "== AWAITING.md tells 'grant a thing' apart from 'answer a question' =="
 # rather than against the script's source, which is strictly the stronger claim.
 QUEUE="$REPO/plugin/scripts/build-awaiting.sh"
 ok "the renderer exists"                   "$([ -f "$QUEUE" ] && echo yes || echo no)" yes
-Q="$TMP/queue"; mkdir -p "$Q/projects/p/tasks"
-printf '{ "org": "x" }\n' > "$Q/instance.config.json"; printf '# S\n' > "$Q/SCHEMA.md"; : > "$Q/AWAITING.md"
+Q="$TMP/queue"; mkdir -p "$Q/projects/p/tasks" "$Q/$AB_DIR"
+printf '{ "org": "x" }\n' > "$Q/instance.config.json"; printf '# S\n' > "$Q/$AB_SCHEMA"; : > "$Q/$AB_AWAITING"
 printf -- '---\ntype: Project\ntitle: "P"\nstatus: active\n---\n' > "$Q/projects/p/project.md"
 printf -- '---\ntype: Task\ntitle: "T"\nstatus: draft\nacceptance_criteria: [ "x" ]\nopen_questions: [ "Q1: which colour?", "Q2: install the foo CLI" ]\n---\n' \
   > "$Q/projects/p/tasks/task-001-t.md"
 bash "$QUEUE" --instance "$Q" >/dev/null 2>&1
-RENDER="$(cat "$Q/AWAITING.md" 2>/dev/null || true)"
+RENDER="$(cat "$Q/$AB_AWAITING" 2>/dev/null || true)"
 ok "the queue layout has a grant verb"     "$(saw_s "$RENDER" '* 🧰 **grant** — [T](/projects/p/tasks/task-001-t.md) · ')" yes
 ok "…distinct from the answer verb"        "$(saw_s "$RENDER" '* ❓ **answer** — [T](/projects/p/tasks/task-001-t.md) · ')" yes
 ok "…and says why they are different asks" "$(saw "$QUEUE" 'are different asks, and that is why `grant` has a glyph of')" yes

@@ -14,6 +14,9 @@
 # assert() follows the convention of the other harnesses here: 0 is a PASS.
 set -euo pipefail
 
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$HERE/.."
 [ -f "$REPO/plugin/scripts/refresh-seeds.sh" ] || {
@@ -45,7 +48,7 @@ cp "$REPO/VERSION" "$TPL/plugin/VERSION"
 cp "$REPO/VERSION" "$TPL/VERSION"
 
 # Controlled seed content for the two decidable classes plus one undecidable file.
-printf 'node_modules/\n/board.html\n/.tick-lock\n'                  > "$TPL/plugin/seed/.gitignore"
+printf 'node_modules/\n/board.html\n/%s\n' "$AB_LOCK"             > "$TPL/plugin/seed/.gitignore"
 printf '# Panel\nintro line\ntail line\n'                           > "$TPL/plugin/seed/CLAUDE.md"
 ( cd "$TPL" && git init -q -b main . && git add -A && gc "template, seed v1" )
 
@@ -76,7 +79,7 @@ assert "the keep directory is gitignored by the stamp" \
   "$(yes_if git -C "$INST" check-ignore -q .ai-bridge/refresh/CLAUDE.md.1)"
 assert "…while the stamped-seed record stays tracked" \
   "$(git -C "$INST" check-ignore -q .ai-bridge/seed-base/CLAUDE.md && echo 1 || echo 0)"
-printf 'node_modules/\n!/board.html\n/.tick-lock\nMY-OWN-IGNORE\n' > "$INST/.gitignore"
+printf 'node_modules/\n!/board.html\n/%s\nMY-OWN-IGNORE\n' "$AB_LOCK" > "$INST/.gitignore"
 mkdir -p "$INST/knowledge/findings"
 printf -- '---\ntype: Finding\ntitle: F1\nstatus: current\nlesson: a lesson\ntimestamp: 2026-01-01T00:00:00Z\n---\nbody\n' \
   > "$INST/knowledge/findings/f1.md"
@@ -85,7 +88,7 @@ sed 's/^intro line$/intro line — HOUSE EDIT/' "$INST/CLAUDE.md" > "$TMP/c" && 
 cp "$INST/CLAUDE.md" "$TMP/claude.pristine"
 
 # ------------------------------------------------------------- the template, seed v2
-printf 'node_modules/\n# derived, never tracked\n/board.html\n/.board-live/\n/.tick-lock\n' > "$TPL/plugin/seed/.gitignore"
+printf 'node_modules/\n# derived, never tracked\n/board.html\n/%s/\n/%s\n' "$AB_BOARD_DIR" "$AB_LOCK" > "$TPL/plugin/seed/.gitignore"
 sed 's/^intro line$/intro line — TEMPLATE V2/' "$TPL/plugin/seed/CLAUDE.md" > "$TMP/c" \
   && mv "$TMP/c" "$TPL/plugin/seed/CLAUDE.md"
 ( cd "$TPL" && git add -A && gc "template, seed v2" )
@@ -113,7 +116,7 @@ assert ".gitignore is reported RESOLVED"      "$(has 'RESOLVED  .gitignore' "$AP
 assert "…naming the rule that decided it"     "$(has 'take the seed side' "$APPLY")"
 assert "…the seed's side of the conflicting hunk landed" \
   "$(yes_if sh -c 'grep -qx "/board.html" "$1" && ! grep -qx "!/board.html" "$1"' _ "$INST/.gitignore")"
-assert "…the seed's new managed line landed"  "$(yes_if grep -qx '/.board-live/' "$INST/.gitignore")"
+assert "…the seed's new managed line landed"  "$(yes_if grep -qx "/$AB_BOARD_DIR/" "$INST/.gitignore")"
 assert "…and the bundle's own line was kept"  "$(yes_if grep -qx 'MY-OWN-IGNORE' "$INST/.gitignore")"
 assert "…with no conflict marker left in it" \
   "$(grep -qE '^(<<<<<<< |=======$|>>>>>>> )' "$INST/.gitignore" && echo 1 || echo 0)"
@@ -151,13 +154,13 @@ assert "…and is idempotent on the decidable classes"       "$(hasnt 'RESOLVED'
 
 echo "== /ai-bridge:init runs the check-and-fix pass itself =="
 # Re-diverge one seed-managed .gitignore line so the pass has something to do.
-printf 'node_modules/\n# derived, never tracked\n/board.html\n/.board-live/\n/.tick-state\n/.tick-lock\n' > "$TPL/plugin/seed/.gitignore"
+printf 'node_modules/\n# derived, never tracked\n/board.html\n/%s/\n/%s\n/%s\n' "$AB_BOARD_DIR" "$AB_STATE_DIR" "$AB_LOCK" > "$TPL/plugin/seed/.gitignore"
 ( cd "$TPL" && git add -A && gc "template, seed v3" )
-printf 'node_modules/\n!/board.html\n/.tick-lock\nMY-OWN-IGNORE\n' > "$INST/.gitignore"
+printf 'node_modules/\n!/board.html\n/%s\nMY-OWN-IGNORE\n' "$AB_LOCK" > "$INST/.gitignore"
 # A lock and an UNCOMMITTED config the pass must refuse to touch, in the same run. The
 # config is the ambiguous tier's only trigger, so this is also what proves a row outside
 # the idempotent tier is printed and left alone.
-printf 'held by a tick\n' > "$INST/.tick-lock"
+mkdir -p "$INST/$AB_DIR"; printf 'held by a tick\n' > "$INST/$AB_LOCK"
 ( cd "$INST" && git add -A && gc "before the pass" )
 printf '{\n  "org": "decided-minutes-ago"\n}\n' > "$INST/instance.config.json"
 cp "$INST/instance.config.json" "$TMP/config.pristine"
@@ -168,10 +171,10 @@ assert "…and says it acts on the idempotent tier ONLY" \
   "$(has 'acting ONLY on the idempotent tier' "$STAMP")"
 assert "…and states the two refusals"          "$(has 'Config files and tick locks are NEVER written' "$STAMP")"
 assert "…a non-idempotent tier is reported, not acted on" "$(has 'NOT ACTED ON' "$STAMP")"
-assert "…the tick lock it found is still there"        "$(yes_if test -f "$INST/.tick-lock")"
+assert "…the tick lock it found is still there"        "$(yes_if test -f "$INST/$AB_LOCK")"
 assert "…and instance.config.json was never written"   "$(yes_if cmp -s "$TMP/config.pristine" "$INST/instance.config.json")"
 assert "…and the seed drift was actually resolved" \
-  "$(yes_if sh -c 'grep -qx "/.tick-state" "$1" && grep -qx "MY-OWN-IGNORE" "$1"' _ "$INST/.gitignore")"
+  "$(yes_if sh -c "grep -qx '/$AB_STATE_DIR' \"\$1\" && grep -qx 'MY-OWN-IGNORE' \"\$1\"" _ "$INST/.gitignore")"
 assert "…without re-entering the stamp"        "$(hasnt 'NOT re-stamped' "$STAMP")"
 
 echo "== welcome fix points at init and exits 0 =="

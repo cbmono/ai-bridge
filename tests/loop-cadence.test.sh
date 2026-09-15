@@ -42,6 +42,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 LOCKSH="$REPO/plugin/scripts/tick-lock.sh"
 DISPATCH="$REPO/plugin/skills/dispatch/SKILL.md"
 AUDIT="$REPO/plugin/skills/audit/SKILL.md"
@@ -67,14 +70,14 @@ saw() { case "$1" in *"$2"*) echo yes ;; *) echo no ;; esac; }
 # =======================================================================================
 echo "== 1. BEHAVIOUR: a firing that lands mid-tick is one quiet line, and still exit 1 =="
 # =======================================================================================
-INST="$TMP/inst"; mkdir -p "$INST"
+INST="$TMP/inst"; mkdir -p "$INST" "$INST/$AB_DIR"
 
 # A free lock: `--as loop` is the launcher in every respect — it takes it, silently, 0.
 out="$(bash "$LOCKSH" acquire --as loop --agent project-manager --instance "$INST" 2>"$TMP/e1")"; rc=$?
 ok "free lock: --as loop takes it"        "$rc" 0
 ok "…and says nothing on stdout"          "$([ -z "$out" ] && echo yes || echo no)" yes
 ok "…and nothing on stderr either"        "$([ -s "$TMP/e1" ] && echo no || echo yes)" yes
-ok "…the lock is on disk"                 "$(yn test -e "$INST/.tick-lock")" yes
+ok "…the lock is on disk"                 "$(yn test -e "$INST/$AB_LOCK")" yes
 
 # THE CASE THIS FILE IS FOR: the lock is held (a tick from an earlier firing is running)
 # and the clock fires again.
@@ -85,17 +88,17 @@ ok "…on STDOUT, because it is not an error" "$([ -n "$out" ] && echo yes || ec
 ok "…and stderr stays empty"              "$([ -s "$TMP/e2" ] && echo no || echo yes)" yes
 ok "…it says a tick is in progress"       "$(saw "$out" 'tick in progress since ')" yes
 ok "…it names WHEN, from the lock"        \
-  "$(saw "$out" "$(grep '^timestamp:' "$INST/.tick-lock" | sed 's/^timestamp: //')")" yes
+  "$(saw "$out" "$(grep '^timestamp:' "$INST/$AB_LOCK" | sed 's/^timestamp: //')")" yes
 ok "…it names the agent holding it"       "$(saw "$out" 'project-manager')" yes
 ok "…and it dispatches nothing"           "$(saw "$out" 'nothing to dispatch this pass')" yes
 
 # A skipped pass must leave the running tick's lock exactly as it found it. A mode that
 # quietly refreshed or released it would hand the next firing a dispatch the running tick
 # has not finished — the double-dispatch the lock exists to prevent, arriving via cadence.
-before="$(cat "$INST/.tick-lock")"
+before="$(cat "$INST/$AB_LOCK")"
 bash "$LOCKSH" acquire --as loop --agent project-manager --instance "$INST" >/dev/null 2>&1
-ok "a skipped pass leaves the lock untouched" "$([ "$before" = "$(cat "$INST/.tick-lock")" ] && echo yes || echo no)" yes
-ok "…and writes no claim"                 "$(yn test -e "$INST/.tick-lock.claim")" no
+ok "a skipped pass leaves the lock untouched" "$([ "$before" = "$(cat "$INST/$AB_LOCK")" ] && echo yes || echo no)" yes
+ok "…and writes no claim"                 "$(yn test -e "$INST/$AB_LOCK_CLAIM")" no
 
 # NON-VACUITY, both halves. The launcher's own report must still be the loud multi-line
 # one on stderr, or "one quiet line" above would be measuring a change everyone got.
@@ -107,11 +110,11 @@ ok "…and still silent on stdout"          "$([ -z "$lout" ] && echo yes || ech
 
 # The loud paths stay loud. A clock asking does not make a stale lock less of a human's
 # problem, so STALE keeps exit 2 and its stderr text under `--as loop` too.
-STALE="$TMP/stale"; mkdir -p "$STALE"
+STALE="$TMP/stale"; mkdir -p "$STALE" "$STALE/$AB_DIR"
 OLD=$(( $(date -u +%s) - 60*60*24 ))
 if date -u -r 0 +%Y >/dev/null 2>&1; then OLD_ISO="$(date -u -r "$OLD" +%Y-%m-%dT%H:%M:%SZ)"
 else OLD_ISO="$(date -u -d "@$OLD" +%Y-%m-%dT%H:%M:%SZ)"; fi
-printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$OLD_ISO" "$OLD" > "$STALE/.tick-lock"
+printf 'timestamp: %s\nepoch: %s\nagent: project-manager\n' "$OLD_ISO" "$OLD" > "$STALE/$AB_LOCK"
 sout="$(bash "$LOCKSH" acquire --as loop --agent project-manager --instance "$STALE" 2>"$TMP/e4")"; src=$?
 ok "stale lock under --as loop: exit 2"   "$src" 2
 ok "…and it is LOUD, on stderr"           "$(grep -q '^STALE:' "$TMP/e4" && echo yes || echo no)" yes
@@ -175,13 +178,13 @@ echo "== 3. MEASURED: a remote routine's clone has none of a bundle's operating 
 # =======================================================================================
 # The oracle is git itself, over the seed `.gitignore` a stamped bundle carries. This is
 # the doc's "7 of 7" claim, re-derived on every run.
-CLONE="$TMP/clone"; mkdir -p "$CLONE"
+CLONE="$TMP/clone"; mkdir -p "$CLONE" "$CLONE/$AB_DIR"
 cp "$SEEDIGNORE" "$CLONE/.gitignore"
 ( cd "$CLONE" && git init -q . ) >/dev/null 2>&1
 
 ignored=0
-for f in instance.config.local.json .tick-lock .tick-lock.claim AWAITING.md SNAPSHOT.json \
-         repos/ai-bridge .board-live/board.html; do
+for f in instance.config.local.json "$AB_LOCK" "$AB_LOCK_CLAIM" "$AB_AWAITING" "$AB_SNAPSHOT" \
+         repos/ai-bridge "$AB_BOARD_DIR/board.html"; do
   if ( cd "$CLONE" && git check-ignore -q "$f" ); then ignored=$((ignored+1))
   else printf '        NOT IGNORED (a remote clone WOULD have it): %s\n' "$f" >&2; fi
 done
@@ -190,7 +193,7 @@ ok "7 of 7 operating inputs are gitignored" "$ignored" 7
 ok "…while instance.config.json is tracked" \
   "$( ( cd "$CLONE" && git check-ignore -q instance.config.json ) && echo no || echo yes)" yes
 ok "…and SCHEMA.md is tracked"            \
-  "$( ( cd "$CLONE" && git check-ignore -q SCHEMA.md ) && echo no || echo yes)" yes
+  "$( ( cd "$CLONE" && git check-ignore -q "$AB_SCHEMA" ) && echo no || echo yes)" yes
 
 O="$(flatten "$OPS")"
 ok "operations.md names the standard form" "$(saw "$O" '**`/loop 10m /ai-bridge:dispatch`.** That is the whole answer')" yes

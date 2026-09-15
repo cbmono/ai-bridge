@@ -22,6 +22,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
+
 SRC="$REPO/plugin/scripts/tick-delta.sh"
 PM="$REPO/plugin/agents/project-manager.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/quiettick.XXXXXX")" || {
@@ -37,7 +40,7 @@ GIT() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git \
 
 # ------------------------------------------------------------------- the fixture
 INST="$TMP/inst"
-mkdir -p "$INST/projects/quiet-proj/tasks" "$INST/scripts"
+mkdir -p "$INST/projects/quiet-proj/tasks" "$INST/scripts" "$INST/$AB_DIR"
 cp "$SRC" "$INST/scripts/tick-delta.sh"; chmod +x "$INST/scripts/tick-delta.sh"
 # The mutants and copies run from a staged directory, and the script sources its sibling
 # resolver (ai-bridge-v3/task-031) — without it they exit 2 before reaching their subject.
@@ -50,12 +53,12 @@ task "$INST/projects/quiet-proj/tasks/t1.md" draft
 task "$INST/projects/quiet-proj/tasks/t2.md" "done"
 printf '* TICK 2026-09-06T08:00:00Z closed — nothing to do\n' > "$INST/log.md"
 printf '# Awaiting you\n\nLast refreshed: 2026-09-06T08:00:00Z.\n\n## 🔴 Awaiting you (0)\n_None._\n' \
-  > "$INST/AWAITING.md"
+  > "$INST/$AB_AWAITING"
 printf '/.tick-state\n/AWAITING.md\n' > "$INST/.gitignore"
 GIT -C "$INST" init -q
 GIT -C "$INST" add -A && GIT -C "$INST" commit -qm init
 
-AW="$INST/AWAITING.md"
+AW="$INST/$AB_AWAITING"
 stamp() { # bytes + mtime, as one comparable string
   printf '%s %s' "$(wc -c < "$AW" | tr -d ' ')" "$(GIT -C "$INST" hash-object "$AW")"
 }
