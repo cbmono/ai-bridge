@@ -103,6 +103,16 @@
 # that is nothing but one of `REPEAT_SKIP` is transparent to the counter however often it
 # repeats — chain anything to it and the whole command is counted.
 #
+# ------------------------------------------------------ WHY THE WALL CLOCK IS HERE
+# The doom loop catches an agent that has stopped making progress; it says nothing about
+# one that keeps making progress for an hour. `maxAgentMinutes` (absent ⇒ 45) is that
+# second bound, on the same event for the same reason. Past the budget an agent may still
+# `Read`/`Grep`/`Glob` and still `git commit`, `git push` or `gh pr create|edit|view|checks`
+# — everything it needs to land what it has and report accurately — and nothing else. The
+# start time is the `SubagentStart` record under `agents.d/`, falling back to the oldest
+# timestamp the transcript carries (an append moves ctime and mtime, so neither alone is a
+# start time, and birth time is not recorded on every filesystem).
+#
 # ------------------------------------------------------------------------ BOUNDED
 # Unbounded per-call state in front of every tool call is its own hazard, so the
 # directive scan stops at `CONTROL_MAX` records (default 20) and SAYS what it did
@@ -180,6 +190,14 @@ REPEAT_SKIP='^(gh +(pr +(checks|view)|run +(view|watch|list))|sleep)([[:space:]]
 # The exemption is for a WHOLE command, so anything that can chain a second one to a poll
 # disqualifies it: `sleep 1; make test` is a `make test` loop wearing a poll's prefix.
 REPEAT_CHAIN='[;&|`\n()]'
+# `$CTL/agents` is the roster FILE, so the per-agent clock cannot live under that name.
+AGENTSTATE="$CTL/agents.d"
+CAP_CACHE="$CTL/agent-cap"
+CAP_RECHECK=60
+CAP_DEFAULT=45
+CAP_SWEEP=1440
+CAP_ALLOW_BASH='^(git +(commit|push)|gh +pr +(view|checks|create|edit))([[:space:]]|$)'
+RESOLVER="$(dirname "$0")/../scripts/resolve-config.sh"
 
 stamp="$(date -u +'%Y-%m-%dT%H:%M:%SZ %s' 2>/dev/null || echo 'unknown 0')"
 now="${stamp%% *}"
@@ -226,12 +244,75 @@ repeat_limit_load() {
 
 digest() { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else cksum; fi; }
 
+# The budget, cached on the same terms as the repeat limit. Precedence is NOT re-implemented
+# here: `resolve-config.sh` owns it, exit 1 is its "absent" — which is the 45-minute default
+# — and anything else is a read that did not happen, so the cap is off and says so.
+CAP_N=off
+cap_limit_load() {
+  local cfg="$root/instance.config.json" loc="$root/instance.config.local.json" n rc when
+  CAP_N=off; when=0
+  if [ -r "$CAP_CACHE" ]; then
+    read -r CAP_N when < "$CAP_CACHE" 2>/dev/null || { CAP_N=off; when=0; }
+    case "$when" in ''|*[!0-9]*) when=0 ;; esac
+  fi
+  if [ ! -e "$CAP_CACHE" ] || [ "$cfg" -nt "$CAP_CACHE" ] \
+     || { [ -e "$loc" ] && [ "$loc" -nt "$CAP_CACHE" ]; } \
+     || [ "$((epoch - when))" -ge "$CAP_RECHECK" ]; then
+    n="$(bash "$RESOLVER" --instance "$root" maxAgentMinutes 2>/dev/null)"; rc=$?
+    case "$rc" in
+      0) ;;
+      1) n="$CAP_DEFAULT" ;;
+      *) n=off; note "fail-open: resolve-config.sh could not read maxAgentMinutes — the time cap is OFF" ;;
+    esac
+    case "$n" in ''|*[!0-9]*) n=off ;; esac
+    [ "$n" = off ] || [ "$n" -ge 1 ] || n=off
+    CAP_N="$n"
+    printf '%s %s\n' "$n" "$epoch" > "$CAP_CACHE" 2>/dev/null || true
+  fi
+  case "$CAP_N" in ''|*[!0-9]*) CAP_N=off ;; esac
+}
+
+# Epoch seconds, or nothing. The fallback takes the OLDEST of birth, ctime and mtime rather
+# than any one of them: a transcript is appended to for the whole of an agent's life, so
+# ctime and mtime both read as "started seconds ago", and birth time is not recorded on
+# every filesystem. None of the three can predate the transcript's first write.
+cap_started() {
+  local f s t oldest=0
+  f="$(cap_file)" || f=""
+  if [ -n "$f" ] && [ -r "$f" ]; then
+    read -r s < "$f" 2>/dev/null || s=""
+    case "$s" in ''|*[!0-9]*) ;; *) printf '%s' "$s"; return 0 ;; esac
+  fi
+  [ -n "$transcript" ] && [ -f "$transcript" ] || return 1
+  s="$(stat -f '%B %c %m' "$transcript" 2>/dev/null || stat -c '%W %Z %Y' "$transcript" 2>/dev/null)" || s=""
+  for t in $s; do
+    case "$t" in ''|*[!0-9]*) continue ;; esac
+    [ "$t" -gt 0 ] || continue
+    { [ "$oldest" -eq 0 ] || [ "$t" -lt "$oldest" ]; } && oldest="$t"
+  done
+  [ "$oldest" -gt 0 ] || return 1
+  printf '%s' "$oldest"
+}
+
+# The allowlist past the cap. A prefix match alone would admit `git commit -m x; rm -rf .`,
+# so the whole command must carry no chaining metacharacter — the REPEAT_CHAIN rule again.
+cap_allows() {
+  case "$tool_name" in
+    Read|Grep|Glob) return 0 ;;
+    Bash) ;;
+    *) return 1 ;;
+  esac
+  printf '%s' "$payload" | jq -e --arg ok "$CAP_ALLOW_BASH" --arg chain "$REPEAT_CHAIN" '
+    ((.tool_input.command // "") | sub("^\\s+"; "")) as $c
+    | ($c | test($ok)) and ($c | test($chain) | not)' >/dev/null 2>&1
+}
+
 # One file per agent_id, under a name NOTHING else can produce. Sanitising an id to
 # `[A-Za-z0-9._-]` let two ids share a path, and `SubagentStop` then deleted the other
 # agent's counter. An id that is already a safe short filename IS its key; anything else
 # is hashed into the `+` namespace, which a safe name can never occupy.
 REPEAT_KEY=""
-repeat_file() {
+agent_key() {
   if [ -z "$REPEAT_KEY" ]; then
     [ -n "$agent_id" ] || return 1
     case "$agent_id" in
@@ -245,14 +326,34 @@ repeat_file() {
       REPEAT_KEY="+${h:0:32}"
     fi
   fi
-  printf '%s/%s' "$REPEATS" "$REPEAT_KEY"
+  printf '%s' "$REPEAT_KEY"
+}
+repeat_file() { local k; k="$(agent_key)" || return 1; printf '%s/%s' "$REPEATS" "$k"; }
+cap_file()    { local k; k="$(agent_key)" || return 1; printf '%s/%s.started' "$AGENTSTATE" "$k"; }
+cap_mark()    { local k; k="$(agent_key)" || return 1; printf '%s/%s.capped' "$AGENTSTATE" "$k"; }
+
+# One cleanup for both counters, on the one event that says an agent is gone. The clock is
+# swept far later than the repeat counter: a live agent legitimately holds one for hours.
+agent_forget() {
+  local f
+  if [ -d "$REPEATS" ]; then
+    f="$(repeat_file)" || f=""
+    [ -z "$f" ] || rm -f "$f" 2>/dev/null || true
+    find "$REPEATS" -type f -mmin +60 -delete 2>/dev/null || true
+  fi
+  if [ -d "$AGENTSTATE" ]; then
+    f="$(cap_file)" || f=""
+    [ -z "$f" ] || rm -f "$f" "${f%.started}.capped" 2>/dev/null || true
+    find "$AGENTSTATE" -type f -mmin +"$CAP_SWEEP" -delete 2>/dev/null || true
+  fi
 }
 
-repeat_forget() {
-  [ -d "$REPEATS" ] || return 0
-  local f; f="$(repeat_file)" || f=""
-  [ -z "$f" ] || rm -f "$f" 2>/dev/null || true
-  find "$REPEATS" -type f -mmin +60 -delete 2>/dev/null || true
+# SubagentStart is the exact start, so it never overwrites: a second event for one agent
+# must not hand it a fresh budget.
+agent_started_record() {
+  local f; f="$(cap_file)" || return 0
+  mkdir -p "$AGENTSTATE" 2>/dev/null || true
+  [ -e "$f" ] || printf '%s\n' "$epoch" > "$f" 2>/dev/null || true
 }
 
 # CONTROL_MAX normalised to base 10 BEFORE any arithmetic. `CONTROL_MAX=08` is
@@ -291,25 +392,27 @@ command -v jq >/dev/null 2>&1 || {
 # TRAILING newlines, which is harmless here: only `tool_name` is last, it is used
 # for the log alone, and `read` leaves it empty in that case anyway.
 fields="$(printf '%s' "$payload" \
-  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.hook_event_name // "")] | .[]' 2>/dev/null)" || fields=""
+  | jq -r '[(.agent_id // ""), (.agent_type // ""), (.tool_name // ""), (.hook_event_name // ""), (.transcript_path // "")] | .[]' 2>/dev/null)" || fields=""
 [ -n "$fields" ] || { note "fail-open: unparseable PreToolUse payload"; exit 0; }
 
-agent_id=""; agent_type=""; tool_name=""; hook_event=""
+agent_id=""; agent_type=""; tool_name=""; hook_event=""; transcript=""
 {
   IFS='' read -r agent_id || true
   IFS='' read -r agent_type || true
   IFS='' read -r tool_name || true
   IFS='' read -r hook_event || true
+  IFS='' read -r transcript || true
 } <<EOF
 $fields
 EOF
 
-# SubagentStop is the counter's reset, and nothing else in this file runs on it — the
-# roster and the directives are both about a tool call. It is ahead of the `agent_id`
-# guard on purpose: the stop event may not carry one, and the age sweep still has to run.
+# The two lifecycle events, and nothing else in this file runs on either — the roster and
+# the directives are both about a tool call. SubagentStop is ahead of the `agent_id` guard
+# on purpose: the stop event may not carry one, and the age sweep still has to run.
 case "${hook_event:-PreToolUse}" in
   PreToolUse) ;;
-  SubagentStop) repeat_forget; exit 0 ;;
+  SubagentStop) agent_forget; exit 0 ;;
+  SubagentStart) agent_started_record; exit 0 ;;
   *) exit 0 ;;
 esac
 
@@ -343,6 +446,36 @@ if [ ! -e "$ROSTER" ] || ! awk -F'\t' -v id="$agent_id" '$1==id { found=1; exit 
       mv "$tmp" "$ROSTER" 2>/dev/null || rm -f "$tmp" 2>/dev/null || true
     else
       rm -f "$tmp" 2>/dev/null || true
+    fi
+  fi
+fi
+
+# ------------------------------------------------------------------- the wall clock
+# Ahead of the doom-loop counter: an agent past its budget is being told to wrap up, which
+# is the more useful of the two messages. An ALLOWED call falls through and is still counted.
+cap_limit_load
+if [ "$CAP_N" != off ]; then
+  started="$(cap_started)" || started=""
+  if [ -n "$started" ]; then
+    elapsed=$(( (epoch - started) / 60 ))
+    [ "$elapsed" -ge 0 ] || elapsed=0
+    if [ "$elapsed" -ge "$CAP_N" ] && ! cap_allows; then
+      # One log line per agent, not per refusal: an agent that keeps trying is one event.
+      mark="$(cap_mark)" || mark=""
+      if [ -n "$mark" ] && [ ! -e "$mark" ]; then
+        mkdir -p "$AGENTSTATE" 2>/dev/null || true
+        : > "$mark" 2>/dev/null || true
+        note agent-cap "$agent_id" "$agent_type" "$tool_name" "elapsed=${elapsed}m budget=${CAP_N}m"
+      fi
+      body="TIME CAP: this agent has been running ${elapsed} minutes and the budget (maxAgentMinutes) is ${CAP_N}, so $tool_name is refused. Wrap up now: commit and push what you have, open or update the pull request, and report what is done and what is not. Still allowed so that report is accurate: Read, Grep, Glob, and a Bash that is a git commit, a git push or gh pr create|edit|view|checks. Nothing else is. Do not start new work and do not work around this."
+      jq -n --arg r "$body" '{
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: $r
+        }
+      }'
+      exit 0
     fi
   fi
 fi

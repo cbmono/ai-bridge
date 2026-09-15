@@ -357,13 +357,14 @@ ok "…so neither hook name appears in it" \
 # feature.
 ok "…and the seeded settings.json has no hooks key at all" \
    "$(jq -r 'if has("hooks") then "present" else "absent" end' "$SETTINGS")" "absent"
-# 5 -> 6 registrations across the SAME five scripts: `agent-control.sh` is registered on
-# `SubagentStop` as well as `PreToolUse`, which is what drops a doom-loop counter when the
-# agent ends. Both numbers are asserted so neither a lost script nor a lost event passes.
+# 5 -> 7 registrations across the SAME five scripts: `agent-control.sh` is registered on
+# `SubagentStart` and `SubagentStop` as well as `PreToolUse` — the two events that start and
+# drop its per-agent state. Both numbers are asserted so neither a lost script nor a lost
+# event passes.
 ok "…while the plugin manifest carries all five scripts" \
    "$(jq -r '[.hooks[][].hooks[].command] | unique | length' "$HOOKSJSON")" "5"
-ok "…across six registrations" \
-   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "6"
+ok "…across seven registrations" \
+   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "7"
 
 echo "== the permissions.deny block: unconditional shapes only"
 # This block is the SECOND layer — the harness matches it before any hook runs — and every
