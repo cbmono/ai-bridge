@@ -7,8 +7,8 @@
 #          rebase-pr.sh --self-test
 #
 #   0 rebased and pushed (or already current)   4 a resolution failed its own check
-#   1 usage                                     5 refused (fork head, base branch, closed)
-#   2 cannot answer (no gh, unreadable)         6 lease stale — the remote head moved
+#   1 usage                                     5 refused (fork, base, closed, not CONFLICTING)
+#   2 cannot answer (no gh, UNKNOWN state)      6 lease stale — the remote head moved
 #   3 UNCLASSIFIED CONFLICT — an agent round; names the file
 #
 # 3, 4, 5 and 6 all leave the branch and the remote exactly as they were. Reasoning,
@@ -56,7 +56,7 @@ share() {
 resolve_file() {
   local f="$1" tmp="$1.rebase-pr"
   awk -v out="$tmp" '
-    function flush_block(   i, j, k, seen, n, name, ov, tv, bv) {
+    function flush_block(   i, j, k, seen, n, name, ov, tv, bv, bc, bvals, rbad, marks) {
       blocks++
       # counter: comment lines plus exactly one IDENT=<int> on each side.
       name = ""; oc = 0; tc = 0
@@ -67,16 +67,21 @@ resolve_file() {
         split(T[i], p, "="); gsub(/^[[:space:]]+/, "", p[1]); if (p[1] != name) name = "!"; tv = p[2] + 0; tc++
       }
       if (name != "" && name != "!" && oc == 1 && tc == 1 && only_comment_or_assign()) {
-        bv = ov; for (i = 1; i <= nb; i++) if (B[i] ~ "^[[:space:]]*" name "=[0-9]+[[:space:]]*$") {
-          split(B[i], p, "="); bv = p[2] + 0
+        # ONE base assignment, or this is not the shape. An add/add block has no base
+        # section at all, and `ours + theirs - ours` is just theirs — the sum would drop
+        # the OURS delta while still looking like the three-way answer.
+        bc = 0; for (i = 1; i <= nb; i++) if (B[i] ~ "^[[:space:]]*" name "=[0-9]+[[:space:]]*$") {
+          split(B[i], p, "="); bv = p[2] + 0; bc++
         }
-        for (i = 1; i <= no; i++) if (O[i] ~ /^[[:space:]]*#/) { print O[i] > out; seen[O[i]] = 1 }
-        for (i = 1; i <= nt; i++) if (T[i] ~ /^[[:space:]]*#/ && !(T[i] in seen)) print T[i] > out
-        printf "%s=%d\n", name, ov + tv - bv > out
-        print "counter " name
-        oc = 0; tc = 0; return
+        if (bc == 1) {
+          for (i = 1; i <= no; i++) if (O[i] ~ /^[[:space:]]*#/) { print O[i] > out; seen[O[i]] = 1 }
+          for (i = 1; i <= nt; i++) if (T[i] ~ /^[[:space:]]*#/ && !(T[i] in seen)) print T[i] > out
+          printf "%s=%d\n", name, ov + tv - bv > out
+          print "counter " name
+          oc = 0; tc = 0; bc = 0; return
+        }
       }
-      oc = 0; tc = 0
+      oc = 0; tc = 0; bc = 0
       # comment history: every line on both sides is a comment. Keep both, in order.
       if (all_comments(O, no) && all_comments(T, nt)) {
         for (i = 1; i <= no; i++) { print O[i] > out; seen[O[i]] = 1 }
@@ -86,13 +91,26 @@ resolve_file() {
       # ratchet table: every line on every side is `<int> <path>`. Union by path; a path
       # both sides lowered is emitted at its OURS value and named for recomputation.
       if (all_rows(O, no) && all_rows(T, nt) && (nb == 0 || all_rows(B, nb))) {
-        n = 0
+        n = 0; rbad = 0; marks = ""
+        for (i = 1; i <= nb; i++) { split(B[i], p, " "); bvals[p[2]] = p[1] + 0 }
         for (i = 1; i <= no; i++) { split(O[i], p, " "); if (!(p[2] in val)) { n++; order[n] = p[2] }; val[p[2]] = p[1] + 0 }
         for (i = 1; i <= nt; i++) {
           split(T[i], p, " ")
           if (!(p[2] in val)) { n++; order[n] = p[2]; val[p[2]] = p[1] + 0 }
-          else if (val[p[2]] != p[1] + 0) print "ratchet " p[2]
+          # BOTH sides lowered, against a base that carries the row, or it is not this
+          # shape: a side that RAISED the row loosened the ratchet on purpose, and the
+          # recomputation below would silently take that decision back.
+          else if (val[p[2]] != p[1] + 0) {
+            if ((p[2] in bvals) && val[p[2]] < bvals[p[2]] && p[1] + 0 < bvals[p[2]]) marks = marks "ratchet " p[2] "\n"
+            else rbad = 1
+          }
         }
+        if (rbad) {
+          for (i = 1; i <= n; i++) delete val[order[i]]
+          printf "%s\n", O[1] > "/dev/stderr"
+          bad = 1; return
+        }
+        printf "%s", marks
         for (i = 1; i < n; i++) for (j = 1; j <= n - i; j++)
           if (order[j] > order[j + 1]) { k = order[j]; order[j] = order[j + 1]; order[j + 1] = k }
         for (i = 1; i <= n; i++) { printf "%d %s\n", val[order[i]], order[i] > out; delete val[order[i]] }
@@ -144,11 +162,14 @@ git -C "$DIR" rev-parse --git-dir >/dev/null 2>&1 || {
   echo "rebase-pr: $DIR is not a git repository — cannot answer" >&2; exit 2; }
 
 meta="$(gh pr view "$PR" ${REPO_SLUG:+--repo "$REPO_SLUG"} \
-  --json state,baseRefName,headRefName,headRefOid,isCrossRepository 2>/dev/null)" || meta=""
+  --json state,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,mergeStateStatus \
+  2>/dev/null)" || meta=""
 [ -n "$meta" ] || { echo "rebase-pr: PR $PR metadata unreadable — cannot answer" >&2; exit 2; }
-read -r state base head lease cross <<EOF
+read -r state base head lease cross mergeable merge_state <<EOF
 $(printf '%s' "$meta" | jq -r '[.state, .baseRefName, .headRefName, .headRefOid,
-  (if .isCrossRepository then "fork" else "same" end)] | @tsv' 2>/dev/null)
+  (if .isCrossRepository then "fork" else "same" end),
+  (if (.mergeable // "") == "" then "UNKNOWN" else .mergeable end),
+  (if (.mergeStateStatus // "") == "" then "UNKNOWN" else .mergeStateStatus end)] | @tsv' 2>/dev/null)
 EOF
 [ -n "${lease:-}" ] || { echo "rebase-pr: PR $PR metadata incomplete — cannot answer" >&2; exit 2; }
 
@@ -156,6 +177,19 @@ EOF
 [ "$cross" = "same" ] || { echo "rebase-pr: refuse — PR $PR has a FORK head; a lease push" >&2
   echo "        needs write access this tick does not have" >&2; exit 5; }
 [ "$head" != "$base" ] || { echo "rebase-pr: refuse — PR $PR's head IS its base ($base)" >&2; exit 5; }
+
+# ONLY A CONFLICTING PR. A caller holding a stale exit 7, or a hand invocation, otherwise
+# rewrites the head of a PR that merges fine — which spends its review and its green CI.
+# UNKNOWN is a hold, not a state: the host computes mergeability lazily and answers UNKNOWN
+# for seconds after the base moves. Same answer review-clearance.sh gives it, exit 2.
+case "$mergeable/$merge_state" in
+  UNKNOWN/*|*/UNKNOWN) echo "rebase-pr: PR $PR mergeability is UNKNOWN — the host is still" >&2
+    echo "        computing it. Nothing touched; re-ask next tick." >&2; exit 2 ;;
+esac
+[ "$mergeable" = "CONFLICTING" ] || [ "$merge_state" = "DIRTY" ] || {
+  echo "rebase-pr: refuse — PR $PR is $mergeable/$merge_state, not CONFLICTING/DIRTY." >&2
+  echo "        A rebase here would rewrite the head of a PR that does not conflict." >&2
+  exit 5; }
 
 git -C "$DIR" fetch --quiet origin \
   "+refs/heads/$base:refs/remotes/origin/$base" \

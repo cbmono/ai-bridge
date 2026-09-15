@@ -57,9 +57,9 @@ table_file() { # <a.sh row> <b.sh row> — b.sh is a MIDDLE row, as a real confl
 oref() { git -C "$ORIGIN" rev-parse refs/heads/feat 2>/dev/null || echo none; }
 oshow() { git -C "$ORIGIN" show "refs/heads/feat:$1" 2>/dev/null || true; }
 
-pr_json() { # <state> <head-oid> <fork?>
-  printf '{"state":"%s","baseRefName":"main","headRefName":"feat","headRefOid":"%s","isCrossRepository":%s}\n' \
-    "$1" "$2" "$3" > "$FIX/pr_json"
+pr_json() { # <state> <head-oid> <fork?> [mergeable] [mergeStateStatus]
+  printf '{"state":"%s","baseRefName":"main","headRefName":"feat","headRefOid":"%s","isCrossRepository":%s,"mergeable":"%s","mergeStateStatus":"%s"}\n' \
+    "$1" "$2" "$3" "${4:-CONFLICTING}" "${5:-DIRTY}" > "$FIX/pr_json"
 }
 
 seed() {
@@ -113,6 +113,17 @@ ok "…and BOTH sides' history lines" \
 ok "…and the rebase really happened: main's commit is an ancestor of feat" \
    "$(git -C "$ORIGIN" merge-base --is-ancestor refs/heads/main refs/heads/feat && echo yes || echo no)" yes
 
+echo "== an ADD/ADD counter has no base value, so the sum would collapse to one side =="
+# `ours + theirs - ours` is theirs: the OURS delta vanishes while the answer still looks
+# three-way. No base assignment ⇒ not the shape ⇒ an agent round, not a plausible number.
+feat_addadd() { printf '#!/usr/bin/env bash\n# 1 -> 12: feat\nEXPECTED_ASSERTIONS=12\n' > "$WORK/addadd.sh"; }
+main_addadd() { printf '#!/usr/bin/env bash\n# 1 -> 11: main\nEXPECTED_ASSERTIONS=11\n' > "$WORK/addadd.sh"; }
+scenario feat_addadd main_addadd
+BEFORE="$(oref)"; run
+ok "an add/add counter conflict exits 3" "$RC" 3
+ok "…naming the file" "$(printf '%s' "$OUT" | grep -c 'addadd\.sh')" 1
+ok "…leaving origin's branch exactly where it was" "$(oref)" "$BEFORE"
+
 echo "== a comment history conflicting with itself: keep both, in order =="
 feat_hist() { printf '#!/usr/bin/env bash\n# 1 -> 2: seeded\n# 2 -> 3: feat\n:\n' > "$WORK/hist.sh"; }
 main_hist() { printf '#!/usr/bin/env bash\n# 1 -> 2: seeded\n# 2 -> 3: main\n:\n' > "$WORK/hist.sh"; }
@@ -131,6 +142,14 @@ ok "a contested ratchet row rebases clean" "$RC" 0
 ok "…at the merged file's MEASURED share, not either side's row" \
    "$(oshow table.sh | sed -n 's/^\([0-9]*\) b\.sh$/\1/p')" 250
 ok "…and the untouched rows survive" "$(oshow table.sh | grep -c '500 [cd]\.sh')" 2
+
+echo "== a ratchet row one side RAISED is not the shape: recomputing would undo it =="
+feat_table_low() { table_file 500 400 > "$WORK/table.sh"; }
+main_table_up()  { table_file 500 600 > "$WORK/table.sh"; }
+scenario feat_table_low main_table_up
+BEFORE="$(oref)"; run
+ok "a row raised above its base exits 3" "$RC" 3
+ok "…leaving origin's branch exactly where it was" "$(oref)" "$BEFORE"
 
 echo "== what it must NOT resolve: a real code conflict is an agent round =="
 feat_code() { printf '#!/usr/bin/env bash\nf() { echo feat; }\n' > "$WORK/code.sh"; }
@@ -171,7 +190,13 @@ pr_json CLOSED "$(g rev-parse refs/heads/feat)" false; run
 ok "a closed PR is refused (exit 5)" "$RC" 5
 pr_json OPEN 0000000000000000000000000000000000000000 false; run
 ok "a lease the host and origin disagree on is exit 6" "$RC" 6
-ok "…and all three left origin's branch alone" "$(oref)" "$BEFORE"
+# ONLY a conflicting PR. Rebasing a clean one rewrites its head, which spends its review
+# and its green CI for nothing; UNKNOWN is the host still computing, so it is a hold.
+pr_json OPEN "$(g rev-parse refs/heads/feat)" false MERGEABLE CLEAN; run
+ok "a PR that does not conflict is refused (exit 5)" "$RC" 5
+pr_json OPEN "$(g rev-parse refs/heads/feat)" false UNKNOWN UNKNOWN; run
+ok "an UNKNOWN mergeability is a hold (exit 2)" "$RC" 2
+ok "…and all five left origin's branch alone" "$(oref)" "$BEFORE"
 
 echo "== an already-rebased PR is a no-op, not a push =="
 seed

@@ -111,9 +111,10 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      means a review artifact exists at that head; every other exit is a refusal it
      explains. **`--record` is not optional here.** It writes the mergeability it just
      read to the task's `pr_mergeable:`, which is the only thing `write-snapshot.sh` —
-     offline by contract — can read. Skip it and the board keeps rendering a merge verb
-     from `status:` plus a PR link, which is the 2026-09-13 failure itself. Absent ⇒
-     `UNKNOWN` ⇒ no merge verb, so forgetting it costs a row, never a wrong merge. **Exit 4 is the common answer and it is not exit 1**: a real review of
+     offline by contract — can read. Skip it and last tick's value stands: a PR that has
+     just gone CONFLICTING still renders as a merge row, which is the 2026-09-13 failure
+     itself. Absent ⇒ `UNKNOWN` ⇒ no merge verb, so a task never recorded costs a row,
+     never a wrong merge. **Exit 4 is the common answer and it is not exit 1**: a real review of
      an *earlier* commit — surface as "reviewed at `<sha>`, head has moved — ask for a
      review at this head", never as "the reviewer declined".
    - **EXIT 7 IS NOT ABOUT THE REVIEWER AT ALL: the PR CONFLICTS, so it is a REBASE
