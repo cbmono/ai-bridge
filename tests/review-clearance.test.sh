@@ -2170,9 +2170,10 @@ expect "…and the acknowledgement stays exit 4" 4
 # reached only through table 2b, which the review marker outranks, so a PR that HAS been
 # reviewed can never be told to ask again.
 assert "the coexistence fixture exists" "$(yes_if test -s "$SKIP_REVIEWED")"
-assert "…and carries the skip marker AND the walkthrough marker, in one body" \
-  "$(yes_if bash -c 'grep -Fq "skip review by coderabbit.ai" "$1" && \
-                     grep -Fqx "<!-- walkthrough_start -->" "$1"' _ "$SKIP_REVIEWED")"
+assert "…and carries the vendor's skip marker" \
+  "$(yes_if grep -Fq "skip review by coderabbit.ai" "$SKIP_REVIEWED")"
+assert "…and the completed review's walkthrough marker, in that same body" \
+  "$(yes_if grep -Fqx "<!-- walkthrough_start -->" "$SKIP_REVIEWED")"
 setup "$SKIP_REVIEWED_HEAD"; add_comment coderabbitai "$SKIP_REVIEWED"
 expect "a skip marker BESIDE a real review -> the review, never 8" 0
 setup "$OTHER_SHA"; add_comment coderabbitai "$SKIP_REVIEWED"
