@@ -57,8 +57,10 @@ knowledge base") means several people write this KB. Absent the key nothing belo
 2. **Findings.** Capture durable decisions/learnings/gotchas as
    `knowledge/findings/<slug>.md` (`type: Finding`), linked to the Services/tasks they
    concern. **40 lines, and a one-line `lesson:` in the frontmatter** — the takeaway the
-   next agent needs, not the history that produced it; `validate-bundle.sh` warns on
-   either, and the `lesson:` becomes the index row **verbatim**, so write it as the row you
+   next agent needs, not the history that produced it; `validate-bundle.sh <path>` warns on
+   either **for the one document you name**, so run it on each Finding as you write it
+   rather than trimming at the next full run. The `lesson:` becomes the index row
+   **verbatim**, so write it as the row you
    want an agent to scan. **`tags:` come from `knowledge/vocab.md` only** — ground your tag
    by longest match over its **tag** and **alias** columns, and **never invent one**; if
    nothing fits, add the row to `vocab.md` in the same change.

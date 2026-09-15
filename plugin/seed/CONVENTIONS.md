@@ -53,7 +53,9 @@ which is the one surface with no length limit, and the short form links to it.
 `pr-body-clearance.sh` refuses a body over 2,500 characters or carrying more than 3 notes
 (**exit 4**); `pr-verdict-clearance.sh` refuses a checker row with no `PASS`/`FAIL` or no
 command (**exit 3**); `validate-bundle.sh` warns on a `Finding` over 40 lines or missing its
-`lesson:`; and `tests/concision-contract.test.sh` in `cbmono/ai-bridge` fails when a
+`lesson:` — **on the document you name (`validate-bundle.sh <path>`) as well as on the whole
+bundle**, so the cap lands while you are writing rather than at the next full run; and
+`tests/concision-contract.test.sh` in `cbmono/ai-bridge` fails when a
 `plugin/**/*.sh` file's comment-line share exceeds **35%**, ratcheting the files already
 above it so none may grow its share.
 
@@ -891,7 +893,9 @@ above it so none may grow its share.
   secrets or environment variables** (rely on existing env / `.npmrc` for auth).
 - **Capture knowledge:** if you discover something durable and reusable, write or
   update a `Finding` in `knowledge/findings/` (per `SCHEMA.md`) and link it from
-  the task, so the next agent doesn't re-derive it.
+  the task, so the next agent doesn't re-derive it. **Run
+  `scripts/validate-bundle.sh <path>` on the one you just wrote** — it is the 40-line cap
+  and the `lesson:` checked at the moment they are cheap to fix.
   **Where `knowledge/` is MOUNTED from another repository** (`knowledge` in
   `instance.config.json`; `SCHEMA.md` → "A mounted knowledge base"), **you do not write
   into it** — return the `Finding` in your result exactly as you would anyway and the tick
