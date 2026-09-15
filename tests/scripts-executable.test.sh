@@ -251,10 +251,12 @@ echo "== plugin/scripts — install.sh chmods these on stamp, but the repo itsel
 check_group "$TPL" "plugin/scripts/*.sh" 18 'plugin/scripts/*.sh'
 
 echo "== plugin/hooks — bare paths off settings.json, NO installer chmod at all =="
-# 5 -> 4: the three SessionStart hooks became one `session-banner.sh`
-# (ai-bridge-v5/task-002), so this directory holds four files, not six. The floor is a
-# vacuity guard — "the glob matched something" — not a ceiling, so it moves DOWN with the
-# real count rather than being left high enough to pass by luck.
+# THE FLOOR IS DERIVED FROM `hooks.json`, not typed under a `# N -> N` history: that shape
+# is the merge magnet the Finding `a-running-counter-annotated-by-a-comment-history-is-a-
+# merge-magnet` names, and every hook the loader invokes is registered there, so a hook
+# file that goes missing from the directory turns this red instead of quietly shrinking
+# the group. It is a vacuity guard — "the glob matched everything it should" — not a
+# ceiling.
 # THE TWO GROUPS BECAME ONE, because the directory they checked became one. `symlink/`
 # held the SessionStart banner and the UserPromptSubmit push-state hook; both moved to
 # `plugin/hooks/` beside `deny-destructive.sh` and `agent-control.sh` when the bundle
@@ -269,7 +271,18 @@ echo "== plugin/hooks — invoked straight off hooks.json, and NOTHING chmods th
 # `hooks.json` — there is no installer in that path at all, so a committed-644 file here is
 # a 126 on every single tool call in every session on the machine, with nothing to launder
 # it on any developer's disk.
-check_group "$TPL" "plugin/hooks/*.sh" 4 'plugin/hooks/*.sh'
+# AND A FLOOR THAT CANNOT BE DERIVED IS NOT A FLOOR. `tests/run.sh` neither requires `jq`
+# nor validates hooks.json, so this is reachable in a supported `--all` run; falling back
+# to 1 makes check_group accept any one executable hook and miss every removed one.
+# `unique`, because the floor counts FILES and the manifest counts REGISTRATIONS: one
+# script may be registered on several events (`agent-control.sh` is on `PreToolUse` and
+# `SubagentStop`), and a raw `length` then sets a floor no directory can reach.
+HOOK_FLOOR="$(jq -r '[.hooks[][].hooks[].command] | unique | length' "$TPL/plugin/hooks/hooks.json" 2>/dev/null)" \
+  && [[ "$HOOK_FLOOR" =~ ^[1-9][0-9]*$ ]] || {
+  echo "scripts-executable.test: cannot derive the hook floor from plugin/hooks/hooks.json (jq present? manifest valid?)" >&2
+  exit "$RC_SETUP"
+}
+check_group "$TPL" "plugin/hooks/*.sh" "$HOOK_FLOOR" 'plugin/hooks/*.sh'
 
 if [[ $IS_CHILD -eq 0 ]]; then
   echo "== guard C: a failed 'mktemp -d' must ABORT with its own refusal line, not run the fixture in place =="
@@ -439,8 +452,9 @@ echo "== guard G: the three real call sites above must stay quoted — and stay 
 # out and pasting an unquoted copy below it PASSED — the commented-out original still
 # contained the pinned string. `^…$` at column 0 excludes any commented or indented copy,
 # and requiring exactly one match excludes a second copy hiding elsewhere. The min-count
-# argument is matched as `[0-9]+` rather than as a literal, so raising the floor when a
-# 16th script is added is an ordinary edit and not a false "no longer quoted" failure.
+# argument is matched as `[0-9]+` — or, for the hooks group, the derived `"$HOOK_FLOOR"` —
+# rather than as a literal, so moving the floor is an ordinary edit and not a false
+# "no longer quoted" failure.
 pin_count() { grep -cE "$1" "$SELF" 2>/dev/null || true; }
 # The patterns below are regexes, not strings to expand — single quotes are deliberate.
 # shellcheck disable=SC2016
@@ -449,7 +463,7 @@ assert "the plugin/scripts/*.sh check_group call is a real, quoted call at colum
 # shellcheck disable=SC2016
 # shellcheck disable=SC2016
 assert "the plugin/hooks/*.sh check_group call is a real, quoted call at column 0 (exactly one)" \
-  "$([ "$(pin_count '^check_group "\$TPL" "plugin/hooks/\*\.sh" [0-9]+ .plugin/hooks/\*\.sh.$')" == 1 ] && echo 0 || echo 1)"
+  "$([ "$(pin_count '^check_group "\$TPL" "plugin/hooks/\*\.sh" ("\$HOOK_FLOOR"|[0-9]+) .plugin/hooks/\*\.sh.$')" == 1 ] && echo 0 || echo 1)"
 # The two pins above cover the CALL sites, not check_group's own USE of $spec at its one
 # call to `ls-files`. That gap is real, not theoretical: unquoting `$spec` there (`--
 # $spec` instead of `-- "$spec"`) still leaves this whole file at 49/49 today, because

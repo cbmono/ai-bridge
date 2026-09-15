@@ -106,9 +106,15 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      the independent verifier; the PR isn't merge-eligible until it has passed **and**
      CI is green. A reviewer that declares it didn't review counts as **no review**
      even beside a green check. **Don't read this off the check** — run
-     `${CLAUDE_PLUGIN_ROOT}/scripts/review-clearance.sh <pr> --repo <org>/<repo> --head <sha>`: exit 0
+     `${CLAUDE_PLUGIN_ROOT}/scripts/review-clearance.sh <pr> --repo <org>/<repo> --head <sha>
+     --record <task-doc>`: exit 0
      means a review artifact exists at that head; every other exit is a refusal it
-     explains. **Exit 4 is the common answer and it is not exit 1**: a real review of
+     explains. **`--record` is not optional here.** It writes the mergeability it just
+     read to the task's `pr_mergeable:`, which is the only thing `write-snapshot.sh` —
+     offline by contract — can read. Skip it and last tick's value stands: a PR that has
+     just gone CONFLICTING still renders as a merge row, which is the 2026-09-13 failure
+     itself. Absent ⇒ `UNKNOWN` ⇒ no merge verb, so a task never recorded costs a row,
+     never a wrong merge. **Exit 4 is the common answer and it is not exit 1**: a real review of
      an *earlier* commit — surface as "reviewed at `<sha>`, head has moved — ask for a
      review at this head", never as "the reviewer declined".
    - **EXIT 7 IS NOT ABOUT THE REVIEWER AT ALL: the PR CONFLICTS, so it is a REBASE
@@ -117,18 +123,30 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      were presented as "merge — verified, CLEAN" while GitHub reported them
      CONFLICTING/DIRTY: four sibling merges had moved the default branch underneath
      them, with no commit on any of the three. What you do:
-     * **Dispatch a fresh round to the task's own agent** — rebase onto the default
-       branch, resolve, `--force-with-lease` with explicit arguments, re-run the body
-       gate, and record the new verified SHA. Never re-request a review for a 7.
+     * **TRY THE SCRIPT BEFORE YOU SPEND AN AGENT:**
+       `${CLAUDE_PLUGIN_ROOT}/scripts/rebase-pr.sh <pr> --repo <org>/<repo> --dir <clone>`.
+       It rebases in a throwaway worktree and resolves ONLY the known merge-magnet
+       shapes — a counter, a contested ratchet row, a comment history — then pushes with
+       an explicit lease and lets CI verify. **Exit 0 ⇒ you are done for this tick**: no
+       agent, no local suite. **Exit 3 is the only one that earns an agent round** — a
+       conflict it could not classify, with the file named. **2, 4, 5 and 6 change
+       nothing**: re-ask next tick, and never dispatch on them.
+     * **On exit 3, dispatch a fresh round to the task's own agent** — rebase onto the
+       default branch, resolve, `--force-with-lease` with explicit arguments, re-run the
+       body gate, and record the new verified SHA. Never re-request a review for a 7.
      * **Leave the task `in-progress`.** It is being worked, not waiting on you; that
        is also what keeps it off `AWAITING.md`, whose merge verb only ever fires for
        `in-review`.
-     * **Count it:** `${CLAUDE_PLUGIN_ROOT}/scripts/stall-counter.sh record <task-doc>
-       --blocker conflict`. **Never pass `--progress` on this round** — the rebase push
-       IS the PR activity `--progress` means, so passing it resets the counter every
-       time and the escalation below can never be reached. Exit 1 means the cap: run
-       `stall-counter.sh escalate <task-doc>` instead of dispatching again, and a
-       second conflict in a row goes to the human.
+     * **Count only the round you SPENT**, with
+       `${CLAUDE_PLUGIN_ROOT}/scripts/stall-counter.sh record <task-doc> --blocker conflict`
+       — which belongs to the **exit 3** path, the one that dispatches an agent. **A
+       rebase the script resolved costs nobody a round, so it is not recorded at all**:
+       recording it would let two clean script rebases, separated by two sibling merges,
+       reach the cap and hand you a conflict nobody spent anything on.
+       **Never pass `--progress` on this round** — the rebase push IS the PR activity
+       `--progress` means, so passing it resets the counter every time and the escalation
+       below can never be reached. Exit 1 means the cap: run `stall-counter.sh escalate <task-doc>`
+       instead of dispatching again, and a second *unclassified* conflict goes to you.
      * **Re-ask every tick, and never cache the answer.** Mergeability changes when the
        default branch moves with no commit on the PR, so a 7 from last tick is not an
        answer this tick and neither is a 0.
