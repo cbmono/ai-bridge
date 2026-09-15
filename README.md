@@ -565,6 +565,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | `bundle-paths.sh` | the one place a bundle's layout is spelled — sourced it exports `AB_SCHEMA`, `AB_AWAITING`, `AB_LEDGER` and the rest as paths relative to a bundle root; run it, it prints them | no |
 | `resolve-config.sh` | the one implementation of the two-file config precedence — `instance.config.local.json` first, `instance.config.json` second, dicts merged entry by entry | no |
 | `resolve-max-agents.sh` | prints the concurrency cap **this machine** should honour, from the same two files | no |
+| `agent-sessions.sh` | the one reader of a dispatched role agent's **background** session — `state <id>` prints `working`/`blocked`/`done`/`gone`, `in-flight <bundle>` counts the recorded `session:` ids that still hold a `maxAgentsInFlight` slot. Exit 2 is unknown, never a free slot | no |
 | `resolve-account.sh` | the one reader of *which Claude account is this bundle on* — prints `declared`/`active`/launcher path, exit 0 match, 3 mismatch, 4 no account on this session, 1 inert (no `ai-bridge-accounts` companion, or nothing declared). Reads no credential | no |
 | `resolve-autonomy.sh` | the one reader of *does delegated autonomy exist here* — prints the `AUTONOMY.md` in force (bundle root first, else an installed companion plugin from core's own marketplace), exit 1 when there is none, which is `gated` | no |
 

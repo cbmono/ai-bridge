@@ -10,6 +10,24 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    **Research tasks have no PRs and no agent** — leave their human-set status alone;
    don't mark them `blocked` for lacking a PR.
 
+   **COMPLETION IS READ, NEVER AWAITED — there is no notification to wait for.** Role
+   agents are detached sessions (step 3), so an agent's state is **two reads and
+   nothing else**: `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh state <the task's `session:`>` and the
+   PR. Never hold the tick open for one, and never treat silence as a verdict.
+
+   | `agent-sessions.sh state` | …and the PR | What it is |
+   |---|---|---|
+   | `working` | absent | live. Leave it. Not a stall, not a re-dispatch. |
+   | `done` | present | finished — advance the task as above. |
+   | `done` | absent | it exited without the artifact: `check-dispatch.sh` exit 1. |
+   | `blocked` | either | parked on a prompt nobody can answer. It holds a slot until `claude stop <id>` — surface it, and run `stop` only on the human's say-so. |
+   | `gone` | absent | never started, or its record was removed. Same verdict as `done`+absent, and the same recovery. |
+   | exit 2 | either | unknown, which is not "finished". Report it and change nothing. |
+
+   **Never `claude rm` a role agent's session** — it deletes the session **and its
+   worktree**, which belongs to `prune-worktrees.sh` and the human who runs its commands.
+   `stop` is the verb here; `rm` is the human's, after the merge.
+
    **Check the artifact, don't believe the report.** For every task a dispatched agent
    has reported on, run `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>` and act on its exit
    code, not on the agent's summary. **0** — it produced what it promised, **or**
@@ -18,20 +36,30 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    waiting on a background job looks like. **3** — its `pr:` names a pull request the
    host does not resolve. **4** — status and `pr:` contradict each other. **2** — it
    could not answer; treat as unknown, not as fine.
-   **A non-zero verdict is never a re-dispatch.** On exit 1, read the agent's final
-   message and its worktree first: the work is usually already committed, and one
-   message asking it to open the PR on what it has recovers it — the same task and
-   same PR, which is the resume step 3 allows. Anything beyond that is the human's
+   **A non-zero verdict is never a re-dispatch.** On exit 1, read the agent's worktree
+   and `claude logs <id>` first: the work is usually already committed, and one message
+   asking it to open the PR on what it has recovers it — the same task and same PR,
+   which is the resume step 3 allows. **The resume is
+   `cd <worktree> && claude --bg --resume <the recorded session> "<the message>"`**,
+   with the same flags step 3 lists. It continues that session under the same id when it
+   has exited, and **starts a COPY and says so when it is still running** — so resume
+   only a session `agent-sessions.sh state` calls `done`, and when the output names a
+   new id, that id replaces `session:` on the task. Anything beyond that is the human's
    call — surface it in `AWAITING.md` (measured case: `docs/pm-design.md#step-4`).
 
-   **An `in-progress` task nobody reported on is not evidence of a live agent.** Run
+   **An `in-progress` task nobody reported on: ask the session, not the disk.** Run
    `${CLAUDE_PLUGIN_ROOT}/scripts/check-dispatch.sh <task-path>` over **every** build `in-progress` task, not
    only the ones an agent reported on — exit **1** is the pre-spawn crash window's exact
-   signature (`in-progress`, no `pr:`). On a task *this* tick dispatched it means nothing.
-   On one it did not, it is either a live agent or a dispatch that never happened and
-   **disk cannot tell them apart** — so name it in the tick report as an *unreconciled
-   dispatch*, and surface it as a 🔴 item once a previous tick's report has already named
-   it. Never re-dispatch it and never roll it back yourself: both are the human's, and
+   signature (`in-progress`, no `pr:`). With a `session:` recorded it prints that
+   session's state beside the verdict, and `working` settles it: a live agent, left
+   alone. **Without one** — a task dispatched before this tick shape, or one whose spawn
+   died in the second before its id was written — it is either a live agent or a
+   dispatch that never happened and **disk cannot tell them apart**. Then
+   `claude agents --json --cwd <the task's recorded worktree>` is the recovery read,
+   because that path was written *before* the spawn and is unique to the task; an empty
+   answer makes it an *unreconciled dispatch* — name it in the tick report, and surface
+   it as a 🔴 item once a previous tick's report has already named it. Never re-dispatch
+   it and never roll it back yourself: both are the human's, and
    `docs/pm-design.md#step-3` carries the price of re-running a finished sequence.
 
    **A doom-loop breach is reflected here, and NEVER re-dispatched.** When the control
