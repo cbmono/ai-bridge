@@ -434,3 +434,8 @@ sed 's/^/  /' "$body_err" >&2
 
 count="$(printf '%s\n' "$required" | grep -c '^' || true)"
 echo "ok: $count required check(s) pass, a review clears PR $pr, and its body carries the required shape (source: $source, head $head_sha)"
+
+# The clearance record the PreToolUse hook reads offline (ai-bridge-v3/task-044). Written
+# after the answer is decided, and silent on any failure: it cannot change that answer.
+"$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record required-checks.sh \
+  --repo "$nwo" --pr "$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/[^/]+/[^/]+/pull/([0-9]+).*#\1#')" --head "$head_sha" >/dev/null 2>&1 || true

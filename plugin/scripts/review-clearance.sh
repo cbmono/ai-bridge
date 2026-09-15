@@ -805,6 +805,14 @@ nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.
   exit 2
 }
 
+# The clearance record the PreToolUse hook reads offline (ai-bridge-v3/task-044) — exit 0
+# here is precondition 2's FIRST HALF, so this line is one of four and never a merge permit
+# on its own. Silent on any failure: it cannot change the answer this script gives.
+mint_receipt() {
+  "$(dirname "${BASH_SOURCE[0]:-$0}")/clearance-receipt.sh" record review-clearance.sh \
+    --repo "$nwo" --pr "$pr_number" --head "$head_sha" >/dev/null 2>&1 || true
+}
+
 # AND THE AUTHOR LOGIN IS PART OF THAT GUARD, because a field that is missing here does
 # not fail — it silently switches off a rule. SCHEMA.md clause 8 (an author is never its
 # own independent reviewer) is enforced below by comparing logins against `$pr_author`, so
@@ -1791,6 +1799,7 @@ if [ -z "$refusal_at_head" ] || [ -n "$cleared_msg" ]; then
       echo "      evidence at the same commit outranks it, so this cleared. Look if unsure." >&2
     }
     printf '%s\n' "$cleared_msg"
+    mint_receipt
     exit 0
   fi
   if [ -n "$held_from" ]; then
@@ -1798,6 +1807,7 @@ if [ -z "$refusal_at_head" ] || [ -n "$cleared_msg" ]; then
     [ -z "$clause9_threads" ] && [ "$clause9_state" = "ok" ] || \
       refuse_clause9 "a submitted review ($held_state) from $held_from"
     echo "ok: a submitted review ($held_state) from $held_from was made at head $head_sha on PR $pr"
+    mint_receipt
     exit 0
   fi
 fi

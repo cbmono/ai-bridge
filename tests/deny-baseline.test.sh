@@ -469,9 +469,15 @@ ok "subagent gh pr view is allowed" \
 ok "subagent pushing a feature branch is allowed" \
    "$(verdict_agent "$GITREPO" 'git push origin feature-x')" "allow"
 
-# --- the allow half that matters most: the HUMAN's own session merges freely ---
-ok "the human (no agent_id) may still gh pr merge" \
-   "$(verdict "$GITREPO" 'gh pr merge 5')" "allow"
+# --- the allow half that matters most: the HUMAN's own session still approves ---
+# THE MERGE HALF IS NO LONGER AGENT-SCOPED (ai-bridge-v3/task-044): task-035's headless tick
+# runs the project-manager in the MAIN thread, where a rule keyed on `agent_id` would never
+# fire — so a merge with no mode check, no clearance record and no SHA pin. Inside a bundle
+# session every `gh pr merge` now goes through the same checks, and the escape hatch is the
+# one this whole baseline relies on: the human runs it in their own terminal. The delegated
+# shape and all eight refusals are `tests/subagent-merge-yolo.test.sh`.
+ok "a merge from the main thread of a bundle session is checked too" \
+   "$(verdict "$GITREPO" 'gh pr merge 5')" "deny:subagent_merge"
 ok "the human may still gh pr review --approve" \
    "$(verdict "$GITREPO" 'gh pr review --approve 5')" "allow"
 

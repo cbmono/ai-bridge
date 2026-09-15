@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+#
+# clearance-receipt.sh — the merge gate's preconditions, recorded on disk at the head they
+# were checked against, so the PreToolUse hook can read them OFFLINE.
+#
+#   clearance-receipt.sh record <script> --repo O/R --pr N --head SHA [--bundle DIR]
+#   clearance-receipt.sh verify --repo O/R --pr N --head SHA [--bundle DIR]
+#   clearance-receipt.sh path   --repo O/R --pr N --head SHA [--bundle DIR]
+#
+# Exit: 0 recorded / complete / printed · 1 absent or incomplete · 2 usage, or no bundle.
+# `record` never fails a caller: outside a bundle it exits 0 having written nothing.
+# Reasoning: ai-bridge-v3/task-044.
+set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
+
+# The four a delegated merge needs, all at the SAME head. A `review-clearance.sh` receipt
+# alone is precondition 2's first half and the qa-reviewer earns one on nearly every PR.
+REQUIRED="review-clearance.sh required-checks.sh pr-body-clearance.sh pr-verdict-clearance.sh"
+KEEP_DAYS=14
+
+usage() {
+  sed -n '5,9p' "$0" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+}
+
+mode="${1:-}"; [ $# -gt 0 ] && shift
+script=""
+case "$mode" in
+  record) script="${1:-}"; [ -n "$script" ] || usage; shift ;;
+  verify|path) ;;
+  *) usage ;;
+esac
+
+bundle=""; repo=""; pr=""; head=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --bundle) bundle="${2:-}"; [ -n "$bundle" ] || usage; shift 2 ;;
+    --repo)   repo="${2:-}";   [ -n "$repo" ] || usage; shift 2 ;;
+    --pr)     pr="${2:-}";     [ -n "$pr" ] || usage; shift 2 ;;
+    --head)   head="${2:-}";   [ -n "$head" ] || usage; shift 2 ;;
+    -h|--help) usage ;;
+    *) usage ;;
+  esac
+done
+
+case "$repo" in */*) ;; *) usage ;; esac
+case "$pr" in ''|*[!0-9]*) usage ;; esac
+case "$head" in [0-9a-fA-F][0-9a-fA-F]*) ;; *) usage ;; esac
+
+# The bundle root, in the order a caller can be sure of: the flag, then the session's own
+# project dir, then the first ancestor carrying the marker.
+if [ -z "$bundle" ]; then
+  if [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -f "${CLAUDE_PROJECT_DIR}/instance.config.json" ]; then
+    bundle="$CLAUDE_PROJECT_DIR"
+  else
+    d="$PWD"
+    while [ -n "$d" ] && [ "$d" != "/" ]; do
+      [ -f "$d/instance.config.json" ] && { bundle="$d"; break; }
+      d="$(dirname "$d")"
+    done
+  fi
+fi
+if [ -z "$bundle" ] || [ ! -f "$bundle/instance.config.json" ]; then
+  [ "$mode" = record ] && exit 0
+  echo "clearance-receipt: no bundle root — refusing (fail closed)" >&2
+  exit 2
+fi
+
+safe() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-'; }
+dir="$bundle/$AB_RECEIPTS"
+file="$dir/$(safe "$repo")__pr$(safe "$pr")__$(safe "$head")"
+
+case "$mode" in
+  path)
+    printf '%s\n' "$file"
+    [ -f "$file" ]
+    exit $?
+    ;;
+
+  verify)
+    [ -f "$file" ] || { echo "clearance-receipt: no receipt for $repo#$pr at $head" >&2; exit 1; }
+    # The head is in the file NAME and again in the file, and both must say this SHA: a
+    # receipt earned at an earlier head must not authorise a later one under any spelling.
+    grep -qx "head $head" "$file" || {
+      echo "clearance-receipt: the receipt for $repo#$pr does not name head $head — refusing" >&2
+      exit 1
+    }
+    got="$(awk '$1 == "pass" { print $2 }' "$file" 2>/dev/null)"
+    missing=""
+    for r in $REQUIRED; do
+      printf '%s\n' "$got" | grep -qx "$r" || missing="${missing:+$missing }$r"
+    done
+    [ -z "$missing" ] || {
+      echo "clearance-receipt: $repo#$pr at $head has not passed: $missing" >&2
+      exit 1
+    }
+    exit 0
+    ;;
+
+  record)
+    mkdir -p "$dir" 2>/dev/null || exit 0
+    tmp="$file.$$"
+    {
+      printf 'repo %s\npr %s\nhead %s\n' "$repo" "$pr" "$head"
+      [ -f "$file" ] && awk '$1 == "pass" && $2 != s' s="$script" "$file"
+      printf 'pass %s %s\n' "$script" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    } > "$tmp" 2>/dev/null && mv -f "$tmp" "$file" 2>/dev/null
+    rm -f "$tmp" 2>/dev/null
+    find "$dir" -type f -mtime "+$KEEP_DAYS" -delete 2>/dev/null
+    exit 0
+    ;;
+esac

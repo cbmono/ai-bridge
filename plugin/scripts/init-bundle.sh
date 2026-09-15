@@ -1702,6 +1702,19 @@ if ! grep -qE "^/?${AB_STATE_DIR//./\\.}$" "$gi"; then
 GI
 fi
 
+# The merge gate's clearance records — its OWN guard, the .tick-lock.claim lesson again:
+# every bundle already satisfies the guards above, so a line added to one of their heredocs
+# reaches nobody.
+if ! grep -qE "^/?${AB_RECEIPTS//./\\.}/?$" "$gi"; then
+  gi_add <<'GI'
+
+# The merge gate's clearance records (clearance-receipt.sh) — one file per PR and head,
+# written by the clearance scripts and read by the PreToolUse hook. Per clone, derived and
+# never committed; delete freely (absence = the next merge waits for a fresh clearance).
+/__AB_RECEIPTS__/
+GI
+fi
+
 # The copies refresh-seeds.sh keeps — its own guard, the .tick-lock.claim lesson again:
 # every bundle in existence satisfies the guards above, so a line added to one of their
 # heredocs reaches nobody.

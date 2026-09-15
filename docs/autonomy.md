@@ -66,7 +66,12 @@ Pair it with `/audit`, the slow counter-metric that watches an autonomous loop f
 
 **Preflight.** With a single `gh` identity and no external reviewer, or with no required
 status checks, the merge authority cannot be exercised at all. The loop says so once and
-keeps surfacing PRs for you.
+keeps surfacing PRs for you. **The deny baseline is trap three**: `deny-destructive.sh`'s
+`subagent_merge` rule permits only `gh pr merge --squash --match-head-commit <sha>`, only
+for the `project-manager`, only where the owning project's mode delegates the merge, and
+only at the SHA every clearance script recorded — everything else refuses. The preflight
+probes it by feeding the hook the real command in a PreToolUse payload, which decides
+without merging anything.
 
 ## Did the dispatch produce its PR?
 
