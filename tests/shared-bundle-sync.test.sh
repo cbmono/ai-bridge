@@ -34,7 +34,8 @@ TICK="$REPO/plugin/agents/project-manager.md"
 LAUNCHER="$REPO/plugin/skills/dispatch/SKILL.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/sync.XXXXXX")" || {
   echo "shared-bundle-sync.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
-trap 'rm -rf "$TMP"' EXIT
+DRAFT=""; STRAY=""   # probe files written INSIDE the repo under test — reaped even on a kill
+trap 'rm -rf "$TMP"; [ -z "$DRAFT" ] || rm -f "$DRAFT"; [ -z "$STRAY" ] || rm -f "$STRAY"' EXIT
 pass=0; fail=0
 ok() { # <name> <actual> <expected>
   if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
@@ -43,6 +44,8 @@ ok() { # <name> <actual> <expected>
 has() { # <file> <fixed-string> -> yes|no
   grep -qF -- "$2" "$1" && echo yes || echo no
 }
+# An ambient GIT_DIR outranks `-C`, so it would answer these reads from another repo.
+g() { env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE git -C "$REPO" "$@"; }
 
 ok "tick exists"     "$([ -f "$TICK" ] && echo yes || echo no)" yes
 ok "launcher exists" "$([ -f "$LAUNCHER" ] && echo yes || echo no)" yes
@@ -198,8 +201,20 @@ ok "…and FAILS when the push command is dropped" \
 # The twin-dedup this used to carry is gone with the copies it deduplicated: the
 # name swap retired symlink/.claude/agents/, so plugin/agents/ is the only copy and
 # every match here is a distinct file again.
+#
+# THE CANDIDATE SET COMES FROM GIT, never from a filesystem walk. This used to be
+# `grep -rl … "$REPO"`, which excluded only `.git/` — so an agent's scratch draft,
+# written exactly where CONVENTIONS.md tells it to write one (`<worktree>/tmp/`, a
+# path this repo ignores), scored as a third document describing step 0 and turned
+# the suite red. `--cached --others --exclude-standard` is tracked files plus
+# untracked ones git would offer to add: a new doc carrying a stale reference is
+# still caught, and nothing ignored can move the answer.
 step0_mentioning_files() {
-  grep -rl "step 0" --include="*.md" "$REPO" 2>/dev/null | grep -v "/\.git/" | sed "s#^$REPO/##" | sort
+  local files=() f
+  while IFS= read -r -d '' f; do files+=("$f"); done < <(
+    g ls-files -z --cached --others --exclude-standard -- '*.md')
+  [ ${#files[@]} -gt 0 ] || return 0
+  (cd "$REPO" && grep -l "step 0" -- "${files[@]}" 2>/dev/null) | sort
 }
 S0FILES="$(step0_mentioning_files)"
 # The TICK is eight files since ai-bridge-v3/task-024 — the core prompt plus one per
@@ -211,6 +226,38 @@ ok "…and the launcher does"     "$(printf '%s\n' "$S0FILES" | grep -qx 'plugin
 ok "…and nothing outside those and the tick-step files" \
    "$(printf '%s\n' "$S0FILES" | grep -vx 'plugin/agents/project-manager.md' \
       | grep -vx 'plugin/skills/dispatch/SKILL.md' | grep -vc '^plugin/tick-steps/' | tr -d ' ')" 0
+
+# REGRESSION: a gitignored scratch .md naming step 0 must not change that answer.
+# The path is READ OUT OF the scratch rule rather than spelled here, so renaming the
+# scratch directory moves this probe with it instead of quietly retiring it.
+# shellcheck disable=SC2016  # the backticks are markdown in the rule, not a substitution
+SCRATCH="$(sed -n 's/^.*Scratch files go in `<worktree>\/\([^`]*\)`.*$/\1/p' \
+           "$REPO/plugin/seed/CONVENTIONS.md" | head -1)"; SCRATCH="${SCRATCH%/}"
+if [ -z "$SCRATCH" ] || ! g check-ignore -q -- "$SCRATCH/probe.md"; then
+  echo "shared-bundle-sync.test: no ignored scratch path in plugin/seed/CONVENTIONS.md" >&2; exit 2
+fi
+mkdir -p "$REPO/$SCRATCH" || exit 2
+DRAFT_REL="$SCRATCH/shared-bundle-sync-regression.$$.md"
+DRAFT="$REPO/$DRAFT_REL"
+printf 'PR body draft — step 0 pulls before the tick reads.\n' > "$DRAFT"
+# NON-VACUITY: the walk this test used to do still sees the file, so a green run below
+# means the enumeration changed, not that the fixture failed to land.
+ok "…the pre-fix filesystem walk DID see an ignored scratch draft" \
+   "$(grep -rl "step 0" --include="*.md" "$REPO" 2>/dev/null | grep -cF "$DRAFT" | tr -d ' ')" 1
+ok "…and a gitignored scratch .md changes nothing"  "$(step0_mentioning_files | grep -cFx "$DRAFT_REL" | tr -d ' ')" 0
+ok "…leaving the stranger count where it was" \
+   "$(step0_mentioning_files | grep -vx 'plugin/agents/project-manager.md' \
+      | grep -vx 'plugin/skills/dispatch/SKILL.md' | grep -vc '^plugin/tick-steps/' | tr -d ' ')" 0
+rm -f "$DRAFT"; DRAFT=""; rmdir "$REPO/$SCRATCH" 2>/dev/null || true
+
+# …and the complement, because narrowing the scan could have made it blind instead of
+# correct: an UNTRACKED, unignored .md is still a stranger.
+STRAY="$REPO/shared-bundle-sync-regression.$$.md"
+printf 'a new doc that names step 0.\n' > "$STRAY"
+ok "…while an untracked, unignored .md IS still counted" \
+   "$(step0_mentioning_files | grep -vx 'plugin/agents/project-manager.md' \
+      | grep -vx 'plugin/skills/dispatch/SKILL.md' | grep -vc '^plugin/tick-steps/' | tr -d ' ')" 1
+rm -f "$STRAY"; STRAY=""
 
 # The launcher's citation of the re-derivation property must point at 0.5, the step
 # it actually lives in now — not the bare "step 0" that would silently mean the new
