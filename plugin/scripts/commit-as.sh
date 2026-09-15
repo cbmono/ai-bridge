@@ -357,14 +357,24 @@ if [ "${#paths[@]}" -gt 0 ]; then
   # Nothing staged under the named paths. Say so plainly: git's own message would
   # describe the shared WORKING TREE ("nothing added to commit…"), which is both
   # confusing and wrong here — the usual cause is a forgotten `git add`.
+  #
+  # PER PATH, never over the pathspec as a whole: one staged path used to satisfy
+  # the guard for all of them, so a commit naming three paths with one staged
+  # succeeded while silently dropping the other two.
   allow_empty=0
   for arg in ${git_args[@]+"${git_args[@]}"}; do
     [ "$arg" = "--allow-empty" ] && allow_empty=1
   done
-  if [ "$allow_empty" -eq 0 ] && [ "$has_head" -eq 1 ] \
-     && GIT_INDEX_FILE="$selected_index" git diff --cached --quiet HEAD; then
+  unstaged=()
+  if [ "$allow_empty" -eq 0 ] && [ "$has_head" -eq 1 ]; then
+    for p in "${paths[@]}"; do
+      GIT_INDEX_FILE="$selected_index" git diff --cached --quiet HEAD -- "$p" \
+        && unstaged+=("$p")
+    done
+  fi
+  if [ "${#unstaged[@]}" -gt 0 ]; then
     echo "error: nothing staged under the named path(s):" >&2
-    for p in "${paths[@]}"; do printf '         %s\n' "$p" >&2; done
+    for p in "${unstaged[@]}"; do printf '         %s\n' "$p" >&2; done
     echo "       Stage your changes by explicit path first, then commit those same paths:" >&2
     echo "         git add -- <path>...   # never 'git add -A' in a shared instance" >&2
     echo "       Or in one command: $(basename "$0") $role \"$message\" --stage -- <path>..." >&2

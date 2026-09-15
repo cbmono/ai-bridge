@@ -334,5 +334,45 @@ said "…and now naming --stage"          "--stage -- <path>..."
 eq "…and nothing was committed" "" "$(git show --name-only --format= HEAD | grep mine.txt || true)"
 
 echo
+echo "== the nothing-staged guard is PER PATH, not all-or-nothing =="
+
+# One staged path used to satisfy the whole guard: the commit succeeded, the other
+# named paths were silently dropped, and the caller was told it worked.
+
+not_said() { # <name> <substring> — against the previous rc_of()'s output
+  if printf '%s' "$LAST_OUT" | grep -Fq -- "$2"; then
+    printf '  FAIL  %-52s named [%s] but it was staged\n' "$1" "$2"; fail=$((fail+1))
+  else
+    printf '  PASS  %-52s\n' "$1"; pass=$((pass+1))
+  fi
+}
+
+setup
+printf 'staged\n' > a.txt; git add a.txt >/dev/null
+printf 'never staged\n' > b.txt
+printf 'never staged\n' > c.txt
+rc_of "1 of 3 named paths staged -> exit 4" 4 software-engineer -- a.txt b.txt c.txt
+said     "…naming the unstaged b.txt"  "b.txt"
+said     "…naming the unstaged c.txt"  "c.txt"
+not_said "…and NOT the staged a.txt"   "a.txt"
+eq "…and nothing was committed" "" \
+   "$(git show --name-only --format= HEAD | grep -E '^[abc]\.txt$' || true)"
+eq "…a.txt is still staged for the caller to retry" "a.txt" "$(git diff --cached --name-only)"
+
+setup
+printf 'a\n' > a.txt; printf 'b\n' > b.txt; printf 'c\n' > c.txt
+git add a.txt b.txt c.txt >/dev/null
+rc_of "all 3 named paths staged -> commits" 0 software-engineer -- a.txt b.txt c.txt
+eq "…and all three land" "a.txt b.txt c.txt" \
+   "$(git show --name-only --format= HEAD | tr '\n' ' ' | sed 's/ *$//')"
+
+# A path staged for DELETION carries a staged change like any other.
+setup
+printf 'a\n' > a.txt; git add a.txt >/dev/null; git commit -qm "seed a" >/dev/null
+git rm -q a.txt >/dev/null
+printf 'staged\n' > b.txt; git add b.txt >/dev/null
+rc_of "a staged deletion counts as staged" 0 software-engineer -- a.txt b.txt
+
+echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
