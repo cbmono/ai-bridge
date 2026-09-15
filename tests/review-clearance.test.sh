@@ -122,11 +122,14 @@ export PATH="$TMP/bin:$PATH"
 
 # --- fixture builders ---------------------------------------------------------
 HEAD=""; AUTHOR=""; REVIEWS=""; COMMENTS=""; THREADS=""; THREADS_MORE=""
-MERGEABLE=""; MERGE_STATE=""
+MERGEABLE=""; MERGE_STATE=""; HEAD_DATE=""
 
-setup() { # start from: a readable PR at <head>, authored by "dev", with no artifacts
+setup() { # start from: a readable PR at <head> [pushed at <date>], authored by "dev"
   rm -rf "$FIX"; mkdir -p "$FIX"
   HEAD="${1:-$CLEAN_HEAD}"; AUTHOR="dev"; REVIEWS='[]'; COMMENTS='[]'
+  # No commit date by default — the PR's commit list is read only to bound the exit-8 ask,
+  # so every case written before that bound existed asks exactly what it was written to ask.
+  HEAD_DATE="${2:-}"
   # A MERGEABLE/CLEAN PR is the default, so every case written before the mergeability
   # check existed keeps asking exactly the question it was written to ask. UNKNOWN holds
   # at exit 2, so a fixture that simply omitted these would refuse the whole file.
@@ -143,6 +146,13 @@ body_file() { # <text...> -> a file holding it, so every artifact arrives the sa
 add_comment() { # <login> <body-file>
   COMMENTS="$("$REAL_JQ" --arg l "$1" --rawfile b "$2" \
               '. + [{user:{login:$l}, body:$b}]' <<<"$COMMENTS")"
+}
+
+# The same comment, with the host's own `created_at` on it — which is what says whether it
+# was written at the current head when its body names no commit.
+add_comment_at() { # <login> <created_at> <body-file>
+  COMMENTS="$("$REAL_JQ" --arg l "$1" --arg t "$2" --rawfile b "$3" \
+              '. + [{user:{login:$l}, body:$b, created_at:$t}]' <<<"$COMMENTS")"
 }
 
 # The host reports no author at all for an artifact from a deleted account, and `gh` passes
@@ -171,9 +181,10 @@ add_thread() { # <isResolved> <path> <line|null> <login|null> <url> <first-line-
 
 write_pr() {
   "$REAL_JQ" -n --arg h "$HEAD" --arg a "$AUTHOR" \
-              --arg m "$MERGEABLE" --arg s "$MERGE_STATE" \
+              --arg m "$MERGEABLE" --arg s "$MERGE_STATE" --arg hd "$HEAD_DATE" \
     '{url:"https://github.com/acme/widgets/pull/42", number:42, headRefOid:$h,
-      author:{login:$a}, mergeable:$m, mergeStateStatus:$s}' > "$FIX/pr_json"
+      author:{login:$a}, mergeable:$m, mergeStateStatus:$s,
+      commits:(if $hd == "" then [] else [{oid:$h, committedDate:$hd}] end)}' > "$FIX/pr_json"
   printf '%s' "$REVIEWS"  > "$FIX/reviews_json"
   printf '%s' "$COMMENTS" > "$FIX/comments_json"
   "$REAL_JQ" -n --argjson t "$THREADS" --argjson more "$THREADS_MORE" \
@@ -2201,6 +2212,29 @@ add_comment coderabbitai "$(body_file \
   '<!-- CodeRabbit review command invocation: v2:abc -->' \
   '✅ Action performed' "Review triggered for $OTHER_SHA.")"
 expect "…while an ack for an EARLIER head still asks at this one" 8
+
+# AND THE REAL ACKNOWLEDGEMENT NAMES NO COMMIT AT ALL, so a pin on the body alone is a
+# bound that never fires: measured over five real ones (#227 and four on #234), the only
+# hex token is a 64-character invocation hash, which `names_head` rejects by design. Left
+# there, the skip notice answers 8 on every tick and the caller re-spends the quota every
+# tick. The comment's own created_at against the head commit's date is what binds it.
+assert "the recorded acknowledgement names no commit at all" \
+  "$(yes_if bash -c '! tr -c "0-9A-Za-z_-" "\n" < "$1" | grep -Eqx "[0-9a-fA-F]{7,40}"' _ "$ACK")"
+setup "$CLEAN_HEAD" 2026-09-15T00:10:00Z
+add_comment coderabbitai "$SKIP"; add_comment_at coderabbitai 2026-09-15T00:11:44Z "$ACK"
+expect "a SHA-LESS ack posted at this head -> hold, not ask again every tick" 1
+says   "  ...and says the ask has been made" "ALREADY been asked"
+setup "$CLEAN_HEAD" 2026-09-15T00:10:00Z
+add_comment coderabbitai "$SKIP"; add_comment_at coderabbitai 2026-09-14T23:00:00Z "$ACK"
+expect "…while the same ack posted BEFORE this head still asks" 8
+# Unknown fails toward the ask, which costs one comment and no round — the PR's commit
+# list is not always readable, and a comment the host gave no timestamp is not evidence.
+setup "$CLEAN_HEAD"
+add_comment coderabbitai "$SKIP"; add_comment_at coderabbitai 2026-09-15T00:11:44Z "$ACK"
+expect "…and with no readable head date, the ask stays open" 8
+setup "$CLEAN_HEAD" 2026-09-15T00:10:00Z
+add_comment coderabbitai "$SKIP"; add_comment_at coderabbitai "not a timestamp" "$ACK"
+expect "…as it does for a timestamp that is not one" 8
 
 echo
 echo "== the REVIEW OBJECT is preferred over a comment marker =="

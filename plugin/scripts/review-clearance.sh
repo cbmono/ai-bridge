@@ -815,7 +815,7 @@ R=()
 # `/repos/{owner}/{repo}/pulls/{n}/reviews` does expose it, alongside the review's
 # `state`, so the two API calls below are what make routes A and B structural.
 raw="$(gh pr view "$pr" ${R[@]+"${R[@]}"} \
-       --json url,number,headRefOid,author,mergeable,mergeStateStatus 2>/dev/null)" || {
+       --json url,number,headRefOid,author,mergeable,mergeStateStatus,commits 2>/dev/null)" || {
   echo "error: could not read PR $pr${repo:+ in $repo} — refusing (fail closed)" >&2
   exit 2
 }
@@ -823,8 +823,12 @@ raw="$(gh pr view "$pr" ${R[@]+"${R[@]}"} \
 # Every column is emitted unconditionally (`// ""`, never `// empty`): a jq array element
 # that vanishes shifts every field after it one left, and `cut -f` reads the wrong one.
 meta="$(printf '%s' "$raw" \
-        | jq -r '[.url, .headRefOid, (.author.login // ""), (.number // "" | tostring),
-                  (.mergeable // ""), (.mergeStateStatus // "")] | @tsv' \
+        | jq -r '. as $p
+                 | [.url, .headRefOid, (.author.login // ""), (.number // "" | tostring),
+                    (.mergeable // ""), (.mergeStateStatus // ""),
+                    ([ (.commits // [])[]
+                       | select(.oid == $p.headRefOid) | (.committedDate // "") ]
+                     | last // "")] | @tsv' \
           2>/dev/null)" || meta=""
 url="$(printf '%s' "$meta" | cut -f1)"
 head_sha="$(printf '%s' "$meta" | cut -f2)"
@@ -832,6 +836,7 @@ pr_author="$(printf '%s' "$meta" | cut -f3)"
 pr_number="$(printf '%s' "$meta" | cut -f4)"
 mergeable="$(printf '%s' "$meta" | cut -f5)"
 merge_state="$(printf '%s' "$meta" | cut -f6)"
+head_date="$(printf '%s' "$meta" | cut -f7)"
 nwo="$(printf '%s' "$url" | sed -E 's#^https?://[^/]+/([^/]+/[^/]+)/pull/[0-9]+.*#\1#')"
 [ -n "$url" ] && [ -n "$head_sha" ] && [ -n "$pr_number" ] && [ "$nwo" != "$url" ] || {
   echo "error: could not resolve the head SHA / repo of PR $pr — refusing (fail closed)" >&2
@@ -913,7 +918,8 @@ gh api "/repos/$nwo/pulls/$pr_number/reviews?per_page=100" --paginate \
   exit 2
 }
 gh api "/repos/$nwo/issues/$pr_number/comments?per_page=100" --paginate \
-  --jq '.[] | {login: (.user.login // ""), body: (.body // "")}' \
+  --jq '.[] | {login: (.user.login // ""), body: (.body // ""),
+               created: (.created_at // "")}' \
   > "$TMPD/comments.ndjson" 2>/dev/null || {
   echo "error: could not read the comments on PR $pr ($nwo) — refusing. A refusal this" >&2
   echo "       script cannot see is a refusal that did not happen, and that is a merge." >&2
@@ -972,10 +978,11 @@ SEP="okf-$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')"
 jq -rn --arg s "$SEP" --slurpfile rv "$TMPD/reviews.ndjson" \
                        --slurpfile cm "$TMPD/comments.ndjson" '
     ( ($rv[] | {kind:"review",  login:(.login // ""), state:(.state // ""),
-                commit:(.commit // ""), body:(.body // "")}),
+                commit:(.commit // ""), created:"",                body:(.body // "")}),
       ($cm[] | {kind:"comment", login:(.login // ""), state:"",
-                commit:"",              body:(.body // "")}) )
-    | "\($s)\t\(.kind)\t\(.login)\t\(.state)\t\(.commit)", .body
+                commit:"",              created:(.created // ""), body:(.body // "")}) )
+    | "\($s)\u001f\(.kind)\u001f\(.login)\u001f\(.state)\u001f\(.commit)\u001f\(.created)",
+      .body
   ' 2>/dev/null > "$TMPD/stream" || {
   echo "error: could not parse the artifacts on PR $pr — refusing (fail closed)" >&2
   exit 2
@@ -983,7 +990,7 @@ jq -rn --arg s "$SEP" --slurpfile rv "$TMPD/reviews.ndjson" \
 
 : > "$TMPD/index"
 awk -v s="$SEP" -v dir="$TMPD" '
-  substr($0, 1, length(s) + 1) == s "\t" {
+  substr($0, 1, length(s) + 1) == s "\037" {
     if (f) close(f)
     n++
     print substr($0, length(s) + 2) >> (dir "/index")
@@ -1367,6 +1374,25 @@ names_head() {
   grep -qxF -f "$TMPD/prefixes" "$TMPD/toks"
 }
 
+# posted_at_head <artifact created_at> — was this COMMENT written after the current head
+# was pushed? The second half of the exit-8 bound, and the only half that can ever fire
+# against this vendor: CodeRabbit's acknowledgement names NO commit at all — its one hex
+# token is a 64-character invocation hash, which `names_head` rejects by design — so a
+# pin on what the body says would be a bound that reads as implemented and never holds.
+# A comment created at or after the head commit's own date cannot be a receipt for an
+# earlier head. Both timestamps must be the host's RFC 3339 UTC; anything else is unknown
+# and unknown leaves the ask open, which is the cheap direction (one comment, no round).
+stamp() { # <timestamp> -> comparable digits, or nothing at all
+  printf '%s' "$1" | grep -Eqx '[0-9]{4}(-[0-9]{2}){2}T([0-9]{2}:){2}[0-9]{2}Z' || return 1
+  printf '%s' "$1" | tr -cd '0-9'
+}
+head_stamp="$(stamp "$head_date")" || head_stamp=""
+posted_at_head() {
+  [ -n "$head_stamp" ] || return 1
+  posted_stamp="$(stamp "$1")" || return 1
+  [ "$posted_stamp" -ge "$head_stamp" ]
+}
+
 # refusal_concerns_head <stripped-body-file> — is this refusal about the commit being
 # cleared? Consulted only to decide whether a CONTENTLESS review object at the head may
 # outrank it, and only in the closing direction.
@@ -1455,7 +1481,12 @@ refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
 cleared_msg=""; ack_from=""; ack_at_head=""; incremental_from=""; marker_outranked=""
 skip_from=""; other_refusal=""
 self_reviews=0; self_at_head=0
-while IFS=$'\t' read -r kind login state commit; do
+# THE FIELDS ARE UNIT-SEPARATED, NOT TAB-SEPARATED, and that is not decoration: a tab is
+# IFS WHITESPACE, so `read` collapses a run of them into one delimiter and every empty
+# field shifts the rest left. A comment's empty state and commit used to sit at the end of
+# the row where the loss was invisible; the moment a field followed them, it arrived in
+# `state`. \037 is not whitespace, so an empty field stays an empty field.
+while IFS=$'\037' read -r kind login state commit created; do
   n=$((n + 1))
   body="$TMPD/body.$n"
   [ -f "$body" ] || : > "$body"
@@ -1573,9 +1604,11 @@ while IFS=$'\t' read -r kind login state commit; do
   # nor the refusal tiers above, and clears nothing at any head (table 3b).
   if [ "$kind" != "review" ] && [ -n "$(hits "$INVOCATION_ACK" "$TMPD/stripped")" ]; then
     [ -n "$ack_from" ] || ack_from="$login"
-    # An ack naming THIS head is the record that the exit-8 ask has already been made, and
-    # it is the only thing that bounds that ask to once per head (see the exit-8 block).
-    names_head "$TMPD/strict" && ack_at_head=yes
+    # An ack made AT this head is the record that the exit-8 ask has already been made,
+    # and it is what bounds that ask to once per head (see the exit-8 block). Two ways to
+    # be at the head, because the real acknowledgement carries no SHA to name: the body
+    # names it, or the comment was posted after the head commit's own date.
+    { names_head "$TMPD/strict" || posted_at_head "$created"; } && ack_at_head=yes
     [ -n "$(hits "$INCREMENTAL_NOTE" "$TMPD/stripped")" ] && incremental_from="$login"
     fatal_grep
     continue
@@ -1911,8 +1944,8 @@ if [ -n "$skip_from" ] && [ -z "$other_refusal" ]; then
                                   -e 's/^/          | /' > "$TMPD/skip-quote"
   if [ -n "$ack_at_head" ]; then
     echo "refuse: $skip_from skipped PR $pr, and $ack_from has ALREADY been asked for a review" >&2
-    echo "        at head $head_sha — its acknowledgement names this commit. Wait for that" >&2
-    echo "        review; do not ask again at this head. It said:" >&2
+    echo "        at head $head_sha — its acknowledgement was posted here. Wait for" >&2
+    echo "        that review; do not ask again at this head. It said:" >&2
     cat "$TMPD/skip-quote" >&2
     exit 1
   fi
