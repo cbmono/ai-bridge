@@ -284,7 +284,13 @@ cap_started() {
     case "$s" in ''|*[!0-9]*) ;; *) printf '%s' "$s"; return 0 ;; esac
   fi
   [ -n "$transcript" ] && [ -f "$transcript" ] || return 1
-  s="$(stat -f '%B %c %m' "$transcript" 2>/dev/null || stat -c '%W %Z %Y' "$transcript" 2>/dev/null)" || s=""
+  # BSD `stat -f` is a FORMAT; GNU `stat -f` is --file-system and prints a block of prose
+  # on stdout before failing, whose "4096" would read as an epoch. So the BSD answer is
+  # accepted only when it is digits and spaces, and anything else falls through to GNU.
+  s="$(stat -f '%B %c %m' "$transcript" 2>/dev/null)" || s=""
+  case "$s" in
+    ''|*[!0-9\ ]*) s="$(stat -c '%W %Z %Y' "$transcript" 2>/dev/null)" || s="" ;;
+  esac
   for t in $s; do
     case "$t" in ''|*[!0-9]*) continue ;; esac
     [ "$t" -gt 0 ] || continue
@@ -294,7 +300,7 @@ cap_started() {
   printf '%s' "$oldest"
 }
 
-# The allowlist past the cap. A prefix match alone would admit `git commit -m x; rm -rf .`,
+# The allowlist past the cap. A prefix match alone would admit `git commit -m x; <anything>`,
 # so the whole command must carry no chaining metacharacter — the REPEAT_CHAIN rule again.
 cap_allows() {
   case "$tool_name" in
