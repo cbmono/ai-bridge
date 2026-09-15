@@ -23,6 +23,8 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$REPO/plugin/hooks/deny-destructive.sh"
 RECEIPT="$REPO/plugin/scripts/clearance-receipt.sh"
 PERMIT="$REPO/plugin/scripts/merge-permit.sh"
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$REPO/plugin/scripts/bundle-paths.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/mergeyolo.XXXXXX")" || {
   echo "subagent-merge-yolo.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}" >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
@@ -93,7 +95,7 @@ record_all() { # <pr> <sha> [script...] — default: all four
     "$RECEIPT" record "$s" --bundle "$BUNDLE" --repo "$NWO" --pr "$pr" --head "$sha" || return 1
   done
 }
-forget() { rm -rf "${BUNDLE:?}/.tick-receipts"; }
+forget() { rm -rf "${BUNDLE:?}/$AB_RECEIPTS"; }
 
 # -------------------------------------------------------------------------------- probes
 payload() { # <cwd> <command> <agent_type>
@@ -171,8 +173,8 @@ ok "a record at an earlier head ⇒ refused" "$(verdict "$MERGE" project-manager
 ok "…and the merge at THAT head is permitted" \
    "$(verdict "gh pr merge --squash --match-head-commit $OTHER_SHA 226" project-manager)" "allow"
 # The file is keyed by head AND says so inside: a rename must not turn one into the other.
-mv "$BUNDLE/.tick-receipts/cbmono-ai-bridge__pr226__$OTHER_SHA" \
-   "$BUNDLE/.tick-receipts/cbmono-ai-bridge__pr226__$SHA" 2>/dev/null
+mv "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$OTHER_SHA" \
+   "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$SHA" 2>/dev/null
 ok "…and a renamed record still names the head it was earned at" \
    "$(verdict "$MERGE" project-manager)" "deny:subagent_merge"
 
@@ -242,9 +244,9 @@ ok "…exit 1 for a PR with none" \
 ok "…and record outside a bundle writes nothing and fails nobody" \
    "$("$RECEIPT" record review-clearance.sh --bundle "$TMP/work" --repo "$NWO" --pr 226 --head "$SHA" >/dev/null 2>&1; echo $?)" 0
 ok "…having created no receipt directory there" \
-   "$([ -e "$TMP/work/.tick-receipts" ] && echo yes || echo no)" no
+   "$([ -e "$TMP/work/$AB_RECEIPTS" ] && echo yes || echo no)" no
 ok "the four scripts each record their own line" \
-   "$(grep -c '^pass ' "$BUNDLE/.tick-receipts/cbmono-ai-bridge__pr226__$SHA")" 4
+   "$(grep -c '^pass ' "$BUNDLE/$AB_RECEIPTS/cbmono-ai-bridge__pr226__$SHA")" 4
 for s in review-clearance required-checks pr-body-clearance pr-verdict-clearance; do
   ok "…$s.sh records the receipt on its clearing path" \
      "$(grep -c "record $s.sh" "$REPO/plugin/scripts/$s.sh")" 1
