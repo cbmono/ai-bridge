@@ -885,17 +885,29 @@ if [ -n "$record_doc" ] && [ -f "$record_doc" ]; then
   rc_state="$mergeable"
   case "$merge_state" in DIRTY) rc_state=CONFLICTING ;; esac
   case "$rc_state" in MERGEABLE|CONFLICTING) ;; *) rc_state=UNKNOWN ;; esac
-  rc_tmp="$(mktemp "${TMPDIR:-/tmp}/review-clearance.XXXXXX")" || rc_tmp=""
-  if [ -n "$rc_tmp" ]; then
-    RC_VAL="$rc_state" awk '
-      BEGIN { v = ENVIRON["RC_VAL"] }
-      NR == 1 && $0 == "---" { n = 1; print; next }
-      n == 1 && $0 == "---" { if (!done) { print "pr_mergeable: " v; done = 1 } n = 2; print; next }
-      n == 1 && !done && index($0, "pr_mergeable:") == 1 { print "pr_mergeable: " v; done = 1; next }
-      { print }
-    ' "$record_doc" > "$rc_tmp" && cat "$rc_tmp" > "$record_doc"
+  # Beside the record document, so the `mv` is a rename and never a half-written doc, and
+  # every step refuses: a stale `pr_mergeable:` is the board minting a merge verb the gate
+  # never saw, which is the whole defect `--record` exists to close.
+  rc_tmp="$(mktemp "$(dirname "$record_doc")/.review-clearance.XXXXXX")" || {
+    echo "error: cannot create a temp file beside $record_doc to record the mergeability read" >&2
+    exit 2
+  }
+  RC_VAL="$rc_state" awk '
+    BEGIN { v = ENVIRON["RC_VAL"] }
+    NR == 1 && $0 == "---" { n = 1; print; next }
+    n == 1 && $0 == "---" { if (!done) { print "pr_mergeable: " v; done = 1 } n = 2; print; next }
+    n == 1 && !done && index($0, "pr_mergeable:") == 1 { print "pr_mergeable: " v; done = 1; next }
+    { print }
+  ' "$record_doc" > "$rc_tmp" || {
     rm -f "$rc_tmp"
-  fi
+    echo "error: could not rewrite pr_mergeable: in $record_doc — refusing (fail closed)" >&2
+    exit 2
+  }
+  mv -f "$rc_tmp" "$record_doc" || {
+    rm -f "$rc_tmp"
+    echo "error: could not write $record_doc with the mergeability read — refusing (fail closed)" >&2
+    exit 2
+  }
 fi
 
 if [ -z "$skip_merge_check" ]; then

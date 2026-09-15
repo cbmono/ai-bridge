@@ -271,7 +271,14 @@ echo "== plugin/hooks — invoked straight off hooks.json, and NOTHING chmods th
 # `hooks.json` — there is no installer in that path at all, so a committed-644 file here is
 # a 126 on every single tool call in every session on the machine, with nothing to launder
 # it on any developer's disk.
-HOOK_FLOOR="$(jq -r '[.hooks[][].hooks[].command] | length' "$TPL/plugin/hooks/hooks.json" 2>/dev/null || echo 1)"
+# AND A FLOOR THAT CANNOT BE DERIVED IS NOT A FLOOR. `tests/run.sh` neither requires `jq`
+# nor validates hooks.json, so this is reachable in a supported `--all` run; falling back
+# to 1 makes check_group accept any one executable hook and miss every removed one.
+HOOK_FLOOR="$(jq -r '[.hooks[][].hooks[].command] | length' "$TPL/plugin/hooks/hooks.json" 2>/dev/null)" \
+  && [[ "$HOOK_FLOOR" =~ ^[1-9][0-9]*$ ]] || {
+  echo "scripts-executable.test: cannot derive the hook floor from plugin/hooks/hooks.json (jq present? manifest valid?)" >&2
+  exit "$RC_SETUP"
+}
 check_group "$TPL" "plugin/hooks/*.sh" "$HOOK_FLOOR" 'plugin/hooks/*.sh'
 
 if [[ $IS_CHILD -eq 0 ]]; then

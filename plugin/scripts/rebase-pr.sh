@@ -15,11 +15,20 @@
 # measurements and the rejected designs: ai-bridge-v3/task-043.
 set -uo pipefail
 
+# git exports these into every hook and into `git rebase -x`, and `git -C` overrides none
+# of them — an inherited GIT_DIR redirects this script's fetch, rebase and lease-protected
+# push into whatever repo the caller was in. Same set tests/run.sh clears, same reason.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+      GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_NAMESPACE \
+      GIT_CONFIG GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_COUNT
+
 PR=""; REPO_SLUG=""; DIR="$PWD"; DRY=0; SELFTEST=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --repo) REPO_SLUG="${2:-}"; shift 2 ;;
-    --dir) DIR="${2:-}"; shift 2 ;;
+    --repo) [ $# -ge 2 ] || { echo "rebase-pr: --repo requires a value" >&2; exit 1; }
+            REPO_SLUG="$2"; shift 2 ;;
+    --dir)  [ $# -ge 2 ] || { echo "rebase-pr: --dir requires a value" >&2; exit 1; }
+            DIR="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     --self-test) SELFTEST=1; shift ;;
     -h|--help) sed -n '3,14p' "$0"; exit 0 ;;
