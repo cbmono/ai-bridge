@@ -274,7 +274,10 @@ echo "== plugin/hooks — invoked straight off hooks.json, and NOTHING chmods th
 # AND A FLOOR THAT CANNOT BE DERIVED IS NOT A FLOOR. `tests/run.sh` neither requires `jq`
 # nor validates hooks.json, so this is reachable in a supported `--all` run; falling back
 # to 1 makes check_group accept any one executable hook and miss every removed one.
-HOOK_FLOOR="$(jq -r '[.hooks[][].hooks[].command] | length' "$TPL/plugin/hooks/hooks.json" 2>/dev/null)" \
+# `unique`, because the floor counts FILES and the manifest counts REGISTRATIONS: one
+# script may be registered on several events (`agent-control.sh` is on `PreToolUse` and
+# `SubagentStop`), and a raw `length` then sets a floor no directory can reach.
+HOOK_FLOOR="$(jq -r '[.hooks[][].hooks[].command] | unique | length' "$TPL/plugin/hooks/hooks.json" 2>/dev/null)" \
   && [[ "$HOOK_FLOOR" =~ ^[1-9][0-9]*$ ]] || {
   echo "scripts-executable.test: cannot derive the hook floor from plugin/hooks/hooks.json (jq present? manifest valid?)" >&2
   exit "$RC_SETUP"
