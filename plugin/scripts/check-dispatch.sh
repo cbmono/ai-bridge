@@ -42,7 +42,8 @@
 #      recorded URL still had to be resolved. Unknown is never reported as fine.
 #   3  the claim is not backed: `pr:` names a pull request the host does not resolve, or
 #      names something that is not a URL at all.
-#   4  the record contradicts itself: `in-review`/`done` with an empty `pr:`, a PR that
+#   4  the record contradicts itself: `in-review`/`done` with an empty `pr:` on a task
+#      that resolves a `target_repo:` (bundle-only work is due no PR), a PR that
 #      resolves while `status:` never moved, or a `blocked` reason naming a tool the
 #      assignee's own `tools:` list already grants. Usually one edit away from correct.
 #
@@ -99,8 +100,8 @@ fm="$(fm_block "$TASK")" || fm_rc=$?
 
 # Only the FIRST occurrence of a key counts. A document with the key repeated would
 # otherwise be judged from the LATER value — the bug push-state.sh had with `status:`.
-field() { # <key>
-  printf '%s\n' "$fm" | awk -v key="$1" '
+field() { # <key> [frontmatter-block, default the task's]
+  printf '%s\n' "${2-$fm}" | awk -v key="$1" '
     !got && index($0, key ":") == 1 {
       v = $0
       sub(/^[^:]*:[[:space:]]*/, "", v)
@@ -317,8 +318,21 @@ EOF
   return 0
 }
 
+# The repo a PR would be opened against. `target_repo:` INHERITS the project default when
+# the task omits it (SCHEMA.md), so the task document alone cannot tell a bundle-only task
+# from a repo-backed one — reading it without project.md would exempt the second.
+resolved_repo() {
+  local v proj
+  v="$(field target_repo)"
+  [ -n "$v" ] && { printf '%s\n' "$v"; return 0; }
+  proj="$(dirname -- "$TASK")/../project.md"
+  [ -f "$proj" ] || return 0
+  field target_repo "$(fm_block "$proj")"
+}
+
 status="$(field status)"
 kind="$(field kind)"
+repo="$(resolved_repo)"
 region="$(pr_region)"
 # Every judgement below is made on the COMMENTED-OUT-FREE value. Nothing a human wrote
 # after a `#` is a recorded artifact, and a URL sitting in a comment is the one input that
@@ -437,6 +451,15 @@ if [ -n "$claim" ] && [ -z "$urls" ]; then
 fi
 
 if [ "$advanced" = "yes" ] && [ -z "$urls" ]; then
+  # A task that names no target repo — neither its own nor its project's — has nowhere to
+  # open a PR, so an empty `pr:` is its correct shape and not a contradiction. Reported
+  # rather than silent: an exemption nobody can see is one nobody can question.
+  if [ -z "$repo" ]; then
+    echo "ok: $TASK advanced to status: $status and names no pull request — correct:"
+    echo "    it records no target_repo:, and neither does its project, so no pull"
+    echo "    request was ever due. Skipped: the advanced-with-no-PR rule (exit 4)."
+    exit 0
+  fi
   echo "MISMATCH: $TASK reads status: $status but names no pull request." >&2
   echo "          One of the two is wrong: either the PR was never opened, or it was" >&2
   echo "          opened and never recorded. Read the agent's report before acting." >&2

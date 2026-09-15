@@ -231,6 +231,30 @@ ok "done with an empty pr:                 -> exit 4" "$(rc_of "$TMP/done-no-pr.
 ok "a resolvable PR but status never moved -> exit 4" "$(rc_of "$TMP/pr-but-unmoved.md")"  4
 
 echo
+echo "== a task that names no target repo is due no PR, so an empty pr: is its correct shape =="
+# Bundle-only work — a task against no repo at all — used to read as exit 4 forever: a
+# contradiction no edit could clear, re-reported by every tick that checked it.
+mkdir -p "$TMP/bundle/tasks"
+mk_task "$TMP/repo-backed.md" done "[ ]"
+sed '/^target_repo:/d' "$TMP/repo-backed.md" > "$TMP/bundle/tasks/bundle-only.md"
+ok "the target_repo: line really is gone (or this asserts on a repo-backed task)" \
+   "$(grep -q '^target_repo:' "$TMP/bundle/tasks/bundle-only.md" && echo yes || echo no)" no
+ok "done, no target_repo, empty pr:        -> exit 0" "$(rc_of "$TMP/bundle/tasks/bundle-only.md")" 0
+BUNDLE_OUT="$(out_of "$TMP/bundle/tasks/bundle-only.md")"
+ok "…and it names the rule it skipped"     "$(grep -qF 'Skipped: the advanced-with-no-PR rule' <<<"$BUNDLE_OUT" && echo yes || echo no)" yes
+ok "…and why it skipped it"                "$(grep -qF 'no target_repo' <<<"$BUNDLE_OUT" && echo yes || echo no)" yes
+# Narrowed, not removed: the same document WITH a target_repo is the contradiction it
+# always was.
+ok "done, target_repo, empty pr:           -> still exit 4" "$(rc_of "$TMP/repo-backed.md")" 4
+# `target_repo:` inherits the project default (SCHEMA.md), so the task's own silence only
+# means bundle-only when project.md is silent too — otherwise the exemption would swallow
+# every task that simply omitted the key.
+mkdir -p "$TMP/inherits/tasks"
+cp "$TMP/bundle/tasks/bundle-only.md" "$TMP/inherits/tasks/task-001.md"
+printf -- '---\ntype: Project\ntarget_repo: acme/widgets\n---\n' > "$TMP/inherits/project.md"
+ok "…and one inheriting its project's repo -> exit 4" "$(rc_of "$TMP/inherits/tasks/task-001.md")" 4
+
+echo
 echo "== an honest stop is not a failure, and a research task is not a question this can answer =="
 mk_task "$TMP/blocked.md" blocked "[ ]"
 mk_task "$TMP/research.md" in-progress "[ ]" research
@@ -400,7 +424,7 @@ ok "…and step 4 says a non-zero verdict is not a re-dispatch" \
 # --- the assertion total ---------------------------------------------------------------
 # A block that is skipped rather than failed still turns this file red. Move this number
 # in the same commit that adds or removes an assertion.
-EXPECTED_ASSERTIONS=74
+EXPECTED_ASSERTIONS=80
 TOTAL=$((pass + fail))
 ok "exactly $EXPECTED_ASSERTIONS assertions ran (a silently skipped block shows up here)" \
    "$TOTAL" "$EXPECTED_ASSERTIONS"
