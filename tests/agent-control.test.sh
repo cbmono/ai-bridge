@@ -60,8 +60,11 @@ mkdir -p "$INST/.claude/agents" "$INST/scripts"
 printf 'x\n' > "$INST/SCHEMA.md"
 printf '{}\n' > "$INST/instance.config.json"
 printf 'x\n' > "$INST/.claude/agents/index.md"
-PLUGROOT="$TMP/plugin"; mkdir -p "$PLUGROOT/hooks"
+PLUGROOT="$TMP/plugin"; mkdir -p "$PLUGROOT/hooks" "$PLUGROOT/scripts"
 cp "$HOOK_SRC" "$PLUGROOT/hooks/agent-control.sh"
+# The wall clock resolves its budget through the plugin's own config resolver (ai-bridge-v3/
+# task-039), so the fixture plugin root carries it — a plugin never ships one without the other.
+cp "$REPO/plugin/scripts/resolve-config.sh" "$PLUGROOT/scripts/resolve-config.sh"
 cp "$CTL_SRC"  "$INST/scripts/control.sh"
 # control.sh sources its sibling resolver (ai-bridge-v3/task-031), so a one-file fixture
 # has to carry it too — the plugin never ships one without the other.
@@ -80,10 +83,15 @@ ctl_rc() { ( cd "$INST" && bash scripts/control.sh "$@" >/dev/null 2>&1 ); print
 # A realistic PreToolUse payload. `agent_id` is OMITTED entirely when the first
 # argument is empty, because that is what the parent's own tool call looks like —
 # not an empty string.
+# A transcript inside the fixture, because the hook now STATS it for a fallback start time
+# (ai-bridge-v3/task-039). A shared `/tmp/t.jsonl` would hand every assertion here whatever
+# age that path happens to have on the machine running the suite.
+FIXTR="$TMP/transcript.jsonl"; : > "$FIXTR"
+TRANSCRIPT="$FIXTR"
 payload() { # <agent_id|""> <agent_type> <tool_name> [tool_input_command]
-  jq -n --arg a "$1" --arg t "$2" --arg n "$3" --arg c "${4:-echo hi}" '
+  jq -n --arg a "$1" --arg t "$2" --arg n "$3" --arg c "${4:-echo hi}" --arg tp "$TRANSCRIPT" '
     {
-      session_id: "sess-1", prompt_id: "p-1", transcript_path: "/tmp/t.jsonl",
+      session_id: "sess-1", prompt_id: "p-1", transcript_path: $tp,
       cwd: "/tmp/wt/repo", permission_mode: "bypassPermissions",
       hook_event_name: "PreToolUse", effort: { level: "high" },
       tool_name: $n, tool_use_id: "tu-1", tool_input: { command: $c }
@@ -587,6 +595,168 @@ ok "a halt is still honoured while counting"          "$(ctl halt H7 x >/dev/nul
 ctl clear --all >/dev/null
 rm -rf "$CTL/repeats"; set_limit ""
 ctl disarm >/dev/null 2>&1; ctl arm >/dev/null 2>&1
+
+echo
+echo "--- the wall clock: a budget per agent ----------------------------------"
+# THE DEFAULT IS ON, unlike the doom loop above: `maxAgentMinutes` absent from both config
+# layers is 45 minutes, because the incident this comes from was an armed instance whose
+# config named no key at all. Every positive case below is paired with its under-budget
+# partner, so "capped" cannot pass by refusing everything.
+ctl arm >/dev/null 2>&1
+CAPDIR="$CTL/agents.d"
+NOW="$(date -u +%s)"
+set_cap() { # "" clears the key; <n> sets it; a second argument goes in the LOCAL layer
+  rm -f "$INST/instance.config.local.json"
+  if [ -z "${1:-}" ]; then printf '{}\n' > "$INST/instance.config.json"
+  else printf '{"maxAgentMinutes": %s}\n' "$1" > "$INST/instance.config.json"; fi
+  [ -z "${2:-}" ] || printf '{"maxAgentMinutes": %s}\n' "$2" > "$INST/instance.config.local.json"
+  rm -f "$CTL/agent-cap"
+}
+started() { # <agent_id> <minutes ago>
+  mkdir -p "$CAPDIR"; printf '%s\n' "$((NOW - $2 * 60))" > "$CAPDIR/$1.started"
+}
+start_payload() { jq -n --arg a "$1" --arg t "$2" --arg tp "$TRANSCRIPT" '{
+  session_id: "sess-1", transcript_path: $tp, cwd: "/tmp/wt/repo",
+  permission_mode: "bypassPermissions", hook_event_name: "SubagentStart",
+  agent_id: $a, agent_type: $t }'; }
+run_start() { # <agent_id> <agent_type>
+  start_payload "$1" "$2" > "$TMP/payload"
+  OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" <"$TMP/payload" 2>"$TMP/err")"; RC=$?
+  ERR="$(cat "$TMP/err")"
+}
+
+set_cap ""
+started C1 46
+run C1 software-engineer Edit
+ok "absent config: 46 minutes trips the 45 default"   "$(decision)" deny
+ok "…the message names the elapsed time and the budget" \
+   "$(reasontxt | grep -c 'running 46 minutes and the budget (maxAgentMinutes) is 45')" 1
+ok "…and it is the WRAP-UP instruction, not just a no" \
+   "$(reasontxt | grep -c 'commit and push what you have, open or update the pull request')" 1
+ok "…and a plain deny, never a kill"                  "$(continues)" absent
+ok "…while Read is still allowed past the cap"        "$(run C1 software-engineer Read; verdict)" allowed
+started C2 44
+ok "…and 44 minutes is under the same default"        "$(run C2 software-engineer Edit; verdict)" allowed
+
+# The allowlist, both halves, at a 1-minute budget so every call below is past it.
+set_cap 1
+started C3 5
+capped() { run C3 software-engineer "$1" "${2:-echo hi}"; verdict; }
+ok "past the cap: Read"                               "$(capped Read)" allowed
+ok "past the cap: Grep"                               "$(capped Grep)" allowed
+ok "past the cap: Glob"                               "$(capped Glob)" allowed
+ok "past the cap: Edit is refused"                    "$(capped Edit)" deny
+ok "past the cap: Write is refused"                   "$(capped Write)" deny
+ok "past the cap: a tool that is neither is refused"  "$(capped TodoWrite)" deny
+ok "past the cap: git commit"                         "$(capped Bash 'git commit -m x')" allowed
+ok "past the cap: git push"                           "$(capped Bash 'git push origin HEAD')" allowed
+ok "past the cap: gh pr create"                       "$(capped Bash 'gh pr create --fill')" allowed
+ok "past the cap: gh pr edit"                         "$(capped Bash 'gh pr edit 4 --body-file b')" allowed
+ok "past the cap: gh pr view"                         "$(capped Bash 'gh pr view 4')" allowed
+ok "past the cap: gh pr checks"                       "$(capped Bash 'gh pr checks 4')" allowed
+ok "past the cap: pnpm build is refused"              "$(capped Bash 'pnpm build')" deny
+ok "past the cap: git status is refused"              "$(capped Bash 'git status')" deny
+# A PREFIX MATCH ALONE WOULD ADMIT THESE: the allowed form is the WHOLE command.
+ok "…and a command chained to git commit is refused"  "$(capped Bash 'git commit -m x; pnpm publish')" deny
+ok "…and one chained to gh pr view too"               "$(capped Bash 'gh pr view 4 && pnpm build')" deny
+ok "…and a substituted one"                           "$(capped Bash 'git push $(echo origin)')" deny
+# The whole cap is off under the budget, so the same two are allowed again at 0 minutes.
+started C3 0
+rm -f "$CAPDIR/C3.capped"
+ok "under the cap: Edit is allowed again"             "$(capped Edit)" allowed
+ok "under the cap: pnpm build is allowed again"       "$(capped Bash 'pnpm build')" allowed
+
+# ONE LOG LINE PER AGENT, not per refusal — an agent that keeps trying is one event.
+started C4 90
+run C4 software-engineer Edit; run C4 software-engineer Write; run C4 software-engineer Bash "pnpm build"
+ok "control.log records the cap with the agent_id"    "$(grep -c $'\tagent-cap\tC4\t' "$CTL/control.log")" 1
+ok "…carrying the elapsed time and the budget"        "$(grep -c 'elapsed=90m budget=1m' "$CTL/control.log")" 1
+
+# SOURCE 1: the SubagentStart record.
+run_start C5 software-engineer
+ok "SubagentStart exits 0 and is silent"              "$([ "$RC" = 0 ] && [ -z "$OUT" ] && [ -z "$ERR" ] && echo yes || echo no)" yes
+ok "…and writes the start file under agents.d"        "$([ -f "$CAPDIR/C5.started" ] && echo yes || echo no)" yes
+ok "…holding an epoch, and only that"                 "$(awk '{print (NF == 1 && $1 ~ /^[0-9]+$/) ? "yes" : "no"}' "$CAPDIR/C5.started")" yes
+ok "…so a fresh agent is nowhere near the cap"        "$(run C5 software-engineer Edit; verdict)" allowed
+started C5 30
+run_start C5 software-engineer
+ok "a SECOND SubagentStart does not restart the clock" "$(cat "$CAPDIR/C5.started")" "$((NOW - 1800))"
+
+# SOURCE 2: the transcript, when no start file exists. Backdated with `touch`, which moves
+# birth time on APFS and mtime everywhere — the hook takes the oldest of what it is given.
+OLDTR="$TMP/old-transcript.jsonl"; : > "$OLDTR"
+touch -t "$(date -v-120M +%Y%m%d%H%M 2>/dev/null || date -d '120 minutes ago' +%Y%m%d%H%M)" "$OLDTR"
+TRANSCRIPT="$OLDTR"
+ok "no start file: a 2h-old transcript caps"          "$(run C6 software-engineer Edit; decision)" deny
+ok "…and Read is still allowed on that path too"      "$(run C6 software-engineer Read; verdict)" allowed
+TRANSCRIPT="$FIXTR"
+ok "…while a transcript created just now does not"    "$(run C7 software-engineer Edit; verdict)" allowed
+# …and the start file WINS over the transcript, which is what makes it the primary source.
+TRANSCRIPT="$OLDTR"
+started C8 0
+ok "the start file outranks an old transcript"        "$(run C8 software-engineer Edit; verdict)" allowed
+TRANSCRIPT="$FIXTR"
+
+# SubagentStop drops the clock as well as the counter — ONE cleanup, ONE state directory.
+started C9 90
+run C9 software-engineer Edit
+ok "the refusal left a .capped marker"                "$([ -e "$CAPDIR/C9.capped" ] && echo yes || echo no)" yes
+run_stop C9 software-engineer
+ok "SubagentStop removes the start file"              "$([ -e "$CAPDIR/C9.started" ] && echo yes || echo no)" no
+ok "…and the marker with it"                          "$([ -e "$CAPDIR/C9.capped" ] && echo yes || echo no)" no
+ok "…and leaves another agent's clock alone"          "$([ -e "$CAPDIR/C5.started" ] && echo yes || echo no)" yes
+ok "…so a resumed agent starts a fresh budget"        "$(run C9 software-engineer Edit; verdict)" allowed
+# NO SECOND STATE TREE: the clock and the doom-loop counter share one directory, and the
+# one SubagentStop cleanup. Both keys on, so both counters exist to be counted.
+printf '{"maxAgentMinutes": 1, "maxRepeatedToolCalls": 2}\n' > "$INST/instance.config.json"
+rm -f "$CTL/agent-cap" "$CTL/repeat-limit"
+run_start CX software-engineer
+run CX software-engineer Read; run CX software-engineer Read
+ok "both counters exist, and only these two"          "$(find "$CTL" -mindepth 1 -maxdepth 1 -type d | sed "s#.*/##" | sort | paste -sd, -)" "agents.d,repeats"
+ok "…the clock is one of them"                        "$([ -f "$CAPDIR/CX.started" ] && echo yes || echo no)" yes
+ok "…the repeat counter the other"                    "$([ -f "$CTL/repeats/CX" ] && echo yes || echo no)" yes
+run_stop CX software-engineer
+ok "…and ONE SubagentStop drops both"                 "$([ -e "$CAPDIR/CX.started" ] || [ -e "$CTL/repeats/CX" ] && echo no || echo yes)" yes
+rm -rf "$CTL/repeats" "$CTL/repeat-limit"
+
+# The budget is a NUMBER from either layer, and an unusable one is OFF rather than guessed.
+started C10 90
+set_cap 200
+ok "a budget of 200 leaves a 90-minute agent alone"   "$(run C10 software-engineer Edit; verdict)" allowed
+set_cap 0
+ok "maxAgentMinutes 0 is off"                         "$(run C10 software-engineer Edit; verdict)" allowed
+set_cap '"soon"'
+ok "a non-numeric budget is off, never guessed"       "$(run C10 software-engineer Edit; verdict)" allowed
+set_cap 200 1
+ok "the LOCAL layer wins over the tracked one"        "$(run C10 software-engineer Edit; decision)" deny
+set_cap 1
+ok "…the tracked layer alone still caps"              "$(run C10 software-engineer Edit; decision)" deny
+started C11 5
+set_cap 1 null
+ok "…and a local null unsets it, back to the 45 default" "$(run C11 software-engineer Edit; verdict)" allowed
+# FAIL OPEN: a resolver this hook cannot run is a read that did not happen, so the cap is
+# off and the log says so — never a refusal on the strength of missing machinery.
+NORES="$TMP/plugin-no-resolver"; mkdir -p "$NORES/hooks"
+cp "$HOOK_SRC" "$NORES/hooks/agent-control.sh"
+rm -f "$CTL/agent-cap"
+payload C10 software-engineer Edit > "$TMP/payload"
+NR_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$NORES/hooks/agent-control.sh" <"$TMP/payload" 2>/dev/null)"
+ok "no resolver beside the hook: the cap is OFF"      "$([ -z "$NR_OUT" ] && echo yes || echo no)" yes
+ok "…and it SAYS so in control.log"                   "$(grep -c 'the time cap is OFF' "$CTL/control.log")" 1
+
+# DISARMED IS STILL A STRICT NO-OP — the clock is state, and state is what arming buys.
+rm -f "$CTL/agent-cap"
+ctl disarm >/dev/null 2>&1
+run C1 software-engineer Edit
+ok "disarmed: a 46-minute agent is not capped"        "$([ -z "$OUT" ] && [ "$RC" = 0 ] && echo yes || echo no)" yes
+ok "…and nothing was recreated"                       "$([ -e "$CTL" ] && echo yes || echo no)" no
+ctl arm >/dev/null 2>&1
+set_cap ""
+
+# The tick is what turns a cap into something countable, so pin the two strings it maps.
+STEP4="$REPO/plugin/tick-steps/step-4-advance.md"
+ok "step 4 reads the agent-cap line"                  "$(grep -c 'agent-cap <agent_id>' "$STEP4")" 1
+ok "…and writes capped: <minutes> on the task"        "$(grep -c 'capped: <minutes>' "$STEP4")" 1
 
 echo
 echo "--- registration: the hook is wired up and shippable --------------------"

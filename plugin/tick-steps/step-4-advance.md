@@ -76,6 +76,15 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    breach** — a looping agent is the stall rule's case, and this line must not contradict
    it.
 
+   **A wall-clock cap is reflected the same way, and it is COUNTED.** The same log carries
+   `agent-cap <agent_id> <agent_type> <tool> elapsed=…m budget=…m` when an agent ran past
+   `maxAgentMinutes`; map it exactly as above and write **`capped: <minutes>`** on that
+   task's `# Notes`. That line exists to be counted: **a cap that fires on every task is a
+   budget that is wrong, not agents that are slow**, and nothing else in the bundle records
+   how long an agent ran. A capped agent has been told to commit, push and report, so its
+   PR is normally already open — treat it like any other reported task, never as a failure
+   to re-dispatch.
+
    **Independent verification (the verifier edge).** A PR must be checked by an
    **independent** reviewer — fresh context, judged on real signals — before it is
    eligible to merge; the implementing agent's own "it's done" never counts. **Each
