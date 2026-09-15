@@ -172,7 +172,7 @@ ok "…stating callers read only the code"   "$(hasf "$CLEAR" 'THAT RULE IS UNCH
 # `*` arm is fatal, so an unlisted 5 turns a broken reviewer into "the round count is
 # unknown" on every PR. Both of its case lists, not one.
 ok "review-rounds.sh accepts 5 as a refusal" \
-   "$(grep -cE '^[[:space:]]*1\|3\|4\|5\)' "$ROUNDS")" 2
+   "$(grep -cE '^[[:space:]]*1\|3\|4\|5\|8\)' "$ROUNDS")" 2
 ok "…and no stale 1|3|4 arm survives"      "$(grep -cE '^[[:space:]]*1\|3\|4\)' "$ROUNDS")" 0
 # required-checks.sh already refuses on any non-zero, so the risk there is silence, not
 # breakage: a human reading "the reviewer did not clear" needs to know it is broken, not busy.
@@ -193,12 +193,12 @@ echo "== 5. collapsing either file back to auto-fallback goes RED =="
 # The collapse, exactly as it would arrive: the two new bullets deleted, leaving the
 # unconditional "dispatch the qa-reviewer" that was there before. Prose-perfect, and the
 # reason a reviewer would not catch it by reading.
-ANCHOR_A='- **A refusal is FOUR classes'
+ANCHOR_A='- **A refusal is FIVE classes'
 if [ "$(grep -cF -- "$ANCHOR_A" "$PM")" -ne 1 ]; then
   skipped "MUTATION A: the PM classification lead-in has moved — its deletion is not asserted"
 else
   MUT_A="$TMP/pm-collapsed.md"
-  awk '/^   - \*\*A refusal is FOUR classes/ { drop = 1 }
+  awk '/^   - \*\*A refusal is FIVE classes/ { drop = 1 }
        drop && /^   - \*\*Fallback when none is configured/ { drop = 0 }
        !drop { print }' "$PM" > "$MUT_A"
   A_FLAT="$(flat_of "$MUT_A")"
@@ -265,10 +265,10 @@ ok "saw() rejects text that is not there" "$(saw "$PM_FLAT" 'dispatch the fallba
 # 6c. THE CALLER MUTANT. Section 4's `1|3|4|5` count is only a check if the old form fails
 # it, so the pre-change arm is reconstructed and measured.
 MUT_C="$TMP/rounds-old.sh"
-sed -e 's/^\([[:space:]]*\)1|3|4|5)/\11|3|4)/' "$ROUNDS" > "$MUT_C"
+sed -e 's/^\([[:space:]]*\)1|3|4|5|8)/\11|3|4)/' "$ROUNDS" > "$MUT_C"
 ok "MUTATION C: the old arm is restored"  "$(grep -cE '^[[:space:]]*1\|3\|4\)' "$MUT_C")" 2
-ok "…and the new-arm count goes to zero"  "$(grep -cE '^[[:space:]]*1\|3\|4\|5\)' "$MUT_C")" 0
-ok "CONTROL: the shipped file is unchanged" "$(grep -cE '^[[:space:]]*1\|3\|4\|5\)' "$ROUNDS")" 2
+ok "…and the new-arm count goes to zero"  "$(grep -cE '^[[:space:]]*1\|3\|4\|5\|8\)' "$MUT_C")" 0
+ok "CONTROL: the shipped file is unchanged" "$(grep -cE '^[[:space:]]*1\|3\|4\|5\|8\)' "$ROUNDS")" 2
 
 # 6d. the block extractors must actually extract. An awk range that matched nothing would
 # make both mutants byte-identical to their sources, and every `no` above would be a lie —
