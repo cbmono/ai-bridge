@@ -447,14 +447,21 @@ REVIEW_SENTINEL='
 # ("DECLINED") over a PR whose real state is a real review at an older commit, which is
 # exit 4 and a different instruction to the caller.
 #
-# PROSE IS ALLOWED HERE, unlike table 3, because this tier only ever REFUSES: the marker
-# rows are the vendor's own, and the two prose rows cost at most a human glance at a PR
-# that was in fact reviewed. Anchored where the prose is a whole line of its own.
+# ONE ROW, AND IT IS THE VENDOR'S OWN INVOCATION MARKER. This table started with two
+# prose rows beside it — `Action performed`, a whole-line `Review finished` — on the
+# reasoning that a tier which only ever REFUSES costs at most a human glance. That was
+# wrong in a way that inverts this file's whole point: `hits` treats rows as independent
+# alternatives, and a comment skipped here never reaches the evidence tests below, so any
+# review whose body happened to quote an acknowledgement was itself read as one and
+# reported exit 4. A review quoting an ack is ordinary on a PR that touches this file.
+# The marker carries the same claim and no review body has ever carried it — measured on
+# the receipts for `review` (#227) and `full review` (#233), both of which have it.
+#
+# `this is an auto-generated reply by coderabbit` was dropped with the prose: it heads
+# EVERY reply the vendor posts, not just a review receipt, so it widens the same
+# false-positive surface while catching no acknowledgement the marker misses.
 INVOCATION_ACK='
-<!--[[:space:]]*coderabbit review command invocation:
-<!--[[:space:]]*this is an auto-generated reply by coderabbit
-action (performed|not completed)
-^[[:space:]]*(>[[:space:]]*)*review finished\.?[[:space:]]*$
+^[[:space:]]*<!--[[:space:]]*coderabbit review command invocation:[^>]*-->[[:space:]]*$
 '
 
 # The reviewer explaining that a plain review request cannot produce a review at this head.

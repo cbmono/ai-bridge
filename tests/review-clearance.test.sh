@@ -41,6 +41,7 @@ FIXTURES="$(cd "$(dirname "$0")" && pwd)/fixtures/reviewer"
 CLEAN="$FIXTURES/clean-review.pr29.md"
 REFUSAL="$FIXTURES/rate-limit-refusal.pr30.md"
 ACK="$FIXTURES/ack-invocation.pr227.md"
+ACK_PROSE="$FIXTURES/ack-prose.quoted-in-a-review.md"
 CLEAN_HEAD="8f40f2ed565a31e141f5ae54a6935ad0810314c4"
 REFUSAL_HEAD="88c106a8dd2b9ae14e001918022d4909e5357460"
 OTHER_SHA="0123456789abcdef0123456789abcdef01234567"
@@ -2104,6 +2105,20 @@ setup "$REFUSAL_HEAD"; add_comment coderabbitai "$(body_file \
   '<!-- CodeRabbit review command invocation: v2:abc -->' \
   '⚠️ Action not completed' 'Review limit reached.')"
 expect "an acknowledgement quoting a rate limit is still the refusal" 1
+
+# THE INVERSE DEFECT, and the reason this tier is one machine marker rather than four rows.
+# `hits` treats rows as independent alternatives, so prose rows — `Action performed`, a
+# whole-line `Review finished` — classified as an ACK any review body that happened to
+# contain them, and a skipped comment never reaches the evidence tests below it. A review
+# quoting an acknowledgement is an ordinary thing on a PR that touches this file: the ack
+# fixture one directory up is in this branch's own diff.
+assert "the quoted prose carries neither machine marker" \
+  "$(yes_if bash -c '! grep -qiE "coderabbit review command invocation:|auto-generated reply" "$1"' _ "$ACK_PROSE")"
+assert "…and is the acknowledgement's own wording, verbatim" \
+  "$(yes_if bash -c 'grep -Fqx "Review finished." "$1" && grep -Fq "Action performed" "$1"' _ "$ACK_PROSE")"
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$(cat "$CLEAN" "$ACK_PROSE" > "$TMP/review-plus-ack"; printf '%s' "$TMP/review-plus-ack")"
+expect "a real review that also quotes the ack prose -> still a review" 0
+says   "  ...pinned to the head, not skipped as a receipt" "$CLEAN_HEAD"
 
 echo
 echo "== the REVIEW OBJECT is preferred over a comment marker =="
