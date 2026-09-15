@@ -252,7 +252,8 @@ rm -f "$DRAFT"; DRAFT=""; rmdir "$REPO/$SCRATCH" 2>/dev/null || true
 
 # …and the complement, because narrowing the scan could have made it blind instead of
 # correct: an UNTRACKED, unignored .md is still a stranger.
-STRAY="$REPO/shared-bundle-sync-regression.$$.md"
+STRAY_REL="shared-bundle-sync-regression.$$.md"
+STRAY="$REPO/$STRAY_REL"
 printf 'a new doc that names step 0.\n' > "$STRAY"
 ok "…while an untracked, unignored .md IS still counted" \
    "$(step0_mentioning_files | grep -vx 'plugin/agents/project-manager.md' \
