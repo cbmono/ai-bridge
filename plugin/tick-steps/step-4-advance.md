@@ -132,7 +132,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      * **Re-ask every tick, and never cache the answer.** Mergeability changes when the
        default branch moves with no commit on the PR, so a 7 from last tick is not an
        answer this tick and neither is a 0.
-   - **A refusal is FOUR classes, and the ask fires on the SPEND, never on the
+   - **A refusal is FIVE classes, and the ask fires on the SPEND, never on the
      hiccup.** The PM never needs permission to WAIT; it needs permission to SPEND
      (a `qa-reviewer` session). Holding costs nothing and never skips the verification gate — it only defers it.
      **The class is `review-clearance.sh`'s EXIT CODE and nothing else** —
@@ -146,9 +146,12 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      | **4** | stale — a real review, at an older commit | **Re-request at the final head.** Explicitly not a fallback case; never report it as a decline. |
      | **3** | no reviewer signal on this PR | **HOLD.** Whether the repo has a reviewer at all is a setup question, below — never decided per PR. |
      | **2** | unreadable reviewer state | **HOLD.** Unknown is not permission. |
+     | **8** | SKIPPED — reviews are not automatic here, so NOBODY EVER ASKED; it never reopens | **REQUEST ONE, at the current head**, by commenting `@coderabbitai review` — then re-ask next tick. A request is not a review round. Never a merge, never a `qa-reviewer` spend. |
 
      **Every outcome not in that table HOLDS**, and that is the standing default rather than a gap to fill in later.
      Holding defers the gate, it never skips it.
+     **Where several PRs answer 8 and the quota is one review per window, spend it on the
+     PR whose criteria table carries no `✗`** — only that one can become merge-eligible.
    - **The SPEND: exit 5, the only branch that consults a human.** A terminal refusal
      is a fact about **every future PR**. Which way it resolves is the existing
      autonomy switch applied to one more decision — not a new flag, field or config key:

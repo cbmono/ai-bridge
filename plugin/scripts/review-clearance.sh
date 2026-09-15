@@ -164,6 +164,17 @@
 #   7  the PR CANNOT MERGE: the host reports `mergeable` CONFLICTING or
 #      `mergeStateStatus` DIRTY at the current head. Nothing about the review was read.
 #      ANSWER IT BY REBASING, never by requesting a review — see below
+#   8  the reviewer SKIPPED this PR because reviews are not automatic here, and said so
+#      in its own notice: "Review skipped / Auto reviews are disabled … invoke the
+#      `@coderabbitai review` command". NOBODY EVER ASKED. ANSWER IT BY ASKING, at this
+#      head, once — see table 2e
+#
+# WHY 8 IS NOT 1, WHICH IS THE WHOLE OF THIS CODE. Exit 1 says "wait, it reopens with
+# nobody doing anything", and that is FALSE of a repository with auto reviews off: the
+# notice is posted on every push and no event will ever clear it. Measured 2026-09-15:
+# four PRs held for three consecutive ticks on exit 1, and one `@coderabbitai review`
+# comment was answered "Review triggered" in 4 seconds. Two refusals, opposite remedies,
+# and until now one code.
 #
 # MERGEABILITY IS THE FIRST CHECK, AND IT IS ITS OWN CODE (7). On 2026-09-13 three pull
 # requests were presented as merge rows while the host reported all three CONFLICTING /
@@ -385,6 +396,28 @@ not authenticated
 (repository|organi[sz]ation) is not (connected|authori[sz]ed|enabled)
 '
 
+# --- table 2e: which refusals NOBODY HAS ASKED OUT OF -------------------------
+# A SUB-CLASSIFIER of table 2b, exactly as 2d is of the tiers above it, and its whole
+# effect is exit 8 instead of exit 1. It cannot turn a review into a refusal and it cannot
+# clear anything.
+#
+# IT IS REACHED ONLY THROUGH TABLE 2b, AND THAT PLACEMENT IS THE CORRECTNESS QUESTION.
+# The vendor edits ONE summary comment in place, so this notice and a completed review's
+# walkthrough sit in the SAME body — measured 2026-09-15: #215 carries the skip marker and
+# 2 review objects, #213 the marker and 1. Table 2b is outranked by the review marker
+# (table 3), so a body carrying both is never a refusal here and can never answer 8.
+# Placing this beside the unconditional sentinel tier would tell the loop to ask again for
+# a review it already has — the same wasted round this code exists to stop.
+#
+# THE ROWS ARE THE VENDOR'S OWN NOTICE AND NOTHING ELSE. A notice not matched here keeps
+# exit 1: unknown stays the conservative answer, because 1 costs a tick and 8 costs a
+# request out of a one-review-per-window quota.
+SKIP_NOTICE='
+<!--[^>]*skip review by coderabbit\.ai[^>]*-->
+auto (incremental )?reviews? (are|is|have been) disabled
+to trigger a (single|first) review, invoke
+'
+
 # --- table 3: the reviewer's own MACHINE-EMITTED review marker ----------------
 # A row here outranks table 2b — never table 2a — and it is the evidence half of route C.
 #
@@ -566,7 +599,7 @@ all_patterns() {
   rows "$REFUSALS_SENTINEL"; rows "$NOT_YET"
   rows "$REFUSALS";          rows "$REVIEW_SENTINEL"
   rows "$REFUSALS_TERMINAL"; rows "$INVOCATION_ACK"
-  rows "$INCREMENTAL_NOTE"
+  rows "$INCREMENTAL_NOTE";  rows "$SKIP_NOTICE"
 }
 
 # Compile every row before anything is classified with it. A table that will not compile
@@ -1419,7 +1452,8 @@ n=0; considered=0; refusal_body=""; refusal_from=""; refusal_kind=""
 terminal_body=""; terminal_from=""
 stale_from=""; stale_at=""; unproven_from=""
 refusal_at_head=""; empty_from=""; empty_state=""; held_from=""; held_state=""
-cleared_msg=""; ack_from=""; incremental_from=""; marker_outranked=""
+cleared_msg=""; ack_from=""; ack_at_head=""; incremental_from=""; marker_outranked=""
+skip_from=""; other_refusal=""
 self_reviews=0; self_at_head=0
 while IFS=$'\t' read -r kind login state commit; do
   n=$((n + 1))
@@ -1490,6 +1524,7 @@ while IFS=$'\t' read -r kind login state commit; do
     elif [ -n "$(hits "$REFUSALS" "$TMPD/stripped")" ] \
       && [ -z "$(hits "$REVIEW_SENTINEL" "$TMPD/strict")" ]; then
       refusal=yes; kind_of_refusal=declined
+      [ -n "$(hits "$SKIP_NOTICE" "$TMPD/stripped")" ] && kind_of_refusal=skipped
     fi
   fi
   fatal_grep
@@ -1500,6 +1535,15 @@ while IFS=$'\t' read -r kind login state commit; do
     # same reason. Nothing clears on this answer — it is consulted below only to stop a
     # CONTENTLESS review object from outranking a refusal published at the same commit.
     refusal_concerns_head "$TMPD/stripped" && refusal_at_head=yes
+    # A SKIP NOTICE ONLY ANSWERS 8 WHERE IT IS THE WHOLE STORY. Any other refusal on the
+    # PR means somebody DID ask and the reviewer answered — a rate limit is the ordinary
+    # answer to the very request exit 8 asks for — so it demotes the PR back to exit 1,
+    # whatever order the host streamed the two artifacts in.
+    if [ "$kind_of_refusal" = skipped ]; then
+      [ -n "$skip_from" ] || { skip_from="$login"; cp "$TMPD/stripped" "$TMPD/skip"; }
+    else
+      other_refusal=yes
+    fi
     [ -n "$refusal_body" ] || { refusal_body="$TMPD/refusal"; refusal_from="$login"
                                 refusal_kind="$kind_of_refusal"
                                 cp "$TMPD/stripped" "$TMPD/refusal"; }
@@ -1529,6 +1573,9 @@ while IFS=$'\t' read -r kind login state commit; do
   # nor the refusal tiers above, and clears nothing at any head (table 3b).
   if [ "$kind" != "review" ] && [ -n "$(hits "$INVOCATION_ACK" "$TMPD/stripped")" ]; then
     [ -n "$ack_from" ] || ack_from="$login"
+    # An ack naming THIS head is the record that the exit-8 ask has already been made, and
+    # it is the only thing that bounds that ask to once per head (see the exit-8 block).
+    names_head "$TMPD/strict" && ack_at_head=yes
     [ -n "$(hits "$INCREMENTAL_NOTE" "$TMPD/stripped")" ] && incremental_from="$login"
     fatal_grep
     continue
@@ -1851,6 +1898,33 @@ if [ -n "$terminal_from" ]; then
   echo "        fallback reviewer instead. Either way it is a decision, and it is not this" >&2
   echo "        script's and not the caller's." >&2
   exit 5
+fi
+
+# NOBODY EVER ASKED. Reported before the transient refusal below and separately from it,
+# because the remedy inverts: exit 1 is answered by waiting and this one never reopens on
+# its own. An ack at this head means the ask has already been made, which is a wait after
+# all — so it goes back to exit 1 and the PR is asked once per head, not once per tick.
+if [ -n "$skip_from" ] && [ -z "$other_refusal" ]; then
+  refusal_hits "$TMPD/skip" | tr -d '\000-\010\013-\037' \
+                            | sed -e 's/^[[:space:]]*\(>[[:space:]]*\)*//' \
+                                  -e 's/^[*#[:space:]]*//' -e 's/[*[:space:]]*$//' \
+                                  -e 's/^/          | /' > "$TMPD/skip-quote"
+  if [ -n "$ack_at_head" ]; then
+    echo "refuse: $skip_from skipped PR $pr, and $ack_from has ALREADY been asked for a review" >&2
+    echo "        at head $head_sha — its acknowledgement names this commit. Wait for that" >&2
+    echo "        review; do not ask again at this head. It said:" >&2
+    cat "$TMPD/skip-quote" >&2
+    exit 1
+  fi
+  echo "refuse: $skip_from SKIPPED PR $pr — reviews are not automatic on this repository, so" >&2
+  echo "        NOBODY HAS ASKED for one at head $head_sha and nothing will ever ask. This" >&2
+  echo "        does NOT reopen by itself, which is the whole difference from exit 1. It said:" >&2
+  cat "$TMPD/skip-quote" >&2
+  echo "        Request one review, at THIS head, by commenting \`@coderabbitai review\` on" >&2
+  echo "        the PR. A request costs no review round. Where several PRs answer 8 and the" >&2
+  echo "        quota is one review per window, spend it on the PR whose criteria table" >&2
+  echo "        carries no \`✗\` — only that one can become merge-eligible." >&2
+  exit 8
 fi
 
 if [ -n "$refusal_body" ]; then

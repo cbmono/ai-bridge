@@ -130,7 +130,15 @@ not be able to talk the loop into a merge. Confirm all four and **abort if any f
    a **terminal** one — an account out of credits, unpaid or unauthenticated, which no
    waiting reopens (exit 5), on no reviewer
    signal (exit 3), on an artifact that evidences no review or is not of the current head
-   (exit 4), and on an unreadable reviewer state (exit 2). Exit 0 is only the *first* half of this precondition: the
+   (exit 4), and on an unreadable reviewer state (exit 2).
+   **Exit 8 is the one refusal nothing reopens: NOBODY EVER ASKED.** Where auto reviews are
+   disabled — this template's own repo — the reviewer posts *"Review skipped … invoke the
+   `@coderabbitai review` command"* on every push, and reading that as exit 1 makes the loop
+   wait for an event that has no cause (measured 2026-09-15: four PRs, three ticks, one
+   comment would have got a review in 4 seconds). The remedy is a **request at the current
+   head**, never a merge and never a `qa-reviewer` spend; a request costs no review round.
+   Where several PRs answer 8 and the quota is one review per window, spend it on the PR
+   whose criteria table carries no `✗` — only that one can become merge-eligible. Exit 0 is only the *first* half of this precondition: the
    clauses above still decide whether that review **cleared**.
    **It asks the merge question FIRST, and that one an auto-merge cannot argue with:**
    a PR the host reports `mergeable: CONFLICTING` / `mergeStateStatus: DIRTY` is **exit 7**
