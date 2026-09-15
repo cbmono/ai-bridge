@@ -321,13 +321,16 @@ EOF
 # The repo a PR would be opened against. `target_repo:` INHERITS the project default when
 # the task omits it (SCHEMA.md), so the task document alone cannot tell a bundle-only task
 # from a repo-backed one — reading it without project.md would exempt the second.
-resolved_repo() {
-  local v proj
+resolved_repo() { # prints the repo, `?` when the project doc exists but cannot be read
+  local v proj pfm
   v="$(field target_repo)"
   [ -n "$v" ] && { printf '%s\n' "$v"; return 0; }
   proj="$(dirname -- "$TASK")/../project.md"
   [ -f "$proj" ] || return 0
-  field target_repo "$(fm_block "$proj")"
+  # Unreadable frontmatter is unknown, never "no repo": the exemption below is a pass, and
+  # a malformed project document must not be able to grant one.
+  pfm="$(fm_block "$proj")" || { printf '?\n'; return 0; }
+  field target_repo "$pfm"
 }
 
 status="$(field status)"

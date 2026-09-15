@@ -253,6 +253,11 @@ mkdir -p "$TMP/inherits/tasks"
 cp "$TMP/bundle/tasks/bundle-only.md" "$TMP/inherits/tasks/task-001.md"
 printf -- '---\ntype: Project\ntarget_repo: acme/widgets\n---\n' > "$TMP/inherits/project.md"
 ok "…and one inheriting its project's repo -> exit 4" "$(rc_of "$TMP/inherits/tasks/task-001.md")" 4
+# A project doc nobody can parse is UNKNOWN, and unknown must not buy the exemption.
+mkdir -p "$TMP/unreadable/tasks"
+cp "$TMP/bundle/tasks/bundle-only.md" "$TMP/unreadable/tasks/task-001.md"
+printf -- 'not frontmatter at all\n' > "$TMP/unreadable/project.md"
+ok "…and one whose project.md cannot be read -> exit 4" "$(rc_of "$TMP/unreadable/tasks/task-001.md")" 4
 
 echo
 echo "== an honest stop is not a failure, and a research task is not a question this can answer =="
@@ -424,7 +429,7 @@ ok "…and step 4 says a non-zero verdict is not a re-dispatch" \
 # --- the assertion total ---------------------------------------------------------------
 # A block that is skipped rather than failed still turns this file red. Move this number
 # in the same commit that adds or removes an assertion.
-EXPECTED_ASSERTIONS=80
+EXPECTED_ASSERTIONS=81
 TOTAL=$((pass + fail))
 ok "exactly $EXPECTED_ASSERTIONS assertions ran (a silently skipped block shows up here)" \
    "$TOTAL" "$EXPECTED_ASSERTIONS"
