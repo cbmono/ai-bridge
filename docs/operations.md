@@ -1002,7 +1002,7 @@ owner asked three times in one session, for three different instances.
  █▀█
 ▄███▄▄▄▄▄▄
 ~▀▀▀▀▀▀▀~~
-AI-Bridge v2.3.0 · _ai-bridge-private · org: cbmono
+AI-Bridge v2.4.0 · _ai-bridge-private · org: cbmono
 ───────────────────────────────────────────────────
 
 SETTING               VALUE                               FROM
