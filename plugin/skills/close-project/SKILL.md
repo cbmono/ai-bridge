@@ -1,9 +1,9 @@
 ---
 name: close-project
 disable-model-invocation: true
-description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. Human-gated; run once a project's tasks are all done/cancelled.
-argument-hint: <project-slug>  [--dry-run] [--force]
-allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent
+description: Close a completed project — final KB consolidation, log the closeout, roll up status, then remove the project folder (git history + KB are the record; no archive) — or, with `retain: true`, freeze and keep it. With no slug it opens a multi-select picker of the projects and asks whether to run `--force` or `--dry-run`. Human-gated; run once a project's tasks are all done/cancelled.
+argument-hint: [<project-slug>]  [--dry-run] [--force]  — no slug opens the picker
+allowed-tools: Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-kb-index.sh:*), Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/papercuts.sh:*), Bash(grep:*), Bash(git rm:*), Bash(git add:*), Bash(git log:*), Bash(ls:*), Read, Write, Edit, Glob, Agent, AskUserQuestion
 ---
 
 **Close a completed Project.** This is the human-triggered form of the closeout the
@@ -42,6 +42,9 @@ named `--dry-run`. **Refuse the rest rather than guessing**: two or more non-fla
 (say which you saw and ask which is the slug), and any `--` token that is neither
 `--dry-run` nor `--force` (name it and stop).
 
+**No slug at all is the PICKER, not an error** — `/ai-bridge:close-project` with nothing
+(or with flags only) runs "The no-slug path" below. A slug on the line skips it entirely.
+
 Pass both flags on to the agent verbatim; neither changes what you may look at.
 
 ## Preconditions
@@ -52,8 +55,8 @@ are on it.
 
 1. **A slug.** Take the one non-flag token of `$ARGUMENTS` (→ "Inputs" — the flags come
    off first, so no `--flag` ever reaches the folder probe as part of a path). If none
-   was given, `ls projects/` for the **directory names**, offer them, and ask which to
-   close — never open one to judge whether it is closeable. That judgement is the agent's
+   was given, `ls projects/` for the **directory names** and run "The no-slug path" below —
+   never open one to judge whether it is closeable. That judgement is the agent's
    step 1, which refuses a project whose tasks are still live.
 2. **The folder exists.** Confirm `projects/<slug>/` is there; if it is not, stop and
    report. Nothing inside it is read here.
@@ -80,6 +83,15 @@ genuinely not the closeout's, hand it to a **background subagent** and let that 
 pay. Never here, and never before the agent or instead of it: not the whole thing, not a
 summary, not "just to orient".
 
+**The picker lives inside this, and here is how.** `ls projects/` is item 1 — directory
+names, nothing more. Every word of state the picker shows a human (how many of a
+project's tasks are terminal, how many are still live, whether the closeout keeps the
+folder rather than removing it) is read by a **background subagent** and comes back as one
+short report, which the picker is rendered from. So the rule was honoured rather than
+bent: the launcher still performs exactly the two operations above, and nothing in this
+thread opened a project's own documents. That is the disposal the paragraph above already
+names, used rather than widened.
+
 **A further entry is the regression, not an exception** — the list closes over a
 **category** and not over a count of nouns. **No other reader may be added by analogy.**
 An enumeration of forbidden sources is the shape that already failed: it said it was
@@ -104,11 +116,61 @@ working in for the rest of the day — while the agent's is disposable.
 alone returned **29 `REMOVABLE` lines** the main session had no use for. That is what
 moves into a context that is thrown away.
 
+## The no-slug path — the picker, and where its state comes from
+
+**Only when `$ARGUMENTS` carries no non-flag token.** `alpha`, `alpha --force` and
+`alpha --dry-run` skip every step here and go straight to precondition 2 — the picker adds
+nothing to the explicit-slug path and never runs on it.
+
+1. **The names.** `ls projects/` — allowlist item 1, directory names and nothing else.
+2. **The state, from a subagent.** Spawn **one background subagent**, on the model
+   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh explorer` prints, and ask it for **one
+   short line per project**: the slug, the project's own `status:`, how many of its tasks
+   are terminal and how many are not, and whether it carries `retain: true`. It reads the
+   documents; you read its report, and nothing else about any project enters this thread.
+3. **The picker.** One `AskUserQuestion` question, **`multiSelect: true`**, one option per
+   project: the **slug** as the label and the subagent's line as the description
+   (`4/4 tasks terminal`, `2 still live — needs --force`, `retain: true — the folder is
+   kept`). **Offer every project the report named.** Filtering the not-yet-closeable ones
+   out is a judgement, and the judgement is the closeout agent's step 1 — the picker shows
+   the state and lets the human decide against it.
+4. **The flags — asked once, applied to every selected project.** A second
+   `AskUserQuestion`, single-select, defaulting to a normal run:
+   - **normal run** — close them as they are; a project with live tasks will be refused at
+     the agent's step 1.
+   - **`--dry-run`** — report what closeout *would* do; change nothing.
+   - **`--force`** — proceed with tasks still open, **and every non-terminal task is set to
+     `cancelled`**. That consequence goes in the option's own description, not after the
+     answer: it is destructive, and the human picks it having read it.
+
+   One answer covers the whole selection. Say so where it is asked and again in step 5, so
+   nobody picks `--force` for the one project that needs it and gets it on the other two.
+5. **Confirm before anything is dispatched.** Repeat the selection back as one line — the
+   projects in the order they will run, the flag, and what `--force` will do if it was
+   chosen — and get a yes. Then precondition 2 (the folder probe) for each slug, in that
+   order.
+
+### Several projects close ONE AT A TIME
+
+**Never fan closeouts out in parallel.** Each one writes the root log, the KB, task
+documents and a project folder in **one working tree**, and each one commits — two at once
+collide exactly as a closeout and a tick do (below), and race each other's index on top.
+So: **one fresh `ai-bridge:project-manager` per project, the next dispatched only after
+the previous has reported.**
+
+**If one stops, the run stops.** A failure, a refusal at step 1, or either escalation ends
+the invocation there: report which projects closed, which one stopped and why, and which
+were **never started**, then let the human re-invoke for the rest. Never continue to the
+next project — an escalation is unanswered until a human answers it, and the projects
+behind it would be closed on an assumption nobody made.
+
 ## Dispatch the closeout — one background agent for steps 1–7
 
 Spawn **one fresh `ai-bridge:project-manager`**, in the background, briefed with "The
 closeout agent's brief" below verbatim, the slug, and any `--dry-run`/`--force` flag.
-Namespace it — a bare agent name does not resolve. Resolve its model with
+Namespace it — a bare agent name does not resolve. **Several projects from the picker are
+several dispatches, in series** (→ "Several projects close ONE AT A TIME"), never one agent
+carrying a list. Resolve its model with
 `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh project-manager`. **Never wake a completed
 closeout agent with a message** — dispatch a fresh one.
 
@@ -344,6 +406,8 @@ question.
   one parse. What remains is that a build project's record lives in the product repo's
   history, not here. Recover with
   `git revert <sha>` or `git show <sha>:projects/<slug>/...` if ever needed.
+- **The picker is foreground-only** — a background session cannot prompt, so a no-slug
+  call there has nothing to ask and stops. With a slug the command runs as it always did.
 - This repo commits straight to `main` (see `CLAUDE.md`) — the human gate here is
   *deciding to close*, not a PR.
 - No customer PII in the log or any KB doc written during closeout.
