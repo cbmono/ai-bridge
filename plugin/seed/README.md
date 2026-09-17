@@ -126,6 +126,9 @@ When a project's tasks are all `done`/`cancelled`, the PM flags it in the awaiti
 ```
 /ai-bridge:close-project <slug>
 ```
+Or run it with **no slug**: it offers a picker of the projects with their task counts,
+takes more than one, asks whether to `--force` or `--dry-run`, and closes them one after
+another.
 Closeout does a final `knowledge/` consolidation (durable learnings live on in the
 KB), records a **Project closed** entry in `log.md` (with the merged PRs and the
 removing commit), rolls the project to `status: done`, and then **removes the

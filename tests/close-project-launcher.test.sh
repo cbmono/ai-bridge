@@ -27,7 +27,9 @@
 #
 # WHAT IT DOES NOT ASSERT: the frontmatter. `allowed-tools` is documentation, not
 # enforcement (measured twice, 2026-08-23 and 2026-09-08), and the closeout's own grants
-# are unchanged by the split — so what is pinned is that the set did not GROW.
+# are unchanged by the split — so what is pinned is that the set grows only on purpose.
+# It has grown exactly once: `AskUserQuestion`, for the no-slug picker. The equality below
+# is the whole mechanism — a grant nobody wrote into it is still a failure.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
@@ -93,13 +95,57 @@ printf -- '## Inputs\n`$ARGUMENTS` = the project slug, plus flags.\n\n## Precond
 ok "…while the pre-change wording does not" \
   "$(has "$TMP/preparse.md" 'Take the one non-flag token of')" no
 
-# --- allowed-tools did not GROW ---------------------------------------------------
+# --- the no-slug path is an INTERACTIVE PICKER ------------------------------------
+# What stood here was a prose list: "offer them, and ask which to close" — one project,
+# and `--force` was something you had to remember to type. The picker is a real selection,
+# more than one project at a time, and the flags asked rather than recalled. Every claim
+# below is text in the launcher half, so none of it can drift into the brief.
+ok "no slug routes to the picker"          "$(in_launcher 'The no-slug path')" yes
+ok "…said in Inputs, where a reader looks" "$(in_launcher 'No slug at all is the PICKER')" yes
+ok "…and the prose list it replaced is gone" \
+  "$(in_launcher 'offer them, and ask which to')" no
+ok "the picker is AskUserQuestion"         "$(in_launcher '`AskUserQuestion` question')" yes
+ok "…multi-select, so several close in one go" "$(in_launcher '`multiSelect: true`')" yes
+ok "…slug as the label, state as the description" \
+  "$(in_launcher 'the **slug** as the label')" yes
+ok "…offering every project, filtering none" \
+  "$(in_launcher 'Offer every project the report named')" yes
+# THE ALLOWLIST TENSION, AND ITS RESOLUTION. Which projects are closeable is state, and
+# state is not the launcher's — so the picker's descriptions come from a subagent whose
+# context is discarded, which is the disposal the allowlist already names. Asserted here
+# AND as a count of two operations below: a picker that reads the documents itself would
+# pass this line and fail that one.
+ok "the picker's state comes from a subagent" "$(in_launcher '**one background subagent**')" yes
+ok "…on the explorer model, resolved not remembered" \
+  "$(in_launcher 'scripts/resolve-model.sh explorer')" yes
+ok "the flags are asked, once, for the whole selection" \
+  "$(in_launcher 'asked once, applied to every selected project')" yes
+ok "…and --force names its consequence in the option itself" \
+  "$(in_launcher 'every non-terminal task is set to')" yes
+ok "…before the human picks it, not after" \
+  "$(in_launcher 'it is destructive, and the human picks it')" yes
+ok "…and the selection is confirmed before any dispatch" \
+  "$(in_launcher 'Confirm before anything is dispatched')" yes
+# SEQUENTIAL, and this is the correctness half: two closeouts in one working tree write
+# the same documents and each commits, which is the collision the tick warning names.
+ok "several closeouts run one at a time"   "$(in_launcher 'Several projects close ONE AT A TIME')" yes
+ok "…never fanned out"                     "$(in_launcher 'Never fan closeouts out in parallel')" yes
+ok "…one fresh agent per project, after the previous reports" \
+  "$(in_launcher 'per project, the next dispatched only after')" yes
+ok "…and a stop ends the run rather than continuing" \
+  "$(in_launcher '**If one stops, the run stops.**')" yes
+ok "…handing the rest back to the human"   "$(in_launcher 'let the human re-invoke for the rest')" yes
+# THE EXPLICIT-SLUG PATH IS UNCHANGED: the picker is the no-slug branch and nothing else.
+ok "a slug on the line skips the picker"   "$(in_launcher 'skip every step here and go straight to precondition 2')" yes
+
+# --- allowed-tools did not GROW WITHOUT BEING DECLARED ----------------------------
 grants() { # <file> -> one grant per line
   awk '/^---$/{d++; next} d==1 && /^allowed-tools:/{sub(/^allowed-tools:[[:space:]]*/,""); print}' "$1" \
     | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$'
 }
-# The closeout's own grants, verbatim as they stood before the split. The criterion is
-# "no NEW grant ships", so this is an equality and a widening is what fails it.
+# The closeout's own grants: as they stood before the split, plus the one the picker
+# needs. The criterion is "no UNDECLARED grant ships", so this is an equality and any
+# widening — including a second interactive tool — is what fails it.
 EXPECTED_GRANTS='Bash(date:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh:*)
 Bash(bash ${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh:*)
@@ -117,10 +163,13 @@ Read
 Write
 Edit
 Glob
-Agent'
-ok "allowed-tools is unchanged by the split" "$(grants "$SKILL")" "$EXPECTED_GRANTS"
-ok "…and Agent was already among them, so no new grant ships" \
+Agent
+AskUserQuestion'
+ok "allowed-tools is the declared set, and nothing else" "$(grants "$SKILL")" "$EXPECTED_GRANTS"
+ok "…Agent was already among them, so the split shipped no new grant" \
   "$(grants "$SKILL" | grep -cx 'Agent' | tr -d ' ')" 1
+ok "…and AskUserQuestion is there, because the picker is a prompt" \
+  "$(grants "$SKILL" | grep -cx 'AskUserQuestion' | tr -d ' ')" 1
 # NON-VACUITY: a widened list must fail the equality above.
 printf -- '---\nallowed-tools: Bash(ls:*), Agent, Bash(curl:*)\n---\nbody\n' > "$TMP/wide.md"
 ok "…and a widened list is NOT equal to it" \
@@ -151,6 +200,11 @@ ok "…and that it is a category"        "$(in_section 'it is a **category**')" 
 ok "…naming the agent as the disposal" "$(in_section 'dispatch the agent and let it read')" yes
 ok "…and the subagent as the other"    "$(in_section '**background subagent**')" yes
 ok "…closing the list against analogy" "$(in_section 'No other reader may be added by analogy')" yes
+# The picker is reconciled IN the section, in the allowlist's own terms — so a later
+# reader sees a rule honoured rather than a rule bent. The count above is what holds it:
+# this line plus `count_allowed_ops` = 2 is the pair.
+ok "…and reconciling the picker without a third entry" \
+  "$(in_section 'The picker lives inside this')" yes
 ok "…keeping the cost argument"        "$(in_section "main session's context")" yes
 ok "…and saying the frontmatter is not the enforcement" \
   "$(in_section 'documentation, not enforcement')" yes

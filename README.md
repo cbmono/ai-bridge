@@ -251,7 +251,7 @@ Run these inside an instance.
 | `/ai-bridge:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
 | `/ai-bridge:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/ai-bridge:fanout <task>` | (plugin) parallel work across several repos |
-| `/ai-bridge:close-project <slug>` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. [→](docs/schema.md#closing-a-project) |
+| `/ai-bridge:close-project [<slug>]` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. No slug opens a picker of the projects, multi-select, and asks about `--force`. [→](docs/schema.md#closing-a-project) |
 | `/ai-bridge:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
 | `/ai-bridge:brief-me [project]` | (plugin) a since-you-last-looked digest, or a meeting-ready brief for one project. Read-only |
 | `/ai-bridge:capture <notes>` | (plugin) turn a decision or meeting notes into drafted projects and tasks, with provenance — never promoted |
