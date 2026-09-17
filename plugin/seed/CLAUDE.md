@@ -40,7 +40,7 @@ AB="$(ls -d ~/.claude/plugins/cache/*/ai-bridge/*/scripts | sort -V | tail -1)"
 |---|---|
 | See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/ai-bridge:dispatch`** — one safe, idempotent tick. Add `10m` to loop on an interval; say "DRY RUN" to preview without spawning agents. |
 | Start a new project | **`/ai-bridge:new-project <description>`** — a build project (code → PRs), or add `kind=research` for docs/decks/assets (no repo). |
-| Close a finished project | **`/ai-bridge:close-project [<slug>]`** — when its tasks are all done/cancelled. Omit the slug and it offers a picker (several at a time, closed one after another) and asks about `--force`. Removes the folder (git history + KB are the record; no archive) unless `project.md` says `retain: true`, which keeps it frozen and pruned. The PM flags candidates; you run it. |
+| Close a finished project | **`/ai-bridge:close-project <slug>`** — when its tasks are all done/cancelled. Removes the folder (git history + KB are the record; no archive) unless `project.md` says `retain: true`, which keeps it frozen and pruned. The PM flags candidates; you run it. |
 | Request grouped PR reviews | **`/ai-bridge:pr-review-request <filter>`** |
 | Fan a batch of independent ad-hoc asks out to parallel background agents | **`/ai-bridge:fanout`** — or just give the assistant ≥2 independent asks at once (see _Ad-hoc requests_) |
 
