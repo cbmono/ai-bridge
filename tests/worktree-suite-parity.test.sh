@@ -103,6 +103,13 @@ check_harness_parity() { # <test-file-basename, without .test.sh>
   fi
   p="$(printf '%s' "$summary" | sed -E 's/pass=([0-9]+).*/\1/')"
   f="$(printf '%s' "$summary" | sed -E 's/.*fail=([0-9]+)/\1/')"
+  if [ "$rc" -ne 0 ] || [ "$f" -ne 0 ]; then
+    # The inner harness's own FAIL lines. Without them a red run names the harness and
+    # never the assertion, which cost a full diagnosis round on 2026-09-15; the fallback
+    # covers a harness whose failures are not marked `FAIL`.
+    echo "worktree-suite-parity.test: $name.test.sh rc=$rc $summary — its own failures:" >&2
+    printf '%s\n' "$out" | grep -E '^[[:space:]]*FAIL([[:space:]]|$)' >&2 || printf '%s\n' "$out" >&2
+  fi
   ok "$name.test.sh exits 0 from a linked worktree" "$rc" 0
   ok "…and reports fail=0"                          "$f" 0
   # A vacuous pass (0 assertions run) would satisfy "fail=0" too — reject it explicitly,
