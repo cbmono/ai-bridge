@@ -374,5 +374,59 @@ printf 'staged\n' > b.txt; git add b.txt >/dev/null
 rc_of "a staged deletion counts as staged" 0 software-engineer -- a.txt b.txt
 
 echo
+echo "== a knowledge/ commit is not refused over the index the script injects =="
+
+# commit-as.sh rebuilds knowledge/index.md and appends it to its own path list. That
+# path used to be judged by the guard above, so an edit leaving the derived index
+# unchanged — the normal case — was refused naming a path the caller never passed.
+
+BUILD_KB="$(dirname "$SCRIPT")/build-kb-index.sh"
+
+finding() { # <path> <lesson> <body>
+  printf -- '---\ntype: Finding\nstatus: current\ntitle: Fixture finding\nlesson: %s\n---\n# Fixture finding\n\n%s\n' \
+    "$2" "$3" > "$1"
+}
+
+setup_kb() {
+  setup
+  mkdir -p knowledge/findings
+  finding knowledge/findings/f1.md "the lesson" "original body"
+  bash "$BUILD_KB" >/dev/null 2>&1
+  git add knowledge >/dev/null; git commit -qm "seed knowledge" >/dev/null
+}
+
+# 1. The reported reproduction: a body-only edit derives no new index row.
+setup_kb
+finding knowledge/findings/f1.md "the lesson" "body rewritten, no derived field touched"
+rc_of "body-only knowledge edit commits" 0 human --stage -- knowledge/findings/f1.md
+eq "…and the commit carries exactly the named file" "knowledge/findings/f1.md" \
+   "$(git show --name-only --format= HEAD | tr '\n' ' ' | sed 's/ *$//')"
+
+# 2. The guard is kept for what the CALLER named, in the same fixture shape.
+setup_kb
+finding knowledge/findings/f1.md "the lesson" "edited but never staged"
+rc_of "unstaged knowledge path is still exit 4" 4 human -- knowledge/findings/f1.md
+said     "…naming the caller's own path" "knowledge/findings/f1.md"
+not_said "…and NOT the injected index"   "knowledge/index.md"
+
+# 3. The injected index still lands when the rebuild does move it.
+setup_kb
+finding knowledge/findings/f1.md "a new lesson the index derives" "body"
+rc_of "index moves -> it is committed too" 0 human --stage -- knowledge/findings/f1.md
+eq "…and knowledge/index.md is in the commit" "knowledge/index.md" \
+   "$(git show --name-only --format= HEAD | grep '^knowledge/index\.md$' || true)"
+
+# 4. Outside knowledge/ the rebuild branch never fires: a deliberately stale index
+#    stays stale, and nothing of it reaches the commit.
+setup_kb
+printf 'stale, and nothing here may regenerate it\n' > knowledge/index.md
+printf 'mine\n' > mine.txt
+rc_of "a non-knowledge commit leaves the index alone" 0 software-engineer --stage -- mine.txt
+eq "…committing only the named path" "mine.txt" \
+   "$(git show --name-only --format= HEAD | tr '\n' ' ' | sed 's/ *$//')"
+eq "…and the stale index was never rebuilt" "stale, and nothing here may regenerate it" \
+   "$(cat knowledge/index.md)"
+
+echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]

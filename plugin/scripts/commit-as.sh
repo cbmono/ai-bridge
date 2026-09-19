@@ -269,6 +269,11 @@ EOF
   exit 4
 fi
 
+# The nothing-staged guard below judges the CALLER'S paths, so snapshot them before the
+# knowledge/ route appends one of its own: an index rebuild that changes nothing must not
+# refuse a commit over a path the caller never passed.
+named_paths=(${paths[@]+"${paths[@]}"})
+
 # The knowledge/ route (SCHEMA.md, "A mounted knowledge base"). Mounted, those paths
 # belong to another repository and this script would commit NOTHING for them — silently,
 # because the selected index is built from THIS repo's HEAD. So refuse by name. Not
@@ -367,7 +372,7 @@ if [ "${#paths[@]}" -gt 0 ]; then
   done
   unstaged=()
   if [ "$allow_empty" -eq 0 ] && [ "$has_head" -eq 1 ]; then
-    for p in "${paths[@]}"; do
+    for p in ${named_paths[@]+"${named_paths[@]}"}; do
       GIT_INDEX_FILE="$selected_index" git diff --cached --quiet HEAD -- "$p" \
         && unstaged+=("$p")
     done
