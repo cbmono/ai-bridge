@@ -113,7 +113,7 @@ tier() { # <tier name> <water> <hull> <bridge> <env…>
 # they build: the theme exactly one, the hook none at all.
 assert "the reset after each run is the theme's one" \
   "$(eq "$(grep -cF -- '${esc}[0m' "$THEME")" 1)"
-assert "…and the hook builds no escape of its own" \
+assert "…and the hook builds no SGR of its own — strip_sgr's ESC matcher aside" \
   "$(eq "$(grep -cF -- '${esc}[' "$HOOK")" 0)"
 # THE COLOUR COUNT IS STUBBED, NEVER THE HOST'S. `tput colors` answers 0 wherever the
 # terminfo entry cannot be loaded, so a TERM name alone asserts the 16-colour palette as 256.
