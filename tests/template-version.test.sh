@@ -181,15 +181,15 @@ echo "== 2. one source, MIRRORED not duplicated: a doc that shows the number agr
 # THE SCANNED FORM IS NAMED, NOT INFERRED. A blanket hunt for `\d+\.\d+\.\d+` in the docs
 # would also catch the HISTORY — `docs/conventions.md` records that there was no version
 # before 0.9.1, and that sentence must NOT move when the number does. So the scan is over
-# the one shape that is a DISPLAY of the current version: the banner header, `AI-Bridge
+# the one shape that is a DISPLAY of the current version: the banner header, `loopd
 # X.Y.Z`. A new display form means adding its shape here, and the non-vacuity assertion
 # below is what makes forgetting that visible rather than silent.
 # `/dev/null` as a fixed argument to grep, not decoration: BSD xargs runs the utility even
 # on empty input, and a `grep` with no file operands reads STDIN — so an empty file list
 # would hang this harness rather than fail it.
 displays="$(cd "$TPL" && git ls-files '*.md' | grep -v '^tests/' \
-            | xargs grep -hoE 'AI-Bridge v?[0-9]+\.[0-9]+\.[0-9]+' /dev/null 2>/dev/null \
-            | sed 's/^AI-Bridge v\{0,1\}//' | sort -u)"
+            | xargs grep -hoE 'loopd v?[0-9]+\.[0-9]+\.[0-9]+' /dev/null 2>/dev/null \
+            | sed 's/^loopd v\{0,1\}//' | sort -u)"
 n_displays="$(printf '%s' "$displays" | grep -c . || true)"
 ok "at least one doc displays the version (the scan is not vacuous)" \
   "$([ "$n_displays" -ge 1 ] && echo yes || echo no)" yes
@@ -198,7 +198,7 @@ mismatched="$(printf '%s\n' "$displays" | grep -v "^${ver}$" | grep -c . || true
 ok "every displayed version equals VERSION" "$mismatched" 0
 # The extractor must be able to fail: a planted disagreement has to come out non-zero, or
 # the assertion above would pass on a scan that matches nothing.
-planted="$(printf 'AI-Bridge 0.0.1 · x\n' | grep -oE 'AI-Bridge v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^AI-Bridge v\{0,1\}//' | grep -vc "^${ver}$")"
+planted="$(printf 'loopd 0.0.1 · x\n' | grep -oE 'loopd v?[0-9]+\.[0-9]+\.[0-9]+' | sed 's/^loopd v\{0,1\}//' | grep -vc "^${ver}$")"
 ok "…and that comparison catches a planted mismatch" "$planted" 1
 
 # A DISPLAY IS A SAMPLE OF REAL OUTPUT, so it has to stay one. The banner underlines its
@@ -216,7 +216,7 @@ ok "…and that comparison catches a planted mismatch" "$planted" 1
 rule_drift() { # reads file names on stdin, prints how many headers are mis-underlined
   python3 -c '
 import io, re, sys
-hdr = re.compile(r"^AI-Bridge v?[0-9]+\.[0-9]+\.[0-9]+ ")
+hdr = re.compile(r"^loopd v?[0-9]+\.[0-9]+\.[0-9]+ ")
 drifted = 0
 for name in sys.stdin.read().split():
     lines = io.open(name, encoding="utf-8").read().splitlines()
@@ -230,7 +230,7 @@ print(drifted)
 widths="$(cd "$TPL" && git ls-files '*.md' | grep -v '^tests/' | rule_drift)"
 ok "every sampled banner header is underlined to its own width" "$widths" 0
 mkdir -p "$TMP/planted"
-{ printf 'AI-Bridge %s \xc2\xb7 x\n' "$ver"; printf '\xe2\x94\x80\xe2\x94\x80\n'; } > "$TMP/planted/sample.md"
+{ printf 'loopd %s \xc2\xb7 x\n' "$ver"; printf '\xe2\x94\x80\xe2\x94\x80\n'; } > "$TMP/planted/sample.md"
 ok "…and that scan flags a rule that is too short" \
   "$(printf '%s\n' "$TMP/planted/sample.md" | rule_drift 2>/dev/null)" 1
 
@@ -632,18 +632,18 @@ ok "…prints the drift line"                    "$(printf '%s\n' "$OUT" | grep 
 # rule" is found from the IDENTITY line: it, its rule, §2b's own blank separator, then the
 # line. The claim is unchanged; only the anchor is.
 HEAD_NO="$(printf '%s\n' "$OUT" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }')"
-HDR_NO="$(printf '%s\n' "$OUT" | awk '/^AI-Bridge/ { print NR; f = 1; exit } END { if (!f) print 0 }')"
+HDR_NO="$(printf '%s\n' "$OUT" | awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }')"
 ok "…the banner opens with exactly ONE blank line"  "$HEAD_NO" 2
 ok "…and the drift line is directly under the header rule (line $((HDR_NO + 3)))" \
   "$(printf '%s\n' "$OUT" | sed -n "$((HDR_NO + 3))p" | grep -qF 'UPDATE' && echo yes || echo no)" yes
 ok "…and the header still carries this template's own version" \
-  "$(printf '%s\n' "$OUT" | grep -qF 'AI-Bridge v0.9.1' && echo yes || echo no)" yes
+  "$(printf '%s\n' "$OUT" | grep -qF 'loopd v0.9.1' && echo yes || echo no)" yes
 
 wire "$equal"
 banner "$equal"
 ok "up to date: the banner says nothing about versions" \
   "$(printf '%s\n' "$OUT" | grep -c 'UPDATE' || true)" 0
-ok "…and the rest of the banner is intact"     "$(printf '%s\n' "$OUT" | grep -c 'AI-Bridge' )" 1
+ok "…and the rest of the banner is intact"     "$(printf '%s\n' "$OUT" | grep -c 'loopd' )" 1
 
 # An instance stamped before this script shipped has no file to run. Absence is silence —
 # the same contract every other optional section of the banner keeps.

@@ -86,7 +86,7 @@ head_no() { printf '%s\n' "$1" | awk '$0 != "" { print NR; f = 1; exit } END { i
 # THE LOGO SITS ABOVE THE HEADER (task-024), so "the identity line opens the banner" is now
 # "it is exactly three lines under the first non-empty one" — the same claim about section
 # ORDER, and §9's mutants prove it still goes red when anything else prints above it.
-hdr_no()  { printf '%s\n' "$1" | awk '/^AI-Bridge/ { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+hdr_no()  { printf '%s\n' "$1" | awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }'; }
 LOGO_ABOVE=3
 nth()     { printf '%s\n' "$1" | sed -n "$2p"; }
 
@@ -225,7 +225,7 @@ assert "…and its stdout is hook JSON, not plain text"  "$(parses "$OUT")"
 SM="$(field "$OUT" systemMessage)"
 assert "systemMessage — the USER-VISIBLE field — is present and non-empty" \
   "$([ -n "$SM" ] && echo 0 || echo 1)"
-assert "…and it carries the identity line"             "$(user_visible "$OUT" 'AI-Bridge')"
+assert "…and it carries the identity line"             "$(user_visible "$OUT" 'loopd')"
 # THE LINK THE HUMAN DID NOT GET. The measured failure lost the board link specifically, so
 # it is asserted on the human's channel by name rather than left to the comparison below.
 assert "…and the board path, the line the human never saw" \
@@ -315,11 +315,11 @@ echo "== 2. the check DISCRIMINATES — it fails the two shapes a content grep p
 #
 # 2a. STDOUT ONLY — the shipped behaviour that was measured failing.
 STDOUT_ONLY="$TEXT"
-assert "a stdout-only banner contains the text…"       "$(has 'AI-Bridge' "$STDOUT_ONLY")"
+assert "a stdout-only banner contains the text…"       "$(has 'loopd' "$STDOUT_ONLY")"
 assert "…which is exactly why the OLD content grep passed it" \
   "$(has "$INST/.board-live/board.html" "$STDOUT_ONLY")"
 assert "…yet it does not parse as hook JSON"           "$(eq "$(parses "$STDOUT_ONLY")" 1)"
-assert "…and reaches no user-visible field"            "$(eq "$(user_visible "$STDOUT_ONLY" 'AI-Bridge')" 1)"
+assert "…and reaches no user-visible field"            "$(eq "$(user_visible "$STDOUT_ONLY" 'loopd')" 1)"
 
 # 2b. JSON, BUT ADDRESSED TO THE MODEL ALONE. The plausible half-fix: valid hook JSON,
 # `additionalContext` populated, no `systemMessage`. The human still sees nothing.
@@ -327,12 +327,12 @@ MODEL_ONLY="$(python3 - <<'PY'
 import json, sys
 sys.stdout.write(json.dumps({"hookSpecificOutput": {
     "hookEventName": "SessionStart",
-    "additionalContext": "AI-Bridge 9.9.9 · fixture\nBoard   file:///tmp/board.html\n"}}))
+    "additionalContext": "loopd 9.9.9 · fixture\nBoard   file:///tmp/board.html\n"}}))
 PY
 )"
 assert "a model-only envelope IS valid JSON"           "$(parses "$MODEL_ONLY")"
-assert "…and a grep for the banner still finds it"     "$(has 'AI-Bridge' "$MODEL_ONLY")"
-assert "…but the user-visible check rejects it"        "$(eq "$(user_visible "$MODEL_ONLY" 'AI-Bridge')" 1)"
+assert "…and a grep for the banner still finds it"     "$(has 'loopd' "$MODEL_ONLY")"
+assert "…but the user-visible check rejects it"        "$(eq "$(user_visible "$MODEL_ONLY" 'loopd')" 1)"
 
 # =======================================================================================
 echo "== 3. nothing a task document or a config can contain may break the envelope =="
@@ -384,7 +384,7 @@ hook_run
 assert "no AWAITING.md, no SNAPSHOT.json, no board.html: exit 0" "$(eq "$RC" 0)"
 assert "…still valid JSON"                             "$(parses "$OUT")"
 assert "…still nothing on stderr"                      "$(eq "$ERR" '')"
-assert "…and the identity line still reaches the human" "$(user_visible "$OUT" 'AI-Bridge')"
+assert "…and the identity line still reaches the human" "$(user_visible "$OUT" 'loopd')"
 assert "…while the sections with nothing to say stay silent" \
   "$(hasnt '🔔' "$(field "$OUT" systemMessage)")"
 assert "…on the model's channel as well" \
@@ -509,10 +509,10 @@ if [ -f "$AB" ]; then
   # for them. The emphasis claims below are about the tables, so they run on it too.
   MD_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md --full 2>/dev/null)"
   TXT_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --full 2>/dev/null)"
-  assert "the /ai-bridge bare form prints a banner" "$(has 'AI-Bridge' "$AB_OUT")"
+  assert "the /ai-bridge bare form prints a banner" "$(has 'loopd' "$AB_OUT")"
   assert "…byte for byte the RELAYED rendering this hook prints" "$(eq "$AB_OUT" "$AB_MD")"
   assert "…and carries no banner text of its own" \
-    "$(grep -qF 'AI-Bridge' "$AB" && echo 1 || echo 0)"
+    "$(grep -qF 'loopd' "$AB" && echo 1 || echo 0)"
   # AND `NO_COLOR` REACHES IT THERE TOO. On a channel that draws `**bold**` as bold, the
   # emphasis IS the colour, so the reader's opt-out has to switch it off — otherwise the
   # opt-out holds on two channels out of three.
@@ -539,7 +539,7 @@ if [ -f "$AB" ]; then
   emph_lines="$(printf '%s\n' "$MD_OUT" | grep -cF '**' || true)"
   assert "…on exactly 3 lines (saw $emph_lines): the identity line and the two headers" \
     "$(eq "$emph_lines" 3)"
-  for anchor in 'AI-Bridge' 'SETTING ' 'AGENT '; do
+  for anchor in 'loopd' 'SETTING ' 'AGENT '; do
     assert "…the line starting \`$anchor\` among them" \
       "$(printf '%s\n' "$MD_OUT" | grep -F '**' | grep -qF -- "$anchor" && echo 0 || echo 1)"
   done
@@ -601,7 +601,7 @@ printf '#!/bin/sh\nexit 1\n' > "$STUBBIN/awk"; chmod +x "$STUBBIN/awk"
 OUT="$(PATH="$STUBBIN:$PATH" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>/dev/null)"; RC=$?
 rm -f "$STUBBIN/awk"
 assert "a broken awk: still exit 0"                    "$(eq "$RC" 0)"
-assert "…and the banner still comes out"               "$(has 'AI-Bridge' "$OUT")"
+assert "…and the banner still comes out"               "$(has 'loopd' "$OUT")"
 assert "…as plain text, not as half an envelope"       "$(hasnt '{"systemMessage"' "$OUT")"
 # NO FENCE ASSERTION ON THIS PATH, AND THE REASON IS NOT THE FALLBACK. `awk` is also what
 # §6 parses AWAITING.md with, so a machine without it has no awaiting block to route in the
@@ -615,7 +615,7 @@ printf '#!/bin/sh\nexit 1\n' > "$STUBBIN/mktemp"; chmod +x "$STUBBIN/mktemp"
 OUT="$(PATH="$STUBBIN:$PATH" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>/dev/null)"; RC=$?
 rm -f "$STUBBIN/mktemp"
 assert "no usable mktemp: still exit 0"                "$(eq "$RC" 0)"
-assert "…and the banner still comes out"               "$(has 'AI-Bridge' "$OUT")"
+assert "…and the banner still comes out"               "$(has 'loopd' "$OUT")"
 assert "…with no partial envelope around it"           "$(hasnt '{"systemMessage"' "$OUT")"
 assert "…and the same fenced list, by the other route" "$(fenced "$OUT")"
 # AND NOT BY ACCIDENT OF TEXT MODE. `--format text` is the OTHER single-stream case and its
@@ -625,7 +625,7 @@ assert "…and the same fenced list, by the other route" "$(fenced "$OUT")"
 # that had simply died would satisfy the absence and hide the regression.
 TEXT_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format text 2>/dev/null)"; TEXT_RC=$?
 assert "plain --format text still exits 0 and prints a banner" \
-  "$([ "$TEXT_RC" = 0 ] && [ "$(has 'AI-Bridge' "$TEXT_OUT")" = 0 ] && echo 0 || echo 1)"
+  "$([ "$TEXT_RC" = 0 ] && [ "$(has 'loopd' "$TEXT_OUT")" = 0 ] && echo 0 || echo 1)"
 assert "…and it carries the count line the human gets"  "$(has '1 item needs you' "$TEXT_OUT")"
 assert "…while, being read by a human, it has neither items nor fence" \
   "$(eq "$(fenced "$TEXT_OUT")" 1)"
@@ -639,7 +639,7 @@ printf '#!/bin/sh\nexit 1\n' > "$STUBBIN/sed"; chmod +x "$STUBBIN/sed"
 OUT="$(PATH="$STUBBIN:$PATH" CLAUDE_PROJECT_DIR="$INST" bash -c "$CMD" 2>/dev/null)"; RC=$?
 rm -f "$STUBBIN/sed"
 assert "a broken sed: still exit 0"                    "$(eq "$RC" 0)"
-assert "…and the banner still comes out"               "$(has 'AI-Bridge' "$OUT")"
+assert "…and the banner still comes out"               "$(has 'loopd' "$OUT")"
 assert "…as ONE plain stream, never a two-field envelope" "$(hasnt '{"systemMessage"' "$OUT")"
 assert "…with no marker byte left in it"               "$(hasnt "$(printf '\001')" "$OUT")"
 
@@ -938,7 +938,7 @@ if mutate "mutant: the leading blank line deleted" "$HOOK" '$0 ~ anchor { next }
   # …AND IT RAN. A mutant that produced nothing reddens every assertion below for the wrong
   # reason, which is the vacuity this whole section exists to refuse.
   assert "…and the mutant still answers the registered command with hook JSON" "$(parses "$OUT")"
-  assert "…and still prints a banner in text mode"  "$(has 'AI-Bridge' "$M1_TXT")"
+  assert "…and still prints a banner in text mode"  "$(has 'loopd' "$M1_TXT")"
   assert "BLANK DELETED: systemMessage stops opening with one blank line" \
     "$([ "$(head_no "$M1_SM")" != 2 ] && echo 0 || echo 1)"
   assert "…text mode stops too"  "$([ "$(head_no "$M1_TXT")" != 2 ] && echo 0 || echo 1)"
@@ -961,7 +961,7 @@ if mutate "mutant: a line printed above the identity line" "$HOOK" \
   M2="$MUT_PATH"; M2_TXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$M2" 2>/dev/null)"
   assert "the mutant really printed a line above the header" \
     "$(has 'MUTANT: a section above the header' "$M2_TXT")"
-  assert "…and still prints the banner under it" "$(has 'AI-Bridge' "$M2_TXT")"
+  assert "…and still prints the banner under it" "$(has 'loopd' "$M2_TXT")"
   assert "ABOVE THE HEADER: 'the logo, then the identity line' goes RED" \
     "$([ "$(hdr_no "$M2_TXT")" != "$(( $(head_no "$M2_TXT") + LOGO_ABOVE ))" ] && echo 0 || echo 1)"
   assert "…while the leading blank line is still exactly one, so the claims differ" \

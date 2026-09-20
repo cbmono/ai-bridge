@@ -298,7 +298,7 @@ ok "…and raises no machinery alarm"              "$(printf '%s' "$CBANNER" | g
 # plugin": before the mirror the banner looked one directory ABOVE the cache and found
 # nothing, so an installed plugin printed a versionless header.
 ok "…and the header carries the plugin's own version" \
-   "$(printf '%s\n' "$CBANNER" | grep -cF "AI-Bridge v$(head -n 1 "$REPO/VERSION")" | tr -d ' ')" 1
+   "$(printf '%s\n' "$CBANNER" | grep -cF "loopd v$(head -n 1 "$REPO/VERSION")" | tr -d ' ')" 1
 # BYTE-FOR-BYTE THE SAME BUNDLE either layout stamps. A cache run that merely EXITS 0
 # while seeding something different is the failure this catches, and it is the assertion
 # that makes the rest of this section about the LAYOUT rather than about exit codes.

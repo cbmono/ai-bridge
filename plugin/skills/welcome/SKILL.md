@@ -25,10 +25,10 @@ SessionStart banner is capped at 12 lines and drops them; `ai-bridge.sh` passes 
 here because a human who typed the command asked to look. Same script, same rendering,
 one flag — never a second copy of either table in this file.
 
-**The banner starts at the `AI-Bridge v…` line, and that is not a line gone missing.** The
-ship above it renders on the SessionStart channel alone, because a relayed copy is markdown:
-it drops the leading space of the ship's first line and carries none of its colour, so the
-human read a second, shifted ship under the Bash tool's own output. Never draw one back in.
+**The banner starts at the `loopd v…` line, and that is not a line gone missing.** The
+loopd mark above it renders on the SessionStart channel alone, because a relayed copy is markdown:
+it drops the leading space of the mark's first row and carries none of its colour, so the
+human read a second, shifted mark under the Bash tool's own output. Never draw one back in.
 
 **And relay every other byte unaltered, the spaces included.** The banner's two tables are
 fixed-width: their `FROM` column is a column only as long as nothing re-flows the lines and
@@ -40,7 +40,7 @@ as an autolink once, and that row's `FROM` sat two columns left of every other's
 
 | You ran | It does |
 |---|---|
-| `/welcome` | `exec`s the SessionStart hook with `--full`, so you get **that** banner minus its ship, plus the two tables — not a copy of it |
+| `/welcome` | `exec`s the SessionStart hook with `--full`, so you get **that** banner minus its mark, plus the two tables — not a copy of it |
 | `/welcome check` | reports state that could be wrong, each line a fact with its evidence |
 | `/welcome fix` | **retired** — prints one line pointing at `/ai-bridge:init`, which runs that pass itself, and exits 0. Relay the line; do not run the repairs by hand |
 

@@ -70,7 +70,7 @@ eq()     { [ "$1" = "$2" ] && echo 0 || echo 1; }
 head_no() { printf '%s\n' "$1" | awk '$0 != "" { print NR; f = 1; exit } END { if (!f) print 0 }'; }
 # THE LOGO SITS ABOVE THE HEADER (task-024), so every claim anchored on the identity line
 # finds it with this rather than assuming it opens the banner. `0` when there is none at all.
-hdr_no()  { printf '%s\n' "$1" | awk '/^AI-Bridge/ { print NR; f = 1; exit } END { if (!f) print 0 }'; }
+hdr_no()  { printf '%s\n' "$1" | awk '/^loopd/ { print NR; f = 1; exit } END { if (!f) print 0 }'; }
 LOGO_ABOVE=3
 nth()     { printf '%s\n' "$1" | sed -n "$2p"; }
 
@@ -445,7 +445,7 @@ tracked_cfg
 echo "== 3. the identity HEADER, and the version in it =="
 # =======================================================================================
 run
-assert "names the harness"            "$(has 'AI-Bridge' "$OUT")"
+assert "names the harness"            "$(has 'loopd' "$OUT")"
 assert "…and this instance directory" "$(has "$(basename "$INST")" "$OUT")"
 assert "…and the org"                 "$(has 'org: example-org' "$OUT")"
 # ONE LEADING BLANK LINE, AND IT IS THE BANNER'S (task-027). Without it the identity line
@@ -498,7 +498,7 @@ rm -rf "$LONGNAME"
 # through the hook's own resolved path, so a release that bumps it needs no edit here.
 tpl_ver="$(head -n 1 "$TPL/VERSION" 2>/dev/null | tr -d '[:space:]')"
 assert "the template ships a VERSION file"   "$([ -n "$tpl_ver" ] && echo 0 || echo 1)"
-assert "…and the header prints that version" "$(has "AI-Bridge v$tpl_ver ·" "$OUT")"
+assert "…and the header prints that version" "$(has "loopd v$tpl_ver ·" "$OUT")"
 
 # ABSENT, UNREADABLE OR JUNK ⇒ THE REST OF THE BANNER, NEVER A CRASH AND NEVER A GUESS. A
 # copy of the hook outside the template cannot find a VERSION at all; the fixtures below
@@ -514,26 +514,26 @@ vrun() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/session-banner.sh" --f
 rm -f "$TMP/faketpl/VERSION"
 vrun
 assert "no VERSION file: still exit 0"            "$(eq "$RC" 0)"
-assert "…header prints without a version"         "$(has 'AI-Bridge · ' "$OUT")"
+assert "…header prints without a version"         "$(has 'loopd · ' "$OUT")"
 assert "…and the rest of the banner is intact"    "$(has 'FROM' "$OUT")"
 printf '' > "$TMP/faketpl/VERSION"
 vrun
-assert "an EMPTY VERSION is the same as none"     "$(has 'AI-Bridge · ' "$OUT")"
+assert "an EMPTY VERSION is the same as none"     "$(has 'loopd · ' "$OUT")"
 # THE `v` IS APPLIED TO A SURVIVING VALUE, NEVER TO THE EMPTY STRING THE FILTERS LEAVE.
-# Prefixing before the emptiness check renders `AI-Bridge v ·` for a VERSION that is empty
+# Prefixing before the emptiness check renders `loopd v ·` for a VERSION that is empty
 # or junk — the one case those filters exist to make identical to "no version at all".
-assert "…and no bare v is left behind"            "$(hasnt 'AI-Bridge v ' "$OUT")"
+assert "…and no bare v is left behind"            "$(hasnt 'loopd v ' "$OUT")"
 # Not version-shaped is dropped rather than printed: this file's contents go straight into
 # session context, and an ESC sequence there would repaint the terminal from line one.
 printf 'not a version\n\033[31mred\n' > "$TMP/faketpl/VERSION"
 vrun
-assert "junk in VERSION is dropped, not printed"  "$(has 'AI-Bridge · ' "$OUT")"
-assert "…and junk leaves no bare v either"        "$(hasnt 'AI-Bridge v ' "$OUT")"
+assert "junk in VERSION is dropped, not printed"  "$(has 'loopd · ' "$OUT")"
+assert "…and junk leaves no bare v either"        "$(hasnt 'loopd v ' "$OUT")"
 assert "…and none of it reaches the banner"       "$(hasnt 'not a version' "$OUT")"
 assert "…still exit 0"                            "$(eq "$RC" 0)"
 printf '9.9.9-rc1\n' > "$TMP/faketpl/VERSION"
 vrun
-assert "a version-shaped value IS printed"        "$(has 'AI-Bridge v9.9.9-rc1 ·' "$OUT")"
+assert "a version-shaped value IS printed"        "$(has 'loopd v9.9.9-rc1 ·' "$OUT")"
 
 # An org-less config must not print a dangling `· org:`.
 printf '{ "maxPrLoc": 2000 }\n' > "$INST/instance.config.json"
@@ -694,7 +694,7 @@ assert "…and the settings block is simply absent"   "$(hasnt 'FROM' "$OUT")"
 # a config table that lost its config, not as a block deliberately absent.
 assert "…including the claudeAccount row, config or not" \
   "$(hasnt 'claudeAccount' "$OUT")"
-assert "…while the identity line still prints"      "$(has 'AI-Bridge' "$OUT")"
+assert "…while the identity line still prints"      "$(has 'loopd' "$OUT")"
 # The section that used to answer here was the queue tail, deleted in task-023. The count
 # line is what the sections BELOW the settings block now amount to, so it is the one that
 # says the banner kept going rather than stopping at the block it could not compute.
@@ -1132,9 +1132,9 @@ printf '9.9.9_beta\n' > "$FAKETPL/VERSION"
 tracked_cfg
 FAKE_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$FAKETPL/plugin/hooks/session-banner.sh" 2>/dev/null)"
 assert "a VERSION carrying an emphasis character still prints a version…" \
-  "$(has 'AI-Bridge v9.9.9' "$FAKE_OUT")"
+  "$(has 'loopd v9.9.9' "$FAKE_OUT")"
 assert "…with the character neutralised on the way to the reader" \
-  "$(has 'AI-Bridge v9.9.9?beta' "$FAKE_OUT")"
+  "$(has 'loopd v9.9.9?beta' "$FAKE_OUT")"
 rm -rf "$FAKETPL"
 
 # =======================================================================================
@@ -1219,11 +1219,11 @@ if mutate "mutant: the leading blank line deleted" "$HOOK" '$0 ~ anchor { next }
     "$(eq "$(grep -cE "$ANCHOR_RE" "$MUTTPL/plugin/hooks/$M1")" 0)"
   # …AND IT RAN. A mutant that printed nothing reddens the assertions below for the wrong
   # reason, which is the vacuity this section exists to refuse.
-  assert "…and still prints a banner"  "$(has 'AI-Bridge' "$M1_OUT")"
+  assert "…and still prints a banner"  "$(has 'loopd' "$M1_OUT")"
   assert "BLANK DELETED: 'opens with exactly ONE blank line' goes RED" \
     "$([ "$(head_no "$M1_OUT")" != 2 ] && echo 0 || echo 1)"
   assert "…and the LOGO is what the label would now prefix" \
-    "$(eq "$(nth "$M1_OUT" 1)" ' █▀█')"
+    "$(eq "$(nth "$M1_OUT" 1)" '   ▄▄▄▄')"
   assert "…while the section-order assertion stays GREEN, so the two claims do not overlap" \
     "$(eq "$(hdr_no "$M1_OUT")" "$(( $(head_no "$M1_OUT") + LOGO_ABOVE ))")"
 fi
@@ -1236,7 +1236,7 @@ if mutate "mutant: a line printed above the identity line" "$HOOK" \
   M2="$MUT_PATH"; M2_OUT="$(mut_run "$M2")"
   assert "the mutant really printed a line above the header" \
     "$(has 'MUTANT: a section above the header' "$M2_OUT")"
-  assert "…and still prints the banner under it" "$(has 'AI-Bridge' "$M2_OUT")"
+  assert "…and still prints the banner under it" "$(has 'loopd' "$M2_OUT")"
   assert "ABOVE THE HEADER: 'three lines under the first NON-EMPTY one' goes RED" \
     "$([ "$(hdr_no "$M2_OUT")" != "$(( $(head_no "$M2_OUT") + LOGO_ABOVE ))" ] && echo 0 || echo 1)"
   # ANCHORED ON WHERE THE RULE BELONGS, NOT ON THE FIRST LINE: with the logo above the header
@@ -1283,7 +1283,7 @@ assert "the default carries no SETTING table"      "$(hasnt 'SETTING ' "$SHORT")
 assert "…and no AGENT table"                       "$(hasnt 'AGENT (role)' "$SHORT")"
 assert "…while --full carries both"                \
   "$([ "$(has 'SETTING ' "$LONG")" = 0 ] && [ "$(has 'AGENT (role)' "$LONG")" = 0 ] && echo 0 || echo 1)"
-assert "…and the default still says who this is"   "$(has 'AI-Bridge' "$SHORT")"
+assert "…and the default still says who this is"   "$(has 'loopd' "$SHORT")"
 assert "…and is strictly shorter"                  \
   "$([ "$(printf '%s\n' "$SHORT" | grep -c '')" -lt "$(printf '%s\n' "$LONG" | grep -c '')" ] && echo 0 || echo 1)"
 # The one python3 call on this path is gated too: a table that does not print must not cost

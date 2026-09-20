@@ -91,8 +91,8 @@ for e in mkt["plugins"]:
 io.open(p, "w", encoding="utf-8").write(json.dumps(mkt, indent=2, ensure_ascii=False) + "\n")
 p = root + "/docs/operations.md"; lines = io.open(p, encoding="utf-8").read().split("\n")
 for i, l in enumerate(lines):
-    if l.startswith("AI-Bridge v"):
-        lines[i] = re.sub(r"^AI-Bridge v[0-9.]+", "AI-Bridge v" + v, l)
+    if l.startswith("loopd v"):
+        lines[i] = re.sub(r"^loopd v[0-9.]+", "loopd v" + v, l)
         if i + 1 < len(lines) and lines[i+1] and set(lines[i+1]) == {u"\u2500"}: lines[i+1] = u"\u2500" * len(lines[i])
 io.open(p, "w", encoding="utf-8").write("\n".join(lines))
 ' "$1" "$2"
@@ -123,7 +123,7 @@ five() { # <dir> — the five places, space-separated, so one assertion reads th
     "$(head -n 1 "$1/VERSION")" "$(head -n 1 "$1/plugin/VERSION")" \
     "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]+"/plugin/.claude-plugin/plugin.json",encoding="utf-8"))["version"])' "$1")" \
     "$(mkt_core "$1")" \
-    "$(grep -hoE 'AI-Bridge v?[0-9]+\.[0-9]+\.[0-9]+' "$1/docs/operations.md" | sed 's/^AI-Bridge v\{0,1\}//' | sort -u)"
+    "$(grep -hoE 'loopd v?[0-9]+\.[0-9]+\.[0-9]+' "$1/docs/operations.md" | sed 's/^loopd v\{0,1\}//' | sort -u)"
 }
 harness() { # <dir> <harness> — run a real harness IN the fixture; its tally and its exit
   local out rc
@@ -185,7 +185,7 @@ ok "…and the banner rule is re-cut to the new header's WIDTH" \
 import io, re, sys
 lines = io.open(sys.argv[1] + "/docs/operations.md", encoding="utf-8").read().splitlines()
 bad = [i for i, l in enumerate(lines[:-1])
-       if l.startswith("AI-Bridge ") and set(lines[i+1]) == {u"─"} and len(lines[i+1]) != len(l)]
+       if l.startswith("loopd ") and set(lines[i+1]) == {u"─"} and len(lines[i+1]) != len(l)]
 print(len(bad))' "$TMP/five")" 0
 ok "…on a header that really did get longer"  "$(five "$TMP/five" | cut -d' ' -f1)" 2.10.0
 
@@ -201,7 +201,7 @@ ok "…with the banner rule re-cut to the SHORTER header" \
 import io, sys
 lines = io.open(sys.argv[1] + "/docs/operations.md", encoding="utf-8").read().splitlines()
 bad = [i for i, l in enumerate(lines[:-1])
-       if l.startswith("AI-Bridge ") and set(lines[i+1]) == {u"\u2500"} and len(lines[i+1]) != len(l)]
+       if l.startswith("loopd ") and set(lines[i+1]) == {u"\u2500"} and len(lines[i+1]) != len(l)]
 print(len(bad))' "$TMP/major")" 0
 # A companion tracks core's MAJOR (plugin/README.md), so the five are not the whole set on
 # a major bump — and template-version.test.sh section 3b is what goes red if they are missed.
