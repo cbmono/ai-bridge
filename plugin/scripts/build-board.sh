@@ -671,7 +671,7 @@ TABLE_HEAD = """<title>__TITLE__</title>
    keeps a third accent out. BLUE IS THE MACHINE'S and PINK IS THE HUMAN'S — --accent,
    --ok and every running/merged/queued state are blue, and --signal/--stop are pink
    because the only pink pixels on this page are things waiting on a person.
-   loopd is dark-only (tokens.css carries no light ground), so there is no [data-theme]
+   loopd is dark-only (tokens.css carries no light ground), so there is one palette
    block, no toggle and no stored choice.
    Four background layers do the separating: ground -> surface -> sunk -> inner. */
 :root{

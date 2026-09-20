@@ -1098,10 +1098,10 @@ assert "…still only COPYING, and now handle + verb"  "$(fhas 'class="promote" 
 assert "…and the three-sentence prompt is gone"      "$(fhasnt 'In the ai-bridge instance, promote' "$RW")"
 assert "…from every rendered page"                   "$(fhasnt 'tighten any that are not testable' "$HB")"
 # IT LOOKS LIKE A CONTROL AT REST, which is the property the old outline bought and the
-# soft-green fill keeps: a chip only visible under a pointer is invisible to a touch
+# soft-blue fill keeps: a chip only visible under a pointer is invisible to a touch
 # screen. Filled at rest, brighter on hover — hover is a state change, not the moment
 # the control appears. Both halves, so a fill with no hover state would not pass.
-assert "the chip is filled at rest, in the soft green" "$(fhas 'border-radius:5px;background:var(--ok-soft);color:var(--ok);' "$RW")"
+assert "the chip is filled at rest, in the soft blue" "$(fhas 'border-radius:6px;background:var(--ok-soft);color:var(--ok);' "$RW")"
 assert "…and hover only brightens what is already there" "$(fhas '.promote:hover,.promote:focus-visible{filter:brightness(1.15)}' "$RW")"
 assert "…so nothing appears on hover that was not there" "$(yes_if python3 -c "
 import re, sys
@@ -1167,8 +1167,8 @@ cells = re.findall(r'<td class=\"prs\">(.*?)</td>', page, re.S)
 sys.exit(0 if cells and max(len(re.findall(r'<a href', c)) for c in cells) == 9 else 1)")"
 assert "the cell carries its own class"              "$(fhas '<td class="prs">' "$CE")"
 assert "…which lets it wrap inside its track"        "$(fhas 'td.prs{white-space:normal;' "$CE")"
-assert "…and gives the cell one monospace context"   "$(fhas 'td.prs{white-space:normal;font-family:"IBM Plex Mono",ui-monospace,monospace;
-  font-size:13px;overflow-wrap:anywhere}' "$CE")"
+assert "…and gives the cell one monospace context"   "$(fhas "td.prs{white-space:normal;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  font-size:13px;overflow-wrap:anywhere}" "$CE")"
 # REFS ARE SPACE-SEPARATED — no comma, the form the Depends-on cell now copies.
 assert "…refs are separated by a space"              "$(fhas '#2101</a> <a href' "$CE")"
 assert "…and never by a comma"                       "$(fhasnt '</a>, <a' "$CE")"
@@ -1227,9 +1227,9 @@ assert "…and is no longer a tint of the card"        "$(fhasnt 'color-mix(in s
 assert "…nor the card's own surface"                 "$(fhasnt 'color-mix(in srgb,var(--signal) 8%,var(--surface))' "$BOUT")"
 assert "…with the decision cards a layer deeper"     "$(fhas '.ask{display:flex;flex-direction:column;padding:14px 16px;
   background:var(--inner);' "$BOUT")"
-assert "the amber left rail is kept"                 "$(fhas 'border-left:4px solid var(--signal);' "$BOUT")"
+assert "the pink left rail is kept"                  "$(fhas 'border-left:4px solid var(--signal);' "$BOUT")"
 assert "…and so is the WAITING FOR YOU · N label"    "$(fhas '<h2>Waiting for you · ' "$BOUT")"
-assert "…rendered upper case, as it reads on the page" "$(fhas '.rail h2{margin:0;font:700 11px/1.4 "IBM Plex Sans",sans-serif;text-transform:uppercase' "$BOUT")"
+assert "…rendered upper case, as it reads on the page" "$(fhas ".rail h2{margin:0;font:700 11px/1.4 'Inter',system-ui,sans-serif;text-transform:uppercase" "$BOUT")"
 # NO SECOND ACCENT. Every colour the block uses is --signal, --ink, --sunk, --surface,
 # --line or --muted; --accent and --ok appearing inside a .rail rule would be a second
 # thing competing for "this one needs you".
@@ -1239,19 +1239,17 @@ src = open('$BOUT', encoding='utf-8').read()
 rules = re.findall(r'(?:^|\})\s*(\.rail[^{}]*)\{([^}]*)\}', src)
 bad = [s for s, b in rules if 'var(--accent)' in b or 'var(--ok)' in b or 'var(--stop)' in b]
 sys.exit(0 if rules and not bad else 1)")"
-# THE LABEL TAKES THE DEEPENED AMBER, NOT PLAIN --signal. Plain --signal on --sunk is
-# 3.55:1 in light, under AA for 11px text; --signal-soft-text is 5.52:1 light and
-# 10.34:1 dark. One token, right in both themes, and it is the same amber the header's
-# "N items need you" and the decision card's verb already use.
-assert "the label takes the deepened amber"          "$(fhas 'letter-spacing:.1em;color:var(--signal-soft-text)}' "$BOUT")"
+# THE LABEL TAKES --signal-soft-text, the one token every "this wants you" surface
+# shares: the header's "N items need you", the decision card's verb and this label all
+# render in the same pink, so the reader learns one colour and not three.
+assert "the label takes the needs-you pink"          "$(fhas 'letter-spacing:.1em;color:var(--signal-soft-text)}' "$BOUT")"
 assert "…and not the mix the tinted fill needed"     "$(fhasnt 'color-mix(in srgb,var(--signal) 78%,var(--ink))' "$BOUT")"
 # THE BREADCRUMB WAS THE LEAST LEGIBLE THING IN THE BLOCK, measurably: --dim on .ask's
-# surface is 3.18:1 in light and 3.79:1 in dark, both under AA's 4.5:1 for .75rem text.
+# surface is 3.45:1, under AA's 4.5:1 for .75rem text.
 assert "the breadcrumb is off --dim"                 "$(fhas '.where{width:100%;font-size:13px;color:var(--muted);' "$BOUT")"
 assert "…and --dim is not still on it"               "$(fhasnt '.where{width:100%;font-size:13px;color:var(--dim)' "$BOUT")"
 # THE RATIOS ARE COMPUTED HERE, not copied from the PR body — a number quoted in prose
-# and nowhere else is a number nobody re-checks. Both themes, since the palette is
-# redefined for dark and a fix that only holds in one is half a fix.
+# and nowhere else is a number nobody re-checks. One theme, because loopd is dark-only.
 contrast_ok() { # <fg> <bg> <min> -> 0 when the pair clears <min>
   python3 - "$1" "$2" "$3" <<'PYC'
 import sys
@@ -1268,23 +1266,17 @@ sys.exit(0 if (hi + 0.05) / (lo + 0.05) >= float(sys.argv[3]) else 1)
 PYC
 }
 # --muted on --inner, the pair the breadcrumb actually renders as (.ask is --inner).
-assert "…clearing AA in light (5.25:1)"              "$(yes_if contrast_ok '#5f6786' '#f7f8fc' 4.5)"
-assert "…and in dark (6.69:1)"                       "$(yes_if contrast_ok '#9da5c0' '#1c1f2c' 4.5)"
+assert "--muted clears AA on the card (6.42:1)"      "$(yes_if contrast_ok '#9aa4b5' '#1c212b' 4.5)"
 # NON-VACUITY: the colour it replaced must FAIL the same check, or this asserts nothing
 # about the change.
-assert "…where --dim failed it in light (2.90:1)"    "$(contrast_ok '#8c92ab' '#f7f8fc' 4.5 && echo 1 || echo 0)"
-assert "…and failed it in dark too (3.52:1)"         "$(contrast_ok '#6c7393' '#1c1f2c' 4.5 && echo 1 || echo 0)"
-# The rail label — --signal-soft-text on --sunk, both themes.
-assert "the label clears AA on the rail, light"      "$(yes_if contrast_ok '#7c5410' '#e6e9f2' 4.5)"
-assert "…and dark"                                   "$(yes_if contrast_ok '#ffcb6b' '#20242f' 4.5)"
-assert "…where plain --signal would not, in light"   "$(contrast_ok '#a2701a' '#e6e9f2' 4.5 && echo 1 || echo 0)"
-# SEPARATION IS WHAT THE FOUR LAYERS BUY, so each adjacent pair is measured in both
-# themes. The numbers are small on purpose — this is layer separation, not text contrast
-# — but they are the whole reason the block reads as set INTO the card.
-assert "the rail separates from the card, light"     "$(yes_if contrast_ok '#e6e9f2' '#ffffff' 1.05)"
-assert "…and dark"                                   "$(yes_if contrast_ok '#20242f' '#262a3b' 1.05)"
-assert "the decision card separates from the rail, light" "$(yes_if contrast_ok '#f7f8fc' '#e6e9f2' 1.05)"
-assert "…and dark"                                   "$(yes_if contrast_ok '#1c1f2c' '#20242f' 1.05)"
+assert "…where --dim failed it (3.45:1)"             "$(contrast_ok '#6c7488' '#1c212b' 4.5 && echo 1 || echo 0)"
+# The rail label — --signal-soft-text on --sunk.
+assert "the label clears AA on the rail (7.54:1)"    "$(yes_if contrast_ok '#ff7ac2' '#14171c' 4.5)"
+# SEPARATION IS WHAT THE FOUR LAYERS BUY, so each adjacent pair is measured. The numbers
+# are small on purpose — loopd separates with 1px --line borders first and tone second,
+# so these are tighter than a shadow-led palette's and the border is what carries it.
+assert "the rail separates from the card (1.04:1)"   "$(yes_if contrast_ok '#14171c' '#171b22' 1.03)"
+assert "the decision card separates from the rail (1.11:1)" "$(yes_if contrast_ok '#1c212b' '#14171c' 1.10)"
 
 echo "== advisor_notes is the loop's inbox, so the board renders none of it =="
 assert "an untriaged concern shows no pill"          "$(fhasnt 'concern' "$OUT")"

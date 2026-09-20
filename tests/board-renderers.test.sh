@@ -643,14 +643,14 @@ assert "the HTML board names it too"                "$(fhas '<h1>Stamped Bridge 
 assert "…and never an empty name in the masthead"   "$(fhasnt '<h1> Bridge Board' "$TMP/fresh.html")"
 
 # ---------------------------------------------------------------------------
-# THE SOFT-SLATE REDESIGN. The handoff is a set of NUMBERS — twelve colours per theme,
-# five grid tracks, one breakpoint — so what is asserted here is those numbers, read
-# back off the rendered page. A design pinned in prose is a design that drifts.
+# THE LOOPD DUOTONE. The handoff is a set of NUMBERS — one dark palette, five grid
+# tracks, one breakpoint — so what is asserted here is those numbers, read back off the
+# rendered page. A design pinned in prose is a design that drifts.
 #
 # WHY THIS FILE AND NOT tests/artifact-board.test.sh: that one owns the page's MARKUP
-# contracts (handles, escaping, what a button copies). The palette, the tab row, the
-# toggle and the breakpoint are the RENDERER's own output and belong beside the other
-# renderer assertions here.
+# contracts (handles, escaping, what a button copies). The palette, the tab row and the
+# breakpoint are the RENDERER's own output and belong beside the other renderer
+# assertions here.
 SLATE="$TMP/slate.html"
 ( cd "$ALPHA" && bash "$BOARD" --standalone --out "$SLATE" >/dev/null 2>&1 )
 
@@ -668,49 +668,39 @@ sys.stdout.write(v.group(1) if v else "")
 PYT
 }
 
-echo "== the soft-slate palette: twelve values per theme, off the rendered page =="
+echo "== the loopd palette: one dark theme, off the rendered page =="
 assert "the page renders at all"                     "$(yes_if test -s "$SLATE")"
-DARK_TOKENS='ground #191c27
-surface #262a3b
-sunk #20242f
-inner #1c1f2c
-ink #e8ebf7
-muted #9da5c0
-dim #6c7393
-line #3a3f55
-signal #ffcb6b
-ok #c3e88d
-stop #ff6e7f
-accent #89ddff'
-LIGHT_TOKENS='ground #eef0f6
-surface #ffffff
-sunk #e6e9f2
-inner #f7f8fc
-ink #232635
-muted #5f6786
-dim #8c92ab
-line #d9dce8
-signal #a2701a
-ok #55803a
-stop #c94e60
-accent #2e7cae'
+# Every value is copied from the brand's tokens.css. loopd is dark-only — the token set
+# carries no light ground — so there is ONE :root block and no [data-theme] override.
+DARK_TOKENS='ground #101318
+surface #171b22
+sunk #14171c
+inner #1c212b
+raise #1c212b
+ink #e9edf4
+muted #9aa4b5
+dim #6c7488
+line #262c37
+signal #ff7ac2
+signal-ink #14171c
+ok #5ea2ff
+stop #ff7ac2
+accent #5ea2ff
+accent-ink #14171c'
 while read -r name hex; do
   [ -n "$name" ] || continue
-  assert "dark --$name is $hex"                      "$(eq "$(tokval "$SLATE" ':root[data-theme="dark"]' "$name")" "$hex")"
+  assert "--$name is $hex"                           "$(eq "$(tokval "$SLATE" ':root' "$name")" "$hex")"
 done <<< "$DARK_TOKENS"
-while read -r name hex; do
-  [ -n "$name" ] || continue
-  assert "light --$name is $hex"                     "$(eq "$(tokval "$SLATE" ':root[data-theme="light"]' "$name")" "$hex")"
-done <<< "$LIGHT_TOKENS"
-# THE BARE :root IS THE DARK BLOCK, value for value — that is what "no stored choice
-# renders dark" means in the stylesheet, and it is asserted rather than assumed because
-# a palette split across a default and an override is how a theme drifts in one half.
-while read -r name hex; do
-  [ -n "$name" ] || continue
-  assert "…and bare :root carries the dark --$name"  "$(eq "$(tokval "$SLATE" ':root' "$name")" "$hex")"
-done <<< "$DARK_TOKENS"
-# The four soft fills and the two soft texts, one check per theme: they are new tokens,
-# so an absent one reads as "" and fails here rather than silently rendering unstyled.
+# THE PALETTE CLOSES. Ten values, and the page may not contain an eleventh: this is the
+# assertion a third accent fails, whichever rule smuggles it in. The list IS tokens.css's
+# — a hex that is not in the brand's token file cannot appear here either.
+LOOPD_HEXES='#101318 #14171c #171b22 #1c212b #262c37 #5ea2ff #6c7488 #9aa4b5 #e9edf4 #ff7ac2'
+assert "…and the page holds those ten and no other" \
+  "$(eq "$(grep -oE '#[0-9a-fA-F]{6}' "$SLATE" | tr 'A-F' 'a-f' | sort -u | tr '\n' ' ')" \
+        "$LOOPD_HEXES ")"
+# The soft fills and the soft text: they are their own tokens, so an absent one reads as
+# "" and fails here rather than silently rendering unstyled. --ok-soft is BLUE because
+# approve is a machine-coloured affordance; --stop-soft is pink because reject is not.
 softs() { # <selector> <expected, space separated name:hex>
   local sel="$1"; shift
   local ok=0 pair
@@ -719,22 +709,30 @@ softs() { # <selector> <expected, space separated name:hex>
   done
   echo "$ok"
 }
-assert "dark carries the four soft fills and two soft texts" \
-  "$(softs ':root[data-theme="dark"]' signal-soft:#3c3524 signal-soft-text:#ffcb6b \
-           ok-soft:#2e3a26 stop-soft:#42262e neutral-soft:#333850 neutral-soft-text:#d4d9ec)"
-assert "…and light carries them too"                 \
-  "$(softs ':root[data-theme="light"]' signal-soft:#f3e7cd signal-soft-text:#7c5410 \
-           ok-soft:#e6f0da stop-soft:#f9e4e8 neutral-soft:#e6e9f2 neutral-soft-text:#454c68)"
-# THE LIGHT PILL IS THE AMBER ITSELF WITH WHITE ON IT (owner, 2026-09-07), not the soft
-# fill — #ffcb6b on white is 1.6:1, so the light theme deepens the amber instead of
-# lightening the text. Both halves: the fill is --signal, the text is --signal-ink.
+assert "the soft fills and the soft text are carried" \
+  "$(softs ':root' signal-soft:#ff7ac21f signal-soft-text:#ff7ac2 \
+           ok-soft:#5ea2ff1f stop-soft:#ff7ac21f neutral-soft:#1c212b neutral-soft-text:#e9edf4)"
+# THE NEEDS-YOU PILL IS THE PINK ITSELF, not the soft fill — it is the one filled thing
+# on a collapsed row. Both halves: the fill is --signal, the text is --signal-ink.
 assert "the needs-you pill is filled with --signal"  "$(fhas '.c.you{background:var(--signal);color:var(--signal-ink);' "$SLATE")"
-assert "…and light --signal-ink is white"            "$(eq "$(tokval "$SLATE" ':root[data-theme="light"]' 'signal-ink')" '#ffffff')"
-assert "…while dark --signal-ink is the ground"      "$(eq "$(tokval "$SLATE" ':root[data-theme="dark"]' 'signal-ink')" '#191c27')"
 assert "…and the pill is not drawn in the soft fill" "$(fhasnt '.c.you{background:var(--signal-soft)' "$SLATE")"
-# The header's own amber text is the deepened one — #7c5410 in light, where plain
-# --signal on --ground would be the pill colour on a pale ground.
-assert "the header's amber text is --signal-soft-text" "$(fhas '.sub .sig{color:var(--signal-soft-text);font-weight:600}' "$SLATE")"
+assert "the header's needs-you text is --signal-soft-text" "$(fhas '.sub .sig{color:var(--signal-soft-text);font-weight:600}' "$SLATE")"
+# TWO COLOURS, AND PINK MEANS A PERSON. Machine state is blue by construction: the four
+# status tones the renderer can emit resolve to --accent, --ok or --dim, and the only
+# one that resolves to pink is `blocked`, which is what a human has to unblock.
+assert "every machine state resolves to blue or dim" "$(fhas '.state.ok{color:var(--ok)} .state.accent{color:var(--accent)}' "$SLATE")"
+assert "…--ok is the same blue as --accent"          "$(eq "$(tokval "$SLATE" ':root' ok)" "$(tokval "$SLATE" ':root' accent)")"
+assert "…and only a blocked task takes --stop"       "$(yes_if python3 -c "
+import re, sys
+src = open('$BOARD', encoding='utf-8').read()
+m = re.search(r'^TONE = \{(.*?)\}', src, re.S | re.M)
+tone = dict(re.findall(r'\"([a-z-]+)\": \"([a-z]+)\"', m.group(1) if m else ''))
+sys.exit(0 if tone and [k for k, v in tone.items() if v == 'stop'] == ['blocked'] else 1)")"
+# The active tab is BLUE: which tab you are reading is the machine's state, and a filled
+# pink pill there would be a pink pixel that is not a decision waiting.
+assert "the active tab pill is filled blue"          "$(fhas 'background:var(--accent);
+  border-color:var(--accent);color:var(--accent-ink);font-weight:700}' "$SLATE")"
+assert "…and the focus ring is blue too"             "$(fhas ':focus-visible{outline:2px solid var(--accent);' "$SLATE")"
 
 echo "== the tab row filters project rows, and All is what ships =="
 assert "the board carries the default tab"           "$(fhas '<div class="board" data-tab="all">' "$SLATE")"
@@ -777,33 +775,18 @@ assert "other owners are hidden under All"           "$(fhas '.board[data-tab="a
 assert "…and so is the heading that led that section" "$(fhas '.board[data-tab="all"] .sep.others,' "$SLATE")"
 assert "…the facet the tab selects on is on the card" "$(fhas '<div class="pcard" data-f="' "$SLATE")"
 
-echo "== one segmented ☀/☾ toggle, and the default is DARK =="
-assert "the control is one segmented group"          "$(fhas '<div class="seg" role="group" aria-label="Theme">' "$SLATE")"
-assert "…with a sun segment"                         "$(fhas 'data-set-theme="light" title="Light theme"' "$SLATE")"
-assert "…and a moon segment"                         "$(fhas 'data-set-theme="dark" title="Dark theme"' "$SLATE")"
-assert "…exactly two segments, not a row of buttons" "$(eq "$(grep -oF 'data-set-theme=' "$SLATE" | wc -l | tr -d ' ')" 2)"
-assert "…drawn with the handoff's glyphs"            "$(fhas '>☀</button>' "$SLATE")"
-assert "…and the moon"                               "$(fhas '>☾</button>' "$SLATE")"
-# THE DEFAULT IS THE ABSENCE OF AN ATTRIBUTE. Nothing renders `data-theme`, the bare
-# :root is dark (asserted above), and the moon lights up off that same absence — so an
-# unvisited page is dark AND says so, whatever the system prefers.
-assert "nothing renders a data-theme attribute"      "$(fhasnt 'data-theme="dark">' "$SLATE")"
-assert "…and prefers-color-scheme is not consulted"  "$(fhasnt 'prefers-color-scheme' "$SLATE")"
-assert "…the moon segment is active with no choice stored" \
-  "$(fhas ':root:not([data-theme="light"]) .seg .moon,' "$SLATE")"
-assert "…and the sun only with an explicit light choice" "$(fhas ':root[data-theme="light"] .seg .sun{background:var(--seg-on);' "$SLATE")"
-# A STORED CHOICE WINS, and it is restored before the first paint — the script is in the
-# head for that reason, so a light page never flashes dark on its way in.
-assert "a stored choice is read back"                "$(fhas "var saved=localStorage.getItem(KEY);" "$SLATE")"
-assert "…only for the two values it wrote"           "$(fhas "if(saved==='light'||saved==='dark')" "$SLATE")"
-assert "…and a click persists it"                    "$(fhas "localStorage.setItem(KEY,v);" "$SLATE")"
-assert "…with the restore ahead of the body"         "$(yes_if python3 -c "
-import sys
-t = open('$SLATE', encoding='utf-8').read()
-sys.exit(0 if t.index('localStorage.getItem(KEY)') < t.index('<body>') else 1)")"
-# STILL ONE SCRIPT. The clipboard helper, the theme and the tabs share the single inline
-# <script> this page has always had — a second one would be a second place for the
-# page's only scripted behaviour to live.
+echo "== dark-only, and the theme toggle is gone with the light palette =="
+# THERE IS NO THEME CONTROL. loopd is a dark-only brand, so there is nothing to toggle:
+# no stored choice, no [data-theme] attribute, no system preference consulted. Asserted
+# as absences, because a half-removed toggle is a control that renders and does nothing.
+assert "no segmented theme control is rendered"      "$(fhasnt '<div class="seg"' "$SLATE")"
+assert "…no segment writes a theme"                  "$(fhasnt 'data-set-theme' "$SLATE")"
+assert "…nothing renders a data-theme attribute"     "$(fhasnt 'data-theme' "$SLATE")"
+assert "…prefers-color-scheme is not consulted"      "$(fhasnt 'prefers-color-scheme' "$SLATE")"
+assert "…and no theme choice is stored"              "$(fhasnt 'ai-bridge-board-theme' "$SLATE")"
+# STILL ONE SCRIPT. The clipboard helper and the tabs share the single inline <script>
+# this page has always had — a second one would be a second place for the page's only
+# scripted behaviour to live.
 assert "the page carries exactly one script element" "$(eq "$(grep -oF '<script>' "$SLATE" | wc -l | tr -d ' ')" 1)"
 
 echo "== the five-track task grid, and the phone layout below 760px =="
@@ -845,10 +828,9 @@ sized "header title 23px/700"            'h1{font-size:23px;font-weight:700;'
 sized "snapshot line 14px"               '.sub{color:var(--muted);margin:6px 0 0;font-size:14px}'
 sized "stat number 21px/700"             '.tally dd{order:1;margin:0;font:700 21px/1.25'
 sized "stat label 12px"                  '.tally dt{order:2;font-size:12px;'
-sized "tab pill 13px, 6px 16px, 999px"   'font:500 13px/1 "IBM Plex Sans",sans-serif;padding:6px 16px;border-radius:999px;'
-sized "toggle 999px with 3px padding"    'border-radius:999px;padding:3px;flex-shrink:0}'
-sized "project card 14px radius"         '.proj{background:var(--surface);border:1px solid var(--line);border-radius:14px}'
-sized "collapsed row 15px 20px padding"  'padding:15px 20px;list-style:none;border-radius:14px}'
+sized "tab pill 13px, 6px 16px, 999px"   "font:500 13px/1 'Inter',system-ui,sans-serif;padding:6px 16px;border-radius:999px;"
+sized "project card 12px radius"         '.proj{background:var(--surface);border:1px solid var(--line);border-radius:12px}'
+sized "collapsed row 15px 20px padding"  'padding:15px 20px;list-style:none;border-radius:12px}'
 sized "project title 15px/600"           '.ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto;min-width:0;font-size:15px;'
 sized "project date 13px"                '.pdate{font-size:13px;color:var(--dim);'
 sized "count summary 13px"               '.counts{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;align-items:center;
@@ -856,20 +838,20 @@ sized "count summary 13px"               '.counts{display:flex;gap:6px;flex-wrap
 sized "needs-you pill 6px 14px, 999px"   'padding:6px 14px;border-radius:999px;margin-left:8px}'
 sized "finished divider 12px/600 .08em"  '.sep{font-size:12px;text-transform:uppercase;letter-spacing:.08em;'
 sized "decision rail 12px radius, 16px"  'border-left:4px solid var(--signal);border-radius:12px;padding:16px;'
-sized "rail label 11px/700 uppercase"    '.rail h2{margin:0;font:700 11px/1.4 "IBM Plex Sans",sans-serif;text-transform:uppercase;
-  letter-spacing:.1em;'
+sized "rail label 11px/700 uppercase"    ".rail h2{margin:0;font:700 11px/1.4 'Inter',system-ui,sans-serif;text-transform:uppercase;
+  letter-spacing:.1em;"
 sized "decision card 10px radius"        'border:1px solid var(--line);border-radius:10px}'
 sized "decision card 14px 16px padding"  '.ask{display:flex;flex-direction:column;padding:14px 16px;'
-sized "verb mono 11px/600 uppercase"     '.verb{font:600 11px/1.5 "IBM Plex Mono",ui-monospace,monospace;text-transform:uppercase;'
+sized "verb mono 11px/600 uppercase"     ".verb{font:600 11px/1.5 'JetBrains Mono',ui-monospace,Menlo,monospace;text-transform:uppercase;"
 sized "card title 15px/600, 1.45 lh"     '.what{width:100%;font-size:15px;font-weight:600;line-height:1.45;'
 sized "breadcrumb 13px"                  '.where{width:100%;font-size:13px;color:var(--muted);'
-sized "action button 9px 16px, 9px"      'border-radius:9px;
+sized "action button 9px 16px, 10px"     'border-radius:10px;
   padding:9px 16px;'
 sized "task id mono 11px"                '.tid{color:var(--dim);font-size:11px;'
 sized "task title 14px"                  '.tbtn{background:none;border:0;padding:0;font:400 14px/1.4'
 sized "state 12px/600"                   '.state{font-size:12px;font-weight:600;'
-sized "depends-on mono 12px"             'button.dep{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;'
-sized "Q chip 5px radius"                'border:0;border-radius:5px;padding:2px 8px;'
+sized "depends-on mono 12px"             "button.dep{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px;"
+sized "Q chip 6px radius"                'border:0;border-radius:6px;padding:2px 8px;'
 sized "PR ref 13px in the activity blue" 'td a{color:var(--accent);text-decoration:none;'
 sized "row 18px column gap, 12px rows"   'gap:0 18px;
   align-items:start;padding:12px 4px;border-top:1px solid var(--line)}'
