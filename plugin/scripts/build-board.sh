@@ -155,7 +155,7 @@
 #     ✕ close-command control — every `[data-copy]` button on the page shares it, and
 #     there is no second one.
 #   · A FAILED COPY IS A STICKY, SELECTABLE FAILURE — because the page is opened over
-#     `file://`. The tick renders to `.board-live/board.html` and a human double-clicks
+#     `file://`. The tick renders to `.ai-bridge/.board-live/board.html` and double-clicks
 #     it, so the copy buttons have to work on an origin nobody serves.
 #     WHAT WAS ACTUALLY MEASURED THERE, on `file:///…/board.html` in Chrome 151 (macOS),
 #     because the intuition was wrong in a way worth writing down: `file:` IS a
@@ -229,7 +229,11 @@
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
-OUT="board.html"
+# THE DEFAULT LANDS IN AB_BOARD_DIR, not the bundle root. A bare `board.html` here
+# put the page at the CWD while `watch-board.sh` and `board-serve.sh` read
+# `$AB_BOARD_DIR`, so a render with no `--out` was invisible to the viewer that was
+# meant to show it — a third board path alongside the two the 3.0 layout already had.
+OUT="$AB_BOARD_DIR/board.html"
 STANDALONE=0
 LIST_ONLY=0
 DIRS=()
@@ -2138,7 +2142,7 @@ else:
     doc = head_html + "\n" + body_html + "\n"
 # The output DIRECTORY is created, and only here — after the "nothing to write" exit
 # above, so an instance that is off the board still leaves no trace. The /ai-bridge:dispatch tick
-# renders to `.board-live/board.html`, which exists on a machine that has run
+# renders to `.ai-bridge/.board-live/board.html`, which exists on a machine that has run
 # watch-board.sh and on no other, and a renderer that fails with a FileNotFoundError the
 # first time each tick calls it would be a board nobody ever sees.
 OUT.parent.mkdir(parents=True, exist_ok=True)

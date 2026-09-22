@@ -21,7 +21,7 @@ node_modules/
 # changed something — which made one path contended by every clone of a shared bundle, for
 # a file both of them regenerate in a second. The board is served locally instead:
 # `/ai-bridge:board serve` binds 127.0.0.1 on a port derived from this bundle's path and
-# serves /.board-live/ (ignored below). Nothing about the board is pushed.
+# serves /.ai-bridge/.board-live/ (ignored below). Nothing about the board is pushed.
 /board.html
 
 # The other-owners cache (scripts/build-board.sh) — the board's second half, read from

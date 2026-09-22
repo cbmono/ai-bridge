@@ -57,10 +57,13 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
       overridable). `false` ⇒ **skip the rest of this step in silence**.
       Absent or `true` ⇒ render.
    2. Render to the bundle's live path:
-      `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone --out .board-live/board.html`, from the
-      bundle root. `--standalone` is required (a file opened straight in a browser
-      needs the full HTML wrapper); the path is the one `watch-board.sh` already
-      writes and `/ai-bridge:init` already gitignores — never stage or commit it. No
+      `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone`, from the bundle
+      root. `--standalone` is required (a file opened straight in a browser needs the
+      full HTML wrapper). **Pass no `--out`**: the renderer resolves `AB_BOARD_DIR`
+      itself — today `.ai-bridge/.board-live/board.html` — which is the path
+      `watch-board.sh` writes, `board-serve.sh` serves and `/ai-bridge:init` gitignores. A hardcoded `--out` overrides that resolver, and
+      the one that used to stand here named the pre-3.0 root path — so the page
+      landed where nothing reads it, untracked and un-ignored. Never stage or commit it. No
       readable snapshot ⇒ the renderer writes nothing and exits 0 ⇒ stop here, in
       silence.
    3. End your report with exactly one line — `BOARD: rendered <path>` — giving the

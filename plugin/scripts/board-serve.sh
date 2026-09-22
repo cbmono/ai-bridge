@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # board-serve.sh — ONE local board server per bundle. Renders SNAPSHOT.json into
-# .board-live/ and serves that directory on 127.0.0.1:<boardPort>, re-rendering
+# $AB_BOARD_DIR and serves that directory on 127.0.0.1:<boardPort>, re-rendering
 # whenever the snapshot changes. No LLM, no network, nothing published.
 #
 #   Usage: board-serve.sh [--port N] [--interval SECS] [--out DIR] [--print-port]
@@ -165,7 +165,7 @@ def watch():
             render()
 
 
-# EVERYTHING SERVED IS UNDER .board-live/, AND THAT IS ENFORCED HERE RATHER THAN BY A
+# EVERYTHING SERVED IS UNDER $AB_BOARD_DIR, AND THAT IS ENFORCED HERE RATHER THAN BY A
 # LIBRARY DEFAULT. The request path is decoded, joined, realpath'd — which also resolves a
 # symlink planted inside the directory — and refused unless it lands inside OUT.
 def resolve(path):

@@ -181,7 +181,9 @@ echo "== 4. the tick's own instructions no longer commit a page =="
 PM="$TPL/plugin/tick-steps/step-8-render.md"
 ok "project-manager.md exists"                          "$(yes_if test -f "$PM")" yes
 ok "…still names the LIVE render" \
-  "$(yes_if grep -qF -- '--out .board-live/board.html' "$PM")" yes
+  "$(yes_if grep -qF -- 'build-board.sh --standalone' "$PM")" yes
+ok "…at the resolved path, not the pre-3.0 root one" \
+  "$(yes_if grep -qF -- '.ai-bridge/.board-live/board.html' "$PM")" yes
 ok "…names no tracked render"    "$(yes_if grep -qF -- '--standalone --out board.html .' "$PM")" no
 ok "…and no board commit"        "$(grep -cF -- 'chore: refresh board.html' "$PM")" 0
 ok "…and points a human at the local server" \
@@ -280,7 +282,7 @@ echo "== 6. the skill and the tick each carry their half of the publish contract
 SK_BOARD="$TPL/plugin/skills/board/SKILL.md"
 ok "the board skill ships"                              "$(yes_if test -f "$SK_BOARD")" yes
 ok "…and names the SCOPED artifact render" \
-  "$(yes_if grep -qF -- 'scripts/build-board.sh --out .board-live/artifact-body.html .' "$SK_BOARD")" yes
+  "$(yes_if grep -qF -- '/artifact-body.html" .' "$SK_BOARD")" yes
 ok "…and never writes the tracked board.html" \
   "$(yes_if grep -qF -- '--out board.html' "$SK_BOARD")" no
 ok "the tick tells the human what refreshes the published page" \

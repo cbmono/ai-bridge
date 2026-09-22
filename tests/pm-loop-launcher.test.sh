@@ -265,7 +265,7 @@ ok "…and says so beside the list"        "$(has "$LAUNCHER" 'Why there is no p
 ok "…naming why it could not work"       "$(has "$LAUNCHER" 'account-scoped')" yes
 ok "…and naming the second, independent reason: no artifact tool headless" \
   "$(has "$LAUNCHER" 'holds no')" yes
-ok "…and where the board goes instead"   "$(has "$LAUNCHER" '.board-live/board.html')" yes
+ok "…and where the board goes instead"   "$(has "$LAUNCHER" '.ai-bridge/.board-live/board.html')" yes
 # The launcher stays out of the config entirely: the URL is the TICK's read, and two
 # readers of one key is how that key went wrong the first time.
 ok "launcher names no config URL key"    "$(has "$LAUNCHER" "$URL_KEY")" no
@@ -302,8 +302,14 @@ ok "…false skips in silence"             "$(has "$TICK_RENDER" 'skip the rest 
 ok "…absent or true renders"             "$(has "$TICK_RENDER" 'Absent or `true`')" yes
 ok "…and it does NOT replace the stamp-time reader" "$(has "$TICK_RENDER" 'cfg_bool board true')" yes
 ok "…reading the same tracked file"      "$(has "$TICK_RENDER" '**tracked**')" yes
-ok "tick renders the board"              "$(has "$TICK_RENDER" 'build-board.sh --standalone --out')" yes
-ok "…to the path watch-board.sh uses"    "$(has "$TICK_RENDER" '.board-live/board.html')" yes
+ok "tick renders the board"              "$(has "$TICK_RENDER" 'build-board.sh --standalone')" yes
+ok "…to the path watch-board.sh uses"    "$(has "$TICK_RENDER" '.ai-bridge/.board-live/board.html')" yes
+# AND IT PASSES NO --out. The hardcoded one that stood here named the pre-3.0 root path
+# and overrode the resolver, so the tick rendered where nothing reads it.
+ok "…passing no --out, so the resolver decides" \
+  "$(has "$TICK_RENDER" 'Pass no `--out`')" yes
+ok "…and never the pre-3.0 root literal" \
+  "$(grep -c -- '--out[= ]\.board-live' "$TICK_RENDER" | tr -d ' ')" 0
 # `--layout` was DELETED, not defaulted away (see build-board.sh's header): a tick that
 # still passed it would exit 2 and render nothing, so its absence is the assertion.
 # tests/artifact-board.test.sh makes the same claim repo-wide; this one keeps it beside

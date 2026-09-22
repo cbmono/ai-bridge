@@ -170,7 +170,11 @@ ok "…and the skill refuses outside an instance root in its own words" \
 ok "…and no model may invoke it, default or not" \
   "$(ge1 "$(grep -cF 'disable-model-invocation: true' "$SK/board/SKILL.md")")" yes
 ok "board renders scoped to THIS instance (the trailing dot)" \
-  "$(ge1 "$(grep -cF -- 'scripts/build-board.sh --out .board-live/artifact-body.html .' "$SK/board/SKILL.md")")" yes
+  "$(ge1 "$(grep -cF -- '/artifact-body.html" .' "$SK/board/SKILL.md")")" yes
+ok "…and it resolves that path rather than hardcoding one" \
+  "$(ge1 "$(grep -cF -- 'bundle-paths.sh AB_BOARD_DIR' "$SK/board/SKILL.md")")" yes
+ok "…and never names the pre-3.0 root path" \
+  "$(grep -c -- '--out[= ]\.board-live' "$SK/board/SKILL.md" | tr -d ' ')" 0
 ok "…as an artifact page BODY, never --standalone" \
   "$(grep -c -- '--standalone --out' "$SK/board/SKILL.md" | tr -d ' ')" 0
 ok "…recording the URL under boardArtifactUrl in the per-machine file" \
