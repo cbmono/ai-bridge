@@ -207,6 +207,43 @@ ok "…the fold refuses it too"  "$(bash "$SH" "$N" >/dev/null 2>&1; echo $?)" 3
 ok "…and nothing was written"  "$(cmp -s "$N" "$TMP/n.before" && echo yes || echo no)" yes
 
 echo
+echo "== a DANGLING separator is not an answer =="
+# The test used to be `" --- " in entry`, so an entry that merely ENDED with the
+# separator — the shape a template leaves, and the shape you get when the separator is
+# pre-placed as an affordance for the answer — counted as answered. It moved carrying
+# nothing and open_questions emptied. An empty open_questions IS the promotion signal,
+# so that turned "nobody has answered this" into "this task is ready". Measured on three
+# task documents whose every question was written that way: ten entries, none answered.
+D="$TMP/dangle.md"
+doc "$D" '"c1"' '"Q1: pre-placed separator --- ", "Q2: separator and spaces ---   "' ''
+cp "$D" "$TMP/dangle.before"
+ok "a dangling separator folds nothing, exit 0" "$(bash "$SH" "$D" >/dev/null 2>&1; echo $?)" 0
+ok "…both questions stay open"                  "$(bash "$SH" --list "$D" open_questions | grep -c . | tr -d ' ')" 2
+ok "…answered_questions stays empty"            "$(bash "$SH" --list "$D" answered_questions | grep -c . | tr -d ' ')" 0
+ok "…and the document is byte-identical"        "$(cmp -s "$D" "$TMP/dangle.before" && echo yes || echo no)" yes
+
+# The boundary: one non-space character after the separator IS an answer.
+E="$TMP/short.md"
+doc "$E" '"c1"' '"Q1: terse --- y", "Q2: dangling --- "' ''
+ok "a one-character answer still folds"  "$(bash "$SH" "$E" 2>&1 | grep -c '^folded: 1 entry' | tr -d ' ')" 1
+ok "…leaving only the dangling one open" "$(bash "$SH" --list "$E" open_questions)" "Q2: dangling --- "
+
+echo
+echo "== a refusal NAMES the key it refused =="
+# scan_flow read the module global `list_key`, which only `--list` sets — so on the fold
+# path every refusal printed an empty name and the operator was told that a list they
+# could not identify was not a flow list. A document has two scannable lists plus other
+# block lists that are never read, so the message decided nothing.
+K="$TMP/block.md"
+printf -- '---\ntype: Task\ntitle: "T"\nstatus: draft\nopen_questions:\n  - "Q1"\nanswered_questions: [ ]\n---\n\n# Context\n\nbody\n' > "$K"
+ok "a block-form list is exit 3" "$(bash "$SH" "$K" >/dev/null 2>&1; echo $?)" 3
+ok "…and the message names it"   "$(bash "$SH" "$K" 2>&1 | grep -c 'open_questions is not a flow list' | tr -d ' ')" 1
+ok "…never an empty name"        "$(bash "$SH" "$K" 2>&1 | grep -c 'fold-answers:  is not' | tr -d ' ')" 0
+# --list names the key it was given, as it always did
+ok "--list on a block list names it too" \
+   "$(bash "$SH" --list "$K" open_questions 2>&1 | grep -c 'open_questions is not a flow list' | tr -d ' ')" 1
+
+echo
 echo "== usage =="
 ok "no argument is exit 2" "$(bash "$SH" >/dev/null 2>&1; echo $?)" 2
 ok "an unreadable path is exit 2" "$(bash "$SH" "$TMP/nope.md" >/dev/null 2>&1; echo $?)" 2
