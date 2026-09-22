@@ -206,6 +206,69 @@ flow_entries() { # <frontmatter> <key>
   list_entries "$1" "$2" | awk 'END { print NR }'
 }
 
+# IS THE FRONTMATTER WELL FORMED? Print one message per structural fault, empty when
+# clean. Bash + awk only, like the rest of this file — so this is NOT a YAML parse and
+# does not pretend to be one. It is the three fault classes that have actually been
+# measured in bundles, each of which made a document unreadable to every YAML consumer
+# while sailing past the field checks below:
+#
+#   1. TWO LIST ENTRIES ON ONE LINE — `..."  - "...`. An agent appending to a block list
+#      wrote the new entry on the previous entry's line. Produced by a project-manager
+#      tick; committed, pushed, and reported clean by this script for a day.
+#   2. AN UNESCAPED QUOTE INSIDE A SELF-CONTAINED ENTRY — the scalar ends early and the
+#      rest of the line parses as garbage. Seen from prose quotation marks and from a
+#      JSON array pasted into a criterion. Only flagged when the line both opens and
+#      closes with a quote, so a legal multi-line scalar is not touched.
+#   3. AN UNQUOTED VALUE CONTAINING A COLON-SPACE PAIR — `description: a: b` is a YAML
+#      mapping error, and a one-line description is where it turns up.
+#
+# A class is added here when it has been seen, not when it can be imagined: every check
+# runs on every document in every bundle, so a speculative one buys false positives on
+# somebody's valid prose.
+fm_wellformed() { # <frontmatter>
+  printf '%s\n' "$1" | awk '
+    function unescaped_quotes(t,   i, c, n, prev) {
+      n = 0; prev = ""
+      for (i = 1; i <= length(t); i++) {
+        c = substr(t, i, 1)
+        if (c == "\"" && prev != "\\") n++
+        prev = (prev == "\\" && c == "\\") ? "" : c
+      }
+      return n
+    }
+    # 1. a second entry opened on this line
+    /"[ \t]+-[ \t]+"/ {
+      printf "line %d: a list entry is opened on another entry'\''s line (\"  - \") — it belongs on its own line\n", NR
+      next
+    }
+    # 2. a self-contained entry carrying unescaped inner quotes
+    /^[ \t]*-[ \t]*"/ {
+      body = $0
+      sub(/^[ \t]*-[ \t]*/, "", body)
+      sub(/[ \t]+$/, "", body)
+      if (body ~ /^".*"$/ && unescaped_quotes(body) != 2) {
+        printf "line %d: %d unescaped double quotes in a quoted entry — escape the inner ones as \\\"\n", NR, unescaped_quotes(body)
+      }
+      next
+    }
+    # 3. an unquoted scalar holding a colon-space pair
+    /^[A-Za-z_][A-Za-z0-9_]*:[ \t]+[^ \t]/ {
+      val = $0
+      sub(/^[A-Za-z_][A-Za-z0-9_]*:[ \t]+/, "", val)
+      sub(/[ \t]+#.*$/, "", val)
+      first = substr(val, 1, 1)
+      key = $0; sub(/:.*$/, "", key)
+      if (first == "`" || first == "@") {
+        printf "line %d: unquoted value for %s opens on %s, which YAML reserves at the start of a plain scalar — quote the value\n", NR, key, first
+      } else if (first != "\"" && first != "'\''" && first != "[" && first != "{" \
+          && first != "|" && first != ">" && first != "&" && first != "*" \
+          && val ~ /: /) {
+        printf "line %d: unquoted value for %s contains a colon-space pair — quote the value\n", NR, key
+      }
+    }
+  '
+}
+
 fail() { printf '  ERROR  %s\n         %s\n' "$1" "$2"; errors=$((errors+1)); }
 warn() { printf '  WARN   %s\n         %s\n' "$1" "$2"; warns=$((warns+1)); }
 
@@ -270,6 +333,19 @@ while IFS= read -r file; do
     continue
   fi
   checked=$((checked+1))
+
+  # STRUCTURE BEFORE FIELDS. A document whose frontmatter does not hold together is
+  # unreadable to every YAML consumer, and the field checks below — sed and grep over
+  # lines — cannot see that: they happily find `type:` in a block whose next line has
+  # already broken the parse. So this runs first, and a fault here stops the document,
+  # the way an unterminated block above does.
+  fm_faults="$(fm_wellformed "$fm")"
+  if [[ -n "$fm_faults" ]]; then
+    while IFS= read -r fault; do
+      [[ -n "$fault" ]] && fail "$rel" "malformed frontmatter — $fault"
+    done <<< "$fm_faults"
+    continue
+  fi
 
   type="$(printf '%s\n' "$fm" | sed -n 's/^type:[[:space:]]*//p' | head -1)"
   if [[ -z "$type" ]]; then
