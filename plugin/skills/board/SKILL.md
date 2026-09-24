@@ -132,8 +132,7 @@ says `run /ai-bridge:board publish to refresh` instead.
 
 So if this session has no artifact capability either: **say that in one line, name the
 rendered file, and stop.** It is not an error and not a failure of the instance —
-`$AB_BOARD_DIR/artifact-body.html` is on disk, `/board.html` is the tracked fallback, and
-nothing is half-published.
+`$AB_BOARD_DIR/artifact-body.html` is on disk and nothing is half-published.
 
 ## Two artifacts, one instance
 

@@ -348,16 +348,34 @@ fmdoc projects/p/tasks/task-005-legal.md '---' 'type: Task' 'title: T' 'status: 
   "timestamp: $TS" 'description: "Fine: this value is quoted"' 'acceptance_criteria:' \
   '  - "he said \"hello\" and that is escaped"' '  - "a url http://example.com/a:b is not a mapping"' \
   '  - "trailing text after a backtick `cmd` is fine"' '---' 'body'
+# A block scalar is opaque text: prose inside it may carry the shapes above and is not
+# a fault. Skipping it is what the entry rule is anchored for.
+fmdoc projects/p/tasks/task-006-block-scalar.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'description: |' '  a quoted list in prose: "one"  - "two" stays prose' \
+  '  - a dash-led line is block content, not an entry' '  and a colon: space pair is legal here' '---' 'body'
+# A single-quoted entry needs no escaping for a double quote, so "one"  - "two" inside
+# one is prose. The rule is anchored to a structural entry for exactly this.
+fmdoc projects/p/tasks/task-007-single-quoted.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'acceptance_criteria:' "  - 'he said \"one\"  - \"two\" in one breath'" '---' 'body'
+# …and the anchoring must still see past an ESCAPED quote to the real delimiter.
+fmdoc projects/p/tasks/task-008-escaped-then-split.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'acceptance_criteria:' '  - "he said \"go\""  - "and left"' '---' 'body'
 set +e; FM_OUT="$(bash "$VALIDATOR" 2>&1)"; set -e
 fm_saw() { printf '%s\n' "$FM_OUT" | grep -q -- "$1" && echo 0 || echo 1; }
+# The path and the message land on TWO lines, so a document counts as flagged only
+# when the message follows its own ERROR line. Grepping both on one line finds nothing.
+fm_flagged() { printf '%s\n' "$FM_OUT" | grep -A1 -- "$1" | grep -q 'malformed' && echo 0 || echo 1; }
+fm_clean() { [ "$(fm_flagged "$1")" = 1 ] && echo 0 || echo 1; }
 
 assert "a list entry opened on another entry's line is an error" "$(fm_saw "opened on another entry")"
 assert "unescaped inner quotes in a quoted entry are an error"   "$(fm_saw "unescaped double quotes")"
 assert "an unquoted value with a colon-space pair is an error"   "$(fm_saw "contains a colon-space pair")"
 assert "an unquoted value opening on a reserved indicator is an error" "$(fm_saw "YAML reserves at the start")"
 assert "the message names the offending line"                    "$(fm_saw "line 6:")"
-assert "the legal control document is NOT flagged" \
-  "$(printf '%s\n' "$FM_OUT" | grep 'malformed' | grep -q 'task-005-legal' && echo 1 || echo 0)"
+assert "the legal control document is NOT flagged"                "$(fm_clean task-005-legal)"
+assert "a block scalar's prose is NOT read as syntax"             "$(fm_clean task-006-block-scalar)"
+assert "a single-quoted entry's inner quotes are NOT a delimiter" "$(fm_clean task-007-single-quoted)"
+assert "…and an escaped quote does not hide a real split entry"   "$(fm_flagged task-008-escaped-then-split)"
 # A malformed document stops at the structure fault, the way an unterminated block does:
 # the field checks below it read lines, and lines lie about a broken block.
 assert "a malformed document is not also field-checked" \

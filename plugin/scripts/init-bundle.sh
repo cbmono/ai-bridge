@@ -1742,7 +1742,7 @@ if [ "$(grep -E '^!?/?board\.html$' "$gi" | tail -1)" != "/board.html" ]; then
   gi_add <<'GI'
 
 # The bundle's board page (build-board.sh) — DERIVED, never tracked. `/ai-bridge:board
-# serve` serves it from /.ai-bridge/.board-live/ on 127.0.0.1, so nothing about the board is pushed.
+# serve` serves it out of AB_BOARD_DIR (bundle-paths.sh) on 127.0.0.1, so nothing is pushed.
 # This line re-ignores it for instances stamped while it was tracked; git takes the LAST
 # matching pattern, so it wins over an older `!/board.html` without editing it.
 /board.html
@@ -1750,7 +1750,7 @@ GI
 fi
 
 # And the file itself goes, once, for a bundle that has one tracked. It is derived output
-# — the next tick re-renders it under /.ai-bridge/.board-live/ — so this is the one removal the stamp
+# — the next tick re-renders it under AB_BOARD_DIR (bundle-paths.sh) — so this is the one removal the stamp
 # makes, and it is reported rather than silent.
 if [ -e "$TARGET/board.html" ] && git -C "$TARGET" ls-files --error-unmatch board.html >/dev/null 2>&1; then
   if git -C "$TARGET" rm --cached --quiet board.html 2>/dev/null; then

@@ -65,5 +65,19 @@ ok "watch-board.sh uses AB_BOARD_DIR" \
 ok "board-serve.sh uses AB_BOARD_DIR" \
    "$(grep -c 'OUT_DIR="\$AB_BOARD_DIR"' "$TPL/plugin/scripts/board-serve.sh" | tr -d ' ')" 1
 
+echo
+echo "== the board dir is spelled ONCE in what a stamped .gitignore inherits =="
+# init-bundle.sh appends the ignore pattern when it cannot find one, and "find" is a
+# grep for the literal — so a COMMENT repeating that literal reads as the pattern and
+# the append is skipped, or the merge restores it and the line lands twice (#251, where
+# rewording one comment took the count 1 -> 2). The literal belongs to bundle-paths.sh;
+# everything else names the variable.
+ok "seed/.gitignore names it once" \
+   "$(grep -cF "$BOARD_DIR" "$TPL/plugin/seed/.gitignore" | tr -d ' ')" 1
+ok "…and that one line IS the pattern" \
+   "$(grep -F "$BOARD_DIR" "$TPL/plugin/seed/.gitignore")" "/$BOARD_DIR/"
+ok "init-bundle.sh spells it nowhere" \
+   "$(grep -cF "$BOARD_DIR" "$TPL/plugin/scripts/init-bundle.sh" | tr -d ' ')" 0
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

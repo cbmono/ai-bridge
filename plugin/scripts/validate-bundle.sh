@@ -212,9 +212,11 @@ flow_entries() { # <frontmatter> <key>
 # measured in bundles, each of which made a document unreadable to every YAML consumer
 # while sailing past the field checks below:
 #
-#   1. TWO LIST ENTRIES ON ONE LINE — `..."  - "...`. An agent appending to a block list
+#   1. TWO LIST ENTRIES ON ONE LINE — `- "a"  - "b"`. An agent appending to a block list
 #      wrote the new entry on the previous entry's line. Produced by a project-manager
-#      tick; committed, pushed, and reported clean by this script for a day.
+#      tick; committed, pushed, and reported clean by this script for a day. Matched
+#      from the start of a structural entry and over escaped quotes, so `\"  - \"`
+#      inside one entry's text is content, not a delimiter.
 #   2. AN UNESCAPED QUOTE INSIDE A SELF-CONTAINED ENTRY — the scalar ends early and the
 #      rest of the line parses as garbage. Seen from prose quotation marks and from a
 #      JSON array pasted into a criterion. Only flagged when the line both opens and
@@ -224,7 +226,8 @@ flow_entries() { # <frontmatter> <key>
 #
 # A class is added here when it has been seen, not when it can be imagined: every check
 # runs on every document in every bundle, so a speculative one buys false positives on
-# somebody's valid prose.
+# somebody's valid prose. Block scalars (`key: |`, `key: >`) are skipped entirely for
+# the same reason: their content is text, and all three rules would read it as syntax.
 fm_wellformed() { # <frontmatter>
   printf '%s\n' "$1" | awk '
     function unescaped_quotes(t,   i, c, n, prev) {
@@ -236,8 +239,22 @@ fm_wellformed() { # <frontmatter>
       }
       return n
     }
+    function indent(t,   p) { p = match(t, /[^ \t]/); return p ? p - 1 : length(t) }
+    function block_header(t) {
+      return t ~ /^[ \t]*([A-Za-z_][A-Za-z0-9_-]*:|-)[ \t]*[|>][0-9+-]*[ \t]*(#.*)?$/
+    }
+    # A block scalar is opaque text, so none of the three rules may read it. Skipping it
+    # is what keeps prose containing `"  - "` or a colon-space pair from being a fault.
+    {
+      if (in_block) {
+        if ($0 ~ /^[ \t]*$/) next
+        if (indent($0) > block_indent) next
+        in_block = 0
+      }
+      if (block_header($0)) { block_indent = indent($0); in_block = 1; next }
+    }
     # 1. a second entry opened on this line
-    /"[ \t]+-[ \t]+"/ {
+    /^[ \t]*-[ \t]+"([^"\\]|\\.)*"[ \t]+-[ \t]+"/ {
       printf "line %d: a list entry is opened on another entry'\''s line (\"  - \") — it belongs on its own line\n", NR
       next
     }
