@@ -218,11 +218,20 @@ if ans_q is None:
 # has answered this yet" into "this task is ready", which is the worst thing this
 # script can do. Measured on three task documents whose every question was written
 # that way: ten entries, none answered, all ten would have folded.
-ANSWERED = re.compile(r" --- \s*\S")
-answered = [e for e in open_q if ANSWERED.search(e)]
+# THE LAST SEPARATOR IS THE ANSWER'S, not the first: a question may carry ` --- ` in its
+# own text, and a search anywhere in the entry folded `Q: compare a --- b --- ` unanswered.
+
+
+def answered_entry(entry):
+    """True when the text after the FINAL ` --- ` has content."""
+    _, sep, answer = entry.rpartition(" --- ")
+    return bool(sep) and bool(answer.strip())
+
+
+answered = [e for e in open_q if answered_entry(e)]
 if not answered:
     sys.exit(0)
-keep = [e for e in open_q if not ANSWERED.search(e)]
+keep = [e for e in open_q if not answered_entry(e)]
 
 COMMITTED = set()
 if committed_state == "read":

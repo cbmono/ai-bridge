@@ -228,6 +228,19 @@ doc "$E" '"c1"' '"Q1: terse --- y", "Q2: dangling --- "' ''
 ok "a one-character answer still folds"  "$(bash "$SH" "$E" 2>&1 | grep -c '^folded: 1 entry' | tr -d ' ')" 1
 ok "…leaving only the dangling one open" "$(bash "$SH" --list "$E" open_questions)" "Q2: dangling --- "
 
+# …and the separator that decides is the LAST one. A question may carry ` --- ` in its own
+# text, so a search anywhere in the entry read that inner one as the answer and folded a
+# question nobody had answered — the same empty `open_questions`, by another route.
+I3="$TMP/inner.md"
+doc "$I3" '"c1"' '"Q1: compare a --- b --- ", "Q2: compare c --- d --- the second one"' ''
+ok "an inner separator does not answer a dangling entry" \
+   "$(bash "$SH" "$I3" 2>&1 | grep -c '^folded: 1 entry' | tr -d ' ')" 1
+ok "…the dangling one stays open, inner separator and all" \
+   "$(bash "$SH" --list "$I3" open_questions)" "Q1: compare a --- b --- "
+ok "…and the folded answer is the text after the FINAL separator" \
+   "$(bash "$SH" --list "$I3" answered_questions | sed 's/^[^·]*· //')" \
+   "Q2: compare c --- d --- the second one"
+
 echo
 echo "== a refusal NAMES the key it refused =="
 # scan_flow read the module global `list_key`, which only `--list` sets — so on the fold

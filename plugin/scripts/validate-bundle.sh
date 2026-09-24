@@ -239,6 +239,17 @@ fm_wellformed() { # <frontmatter>
       }
       return n
     }
+    # Index of the closing quote of a quoted scalar, escape-aware; 0 when it runs on to
+    # the next line, which is a legal multi-line scalar and no business of this rule.
+    function close_quote(t,   i, c, prev) {
+      prev = substr(t, 1, 1)
+      for (i = 2; i <= length(t); i++) {
+        c = substr(t, i, 1)
+        if (c == "\"" && prev != "\\") return i
+        prev = (prev == "\\" && c == "\\") ? "" : c
+      }
+      return 0
+    }
     function indent(t,   p) { p = match(t, /[^ \t]/); return p ? p - 1 : length(t) }
     function block_header(t) {
       return t ~ /^[ \t]*([A-Za-z_][A-Za-z0-9_-]*:|-)[ \t]*[|>][0-9+-]*[ \t]*(#.*)?$/
@@ -263,6 +274,11 @@ fm_wellformed() { # <frontmatter>
       body = $0
       sub(/^[ \t]*-[ \t]*/, "", body)
       sub(/[ \t]+$/, "", body)
+      # An inline comment is not part of the scalar, and its own quotes are not inner
+      # ones — rule 3 already strips one. Only past the closing quote, so a malformed
+      # entry that also carries a `#` still counts every quote it opened.
+      q = close_quote(body)
+      if (q > 0 && substr(body, q + 1) ~ /^[ \t]+#/) body = substr(body, 1, q)
       if (body ~ /^".*"$/ && unescaped_quotes(body) != 2) {
         printf "line %d: %d unescaped double quotes in a quoted entry — escape the inner ones as \\\"\n", NR, unescaped_quotes(body)
       }

@@ -360,6 +360,11 @@ fmdoc projects/p/tasks/task-007-single-quoted.md '---' 'type: Task' 'title: T' '
 # …and the anchoring must still see past an ESCAPED quote to the real delimiter.
 fmdoc projects/p/tasks/task-008-escaped-then-split.md '---' 'type: Task' 'title: T' 'status: draft' \
   "timestamp: $TS" 'acceptance_criteria:' '  - "he said \"go\""  - "and left"' '---' 'body'
+# A trailing inline comment is not part of the scalar, so the quotes inside it are not
+# inner ones. Rule 3 strips one already; rule 2 flagged this and skipped the document,
+# which is why the timestamp below is missing: the field checks must still reach it.
+fmdoc projects/p/tasks/task-009-inline-comment.md '---' 'type: Task' 'title: T' 'status: draft' \
+  'acceptance_criteria:' '  - "ship it" # reviewer said "go"' '---' 'body'
 set +e; FM_OUT="$(bash "$VALIDATOR" 2>&1)"; set -e
 fm_saw() { printf '%s\n' "$FM_OUT" | grep -q -- "$1" && echo 0 || echo 1; }
 # The path and the message land on TWO lines, so a document counts as flagged only
@@ -380,6 +385,9 @@ assert "…and an escaped quote does not hide a real split entry"   "$(fm_flagge
 # the field checks below it read lines, and lines lie about a broken block.
 assert "a malformed document is not also field-checked" \
   "$(printf '%s\n' "$FM_OUT" | grep -q 'task-001-two-entries.md.*missing required' && echo 1 || echo 0)"
+assert "an entry whose inline comment carries quotes is NOT flagged" "$(fm_clean task-009-inline-comment)"
+assert "…and that document is still field-checked" \
+  "$(printf '%s\n' "$FM_OUT" | grep -A1 'task-009-inline-comment.md' | grep -q 'missing required field: timestamp' && echo 0 || echo 1)"
 
 cd "$B"
 
