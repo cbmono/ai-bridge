@@ -227,7 +227,7 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
 
    | Stage | What | When it is skipped |
    |---|---|---|
-   | **1. `${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh projects/<slug>`** | Deterministic, and scoped to the new project.  Dangling references, unknown enum values, missing required fields, a frontmatter/body mismatch. Free, no tokens, no false positives. | never, once the chain runs at all |
+   | **1. `${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh projects/<slug>/project.md projects/<slug>/tasks/*.md`** | Deterministic, and scoped to the files just written — a DIRECTORY argument checks 0 documents and passes vacuously.  Dangling references, unknown enum values, missing required fields, a frontmatter/body mismatch. Free, no tokens, no false positives. | never, once the chain runs at all |
    | **2. External reviewer** — `externalReviewer` from `instance.config.json`, else the CodeRabbit CLI | Judgement on the scaffold's substance. | **none configured** ⇒ stage 3 *is* the route. **Configured but refusing** ⇒ stage 3 is a **spend**, and step e asks first |
    | **3. `qa-reviewer` scaffold mode** | The **declared fallback** where nothing is configured; a **spend the human authorises** where a reviewer is configured and refused. Never a skip, either way. | only when the human has said not to dispatch agents |
 
@@ -253,8 +253,10 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    **a. Gate on applicability, then run stage 1.** First, if `kind` is `research`, stop
    here — nothing below runs. Then, if step 7 ran with `--no-commit`, stop here too.
 
-   Now run **`${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh projects/<slug>`** — scoped to the
-   project you just created, **never the whole bundle**. Zero errors is the gate for continuing.
+   Now run **`${CLAUDE_PLUGIN_ROOT}/scripts/validate-bundle.sh projects/<slug>/project.md projects/<slug>/tasks/*.md`**
+   — the FILES you just created, **never the whole bundle**. It takes file paths, not directories:
+   a directory argument checks **0 documents and exits 0**, which would make this gate pass
+   vacuously. Name the files. Zero errors is the gate for continuing.
    Any error is a defect in the scaffold you just wrote: fix it, amend or add a commit, and
    re-run until clean. Errors here are never "by design" — the validator only reports
    things the schema forbids.
