@@ -90,8 +90,13 @@ def frontmatter(text):
 FM_START, FM_END = frontmatter(src)
 
 
-def scan_flow(text, i):
+def scan_flow(text, i, key=""):
     """A real scanner for a YAML flow sequence of scalars: returns (entries, end_index).
+
+    `key` is the frontmatter key being scanned, and it is a PARAMETER rather than the
+    module global it used to read: the global is set only by `--list`, so on the main
+    path every refusal below named the empty string and the operator was told a list
+    they could not identify was not a flow list.
 
     Quoted scalars are consumed by their own grammar, which is the whole point — a
     bracket, a comma or a ` --- ` inside an entry is data, and every hand-rolled
@@ -100,14 +105,14 @@ def scan_flow(text, i):
     while i < n and text[i] in " \t\n":
         i += 1
     if i >= n or text[i] != "[":
-        die(3, "%s is not a flow list" % list_key)
+        die(3, "%s is not a flow list" % (key or "the list"))
     i += 1
     out = []
     while True:
         while i < n and text[i] in " \t\n,":
             i += 1
         if i >= n:
-            die(3, "unterminated flow list")
+            die(3, "unterminated flow list in %s" % (key or "the list"))
         if text[i] == "]":
             return out, i + 1
         if text[i] == '"':
@@ -115,7 +120,7 @@ def scan_flow(text, i):
             buf = []
             while True:
                 if i >= n:
-                    die(3, "unterminated double-quoted entry")
+                    die(3, "unterminated double-quoted entry in %s" % (key or "the list"))
                 c = text[i]
                 if c == "\\":
                     if i + 1 >= n:
@@ -125,7 +130,7 @@ def scan_flow(text, i):
                     # as `u263A` and re-parse to `u263A`, so the round-trip guard — which
                     # uses this same scanner — cannot see that the backslash was dropped.
                     if nxt not in ESCAPES:
-                        die(3, "unsupported escape \\%s in %s" % (nxt, list_key or "the list"))
+                        die(3, "unsupported escape \\%s in %s" % (nxt, key or "the list"))
                     buf.append(ESCAPES[nxt])
                     i += 2
                     continue
@@ -140,7 +145,7 @@ def scan_flow(text, i):
             buf = []
             while True:
                 if i >= n:
-                    die(3, "unterminated single-quoted entry")
+                    die(3, "unterminated single-quoted entry in %s" % (key or "the list"))
                 if text[i] == "'":
                     if i + 1 < n and text[i + 1] == "'":
                         buf.append("'")
@@ -172,7 +177,7 @@ def read(key):
     at = find_key(key)
     if at is None:
         return None, None, None
-    entries, end = scan_flow(src, at)
+    entries, end = scan_flow(src, at, key)
     return entries, at, end
 
 
@@ -205,10 +210,28 @@ if open_q is None:
 if ans_q is None:
     ans_q, a_at, a_end = [], None, None
 
-answered = [e for e in open_q if " --- " in e]
+# AN ANSWER MUST HAVE CONTENT. The test was `" --- " in e`, so an entry that merely
+# ENDED with the separator — the shape you get when the separator is pre-placed as an
+# affordance for the answer, and the shape a template leaves behind — counted as
+# answered: it moved to answered_questions carrying nothing, and open_questions
+# emptied. Since an empty open_questions IS the promotion signal, that turned "nobody
+# has answered this yet" into "this task is ready", which is the worst thing this
+# script can do. Measured on three task documents whose every question was written
+# that way: ten entries, none answered, all ten would have folded.
+# THE LAST SEPARATOR IS THE ANSWER'S, not the first: a question may carry ` --- ` in its
+# own text, and a search anywhere in the entry folded `Q: compare a --- b --- ` unanswered.
+
+
+def answered_entry(entry):
+    """True when the text after the FINAL ` --- ` has content."""
+    _, sep, answer = entry.rpartition(" --- ")
+    return bool(sep) and bool(answer.strip())
+
+
+answered = [e for e in open_q if answered_entry(e)]
 if not answered:
     sys.exit(0)
-keep = [e for e in open_q if " --- " not in e]
+keep = [e for e in open_q if not answered_entry(e)]
 
 COMMITTED = set()
 if committed_state == "read":

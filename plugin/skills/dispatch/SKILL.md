@@ -447,7 +447,10 @@ ticks, regardless of how long a tick runs.
   `instance.config.json` names what a board shows; **absent or empty ⇒ just this
   instance**.
 - **The board page is re-rendered by the same tick, to a local file** —
-  `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone --out .board-live/board.html`, the gitignored
+  `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --standalone` — which resolves its own
+  output path from `AB_BOARD_DIR` — today `.ai-bridge/.board-live/board.html` — so do
+  NOT pass `--out`: a hardcoded one overrides the resolver and renders outside the
+  layout. It is the gitignored
   path `${CLAUDE_PLUGIN_ROOT}/scripts/watch-board.sh` also writes. Per machine, not per account; nothing is
   published anywhere. `board: false` in `instance.config.json` ⇒ no render and no
   mention; absent or `true` ⇒ it renders and the tick reports the path. The page is

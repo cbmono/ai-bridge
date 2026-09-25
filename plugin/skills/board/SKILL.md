@@ -31,8 +31,8 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/board-serve.sh
 
 That is the whole form. The script binds `127.0.0.1` on `boardPort`
 (`instance.config.local.json`; absent, a port derived from the bundle path in the 4xxxx
-band), renders `.board-live/board.html` from `SNAPSHOT.json`, re-renders within two seconds
-of that file changing, and serves nothing outside `.board-live/`. **No model is in that
+band), renders `.ai-bridge/.board-live/board.html` from `SNAPSHOT.json`, re-renders in two seconds
+of that file changing, and serves nothing outside `$AB_BOARD_DIR`. **No model is in that
 path** — do not render, summarise or reformat the board yourself, and do not read the page
 back into the session. It runs until the human stops it; a second start on the same bundle
 says the port is already served and exits 0. The next session's banner prints the URL.
@@ -62,7 +62,7 @@ its own; what it publishes is the bytes the renderer wrote.
 4. **Render, scoped to this instance**, from the instance root:
 
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --out .board-live/artifact-body.html .
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh --out "$(bash ${CLAUDE_PLUGIN_ROOT}/scripts/bundle-paths.sh AB_BOARD_DIR)/artifact-body.html" .
    ```
 
    **No `--standalone`**: the artifact host supplies `<!doctype>`, `<html>`, `<head>` and
@@ -76,7 +76,7 @@ its own; what it publishes is the bytes the renderer wrote.
    instance's snapshot and nothing else. No readable snapshot ⇒ nothing written, exit 0 ⇒
    stop here.
 
-   `.board-live/` is gitignored, so the rendered body is never committed.
+   `$AB_BOARD_DIR` is gitignored, so the rendered body is never committed.
 5. **Publish it, updating the same artifact.** Read the rendered file and publish its
    contents with this session's artifact capability:
 
@@ -132,8 +132,7 @@ says `run /ai-bridge:board publish to refresh` instead.
 
 So if this session has no artifact capability either: **say that in one line, name the
 rendered file, and stop.** It is not an error and not a failure of the instance —
-`.board-live/artifact-body.html` is on disk, `/board.html` is the tracked fallback, and
-nothing is half-published.
+`$AB_BOARD_DIR/artifact-body.html` is on disk and nothing is half-published.
 
 ## Two artifacts, one instance
 
@@ -167,7 +166,7 @@ never from anybody's published page.
 ## What must not happen here
 
 - **Never write `/board.html`.** No tick commits that file any more; `publish` only ever
-  writes under `.board-live/`.
+  writes under `$AB_BOARD_DIR`.
 - **Never put the URL in `instance.config.json`**, and never remove or rewrite a key
   already in the local file.
 - **Never report `BOARD: published` before the URL is recorded**, and never end a session

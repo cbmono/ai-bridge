@@ -1318,7 +1318,7 @@ page="$root/$AB_BOARD_DIR/board.html"
 # THE BOARD SECTION'S LABEL COLUMN, in characters, so its rows are a table rather than a
 # sentence: `Board`, the widest label, plus the gap the dim continuation lines already use.
 BOARD_LW=8
-# IS THE LOCAL SERVER UP? `.board-live/.serve` is written by board-serve.sh (port, then
+# IS THE LOCAL SERVER UP? `$AB_BOARD_DIR/.serve` is written by board-serve.sh (port, then
 # pid) and removed when it stops — but a SIGKILL leaves it behind, so the pid is checked
 # rather than the file's presence. A dead pid reads as "not up", which is the safe
 # direction: a banner may never send a human to a port nothing is listening on.
@@ -1353,7 +1353,7 @@ fi
 # telling them so every session start is the "only fire what is true" rule broken in the
 # other direction, and `board: false` is not a state anybody needs reminding of. The switch
 # read above is the only thing that reaches this decision — the presence of a stale
-# `.board-live/` on a disabled instance may not resurrect the section, which is what the
+# `$AB_BOARD_DIR` on a disabled instance may not resurrect the section, which is what the
 # `board_on` test being FIRST and OUTERMOST says.
 #
 # WHETHER THE LINK ACTUALLY PRINTED, for §6 to point at: only the first row may be called

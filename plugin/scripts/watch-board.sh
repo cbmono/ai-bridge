@@ -11,7 +11,7 @@
 #                       else ./instance.config.json; if that key is absent or empty,
 #                       just this instance. Resolved by `build-board.sh
 #                       --list-instances`, so there is exactly one discovery rule.
-#     --out DIR         where the page goes (default: ./.board-live). Gitignored.
+#     --out DIR         where the page goes (default: $AB_BOARD_DIR). Gitignored.
 #     --interval SECS   polling interval when there is no fswatch (default: 2).
 #     --once            render once and exit. No watching, nothing to interrupt.
 #

@@ -324,6 +324,73 @@ assert "a project with success_criteria and no objective: is silent" \
 assert "…and its documents were actually checked, not skipped" \
   "$(printf '%s\n' "$NOOBJ_OUT" | grep -q '2 documents checked' && echo 0 || echo 1)"
 
+echo "== malformed frontmatter is an error, per measured fault class =="
+# Each of these four made a real document unreadable to every YAML consumer while
+# passing every field check in this script. The validator is bash + awk, so these are
+# the classes that have been SEEN, checked structurally — not a YAML parse.
+mkdir -p "$TMP/fm/projects/p/tasks" && cd "$TMP/fm"
+echo '{ "org": "x", "reposRoot": "/tmp" }' > instance.config.json
+mkdir -p .ai-bridge && touch .ai-bridge/SCHEMA.md SCHEMA.md
+
+fmdoc() { # <file> <lines...>
+  local f="$1"; shift; mkdir -p "$(dirname "$f")"; printf '%s\n' "$@" > "$f"
+}
+fmdoc projects/p/tasks/task-001-two-entries.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'advisor_notes:' '  - "first entry."  - "second opened on the same line"' '---' 'body'
+fmdoc projects/p/tasks/task-002-inner-quotes.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'acceptance_criteria:' '  - "include already lists ["src/**/*", "test/**/*"] so it is covered"' '---' 'body'
+fmdoc projects/p/tasks/task-003-colon-space.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'description: Unblock the deploy: port the guard first' '---' 'body'
+fmdoc projects/p/tasks/task-004-reserved.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'description: `gh pr view --json reviewThreads` errors' '---' 'body'
+# the control: every shape above, written legally
+fmdoc projects/p/tasks/task-005-legal.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'description: "Fine: this value is quoted"' 'acceptance_criteria:' \
+  '  - "he said \"hello\" and that is escaped"' '  - "a url http://example.com/a:b is not a mapping"' \
+  '  - "trailing text after a backtick `cmd` is fine"' '---' 'body'
+# A block scalar is opaque text: prose inside it may carry the shapes above and is not
+# a fault. Skipping it is what the entry rule is anchored for.
+fmdoc projects/p/tasks/task-006-block-scalar.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'description: |' '  a quoted list in prose: "one"  - "two" stays prose' \
+  '  - a dash-led line is block content, not an entry' '  and a colon: space pair is legal here' '---' 'body'
+# A single-quoted entry needs no escaping for a double quote, so "one"  - "two" inside
+# one is prose. The rule is anchored to a structural entry for exactly this.
+fmdoc projects/p/tasks/task-007-single-quoted.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'acceptance_criteria:' "  - 'he said \"one\"  - \"two\" in one breath'" '---' 'body'
+# …and the anchoring must still see past an ESCAPED quote to the real delimiter.
+fmdoc projects/p/tasks/task-008-escaped-then-split.md '---' 'type: Task' 'title: T' 'status: draft' \
+  "timestamp: $TS" 'acceptance_criteria:' '  - "he said \"go\""  - "and left"' '---' 'body'
+# A trailing inline comment is not part of the scalar, so the quotes inside it are not
+# inner ones. Rule 3 strips one already; rule 2 flagged this and skipped the document,
+# which is why the timestamp below is missing: the field checks must still reach it.
+fmdoc projects/p/tasks/task-009-inline-comment.md '---' 'type: Task' 'title: T' 'status: draft' \
+  'acceptance_criteria:' '  - "ship it" # reviewer said "go"' '---' 'body'
+set +e; FM_OUT="$(bash "$VALIDATOR" 2>&1)"; set -e
+fm_saw() { printf '%s\n' "$FM_OUT" | grep -q -- "$1" && echo 0 || echo 1; }
+# The path and the message land on TWO lines, so a document counts as flagged only
+# when the message follows its own ERROR line. Grepping both on one line finds nothing.
+fm_flagged() { printf '%s\n' "$FM_OUT" | grep -A1 -- "$1" | grep -q 'malformed' && echo 0 || echo 1; }
+fm_clean() { [ "$(fm_flagged "$1")" = 1 ] && echo 0 || echo 1; }
+
+assert "a list entry opened on another entry's line is an error" "$(fm_saw "opened on another entry")"
+assert "unescaped inner quotes in a quoted entry are an error"   "$(fm_saw "unescaped double quotes")"
+assert "an unquoted value with a colon-space pair is an error"   "$(fm_saw "contains a colon-space pair")"
+assert "an unquoted value opening on a reserved indicator is an error" "$(fm_saw "YAML reserves at the start")"
+assert "the message names the offending line"                    "$(fm_saw "line 6:")"
+assert "the legal control document is NOT flagged"                "$(fm_clean task-005-legal)"
+assert "a block scalar's prose is NOT read as syntax"             "$(fm_clean task-006-block-scalar)"
+assert "a single-quoted entry's inner quotes are NOT a delimiter" "$(fm_clean task-007-single-quoted)"
+assert "…and an escaped quote does not hide a real split entry"   "$(fm_flagged task-008-escaped-then-split)"
+# A malformed document stops at the structure fault, the way an unterminated block does:
+# the field checks below it read lines, and lines lie about a broken block.
+assert "a malformed document is not also field-checked" \
+  "$(printf '%s\n' "$FM_OUT" | grep -q 'task-001-two-entries.md.*missing required' && echo 1 || echo 0)"
+assert "an entry whose inline comment carries quotes is NOT flagged" "$(fm_clean task-009-inline-comment)"
+assert "…and that document is still field-checked" \
+  "$(printf '%s\n' "$FM_OUT" | grep -A1 'task-009-inline-comment.md' | grep -q 'missing required field: timestamp' && echo 0 || echo 1)"
+
+cd "$B"
+
 echo "== refusing to run outside an instance root =="
 mkdir -p "$TMP/notabundle" && cd "$TMP/notabundle"
 set +e; bash "$VALIDATOR" >/dev/null 2>&1; OUTSIDE=$?; set -e
