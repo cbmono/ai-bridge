@@ -151,6 +151,19 @@ ok "new-project keeps the scaffold review's declared fallback" \
   "$(ge1 "$(grep -ci 'fallback' "$SK/new-project/SKILL.md")")" yes
 ok "…and the build/research asymmetry (clis from a flag or empty)" \
   "$(ge1 "$(grep -c 'clis' "$SK/new-project/SKILL.md")")" yes
+# The stage-1 gate asks ONE question — is the scaffold I just wrote well-formed? An unscoped
+# `validate-bundle.sh` also reports every pre-existing warning in the bundle: measured
+# 2026-09-25 on a live instance, 281 documents, 0 errors, 290 warnings, 582 lines / 64 KB
+# entering a session with no use for it. This asserts the SCOPE, not the prose around it —
+# every body invocation must name `projects/<slug>`, and an unscoped one must fail here.
+# The frontmatter `allowed-tools:` line is excluded: it is a permission glob, not a call.
+nps_unscoped() {
+  awk 'NR>1 && /^---$/ { body=1; next } body' "$SK/new-project/SKILL.md" \
+    | grep -o 'validate-bundle\.sh[^`]*' \
+    | grep -vc 'validate-bundle\.sh projects/<slug>'
+}
+ok "new-project's stage-1 gate validates only the project it made" \
+  "$(nps_unscoped)" 0
 ok "close-project keeps the retain: true freeze route" \
   "$(ge1 "$(grep -c 'retain: true' "$SK/close-project/SKILL.md")")" yes
 ok "…and stays human-gated" \
