@@ -394,15 +394,15 @@ def toint(v, default=0):
 
 # ---------------------------------------------------------------- the board
 TONE = {"blocked": "stop", "review": "accent", "in-review": "accent", "ready": "accent",
-        "done": "ok", "in-progress": "accent", "cancelled": "dim"}
+        "done": "ok", "in-progress": "accent", "cancelled": "dim", "paused": "dim"}
 # THE GLYPH AND THE LABEL ARE MARKUP, NOT A PSEUDO-ELEMENT, and both fall back to the
 # raw status: a value the board has never seen still renders as its own text, so drift
 # stays visible instead of arriving as a blank cell.
 GLYPH = {"done": "✓", "in-review": "◐", "review": "◐", "in-progress": "◐",
-         "blocked": "■", "draft": "◇", "ready": "◇", "cancelled": "⊘"}
+         "blocked": "■", "draft": "◇", "ready": "◇", "cancelled": "⊘", "paused": "⏸"}
 LABEL = {"in-review": "In review", "review": "In review", "in-progress": "In progress",
          "done": "Done", "blocked": "Blocked", "draft": "Draft", "ready": "Ready",
-         "cancelled": "Cancelled"}
+         "cancelled": "Cancelled", "paused": "Paused"}
 
 
 def state_cell(st):
@@ -731,6 +731,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
 .board[data-tab="all"] .tab[data-pick="all"],
 .board[data-tab="you"] .tab[data-pick="you"],
 .board[data-tab="act"] .tab[data-pick="act"],
+.board[data-tab="pause"] .tab[data-pick="pause"],
 .board[data-tab="fin"] .tab[data-pick="fin"],
 .board[data-tab="other"] .tab[data-pick="other"]{background:var(--accent);
   border-color:var(--accent);color:var(--accent-ink);font-weight:700}
@@ -740,6 +741,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
    class list stays exactly what it was. */
 .board[data-tab="you"] .pcard:not([data-f~="you"]),
 .board[data-tab="act"] .pcard:not([data-f~="act"]),
+.board[data-tab="pause"] .pcard:not([data-f~="pause"]),
 .board[data-tab="fin"] .pcard:not([data-f~="fin"]),
 .board[data-tab="other"] .pcard:not([data-f~="other"]),
 .board[data-tab="all"] .pcard[data-f~="other"],
@@ -1624,7 +1626,7 @@ def render_table():
              % ("live" if asks else "", len(asks)))
     o.append("</dl></header>")
 
-    # ---- the tab row: five filters over the SAME project rows ----
+    # ---- the tab row: six filters over the SAME project rows ----
     #
     # THE TABS ARE FILTERS, NEVER A SECOND VIEW. Each one hides project rows whose
     # wrapper does not carry its facet; nothing is re-derived, re-ordered or re-rendered,
@@ -1632,9 +1634,11 @@ def render_table():
     # computes for its own masthead and sections, so a tab can never disagree with the
     # rows under it.
     n_active = sum(1 for r in rows if str(r[1].get("status") or "") == "active")
+    n_paused = sum(1 for r in rows if str(r[1].get("status") or "") == "paused")
     n_fin_tab = sum(1 for r in rows if r[2])
     tabs = [("all", "All", len(rows)), ("you", "Needs you", len(asks)),
-            ("act", "Active", n_active), ("fin", "Finished", n_fin_tab),
+            ("act", "Active", n_active), ("pause", "Paused", n_paused),
+            ("fin", "Finished", n_fin_tab),
             ("other", "Other owners", n_owners)]
     o.append('<nav class="tabs"><div class="tabwrap">')
     for pick, label, count in tabs:
@@ -1769,14 +1773,20 @@ def render_table():
         # least one rail item; Active = the project says `active`; Finished = the same
         # half of the board the divider above already draws.
         facets = ["you"] if mine else []
+        paused = str(p.get("status") or "") == "paused"
         if str(p.get("status") or "") == "active":
             facets.append("act")
+        if paused:
+            facets.append("pause")
         if fin:
             facets.append("fin")
         o.append('<div class="pcard" data-f="%s">' % e(" ".join(facets)))
         o.append('<details class="proj%s%s"><summary class="phead">'
                  % (" fin" if fin else "", " wants" if mine else ""))
         o.append('<span class="ptitle">%s</span>' % e(p.get("title")))
+        # The tab is where a paused project is found; the marker says why it is there.
+        if paused:
+            o.append('<span class="tag paused">%s</span>' % e(state_cell("paused")))
         # THE DATE SITS WITH THE TITLE, not at the far end of the line. It qualifies the
         # title — "this project, started then" — and reading it meant crossing six count
         # chips to get to it. Same span, same class, same treatment; only the position
