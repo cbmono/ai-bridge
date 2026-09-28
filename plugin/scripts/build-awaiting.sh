@@ -97,6 +97,14 @@ mine() { # <task-path>
   ( cd "$inst" && bash "$HERE/task-owner.sh" "$1" ) >/dev/null 2>&1
 }
 
+# A paused project keeps its `merge` rows and nothing else: only the human merges, and a PR
+# that finished during the pause must not wait for the resume. Exit 1 is the only skip.
+paused() { # <path under projects/<slug>/>
+  [ -f "$HERE/project-paused.sh" ] || return 1
+  ( cd "$inst" && bash "$HERE/project-paused.sh" "$1" ) >/dev/null 2>&1
+  [ $? -eq 1 ]
+}
+
 lookup() { # <path> <"trailer"|"merge">  -> prints the value, or nothing
   local p="$1" kind="$2" i n
   if [ "$kind" = trailer ]; then
@@ -133,6 +141,7 @@ for pm in "$inst"/projects/*/project.md; do
   [ "$(fmfirst "$pm" status)" = done ] && continue
   slug="$(basename "$(dirname "$pm")")"
   ntask=0; nterm=0
+  held=0; paused "$pm" && held=1
 
   for f in "$(dirname "$pm")"/tasks/*.md; do
     [ -f "$f" ] || continue
@@ -144,6 +153,11 @@ for pm in "$inst"/projects/*/project.md; do
     mine "$f" || continue
     t="$(title_of "$f")"
     trail="$(lookup "$f" trailer)"; [ -n "$trail" ] || trail="$(lookup "$rel" trailer)"
+    mlink="$(lookup "$f" merge)"; [ -n "$mlink" ] || mlink="$(lookup "$rel" merge)"
+    if [ "$held" = 1 ]; then
+      [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${trail:-$mlink}"
+      continue
+    fi
 
     # UNANSWERED questions only: an entry carrying ` --- ` is answered and belongs to
     # step 2's fold, not to the human's queue.
@@ -160,7 +174,6 @@ $qlist
 EOF
     [ -n "$qs" ] && add "❓" answer "$t" "$rel" "${trail:-$qs}"
 
-    mlink="$(lookup "$f" merge)"; [ -n "$mlink" ] || mlink="$(lookup "$rel" merge)"
     [ -n "$mlink" ] && add "🔀" merge "$t" "$rel" "${trail:-$mlink}"
 
     case "$st" in
@@ -176,7 +189,7 @@ EOF
     esac
   done
 
-  if [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ]; then
+  if [ "$held" = 0 ] && [ "$ntask" -gt 0 ] && [ "$ntask" = "$nterm" ]; then
     pt="$(title_of "$pm")"; ptrail="$(lookup "$pm" trailer)"
     add "🏁" close "$pt" "${pm#"$inst"}" "${ptrail:-$DEF_CLOSE$slug\`}"
   fi
