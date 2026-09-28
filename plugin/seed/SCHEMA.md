@@ -81,7 +81,7 @@ browser: off | claude-for-chrome      # optional (default off). claude-for-chrom
 owner: <github-username>              # optional: which human's work this project is, on an instance shared by more than one. A GitHub USERNAME, never an email. Absent ⇒ nobody in particular, so it is this clone's — see "Ownership on a shared instance" below. Gates DISPATCH only, never promotion.
 retain: true                          # optional (default absent = false). Closeout KEEPS this project's folder instead of `git rm -r`-ing it. Governs the FOLDER ONLY — not the tasks, not the status: a retained project still ends `status: done` with every task terminal. See "Project & objective completion" below.
 deliverable_paths: [ /projects/<slug>/deliverables/<file>, ... ]   # WRITTEN BY CLOSEOUT, not by hand. Bundle-relative paths, resolved once from each task's `artifacts:` and verified on disk at closeout. `[ ]` means closeout looked and found none.
-status: active | paused | done
+status: active | paused | done        # paused gates DISPATCH only, never a task rewrite — in-flight work and merges continue; resolved by project-paused.sh.
 timestamp: <ISO 8601>
 ---
 ```

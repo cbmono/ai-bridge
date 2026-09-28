@@ -639,6 +639,12 @@ while IFS= read -r pfile; do
     continue
   fi
 
+  # A paused project's verbs agree with AWAITING.md: `merge` survives, nothing else does.
+  # Exit 1 is the only "paused"; exit 2 cannot answer and must not hide work.
+  p_held=0; prc=0
+  bash "$(dirname "${BASH_SOURCE[0]:-$0}")/project-paused.sh" "$pfile" >/dev/null 2>&1 || prc=$?
+  [[ $prc -eq 1 ]] && p_held=1
+
   # ---- phases
   phases_json=""; ph_total=0; ph_done=0
   while IFS= read -r phfile; do
@@ -741,6 +747,7 @@ EOF
       in-review) [[ -n "$prs_json" && "$t_mergeable" == "MERGEABLE" ]] && awaiting="merge" ;;
       blocked)   awaiting="unblock" ;;
     esac
+    [[ $p_held -eq 1 && "$awaiting" != merge ]] && awaiting=""
     [[ -n "$awaiting" ]] && awaiting_total=$((awaiting_total+1))
 
     case "$t_status" in done|cancelled) t_terminal=$((t_terminal+1)) ;; esac
@@ -755,7 +762,7 @@ EOF
   # A close proposal, same rule as the PM's step 6: every task terminal, at least
   # one task, project not already done. Never an action — the board only shows it.
   awaiting_close=false
-  if [[ $t_count -gt 0 && $t_terminal -eq $t_count && "$p_status" != "done" ]]; then
+  if [[ $p_held -eq 0 && $t_count -gt 0 && $t_terminal -eq $t_count && "$p_status" != "done" ]]; then
     awaiting_close=true; awaiting_total=$((awaiting_total+1))
   fi
 
