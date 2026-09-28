@@ -1,0 +1,15 @@
+resource 200 http://127.0.0.1:8738/assets/loopd-mark-color.svg
+resource 200 http://127.0.0.1:8738/assets/loopd-icon.png
+resource 200 http://127.0.0.1:8738/assets/fonts/jetbrains-mono/JetBrainsMono-Regular.woff2
+resource 200 http://127.0.0.1:8738/assets/fonts/jetbrains-mono/JetBrainsMono-Bold.woff2
+resource 200 http://127.0.0.1:8738/assets/fonts/inter/Inter-Regular.woff2
+resource 200 http://127.0.0.1:8738/assets/fonts/jetbrains-mono/JetBrainsMono-Medium.woff2
+resource 200 http://127.0.0.1:8738/assets/fonts/inter/Inter-Bold.woff2
+resource 200 http://127.0.0.1:8738/assets/fonts/inter/Inter-SemiBold.woff2
+font Inter 400 loaded
+font Inter 600 loaded
+font Inter 700 loaded
+font JetBrains Mono 400 loaded
+font JetBrains Mono 500 loaded
+font JetBrains Mono 700 loaded
+SUMMARY resources=8 failed=0 broken-images=0
