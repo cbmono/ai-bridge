@@ -47,8 +47,13 @@ MARK
 rows() { sed -n '2,4p' "$1"; }
 mark_matches() { diff -q "$TMP/mark.txt" <(rows "$1") >/dev/null 2>&1 && echo yes || echo no; }
 
-# Every tracked path a reader is shipped, same scope as install-era-wording.test.sh.
-shipped_surface() { ( cd "$REPO" && git ls-files -- README.md docs plugin .claude 2>/dev/null ); }
+# Every tracked path a reader is shipped: the docs plus CLAUDE.md's closed `core` list —
+# the companion plugins and both deprecation stubs still carry `/ai-bridge:` slugs.
+shipped_surface() {
+  ( cd "$REPO" && git ls-files -- README.md docs .claude plugin 'plugin-*' config \
+      install.sh upgrade.sh 2>/dev/null )
+}
+in_surface() { shipped_surface | grep -qxF -- "$1" && echo yes || echo no; }
 
 echo
 echo "== 1. the README opens with the mark, copied =="
@@ -70,6 +75,9 @@ echo "== 3. the slugs are untouched until task-007 =="
 ok "no /loopd: slug in the README"    "$(count "$README" '/loopd:')" 0
 ok "…nor anywhere on the shipped surface" \
    "$(shipped_surface | tr '\n' '\0' | (cd "$REPO" && xargs -0 grep -lF -- '/loopd:' 2>/dev/null) | wc -l | tr -d ' ')" 0
+ok "the sweep covers the install.sh stub"   "$(in_surface install.sh)" yes
+ok "the sweep covers the upgrade.sh stub"   "$(in_surface upgrade.sh)" yes
+ok "the sweep covers the plugin-yolo companion" "$(in_surface plugin-yolo/companion/AUTONOMY.md)" yes
 ok "the README still documents /ai-bridge: commands" \
    "$([ "$(count "$README" '/ai-bridge:')" -gt 0 ] && echo yes || echo no)" yes
 ok "the marketplace line resolves today" \
