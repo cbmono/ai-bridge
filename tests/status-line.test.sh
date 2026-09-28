@@ -179,16 +179,19 @@ sgr_of() { # <output> <segment text> -> the code that opens it
   printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p' | head -n1
 }
 C="$(run --instance "$INST" --color always)"
-ok "work in flight is cyan"                "$(sgr_of "$C" '2 in flight')" 36
-ok "a queue that needs you is yellow"       "$(sgr_of "$C" '3 need you')" 33
+ok "work in flight is the machine's blue"  "$(sgr_of "$C" '2 in flight')" 94
+ok "a queue that needs you is the human's pink" "$(sgr_of "$C" '3 need you')" 95
 ok "a free lock is dim, not shouting"       "$(sgr_of "$C" 'lock free')" 2
 : > "$INST/$AB_LOCK"
-ok "…and a held one is yellow"              "$(sgr_of "$(run --instance "$INST" --color always)" 'lock held')" 33
+ok "…and a held one is the machine's blue"  "$(sgr_of "$(run --instance "$INST" --color always)" 'lock held')" 94
 rm -f "$INST/$AB_LOCK"
+ok "the last tick is a timestamp, so dim italic" "$(sgr_of "$C" 'last tick')" '3;2'
+ok "no third hue: every code is blue, pink, bold, dim or dim italic" \
+   "$(grep -oE '\[[0-9;]+m' "$SL" | sort -u | grep -vcE '^\[(94|95|1|2|3;2|0)m$' | tr -d ' ')" 0
 Z="$(run --instance "$TMP/d5" --color always)"
-ok "zero in flight goes dim, not cyan"      "$(sgr_of "$Z" '0 in flight')" 2
+ok "zero in flight goes dim, not blue"      "$(sgr_of "$Z" '0 in flight')" 2
 U="$(run --instance "$TMP/d1" --color always)"
-ok "an unknown number is red"               "$(sgr_of "$U" '? need you')" 31
+ok "an unknown number is a warning, so pink" "$(sgr_of "$U" '? need you')" 95
 
 echo
 echo "== 8. 3/4-bit ONLY — no 256-colour, no truecolor, no terminfo probe =="
