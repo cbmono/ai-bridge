@@ -758,6 +758,44 @@ assert "…and the hook really EMITS that line, rather than merely naming it in 
 assert "…while the human's copy of the same instance does not" \
   "$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>&1 | grep -qF 'Ready to dispatch' && echo 1 || echo 0)"
 rm -rf "$INST/projects"
+
+# A PAUSED PROJECT OFFERS NOTHING, asked of project-paused.sh. Two projects, each with a
+# `ready` task on disk: exactly the active one counts, so a gate that drops both fails too.
+mkdir -p "$INST/projects/live/tasks" "$INST/projects/held/tasks" "$INST/$AB_DIR"
+[ -f "$INST/$AB_SCHEMA" ] || printf 'stub\n' > "$INST/$AB_SCHEMA"   # project-paused.sh answers 2 without it
+printf -- '---\ntype: Project\nstatus: active\n---\n' > "$INST/projects/live/project.md"
+printf -- '---\ntype: Project\nstatus: paused\n---\n' > "$INST/projects/held/project.md"
+for p in live held; do printf -- '---\nstatus: ready\n---\n' > "$INST/projects/$p/tasks/task-001.md"; done
+printf -- '---\nstatus: in-progress\nsession: s1\n---\n' > "$INST/projects/held/tasks/task-002.md"
+assert "paused + active, one ready each: 'Ready to dispatch   1'" \
+  "$(has 'Ready to dispatch   1' "$(model_ctx)")"
+mv "$INST/projects/held/project.md" "$TMP/held.md"
+assert "…and 2 once the paused project is gone — so the 1 is the active one's" \
+  "$(has 'Ready to dispatch   2' "$(model_ctx)")"
+# Exit 2 never hides work: an unterminated frontmatter says `paused` and cannot be read.
+printf -- '---\ntype: Project\nstatus: paused\n' > "$INST/projects/held/project.md"
+assert "an unreadable paused project.md (exit 2) still counts its ready task" \
+  "$(has 'Ready to dispatch   2' "$(model_ctx)")"
+mv "$TMP/held.md" "$INST/projects/held/project.md"
+
+# REGRESSION TRIPWIRE, not a live bug: none of these three writes a task file today. The
+# rewrite being retired is the HUMAN workaround — demoting every task to `draft`, which is
+# how a project was paused on 2026-09-14 (4a9dab3). Pause and resume touch project.md only.
+printf '# Awaiting you\n' > "$INST/$AB_AWAITING"
+hash_tasks() { find "$INST/projects" -path '*/tasks/*.md' -type f | sort | xargs cat | cksum; }
+three() { ( cd "$INST" && bash "$SCRIPTS/project-paused.sh" projects/held/tasks/task-001.md ) >/dev/null 2>&1
+          model_ctx >/dev/null
+          bash "$SCRIPTS/build-awaiting.sh" --instance "$INST" >/dev/null 2>&1; }
+H0="$(hash_tasks)"; three; H1="$(hash_tasks)"
+printf -- '---\ntype: Project\nstatus: active\n---\n' > "$INST/projects/held/project.md"
+three; H2="$(hash_tasks)"
+assert "pause → run all three → resume → run all three: every task file byte-identical" \
+  "$([ "$H0" = "$H1" ] && [ "$H1" = "$H2" ] && echo 0 || echo 1)"
+assert "…and the ready task is still ready" \
+  "$(grep -qx 'status: ready' "$INST/projects/held/tasks/task-001.md" && echo 0 || echo 1)"
+assert "…and once resumed it counts again: 'Ready to dispatch   2'" \
+  "$(has 'Ready to dispatch   2' "$(model_ctx)")"
+rm -rf "$INST/projects"; rm -f "$INST/$AB_AWAITING"
 # The hook must not attempt the offer itself. Scoped to what it PRINTS — an `echo` or
 # `printf` — rather than to every line in the file: `$?` ends a line with a question mark
 # and a header sentence may pose one, and neither is the hook asking the human anything.

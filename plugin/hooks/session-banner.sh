@@ -1691,6 +1691,12 @@ if [ -d "$root/projects" ]; then
     # offer a loop that then refuses. Exit 1 is the only skip: exit 2 means task-owner.sh
     # could not answer (no SCHEMA.md, an unreadable frontmatter), and an unanswered question
     # must not silently hide work from its owner.
+    # A paused project is skipped the same way, and on the same rule: exit 1 only.
+    if [ -x "$bin/project-paused.sh" ]; then
+      prc=0
+      ( cd "$root" && bash "$bin/project-paused.sh" "$root$val" >/dev/null 2>&1 ) || prc=$?
+      [ "$prc" -eq 1 ] && continue
+    fi
     if [ -x "$bin/task-owner.sh" ]; then
       orc=0
       ( cd "$root" && bash "$bin/task-owner.sh" "$root$val" >/dev/null 2>&1 ) || orc=$?
