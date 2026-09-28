@@ -746,11 +746,23 @@ src = open('$BOARD', encoding='utf-8').read()
 m = re.search(r'^TONE = \{(.*?)\}', src, re.S | re.M)
 tone = dict(re.findall(r'\"([a-z-]+)\": \"([a-z]+)\"', m.group(1) if m else ''))
 sys.exit(0 if tone and [k for k, v in tone.items() if v == 'stop'] == ['blocked'] else 1)")"
+assert "…while queued, running and merged are blue"   "$(yes_if python3 -c "
+import re, sys
+src = open('$BOARD', encoding='utf-8').read()
+m = re.search(r'^TONE = \{(.*?)\}', src, re.S | re.M)
+tone = dict(re.findall(r'\"([a-z-]+)\": \"([a-z]+)\"', m.group(1) if m else ''))
+sys.exit(0 if all(tone.get(k) in ('accent', 'ok') for k in ('ready', 'in-progress', 'in-review', 'done')) else 1)")"
 # The active tab is BLUE: which tab you are reading is the machine's state, and a filled
 # pink pill there would be a pink pixel that is not a decision waiting.
 assert "the active tab pill is filled blue"          "$(fhas 'background:var(--accent);
   border-color:var(--accent);color:var(--accent-ink);font-weight:700}' "$SLATE")"
 assert "…and the focus ring is blue too"             "$(fhas ':focus-visible{outline:2px solid var(--accent);' "$SLATE")"
+# GEOMETRY FROM THE TOKENS: radii are --loopd-r-l/m/s (12/10/6) or the pill, and the one
+# shadow on the page is --loopd-shadow on the toast, the only floating chrome.
+assert "every radius is 12, 10, 6, 0 or the pill"    "$(eq "$(grep -oE 'border-radius:[^;}]+' "$SLATE" | sort -u | tr '\n' ' ')" \
+  'border-radius:0 border-radius:10px border-radius:12px border-radius:6px border-radius:999px ')"
+assert "…the shadow token is tokens.css's"          "$(fhas '--shadow:0 24px 80px rgba(0,0,0,.5);' "$SLATE")"
+assert "…and only the floating toast casts one"      "$(eq "$(grep -oE 'box-shadow:[^;}]+' "$SLATE" | tr '\n' ' ')" 'box-shadow:var(--shadow) ')"
 
 echo "== the tab row filters project rows, and All is what ships =="
 assert "the board carries the default tab"           "$(fhas '<div class="board" data-tab="all">' "$SLATE")"

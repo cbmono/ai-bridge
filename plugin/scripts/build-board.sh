@@ -393,7 +393,7 @@ def toint(v, default=0):
         return default
 
 # ---------------------------------------------------------------- the board
-TONE = {"blocked": "stop", "review": "accent", "in-review": "accent",
+TONE = {"blocked": "stop", "review": "accent", "in-review": "accent", "ready": "accent",
         "done": "ok", "in-progress": "accent", "cancelled": "dim"}
 # THE GLYPH AND THE LABEL ARE MARKUP, NOT A PSEUDO-ELEMENT, and both fall back to the
 # raw status: a value the board has never seen still renders as its own text, so drift
@@ -740,7 +740,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
 .board[data-tab="all"] .sep.others,
 .board:not([data-tab="all"]) .sep{display:none}
 
-/* THE DECISION RAIL. Sunk ground, a 4px amber left border and the label above it —
+/* THE DECISION RAIL. Sunk ground, a 4px pink left border and the label above it —
    the panel is set INTO the card rather than tinted on top of it, which is what the
    four background layers buy. */
 .rail{background:var(--sunk);border:1px solid var(--line);
@@ -807,7 +807,7 @@ button:hover{border-color:var(--accent)}
   white-space:nowrap;flex-shrink:0;margin-left:-8px}
 /* THE COUNT SUMMARY IS ONE SENTENCE, NOT A ROW OF CHIPS: `2 done · 3 active · 2
    pending`, muted, with the numbers bold and coloured. The interpunct is drawn by the
-   separator rule, so nothing but the amber pill is a box on this line. */
+   separator rule, so nothing but the pink pill is a box on this line. */
 .counts{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;align-items:center;
   font-size:13px;color:var(--muted)}
 .c,.tag{font-size:13px;color:var(--muted);border:0;background:none;padding:0;
@@ -839,7 +839,7 @@ button:hover{border-color:var(--accent)}
   color:var(--muted)}
 .proj.other[open] .ptitle{color:var(--ink)}
 /* A project that wants you keeps its title at full weight even under the finished or
-   other-owner treatments. The filled amber pill and the sort are the other two channels
+   other-owner treatments. The filled pink pill and the sort are the other two channels
    — the card border and inset bar are gone, because the handoff draws every card the
    same and the pill is filled again (see `.c.you`). */
 .proj.wants .ptitle{color:var(--ink);font-weight:600}
@@ -868,7 +868,7 @@ td{padding:0;vertical-align:middle;min-width:0}
    plus `.trow`'s 2px gap. `.tfile` carries an explicit line-height for exactly this reason
    — left at `normal` the offset moves with whichever mono font the machine resolves. */
 td:not(:first-child){padding-top:19px}
-tr.flight{box-shadow:inset 2px 0 0 var(--accent)}
+tr.flight{background:linear-gradient(var(--accent),var(--accent)) left/2px 100% no-repeat}
 .tid{color:var(--dim);font-size:11px;margin-right:.4rem;
   font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
 td:first-child{overflow-wrap:break-word}
@@ -888,7 +888,7 @@ td:first-child{overflow-wrap:break-word}
 .tmain{display:flex;flex-direction:column;align-items:flex-start;gap:.22rem;min-width:0}
 .tbtn{background:none;border:0;padding:0;font:400 14px/1.4 'Inter',system-ui,sans-serif;
   color:var(--ink);text-align:left;border-radius:0}
-.tbtn:hover{color:var(--signal-soft-text)}
+.tbtn:hover{color:var(--accent)}
 /* THE PROMOTE CHIP RIDES IN THE PR COLUMN, where a draft has no PR to show. It is the
    only chip in the table that asks for something, and it still only COPIES a prompt. */
 .promote{font:600 11px/1.4 'Inter',system-ui,sans-serif;padding:2px 8px;margin:0;
