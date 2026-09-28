@@ -34,7 +34,7 @@
 # THE SIGNIFICANCE ASSERTION IS THE POINT OF THE FEATURE AND IS IN SECTION 3. Colour that
 # tracked CATEGORY would make the banner prettier and make nothing faster to find, so the
 # machine-checkable form of "the warning is findable at a glance" is: the rows that are FINE
-# carry no escape at all, and the warning rows carry one. Both halves, or it is decoration.
+# carry no hue (blue or pink), and the warning rows carry one. Both halves, or it is decoration.
 #
 # assert(): 0 is a PASS, matching the harnesses next door.
 set -uo pipefail
@@ -241,7 +241,7 @@ assert "…yet it does not parse as hook JSON"              "$(eq "$(parses "$ST
 assert "…and reaches no user-visible field"               "$(eq "$(field "$STDOUT_ONLY" systemMessage)" '')"
 
 # =======================================================================================
-echo "== 3. SIGNIFICANCE, not category — the fine rows carry nothing to look at =="
+echo "== 3. SIGNIFICANCE, not category — the fine rows carry no hue =="
 # =======================================================================================
 # THIS IS THE ASSERTION THE FEATURE IS FOR. A banner where every kind of line has its own
 # colour is prettier and gives a reader nothing to scan for, so both halves are pinned: the
@@ -267,8 +267,35 @@ assert "…and that line is coloured" \
 SM_FULL="$(field "$(CLAUDE_PLUGIN_ROOT="$TPL/plugin" CLAUDE_PROJECT_DIR="$INST" \
   bash "$HOOK" --format json --full 2>/dev/null)" systemMessage)"
 assert "the settings table fired"                  "$(has 'maxAgentsInFlight' "$SM_FULL")"
-assert "…and its rows are NOT coloured" \
-  "$(no_esc "$(grep -E '^(owner|maxAgentsInFlight|maxPrLoc|software-engineer|cataloguer) ' <<<"$SM_FULL")")"
+# SINCE loopd, A FINE ROW CARRIES WEIGHT BUT NEVER A HUE: body is muted and FROM is dim
+# italic (`cli-theme.json` → `semantics`), and significance is what blue and pink are for.
+# Rows are found on their SGR-STRIPPED text — a `^owner` grep over the raw line matches
+# nothing once the row opens with an escape, and the assertion passes vacuously.
+rows_of() { # <banner> -> its settings/agent rows, raw
+  python3 -c '
+import re, sys
+for ln in sys.stdin.read().split("\n"):
+    if re.match(r"(owner|maxAgentsInFlight|maxPrLoc|software-engineer|cataloguer) ",
+                re.sub(r"\x1b\[[0-9;]*m", "", ln)):
+        print(ln)' <<<"$1"
+}
+ROWS="$(rows_of "$SM_FULL")"
+assert "…its five rows are found (not a vacuous pass)" "$(eq "$(grep -c '' <<<"$ROWS")" 5)"
+HUES="94m|95m|38;5;75m|38;5;212m|38;2;94;162;255m|38;2;255;122;194m"
+assert "…and a fine row carries no hue, neither blue nor pink" \
+  "$(LC_ALL=C grep -qE "$ESC\[($HUES)" <<<"$ROWS" && echo 1 || echo 0)"
+# THE SEMANTICS TABLE, APPLIED, read at the truecolor tier where every weight has its code.
+SM_TC="$(field "$(COLORTERM=truecolor CLAUDE_PLUGIN_ROOT="$TPL/plugin" CLAUDE_PROJECT_DIR="$INST" \
+  bash "$HOOK" --format json --full 2>/dev/null)" systemMessage)"
+for h in 'SETTING ' 'AGENT (role) '; do
+  assert "truecolor: the \`$h\` heading is ink bold" \
+    "$(has "${ESC}[1;38;2;233;237;244m$h" "$SM_TC")"
+done
+ROWS_TC="$(rows_of "$SM_TC")"
+assert "truecolor: every row's body is muted" \
+  "$(eq "$(LC_ALL=C grep -c "^${ESC}\[38;2;154;164;181m" <<<"$ROWS_TC")" 5)"
+assert "truecolor: …and every FROM cell is dim italic" \
+  "$(eq "$(LC_ALL=C grep -cF "${ESC}[0m  ${ESC}[3;38;2;108;116;136m" <<<"$ROWS_TC")" 5)"
 assert "…and the SessionStart banner carries no table at all" \
   "$(hasnt 'maxAgentsInFlight' "$SM")"
 # Read from the MODEL's copy, where the items are since task-021 — on the human's channel

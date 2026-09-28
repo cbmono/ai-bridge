@@ -63,7 +63,7 @@ import io, json, os, re, subprocess, sys
 root, new, dry, field = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4]
 # A companion tracks the core MAJOR, so only a major bump moves one, to <new major>.0.0.
 companion_new = new.split(".")[0] + ".0.0" if field == "major" else None
-HDR = re.compile(r'(AI-Bridge v?)(\d+\.\d+\.\d+)')
+HDR = re.compile(r'(loopd v?)(\d+\.\d+\.\d+)')
 RULE = u"─"
 changed = []
 
@@ -158,7 +158,7 @@ for rel in docs:
         header = HDR.sub(lambda m: m.group(1) + new, body)
         lines[k] = header + ("\n" if line.endswith("\n") else "")
         nxt = lines[k + 1].rstrip("\n") if k + 1 < len(lines) else ""
-        if header.startswith("AI-Bridge") and nxt and set(nxt) == set(RULE):
+        if header.startswith("loopd") and nxt and set(nxt) == set(RULE):
             lines[k + 1] = RULE * len(header) + "\n"
     if hit:
         planned.append((rel, "".join(lines)))
@@ -190,7 +190,7 @@ if not dry:
             nxt = lines[k + 1] if k + 1 < len(lines) else ""
             if m.group(2) != new:
                 refuse("%s still displays %s" % (rel, m.group(2)))
-            if line.startswith("AI-Bridge") and nxt and set(nxt) == set(RULE) and len(nxt) != len(line):
+            if line.startswith("loopd") and nxt and set(nxt) == set(RULE) and len(nxt) != len(line):
                 refuse("%s: the rule under the banner is %d wide, the header is %d" % (rel, len(nxt), len(line)))
 
 print("\n".join(changed))
