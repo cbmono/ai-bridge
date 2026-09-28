@@ -17,8 +17,10 @@ Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplace
 
 **It also ships a colour theme.** `themes/ai-bridge.json`, declared by `experimental.themes`
 and listed in `/theme` as `custom:ai-bridge:ai-bridge` — select it there, because nothing
-here writes your `theme` setting. The palette is provisional until the branding work lands;
-the token names a theme file may use are listed once, in
+here writes your `theme` setting. The palette is a duotone — blue is the machine's, pink is
+yours — and every colour in it comes from
+[`tests/fixtures/theme-palette.txt`](../tests/fixtures/theme-palette.txt); the token names a
+theme file may use are listed once, in
 [`tests/fixtures/theme-tokens.txt`](../tests/fixtures/theme-tokens.txt).
 
 **What ships here, and the one thing that does not.** An installed plugin is the CONTENTS
