@@ -1170,8 +1170,10 @@ cells = re.findall(r'<td class=\"prs\">(.*?)</td>', page, re.S)
 sys.exit(0 if cells and max(len(re.findall(r'<a href', c)) for c in cells) == 9 else 1)")"
 assert "the cell carries its own class"              "$(fhas '<td class="prs">' "$CE")"
 assert "…which lets it wrap inside its track"        "$(fhas 'td.prs{white-space:normal;' "$CE")"
-assert "…and gives the cell one monospace context"   "$(fhas "td.prs{white-space:normal;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;
-  font-size:13px;overflow-wrap:anywhere}" "$CE")"
+# A plain assignment, not inline: bash 3.2 brace-expands a quoted `{a,b}` inside "$(…)".
+PRS_MONO="td.prs{white-space:normal;font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  font-size:13px;overflow-wrap:anywhere}"
+assert "…and gives the cell one monospace context"   "$(fhas "$PRS_MONO" "$CE")"
 # REFS ARE SPACE-SEPARATED — no comma, the form the Depends-on cell now copies.
 assert "…refs are separated by a space"              "$(fhas '#2101</a> <a href' "$CE")"
 assert "…and never by a comma"                       "$(fhasnt '</a>, <a' "$CE")"
