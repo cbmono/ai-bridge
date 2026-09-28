@@ -681,6 +681,9 @@ TABLE_HEAD = """<title>__TITLE__</title>
 :root{
   --ground:#101318; --surface:#171b22; --sunk:#14171c; --inner:#1c212b; --raise:#1c212b;
   --ink:#e9edf4; --muted:#9aa4b5; --dim:#6c7488; --line:#262c37;
+  /* --dim is 3.45:1 to 3.98:1 on these grounds: UNDER AA for text. It is for
+     NON-TEXT content only -- the caret glyphs, the dot separators, the close
+     control. Any run of characters a reader reads takes --muted (6.4:1+). */
   --accent:#5ea2ff; --accent-ink:#14171c; --signal:#ff7ac2; --signal-ink:#14171c;
   --signal-soft:#ff7ac21f; --signal-soft-text:#ff7ac2;
   --ok:#5ea2ff; --ok-soft:#5ea2ff1f; --stop:#ff7ac2; --stop-soft:#ff7ac21f;
@@ -688,6 +691,9 @@ TABLE_HEAD = """<title>__TITLE__</title>
   --shadow:0 24px 80px rgba(0,0,0,.5);
 }
 *,*::before,*::after{box-sizing:border-box}
+/* The UA default selection is a dark blue on a dark ground -- invisible here.
+   accent/accent-ink is the palette's own high-contrast pair. */
+::selection{background:var(--accent);color:var(--accent-ink)}
 body{background:var(--ground);color:var(--ink);margin:0;
   font:400 15px/1.55 'Inter',system-ui,sans-serif;
   -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
@@ -705,7 +711,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
 .tally dt{order:2;font-size:12px;color:var(--muted);margin:0}
 .tally dd{order:1;margin:0;font:700 21px/1.25 'Inter',system-ui,sans-serif;
   color:var(--ink);font-variant-numeric:tabular-nums}
-.tally dd .of{color:var(--dim)}
+.tally dd .of{color:var(--muted)}
 .tally .live dd,.tally .live dt{color:var(--signal-soft-text)}
 
 /* THE TAB ROW FILTERS PROJECT ROWS, AND IT DOES IT IN CSS. The script only writes
@@ -717,7 +723,7 @@ h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;text-wrap:balan
   font:500 13px/1 'Inter',system-ui,sans-serif;padding:6px 16px;border-radius:999px;
   cursor:pointer;white-space:nowrap}
 .tab:hover{color:var(--ink)}
-.tab.rest{color:var(--dim)}
+.tab.rest{color:var(--muted)}
 /* Active tab: filled BLUE, not pink — which tab you are reading is the machine's
    state, and pink is reserved for what wants a person. The 1px border stays and keeps
    its colour, so the active pill is the same box as an inactive one and the row does
@@ -803,7 +809,7 @@ button:hover{border-color:var(--accent)}
 .phead:hover{background:color-mix(in srgb,var(--ink) 4%,var(--surface))}
 .ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto;min-width:0;font-size:15px;
   color:var(--ink)}
-.pdate{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums;
+.pdate{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;
   white-space:nowrap;flex-shrink:0;margin-left:-8px}
 /* THE COUNT SUMMARY IS ONE SENTENCE, NOT A ROW OF CHIPS: `2 done · 3 active · 2
    pending`, muted, with the numbers bold and coloured. The interpunct is drawn by the
@@ -825,7 +831,7 @@ button:hover{border-color:var(--accent)}
   flex-direction:column;gap:18px}
 
 /* Finished projects: below a hairline divider, dashed, with a ✓ where the caret was. */
-.sep{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);
+.sep{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
   font-weight:600;margin:8px 0 0;display:flex;align-items:center;gap:12px}
 .sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--line)}
 .proj.fin{background:transparent;border-style:dashed}
@@ -859,7 +865,7 @@ tr{display:grid;grid-template-columns:minmax(0,1fr) 105px 140px 80px 90px;gap:0 
   align-items:start;padding:12px 4px;border-top:1px solid var(--line)}
 thead tr{padding:0 4px 10px;border-top:0}
 th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.1em;
-  color:var(--dim);font-weight:600;padding:0;white-space:nowrap}
+  color:var(--muted);font-weight:600;padding:0;white-space:nowrap}
 th.r,td.r{text-align:left}
 td{padding:0;vertical-align:middle;min-width:0}
 /* THE PILLS SIT LEVEL WITH THE TITLE'S FIRST LINE, NOT WITH THE FILENAME ABOVE IT.
@@ -869,7 +875,7 @@ td{padding:0;vertical-align:middle;min-width:0}
    — left at `normal` the offset moves with whichever mono font the machine resolves. */
 td:not(:first-child){padding-top:19px}
 tr.flight{background:linear-gradient(var(--accent),var(--accent)) left/2px 100% no-repeat}
-.tid{color:var(--dim);font-size:11px;margin-right:.4rem;
+.tid{color:var(--muted);font-size:11px;margin-right:.4rem;
   font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
 td:first-child{overflow-wrap:break-word}
 
@@ -916,7 +922,7 @@ td.prs{white-space:normal;font-family:'JetBrains Mono',ui-monospace,Menlo,monosp
   font-size:13px;overflow-wrap:anywhere}
 .delivs{padding-top:4px}
 .delivs h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;
-  color:var(--dim);font-weight:600}
+  color:var(--muted);font-weight:600}
 .delivs ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
 button.dlv{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px;
   padding:6px 10px;color:var(--muted);background:var(--neutral-soft);border:0;
@@ -926,8 +932,8 @@ button.dlv:hover{color:var(--ink)}
    status the board has never seen still renders as its own text with no glyph. */
 .state{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
 .state.ok{color:var(--ok)} .state.accent{color:var(--accent)}
-.state.stop{color:var(--stop)} .state.dim{color:var(--dim)}
-.dim{color:var(--dim)} .sig{color:var(--signal-soft-text);font-weight:600}
+.state.stop{color:var(--stop)} .state.dim{color:var(--muted)}
+.dim{color:var(--muted)} .sig{color:var(--signal-soft-text);font-weight:600}
 td.dim{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px}
 td a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent;
   font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:13px}
@@ -953,7 +959,7 @@ td a:hover,td a:focus-visible{border-bottom-color:currentColor}
   color:var(--ground);font-size:1rem;line-height:1;padding:.1rem .3rem}
 .toast.fail .x:hover{border-color:var(--ground)}
 footer{border-top:1px solid var(--line);padding-top:.9rem;margin-top:1rem}
-footer p{margin:0 0 .5rem;font-size:12px;color:var(--dim);max-width:45rem}
+footer p{margin:0 0 .5rem;font-size:12px;color:var(--muted);max-width:45rem}
 footer p:last-child{margin:0}
 code{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:.93em}
 

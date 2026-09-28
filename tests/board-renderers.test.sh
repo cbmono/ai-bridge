@@ -862,7 +862,7 @@ sized "tab pill 13px, 6px 16px, 999px"   "font:500 13px/1 'Inter',system-ui,sans
 sized "project card 12px radius"         '.proj{background:var(--surface);border:1px solid var(--line);border-radius:12px}'
 sized "collapsed row 15px 20px padding"  'padding:15px 20px;list-style:none;border-radius:12px}'
 sized "project title 15px/600"           '.ptitle{font-weight:600;letter-spacing:-.01em;flex:0 1 auto;min-width:0;font-size:15px;'
-sized "project date 13px"                '.pdate{font-size:13px;color:var(--dim);'
+sized "project date 13px"                '.pdate{font-size:13px;color:var(--muted);'
 sized "count summary 13px"               '.counts{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;align-items:center;
   font-size:13px;'
 sized "needs-you pill 6px 14px, 999px"   'padding:6px 14px;border-radius:999px;margin-left:8px}'
@@ -877,7 +877,7 @@ sized "card title 15px/600, 1.45 lh"     '.what{width:100%;font-size:15px;font-w
 sized "breadcrumb 13px"                  '.where{width:100%;font-size:13px;color:var(--muted);'
 sized "action button 9px 16px, 10px"     'border-radius:10px;
   padding:9px 16px;'
-sized "task id mono 11px"                '.tid{color:var(--dim);font-size:11px;'
+sized "task id mono 11px"                '.tid{color:var(--muted);font-size:11px;'
 sized "task title 14px"                  '.tbtn{background:none;border:0;padding:0;font:400 14px/1.4'
 sized "state 12px/600"                   '.state{font-size:12px;font-weight:600;'
 sized "depends-on mono 12px"             "button.dep{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:12px;"
