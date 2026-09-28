@@ -766,17 +766,17 @@ assert "…and only the floating toast casts one"      "$(eq "$(grep -oE 'box-sh
 
 echo "== the tab row filters project rows, and All is what ships =="
 assert "the board carries the default tab"           "$(fhas '<div class="board" data-tab="all">' "$SLATE")"
-for pick in all you act fin other; do
+for pick in all you act pause fin other; do
   assert "…a $pick tab is rendered"                  "$(fhas "data-pick=\"$pick\"" "$SLATE")"
 done
-assert "…five of them and no more"                   "$(eq "$(grep -oF '<button class="tab' "$SLATE" | wc -l | tr -d ' ')" 5)"
+assert "…six of them and no more"                    "$(eq "$(grep -oF '<button class="tab' "$SLATE" | wc -l | tr -d ' ')" 6)"
 assert "…labelled from the handoff"                  "$(yes_if python3 -c "
 import re, sys
 labels = re.findall(r'data-pick=\"[a-z]+\">([^<]*) · [0-9]+</button>', open('$SLATE', encoding='utf-8').read())
-sys.exit(0 if labels == ['All', 'Needs you', 'Active', 'Finished', 'Other owners'] else 1)")"
+sys.exit(0 if labels == ['All', 'Needs you', 'Active', 'Paused', 'Finished', 'Other owners'] else 1)")"
 # THE COUNTS ARE THE BOARD'S OWN, and each is re-derived here from what actually
 # rendered — a tab saying 3 over 4 cards is the only way a filter can lie. `Needs you`
-# counts ITEMS, exactly as the masthead tally does, while the other four count PROJECTS;
+# counts ITEMS, exactly as the masthead tally does, while the other five count PROJECTS;
 # that asymmetry is the handoff's and is pinned rather than smoothed over.
 assert "…and every count matches the rows it filters" "$(yes_if python3 -c "
 import re, sys
@@ -791,6 +791,7 @@ sys.exit(0 if tabs['all'] == len(mine)
              and sum(1 for f in mine if 'you' in f.split())
                  == len(re.findall(r'class=\"c you\"', page))
              and tabs['act'] == sum(1 for f in mine if 'act' in f.split())
+             and tabs['pause'] == sum(1 for f in mine if 'pause' in f.split())
              and tabs['fin'] == sum(1 for f in mine if 'fin' in f.split())
              and tabs['other'] == len(re.findall(r'class=\"proj other\"', page)) else 1)")"
 # FILTERING IS CSS, NOT A LIST OF ROWS THE SCRIPT WALKS: the script writes ONE attribute
