@@ -173,6 +173,27 @@ ok "a done project is skipped at its frontmatter in the digest" \
 ok "…and in the probe walk too"                 "$(WITH record; grep -c 'done-proj/tasks' "$INST/$AB_STATE_DIR")" 0
 ok "…while its project line still shows in the digest" "$(WITH digest | grep -c 'project done-proj status=done')" 1
 
+echo "== a paused project is still walked: in-flight work and its PRs stay monitored =="
+# tick-delta.sh is deliberately untouched by the pause gate: it skips `done` alone, so an
+# agent running inside a paused project and a PR finishing there both still reach the tick.
+mkdir -p "$INST/projects/held/tasks"
+printf 'type: Project\nstatus: paused\n' > "$INST/projects/held/project.md"
+printf -- '---\ntype: Task\nkind: build\nstatus: in-progress\nsession: s-1\npr: []\n---\n' \
+  > "$INST/projects/held/tasks/run.md"
+task "$INST/projects/held/tasks/rev.md" in-review "https://github.com/example-org/example-repo/pull/8"
+printf 'OPEN fed4321 NONE\n' > "$GHDIR/8"
+GIT -C "$INST" add -A && GIT -C "$INST" commit -qm held
+D="$(WITH digest)"
+ok "the paused project is enumerated"            "$(printf '%s\n' "$D" | grep -c '^project held status=paused')" 1
+ok "…its in-progress task, status unchanged"     "$(printf '%s\n' "$D" | grep -c 'held/tasks/run.md status=in-progress')" 1
+ok "…its in-review task, status unchanged"       "$(printf '%s\n' "$D" | grep -c 'held/tasks/rev.md status=in-review')" 1
+ok "…and the digest says inflight yes"           "$(printf '%s\n' "$D" | grep -cx 'inflight yes')" 1
+ok "…and its PR is still read from the host"     "$(printf '%s\n' "$D" | grep -c 'pr https://github.com/example-org/example-repo/pull/8 OPEN fed4321 NONE')" 1
+WITH record
+ok "check is DELTA, never IDLE, while an agent runs in a paused project" "$(run check)" "rc:1 DELTA: task("
+rm -rf "$INST/projects/held" "$GHDIR/8"; GIT -C "$INST" add -A && GIT -C "$INST" commit -qm unheld
+WITH record
+
 mkdir -p "$INST/projects/broken/tasks"
 task "$INST/projects/broken/tasks/orphan.md" ready
 ok "a tasks/ dir with no project.md poisons the walk (exit 2, not a silent hole)" \
