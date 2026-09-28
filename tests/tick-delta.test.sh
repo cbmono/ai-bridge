@@ -179,6 +179,77 @@ ok "a tasks/ dir with no project.md poisons the walk (exit 2, not a silent hole)
    "$(WITH digest >/dev/null 2>&1; echo $?)" 2
 rm -rf "$INST/projects/broken"; GIT -C "$INST" checkout -q -- . 2>/dev/null
 
+echo "== the digest counts list ELEMENTS, and a one-line list ends on its own line =="
+# A sed range /A/,/B/ never tests B on A's line, so `key: [ ]` used to run on to the NEXT
+# `]`. The fixture keeps a real task's key ORDER, because the order decided the wrong number.
+QD="$INST/projects/proj-q/tasks"; mkdir -p "$QD"
+printf 'type: Project\nstatus: active\n' > "$INST/projects/proj-q/project.md"
+cat > "$QD/empty.md" <<'EOF'
+---
+type: Task
+title: "an empty-list fixture"
+kind: build
+status: ready
+assignee: software-engineer
+depends_on: [ ]
+acceptance_criteria: [ "one", "two" ]
+open_questions: [ ]
+answered_questions: [ "2026-01-01T00:00:00Z by example-user-007 · Q1: which? --- this one" ]
+worktree: /tmp/wt
+branch: b
+pr: [ "https://github.com/example-org/example-repo/pull/9" ]
+open_caveats: [ ]
+---
+EOF
+cat > "$QD/filled.md" <<'EOF'
+---
+type: Task
+status: ready
+depends_on: [ task-006 ]
+acceptance_criteria: [ "x" ]
+open_questions: [ "Q1: a comma, and a ] inside quotes?", "Q2: b" ]
+worktree: /tmp/wt
+pr: [ ]
+---
+EOF
+cat > "$QD/multi.md" <<'EOF'
+---
+type: Task
+status: ready
+depends_on:
+  - task-001
+  - task-002
+open_questions: [
+  "Q1: one",
+  "Q2: two",
+  "Q3: three"
+]
+acceptance_criteria: [ "x" ]
+---
+EOF
+cat > "$QD/prose.md" <<'EOF'
+---
+type: Task
+status: ready
+open_questions: [ ]
+---
+
+A body line carrying the delimiter --- which is prose, not an answer.
+EOF
+GIT -C "$INST" add -A && GIT -C "$INST" commit -qm counts
+D="$(WITH digest)"
+ok 'an empty one-line list counts 0, in a real task'"'"'s key order' \
+   "$(printf '%s\n' "$D" | grep -c 'proj-q/tasks/empty.md .* deps=0 q=0 crit=yes wt=yes$')" 1
+ok 'a filled one-line list counts its elements (1 dep, 2 quoted questions)' \
+   "$(printf '%s\n' "$D" | grep -c 'proj-q/tasks/filled.md .* deps=1 q=2 crit=yes wt=yes$')" 1
+ok '...and a list across several lines still counts its elements' \
+   "$(printf '%s\n' "$D" | grep -c 'proj-q/tasks/multi.md .* deps=2 q=3 crit=yes wt=no$')" 1
+ok 'an empty open_questions with --- in the body and a later list does not name step 2' \
+   "$(printf '%s\n' "$D" | grep '^steps:' | grep -c 'step-2')" 0
+ok '...while the steps line keeps its shape' \
+   "$(printf '%s\n' "$D" | grep -c '^steps: .*step-3-dispatch.md')" 1
+rm -rf "$INST/projects/proj-q"; GIT -C "$INST" add -A && GIT -C "$INST" commit -qm uncounts
+
 echo "== plumbing =="
 ok "not a git repo is exit 2"    "$(mkdir -p "$TMP/plain"; "$SH" check --instance "$TMP/plain" >/dev/null 2>&1; echo $?)" 2
 ok "a bad mode is usage (3)"     "$("$SH" frobnicate >/dev/null 2>&1; echo $?)" 3

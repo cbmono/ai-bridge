@@ -221,11 +221,37 @@ fi
 fmfirst() { # <file> <key> — the first `key:`'s scalar value
   sed -n "s/^$2:[[:space:]]*\([^[:space:]].*\)/\1/p" "$1" | head -n1
 }
-# Entries in a `key: [ ... ]` block (inline or multi-line): lines that carry content
-# once brackets and blanks are stripped. A count, because that is all a digest needs.
-fmcount() { # <file> <key>
-  sed -n "/^$2:/,/\]/p" "$1" | sed -e "s/^$2:[[:space:]]*//" -e 's/[][]//g'     | grep -c '[^[:space:]]' || true
+# The first `key:` list — `[ ... ]` on one line or across several, or a `- item` block.
+# Quote-aware: a `]` or `,` inside a quoted entry neither ends the list nor splits it.
+# `text` prints the list up to its closing `]`; `count` prints its number of ELEMENTS.
+fmlist() { # <file> <key> <text|count>
+  awk -v key="$2" -v mode="$3" '
+    function scan(s,   i, c) {
+      for (i = 1; i <= length(s); i++) {
+        c = substr(s, i, 1)
+        if (q != "") { if (c == "\\" && q == "\"") i++; else if (c == q) q = ""; continue }
+        if (c == "\"" || c == "\047") { q = c; seen = 1 }
+        else if (c == "]") { done = 1; return i - 1 }
+        else if (c == ",") { if (seen) n++; seen = 0 }
+        else if (c !~ /[[:space:]]/) seen = 1
+      }
+      return length(s)
+    }
+    function emit(s) { if (mode == "text") print s }
+    state == "" && index($0, key ":") == 1 {
+      rest = substr($0, length(key) + 2); sub(/^[[:space:]]+/, "", rest)
+      if (substr(rest, 1, 1) == "[") { state = "flow"; rest = substr(rest, 2); emit(substr(rest, 1, scan(rest))) }
+      else if (rest == "" || substr(rest, 1, 1) == "#") state = "block"
+      else { n = 1; exit }
+      if (done) exit
+      next
+    }
+    state == "flow" { if (/^---[[:space:]]*$/) exit; emit(substr($0, 1, scan($0))); if (done) exit; next }
+    state == "block" { if (/^[[:space:]]*-([[:space:]]|$)/) { n++; emit($0); next }; if (/^[[:space:]]*$/) next; exit }
+    END { if (seen) n++; if (mode == "count") print n + 0 }
+  ' "$1"
 }
+fmcount() { fmlist "$1" "$2" count; } # <file> <key>
 
 # THE `steps:` LINE. The tick's prompt is split into a core and one file per step under
 # `tick-steps/`; a step file is read only when this tick has work for it, and this is where
@@ -238,14 +264,13 @@ step2=0 step3=0 step4=0 step5=0 step6=0
 # A ` --- `-answered entry inside the open_questions block. The digest's `q=` count says
 # how many questions there are and never whether one has been answered, which is the only
 # thing that names step 2 on a task that is not a draft.
-# The cheap range is a PREFIX of the block (it ends at the first `]`, which a quoted
-# question can carry), so a hit is always genuine and a miss never is — hence the fall
+# The cheap read is bounded to the list, so a hit is always genuine; a miss still falls
 # through to fold-answers.sh's parser, the one reader of this shape that round-trips.
 # Exit 2 is UNKNOWN, not "no": the caller poisons the fingerprint on it rather than let a
 # parser it could not run read as a task with nothing answered.
 FOLD="$(dirname "${BASH_SOURCE[0]}")/fold-answers.sh"
 answered_open() { # <file>
-  sed -n '/^open_questions:/,/\]/p' "$1" 2>/dev/null | grep -qF -- ' --- ' && return 0
+  fmlist "$1" open_questions text 2>/dev/null | grep -qF -- ' --- ' && return 0
   local parsed
   parsed="$(bash "$FOLD" --list "$1" open_questions 2>/dev/null)" || return 2
   printf '%s\n' "$parsed" | grep -qF -- ' --- '
