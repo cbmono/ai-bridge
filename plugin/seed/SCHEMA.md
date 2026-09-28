@@ -291,7 +291,7 @@ owner:                            # team / person, optional. FREE TEXT and read 
 stack: [ <framework>, <orm>, ... ]
 runtime: node-<major>
 status: active | deprecated
-provenance: machine | mixed | human  # who wrote it — required on every knowledge type (below)
+provenance: machine | mixed | human  # who wrote it — required on every knowledge type (above)
 timestamp: <ISO 8601>
 ---
 ```
@@ -310,7 +310,7 @@ lesson: <one line — the takeaway the next agent needs; required, and it become
 category: decision | learning | gotcha
 tags: [ <tag>, ... ]              # from /knowledge/vocab.md ONLY — never a new word
 status: current | superseded | corrected
-provenance: machine | mixed | human  # who wrote it — required on every knowledge type (below)
+provenance: machine | mixed | human  # who wrote it — required on every knowledge type (above)
 author: <github-login>            # who filed it — optional, and provenance that survives a file move
 supersedes: [ <slug>, ... ]       # Findings this one replaces
 superseded_by: <slug>             # set together with status: superseded
@@ -395,7 +395,7 @@ title: <team name>
 description: <one line>
 owns: [ <system/area>, ... ]          # what this team is the authority for
 contact:                              # lead / channel, optional — no PII beyond work contact
-provenance: machine | mixed | human  # who wrote it — required on every knowledge type (below)
+provenance: machine | mixed | human  # who wrote it — required on every knowledge type (above)
 timestamp: <ISO 8601>
 ---
 ```
@@ -409,7 +409,7 @@ type: Runbook
 title: <procedure>
 description: <one line>
 applies_to: [ <service or area>, ... ]
-provenance: machine | mixed | human  # who wrote it — required on every knowledge type (below)
+provenance: machine | mixed | human  # who wrote it — required on every knowledge type (above)
 timestamp: <ISO 8601>
 ---
 ```
@@ -427,7 +427,7 @@ type: Reference
 title: <what this specifies>
 description: <one line>
 status: current | superseded
-provenance: machine | mixed | human  # who wrote it — required on every knowledge type (below)
+provenance: machine | mixed | human  # who wrote it — required on every knowledge type (above)
 timestamp: <ISO 8601>
 ---
 ```
