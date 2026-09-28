@@ -56,7 +56,9 @@ knowledge base") means several people write this KB. Absent the key nothing belo
    from. Prefer updating an existing doc over duplicating.
 2. **Findings.** Capture durable decisions/learnings/gotchas as
    `knowledge/findings/<slug>.md` (`type: Finding`), linked to the Services/tasks they
-   concern. **40 lines, and a one-line `lesson:` in the frontmatter** — the takeaway the
+   concern. **`provenance: machine` on every document you create** (`SCHEMA.md` →
+   `provenance:`; a person's document stays `human`, and one you edit keeps its value).
+   **40 lines, and a one-line `lesson:` in the frontmatter** — the takeaway the
    next agent needs, not the history that produced it; `validate-bundle.sh <path>` warns on
    either **for the one document you name**, so run it on each Finding as you write it
    rather than trimming at the next full run. The `lesson:` becomes the index row

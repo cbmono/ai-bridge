@@ -23,6 +23,8 @@
 #     added the file. That is real provenance, not a guess. A file git does not know
 #     is reported and skipped — inventing a date would be worse than leaving the
 #     error, because a wrong timestamp is indistinguishable from a right one.
+#   · A missing knowledge-document `provenance`, from the file's git history (SCHEMA.md,
+#     "provenance:"): `machine` only when a role created it and no one else touched it.
 #   · THE 3.0 LAYOUT. Plugin-owned files still sitting at the bundle root move under
 #     `.ai-bridge/`, and the links pointing at them are rewritten. See that step.
 #
@@ -219,6 +221,42 @@ git_added_date() { # <file> -> ISO 8601, or empty
   git log --diff-filter=A --format=%aI -1 -- "$1" 2>/dev/null | head -1
 }
 
+# The author names commit-as.sh stamps for an agent. Read from it so there is one list; a
+# missing file yields none, and every document then falls to human.
+MACHINE_AUTHORS="$(awk -F'[()]' '/^VALID_ROLES=\(/ { print $2; exit }' \
+  "$(dirname "${BASH_SOURCE[0]:-$0}")/commit-as.sh" 2>/dev/null | tr ' ' '\n' | grep -vx -e human -e '' || true)"
+# No pipe: under pipefail, `grep -q` quitting early SIGPIPEs printf and reads as "not a role".
+is_machine() { [[ -n "$1" && $'\n'"$MACHINE_AUTHORS"$'\n' == *$'\n'"$1"$'\n'* ]]; }
+
+prov_machine=0; prov_mixed=0; prov_human=0; prov_unresolved=0
+# <file> -> machine | mixed | human, and the reason. `git -C` the file's own directory, so a
+# mounted knowledge/ is read from its own repository.
+provenance_from_git() {
+  local d b authors creator a
+  d="$(dirname "$1")"; b="$(basename "$1")"
+  # --follow also pairs a new file with a SIMILAR one (status C) and hands it that file's
+  # creator — a person's document read as machine. So history stops at a copy.
+  authors="$(git -C "$d" log --follow --format='@%an' --name-status -- "$b" 2>/dev/null \
+    | awk '/^@/ { print substr($0, 2); next } /^C[0-9]*\t/ { exit }' || true)"
+  creator="$(printf '%s\n' "$authors" | sed '/^$/d' | tail -1)"
+  if [[ -z "$creator" ]]; then
+    printf 'human\tunresolved: git has no commit for it'; return 0
+  fi
+  # AMBIGUITY BIASES TO HUMAN: anything but a role name as the creator is a person.
+  if ! is_machine "$creator"; then
+    printf 'human\tcreated by %s' "$creator"; return 0
+  fi
+  while IFS= read -r a; do
+    [[ -z "$a" ]] || is_machine "$a" || {
+      printf 'mixed\tcreated by %s, later edited by %s' "$creator" "$a"; return 0
+    }
+  done <<< "$authors"
+  if ! git -C "$d" diff --quiet HEAD -- "$b" 2>/dev/null; then
+    printf 'mixed\tcreated by %s, with an uncommitted edit' "$creator"; return 0
+  fi
+  printf 'machine\tcreated by %s, no other author' "$creator"
+}
+
 collect_files() {
   find ./objectives -maxdepth 1 -name '*.md' 2>/dev/null || true
   find ./projects -maxdepth 2 -name 'project.md' 2>/dev/null || true
@@ -307,6 +345,25 @@ while IFS= read -r file; do
       esac ;;
   esac
 
+  case "$type" in
+    Service|Finding|Team|Runbook|Reference)
+      prov="$(field "$file" provenance)"
+      case "$prov" in
+        machine|mixed|human) : ;;
+        "")
+          derived="$(provenance_from_git "$file")"
+          case "$derived" in
+            machine*) prov_machine=$((prov_machine+1)) ;;
+            mixed*)   prov_mixed=$((prov_mixed+1)) ;;
+            *)        prov_human=$((prov_human+1)) ;;
+          esac
+          if [[ "$derived" == *$'\tunresolved:'* ]]; then prov_unresolved=$((prov_unresolved+1)); fi
+          fix_field "$file" "$rel" "provenance missing -> ${derived%%$'\t'*} (${derived#*$'\t'})" \
+            provenance "${derived%%$'\t'*}" add ;;
+        *) hold "$rel" "provenance '$prov' is not machine|mixed|human — decide it by hand" ;;
+      esac ;;
+  esac
+
   if [[ -z "$(field "$file" timestamp)" ]]; then
     added="$(git_added_date "$file")"
     if [[ -n "$added" ]]; then
@@ -331,6 +388,10 @@ while IFS= read -r file; do
 done <<< "$FILE_LIST"
 
 echo "---"
+if [[ $((prov_machine+prov_mixed+prov_human)) -gt 0 ]]; then
+  printf 'provenance: %d machine, %d mixed, %d human (%d of them unresolved in git).\n' \
+    "$prov_machine" "$prov_mixed" "$prov_human" "$prov_unresolved"
+fi
 if [[ $APPLY -eq 1 ]]; then
   printf 'migrate-bundle: %d fixed, %d left for a human, %d skipped, %d FAILED.\n' \
     "$fixed" "$human" "$skipped" "$failed"

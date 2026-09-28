@@ -24,6 +24,7 @@ edit, and always before closing a project:
 
 * every concept document carries `type`, and a `status` from its type's closed enum,
   and a `timestamp`;
+* every knowledge document carries a `provenance:` from `machine | mixed | human`;
 * every **frontmatter** reference (`objective:`, `project:`, `phase:`, `depends_on:`)
   resolves. Body prose is not checked — a body may cite a closed project as history;
 * `artifacts:` may name a deliverable that is not written yet, so it warns.
@@ -261,6 +262,22 @@ section is part of this bundle, so its docs cross-link freely to/from objectives
 projects, and tasks. **No customer PII** in any knowledge doc; authoritative
 *data* questions route to the owning team (see `knowledge/teams/`), not the KB.
 
+**`provenance:` says whether machinery or a person wrote the document** — required on
+all five types below, closed set, enforced by `validate-bundle.sh`:
+
+| Value | Meaning | May a cleanup pass rewrite it? |
+|---|---|---|
+| `machine` | a role agent wrote it and no person has edited it | yes |
+| `mixed` | a role agent wrote it and a person edited it since | no |
+| `human` | a person wrote it, **or who wrote it cannot be resolved** | no |
+
+A role agent writes `machine`; the in-thread session and a person write `human`; a person
+editing a `machine` document sets it to `mixed`. **Ambiguity is `human`**: a wrong `human`
+label costs nothing, a wrong `machine` one licenses rewriting what a person wrote.
+`migrate-bundle.sh --apply` fills a missing value from git — the file's authors, a
+`commit-as.sh` role name being the only one that reads as machine. `author:` and
+`source:` are unrelated and unchanged: a login and a URL, neither of which says which.
+
 ### type: Service  (`knowledge/services/<name>.md`)
 
 ```yaml
@@ -274,6 +291,7 @@ owner:                            # team / person, optional. FREE TEXT and read 
 stack: [ <framework>, <orm>, ... ]
 runtime: node-<major>
 status: active | deprecated
+provenance: machine | mixed | human  # who wrote it — required on every knowledge type (below)
 timestamp: <ISO 8601>
 ---
 ```
@@ -292,6 +310,7 @@ lesson: <one line — the takeaway the next agent needs; required, and it become
 category: decision | learning | gotcha
 tags: [ <tag>, ... ]              # from /knowledge/vocab.md ONLY — never a new word
 status: current | superseded | corrected
+provenance: machine | mixed | human  # who wrote it — required on every knowledge type (below)
 author: <github-login>            # who filed it — optional, and provenance that survives a file move
 supersedes: [ <slug>, ... ]       # Findings this one replaces
 superseded_by: <slug>             # set together with status: superseded
@@ -300,7 +319,7 @@ timestamp: <ISO 8601>
 ---
 ```
 Body headings: `# Context`, `# Finding` (or `# Decision`), `# Rationale`,
-`# Implications`. Link to the Services/tasks it concerns. **40 lines, whole file**
+`# Implications`. Link to the Services/tasks it concerns. **40 lines, whole file, less the `provenance:` line**
 (`CONVENTIONS.md` → "Write less"); the history that produced it lives in the task doc.
 
 **`lesson:` is the index row.** `build-kb-index.sh` copies it into `knowledge/index.md`
@@ -376,6 +395,7 @@ title: <team name>
 description: <one line>
 owns: [ <system/area>, ... ]          # what this team is the authority for
 contact:                              # lead / channel, optional — no PII beyond work contact
+provenance: machine | mixed | human  # who wrote it — required on every knowledge type (below)
 timestamp: <ISO 8601>
 ---
 ```
@@ -389,6 +409,7 @@ type: Runbook
 title: <procedure>
 description: <one line>
 applies_to: [ <service or area>, ... ]
+provenance: machine | mixed | human  # who wrote it — required on every knowledge type (below)
 timestamp: <ISO 8601>
 ---
 ```
@@ -406,6 +427,7 @@ type: Reference
 title: <what this specifies>
 description: <one line>
 status: current | superseded
+provenance: machine | mixed | human  # who wrote it — required on every knowledge type (below)
 timestamp: <ISO 8601>
 ---
 ```

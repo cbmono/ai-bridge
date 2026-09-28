@@ -893,7 +893,8 @@ above it so none may grow its share.
   secrets or environment variables** (rely on existing env / `.npmrc` for auth).
 - **Capture knowledge:** if you discover something durable and reusable, write or
   update a `Finding` in `knowledge/findings/` (per `SCHEMA.md`) and link it from
-  the task, so the next agent doesn't re-derive it. **Run
+  the task, so the next agent doesn't re-derive it. It carries **`provenance: machine`**
+  (`SCHEMA.md` → `provenance:`) — never on a document a person wrote. **Run
   `scripts/validate-bundle.sh <path>` on the one you just wrote** — it is the 40-line cap
   and the `lesson:` checked at the moment they are cheap to fix.
   **Where `knowledge/` is MOUNTED from another repository** (`knowledge` in

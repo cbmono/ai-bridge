@@ -45,7 +45,7 @@ doc projects/live/phases/1-a.md '---' 'type: Phase' 'title: A' \
 doc projects/live/tasks/task-001-ok.md '---' 'type: Task' 'title: Ok' 'status: ready' \
   'objective: /objectives/good.md' 'phase: /projects/live/phases/1-a.md' "timestamp: $TS" '---' 'body'
 doc knowledge/findings/good.md '---' 'type: Finding' 'title: F' 'category: learning' \
-  'lesson: a one-line takeaway' 'status: current' "timestamp: $TS" '---' 'body'
+  'lesson: a one-line takeaway' 'status: current' 'provenance: machine' "timestamp: $TS" '---' 'body'
 
 # A task carrying the free-text `answered_questions:` audit list. Asserted SILENT on
 # purpose: that key is deliberately NOT machine-read, so the validator must have no
@@ -85,15 +85,15 @@ doc projects/live/tasks/task-011-block-ok.md '---' 'type: Task' 'title: BlockOk'
 doc projects/live/tasks/task-012-unterminated.md '---' 'type: Task' 'title: Unterminated' 'status: draft' \
   "timestamp: $TS" 'body with no closing delimiter'
 # Service carries its own status enum, which enum_for originally omitted.
-doc knowledge/services/bad-service.md '---' 'type: Service' 'title: S' 'status: retired' "timestamp: $TS" '---' 'body'
-doc knowledge/services/good-service.md '---' 'type: Service' 'title: S2' 'status: active' "timestamp: $TS" '---' 'body'
+doc knowledge/services/bad-service.md '---' 'type: Service' 'title: S' 'status: retired' 'provenance: machine' "timestamp: $TS" '---' 'body'
+doc knowledge/services/good-service.md '---' 'type: Service' 'title: S2' 'status: active' 'provenance: machine' "timestamp: $TS" '---' 'body'
 # CONVENTIONS.md -> "Write less" bounds a Finding at 40 lines and requires a one-line
 # `lesson:`. Both WARN rather than fail: every bundle alive has findings that predate the
 # rule, and a validator that fails on all of them is one people switch off.
 doc knowledge/findings/no-lesson.md '---' 'type: Finding' 'title: NoLesson' \
-  'category: learning' 'status: current' "timestamp: $TS" '---' 'body'
+  'category: learning' 'status: current' 'provenance: machine' "timestamp: $TS" '---' 'body'
 { printf '%s\n' '---' 'type: Finding' 'title: TooLong' 'category: learning' \
-    'lesson: it is too long' 'status: current' "timestamp: $TS" '---'
+    'lesson: it is too long' 'status: current' 'provenance: machine' "timestamp: $TS" '---'
   for i in $(seq 40); do echo "line $i"; done
 } > knowledge/findings/too-long.md
 # Below knowledge/<kind>/ is not a schema location and must be ignored.
@@ -102,13 +102,13 @@ doc knowledge/findings/sources/raw-note.md '# a raw note a human dropped in'
 # so these documents were always collected and checked for type, timestamp and refs —
 # the one gap was `status`, because `Reference` carried no enum. A Finding's enum
 # applied to a Reference (`open`) is exactly the drift class this script exists for.
-doc knowledge/references/bad-ref.md '---' 'type: Reference' 'title: R' 'status: open' "timestamp: $TS" '---' 'body'
-doc knowledge/references/good-ref.md '---' 'type: Reference' 'title: R2' 'status: current' "timestamp: $TS" '---' 'body'
+doc knowledge/references/bad-ref.md '---' 'type: Reference' 'title: R' 'status: open' 'provenance: machine' "timestamp: $TS" '---' 'body'
+doc knowledge/references/good-ref.md '---' 'type: Reference' 'title: R2' 'status: current' 'provenance: machine' "timestamp: $TS" '---' 'body'
 # Declaring the enum also makes `status` REQUIRED on a Reference in a schema
 # location. Root documents typed `Reference` (SCHEMA.md, AUTONOMY.md) carry none and
 # are unaffected, because they are not in one — the `index.md`/`log.md` cases below
 # assert that side of it.
-doc knowledge/references/no-status-ref.md '---' 'type: Reference' 'title: R3' "timestamp: $TS" '---' 'body'
+doc knowledge/references/no-status-ref.md '---' 'type: Reference' 'title: R3' 'provenance: machine' "timestamp: $TS" '---' 'body'
 # `owner` is deliberately NOT validated: it names a person outside the bundle, so
 # nothing here can resolve it. Both of these must be silent — including the second,
 # whose value is not a username at all (task-owner.sh judges the shape at dispatch,
@@ -272,10 +272,10 @@ set +e; GIT_CEILING_DIRECTORIES="$TMP" bash "$VALIDATOR" --changed >/dev/null 2>
 assert "--changed outside a work tree exits 2"    "$([[ $NOGIT_RC -eq 2 ]] && echo 0 || echo 1)"
 G="$TMP/changed"; mkdir -p "$G/knowledge/findings"; cd "$G"
 echo '{ "org": "x", "reposRoot": "/tmp" }' > instance.config.json; echo '# Schema' > SCHEMA.md
-doc knowledge/findings/committed.md '---' 'type: Finding' 'title: C' 'lesson: l' 'status: current' "timestamp: $TS" '---' 'body'
+doc knowledge/findings/committed.md '---' 'type: Finding' 'title: C' 'lesson: l' 'status: current' 'provenance: machine' "timestamp: $TS" '---' 'body'
 git init -q . && git add -A \
   && git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -qm init
-{ printf -- '---\ntype: Finding\ntitle: N\nlesson: l\nstatus: current\ntimestamp: %s\n---\n' "$TS"
+{ printf -- '---\ntype: Finding\ntitle: N\nlesson: l\nstatus: current\nprovenance: machine\ntimestamp: %s\n---\n' "$TS"
   for i in $(seq 1 50); do echo "line $i"; done; } > knowledge/findings/just-written.md
 set +e; CH="$(bash "$VALIDATOR" --changed 2>&1)"; set -e
 assert "an untracked over-long Finding is caught" "$(printf '%s\n' "$CH" | grep -q 'just-written.md' && echo 0 || echo 1)"
@@ -389,6 +389,35 @@ assert "an entry whose inline comment carries quotes is NOT flagged" "$(fm_clean
 assert "…and that document is still field-checked" \
   "$(printf '%s\n' "$FM_OUT" | grep -A1 'task-009-inline-comment.md' | grep -q 'missing required field: timestamp' && echo 0 || echo 1)"
 
+cd "$B"
+
+echo "== provenance: required on all five knowledge types, from a closed set =="
+P="$TMP/prov"; mkdir -p "$P"; cd "$P"
+echo '{ "org": "x", "reposRoot": "/tmp" }' > instance.config.json; echo '# Schema' > SCHEMA.md
+for v in machine mixed human; do
+  doc "knowledge/findings/ok-$v.md" '---' 'type: Finding' 'title: F' 'lesson: l' 'status: current' "provenance: $v" "timestamp: $TS" '---' 'body'
+done
+doc knowledge/teams/none.md '---' 'type: Team' 'title: T' "timestamp: $TS" '---' 'body'
+doc knowledge/runbooks/none.md '---' 'type: Runbook' 'title: R' "timestamp: $TS" '---' 'body'
+doc knowledge/services/none.md '---' 'type: Service' 'title: S' 'status: active' "timestamp: $TS" '---' 'body'
+doc knowledge/references/none.md '---' 'type: Reference' 'title: R' 'status: current' "timestamp: $TS" '---' 'body'
+doc knowledge/findings/none.md '---' 'type: Finding' 'title: F' 'lesson: l' 'status: current' "timestamp: $TS" '---' 'body'
+doc knowledge/runbooks/bot.md '---' 'type: Runbook' 'title: R' 'provenance: bot' "timestamp: $TS" '---' 'body'
+# Only the frontmatter counts: a body line of the same shape is prose.
+doc knowledge/teams/body-only.md '---' 'type: Team' 'title: T' "timestamp: $TS" '---' 'provenance: machine'
+{ printf '%s\n' '---' 'type: Finding' 'title: Forty' 'lesson: l' 'status: current' 'provenance: machine' "timestamp: $TS" '---'
+  for i in $(seq 32); do echo "line $i"; done; } > knowledge/findings/forty.md
+set +e; POUT="$(bash "$VALIDATOR" 2>&1)"; set -e
+pmiss() { printf '%s\n' "$POUT" | grep -A1 "ERROR  knowledge/$1" | grep -q "requires provenance" && echo 0 || echo 1; }
+for k in teams/none runbooks/none services/none references/none findings/none; do
+  assert "a missing provenance is an ERROR on $k" "$(pmiss "$k.md")"
+done
+assert "…and the message names the repair" "$(printf '%s\n' "$POUT" | grep -q 'migrate-bundle.sh --apply fills it from git' && echo 0 || echo 1)"
+assert "a value outside the set is an ERROR" "$(printf '%s\n' "$POUT" | grep -q "provenance 'bot' is not one of: machine mixed human" && echo 0 || echo 1)"
+assert "a body line is not the field" "$(pmiss teams/body-only.md)"
+assert "machine, mixed and human are all silent" "$(printf '%s\n' "$POUT" | grep -q 'ok-' && echo 1 || echo 0)"
+assert "the provenance line is not counted against the 40-line cap" "$(printf '%s\n' "$POUT" | grep -q 'forty.md' && echo 1 || echo 0)"
+assert "exactly the seven faulty documents error" "$(printf '%s\n' "$POUT" | grep -q ', 7 errors,' && echo 0 || echo 1)"
 cd "$B"
 
 echo "== refusing to run outside an instance root =="
