@@ -16,7 +16,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    (`docs/pm-design.md#step-3` has the price of not holding it).
 
    **Gate 3 in the core is the ownership check this step depends on** — run
-   `task-owner.sh` and take exit 0 as the only clearance before anything below.
+   `task-owner.sh` and take exit 0 as the only clearance before anything below — and the
+   same for `project-paused.sh`, which is how a paused project dispatches nothing.
 
    **A ROLE AGENT IS A DETACHED SESSION, NEVER YOUR CHILD.** Do not use the `Agent`
    tool here. Claude Code withholds a parent's completion notification until every
