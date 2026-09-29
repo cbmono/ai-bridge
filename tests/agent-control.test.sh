@@ -711,7 +711,10 @@ touch -t "$(date -v-120M +%Y%m%d%H%M 2>/dev/null || date -d '120 minutes ago' +%
 TRANSCRIPT="$OLDTR"
 ok "no start file: a 2h-old transcript caps"          "$(run C6 software-engineer Edit; decision)" deny
 ok "…and Read is still allowed on that path too"      "$(run C6 software-engineer Read; verdict)" allowed
-TRANSCRIPT="$FIXTR"
+# A FRESH file, not the suite's shared one: at a 1-minute budget, a transcript created when
+# the suite started is itself past the cap on a loaded machine.
+fresh_transcript() { FIXTR="$TMP/transcript.$1.jsonl"; : > "$FIXTR"; TRANSCRIPT="$FIXTR"; }
+fresh_transcript C7
 ok "…while a transcript created just now does not"    "$(run C7 software-engineer Edit; verdict)" allowed
 # …and the start file WINS over the transcript, which is what makes it the primary source.
 TRANSCRIPT="$OLDTR"
@@ -727,6 +730,7 @@ run_stop C9 software-engineer
 ok "SubagentStop removes the start file"              "$([ -e "$CAPDIR/C9.started" ] && echo yes || echo no)" no
 ok "…and the marker with it"                          "$([ -e "$CAPDIR/C9.capped" ] && echo yes || echo no)" no
 ok "…and leaves another agent's clock alone"          "$([ -e "$CAPDIR/C5.started" ] && echo yes || echo no)" yes
+fresh_transcript C9
 ok "…so a resumed agent starts a fresh budget"        "$(run C9 software-engineer Edit; verdict)" allowed
 # NO SECOND STATE TREE: the clock and the doom-loop counter share one directory, and the
 # one SubagentStop cleanup. Both keys on, so both counters exist to be counted.
