@@ -106,9 +106,14 @@
 # ------------------------------------------------------ WHY THE WALL CLOCK IS HERE
 # The doom loop catches an agent that has stopped making progress; it says nothing about
 # one that keeps making progress for an hour. `maxAgentMinutes` (absent ⇒ 45) is that
-# second bound, on the same event for the same reason. Past the budget an agent may still
-# `Read`/`Grep`/`Glob` and still `git commit`, `git push` or `gh pr create|edit|view|checks`
-# — everything it needs to land what it has and report accurately — and nothing else. The
+# second bound, on the same event for the same reason. It is PER ROLE: `roleMinutes.<role>`
+# wins, and the `project-manager` defaults to 180 rather than 45, because a tick walks the
+# whole bundle and grows with it (docs/conventions.md #16). Past the budget an agent may
+# still `Read`/`Grep`/`Glob` and still `git add|commit|push`, `commit-as.sh`, `cd` or
+# `gh pr create|edit|view|checks` — everything it needs to land what it has and report
+# accurately — and nothing else. The Bash is parsed quote-aware, one `&&`/`;`/newline
+# segment at a time: a quoted commit message may carry `()` and newlines, and a quoted
+# heredoc message is admitted, but an unquoted pipe, substitution or redirect is not. The
 # start time is the `SubagentStart` record under `agents.d/`, falling back to the oldest
 # timestamp the transcript carries (an append moves ctime and mtime, so neither alone is a
 # start time, and birth time is not recorded on every filesystem).
@@ -195,8 +200,9 @@ AGENTSTATE="$CTL/agents.d"
 CAP_CACHE="$CTL/agent-cap"
 CAP_RECHECK=60
 CAP_DEFAULT=45
+CAP_PM_DEFAULT=180
 CAP_SWEEP=1440
-CAP_ALLOW_BASH='^(git +(commit|push)|gh +pr +(view|checks|create|edit))([[:space:]]|$)'
+CAP_ALLOW_BASH='^(cd +[^ ]+|git +(-C +[^ ]+ +)?(add|commit|push)|gh +pr +(view|checks|create|edit)|(bash +)?([^ ]*/)?commit-as\.sh)([[:space:]]|$)'
 RESOLVER="$(dirname "$0")/../scripts/resolve-config.sh"
 
 stamp="$(date -u +'%Y-%m-%dT%H:%M:%SZ %s' 2>/dev/null || echo 'unknown 0')"
@@ -244,32 +250,44 @@ repeat_limit_load() {
 
 digest() { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else cksum; fi; }
 
-# The budget, cached on the same terms as the repeat limit. Precedence is NOT re-implemented
-# here: `resolve-config.sh` owns it, exit 1 is its "absent" — which is the 45-minute default
-# — and anything else is a read that did not happen, so the cap is off and says so.
-CAP_N=off
+# The budget, cached per role on the same terms as the repeat limit. Precedence is NOT
+# re-implemented here: `resolve-config.sh` owns it, exit 1 is its "absent" — which falls to
+# the next source — and anything else is a read that did not happen, so the cap is off and
+# says so. `agent_type` arrives namespaced (`ai-bridge:project-manager`); roles are bare.
+CAP_N=off; CAP_SRC=maxAgentMinutes
 cap_limit_load() {
   local cfg="$root/instance.config.json" loc="$root/instance.config.local.json" n rc when
-  CAP_N=off; when=0
-  if [ -r "$CAP_CACHE" ]; then
-    read -r CAP_N when < "$CAP_CACHE" 2>/dev/null || { CAP_N=off; when=0; }
+  local role="${agent_type##*:}" cache
+  case "$role" in ''|*[!A-Za-z0-9._-]*) role="" ;; esac
+  cache="$CAP_CACHE${role:+.$role}"
+  CAP_N=off; CAP_SRC=maxAgentMinutes; when=0
+  if [ -r "$cache" ]; then
+    read -r CAP_N when CAP_SRC < "$cache" 2>/dev/null || { CAP_N=off; when=0; }
     case "$when" in ''|*[!0-9]*) when=0 ;; esac
   fi
-  if [ ! -e "$CAP_CACHE" ] || [ "$cfg" -nt "$CAP_CACHE" ] \
-     || { [ -e "$loc" ] && [ "$loc" -nt "$CAP_CACHE" ]; } \
+  if [ ! -e "$cache" ] || [ "$cfg" -nt "$cache" ] \
+     || { [ -e "$loc" ] && [ "$loc" -nt "$cache" ]; } \
      || [ "$((epoch - when))" -ge "$CAP_RECHECK" ]; then
-    n="$(bash "$RESOLVER" --instance "$root" maxAgentMinutes 2>/dev/null)"; rc=$?
+    rc=1; CAP_SRC="roleMinutes.$role"
+    [ -z "$role" ] || { n="$(bash "$RESOLVER" --instance "$root" roleMinutes "$role" 2>/dev/null)"; rc=$?; }
+    if [ "$rc" = 1 ] && [ "$role" = project-manager ]; then
+      n="$CAP_PM_DEFAULT"; rc=0
+    elif [ "$rc" = 1 ]; then
+      CAP_SRC=maxAgentMinutes
+      n="$(bash "$RESOLVER" --instance "$root" maxAgentMinutes 2>/dev/null)"; rc=$?
+    fi
     case "$rc" in
       0) ;;
       1) n="$CAP_DEFAULT" ;;
-      *) n=off; note "fail-open: resolve-config.sh could not read maxAgentMinutes — the time cap is OFF" ;;
+      *) n=off; note "fail-open: resolve-config.sh could not read $CAP_SRC — the time cap is OFF" ;;
     esac
     case "$n" in ''|*[!0-9]*) n=off ;; esac
     [ "$n" = off ] || [ "$n" -ge 1 ] || n=off
     CAP_N="$n"
-    printf '%s %s\n' "$n" "$epoch" > "$CAP_CACHE" 2>/dev/null || true
+    printf '%s %s %s\n' "$n" "$epoch" "$CAP_SRC" > "$cache" 2>/dev/null || true
   fi
   case "$CAP_N" in ''|*[!0-9]*) CAP_N=off ;; esac
+  [ -n "$CAP_SRC" ] || CAP_SRC=maxAgentMinutes
 }
 
 # Epoch seconds, or nothing. The fallback takes the OLDEST of birth, ctime and mtime rather
@@ -300,17 +318,32 @@ cap_started() {
   printf '%s' "$oldest"
 }
 
-# The allowlist past the cap. A prefix match alone would admit `git commit -m x; <anything>`,
-# so the whole command must carry no chaining metacharacter — the REPEAT_CHAIN rule again.
+# The allowlist past the cap. Quoted spans are neutralised left to right — a quoted heredoc
+# message first, then "…" and '…' — so their contents can never read as a separator; any
+# unquoted escape, `$'`, or `$(`/backtick inside "…" poisons the command. What is left is
+# split on `&&`, `;` and newline, and EVERY segment must be on the allowlist and carry no
+# pipe, `&`, parenthesis, redirect, backslash or stray quote. `2>&1` is the one redirect kept.
+CAP_SCAN='
+  def safe: gsub("[^A-Za-z0-9_./${}:=+@%,~-]"; "_");
+  (.tool_input.command // "")
+  | if test("\\$\u0027") then "(" else . end
+  | gsub("(?<hd>\"\\$\\(cat <<\u0027(?<t>[A-Za-z_][A-Za-z0-9_]*)\u0027\\n(?<b>[\\s\\S]*?)\\n\\k<t>\\n[ \\t]*\\)\")|(?<dq>\"(?:[^\"\\\\]|\\\\[\\s\\S])*\")|(?<sq>\u0027[^\u0027]*\u0027)|(?<esc>\\\\[\\s\\S])";
+      . as $m
+      | if $m.hd then (if ($m.b | split("\n") | any(. == $m.t)) then "(" else "MSG" end)
+        elif $m.dq then (if ($m.dq | test("\\$\\(|`")) then "(" else ($m.dq[1:-1] | safe) end)
+        elif $m.sq then ($m.sq[1:-1] | safe)
+        else "\\" end)
+  | [splits("&&|;|\n") | gsub("(^|[ \t])2>&1(?=[ \t]|$)"; " ") | sub("^\\s+"; "") | sub("\\s+$"; "")
+     | select(. != "")] as $segs
+  | ($segs | length) > 0
+    and all($segs[]; test($ok) and (test("[|&`()<>\\\\\"\u0027]") | not))'
 cap_allows() {
   case "$tool_name" in
     Read|Grep|Glob) return 0 ;;
     Bash) ;;
     *) return 1 ;;
   esac
-  printf '%s' "$payload" | jq -e --arg ok "$CAP_ALLOW_BASH" --arg chain "$REPEAT_CHAIN" '
-    ((.tool_input.command // "") | sub("^\\s+"; "")) as $c
-    | ($c | test($ok)) and ($c | test($chain) | not)' >/dev/null 2>&1
+  printf '%s' "$payload" | jq -e --arg ok "$CAP_ALLOW_BASH" "$CAP_SCAN" >/dev/null 2>&1
 }
 
 # One file per agent_id, under a name NOTHING else can produce. Sanitising an id to
@@ -473,7 +506,7 @@ if [ "$CAP_N" != off ]; then
         : > "$mark" 2>/dev/null || true
         note agent-cap "$agent_id" "$agent_type" "$tool_name" "elapsed=${elapsed}m budget=${CAP_N}m"
       fi
-      body="TIME CAP: this agent has been running ${elapsed} minutes and the budget (maxAgentMinutes) is ${CAP_N}, so $tool_name is refused. Wrap up now: commit and push what you have, open or update the pull request, and report what is done and what is not. Still allowed so that report is accurate: Read, Grep, Glob, and a Bash that is a git commit, a git push or gh pr create|edit|view|checks. Nothing else is. Do not start new work and do not work around this."
+      body="TIME CAP: this agent has been running ${elapsed} minutes and the budget ($CAP_SRC) is ${CAP_N}, so $tool_name is refused. Wrap up now: commit and push what you have, open or update the pull request, and report what is done and what is not. Still allowed so that report is accurate: Read, Grep, Glob, and a Bash made only of git add|commit|push, commit-as.sh, cd and gh pr create|edit|view|checks, joined by && or ; — a quoted message may span lines and carry parentheses, but no pipe, redirect or unquoted \$( is admitted. Nothing else is. Do not start new work and do not work around this."
       jq -n --arg r "$body" '{
         hookSpecificOutput: {
           hookEventName: "PreToolUse",

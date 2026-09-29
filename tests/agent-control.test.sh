@@ -610,7 +610,7 @@ set_cap() { # "" clears the key; <n> sets it; a second argument goes in the LOCA
   if [ -z "${1:-}" ]; then printf '{}\n' > "$INST/instance.config.json"
   else printf '{"maxAgentMinutes": %s}\n' "$1" > "$INST/instance.config.json"; fi
   [ -z "${2:-}" ] || printf '{"maxAgentMinutes": %s}\n' "$2" > "$INST/instance.config.local.json"
-  rm -f "$CTL/agent-cap"
+  rm -f "$CTL"/agent-cap*
 }
 started() { # <agent_id> <minutes ago>
   mkdir -p "$CAPDIR"; printf '%s\n' "$((NOW - $2 * 60))" > "$CAPDIR/$1.started"
@@ -660,6 +660,28 @@ ok "past the cap: git status is refused"              "$(capped Bash 'git status
 ok "…and a command chained to git commit is refused"  "$(capped Bash 'git commit -m x; pnpm publish')" deny
 ok "…and one chained to gh pr view too"               "$(capped Bash 'gh pr view 4 && pnpm build')" deny
 ok "…and a substituted one"                           "$(capped Bash 'git push $(echo origin)')" deny
+# THE COMMITS A REAL AGENT MAKES. `git commit -m x` alone passed while every one of these was
+# refused, which is how the 2026-09-29T08:37Z tick lost four files past its budget.
+HD="$(printf 'git commit -m "$(cat <<\x27EOF\x27\nfeat(task-017): land it; really\n\nCo-Authored-By: C <n@example.com>\nEOF\n)"')"
+ok "past the cap: a conventional-scope message"       "$(capped Bash 'git commit -m "feat(task-017): x"')" allowed
+ok "past the cap: a multi-line quoted message"        "$(capped Bash "$(printf 'git commit -m "fix: x\n\nCo-Authored-By: C <n@example.com>"')")" allowed
+ok "past the cap: a quoted heredoc message"           "$(capped Bash "$HD")" allowed
+ok "past the cap: commit-as.sh"                       "$(capped Bash '"${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh" project-manager "chore(tick): x" -- a.md')" allowed
+ok "past the cap: git add <path>"                     "$(capped Bash 'git add projects/a.md')" allowed
+ok "past the cap: git -C <wt> commit"                 "$(capped Bash 'git -C /wt commit -m "a (b)"')" allowed
+ok "past the cap: cd <wt> && add && commit && push"   "$(capped Bash 'cd /wt && git add a.md && git commit -m "x(y)" && git push origin HEAD 2>&1')" allowed
+# …and every way to hide a second command inside that wider shape is still refused.
+ok "…a heredoc whose body ends early is refused"      "$(capped Bash "$(printf 'git commit -m "$(cat <<\x27E\x27\nx\nE\nrm -rf a\nE\n)"')")" deny
+ok "…an unquoted-tag heredoc is refused"              "$(capped Bash "$(printf 'git commit -m "$(cat <<E\nx\nE\n)"')")" deny
+ok "…a substitution inside the quotes is refused"     "$(capped Bash 'git commit -m "$(pnpm build)"')" deny
+ok "…an escaped quote cannot open a fake string"      "$(capped Bash 'git commit -m \"; pnpm publish; echo "')" deny
+ok "…nor can an ANSI-C string"                        "$(capped Bash "git commit -m \$'\\''; pnpm publish; ''")" deny
+ok "…a chain with one bad segment is refused"         "$(capped Bash 'cd /wt && git add a && pnpm publish')" deny
+ok "…a pipe is refused"                               "$(capped Bash 'git push origin HEAD | tee log')" deny
+ok "…a redirect is refused"                           "$(capped Bash 'git commit -m x > f')" deny
+ok "…an unterminated quote is refused"                "$(capped Bash 'git commit -m "x; pnpm publish')" deny
+ok "…a newline starts a new segment"                  "$(capped Bash "$(printf 'git add a\npnpm publish')")" deny
+ok "…and a lookalike script name is not commit-as.sh" "$(capped Bash './evilcommit-as.sh x')" deny
 # The whole cap is off under the budget, so the same two are allowed again at 0 minutes.
 started C3 0
 rm -f "$CAPDIR/C3.capped"
@@ -709,7 +731,7 @@ ok "…so a resumed agent starts a fresh budget"        "$(run C9 software-engin
 # NO SECOND STATE TREE: the clock and the doom-loop counter share one directory, and the
 # one SubagentStop cleanup. Both keys on, so both counters exist to be counted.
 printf '{"maxAgentMinutes": 1, "maxRepeatedToolCalls": 2}\n' > "$INST/instance.config.json"
-rm -f "$CTL/agent-cap" "$CTL/repeat-limit"
+rm -f "$CTL"/agent-cap* "$CTL/repeat-limit"
 run_start CX software-engineer
 run CX software-engineer Read; run CX software-engineer Read
 ok "both counters exist, and only these two"          "$(find "$CTL" -mindepth 1 -maxdepth 1 -type d | sed "s#.*/##" | sort | paste -sd, -)" "agents.d,repeats"
@@ -718,6 +740,35 @@ ok "…the repeat counter the other"                    "$([ -f "$CTL/repeats/CX
 run_stop CX software-engineer
 ok "…and ONE SubagentStop drops both"                 "$([ -e "$CAPDIR/CX.started" ] || [ -e "$CTL/repeats/CX" ] && echo no || echo yes)" yes
 rm -rf "$CTL/repeats" "$CTL/repeat-limit"
+
+# PER ROLE. The tick walks the whole bundle, so the role-agent number is not its bound: the
+# `project-manager` defaults to 180, `roleMinutes.<role>` overrides any role, and the role
+# agents keep maxAgentMinutes. agent_type arrives namespaced; the key is the bare role.
+set_cap ""
+started P1 73
+ok "a 73-minute tick is NOT capped by the 45 default" "$(run P1 ai-bridge:project-manager Edit; verdict)" allowed
+ok "…while a 73-minute role agent is"                 "$(run P1 ai-bridge:software-engineer Edit; decision)" deny
+set_cap 45
+ok "…and a tracked maxAgentMinutes does not reach it" "$(run P1 ai-bridge:project-manager Edit; verdict)" allowed
+started P2 181
+run P2 ai-bridge:project-manager Edit
+ok "…but the tick keeps a bound: 181 minutes caps"    "$(decision)" deny
+ok "…naming roleMinutes.project-manager and 180"      "$(reasontxt | grep -c 'budget (roleMinutes.project-manager) is 180')" 1
+ok "…and it may still commit what it has"             "$(run P2 ai-bridge:project-manager Bash 'git commit -m "chore(tick): land"'; verdict)" allowed
+printf '{"maxAgentMinutes": 45, "roleMinutes": {"project-manager": 60, "qa-reviewer": 10}}\n' > "$INST/instance.config.json"
+rm -f "$CTL"/agent-cap*
+ok "roleMinutes overrides the tick's default"         "$(run P1 ai-bridge:project-manager Edit; decision)" deny
+started P3 20
+ok "…and any other role's"                            "$(run P3 qa-reviewer Edit; decision)" deny
+ok "…leaving a role it does not name on maxAgentMinutes" "$(run P3 software-engineer Edit; verdict)" allowed
+printf '{"roleMinutes": {"project-manager": 240}}\n' > "$INST/instance.config.local.json"
+rm -f "$CTL"/agent-cap*
+ok "…and the LOCAL layer merges per role"             "$(run P1 ai-bridge:project-manager Edit; verdict)" allowed
+ok "…keeping the tracked entry it does not name"      "$(run P3 qa-reviewer Edit; decision)" deny
+set_cap ""
+# The shipped role-agent number is unchanged: the seed and the hook both still say 45.
+ok "the seed still ships maxAgentMinutes 45"          "$(jq -r .maxAgentMinutes "$REPO/plugin/seed/instance.config.json")" 45
+ok "…and the hook's absent-key default is still 45"   "$(grep -c '^CAP_DEFAULT=45$' "$HOOK_SRC")" 1
 
 # The budget is a NUMBER from either layer, and an unusable one is OFF rather than guessed.
 started C10 90
@@ -738,14 +789,14 @@ ok "…and a local null unsets it, back to the 45 default" "$(run C11 software-e
 # off and the log says so — never a refusal on the strength of missing machinery.
 NORES="$TMP/plugin-no-resolver"; mkdir -p "$NORES/hooks"
 cp "$HOOK_SRC" "$NORES/hooks/agent-control.sh"
-rm -f "$CTL/agent-cap"
+rm -f "$CTL"/agent-cap*
 payload C10 software-engineer Edit > "$TMP/payload"
 NR_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$NORES/hooks/agent-control.sh" <"$TMP/payload" 2>/dev/null)"
 ok "no resolver beside the hook: the cap is OFF"      "$([ -z "$NR_OUT" ] && echo yes || echo no)" yes
 ok "…and it SAYS so in control.log"                   "$(grep -c 'the time cap is OFF' "$CTL/control.log")" 1
 
 # DISARMED IS STILL A STRICT NO-OP — the clock is state, and state is what arming buys.
-rm -f "$CTL/agent-cap"
+rm -f "$CTL"/agent-cap*
 ctl disarm >/dev/null 2>&1
 run C1 software-engineer Edit
 ok "disarmed: a 46-minute agent is not capped"        "$([ -z "$OUT" ] && [ "$RC" = 0 ] && echo yes || echo no)" yes
