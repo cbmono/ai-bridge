@@ -29,17 +29,13 @@ never written). **`/ai-bridge:welcome` is the banner and `check`** — facts, no
 **A bare `scripts/<x>.sh` in this bundle means the installed plugin's scripts directory —
 `<scripts>` below — never a folder here.** Agents reach it as
 `${CLAUDE_PLUGIN_ROOT}/scripts/<x>.sh`. **Call a script one command per call, by its
-resolved absolute path**: `${CLAUDE_PLUGIN_ROOT}` and `~` written out, no `VAR=` path,
-no `$(…)`, no trailing `; echo "EXIT=$?"` — the Bash tool reports the exit code. A
-permission rule matches the command text, so a path it cannot read re-prompts on every
-call, and each approval writes an entry that covers nothing else. `/ai-bridge:init` writes
-the two rules that cover every script at every version into `.claude/settings.local.json`.
-Find the directory once, then call by the path it prints:
+absolute path** — no `VAR=` path, `$(…)`, `~` or `; echo "EXIT=$?"`: a permission rule
+matches the command text, so those re-prompt every call and each approval covers nothing
+else; `/ai-bridge:init` writes the rules that match. Find the path:
 
 ```sh
 ls -d ~/.claude/plugins/cache/*/ai-bridge/*/scripts | sort -V | tail -1
-<scripts>/commit-as.sh human "<msg>" -- <path>...
-<scripts>/validate-bundle.sh   # likewise pr-body-clearance.sh, pr-comment-clearance.sh
+<scripts>/commit-as.sh human "<msg>" -- <path>...   # likewise validate-bundle.sh, pr-body-clearance.sh
 ```
 
 | To… | Run |
