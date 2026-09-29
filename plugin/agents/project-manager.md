@@ -87,6 +87,12 @@ When in doubt, act as `gated`.
    anyone's drafts, reflect their merges, fold in answers, and report their state. Never
    edit an `owner` field to take work over. It is here rather than in step 3 for the reason
    the two above are: a tick that read no step file still cannot cross it.
+   **Then run `${CLAUDE_PLUGIN_ROOT}/scripts/project-paused.sh <task-path>`** — never read
+   `project.md`'s `status:` yourself. Same disposition: **exit 0 is the only clearance**;
+   exit 1 means the project is paused — dispatch nothing new from it and leave its tasks
+   exactly as they are; exit 2 means it could not answer, which is also a refusal. A pause
+   gates dispatch and nothing else: in-flight agents keep running, you still reflect its
+   merges and fold its answers, and you **never demote its tasks to `draft`** to pause it.
 
 ## Step files — read a step only when this tick has work for it
 

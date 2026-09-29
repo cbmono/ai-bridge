@@ -411,6 +411,48 @@ simple "…one that can name neither is not rendered" \
   "$(pm_has 'can name neither is not rendered at all')" yes
 simple "…and it adds NO new report heading"   "$(pm_has 'This is not a new heading and there is no `Needs you` section to add')" yes
 
+# A PAUSED PROJECT GOES QUIET EXCEPT FOR `merge`, asked of project-paused.sh by
+# plugin/scripts/build-awaiting.sh. Four rows per project, asserted one by one, so a gate
+# that silences everything fails and a gate that silences nothing fails too.
+echo
+echo "-- a paused project keeps its merge rows and only those"
+pz="$TMP/paused"
+mkdir -p "$pz/$AB_DIR"
+# Each task names its owner, so task-owner.sh never opens project.md and the exit-2 case
+# below exercises project-paused.sh alone rather than the ownership refusal.
+printf '{ "org": "o", "ownerGithubUser": "example-user-007" }\n' > "$pz/instance.config.json"
+printf 'stub\n' > "$pz/$AB_SCHEMA"
+merges=()
+for p in live held; do
+  mkdir -p "$pz/projects/$p/tasks"
+  printf -- '---\ntype: Project\ntitle: %s\nstatus: active\n---\n' "$p" > "$pz/projects/$p/project.md"
+  d="$pz/projects/$p/tasks"
+  printf -- '---\nowner: example-user-007\ntitle: %s-approve\nstatus: draft\nacceptance_criteria: [ "c" ]\nopen_questions: [ ]\n---\n' "$p" > "$d/t1.md"
+  printf -- '---\nowner: example-user-007\ntitle: %s-answer\nstatus: draft\nacceptance_criteria: [ "c" ]\nopen_questions: [ "Q1: which?" ]\n---\n' "$p" > "$d/t2.md"
+  printf -- '---\nowner: example-user-007\ntitle: %s-unblock\nstatus: blocked\n---\n' "$p" > "$d/t3.md"
+  printf -- '---\nowner: example-user-007\ntitle: %s-merge\nstatus: in-review\npr: https://example.com/pr/1\n---\n' "$p" > "$d/t4.md"
+  merges+=(--merge "$d/t4.md=[pr](https://example.com/pr/1)")
+done
+printf -- '---\ntype: Project\ntitle: held\nstatus: paused\n---\n' > "$pz/projects/held/project.md"
+aw() { printf '# Awaiting you\n' > "$pz/$AB_AWAITING"
+       bash "$TPL/plugin/scripts/build-awaiting.sh" --instance "$pz" "${merges[@]}" >/dev/null 2>&1
+       cat "$pz/$AB_AWAITING"; }
+row_for() { printf '%s\n' "$1" | grep -qF -- "**$2** — [$3]" && echo shown || echo hidden; }
+OUTQ="$(aw)"
+for v in approve answer unblock merge; do
+  simple "active project keeps its $v row"  "$(row_for "$OUTQ" "$v" "live-$v")" shown
+done
+for v in approve answer unblock; do
+  simple "paused project drops its $v row"  "$(row_for "$OUTQ" "$v" "held-$v")" hidden
+done
+simple "paused project keeps its merge row" "$(row_for "$OUTQ" merge held-merge)" shown
+# Exit 2 never hides work: an unterminated frontmatter that says `paused` cannot be read.
+printf -- '---\ntype: Project\ntitle: held\nstatus: paused\n' > "$pz/projects/held/project.md"
+OUTQ="$(aw)"
+for v in approve answer unblock merge; do
+  simple "unreadable paused project.md (exit 2) keeps $v" "$(row_for "$OUTQ" "$v" "held-$v")" shown
+done
+
 echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
