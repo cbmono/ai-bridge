@@ -237,6 +237,8 @@ check_docs() {
         *) err "$f" "status '$st' is outside {${FINDING_STATUSES// /, }}" ;;
       esac
       n=$(grep -c '' "$f")
+      # validate-bundle.sh's rule: the mandatory `provenance:` line is not counted.
+      [ -z "$(field "$fmv" provenance)" ] || n=$((n-1))
       au=$(field "$fmv" author)
       if [ -n "$au" ] && ! printf '%s' "$au" | grep -qE '^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$'; then
         warn "$f" "author: '$au' is not a GitHub login — provenance has to survive a file move"

@@ -31,8 +31,8 @@ doc() { local p="$1"; shift; mkdir -p "$(dirname "$p")"; printf '%s\n' "$@" > "$
 doc objectives/o.md '---' 'type: Objective' 'title: O' 'status: active' "timestamp: $TS" '---' 'body'
 doc projects/live/project.md '---' 'type: Project' 'title: L' 'status: active' "timestamp: $TS" '---' 'body'
 # valid, must not be touched
-doc knowledge/findings/ok.md '---' 'type: Finding' 'title: OK' 'status: current' "timestamp: $TS" '---' 'body'
-doc knowledge/services/ok.md '---' 'type: Service' 'title: OK' 'status: active' "timestamp: $TS" '---' 'body'
+doc knowledge/findings/ok.md '---' 'type: Finding' 'title: OK' 'status: current' 'provenance: human' "timestamp: $TS" '---' 'body'
+doc knowledge/services/ok.md '---' 'type: Service' 'title: OK' 'status: active' 'provenance: human' "timestamp: $TS" '---' 'body'
 # mechanical fixes
 doc knowledge/findings/open.md '---' 'type: Finding' 'title: F1' 'status: open' "timestamp: $TS" '---' 'body'
 doc knowledge/findings/active.md '---' 'type: Finding' 'title: F2' 'status: active' "timestamp: $TS" '---' 'body'
@@ -271,6 +271,62 @@ assert "it names the occupied destination" \
   "$(printf '%s' "$HALF" | grep -q 'STOPPED' && printf '%s' "$HALF" | grep -q ".board-live -> $AB_BOARD_DIR" && echo 0 || echo 1)"
 assert "and moved nothing at all"          "$([[ -f SCHEMA.md && -d .board-live && ! -e $AB_SCHEMA ]] && echo 0 || echo 1)"
 assert "no source was nested inside it"    "$([[ ! -e $AB_BOARD_DIR/.board-live ]] && echo 0 || echo 1)"
+
+# =========================================================================================
+# PROVENANCE — from git history, and every doubt lands on human.
+# =========================================================================================
+V="$TMP/prov"; mkdir -p "$V/knowledge"/{findings,services,teams,runbooks,references}; cd "$V"
+echo '{ "org": "x" }' > instance.config.json
+git init -q -b main .
+as() { local who="$1"; shift; git add -A && git -c user.email=a@b -c user.name="$who" -c commit.gpgsign=false commit -qm "$*"; }
+kdoc() { doc "knowledge/$1.md" '---' "type: $2" 'title: X' ${3:+"$3"} "timestamp: $TS" '---' "${4:-body}"; }
+kdoc findings/machine Finding 'status: current'
+kdoc findings/body Finding 'status: current' 'provenance: human'
+kdoc references/old Reference 'status: current'
+kdoc findings/dirty Finding 'status: current'
+kdoc findings/already Finding 'status: current'; sed -i.bak 's/^status: current$/status: current\nprovenance: human/' knowledge/findings/already.md
+kdoc runbooks/bot Runbook 'provenance: bot'; rm -f knowledge/findings/*.bak
+kdoc services/edited Service 'status: active'
+as cataloguer add
+git mv knowledge/references/old.md knowledge/references/renamed.md && as cataloguer rename
+echo 'a person was here' >> knowledge/services/edited.md && as "A Person" edit
+kdoc teams/person Team && as "A Person" add
+kdoc runbooks/claude Runbook && as Claude add
+echo 'pending' >> knowledge/findings/dirty.md
+kdoc findings/untracked Finding 'status: current'
+line() { printf '%s\n' "$1" | grep -A1 "knowledge/$2.md" | tail -1; }
+
+echo "== provenance: the report classifies from git, and writes nothing =="
+PD="$(bash "$MIGRATE" 2>&1)"
+assert "a role-created, untouched document is machine" "$(line "$PD" findings/machine | grep -q -- '-> machine (created by cataloguer' && echo 0 || echo 1)"
+assert "a rename is followed, not read as unresolved" "$(line "$PD" references/renamed | grep -q -- '-> machine' && echo 0 || echo 1)"
+assert "a person's later edit makes it mixed" "$(line "$PD" services/edited | grep -q -- '-> mixed (created by cataloguer, later edited by A Person)' && echo 0 || echo 1)"
+assert "an uncommitted edit makes it mixed" "$(line "$PD" findings/dirty | grep -q -- '-> mixed' && echo 0 || echo 1)"
+# person.md and claude.md are near-copies of role-created files: --follow alone calls them COPIES.
+assert "a person's document is human, not its look-alike's" "$(line "$PD" teams/person | grep -q -- '-> human (created by A Person)' && echo 0 || echo 1)"
+assert "a non-role name (Claude) is human" "$(line "$PD" runbooks/claude | grep -q -- '-> human' && echo 0 || echo 1)"
+assert "a file git does not know is human, never machine" "$(line "$PD" findings/untracked | grep -q -- '-> human (unresolved' && echo 0 || echo 1)"
+assert "a value outside the set is held for a human" "$(printf '%s\n' "$PD" | grep -q "provenance 'bot' is not machine|mixed|human" && echo 0 || echo 1)"
+assert "an existing value is never re-derived" "$(printf '%s\n' "$PD" | grep -q 'findings/already.md' && echo 1 || echo 0)"
+assert "the tally counts each class and the unresolved" "$(printf '%s\n' "$PD" | grep -qx 'provenance: 3 machine, 2 mixed, 3 human (1 of them unresolved in git).' && echo 0 || echo 1)"
+
+echo "== provenance: without commit-as.sh there is no role list, so nothing is machine =="
+mkdir -p "$TMP/lonely" && cp "$MIGRATE" "$HERE/../plugin/scripts/bundle-paths.sh" "$TMP/lonely/"
+LD="$(bash "$TMP/lonely/migrate-bundle.sh" 2>&1)"
+assert "every document falls to human" "$(printf '%s\n' "$LD" | grep -q '^provenance: 0 machine, 0 mixed, 8 human' && echo 0 || echo 1)"
+
+echo "== provenance: --apply writes inside the frontmatter, and the validator agrees =="
+bash "$MIGRATE" --apply >/dev/null 2>&1 || true
+fmp() { awk '/^---$/{n++; next} n==1 && /^provenance:/{sub(/^provenance: */,""); print}' "knowledge/$1.md"; }
+assert "machine written" "$([[ "$(fmp findings/machine)" == machine ]] && echo 0 || echo 1)"
+assert "mixed written" "$([[ "$(fmp services/edited)" == mixed ]] && echo 0 || echo 1)"
+assert "human written" "$([[ "$(fmp teams/person)" == human ]] && echo 0 || echo 1)"
+assert "the field landed inside the --- block, not after a body line" "$([[ "$(fmp findings/body)" == machine ]] && grep -qx 'provenance: human' knowledge/findings/body.md && echo 0 || echo 1)"
+assert "the out-of-set value survived" "$(grep -qx 'provenance: bot' knowledge/runbooks/bot.md && echo 0 || echo 1)"
+assert "the existing human label survived" "$([[ "$(fmp findings/already)" == human ]] && echo 0 || echo 1)"
+set +e; PV="$(bash "$VALIDATE" 2>&1)"; set -e
+assert "only the out-of-set value still errors" "$([[ "$(printf '%s\n' "$PV" | grep -c 'provenance')" == 1 ]] && echo 0 || echo 1)"
+assert "a second run derives nothing" "$(bash "$MIGRATE" 2>&1 | grep -q '^provenance:' && echo 1 || echo 0)"
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

@@ -121,6 +121,10 @@ enum_for() {
 }
 
 KNOWN_TYPES="Objective Project Phase Task Agent Service Finding Team Runbook Reference"
+# Who wrote a knowledge document — SCHEMA.md, "provenance:". Its own enum, because Team and
+# Runbook have no status, so enum_for never reaches them.
+KB_TYPES="Service Finding Team Runbook Reference"
+PROVENANCE_ENUM="machine mixed human"
 
 # CONVENTIONS.md -> "Write less". Lowering it is free; raising it is a rule change.
 FINDING_MAX_LINES=40
@@ -407,8 +411,19 @@ while IFS= read -r file; do
     fail "$rel" "missing required field: timestamp"
   fi
 
+  if [[ " $KB_TYPES " == *" $type "* ]]; then
+    prov="$(printf '%s\n' "$fm" | sed -n 's/^provenance:[[:space:]]*//p' | head -1 | sed 's/[[:space:]]*#.*//;s/[[:space:]]*$//')"
+    if [[ -z "$prov" ]]; then
+      fail "$rel" "type $type requires provenance (one of: $PROVENANCE_ENUM) — migrate-bundle.sh --apply fills it from git"
+    elif [[ " $PROVENANCE_ENUM " != *" $prov "* ]]; then
+      fail "$rel" "provenance '$prov' is not one of: $PROVENANCE_ENUM ($AB_SCHEMA, 'provenance:')"
+    fi
+  fi
+
   if [[ "$type" == Finding ]]; then
     lines="$(grep -c '' "$file" || true)"
+    # The mandatory `provenance:` line is not the author's to shorten, so it is not counted.
+    [[ -z "${prov:-}" ]] || lines=$((lines-1))
     if [[ -n "$lines" && "$lines" -gt $FINDING_MAX_LINES ]]; then
       warn "$rel" "Finding is $lines lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES — the history behind it belongs in the task doc"
     fi

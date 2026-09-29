@@ -48,6 +48,7 @@ lesson: $3
 category: learning
 status: current
 author: example-user-007
+provenance: machine
 timestamp: 2026-09-13T00:00:00Z
 ---
 
