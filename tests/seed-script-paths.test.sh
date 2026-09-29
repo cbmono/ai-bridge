@@ -4,7 +4,7 @@
 # plugin/scripts/, so a rename cannot strand the prose.
 #
 # WHY. A bundle is data-only: it has no `scripts/`, so the seed's `scripts/<x>.sh` and
-# `"$AB/<x>.sh"` forms both resolve into the installed plugin. Nothing read them, and a
+# `<scripts>/<x>.sh` forms both resolve into the installed plugin. Nothing read them, and a
 # human following one got `no such file or directory` (2026-09-06, commit-as.sh).
 # Exit codes: 0 clean, 1 a named script does not ship, 2 the tree is not readable.
 # Reasoning: ai-bridge-next/task-022.
@@ -28,7 +28,7 @@ ok() { # <name> <actual> <expected>
 
 # Both forms the seed uses to name a plugin script, reduced to basenames. A placeholder
 # like `scripts/<x>.sh` carries no basename character class match, so it never appears.
-named()   { grep -rhoE '(scripts|\$AB)/[A-Za-z0-9._-]+\.sh' "$1" | sed 's#.*/##' | sort -u; }
+named()   { grep -rhoE 'scripts>?/[A-Za-z0-9._-]+\.sh' "$1" | sed 's#.*/##' | sort -u; }
 shipped() { find "$SCRIPTS" -maxdepth 1 -name '*.sh' -exec basename {} \; | sort; }
 stranded() { comm -23 <(named "$1") <(shipped); }
 

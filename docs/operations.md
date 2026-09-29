@@ -1205,6 +1205,14 @@ instance. For permissions or env an instance needs on its own (e.g. allow `Bash`
 group's repos), put them in `.claude/settings.local.json` **in the instance**: it's local,
 gitignored, layered on top, and never touches the template.
 
+**`/ai-bridge:init` writes the plugin-script allowlist there**, from a plugin-cache install
+only: `Bash(<cache>/<marketplace>/ai-bridge/*/scripts/*)` and its `bash `-prefixed twin,
+`$HOME` expanded, the version the only wildcard — once, and a file it cannot edit safely is
+left alone with the two lines printed. Measured on Claude Code 2.1.284 (task-016): a rule
+matches the command text, so it covers `<abs>/scripts/x.sh args` and never a `~` path, a
+`$(…)`-derived path, a `; echo "EXIT=$?"` tail, or a rule mixing a mid-pattern `*` with
+`:*` — `…/scripts/*.sh:*` matches nothing at all.
+
 ---
 
 ## 7. Editor view (control panel + repos in one tree)

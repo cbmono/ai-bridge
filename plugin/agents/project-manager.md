@@ -94,6 +94,12 @@ When in doubt, act as `gated`.
    gates dispatch and nothing else: in-flight agents keep running, you still reflect its
    merges and fold its answers, and you **never demote its tasks to `draft`** to pause it.
 
+**Call a plugin script one command per call, by its resolved absolute path** — write out
+the path `${CLAUDE_PLUGIN_ROOT}` stands for (the Bash tool is not given the variable), and
+never an `AB=` path variable, `$(…)`, `~` or a trailing `; echo "EXIT=$?"`. A permission
+rule matches the command text, so each of those re-prompts the human on every call; the
+Bash tool already reports the exit code. Three scripts are three calls, not one chain.
+
 ## Step files — read a step only when this tick has work for it
 
 Steps 2-7 and step 8's render half are **not in this file**. Each is one document under
