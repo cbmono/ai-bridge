@@ -57,21 +57,20 @@ done
 # `statusLine` command's stdout is ALWAYS a pipe into Claude Code, which renders the SGR
 # itself — so `[ -t 1 ]` would strip the colour off the one surface that must carry it.
 # `NO_COLOR` and `--color never` are the opt-outs, exactly as everywhere else here.
-# 3/4-bit only: `COLORTERM` and `tput colors` are not reliably inherited by a process
-# Claude Code spawns. The codes are session-banner.sh's own 3/4-bit tier — blue is the
-# machine's, pink the human's, and there is no third hue (loopd's two-colour rule).
+# 3/4-bit only, so `cli-theme.sh`'s `basic` tier is ASKED FOR BY NAME and nothing is probed:
+# `COLORTERM` and `tput colors` are not reliably inherited by a process Claude Code spawns.
 use_color=0
 case "$COLOR" in
   always) use_color=1 ;;
   never)  use_color=0 ;;
   *)      [ -z "${NO_COLOR:-}" ] && use_color=1 ;;
 esac
-C_B=""; C_DIM=""; C_DIMI=""; C_BLUE=""; C_PINK=""; C_OFF=""
-if [ "$use_color" -eq 1 ]; then
-  esc="$(printf '\033')"
-  C_B="${esc}[1m"; C_DIM="${esc}[2m"; C_DIMI="${esc}[3;2m"
-  C_BLUE="${esc}[94m"; C_PINK="${esc}[95m"; C_OFF="${esc}[0m"
-fi
+# shellcheck source=cli-theme.sh
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/cli-theme.sh" 2>/dev/null
+command -v ab_theme >/dev/null 2>&1 || ab_theme() { :; }
+ab_theme "$use_color" basic
+C_B="${T_BOLD:-}"; C_DIM="${T_DIM:-}"; C_DIMI="${T_DIMI:-}"
+C_BLUE="${T_BLUE:-}"; C_PINK="${T_PINK:-}"; C_OFF="${T_OFF:-}"
 paint() { printf '%s%s%s' "$1" "$2" "$C_OFF"; }
 
 UNKNOWN='?'

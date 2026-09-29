@@ -613,8 +613,6 @@ TAB="$(printf '\t')"
 # Empty strings rather than an `if` at each site: a banner that has to remember to be
 # colourless is a banner that will one day emit a bare `\033[1m` into a log. `NO_COLOR`'s
 # contract is "set and NON-EMPTY disables", hence `-z` rather than a presence test.
-# `$(printf '\033')` rather than `$'\033'` for the same reason print-board.sh spells its
-# escapes out: an escape typed into a string literal is invisible in a diff and in a grep.
 use_color=0
 case "$COLOR" in
   always) use_color=1 ;;
@@ -648,46 +646,15 @@ fi
 # `printf` of the same escape, so the byte `cell` filters and the byte `emit_md` reads cannot
 # drift apart.
 [ "$use_emph" -eq 1 ] && EMPH_MARK="$EMPH_MARK_BYTE"
-C_OFF=""; C_BLUE=""; C_PINK=""; C_INK=""; C_MUTED=""; C_DIM=""; C_DIMI=""
-if [ "$use_color" -eq 1 ]; then
-  esc="$(printf '\033')"
-  # `${esc}[` braced: `"$esc[1m"` is bash's ARRAY-SUBSCRIPT spelling and shellcheck calls
-  # it an error (SC1087). It happens to work while `esc` is a scalar, which is exactly the
-  # kind of accident that stops working later.
-  C_OFF="${esc}[0m"
-  # THE PALETTE IS `cli-theme.json`'s AND EVERY CODE BELOW IS COPIED FROM IT, NEVER COMPOSED
-  # — `truecolor` for the first tier, `ansi256` for the second. Two colours carry meaning
-  # and only two: BLUE is the machine's (the mark's tube, agents, refs, running state) and
-  # PINK is the human's (the gate, the exit arrow, anything waiting on a person). `ink` is
-  # weight rather than hue, `muted` is body text and `dim` is chrome; `dim italic` is the
-  # theme's own spelling for a status line, so the italic (SGR 3) rides on the dim code.
-  # THE THIRD TIER IS THE ONE THIS FILE ALREADY HAD (94/95/93) AND IT SURVIVES UNCHANGED:
-  # `cli-theme.json` defines no 3/4-bit tier, so the alternative was inventing codes, which
-  # is the one thing the palette rule forbids. `COLORTERM` is the terminal's own claim about
-  # truecolor and `tput colors` the terminfo count; neither is asked when `use_color` is 0,
-  # so the opt-outs above stay the single answer to "colour at all".
-  tc=0
-  if command -v tput >/dev/null 2>&1; then tc="$(tput colors 2>/dev/null || echo 0)"; fi
-  case "$tc" in ''|*[!0-9]*) tc=0 ;; esac
-  case "${COLORTERM:-}" in
-    truecolor|24bit)
-      C_BLUE="${esc}[38;2;94;162;255m"; C_PINK="${esc}[38;2;255;122;194m"
-      C_INK="${esc}[1;38;2;233;237;244m"; C_MUTED="${esc}[38;2;154;164;181m"
-      C_DIM="${esc}[38;2;108;116;136m" ;;
-    *)
-      if [ "$tc" -ge 256 ]; then
-        C_BLUE="${esc}[38;5;75m"; C_PINK="${esc}[38;5;212m"
-        C_INK="${esc}[1;38;5;255m"; C_MUTED="${esc}[38;5;248m"
-        C_DIM="${esc}[38;5;243m"
-      else
-        C_BLUE="${esc}[94m"; C_PINK="${esc}[95m"
-        C_INK="${esc}[1;93m"; C_MUTED=""; C_DIM="${esc}[2m"
-      fi ;;
-  esac
-  # Dim italic — the theme's status weight, built from the dim code above so the two can
-  # never disagree. `[2m` at the 3/4-bit tier becomes `[3;2m` by the same substitution.
-  C_DIMI="${esc}[3;${C_DIM#"${esc}["}"
-fi
+# THE ESCAPES ARE NOT SPELLED HERE: `cli-theme.sh` holds every code and the tier ladder
+# (truecolor -> ansi256 -> the 3/4-bit tier), and `use_color` above stays the single answer
+# to "colour at all". A theme that cannot be sourced means no colour, never no banner.
+# shellcheck source=../scripts/cli-theme.sh
+[ -n "$bin" ] && . "$bin/cli-theme.sh" 2>/dev/null
+command -v ab_theme >/dev/null 2>&1 || ab_theme() { :; }
+ab_theme "$use_color" auto
+C_OFF="${T_OFF:-}"; C_BLUE="${T_BLUE:-}"; C_PINK="${T_PINK:-}"; C_INK="${T_INK:-}"
+C_MUTED="${T_MUTED:-}"; C_DIM="${T_DIM:-}"; C_DIMI="${T_DIMI:-}"
 
 # say <colour> <text…> — one whole line, coloured end to end. COLOUR NEVER GOES INSIDE A
 # PADDED FIELD: `printf '%-20s'` counts the escape bytes as width and the column silently

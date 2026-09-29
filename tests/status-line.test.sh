@@ -186,8 +186,8 @@ ok "a free lock is dim, not shouting"       "$(sgr_of "$C" 'lock free')" 2
 ok "…and a held one is the machine's blue"  "$(sgr_of "$(run --instance "$INST" --color always)" 'lock held')" 94
 rm -f "$INST/$AB_LOCK"
 ok "the last tick is a timestamp, so dim italic" "$(sgr_of "$C" 'last tick')" '3;2'
-ok "no third hue: every code is blue, pink, bold, dim or dim italic" \
-   "$(grep -oE '\[[0-9;]+m' "$SL" | sort -u | grep -vcE '^\[(94|95|1|2|3;2|0)m$' | tr -d ' ')" 0
+ok "no third hue: every code emitted is blue, pink, bold, dim or dim italic" \
+   "$(printf '%s' "$C" | tr '\033' '\n' | grep -oE '^\[[0-9;]+m' | sort -u | grep -vcE '^\[(94|95|1|2|3;2|0)m$' | tr -d ' ')" 0
 Z="$(run --instance "$TMP/d5" --color always)"
 ok "zero in flight goes dim, not blue"      "$(sgr_of "$Z" '0 in flight')" 2
 U="$(run --instance "$TMP/d1" --color always)"
@@ -195,6 +195,14 @@ ok "an unknown number is a warning, so pink" "$(sgr_of "$U" '? need you')" 95
 
 echo
 echo "== 8. 3/4-bit ONLY — no 256-colour, no truecolor, no terminfo probe =="
+# The codes live in cli-theme.sh; this file asks for its `basic` tier by name, never `auto`.
+ok "the theme's basic tier is asked for by name" "$(grep -c 'ab_theme "\$use_color" basic' "$SL" | tr -d ' ')" 1
+ok "…and this file builds no escape of its own"  "$(grep -v '^[[:space:]]*#' "$SL" | grep -c '033' | tr -d ' ')" 0
+NT="$TMP/no-theme"; mkdir -p "$NT"
+cp "$SL" "$REPO/plugin/scripts/bundle-paths.sh" "$NT/"
+ok "an unsourceable theme means no colour, never no line" \
+   "$(SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NT/status-line.sh" --instance "$INST" --color always </dev/null 2>/dev/null)" \
+   "$(plain "$INST")"
 ok "no \`38;5;\` (256-colour) anywhere"  "$(grep -c '38;5;' "$SL" | tr -d ' ')" 0
 ok "no \`38;2;\` (truecolor) anywhere"   "$(grep -c '38;2;' "$SL" | tr -d ' ')" 0
 ok "COLORTERM is never asked"            "$(grep -v '^[[:space:]]*#' "$SL" | grep -c 'COLORTERM' | tr -d ' ')" 0
