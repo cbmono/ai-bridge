@@ -90,6 +90,56 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    branch is a refusal. Say so in the tick report. Left alone, the task claims a
    `maxAgentsInFlight` slot forever with nothing behind it, and step 4's sweep can only
    name it, never decide it.
+
+   **A spawn the HOST REFUSED is a different failure, and it stops the wave.** It is one
+   where `claude --bg` never ran: the Bash call came back denied by Claude Code itself —
+   a permission denial, not an exit status from `claude` — or its text carries
+   `Workspace not trusted`. Any other non-zero exit is the rollback above, and the wave
+   goes on. On a refusal:
+   - **Roll that one task back** exactly as above, then **stop dispatching this tick.**
+     Every other `ready` task stays as it is — no status write, no worktree, no
+     `session:` — because it would be refused identically.
+   - **Do not run `stall-counter.sh` for it, on this task or any other.** No agent ran,
+     so no round was spent; recording one escalates a task for a condition it did not
+     cause.
+   - **Write ONE `open_questions` entry on the task you rolled back**, numbered after its
+     last entry, in exactly this shape (`build-awaiting.sh` renders it as a `grant` row
+     because it says `permission`):
+
+     ```text
+     Q<n>: dispatch refused: <which>. The host denied this tick permission to spawn an agent. Remedy: <remedy>. Cleared by the next spawn that succeeds.
+     ```
+
+     Skip the write when an unanswered entry containing `dispatch refused:` already sits
+     on any task in the bundle — one condition, one row. When a later spawn succeeds, move
+     every such entry to `answered_questions` with ` --- cleared: a spawn succeeded`
+     appended and no `by` (the loop wrote it).
+   - **`<which>` and `<remedy>` are one of three pairs, chosen from the refusal text:**
+
+     | The text carries | `<which>` | `<remedy>` |
+     |---|---|---|
+     | `Reason: [Create Unsafe Agents]` | `auto-mode classifier (Reason: [Create Unsafe Agents])` | `exit auto mode for the WHOLE tick, not just the spawn (shift+tab cycles it), then run the tick again` |
+     | `Workspace not trusted` | `workspace trust (Workspace not trusted)` | `run claude once, interactively, in the worktree and accept the trust prompt` |
+     | neither | `unrecognised, verbatim: <the refusal text, unedited>` | `unknown, read the refusal text` |
+
+     **The auto mode here is the mode of the session RUNNING THE TICK** — the one
+     `shift+tab` cycles — not the child's `--permission-mode bypassPermissions` above,
+     which stays exactly as it is. **An allow rule for `claude --bg`
+     (`permissions.allow`, `autoMode.allow`, `/permissions`) is NOT the remedy, and
+     neither is running the tick under `bypassPermissions`**: an allow rule for the exact
+     command was measured to change nothing, and the owner declined both on 2026-09-25,
+     because a plugin must not be able to grant itself a bypass. Never print either as
+     advice.
+   - **Report it in one line, and never as a full cap** — the cap was not reached, so
+     close the report without the in-flight count:
+
+     ```text
+     dispatch refused: <which>. <task> rolled back to ready; <k> more ready left unattempted. Remedy: <remedy>.
+     ```
+
+     If the edit that writes the entry is itself refused, add ` The open_questions entry
+     could not be written.` to that line and quote that refusal too.
+
    **Exit 0 is not proof the agent lives** — `--bg` returns before the session has done
    anything, so one that dies on plugin load looks identical here. That is step 4's
    question, asked from `agent-sessions.sh`, and not one to hold this tick open for.
