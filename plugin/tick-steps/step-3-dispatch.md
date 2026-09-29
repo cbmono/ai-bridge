@@ -81,7 +81,9 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    fills it is `${CLAUDE_PLUGIN_ROOT}/scripts/agent-sessions.sh in-flight <bundle root>`, which counts the
    `session:` ids recorded on `in-progress` tasks that are still `working` or
    `blocked`; **exit 2 is unknown, and unknown is not a free slot** — dispatch nothing
-   this tick and say so. Leave the rest `ready` for the next tick.
+   this tick and say so. A `plan-architect` critique step 2 launched and has not yet
+   answered holds a slot too, so subtract those before you dispatch. Leave the rest
+   `ready` for the next tick.
 
    **A spawn that FAILS is a rollback, not a report — the other half of the window the
    pre-spawn write opens.** If the command exits non-zero or prints no id, put that
