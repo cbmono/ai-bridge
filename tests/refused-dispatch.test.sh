@@ -31,10 +31,8 @@ yn() { "$@" && echo yes || echo no; }
 entry_tpl="$(sed -n 's/^[[:space:]]*\(Q<n>: dispatch refused: .*\)$/\1/p' "$S3" | head -n1)"
 line_tpl="$(sed -n 's/^[[:space:]]*\(dispatch refused: <which>\. <task> .*\)$/\1/p' "$S3" | head -n1)"
 # The three `| <carries> | <which> | <remedy> |` rows under the table's header.
-table="$(awk '/\| The text carries \|/ { t = 1; next }
-              t && /^[[:space:]]*\|---/ { next }
-              t && /^[[:space:]]*\|/ { print; next }
-              t { exit }' "$S3")"
+table_of() { awk '/\| The text carries \|/ { t = 1; next } t && /^[[:space:]]*\|---/ { next } t && /^[[:space:]]*\|/ { print; next } t { exit }' "$1"; }
+table="$(table_of "$S3")"
 
 echo "== the step carries the two templates and the three refusal kinds =="
 ok "the open_questions entry template"  "$([ -n "$entry_tpl" ] && echo yes || echo no)" yes
@@ -89,7 +87,7 @@ echo
 echo "== the status line shows a refused wave apart from an idle machine =="
 sgr_of() { printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p' | head -n1; }
 IDLE="$TMP/idle"; inst "$IDLE" ''; bash "$AW" --instance "$IDLE" >/dev/null 2>&1
-R="$(bash "$SL" --instance "$TMP/k1" --color always)"; I="$(bash "$SL" --instance "$IDLE" --color always)"
+R="$(bash "$SL" --instance "$TMP/k1" --color always </dev/null)"; I="$(bash "$SL" --instance "$IDLE" --color always </dev/null)"
 ok "refused: the queue carries the grant, in the human's pink" "$(sgr_of "$R" '1 need you')" 95
 ok "idle: an empty queue, dim"                                  "$(sgr_of "$I" '0 need you')" 2
 ok "…so the two are different lines"                           "$([ "$R" != "$I" ] && echo yes || echo no)" yes
