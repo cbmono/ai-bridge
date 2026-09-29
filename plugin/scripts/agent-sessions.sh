@@ -2,7 +2,8 @@
 #
 # agent-sessions.sh — what a dispatched BACKGROUND role-agent session is doing.
 #
-#   agent-sessions.sh state <session-id>      -> working|blocked|done|gone on stdout
+#   agent-sessions.sh state <session-id>      -> the raw state `claude agents` reports
+#                                                (working|blocked|done|gone, …) on stdout
 #   agent-sessions.sh in-flight <bundle-root> -> how many recorded sessions still hold a
 #                                                slot, on stdout; one line per recorded
 #                                                session on stderr
@@ -13,7 +14,7 @@
 # Verified by tests/background-dispatch.test.sh.
 set -uo pipefail
 
-usage() { sed -n '3,7p' "$0" >&2; exit 2; }
+usage() { sed -n '3,9p' "$0" >&2; exit 2; }
 [ $# -ge 1 ] || usage
 
 command -v python3 >/dev/null 2>&1 || {
@@ -46,6 +47,21 @@ print("gone")
 ' "$1" "$2"
 }
 
+# Only an explicitly terminal value frees a slot. Anything else holds one — `idle`
+# included, since a waiting session still holds work and counting it free dispatches past
+# the cap — and a value outside the known vocabulary is named, so a change in what
+# `claude agents --json` emits is a visible line rather than a silent wedge.
+TERMINAL="done gone stopped completed cancelled failed error exited"
+holds_slot() { # <state> <session-id> -> 0 holds a slot, 1 frees it
+  local t
+  for t in $TERMINAL; do [ "$1" = "$t" ] && return 1; done
+  case "$1" in
+    working|blocked) ;;
+    *) echo "agent-sessions: unrecognised state '$1' for session $2 — counted live" >&2 ;;
+  esac
+  return 0
+}
+
 case "$1" in
   state)
     [ $# -eq 2 ] || usage
@@ -73,12 +89,12 @@ case "$1" in
              | tr -d '"'"'"' ' | sed 's/#.*$//')"
       [ -n "$sid" ] || continue
       st="$(state_of "$sid" "$json")" || { echo "agent-sessions: could not read the session list" >&2; exit 2; }
-      case "$st" in done|gone) ;; *) live=$((live+1)) ;; esac
+      holds_slot "$st" "$sid" && live=$((live+1))
       printf '%-8s %s  %s\n' "$st" "$sid" "$task" >&2
     done
     printf '%s\n' "$live"
     ;;
 
-  -h|--help) sed -n '3,7p' "$0"; exit 0 ;;
+  -h|--help) sed -n '3,9p' "$0"; exit 0 ;;
   *) usage ;;
 esac

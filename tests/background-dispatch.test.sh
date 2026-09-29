@@ -46,7 +46,9 @@ cat > "$TMP/bin/claude" <<'STUB'
 cat <<'JSON'
 [ {"id":"aaaa1111","sessionId":"aaaa1111-0000-4000-8000-000000000001","kind":"background","state":"working"},
   {"id":"bbbb2222","sessionId":"bbbb2222-0000-4000-8000-000000000002","kind":"background","state":"blocked"},
-  {"id":"cccc3333","sessionId":"cccc3333-0000-4000-8000-000000000003","kind":"background","state":"done"} ]
+  {"id":"cccc3333","sessionId":"cccc3333-0000-4000-8000-000000000003","kind":"background","state":"done"},
+  {"id":"dddd4444","sessionId":"dddd4444-0000-4000-8000-000000000004","kind":"background","state":"stopped"},
+  {"id":"eeee5555","sessionId":"eeee5555-0000-4000-8000-000000000005","kind":"background","state":"idle"} ]
 JSON
 STUB
 chmod +x "$TMP/bin/claude"
@@ -87,6 +89,36 @@ ok "every live-eligible session is reported by name" \
   "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>&1 >/dev/null | wc -l | tr -d ' ')" 4
 ok "an empty bundle is 0, not an error" \
   "$(mkdir -p "$TMP/none" && PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/none" 2>/dev/null)" 0
+
+echo "== in-flight: only an explicitly terminal state frees a slot =="
+one() { # <bundle> <session> -> a bundle whose only recorded session is <session>
+  mkdir -p "$TMP/$1/projects/p/tasks"
+  printf -- '---\ntype: Task\nstatus: in-progress\nsession: %s\n---\n' "$2" \
+    > "$TMP/$1/projects/p/tasks/t.md"
+}
+one b-stopped dddd4444
+one b-idle    eeee5555
+ok "the allowlist is spelled out once" \
+  "$(grep -c '^TERMINAL="done gone stopped completed cancelled failed error exited"$' "$SESS")" 1
+ok "a \`stopped\` session frees its slot" \
+  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/b-stopped" 2>/dev/null)" 0
+ok "…and is not named unrecognised" \
+  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/b-stopped" 2>&1 >/dev/null | grep -c unrecognised)" 0
+ok "an \`idle\` session still holds one" \
+  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/b-idle" 2>/dev/null)" 1
+ok "…and is named once as unrecognised, with its id" \
+  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/b-idle" 2>&1 >/dev/null \
+     | grep -c "unrecognised state 'idle' for session eeee5555")" 1
+ok "working/blocked are known, not unrecognised" \
+  "$(PATH="$PATH_WITH" bash "$SESS" in-flight "$TMP/bundle" 2>&1 >/dev/null | grep -c unrecognised)" 0
+ok "\`state\` passes stopped through raw" "$(PATH="$PATH_WITH" bash "$SESS" state dddd4444 2>/dev/null)" stopped
+ok "\`state\` passes idle through raw, unflagged" \
+  "$(PATH="$PATH_WITH" bash "$SESS" state eeee5555 2>&1)" idle
+ok "one classifier, and in-flight its only caller" \
+  "$(grep -c 'holds_slot' "$SESS")" 2
+OUT="$(PATH="/usr/bin:/bin" bash "$SESS" in-flight "$TMP/b-idle" 2>/dev/null)"; RC=$?
+ok "no \`claude\`: in-flight exits 2" "$RC" 2
+ok "…and prints no count" "${OUT:-<empty>}" "<empty>"
 
 echo "== check-dispatch.sh keeps every verdict it returned before it learned session: =="
 parked() { printf -- '---\ntype: Task\nkind: build\nstatus: in-progress\n%spr: [ ]\n---\n' "$1"; }
