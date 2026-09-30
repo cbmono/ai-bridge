@@ -28,30 +28,29 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    dispatches are recorded (`docs/pm-design.md#step-3-background`).
 
    **Run the spawn preflight BEFORE the wave's first status write** — once per tick, and
-   only when there is a task to dispatch:
+   only when there is a task to dispatch. `<token>` is a fresh literal string you type for
+   this call (8 hex characters is plenty); it is what tells the preflight the hook's record
+   is this call's and not the last one's, so never reuse one and never write a `$`-expansion:
 
    ```bash
-   ${CLAUDE_PLUGIN_ROOT}/scripts/spawn-preflight.sh --instance <bundle root>
+   ${CLAUDE_PLUGIN_ROOT}/scripts/spawn-preflight.sh --instance <bundle root> --token <token>
    ```
 
-   It reads this session's permission mode as of that very call, off the hook payload — no
-   probe, no spawn, no slot. Three answers, and none stands in for another:
-   - **exit 1, `will-refuse`** — auto mode. **Dispatch nothing this tick**: no status
-     write, no worktree, no `session:`, so nothing is rolled back and no stall round is
-     recorded. Write the refusal entry below on the first task the wave would have
-     dispatched, with the table's FIRST row as `<which>` and `<remedy>` — it is the same
-     classifier, caught before it answers, so the dedupe and the clearing below apply
-     unchanged. Report it in one line:
+   It reports this session's permission mode as of that very call, off the hook payload — no
+   probe, no spawn, no slot. **It reports the MODE and predicts NOTHING.** Measured
+   2026-09-30: the auto-mode classifier judges the BRIEF's text and not the command, so
+   no mode predicts a refusal — `claude --bg` in this step's shape spawned under auto mode
+   (`knowledge/findings/the-auto-mode-classifier-reads-the-brief-not-the-command`).
+   **Dispatch on every answer**, and quote its line in the report:
+   - **exit 1, `auto`** — the mode the earlier refusals were seen under. It is not a
+     refusal and never skips the wave; a refusal that does come is caught after the fact,
+     below.
+   - **exit 0, `not-auto`** — the mode was read and it is not auto.
+   - **exit 2, `could-not-read`** (or any other exit) — the mode could not be established.
+     It is its own answer, never a pass and never a failure.
 
-     ```text
-     dispatch not attempted: <which>. <k> ready left unattempted; nothing was spawned or rolled back. Remedy: <remedy>.
-     ```
-
-   - **exit 0, `will-not-refuse`** — dispatch as below.
-   - **exit 2, `could-not-read`** (or any other exit) — dispatch as below and quote its
-     line in the report. It is not a pass: a refusal is then caught after the fact, below.
-
-   Tier `human`: nothing in the plugin changes the session's mode or writes a grant.
+   Tier `human`: nothing in the plugin changes the session's mode or writes a grant, and the
+   preflight writes no `open_questions` entry — there is no refusal yet to report.
 
    For each **build** `ready` task whose `depends_on` are all `done`, that clears the
    ownership check, and that is not already in-progress: set `assignee` +

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# spawn-preflight.test.sh — the dispatch preflight answers will-refuse / will-not-refuse /
-# could-not-read from the mode the hook recorded for the preflight's own call, never
-# collapses the third, spawns nothing, writes nothing, and runs before the wave's first
-# status write. Drives the REGISTERED hook command off hooks.json. Offline; mktemp only.
+# spawn-preflight.test.sh — the dispatch preflight answers auto / not-auto / could-not-read
+# from the mode the hook recorded for THIS call (matched by its --token), claims no launch
+# outcome, never collapses the third, spawns nothing, writes nothing, and runs before the
+# wave's first status write. Drives the REGISTERED hook command off hooks.json. Offline.
 #
 # Reasoning: dispatch-reporting-defects/task-005.
 set -uo pipefail
@@ -42,10 +42,12 @@ payload() { # <mode or ""> <command> [session id]
 hook() { # <project dir> — the registered command, run the way the loader runs it
   CLAUDE_PLUGIN_ROOT="$REPO/plugin" CLAUDE_PROJECT_DIR="$1" bash -c "exec $REGCMD"
 }
-CALL='${CLAUDE_PLUGIN_ROOT}/scripts/spawn-preflight.sh --instance .'
+TOK=9f3c1a77
+CALL='${CLAUDE_PLUGIN_ROOT}/scripts/spawn-preflight.sh --instance . --token '"$TOK"
+pre() { CLAUDE_CODE_SESSION_ID="${SID_OVERRIDE-$SID}" bash "$PRE" --instance "$INST" "$@"; }
 run() { # <mode or ""> — the hook for the preflight's own call, then the preflight; prints "<exit> <line>"
   payload "$1" "$CALL" | hook "$INST" >/dev/null 2>&1
-  local out rc; out="$(CLAUDE_CODE_SESSION_ID="$SID" bash "$PRE" --instance "$INST" 2>&1)"; rc=$?
+  local out rc; out="$(pre --token "$TOK" 2>&1)"; rc=$?
   printf '%s %s' "$rc" "$out"
 }
 verdict() { printf '%s' "$1" | awk '{ sub(/:.*/, "", $2); print $1, $2 }'; }
@@ -67,14 +69,19 @@ payload auto "$CALL" '../../etc' | hook "$INST" >/dev/null 2>&1
 ok "a session id that is not an id is refused"    "$(yn test -e "$INST/$AB_MODE_DIR")" no
 ok "the preflight's call: stdout empty, never a decision" "$(payload auto "$CALL" | hook "$INST" 2>/dev/null | wc -c | tr -d ' ')" 0
 ok "…records the mode under the session id"       "$(awk '{print $2}' "$INST/$AB_MODE_DIR/$SID" 2>/dev/null)" auto
+ok "…with the token off that call's command"      "$(awk '{print $3}' "$INST/$AB_MODE_DIR/$SID" 2>/dev/null)" "$TOK"
 ok "…and the record stays out of git"             "$(yn git -C "$INST" check-ignore -q "$AB_MODE_DIR/$SID")" yes
 
 echo
-echo "== three outcomes, each its own exit and its own word =="
-ok "auto ⇒ will-refuse"                   "$(verdict "$(run auto)")" "1 will-refuse"
-ok "default ⇒ will-not-refuse"            "$(verdict "$(run default)")" "0 will-not-refuse"
-ok "bypassPermissions ⇒ will-not-refuse"  "$(verdict "$(run bypassPermissions)")" "0 will-not-refuse"
-ok "the will-refuse line names auto mode"  "$(yn grep -qF 'auto mode' <<<"$(run auto)")" yes
+echo "== three outcomes: the MODE it read, never a launch outcome it cannot know =="
+ok "auto ⇒ auto"                          "$(verdict "$(run auto)")" "1 auto"
+ok "default ⇒ not-auto"                   "$(verdict "$(run default)")" "0 not-auto"
+ok "bypassPermissions ⇒ not-auto"         "$(verdict "$(run bypassPermissions)")" "0 not-auto"
+ok "dontAsk ⇒ not-auto"                   "$(verdict "$(run dontAsk)")" "0 not-auto"
+ok "the auto line names auto mode"        "$(yn grep -qF 'auto mode' <<<"$(run auto)")" yes
+# Measured 2026-09-30: the classifier judges the brief, not the command, so no mode predicts.
+ok "no answer predicts the spawn"         "$(grep -cE 'will-refuse|will-not-refuse' "$PRE" "$S3" | awk -F: '{s+=$2} END {print s}')" 0
+ok "…and auto says so on the line"        "$(yn grep -qF 'predicts nothing' <<<"$(run auto)")" yes
 
 echo
 echo "== could-not-read is reachable from every cause, and never folded into a pass or a failure =="
@@ -83,16 +90,33 @@ cnr "no permission_mode in the payload" "$(run '')"
 cnr "an unrecognised mode"              "$(run turbo)"
 cnr "a mode that is not a word"         "$(run 'auto; rm')"
 payload default "$CALL" | hook "$INST" >/dev/null 2>&1
-x="$(env -u CLAUDE_CODE_SESSION_ID bash "$PRE" --instance "$INST")"; cnr "no session id in the shell" "$? $x"
-x="$(CLAUDE_CODE_SESSION_ID='../x' bash "$PRE" --instance "$INST")"; cnr "a session id that is not an id" "$? $x"
-x="$(CLAUDE_CODE_SESSION_ID=feedface bash "$PRE" --instance "$INST")"; cnr "no record for this session" "$? $x"
-printf '%s auto\n' "$(( $(date +%s) - 120 ))" > "$INST/$AB_MODE_DIR/$SID"
-x="$(CLAUDE_CODE_SESSION_ID="$SID" bash "$PRE" --instance "$INST")"; cnr "a stale record (an earlier call's)" "$? $x"
+x="$(env -u CLAUDE_CODE_SESSION_ID bash "$PRE" --instance "$INST" --token "$TOK")"; cnr "no session id in the shell" "$? $x"
+x="$(SID_OVERRIDE='../x' pre --token "$TOK")"; cnr "a session id that is not an id" "$? $x"
+x="$(SID_OVERRIDE=feedface pre --token "$TOK")"; cnr "no record for this session" "$? $x"
+x="$(pre)"; cnr "no --token, so nothing correlates" "$? $x"
+x="$(pre --token 'a b')"; cnr "a token that is not a token" "$? $x"
+x="$(pre --token deadbeef)"; cnr "the record is another call's" "$? $x"
+printf '%s auto %s\n' "$(( $(date +%s) - 120 ))" "$TOK" > "$INST/$AB_MODE_DIR/$SID"
+x="$(pre --token "$TOK")"; cnr "a stale record (an earlier call's)" "$? $x"
 printf 'garbage\n' > "$INST/$AB_MODE_DIR/$SID"
-x="$(CLAUDE_CODE_SESSION_ID="$SID" bash "$PRE" --instance "$INST")"; cnr "a malformed record" "$? $x"
-x="$(CLAUDE_CODE_SESSION_ID="$SID" bash "$PRE" --instance "$TMP/nowhere")"; cnr "no hook ever ran" "$? $x"
-ok "the reason is on the line"            "$(yn grep -qF 'not set in this shell' <<<"$(env -u CLAUDE_CODE_SESSION_ID bash "$PRE" --instance "$INST")")" yes
+x="$(pre --token "$TOK")"; cnr "a malformed record" "$? $x"
+x="$(CLAUDE_CODE_SESSION_ID="$SID" bash "$PRE" --instance "$TMP/nowhere" --token "$TOK")"; cnr "no hook ever ran" "$? $x"
+ok "the reason is on the line"            "$(yn grep -qF 'not set in this shell' <<<"$(env -u CLAUDE_CODE_SESSION_ID bash "$PRE" --instance "$INST" --token "$TOK")")" yes
 ok "a usage error is none of the three"   "$(bash "$PRE" --bogus >/dev/null 2>&1; echo $?)" 3
+
+echo
+echo "== a REFRESH THAT FAILED never reads as this call's, however recent the record =="
+# The record's age proves recency, not that this invocation's hook write landed.
+payload auto "$CALL" | hook "$INST" >/dev/null 2>&1
+NEXT='${CLAUDE_PLUGIN_ROOT}/scripts/spawn-preflight.sh --instance . --token beef1234'
+chmod a-w "$INST/$AB_MODE_DIR"
+ok "the hook genuinely cannot write"      "$(yn test -w "$INST/$AB_MODE_DIR")" no
+payload default "$NEXT" | hook "$INST" >/dev/null 2>&1
+chmod u+w "$INST/$AB_MODE_DIR"
+ok "…so the PREVIOUS call's record survives" "$(awk '{print $2, $3}' "$INST/$AB_MODE_DIR/$SID")" "auto $TOK"
+ok "…and it is inside the 30s window"     "$(yn test "$(( $(date +%s) - $(awk '{print $1}' "$INST/$AB_MODE_DIR/$SID") ))" -le 30)" yes
+x="$(pre --token beef1234)"; cnr "a failed refresh with a recent previous record" "$? $x"
+ok "…and says the refresh did not land"   "$(yn grep -qF 'refresh did not land' <<<"$x")" yes
 
 echo
 echo "== no probe and no repair: nothing spawned, nothing written =="
@@ -100,7 +124,7 @@ mkdir -p "$TMP/bin" "$TMP/home"
 printf '#!/bin/sh\necho called >> "%s/claude-calls"\n' "$TMP" > "$TMP/bin/claude"; chmod +x "$TMP/bin/claude"
 payload auto "$CALL" | hook "$INST" >/dev/null 2>&1
 : > "$TMP/marker"; sleep 1
-CLAUDE_CODE_SESSION_ID="$SID" HOME="$TMP/home" PATH="$TMP/bin:$PATH" bash "$PRE" --instance "$INST" >/dev/null 2>&1
+CLAUDE_CODE_SESSION_ID="$SID" HOME="$TMP/home" PATH="$TMP/bin:$PATH" bash "$PRE" --instance "$INST" --token "$TOK" >/dev/null 2>&1
 ok "no claude invocation, not even a stub"  "$(yn test -e "$TMP/claude-calls")" no
 ok "the preflight writes no file anywhere"  "$(find "$TMP" -newer "$TMP/marker" -type f | grep -c .)" 0
 ok "neither file names a settings or grant write" \
@@ -114,17 +138,19 @@ spawn_at="$(grep -n 'claude --bg "<the whole brief>"' "$S3" | head -n1 | cut -d:
 ok "the preflight is named in step 3"        "$([ -n "$pre_at" ] && echo yes || echo no)" yes
 ok "…before the first status write"          "$([ "${pre_at:-999}" -lt "${write_at:-0}" ] && echo yes || echo no)" yes
 ok "…and so before the first spawn"          "$([ "${pre_at:-999}" -lt "${spawn_at:-0}" ] && echo yes || echo no)" yes
-ok "will-refuse dispatches nothing"          "$(yn grep -qF '**Dispatch nothing this tick**: no status' "$S3")" yes
-ok "…and has nothing to roll back"           "$(yn grep -qF 'so nothing is rolled back and no stall round is' "$S3")" yes
-ok "could-not-read is not a pass"            "$(yn grep -qF 'It is not a pass' "$S3")" yes
+ok "…with a per-call token"                  "$(yn grep -qF 'spawn-preflight.sh --instance <bundle root> --token <token>' "$S3")" yes
+ok "every answer dispatches"                 "$(yn grep -qF '**Dispatch on every answer**' "$S3")" yes
+ok "…so no answer skips the wave"            "$(grep -ciE 'dispatch nothing this tick|never skips the wave' "$S3" | tr -d ' ')" 1
+ok "the mode predicts nothing, and step 3 says so" "$(yn grep -qF 'no mode predicts a refusal' "$S3")" yes
+ok "could-not-read is neither a pass nor a failure" "$(yn grep -qF 'never a pass and never a failure' "$S3")" yes
+ok "the preflight writes no grant entry"     "$(yn grep -qF 'preflight writes no `open_questions` entry' "$S3")" yes
 ok "ONE entry shape: task-003's"             "$(grep -c 'Q<n>: dispatch refused: ' "$S3" | tr -d ' ')" 1
-ok "…taken with the table's first row"       "$(yn grep -qF "with the table's FIRST row as \`<which>\` and \`<remedy>\`" "$S3")" yes
 ok "the remedy is stated once, in one place" \
    "$(grep -rlF 'exit auto mode for the WHOLE tick' "$REPO/plugin" | sed "s|$REPO/||" | tr '\n' ' ')" "plugin/tick-steps/step-3-dispatch.md "
 row1="$(awk '/\| The text carries \|/ { t = 1; next } t && /^[[:space:]]*\|---/ { next } t { print; exit }' "$S3")"
 cell() { printf '%s' "$row1" | awk -F' [|] ' -v n="$1" '{ gsub(/^[[:space:]]*[|] | [|][[:space:]]*$/, ""); print $n }' | sed 's/^`//; s/`$//'; }
 which="$(cell 2)"; remedy="$(cell 3)"
-line_tpl="$(sed -n 's/^[[:space:]]*\(dispatch not attempted: <which>\. .*\)$/\1/p' "$S3" | head -n1)"
+line_tpl="$(sed -n 's/^[[:space:]]*\(dispatch refused: <which>\. .*\)$/\1/p' "$S3" | head -n1)"
 line="${line_tpl//<which>/$which}"; line="${line//<remedy>/$remedy}"; line="${line//<k>/3}"
 ok "the report line template is there"       "$([ -n "$line_tpl" ] && echo yes || echo no)" yes
 ok "…carrying the shift+tab remedy"          "$(yn grep -qF 'shift+tab' <<<"$line")" yes
@@ -138,7 +164,7 @@ printf -- '---\ntype: Project\ntitle: "Demo"\nstatus: active\n---\n' > "$D/proje
 printf -- '---\ntype: Task\ntitle: "First"\nkind: build\nstatus: ready\nacceptance_criteria: [ "x" ]\nopen_questions: [ "%s" ]\n---\n' \
   "$entry" > "$D/projects/demo/tasks/task-001-a.md"
 bash "$AW" --instance "$D" >/dev/null 2>&1
-ok "the entry it writes renders as one grant row" "$(grep -c '^\* 🧰 \*\*grant\*\* — \[First\]' "$D/$AB_AWAITING" | tr -d ' ')" 1
+ok "task-003's entry still renders as one grant row" "$(grep -c '^\* 🧰 \*\*grant\*\* — \[First\]' "$D/$AB_AWAITING" | tr -d ' ')" 1
 
 echo
 echo "spawn-preflight.test: $pass passed, $fail failed"
