@@ -120,6 +120,7 @@ A conflict that recurs on every bundle with the same answer is a rule, not a que
 | Seed path | Rule that resolves it |
 |---|---|
 | `knowledge/index.md` | derived from frontmatter — regenerated with `build-kb-index.sh`, never merged |
+| `index.md` (`.ai-bridge/index.md`) | derived and gitignored — the project-manager rewrites it at tick step 8 (Curate), so a conflicting hunk keeps the bundle's copy and writes nothing |
 | `.gitignore` | conflicting hunks that touch only seed-managed lines (`board.html`, `.board-live/`, `AWAITING.md`, `.tick-lock`, `.ai-bridge/`) take the seed side; every bundle-added line is kept |
 
 ### The two config files, on the same stamp
