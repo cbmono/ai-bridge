@@ -27,8 +27,8 @@ copy_plugin "$MK/9.9.9"
 copy_plugin "$TMP/checkout/plugin"
 
 STUB="$TMP/bin"; mkdir -p "$STUB"; printf '#!/bin/sh\nexit 1\n' > "$STUB/gh"; chmod +x "$STUB/gh"
-stamp() { # <plugin root> <instance>
-  PATH="$STUB:$PATH" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" \
+stamp() { # <plugin root> <instance> [PATH]
+  PATH="${3:-$STUB:$PATH}" HOME="$TMP/home" XDG_CONFIG_HOME="$TMP/home" \
     GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$TMP/home/none" \
     bash "$1/scripts/init-bundle.sh" "$2" </dev/null >"$TMP/out" 2>&1
 }
@@ -38,9 +38,9 @@ json() { python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$1"; }
 PY=$(command -v python3 >/dev/null 2>&1 && echo yes || echo no)
 
 echo "== 1. a bundle with no settings.local.json gets both rules =="
-I="$TMP/i1"; git init -q "$I"; stamp "$MK/9.9.9" "$I"
+I="$TMP/i1"; git init -q "$I"; stamp "$MK/9.9.9" "$I"; rc=$?
 L="$I/.claude/settings.local.json"
-ok "stamp exits 0" "$?" 0
+ok "stamp exits 0" "$rc" 0
 ok "settings.local.json written" "$(yn test -f "$L")" yes
 ok "plain rule present once" "$(has "$R1" "$L")" 1
 ok "bash-prefixed twin present once" "$(has "$R2" "$L")" 1
@@ -91,6 +91,34 @@ ok "no claude --bg / bypassPermissions in what init writes" \
   "$(grep -cE 'claude --bg|bypassPermissions' "$TMP/i1/.claude/settings.local.json" | tr -d ' ')" 0
 ok "the version is the only wildcard besides the script" \
   "$(grep -oF "$TMP/home/.claude/plugins/cache/mk/ai-bridge/*/scripts/*)" "$TMP/i1/.claude/settings.local.json" | wc -l | tr -d ' ')" 2
+
+echo "== 7. a multi-line EMPTY allow array is filled, valid, with python3 unavailable =="
+# No python3 means init's JSON check is skipped, so a malformed rewrite would replace a good
+# settings.local.json unchecked. That is what makes this shape a data-integrity case.
+NOPY="$TMP/nopy"; mkdir -p "$NOPY"
+( IFS=:; for d in $PATH; do
+    [ -d "$d" ] || continue
+    for f in "$d"/*; do
+      n="${f##*/}"; case "$n" in python3*) continue ;; esac
+      [ -x "$f" ] && [ ! -e "$NOPY/$n" ] && ln -s "$f" "$NOPY/$n"
+    done
+  done ) 2>/dev/null
+ok "no python3 on the fixture PATH" "$( (PATH="$NOPY"; yn command -v python3) )" no
+n7=0
+for blank in "blank line after [" "no blank line"; do
+  n7=$((n7+1)); I="$TMP/i7-$n7"; mkdir -p "$I/.claude"; L="$I/.claude/settings.local.json"
+  if [ "$blank" = "no blank line" ]; then
+    printf '{\n  "permissions": {\n    "allow": [\n    ],\n    "deny": []\n  }\n}\n' > "$L"
+  else
+    printf '{\n  "permissions": {\n    "allow": [\n\n    ]\n  }\n}\n' > "$L"
+  fi
+  stamp "$MK/9.9.9" "$I" "$STUB:$NOPY"; rc=$?
+  ok "stamp exits 0 ($blank)" "$rc" 0
+  ok "plain rule present once ($blank)" "$(has "$R1" "$L")" 1
+  ok "twin present once ($blank)" "$(has "$R2" "$L")" 1
+  ok "only the non-last entry keeps its comma ($blank)" "$(grep -c '",$' "$L" | tr -d ' ')" 1
+  [ "$PY" = no ] || ok "the filled file parses as JSON ($blank)" "$(yn json "$L")" yes
+done
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

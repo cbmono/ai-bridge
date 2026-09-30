@@ -1575,13 +1575,20 @@ case "${al_mk##*/}|${al_mk%/*/*}|$PLUGIN_ROOT" in
   *) al_mk="" ;;
 esac
 al_write() { # <missing entries, one per line> -> the rewritten file on stdout, or nothing
-  local body
+  local body add
+  add="$1"
   body="$(tr -d '[:space:]' < "$AL_FILE" 2>/dev/null)"
   if [ -z "$body" ] || [ "$body" = "{}" ]; then
-    printf '{\n  "permissions": {\n    "allow": [\n%s\n    ]\n  }\n}\n' "$(printf '%s' "$1" | sed '$s/,$//')"
-  elif [ "$(grep -c "$AL_OPEN" "$AL_FILE")" = 1 ] &&
-       ! O="$AL_OPEN" awk '$0 ~ ENVIRON["O"] { getline; exit !/^[[:space:]]*\]/ }' "$AL_FILE"; then
-    O="$AL_OPEN" AL="$1" awk '{ print } $0 ~ ENVIRON["O"] { print ENVIRON["AL"] }' "$AL_FILE"
+    printf '{\n  "permissions": {\n    "allow": [\n%s\n    ]\n  }\n}\n' "$(printf '%s' "$add" | sed '$s/,$//')"
+  elif [ "$(grep -c "$AL_OPEN" "$AL_FILE")" = 1 ]; then
+    # Blank lines between `[` and `]` still mean an empty array, which takes the entries
+    # WITHOUT the trailing comma; a non-empty one keeps it, ahead of its first element.
+    if O="$AL_OPEN" awk '$0 ~ ENVIRON["O"] {
+           while ((getline) > 0) if ($0 !~ /^[[:space:]]*$/) exit !/^[[:space:]]*\]/
+           exit 0 }' "$AL_FILE"; then
+      add="$(printf '%s' "$add" | sed '$s/,$//')"
+    fi
+    O="$AL_OPEN" AL="$add" awk '{ print } $0 ~ ENVIRON["O"] { print ENVIRON["AL"] }' "$AL_FILE"
   fi
 }
 if [ -z "$al_mk" ]; then
