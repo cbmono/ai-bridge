@@ -97,6 +97,7 @@ ab_expand() {   # stdin -> stdout, __AB_SCHEMA__ and friends replaced by their v
 
 # The plugin's own name rides along: a script that knows the layout can spell its slugs.
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh" 2>/dev/null || true
+PLUGIN_NAME="${PLUGIN_NAME:-}" PLUGIN_MARKETPLACE="${PLUGIN_MARKETPLACE:-}"   # set -u callers, helper absent
 
 # Sourced ⇒ stop here. Executed ⇒ answer, so a harness, a doc or a non-bash reader gets
 # the same answer as a script does.
