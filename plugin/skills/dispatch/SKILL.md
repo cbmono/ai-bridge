@@ -380,7 +380,8 @@ ticks, regardless of how long a tick runs.
   (add `--progress` when the PR moved — a new commit or a new review thread — which resets
   the counter); its **exit 1** means the cap is reached, so run `… escalate <task-doc>`
   instead of dispatching and put the line it prints in `AWAITING.md`. The cap is
-  `maxStallRounds` in `instance.config.json` (**absent ⇒ 2**).
+  `maxStallRounds` in `instance.config.json` (**absent ⇒ 2**). **A spawn the host
+  refused is not a round and is never recorded** — no agent ran (step 3).
 - **An answered question is MOVED, never deleted** — from `open_questions` into
   `answered_questions`, one flat line `<ISO 8601> by <login> · <the entry verbatim>`,
   the login from `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh` (`SCHEMA.md` →
