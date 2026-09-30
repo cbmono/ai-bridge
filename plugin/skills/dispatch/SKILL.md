@@ -387,7 +387,8 @@ ticks, regardless of how long a tick runs.
   the login from `${CLAUDE_PLUGIN_ROOT}/scripts/decision-stamp.sh` (`SCHEMA.md` →
   "Decisions name the human"; an `advisor:` entry the loop wrote carries no `by`). `open_questions` must still empty — that is the promotion signal; an
   entry left in both lists blocks the draft forever.
-- Concurrency cap: **at most `maxAgentsInFlight` role agents in flight** — resolve
+- Concurrency cap: **at most `maxAgentsInFlight` role agents in flight**, a still-running
+  `plan-architect` critique counting as one (`tick-steps/step-2-refine-drafts.md`) — resolve
   with `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-max-agents.sh` (local file first, tracked second; prints
   nothing and exits 1 when neither sets it — fall back to 4 then, the seeded, measured
   default per SCHEMA.md). Each agent uses its own worktree under `worktreeRoot`

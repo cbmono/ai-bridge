@@ -451,17 +451,23 @@ bound: **absent from both config layers it is 45**, so unlike the doom loop it i
 default on an armed instance, and `0` is how you turn it off. Past the budget the agent's
 next tool call is a `deny` whose text is the whole instruction — commit and push what you
 have, open or update the PR, report — and the **allowlist is what makes that report
-honest**: `Read`, `Grep`, `Glob`, and a `Bash` that is a `git commit`, `git push` or
-`gh pr create|edit|view|checks` with no chained second command; `Edit`, `Write` and every
-other `Bash` are refused. The clock starts at the **`SubagentStart`** registration of this
-same script, which writes `.claude/control/agents.d/<agent_id>.started`, and falls back to
-the **oldest** timestamp the transcript carries — never its ctime alone, which an append
+honest**: `Read`, `Grep`, `Glob`, and a `Bash` made only of `git add|commit|push`,
+`commit-as.sh`, `cd` and `gh pr create|edit|view|checks`, joined by `&&` or `;`; `Edit`,
+`Write` and every other `Bash` are refused. **That `Bash` is scanned quote-aware**, because
+until 2026-09-29 it refused any `(` or newline anywhere, so `git commit -m x` was the only
+commit it admitted: a scoped message, a heredoc and `commit-as.sh` were all denied, and a
+73-minute tick lost four finished files it could not commit. **The budget is per role**
+(`roleMinutes`, merged per role): the `project-manager` walks the whole bundle, so its
+absent-key budget is **180**, not the role agents' 45 — measured ticks ran 73 and 121+
+minutes with no critique in flight, so the walk, not the critiques, outgrew 45. The clock
+starts at the **`SubagentStart`** registration of this same script, which writes
+`.claude/control/agents.d/<agent_id>.started`, and falls back to the **oldest** timestamp the transcript carries — never its ctime alone, which an append
 moves to now, and not birth time alone, which not every filesystem records. The stop
 event drops it, so a **resumed** agent is given a fresh budget rather than an expired one.
 Same reflection path as the doom loop: `agent-cap` in `control.log`, one `capped: <minutes>`
 line on the task at the next tick.
 
-Covered by `tests/agent-control.test.sh` (256 assertions, most of them refusals).
+Covered by `tests/agent-control.test.sh` (287 assertions, most of them refusals).
 
 ## 17. An instruction addressed to an agent is executable only if that agent *holds* the tool
 

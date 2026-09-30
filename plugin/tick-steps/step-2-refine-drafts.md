@@ -83,6 +83,12 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    only `fold-answers.sh` writes and only from an answered `open_questions` entry — a
    critique that raised nothing has no such entry, so the receipt had nowhere it was
    allowed to be written.
+   **Every critique this tick owes is launched in ONE message, concurrently, in the
+   background** (`Agent` with `run_in_background: true`), never one at a time and never
+   waited on before the walk moves on: take the answers into `advisor_notes` when they
+   return, before step 8. Each running critique counts as one agent against
+   `maxAgentsInFlight` (absent ⇒ 4) while it runs; a critique that finds no free slot waits
+   for the next tick, which its missing receipt already arranges.
    Its model comes from `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh plan-architect` — `roleTiers`
    (`apex`) through `models` — never a hard-coded alias; and `plan-architect` stays out
    of `roles`.
