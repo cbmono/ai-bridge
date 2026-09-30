@@ -41,7 +41,7 @@
 # is how the two would come to disagree. This file owns the two-step lookup below and the
 # contract that absence is not an error; precedence is that file's.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh" 2>/dev/null || true
+_pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then . "$_pn"; fi
 
 agent=""; inst="."
 while [ $# -gt 0 ]; do

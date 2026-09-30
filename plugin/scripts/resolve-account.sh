@@ -16,7 +16,7 @@
 # GENERIC TEMPLATE FILE — ships with the `ai-bridge` plugin; do not edit per instance.
 # Verified by tests/companion-account-switch.test.sh.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh" 2>/dev/null || true
+_pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then . "$_pn"; fi
 
 COMPANION_REL="companion/accounts.md"
 LAUNCHER_REL="bin/ai-bridge-claude"

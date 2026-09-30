@@ -96,7 +96,9 @@ ab_expand() {   # stdin -> stdout, __AB_SCHEMA__ and friends replaced by their v
 }
 
 # The plugin's own name rides along: a script that knows the layout can spell its slugs.
-. "$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh" 2>/dev/null || true
+# `if [ -r ]`, never `|| true`: bash 3.2 under `set -e` exits on sourcing a missing file.
+_pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"
+if [ -r "$_pn" ]; then . "$_pn"; fi; unset _pn
 PLUGIN_NAME="${PLUGIN_NAME:-}" PLUGIN_MARKETPLACE="${PLUGIN_MARKETPLACE:-}"   # set -u callers, helper absent
 
 # Sourced ⇒ stop here. Executed ⇒ answer, so a harness, a doc or a non-bash reader gets

@@ -45,7 +45,7 @@
 #
 # Verified by tests/template-version.test.sh.
 set -uo pipefail
-. "$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh" 2>/dev/null || true
+_pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then . "$_pn"; fi
 
 TEMPLATE=""; PLUGIN=""; PLUGIN_SET=0; INSTANCE=""; REF=""; FETCH=0; STATE=0
 # Six hours, and a two-second cap: the SessionStart banner may not wait on a socket, and a
