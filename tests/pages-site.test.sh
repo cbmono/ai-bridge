@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # pages-site.test.sh — the GitHub Pages site under docs/ stays on-palette, self-contained
-# and on the slugs that resolve today (loopd/task-006).
+# and on slugs spelled under the plugin's manifest name (loopd/task-006, task-007).
 #
 # Every check is a function over a site directory, run once against docs/ (must pass) and
 # once against a mutant copy carrying the exact regression it exists for (must fail) — a
@@ -14,6 +14,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
+. "$HERE/tools/plugin-name.sh"
 SITE="$REPO/docs"
 for f in "$SITE/index.html" "$SITE/assets/loopd-mark-color.svg"; do
   [ -f "$f" ] || { echo "pages-site.test: missing $f" >&2; exit 2; }
@@ -50,7 +51,9 @@ check_rgba() {
 }
 
 check_slugs() {
-  [ "$(grep -c '/loopd:' "$1/index.html")" = 0 ] && grep -qF 'ai-bridge@ai-bridge' "$1/index.html"
+  local cmds; cmds="$(ls "$REPO/plugin/skills" | tr '\n' '|' | sed 's/|$//')"
+  [ "$(grep -oE "/[a-z][a-z0-9-]*:(${cmds})([^a-z-]|\$)" "$1/index.html" | grep -vc "^/${PN}:")" = 0 ] \
+    && grep -qF "${PN}@${PMK}" "$1/index.html"
 }
 
 # Every src/href/url() that is not a remote URL or a fragment is relative and resolves.
@@ -113,10 +116,10 @@ mutant; edit '</style>' '.x{color:#a9b1c2}</style>'
 ok "$(rc check_hex "$M")" fail "hex — cli-theme.json's terminal-only #a9b1c2 is refused"
 mutant; edit '</style>' '.x{box-shadow:0 24px 80px rgba(0,0,0,.5)}</style>'
 ok "$(rc check_rgba "$M")" fail "rgba — a fourth rgba() is refused"
-mutant; edit '</main>' '<code>/loopd:dispatch</code></main>'
-ok "$(rc check_slugs "$M")" fail "slugs — a /loopd: slug is refused"
-mutant; edit 'ai-bridge@ai-bridge' 'loopd@loopd'
-ok "$(rc check_slugs "$M")" fail "slugs — losing ai-bridge@ai-bridge is refused"
+mutant; edit '</main>' "<code>/not-${PN}:dispatch</code></main>"
+ok "$(rc check_slugs "$M")" fail "slugs — a slug under another name is refused"
+mutant; edit "${PN}@${PMK}" "not-${PN}@not-${PMK}"
+ok "$(rc check_slugs "$M")" fail "slugs — losing ${PN}@${PMK} is refused"
 mutant; edit 'src="assets/loopd-icon.png"' 'src="/assets/loopd-icon.png"'
 ok "$(rc check_refs "$M")" fail "refs — a root-absolute src is refused"
 mutant; edit 'src="assets/loopd-icon.png"' 'src="assets/loopd-hero.png"'

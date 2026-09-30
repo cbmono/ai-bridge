@@ -57,9 +57,9 @@
 # never a merge nobody approved.
 #
 # GENERIC TEMPLATE FILE — ships with the `ai-bridge` plugin; do not edit per instance. It
-# reads no org, repo or path literal beyond its own marketplace's name.
+# reads no org, repo or path literal, and derives even its own marketplace's name.
 #
-# Verified by tests/companion-plugins.test.sh.
+# Verified by tests/companion-plugins.test.sh and tests/plugin-name.test.sh.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh" 2>/dev/null || true
 

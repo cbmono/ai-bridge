@@ -461,9 +461,9 @@ ok "…so the compare is numeric per field, not lexicographic" \
   "$(printf '%s\n' "$OUT" | grep -qF 'UPDATE' && echo yes || echo no)" yes
 # THE REPAIR IS TWO COMMANDS AND THE SECOND ONE IS STILL THE POINT: updating the plugin
 # refreshes the machinery, but a SEED change reaches a bundle only through a stamp. It was
-# `install.sh`; it is `/ai-bridge:init` since the bundle stopped carrying machinery.
+# `install.sh`; it is `/<plugin>:init` since the bundle stopped carrying machinery.
 ok "…and it names the RE-STAMP, not just the update" \
-  "$(printf '%s\n' "$OUT" | grep -qF '/ai-bridge:init' && echo yes || echo no)" yes
+  "$(printf '%s\n' "$OUT" | grep -qF '/'"${PN}:"'init' && echo yes || echo no)" yes
 
 equal="$(mkfixture equal 1.2.3 1.2.3)"
 run_check "$equal"
@@ -665,7 +665,7 @@ echo "== 8. THE PLUGIN INSTALL is the other subject, and it is bounded and cache
 #
 # The remote is a local bare repo: nothing here touches the network.
 PHOME="$TMP/phome/plugins"
-PINST="$PHOME/cache/mkt/ai-bridge/1.0.0"
+PINST="$PHOME/cache/mkt/${PN}/1.0.0"
 PMKT="$PHOME/marketplaces/mkt"
 PCACHE="$PHOME/data/ai-bridge-mkt/version-check"
 # THE WHOLE PLUGIN, not just this one script: `ai-bridge.sh check` is asserted against the
@@ -691,7 +691,7 @@ ok "…and the plugin, so a caller need not spell it" "$(printf '%s' "$OUT" | cu
 pcheck
 ok "…and the human line stays byte-empty"          "$(printf '%s' "$OUT" | wc -c | tr -d ' ')" 0
 
-# THE SAME HELPER ANSWERS `/ai-bridge:welcome check`, which is what stops that row and the
+# THE SAME HELPER ANSWERS `/<plugin>:welcome check`, which is what stops that row and the
 # banner's from ever disagreeing — asserted on both verdicts, against this same install.
 abcheck() { AOUT="$(CLAUDE_PLUGIN_ROOT="$PINST" bash "$PINST/scripts/ai-bridge.sh" check --instance "$TMP/inst" 2>/dev/null)"; }
 abcheck

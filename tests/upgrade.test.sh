@@ -4,9 +4,9 @@
 # machinery (ai-bridge-v2/task-013). Three of its four stages went with that design:
 # stage 1 was `install.sh`'s symlink pass, and stages 2 and 3 ran the bundle's own
 # `validate-bundle.sh` and `migrate-bundle.sh` through symlinks that no longer exist (both
-# ship in the plugin and are reachable directly, and `/ai-bridge:welcome check` is the one
+# ship in the plugin and are reachable directly, and `/<plugin>:welcome check` is the one
 # command that surveys a bundle). What was left is the stage nothing else can do: the
-# 3-way seed merge, reachable as `/ai-bridge:welcome fix` and `/ai-bridge:init
+# 3-way seed merge, reachable as `/<plugin>:welcome fix` and `/<plugin>:init
 # --refresh-seeds`.
 #
 # The properties that matter are the negative ones, in this order:
@@ -136,7 +136,7 @@ mkdir -p "$TMP/stranger"
 set +e; bash "$UPGRADE" "$TMP/stranger" > "$TMP/refuse.out" 2>&1; RC=$?; set -e
 assert "exits 2 on a directory that is not an instance" "$([[ $RC -eq 2 ]] && echo 0 || echo 1)"
 assert "says what it expected to find"    "$(has 'instance.config.json' "$(cat "$TMP/refuse.out")")"
-assert "points at /ai-bridge:init for a NEW bundle" "$(has 'ai-bridge:init' "$(cat "$TMP/refuse.out")")"
+assert "points at /${PN}:init for a NEW bundle" "$(has ''"${PN}:"'init' "$(cat "$TMP/refuse.out")")"
 assert "it did not stamp the stranger"    "$(yes_if test ! -e "$TMP/stranger/$AB_SCHEMA")"
 set +e; bash "$UPGRADE" "$TMP/no-such-dir" >/dev/null 2>&1; RC=$?; set -e
 assert "exits 2 on a directory that does not exist" "$([[ $RC -eq 2 ]] && echo 0 || echo 1)"
@@ -172,7 +172,7 @@ assert "the per-instance workspace file is never treated as drift" \
 assert "the numbered next-steps list offers --apply" "$(has -- '--apply' "$REPORT")"
 assert "…and names the conflict as the human's work" "$(has 'port the seed change into CLAUDE.md' "$REPORT")"
 # CONFIG IS NEVER MERGED — a ship-blocker, not an omission. `instance.config.json` is the
-# one seed file whose purpose is to diverge, and `/ai-bridge:welcome` already refuses to
+# one seed file whose purpose is to diverge, and `/<plugin>:welcome` already refuses to
 # repair an uncommitted config for exactly that reason; a merge here would be the same
 # write arriving by another door.
 assert "instance.config.json is reported, never merged" "$(has 'CONFIG    instance.config.json' "$REPORT")"
@@ -263,7 +263,7 @@ assert "…and index.md was not written" \
 # Criterion 5: the explanation has to be actionable, not just true.
 assert "…and the UNKNOWN names the marketplace clone as a fix" \
   "$(has 'marketplace clone' "$NOREC_OUT")"
-assert "…and names the re-stamp that records a base"  "$(has 'ai-bridge:init' "$NOREC_OUT")"
+assert "…and names the re-stamp that records a base"  "$(has ''"${PN}:"'init' "$NOREC_OUT")"
 
 echo "== the four review findings, as refusals =="
 
@@ -393,7 +393,7 @@ sed 's/^intro line$/intro line — TEMPLATE V2/' "$CTPL/plugin/seed/CLAUDE.md" >
 
 # <home>/plugins/cache/<marketplace>/<plugin>/<version>/  +  <home>/plugins/marketplaces/<marketplace>/
 HOMEP="$TMP/claude-home/plugins"
-CACHE="$HOMEP/cache/fixture-market/ai-bridge/9.9.9"
+CACHE="$HOMEP/cache/fixture-market/${PN}/9.9.9"
 mkdir -p "$CACHE" "$HOMEP/marketplaces"
 cp -R "$CTPL/plugin/." "$CACHE/"
 git clone -q "$CTPL" "$HOMEP/marketplaces/fixture-market"
@@ -436,7 +436,7 @@ echo "== a shallow marketplace clone is never silently treated as full history =
 # truncated walk fails QUIETLY — the older seed versions are simply absent, so "this seed
 # never changed" reads true and real drift is reported as in sync.
 SHOME="$TMP/claude-home-shallow/plugins"
-SCACHE="$SHOME/cache/fixture-market/ai-bridge/9.9.9"
+SCACHE="$SHOME/cache/fixture-market/${PN}/9.9.9"
 mkdir -p "$SCACHE" "$SHOME/marketplaces"
 cp -R "$CTPL/plugin/." "$SCACHE/"
 # `file://` because git ignores --depth on a plain local clone.

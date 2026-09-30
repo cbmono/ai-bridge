@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # normalise-config.test.sh — `normalise-config.sh` reports the three finding kinds, moves
-# and adds without ever changing a value, and `/ai-bridge:init` runs it on every stamp.
+# and adds without ever changing a value, and `/<plugin>:init` runs it on every stamp.
 #
 # WHY. Measured 2026-09-07 across the owner's three bundles: absolute paths in the TRACKED
 # `instance.config.json`, `defaultOwner` duplicated into a per-machine file, every key
@@ -22,7 +22,7 @@
 #      is the property that makes this safe to run on every stamp.
 #   4. NO VALUE EVER CHANGES — asserted over every key of a deliberately mangled pair,
 #      the one rule whose violation would be silent and unrecoverable.
-#   5. `/ai-bridge:init` — silent about config on a clean pair, reports on a dirty one,
+#   5. `/<plugin>:init` — silent about config on a clean pair, reports on a dirty one,
 #      applies with `--normalise-config` and at an interactive yes, and leaves the tracked
 #      file STAGED rather than committed.
 #   6. The stamp leaves NO per-machine path in the tracked file and invents none in the
@@ -268,7 +268,7 @@ ok "…and a string too"                        "$(jget "$I/$TCFG" org)" kept-ex
 
 # =========================================================================== #
 echo
-echo "-- 5. /ai-bridge:init runs it on every stamp"
+echo "-- 5. /${PN}:init runs it on every stamp"
 I="$(newinst 6)"
 ok "a clean pair: the stamp says nothing about config" \
    "$(grep -ci 'config findings' "$TMP/stamp.6" | tr -d ' ')" 0

@@ -12,6 +12,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 SESS="$REPO/plugin/scripts/agent-sessions.sh"
 CHECK="$REPO/plugin/scripts/check-dispatch.sh"
 CORE="$REPO/plugin/agents/project-manager.md"
@@ -146,7 +147,7 @@ ok "…and refuses \`claude rm\` on a role agent" "$(has "$S4" 'Never `claude rm
 # split (#215) left steps 3 and 4 duplicated there, and the stale copy still said
 # `Agent` tool. A grep over both files is the only thing that keeps them from diverging.
 ok "no role agent is spawned with the Agent tool anywhere" \
-  "$(grep -rc 'subagent_type: ai-bridge:<assignee>' "$CORE" "$S3" "$S4" | grep -cv ':0$')" 0
+  "$(grep -rc "subagent_type: ${PN}:<assignee>" "$CORE" "$S3" "$S4" | grep -cv ':0$')" 0
 ok "the core points at step 3 rather than restating it" \
   "$(has "$CORE" 'tick-steps/step-3-dispatch.md')" yes
 ok "…and at step 4"                       "$(has "$CORE" 'tick-steps/step-4-advance.md')"  yes

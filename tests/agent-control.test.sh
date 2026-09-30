@@ -759,24 +759,24 @@ rm -rf "$CTL/repeats" "$CTL/repeat-limit"
 # agents keep maxAgentMinutes. agent_type arrives namespaced; the key is the bare role.
 set_cap ""
 started P1 73
-ok "a 73-minute tick is NOT capped by the 45 default" "$(run P1 ai-bridge:project-manager Edit; verdict)" allowed
-ok "…while a 73-minute role agent is"                 "$(run P1 ai-bridge:software-engineer Edit; decision)" deny
+ok "a 73-minute tick is NOT capped by the 45 default" "$(run P1 ${PN}:project-manager Edit; verdict)" allowed
+ok "…while a 73-minute role agent is"                 "$(run P1 ${PN}:software-engineer Edit; decision)" deny
 set_cap 45
-ok "…and a tracked maxAgentMinutes does not reach it" "$(run P1 ai-bridge:project-manager Edit; verdict)" allowed
+ok "…and a tracked maxAgentMinutes does not reach it" "$(run P1 ${PN}:project-manager Edit; verdict)" allowed
 started P2 181
-run P2 ai-bridge:project-manager Edit
+run P2 ${PN}:project-manager Edit
 ok "…but the tick keeps a bound: 181 minutes caps"    "$(decision)" deny
 ok "…naming roleMinutes.project-manager and 180"      "$(reasontxt | grep -c 'budget (roleMinutes.project-manager) is 180')" 1
-ok "…and it may still commit what it has"             "$(run P2 ai-bridge:project-manager Bash 'git commit -m "chore(tick): land"'; verdict)" allowed
+ok "…and it may still commit what it has"             "$(run P2 ${PN}:project-manager Bash 'git commit -m "chore(tick): land"'; verdict)" allowed
 printf '{"maxAgentMinutes": 45, "roleMinutes": {"project-manager": 60, "qa-reviewer": 10}}\n' > "$INST/instance.config.json"
 rm -f "$CTL"/agent-cap*
-ok "roleMinutes overrides the tick's default"         "$(run P1 ai-bridge:project-manager Edit; decision)" deny
+ok "roleMinutes overrides the tick's default"         "$(run P1 ${PN}:project-manager Edit; decision)" deny
 started P3 20
 ok "…and any other role's"                            "$(run P3 qa-reviewer Edit; decision)" deny
 ok "…leaving a role it does not name on maxAgentMinutes" "$(run P3 software-engineer Edit; verdict)" allowed
 printf '{"roleMinutes": {"project-manager": 240}}\n' > "$INST/instance.config.local.json"
 rm -f "$CTL"/agent-cap*
-ok "…and the LOCAL layer merges per role"             "$(run P1 ai-bridge:project-manager Edit; verdict)" allowed
+ok "…and the LOCAL layer merges per role"             "$(run P1 ${PN}:project-manager Edit; verdict)" allowed
 ok "…keeping the tracked entry it does not name"      "$(run P3 qa-reviewer Edit; decision)" deny
 set_cap ""
 # The shipped role-agent number is unchanged: the seed and the hook both still say 45.

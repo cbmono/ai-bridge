@@ -174,7 +174,7 @@ printf 'stub\n' > "$INST/$AB_SCHEMA"          # task-owner.sh's instance-root te
 # `--full` (ai-bridge-v3/task-025): this file is the FULL banner's test — the two tables and
 # their columns are most of what it asserts. The SessionStart default drops them to hold 12
 # lines and §14 is where that cut is pinned; everything else here asks for the rendering
-# `/ai-bridge:welcome` gets.
+# `/<plugin>:welcome` gets.
 run() { OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --full 2>&1)"; RC=$?; }
 # `run` IS THE HUMAN'S CHANNEL, and since task-023 that is a real restriction rather than a
 # detail of the harness. With no `--format json` the hook has ONE stream whose reader is a

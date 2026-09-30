@@ -167,7 +167,7 @@ echo "== project-manager.md acts on the script, and only on the script =="
 ok "step 7 names the script" "$(hasf "$PM" "scripts/kb-sweep-due.sh --dispatched")" yes
 ok "it passes the in-flight count" "$(hasf "$PM" "--in-flight <still running>")" yes
 ok "it passes the cataloguer-in-flight flag" "$(hasf "$PM" "[--cataloguer-in-flight]")" yes
-ok "exit 0 dispatches the cataloguer, namespaced" "$(hasf "$PM" 'dispatch `ai-bridge:cataloguer`')" yes
+ok "exit 0 dispatches the cataloguer, namespaced" "$(hasf "$PM" 'dispatch `'"${PN}:"'cataloguer`')" yes
 ok "the error list goes into the brief verbatim" "$(hasf "$PM" "that output pasted into the brief")" yes
 ok "exit 1 is silence" "$(hasf "$PM" "Exit 1 is silence: no line in the report, no dispatch")" yes
 ok "the PM never re-derives the answer itself" "$(hasf "$PM" "Never re-derive the answer by running")" yes

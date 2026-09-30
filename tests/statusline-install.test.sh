@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# statusline-install.test.sh — `/ai-bridge:init` puts the status line in the BUNDLE's own
+# statusline-install.test.sh — `/<plugin>:init` puts the status line in the BUNDLE's own
 # `.claude/settings.json` and never in the user's. ai-bridge-v3/task-025.
 #
 # WHY THE BUNDLE'S FILE. Project settings are seed content init already owns, so the
@@ -22,6 +22,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/slinstall.XXXXXX")" || {
   echo "statusline-install.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}" >&2; exit 2; }
 TMP="$(cd "$TMP" && pwd)"
@@ -147,7 +148,7 @@ EMPTY="$TMP/nohome"; mkdir -p "$EMPTY"
 out="$(CLAUDE_CONFIG_DIR="$EMPTY" bash "$SHIM" </dev/null 2>&1; echo "rc=$?")"
 ok "no plugin cache ⇒ no output"            "${out%rc=*}" ""
 ok "…and exit 0, never a broken status line" "${out##*rc=}" 0
-CACHE="$TMP/fakehome/plugins/cache/mk/ai-bridge"
+CACHE="$TMP/fakehome/plugins/cache/mk/${PN}"
 mkdir -p "$CACHE/2.2.9/scripts" "$CACHE/2.2.10/scripts"
 printf '#!/usr/bin/env bash\necho "OLD $*"\n' > "$CACHE/2.2.9/scripts/status-line.sh"
 printf '#!/usr/bin/env bash\necho "NEW $*"\n' > "$CACHE/2.2.10/scripts/status-line.sh"

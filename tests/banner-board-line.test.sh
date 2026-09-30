@@ -16,7 +16,7 @@
 # THE HOOK PRINTS A PATH, AND — WHEN THIS MACHINE PUBLISHED ONE — A URL ABOVE IT. The path
 # is `.board-live/board.html`, which `watch-board.sh` already writes and `install.sh`
 # already gitignores, and it never stops printing: it is the route for a reader with no
-# artifact access. The URL is written by `/ai-bridge:board` into
+# artifact access. The URL is written by `/<plugin>:board` into
 # `instance.config.local.json` and read from the LOCAL layer only. That last word is the
 # whole constraint. The key was banished from this repo when publishing was deleted, and it
 # was banished because it had been TRACKED: publishing is account-scoped, so exactly one
@@ -96,7 +96,7 @@ PAGE="$INST/$AB_BOARD_DIR/board.html"
 # section of the banner still resolves. No clone ⇒ the check cannot answer ⇒ the row every
 # fixture below owes is the unknown one, and it needs no git and no network.
 PLUGHOME="$TMP/home/plugins"
-PLUG="$PLUGHOME/cache/mkt/ai-bridge/9.9.9"
+PLUG="$PLUGHOME/cache/mkt/${PN}/9.9.9"
 MKT="$PLUGHOME/marketplaces/mkt"
 CACHE="$PLUGHOME/data/ai-bridge-mkt/version-check"
 mkdir -p "$PLUG" "$PLUGHOME/marketplaces"
@@ -117,7 +117,7 @@ section() { printf '%s\n' "$OUT" | awk '/^Board   /{f=1} f&&/^[[:space:]]*$/{exi
 # THE RENDERED BLOCK IS TWO ROWS, and it is spelled out ONCE here rather than re-typed at
 # each comparison: a fixture copied into six places is six chances for one of them to drift
 # into asserting the shape the row is being moved away from.
-rendered_block() { printf 'Board   file://%s\nRun     /ai-bridge:board serve for a live URL\n%s' "$PAGE" "$UPDATE_ROW"; }
+rendered_block() { printf 'Board   file://%s\nRun     /'"${PN}:"'board serve for a live URL\n%s' "$PAGE" "$UPDATE_ROW"; }
 serving_block()  { printf 'Board   file://%s\nLive    %s\n%s' "$PAGE" "$1" "$UPDATE_ROW"; }
 # The column a row's VALUE starts in — past the label and the spaces after it. This is what
 # "the second row's value starts under `file://`" is asserted with, rather than a count of
@@ -201,7 +201,7 @@ assert "board enabled, nothing rendered: it SAYS SO rather than saying nothing" 
   "$(has 'Board   enabled, but never rendered' "$OUT")"
 # NAMING THE REPAIR IS HALF THE LINE. "Something is missing" without "here is what makes it"
 # leaves the reader exactly where the silence did — reaching for `ls`.
-assert "…names an /ai-bridge:dispatch tick as the renderer"  "$(has '/ai-bridge:dispatch tick renders it' "$OUT")"
+assert "…names an /${PN}:dispatch tick as the renderer"  "$(has '/'"${PN}:"'dispatch tick renders it' "$OUT")"
 assert "…and build-board.sh as the other route" "$(has 'build-board.sh' "$OUT")"
 # TEXTUALLY DISTINCT FROM THE RENDERED ROW, which is the whole property: two states that
 # print strings a human (or a grep) cannot tell apart are one state with extra steps. Keyed
@@ -287,7 +287,7 @@ BLK="$(section)"
 assert "row 1 is the label and the file:// link" \
   "$(eq "$(printf '%s\n' "$BLK" | sed -n 1p)" "Board   file://$PAGE")"
 assert 'row 2 is Run and the command, ending in the words: for a live URL' \
-  "$(eq "$(printf '%s\n' "$BLK" | sed -n 2p)" 'Run     /ai-bridge:board serve for a live URL')"
+  "$(eq "$(printf '%s\n' "$BLK" | sed -n 2p)" 'Run     /'"${PN}:"'board serve for a live URL')"
 assert "…and row 2's value starts in the SAME column as file:// on row 1" \
   "$(eq "$(val_col "$BLK" 1)" "$(val_col "$BLK" 2)")"
 # NON-VACUOUS: the equality above holds for two empty strings too, so the column is also
@@ -297,7 +297,7 @@ assert "…and that column is 8, the one the Board label sets" "$(eq "$(val_col 
 # what wrapped, and an assertion on the two rows above would still pass if it came back on
 # row 1 as well.
 assert "…and the em-dash repair no longer rides on the link row" \
-  "$(hasnt ' — run /ai-bridge:board serve' "$OUT")"
+  "$(hasnt ' — run /'"${PN}:"'board serve' "$OUT")"
 
 echo "== the local server: its URL when it is up, the way to start it when it is not =="
 # THE STATE FILE IS NOT THE ANSWER — THE PID IS. board-serve.sh removes `.board-live/.serve`
@@ -316,7 +316,7 @@ assert "…and the section is still three lines"  "$(eq "$(section | grep -c .)"
 assert "…and the file:// row is still row 1"  "$(has "Board   file://$PAGE" "$OUT")"
 assert "…with the label still in the same column as row 1's" \
   "$(eq "$(val_col "$(section)" 1)" "$(val_col "$(section)" 2)")"
-assert "…and the command it replaced is gone"  "$(hasnt '/ai-bridge:board serve for a live URL' "$OUT")"
+assert "…and the command it replaced is gone"  "$(hasnt '/'"${PN}:"'board serve for a live URL' "$OUT")"
 
 # A pid nothing is running under. `awk` picks one above this machine's live range rather
 # than a literal, so the case cannot silently become "a pid that happens to exist".
@@ -325,7 +325,7 @@ printf '43210\n%s\n%s\n' "$DEADPID" "$INST" > "$STATE"
 run
 assert "a DEAD pid does not print a URL"      "$(hasnt 'http://localhost:43210' "$OUT")"
 assert "…it falls back to the file:// row"    "$(has "Board   file://$PAGE" "$OUT")"
-assert "…which names the way to start one"    "$(has '/ai-bridge:board serve for a live URL' "$OUT")"
+assert "…which names the way to start one"    "$(has '/'"${PN}:"'board serve for a live URL' "$OUT")"
 rm -f "$STATE"
 run
 
@@ -433,7 +433,7 @@ echo "== the published URL: LOCAL layer only, and filtered before it prints =="
 # THE KEY IS BACK, AND THE CONSTRAINT ON IT IS WHAT THIS BLOCK ASSERTS. It was banished
 # from this repo outright when publishing was deleted, because it had been TRACKED: a
 # shared value plus an ACCOUNT-SCOPED update path meant one working board and one silently
-# dead publish step on whichever clone did not own the artifact. `/ai-bridge:board`
+# dead publish step on whichever clone did not own the artifact. `/<plugin>:board`
 # reinstates publishing per machine, so the key returns to the file that is per machine —
 # and the absence scan is replaced by the narrower guard that actually encodes the lesson:
 # a TRACKED value must not print. That is asserted behaviourally, in both directions,
@@ -528,13 +528,13 @@ if command -v git >/dev/null 2>&1; then
   assert "…and it offers no command, because there is nothing to run" \
     "$(hasnt 'claude plugin update' "$OUT")"
 
-  # THE STAMP RECORD. /ai-bridge:init writes the plugin version it ran with; a record that
+  # THE STAMP RECORD. /<plugin>:init writes the plugin version it ran with; a record that
   # trails the installed plugin means seed edits are waiting on a re-stamp. All off the
   # cached verdict, so nothing here touches the fixture remote.
   mkdir -p "$INST/.ai-bridge/seed-base"
   printf '9.9.8\n' > "$INST/.ai-bridge/seed-base/VERSION"; run
-  assert "a stamp record behind the installed plugin: the row names /ai-bridge:init" \
-    "$(line_is 'Update  up to date (9.9.9) · bundle stamped at 9.9.8 — run /ai-bridge:init' "$OUT")"
+  assert "a stamp record behind the installed plugin: the row names /${PN}:init" \
+    "$(line_is 'Update  up to date (9.9.9) · bundle stamped at 9.9.8 — run /'"${PN}:"'init' "$OUT")"
   assert "…and the section is still three rows"    "$(eq "$(section | grep -c .)" 3)"
   printf '9.9.9\n' > "$INST/.ai-bridge/seed-base/VERSION"; run
   assert "a record matching the plugin: the plain row" \

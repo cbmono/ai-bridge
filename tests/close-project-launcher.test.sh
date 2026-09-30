@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# close-project-launcher.test.sh — `/ai-bridge:close-project` does its two preconditions
+# close-project-launcher.test.sh — `/<plugin>:close-project` does its two preconditions
 # and dispatches; steps 1-7 belong to one background agent, and the two human-gated
 # branches stay in the main thread.
 #
@@ -234,7 +234,7 @@ ok "…and the 29 REMOVABLE lines"                  "$(in_launcher '29 `REMOVABL
 ok "…dated"                                       "$(in_launcher '2026-09-08')" yes
 
 # --- ONE background agent runs steps 1-7 -----------------------------------------
-ok "it dispatches one fresh agent"     "$(in_launcher 'one fresh `ai-bridge:project-manager`')" yes
+ok "it dispatches one fresh agent"     "$(in_launcher 'one fresh `'"${PN}:"'project-manager`')" yes
 ok "…namespaced, because a bare name does not resolve" \
   "$(in_launcher 'a bare agent name does not resolve')" yes
 ok "…in the background"                "$(in_launcher 'in the background')" yes

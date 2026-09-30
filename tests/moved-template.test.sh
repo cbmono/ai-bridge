@@ -11,7 +11,7 @@
 #
 # WHAT CHANGED (ai-bridge-v2/task-013), AND WHY THIS FILE STILL EXISTS. The design that
 # made that incident possible is gone: machinery ships in the PLUGIN, and a bundle
-# `/ai-bridge:init` stamps carries no link into any checkout. So the question is no longer
+# `/<plugin>:init` stamps carries no link into any checkout. So the question is no longer
 # "did a link die?" but "is anything still linked at all?" — and the answer must be the
 # same alarm, because a LIVE machinery link is the quieter half of the same defect: it
 # resolves into a clone that `claude plugin update` never touches, so the bundle runs
@@ -160,7 +160,7 @@ OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK_SRC" 2>&1)"
 assert "a dangling SCHEMA.md is reported"   "$(has 'SCHEMA.md' "$OUT")"
 assert "…and counted as 1 of 5"             "$(has '1 of 5' "$OUT")"
 assert "…and as already dead"               "$(has '1 of them are already dead' "$OUT")"
-assert "…and the repair is /ai-bridge:init" "$(has "/ai-bridge:init $INST" "$OUT")"
+assert "…and the repair is /${PN}:init" "$(has "/${PN}:init $INST" "$OUT")"
 
 echo "== the whole symlink-era bundle, against a template that MOVED =="
 # The real incident, in the shape it takes today: a bundle stamped by the old install.sh,
@@ -198,7 +198,7 @@ assert "exit 0 even when reporting"      "$([[ $RC -eq 0 ]] && echo 0 || echo 1)
 assert "all five probes are named"       "$(has '5 of 5' "$OUT")"
 assert "…the linked paths are listed"    "$(has 'scripts/commit-as.sh' "$OUT")"
 assert "…the OLD location is named"      "$(has "$TPL" "$OUT")"
-assert "…and the repair is /ai-bridge:init" "$(has "/ai-bridge:init $LEG" "$OUT")"
+assert "…and the repair is /${PN}:init" "$(has "/${PN}:init $LEG" "$OUT")"
 # It names the repair; it must not BE the repair. A hook that silently converted a bundle
 # at session start would leave a migration with no trace at all.
 assert "nothing was repaired"            "$(yes_if test -L "$LEG/SCHEMA.md")"

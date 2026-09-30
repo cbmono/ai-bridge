@@ -17,12 +17,13 @@
 # plugins cannot ship (hooks, mcpServers, permissionMode) — a field added later would
 # vanish silently at load. What it does NOT pin any more is bare-name dispatch: measured
 # on 2026-09-02, a bare agent name does NOT resolve, which is why every dispatch string
-# reads `ai-bridge:<role>` and why the section below asserts the namespace instead.
+# reads `<plugin>:<role>` and why the section below asserts the namespace instead.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 TPL="$(cd "$HERE/.." && pwd)"
 PA="$TPL/plugin/agents"
 [ -d "$PA" ] || { echo "plugin-agents.test: missing $PA" >&2; exit 2; }
@@ -83,7 +84,7 @@ done
 echo "== 3. every dispatch string is NAMESPACED =="
 # =======================================================================================
 # The measured fact this whole slice turns on (2026-09-02, from a bare directory):
-# `ai-bridge:advisor` dispatched and replied; the BARE name did NOT resolve, which
+# `<plugin>:advisor` dispatched and replied; the BARE name did NOT resolve, which
 # contradicts the plugin docs. So a document that tells an agent to dispatch a role by
 # its bare name describes something that fails at runtime, and it fails SILENTLY — the
 # caller sees "no such agent", never "you forgot the namespace".
@@ -95,8 +96,8 @@ echo "== 3. every dispatch string is NAMESPACED =="
 DISPATCHERS="plugin/skills/dispatch/SKILL.md plugin/skills/audit/SKILL.md plugin/agents/project-manager.md"
 OLDSUF="-v$((1 + 1))"   # "-v2" — assembled, never spelled; see the comment below
 for d in $DISPATCHERS; do
-  ok "$(basename "$(dirname "$d")")/$(basename "$d") names ai-bridge:" \
-    "$(grep -cF 'ai-bridge:' "$TPL/$d" | awk '{print ($1 > 0 ? "yes" : "no")}')" yes
+  ok "$(basename "$(dirname "$d")")/$(basename "$d") names ${PN}:" \
+    "$(grep -cF "${PN}:" "$TPL/$d" | awk '{print ($1 > 0 ? "yes" : "no")}')" yes
   # The TRANSITION namespace, spelled out of two halves so this repo's own rename sweeps
   # cannot silently rewrite the needle into the haystack — which is exactly what happened
   # while this branch was being written.

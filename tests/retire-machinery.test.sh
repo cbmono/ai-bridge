@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# retire-machinery.test.sh — `/ai-bridge:init` removes a machinery symlink into a template
+# retire-machinery.test.sh — `/<plugin>:init` removes a machinery symlink into a template
 # checkout, and nothing else.
 #
 # WHY. Removing a capability from `symlink/` (the /todo feature was the first) left every

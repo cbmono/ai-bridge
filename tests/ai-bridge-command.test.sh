@@ -183,7 +183,7 @@ ln -s "$SRC/plugin/scripts/commit-as.sh" "$INSTL/scripts/commit-as.sh"
 OUTL="$(bash "$SH" check --instance "$INSTL" --template "$SRC" 2>&1)"
 ok "an unconverted bundle is reported as such"             "$(printf '%s\n' "$OUTL" | grep -c 'has not been converted' | tr -d ' ')" 1
 ok "…naming the link it found"                             "$(printf '%s\n' "$OUTL" | grep -c 'scripts/commit-as.sh' | tr -d ' ')" 1
-ok "…with the repair, which is /ai-bridge:init"            "$(printf '%s\n' "$OUTL" | grep -A3 'has not been converted' | grep -c '/ai-bridge:init' | tr -d ' ')" 1
+ok "…with the repair, which is /${PN}:init"            "$(printf '%s\n' "$OUTL" | grep -A3 'has not been converted' | grep -c '/'"${PN}:"'init' | tr -d ' ')" 1
 
 # `--since` IS ACCEPTED AND IGNORED, and that is asserted rather than left to be
 # discovered. It asked the retired `unstamped-machinery` row for the literal post-merge
@@ -233,7 +233,7 @@ ok "…and every row declares whether it may speak on the banner path" \
   "$(printf '%s\n' "$LIST" | awk -F'\t' '$3!="yes" && $3!="no"' | grep -c . | tr -d ' ')" 0
 
 # `fix` IS INTERNAL NOW: typed by a human it prints one line pointing at
-# `/ai-bridge:init` and exits 0, and init is its one caller (AI_BRIDGE_INIT_PASS=1).
+# `/<plugin>:init` and exits 0, and init is its one caller (AI_BRIDGE_INIT_PASS=1).
 # The pass itself is unchanged, so these sections still test it — through the door
 # init uses. tests/seed-conflict-resolution.test.sh pins the pointer.
 FIXOUT="$(AI_BRIDGE_INIT_PASS=1 bash "$SH" fix --instance "$INST1" --template "$SRC" 2>&1)"
@@ -494,7 +494,7 @@ mkdir -p "$INST5/scripts"
 ln -s "$SRC/plugin/scripts/commit-as.sh" "$INST5/scripts/commit-as.sh"
 B1="$(bash "$SH" check --only-problems --banner --instance "$INST5" --template "$SRC" 2>&1)"
 ok "an unconverted one does speak (not vacuous)"           "$([ -n "$B1" ] && echo yes || echo no)" yes
-ok "…and names the repair"                                 "$(printf '%s\n' "$B1" | grep -c '/ai-bridge:init' | tr -d ' ')" 1
+ok "…and names the repair"                                 "$(printf '%s\n' "$B1" | grep -c '/'"${PN}:"'init' | tr -d ' ')" 1
 ok "…in at most 2 lines per failing check, plus a header"  "$([ "$(printf '%s\n' "$B1" | grep -c .)" -le 4 ] && echo yes || echo no)" yes
 # The rows that opted OUT of the banner must not appear there, or the banner says the same
 # thing twice — it already prints the VERSION drift line and the config FROM column.

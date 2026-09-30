@@ -286,7 +286,7 @@ ok "…with its output on stderr, so --format json stays parseable" \
   "$(grep -c 'pull >&2 || true' "$REPO/plugin/hooks/session-banner.sh" | tr -d ' ')" 1
 ok "the tick fast-forwards at its start" \
   "$(grep -c 'kb-sync.sh pull' "$REPO/plugin/agents/project-manager.md" | tr -d ' ')" 1
-ok "/ai-bridge:init WARNs on unpushed KB commits" \
+ok "/${PN}:init WARNs on unpushed KB commits" \
   "$(grep -c 'kb-sync.sh\" --instance \"\$TARGET\" status' "$REPO/plugin/scripts/init-bundle.sh" | tr -d ' ')" 1
 ok "…and never pushes them itself" \
   "$(grep -c 'kb-sync.sh" --instance "$TARGET" commit' "$REPO/plugin/scripts/init-bundle.sh" | tr -d ' ')" 0

@@ -218,7 +218,7 @@ ok "…the SAME .env, untracked, is read -> exit 0"   "$RC" 0
 
 # (c) THE DEFAULT A STAMPED BUNDLE GETS.
 ok "the seed .gitignore ignores .env"               "$(grep -cxF '.env' "$REPO/plugin/seed/.gitignore")" 1
-ok "…and /ai-bridge:init appends it to an older bundle" \
+ok "…and /${PN}:init appends it to an older bundle" \
    "$(grep -c "grep -qxF '.env'" "$REPO/plugin/scripts/init-bundle.sh")" 1
 
 echo
@@ -245,11 +245,11 @@ ok "another backend is named as itself"             \
 ok "unset -> the banner says nothing about a backend" \
    "$(CLAUDE_PROJECT_DIR="$BB" CLAUDE_PLUGIN_ROOT="$REPO/plugin" CLAUDE_CONFIG_DIR="$EMPTY" \
       bash "$BANNER" --no-color 2>/dev/null | grep -c 'NOT ANTHROPIC')" 0
-# It re-prints on /ai-bridge:welcome because that form EXECS this hook — asserted on the
+# It re-prints on /<plugin>:welcome because that form EXECS this hook — asserted on the
 # skill's own contract, so a second copy of the banner could not satisfy it.
 # Three exec sites since 2x/task-006: the md form, the plain form (both --no-logo) and the
 # pass-through — every one of them the hook itself, none a second rendering.
-ok "/ai-bridge:welcome execs the hook, not a copy"  \
+ok "/${PN}:welcome execs the hook, not a copy"  \
    "$(grep -c 'exec bash "$hook"' "$REPO/plugin/scripts/ai-bridge.sh")" 3
 
 echo

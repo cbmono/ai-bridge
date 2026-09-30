@@ -257,7 +257,7 @@ bash "$T4/plugin/scripts/init-bundle.sh" "$I" >"$TMP/out" 2>&1; irc=$?
 ok "a config-less checkout still stamps"  "$irc" 0
 ok "…the instance is seeded"              "$(yn test -f "$I/instance.config.json")" yes
 # THE BUNDLE HALF NO LONGER LINKS ANYTHING (task-013): SCHEMA.md is seed content copied
-# into the bundle, and a link there would be exactly the symlink-era state /ai-bridge:init
+# into the bundle, and a link there would be exactly the symlink-era state /<plugin>:init
 # converts away from. Both halves are asserted so the change cannot be read as a loss.
 ok "…SCHEMA.md is a real file, not a link"  "$(yn test -f "$I/$AB_SCHEMA")" yes
 ok "…and nothing in the bundle is a symlink" \
