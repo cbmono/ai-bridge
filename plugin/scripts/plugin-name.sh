@@ -9,7 +9,7 @@
 # two manifests. Exit: 0, or 1 when no name can be derived. Reasoning: loopd/task-007.
 
 ab_plugin_name() { # [<plugin-root>] -> sets PLUGIN_NAME PLUGIN_MARKETPLACE
-  local root="${1:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)}" p mk ca
+  local root="${1:-$(cd -P "$(dirname "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)}" p mk ca
   root="${root%/}"; p="${root%/*}"; mk="${p%/*}"; ca="${mk%/*}"
   PLUGIN_NAME="" PLUGIN_MARKETPLACE=""
   if [ "${ca##*/}" = cache ] && [ "$(basename "${ca%/*}")" = plugins ]; then

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Sourced by a harness: PN (plugin), PMK (marketplace) and GH (owner/repo), read from the
 # manifests directly — never from plugin/scripts/plugin-name.sh, whose answers the
 # harnesses check. Not exported, so a script under test that failed to derive its own name

@@ -590,6 +590,7 @@ fresh_copy() { # <dest>
     cp -R "$e" "$dest/" || return 1
   done
   [ -f "$REPO/.gitignore" ] && cp "$REPO/.gitignore" "$dest/"
+  [ -d "$REPO/.claude-plugin" ] && cp -R "$REPO/.claude-plugin" "$dest/"
   return 0
 }
 
