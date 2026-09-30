@@ -322,7 +322,7 @@ ok "…agent-control.sh is registered too, unmatched" \
 # tool call. `${CLAUDE_PLUGIN_ROOT}` is the plugin's equivalent of the `$CLAUDE_PROJECT_DIR`
 # idiom settings.json used, and it is the only correct spelling here.
 ok "…both via the \${CLAUDE_PLUGIN_ROOT} idiom, never a bare relative path" \
-   "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(startswith("${CLAUDE_PLUGIN_ROOT}/hooks/"))] | length' "$HOOKSJSON")" "2"
+   "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(test("(deny-destructive|agent-control)[.]sh")) | select(startswith("${CLAUDE_PLUGIN_ROOT}/hooks/"))] | length' "$HOOKSJSON")" "2"
 # RUN THE COMMAND hooks.json ACTUALLY REGISTERS, rather than grepping the artifact for a
 # name that looks right. The lesson is the bundle Finding
 # "a-hooks-stdout-is-the-models-channel-not-the-humans": five harnesses and 214 assertions
@@ -362,8 +362,8 @@ ok "…and the seeded settings.json has no hooks key at all" \
    "$(jq -r 'if has("hooks") then "present" else "absent" end' "$SETTINGS")" "absent"
 ok "…while the plugin manifest carries every hook file" \
    "$(jq -r '[.hooks[][].hooks[].command] | unique | length' "$HOOKSJSON")" "$N_HOOK_FILES"
-ok "…across seven registrations" \
-   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "7"
+ok "…across eight registrations" \
+   "$(jq -r '[.hooks[][].hooks[].command] | length' "$HOOKSJSON")" "8"
 
 echo "== the permissions.deny block: unconditional shapes only"
 # This block is the SECOND layer — the harness matches it before any hook runs — and every

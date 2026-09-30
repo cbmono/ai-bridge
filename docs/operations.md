@@ -241,7 +241,7 @@ the template, so its `PreToolUse` registration disappears the instant you pull t
 the plugin is installed or updated, **the destructive-action deny baseline and the kill
 switch are off**. Nothing reports it: the absence of a hook looks exactly like a session
 where nothing was denied. Do step 1 on the machine before you pull, or accept the gap
-knowingly. After the conversion the question cannot arise again — all four hooks are
+knowingly. After the conversion the question cannot arise again — all five hooks are
 registered by `plugin/hooks/hooks.json`, per machine.
 
 ### Why `/ai-bridge:init` no longer exists, and what is left of it
