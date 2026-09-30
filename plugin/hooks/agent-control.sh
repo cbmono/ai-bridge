@@ -323,6 +323,10 @@ cap_started() {
 # unquoted escape, `$'`, or `$(`/backtick inside "…" poisons the command. What is left is
 # split on `&&`, `;` and newline, and EVERY segment must be on the allowlist and carry no
 # pipe, `&`, parenthesis, redirect, backslash or stray quote. `2>&1` is the one redirect kept.
+# An UNQUOTED `#` is forbidden too, and that one is not cosmetic: jq's negated classes match
+# newlines, so a quote opened inside what bash reads as a comment pairs with one lines below
+# and swallows the newlines between them, collapsing `git add a # '⏎pnpm build⏎# '` into a
+# single allowlisted segment. A quoted `#` never reaches here — `safe` has already made it `_`.
 CAP_SCAN='
   def safe: gsub("[^A-Za-z0-9_./${}:=+@%,~-]"; "_");
   (.tool_input.command // "")
@@ -336,7 +340,7 @@ CAP_SCAN='
   | [splits("&&|;|\n") | gsub("(^|[ \t])2>&1(?=[ \t]|$)"; " ") | sub("^\\s+"; "") | sub("\\s+$"; "")
      | select(. != "")] as $segs
   | ($segs | length) > 0
-    and all($segs[]; test($ok) and (test("[|&`()<>\\\\\"\u0027]") | not))'
+    and all($segs[]; test($ok) and (test("[#|&`()<>\\\\\"\u0027]") | not))'
 cap_allows() {
   case "$tool_name" in
     Read|Grep|Glob) return 0 ;;

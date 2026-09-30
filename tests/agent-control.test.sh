@@ -682,6 +682,15 @@ ok "…a redirect is refused"                           "$(capped Bash 'git comm
 ok "…an unterminated quote is refused"                "$(capped Bash 'git commit -m "x; pnpm publish')" deny
 ok "…a newline starts a new segment"                  "$(capped Bash "$(printf 'git add a\npnpm publish')")" deny
 ok "…and a lookalike script name is not commit-as.sh" "$(capped Bash './evilcommit-as.sh x')" deny
+# A `#` COMMENT IS BASH'S LEXING, NOT THE SCANNER'S, and the two disagreed. jq's `[^']` matches
+# NEWLINES, so the quote in `# '` paired with the one two lines down and `safe` swallowed the
+# newlines between them — three segments collapsing into one allowlisted `git add …` — while
+# bash comments to end of LINE and ran `pnpm build` with no allowlist check at all. Both of
+# these were ALLOWED before an unquoted `#` joined the forbidden class.
+ok "…a trailing comment cannot swallow the next line" "$(capped Bash "$(printf 'git add a.md # \x27\npnpm build\n# \x27')")" deny
+ok "…nor the same trick with a double quote"          "$(capped Bash "$(printf 'git add a.md # "\npnpm build\n# "')")" deny
+# …and the ban costs nothing real: `safe` has already turned a QUOTED `#` into `_` by here.
+ok "past the cap: a message containing #123"          "$(capped Bash "git commit -m 'fixes #123'")" allowed
 # The whole cap is off under the budget, so the same two are allowed again at 0 minutes.
 started C3 0
 rm -f "$CAPDIR/C3.capped"
