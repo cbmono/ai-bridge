@@ -27,6 +27,32 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    work inside ~5. `claude --bg` leaves your process tree, so the tick ends when its
    dispatches are recorded (`docs/pm-design.md#step-3-background`).
 
+   **Run the spawn preflight BEFORE the wave's first status write** — once per tick, and
+   only when there is a task to dispatch:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/spawn-preflight.sh --instance <bundle root>
+   ```
+
+   It reads this session's permission mode as of that very call, off the hook payload — no
+   probe, no spawn, no slot. Three answers, and none stands in for another:
+   - **exit 1, `will-refuse`** — auto mode. **Dispatch nothing this tick**: no status
+     write, no worktree, no `session:`, so nothing is rolled back and no stall round is
+     recorded. Write the refusal entry below on the first task the wave would have
+     dispatched, with the table's FIRST row as `<which>` and `<remedy>` — it is the same
+     classifier, caught before it answers, so the dedupe and the clearing below apply
+     unchanged. Report it in one line:
+
+     ```text
+     dispatch not attempted: <which>. <k> ready left unattempted; nothing was spawned or rolled back. Remedy: <remedy>.
+     ```
+
+   - **exit 0, `will-not-refuse`** — dispatch as below.
+   - **exit 2, `could-not-read`** (or any other exit) — dispatch as below and quote its
+     line in the report. It is not a pass: a refusal is then caught after the fact, below.
+
+   Tier `human`: nothing in the plugin changes the session's mode or writes a grant.
+
    For each **build** `ready` task whose `depends_on` are all `done`, that clears the
    ownership check, and that is not already in-progress: set `assignee` +
    `status: in-progress`, **and record `worktree:` (absolute) and `branch:` on the

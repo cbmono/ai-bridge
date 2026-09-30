@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+#
+# spawn-preflight.test.sh — the dispatch preflight answers will-refuse / will-not-refuse /
+# could-not-read from the mode the hook recorded for the preflight's own call, never
+# collapses the third, spawns nothing, writes nothing, and runs before the wave's first
+# status write. Drives the REGISTERED hook command off hooks.json. Offline; mktemp only.
+#
+# Reasoning: dispatch-reporting-defects/task-005.
+set -uo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+HOOK="$REPO/plugin/hooks/permission-mode.sh"
+PRE="$REPO/plugin/scripts/spawn-preflight.sh"
+HOOKSJSON="$REPO/plugin/hooks/hooks.json"
+S3="$REPO/plugin/tick-steps/step-3-dispatch.md"
+AW="$REPO/plugin/scripts/build-awaiting.sh"
+for f in "$HOOK" "$PRE" "$HOOKSJSON" "$S3" "$AW"; do
+  [ -f "$f" ] || { echo "spawn-preflight.test: $f not found" >&2; exit 2; }
+done
+command -v jq >/dev/null 2>&1 || { echo "spawn-preflight.test: jq required" >&2; exit 2; }
+# shellcheck source=../plugin/scripts/bundle-paths.sh
+. "$REPO/plugin/scripts/bundle-paths.sh"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/spawn-preflight.XXXXXX")" || {
+  echo "spawn-preflight.test: mktemp -d failed" >&2; exit 2; }
+trap 'rm -rf "$TMP"' EXIT
+
+pass=0; fail=0
+ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-64s (%s)\n' "$1" "$2"; pass=$((pass+1))
+       else printf '  FAIL  %-64s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi }
+yn() { "$@" && echo yes || echo no; }
+
+SID="1a2b3c4d-0000-4000-8000-00000000abcd"
+INST="$TMP/inst"; mkdir -p "$INST/$AB_DIR"; printf '{ "org": "demo" }\n' > "$INST/instance.config.json"
+git -C "$INST" init -q 2>/dev/null
+REGCMD="$(jq -r '.hooks.PreToolUse[] | select(.hooks[].command | test("permission-mode[.]sh")) | .hooks[].command' "$HOOKSJSON")"
+
+payload() { # <mode or ""> <command> [session id]
+  jq -nc --arg m "$1" --arg c "$2" --arg s "${3:-$SID}" \
+    '{session_id: $s, hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: {command: $c}}
+     + (if $m == "" then {} else {permission_mode: $m} end)'
+}
+hook() { # <project dir> — the registered command, run the way the loader runs it
+  CLAUDE_PLUGIN_ROOT="$REPO/plugin" CLAUDE_PROJECT_DIR="$1" bash -c "exec $REGCMD"
+}
+CALL='${CLAUDE_PLUGIN_ROOT}/scripts/spawn-preflight.sh --instance .'
+run() { # <mode or ""> — the hook for the preflight's own call, then the preflight; prints "<exit> <line>"
+  payload "$1" "$CALL" | hook "$INST" >/dev/null 2>&1
+  local out rc; out="$(CLAUDE_CODE_SESSION_ID="$SID" bash "$PRE" --instance "$INST" 2>&1)"; rc=$?
+  printf '%s %s' "$rc" "$out"
+}
+verdict() { printf '%s' "$1" | awk '{ sub(/:.*/, "", $2); print $1, $2 }'; }
+
+echo "== the hook: registered on Bash, records only the preflight's own call =="
+ok "hooks.json registers it once, on PreToolUse"  "$(printf '%s\n' "$REGCMD" | grep -c .)" 1
+ok "…matched to Bash" \
+   "$(jq -r '[.hooks.PreToolUse[] | select(.hooks[].command | test("permission-mode[.]sh")) | .matcher] | join(",")' "$HOOKSJSON")" Bash
+ok "the hook file is executable"                  "$(yn test -x "$HOOK")" yes
+OUT="$TMP/outside"; mkdir -p "$OUT"
+ok "outside an instance: silent"                  "$(payload auto "$CALL" | hook "$OUT" 2>&1 | wc -c | tr -d ' ')" 0
+ok "…and no state"                                "$(find "$OUT" -mindepth 1 | grep -c .)" 0
+payload auto 'ls -la' | hook "$INST" >/dev/null 2>&1
+ok "any other Bash call records nothing"          "$(yn test -e "$INST/$AB_MODE_DIR")" no
+jq -nc --arg s "$SID" '{session_id: $s, permission_mode: "auto", tool_input: {command: "ls", description: "spawn-preflight.sh"}}' \
+  | hook "$INST" >/dev/null 2>&1
+ok "…nor one naming it outside tool_input.command" "$(yn test -e "$INST/$AB_MODE_DIR")" no
+payload auto "$CALL" '../../etc' | hook "$INST" >/dev/null 2>&1
+ok "a session id that is not an id is refused"    "$(yn test -e "$INST/$AB_MODE_DIR")" no
+ok "the preflight's call: stdout empty, never a decision" "$(payload auto "$CALL" | hook "$INST" 2>/dev/null | wc -c | tr -d ' ')" 0
+ok "…records the mode under the session id"       "$(awk '{print $2}' "$INST/$AB_MODE_DIR/$SID" 2>/dev/null)" auto
+ok "…and the record stays out of git"             "$(yn git -C "$INST" check-ignore -q "$AB_MODE_DIR/$SID")" yes
+
+echo
+echo "== three outcomes, each its own exit and its own word =="
+ok "auto ⇒ will-refuse"                   "$(verdict "$(run auto)")" "1 will-refuse"
+ok "default ⇒ will-not-refuse"            "$(verdict "$(run default)")" "0 will-not-refuse"
+ok "bypassPermissions ⇒ will-not-refuse"  "$(verdict "$(run bypassPermissions)")" "0 will-not-refuse"
+ok "the will-refuse line names auto mode"  "$(yn grep -qF 'auto mode' <<<"$(run auto)")" yes
+
+echo
+echo "== could-not-read is reachable from every cause, and never folded into a pass or a failure =="
+cnr() { ok "$1 ⇒ could-not-read" "$(verdict "$2")" "2 could-not-read"; }
+cnr "no permission_mode in the payload" "$(run '')"
+cnr "an unrecognised mode"              "$(run turbo)"
+cnr "a mode that is not a word"         "$(run 'auto; rm')"
+payload default "$CALL" | hook "$INST" >/dev/null 2>&1
+x="$(env -u CLAUDE_CODE_SESSION_ID bash "$PRE" --instance "$INST")"; cnr "no session id in the shell" "$? $x"
+x="$(CLAUDE_CODE_SESSION_ID='../x' bash "$PRE" --instance "$INST")"; cnr "a session id that is not an id" "$? $x"
+x="$(CLAUDE_CODE_SESSION_ID=feedface bash "$PRE" --instance "$INST")"; cnr "no record for this session" "$? $x"
+printf '%s auto\n' "$(( $(date +%s) - 120 ))" > "$INST/$AB_MODE_DIR/$SID"
+x="$(CLAUDE_CODE_SESSION_ID="$SID" bash "$PRE" --instance "$INST")"; cnr "a stale record (an earlier call's)" "$? $x"
+printf 'garbage\n' > "$INST/$AB_MODE_DIR/$SID"
+x="$(CLAUDE_CODE_SESSION_ID="$SID" bash "$PRE" --instance "$INST")"; cnr "a malformed record" "$? $x"
+x="$(CLAUDE_CODE_SESSION_ID="$SID" bash "$PRE" --instance "$TMP/nowhere")"; cnr "no hook ever ran" "$? $x"
+ok "the reason is on the line"            "$(yn grep -qF 'not set in this shell' <<<"$(env -u CLAUDE_CODE_SESSION_ID bash "$PRE" --instance "$INST")")" yes
+ok "a usage error is none of the three"   "$(bash "$PRE" --bogus >/dev/null 2>&1; echo $?)" 3
+
+echo
+echo "== no probe and no repair: nothing spawned, nothing written =="
+mkdir -p "$TMP/bin" "$TMP/home"
+printf '#!/bin/sh\necho called >> "%s/claude-calls"\n' "$TMP" > "$TMP/bin/claude"; chmod +x "$TMP/bin/claude"
+payload auto "$CALL" | hook "$INST" >/dev/null 2>&1
+: > "$TMP/marker"; sleep 1
+CLAUDE_CODE_SESSION_ID="$SID" HOME="$TMP/home" PATH="$TMP/bin:$PATH" bash "$PRE" --instance "$INST" >/dev/null 2>&1
+ok "no claude invocation, not even a stub"  "$(yn test -e "$TMP/claude-calls")" no
+ok "the preflight writes no file anywhere"  "$(find "$TMP" -newer "$TMP/marker" -type f | grep -c .)" 0
+ok "neither file names a settings or grant write" \
+   "$(grep -cE 'settings(\.local)?\.json|permissions\.allow|defaultMode' "$PRE" "$HOOK" | awk -F: '{s+=$2} END {print s}')" 0
+
+echo
+echo "== step 3: the preflight runs before the wave, through task-003's channel =="
+pre_at="$(grep -n 'scripts/spawn-preflight.sh --instance' "$S3" | head -n1 | cut -d: -f1)"
+write_at="$(grep -n 'set `assignee` +' "$S3" | head -n1 | cut -d: -f1)"
+spawn_at="$(grep -n 'claude --bg "<the whole brief>"' "$S3" | head -n1 | cut -d: -f1)"
+ok "the preflight is named in step 3"        "$([ -n "$pre_at" ] && echo yes || echo no)" yes
+ok "…before the first status write"          "$([ "${pre_at:-999}" -lt "${write_at:-0}" ] && echo yes || echo no)" yes
+ok "…and so before the first spawn"          "$([ "${pre_at:-999}" -lt "${spawn_at:-0}" ] && echo yes || echo no)" yes
+ok "will-refuse dispatches nothing"          "$(yn grep -qF '**Dispatch nothing this tick**: no status' "$S3")" yes
+ok "…and has nothing to roll back"           "$(yn grep -qF 'so nothing is rolled back and no stall round is' "$S3")" yes
+ok "could-not-read is not a pass"            "$(yn grep -qF 'It is not a pass' "$S3")" yes
+ok "ONE entry shape: task-003's"             "$(grep -c 'Q<n>: dispatch refused: ' "$S3" | tr -d ' ')" 1
+ok "…taken with the table's first row"       "$(yn grep -qF "with the table's FIRST row as \`<which>\` and \`<remedy>\`" "$S3")" yes
+ok "the remedy is stated once, in one place" \
+   "$(grep -rlF 'exit auto mode for the WHOLE tick' "$REPO/plugin" | sed "s|$REPO/||" | tr '\n' ' ')" "plugin/tick-steps/step-3-dispatch.md "
+row1="$(awk '/\| The text carries \|/ { t = 1; next } t && /^[[:space:]]*\|---/ { next } t { print; exit }' "$S3")"
+cell() { printf '%s' "$row1" | awk -F' [|] ' -v n="$1" '{ gsub(/^[[:space:]]*[|] | [|][[:space:]]*$/, ""); print $n }' | sed 's/^`//; s/`$//'; }
+which="$(cell 2)"; remedy="$(cell 3)"
+line_tpl="$(sed -n 's/^[[:space:]]*\(dispatch not attempted: <which>\. .*\)$/\1/p' "$S3" | head -n1)"
+line="${line_tpl//<which>/$which}"; line="${line//<remedy>/$remedy}"; line="${line//<k>/3}"
+ok "the report line template is there"       "$([ -n "$line_tpl" ] && echo yes || echo no)" yes
+ok "…carrying the shift+tab remedy"          "$(yn grep -qF 'shift+tab' <<<"$line")" yes
+ok "…never a claude --bg or bypass grant"    "$(yn grep -qE 'claude --bg|bypassPermissions' <<<"$line")" no
+ok "…never a cap"                            "$( { grep -qiw 'cap' || grep -qiE 'in[- ]flight'; } <<<"$line" && echo yes || echo no)" no
+entry_tpl="$(sed -n 's/^[[:space:]]*\(Q<n>: dispatch refused: .*\)$/\1/p' "$S3" | head -n1)"
+entry="${entry_tpl//<n>/1}"; entry="${entry//<which>/$which}"; entry="${entry//<remedy>/$remedy}"
+D="$TMP/aw"; mkdir -p "$D/projects/demo/tasks" "$D/$AB_DIR"; printf '{ "org": "demo" }\n' > "$D/instance.config.json"
+printf '# SCHEMA\n' > "$D/$AB_SCHEMA"; : > "$D/$AB_AWAITING"
+printf -- '---\ntype: Project\ntitle: "Demo"\nstatus: active\n---\n' > "$D/projects/demo/project.md"
+printf -- '---\ntype: Task\ntitle: "First"\nkind: build\nstatus: ready\nacceptance_criteria: [ "x" ]\nopen_questions: [ "%s" ]\n---\n' \
+  "$entry" > "$D/projects/demo/tasks/task-001-a.md"
+bash "$AW" --instance "$D" >/dev/null 2>&1
+ok "the entry it writes renders as one grant row" "$(grep -c '^\* 🧰 \*\*grant\*\* — \[First\]' "$D/$AB_AWAITING" | tr -d ' ')" 1
+
+echo
+echo "spawn-preflight.test: $pass passed, $fail failed"
+[ "$fail" = 0 ]
