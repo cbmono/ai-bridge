@@ -15,6 +15,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 RESOLVE="$REPO/plugin/scripts/resolve-account.sh"
 LAUNCH="$REPO/plugin-accounts/bin/ai-bridge-claude"
 BANNER="$REPO/plugin/hooks/session-banner.sh"
@@ -49,7 +50,7 @@ cat > "$CFG/plugins/installed_plugins.json" <<JSON
 {
   "version": 2,
   "plugins": {
-    "ai-bridge-accounts@ai-bridge": [
+    "ai-bridge-accounts@${PMK}": [
       { "scope": "user", "installPath": "$COMPANION", "version": "1.0.0" }
     ]
   }

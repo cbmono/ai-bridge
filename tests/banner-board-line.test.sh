@@ -99,7 +99,7 @@ PAGE="$INST/$AB_BOARD_DIR/board.html"
 PLUGHOME="$TMP/home/plugins"
 PLUG="$PLUGHOME/cache/mkt/${PN}/9.9.9"
 MKT="$PLUGHOME/marketplaces/mkt"
-CACHE="$PLUGHOME/data/ai-bridge-mkt/version-check"
+CACHE="$PLUGHOME/data/${PN}-mkt/version-check"
 mkdir -p "$PLUG" "$PLUGHOME/marketplaces"
 ln -s "$TPL/plugin/scripts" "$PLUG/scripts"
 printf '9.9.9\n' > "$PLUG/VERSION"
@@ -554,7 +554,7 @@ if command -v git >/dev/null 2>&1; then
   # restart is the only step left with the human, and a second line for it is the wrapped
   # sentence the two rows above were split to remove.
   assert "a newer VERSION on the default branch: the row is the command, both versions and the restart" \
-    "$(line_is 'Update  claude plugin update ai-bridge  (9.9.9 → 9.9.10) — restart to apply it' "$OUT")"
+    "$(line_is 'Update  claude plugin update '"$PN"'  (9.9.9 → 9.9.10) — restart to apply it' "$OUT")"
   assert "…and the restart is not a second line"  \
     "$(eq "$(printf '%s\n' "$OUT" | grep -cF 'restart to apply it')" 1)"
   assert "…and the section is still three rows" "$(eq "$(section | grep -c .)" 3)"
@@ -571,7 +571,7 @@ if command -v git >/dev/null 2>&1; then
   mkt_version 9.9.20
   run
   assert "a fresh cache is not re-fetched: the row still names 9.9.10" \
-    "$(has 'Update  claude plugin update ai-bridge  (9.9.9 → 9.9.10)' "$OUT")"
+    "$(has 'Update  claude plugin update '"$PN"'  (9.9.9 → 9.9.10)' "$OUT")"
   rm -f "$CACHE"; run
   assert "…and a cleared one picks the new version up" "$(has '(9.9.9 → 9.9.20)' "$OUT")"
 

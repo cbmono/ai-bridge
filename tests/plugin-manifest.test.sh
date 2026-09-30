@@ -23,7 +23,7 @@ ok "…name is ai-bridge"        "$(jq -r .name "$PJ")" "ai-bridge"
 ok "…version is semver"        "$(jq -r .version "$PJ" | grep -cE '^[0-9]+\.[0-9]+\.[0-9]+$')" 1
 ok "marketplace.json parses"   "$(jq empty "$MJ" >/dev/null 2>&1 && echo yes || echo no)" yes
 ok "…names the owner"          "$(jq -r '.owner.name // empty' "$MJ" | grep -c .)" 1
-ok "…lists the plugin"         "$(jq -r '.plugins[0].name' "$MJ")" "ai-bridge"
+ok "…lists the plugin first"   "$(jq -r '.plugins[0].name' "$MJ")" "$(jq -r .name "$PJ")"
 
 echo "== the marketplace source resolves to the plugin it names =="
 SRC="$(jq -r '.plugins[0].source' "$MJ")"
@@ -53,7 +53,7 @@ ok "…and so is its marketplace entry" \
 # Non-vacuity: the same lookup finds the entries that ARE listed, so "no" above is an
 # answer about ai-bridge-v2 and not a jq expression that can only ever say no.
 ok "…while the lookup still finds a name that IS listed" \
-   "$(jq -r '[.plugins[].name] | index("ai-bridge") | if . == null then "no" else "yes" end' "$MJ")" yes
+   "$(jq -r --arg n "$(jq -r .name "$PJ")" '[.plugins[].name] | index($n) | if . == null then "no" else "yes" end' "$MJ")" yes
 # Every REMAINING source must still resolve — the other thing the removal could have
 # broken, and the one a jq check on names alone cannot see. ONE SCANNER, RUN TWICE: over
 # the real manifest, and over a planted source that points at the directory just deleted.

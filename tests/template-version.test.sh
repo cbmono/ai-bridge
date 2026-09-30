@@ -647,7 +647,7 @@ wire "$equal"
 banner "$equal"
 ok "up to date: the banner says nothing about versions" \
   "$(printf '%s\n' "$OUT" | grep -c 'UPDATE' || true)" 0
-ok "…and the rest of the banner is intact"     "$(printf '%s\n' "$OUT" | grep -c 'loopd' )" 1
+ok "…and the rest of the banner is intact"     "$(printf '%s\n' "$OUT" | grep -c 'loopd v' )" 1
 
 # An instance stamped before this script shipped has no file to run. Absence is silence —
 # the same contract every other optional section of the banner keeps.
@@ -668,7 +668,7 @@ echo "== 8. THE PLUGIN INSTALL is the other subject, and it is bounded and cache
 PHOME="$TMP/phome/plugins"
 PINST="$PHOME/cache/mkt/${PN}/1.0.0"
 PMKT="$PHOME/marketplaces/mkt"
-PCACHE="$PHOME/data/ai-bridge-mkt/version-check"
+PCACHE="$PHOME/data/${PN}-mkt/version-check"
 # THE WHOLE PLUGIN, not just this one script: `ai-bridge.sh check` is asserted against the
 # same fixture below, and it resolves its own root from where it is executing.
 mkdir -p "$PINST" "$PHOME/marketplaces"
@@ -688,7 +688,7 @@ pcheck() { OUT="$(bash "$PINST/scripts/check-template-version.sh" "$@" 2>/dev/nu
 rm -f "$PCACHE"; pcheck --state
 ok "level with the marketplace: state is current"  "$(printf '%s' "$OUT" | cut -f1)" current
 ok "…and it names the installed version"           "$(printf '%s' "$OUT" | cut -f2)" 1.0.0
-ok "…and the plugin, so a caller need not spell it" "$(printf '%s' "$OUT" | cut -f4)" ai-bridge
+ok "…and the plugin, so a caller need not spell it" "$(printf '%s' "$OUT" | cut -f4)" "$PN"
 pcheck
 ok "…and the human line stays byte-empty"          "$(printf '%s' "$OUT" | wc -c | tr -d ' ')" 0
 
@@ -709,7 +709,7 @@ rm -f "$PCACHE"; abcheck
 ok "welcome check agrees it is behind, with both versions" \
   "$(printf '%s\n' "$AOUT" | grep -qF 'plugin 1.0.0 is behind the marketplace, which carries 1.0.1' && echo yes || echo no)" yes
 ok "…and names the one command that fixes it"       \
-  "$(printf '%s\n' "$AOUT" | grep -qF 'claude plugin update ai-bridge' && echo yes || echo no)" yes
+  "$(printf '%s\n' "$AOUT" | grep -qF "claude plugin update $PN" && echo yes || echo no)" yes
 
 # THE CACHE IS THE REASON A SESSION MAKES NO NETWORK CALL. With a fresh stamp the remote may
 # move as far as it likes and the answer does not — and `--fetch` is what forces past it.

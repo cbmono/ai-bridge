@@ -176,7 +176,7 @@ if command -v jq >/dev/null 2>&1; then
   # and a re-add would silently restore an install path for a name nothing maintains.
   ok "the ai-bridge-v2 stub entry is gone" \
      "$(jq -r '[.plugins[].name] | index("ai-bridge-v2") | if . == null then "no" else "yes" end' "$MJ")" no
-  ok "…and ai-bridge is still plugins[0]" "$(jq -r '.plugins[0].name' "$MJ")" "ai-bridge"
+  ok "…and core is still plugins[0]" "$(jq -r '.plugins[0].name' "$MJ")" "$PN"
 else
   echo "  SKIP  jq not installed — the manifest checks need it"
 fi

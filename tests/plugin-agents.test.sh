@@ -106,9 +106,9 @@ for d in $DISPATCHERS; do
 done
 # The plugin's own name is what the namespace is derived from, so a rename of one without
 # the other leaves twelve dispatch strings pointing at nothing.
-ok "the namespace matches plugin.json's name" \
-  "$(sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$TPL/plugin/.claude-plugin/plugin.json" | head -1)" \
-  "ai-bridge"
+ok "the namespace, plugin.json's name, is the marketplace's ./plugin entry" \
+  "$PN" \
+  "$(jq -r '.plugins[] | select(.source == "./plugin") | .name' "$TPL/.claude-plugin/marketplace.json")"
 
 printf '\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
