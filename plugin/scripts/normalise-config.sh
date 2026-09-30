@@ -50,7 +50,8 @@ TRACKED, LOCAL = "instance.config.json", "instance.config.local.json"
 # order and the membership test for what may live there, in one list.
 LOCAL_ORDER = ["$schema", "ownerGithubUser", "authorEmail", "reposRoot", "worktreeRoot",
                "boardInstances", "boardArtifactUrl", "models", "roleTiers",
-               "maxAgentsInFlight", "allowSubstituteBackend", "commitAttribution"]
+               "maxAgentsInFlight", "maxRepeatedToolCalls", "maxAgentMinutes", "roleMinutes",
+               "allowSubstituteBackend", "commitAttribution"]
 
 # The overridable keys whose TRACKED copy is NOT a documented fallback. That column is the
 # whole test: SCHEMA names the tracked value as the answer for authorEmail, models,

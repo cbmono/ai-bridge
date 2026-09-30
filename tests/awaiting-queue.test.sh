@@ -437,7 +437,7 @@ printf -- '---\ntype: Project\ntitle: held\nstatus: paused\n---\n' > "$pz/projec
 aw() { printf '# Awaiting you\n' > "$pz/$AB_AWAITING"
        bash "$TPL/plugin/scripts/build-awaiting.sh" --instance "$pz" "${merges[@]}" >/dev/null 2>&1
        cat "$pz/$AB_AWAITING"; }
-row_for() { printf '%s\n' "$1" | grep -qF -- "**$2** — [$3]" && echo shown || echo hidden; }
+row_for() { grep -qF -- "**$2** — [$3]" <<<"$1" && echo shown || echo hidden; }
 OUTQ="$(aw)"
 for v in approve answer unblock merge; do
   simple "active project keeps its $v row"  "$(row_for "$OUTQ" "$v" "live-$v")" shown

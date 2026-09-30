@@ -529,6 +529,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `validate-bundle.sh` | schema errors + dangling frontmatter references | no |
 | `normalise-config.sh` | `<dir>` — reports what is out of place across the two config files: MISPLACED (a per-machine key in the tracked `instance.config.json`, or a tracked-only key such as `defaultOwner` in `instance.config.local.json`), MISSING (a seed key the tracked file lacks) and ORDER. Values are never changed — only placed, ordered, or added when absent — and the tracked file is left **staged**, never committed. Run by every `/ai-bridge:init` stamp | only with `--apply` |
 | `migrate-bundle.sh` | mechanical schema repairs | only with `--apply` |
+| `project-paused.sh` | answers whether a project is paused, as one predicate with a three-value exit | no |
 | `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
 | `commit-as.sh` | commits as the right agent identity | yes |
 | `required-checks.sh` | resolves a PR's required checks | no |

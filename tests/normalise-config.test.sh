@@ -125,6 +125,8 @@ PY
 jedit "$I/$LCFG" <<'PY'
 d["defaultOwner"] = "example-user-008"
 d["org"] = "wrong-org"
+d["maxAgentMinutes"] = 120
+d["roleMinutes"] = {"project-manager": 200}
 PY
 RC="$(norm "$I")"
 ok "a dirty pair exits 1"                     "$RC" 1
@@ -132,6 +134,9 @@ ok "reposRoot in the tracked file is MISPLACED"      "$(finding MISPLACED reposR
 ok "…and so is ownerGithubUser"                      "$(finding MISPLACED ownerGithubUser)" yes
 ok "defaultOwner in the local file is MISPLACED"     "$(finding MISPLACED defaultOwner)" yes
 ok "…and so is a shared fact like org"               "$(finding MISPLACED org)" yes
+# SCHEMA marks both overridable, so the per-machine wall-clock budget stays where it is.
+ok "a local maxAgentMinutes is NOT misplaced"        "$(finding MISPLACED maxAgentMinutes)" no
+ok "…nor a local roleMinutes"                        "$(finding MISPLACED roleMinutes)" no
 ok "report mode wrote nothing"                "$(jget "$I/$TCFG" reposRoot)" /abs/path/on/one/machine
 RC="$(norm "$I" --apply)"
 ok "--apply exits 0"                          "$RC" 0
