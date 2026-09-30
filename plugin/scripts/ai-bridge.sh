@@ -4,9 +4,9 @@
 #
 #   ai-bridge.sh                      reprint the SessionStart banner
 #   ai-bridge.sh check  [flags]       report the state of this instance
-#   ai-bridge.sh fix    [flags]       RETIRED — points at /ai-bridge:init and exits 0
+#   ai-bridge.sh fix    [flags]       RETIRED — points at /<plugin>:init and exits 0
 #
-# `fix` MOVED INTO `/ai-bridge:init` — it stamps the bundle, then runs this file's pass
+# `fix` MOVED INTO `/<plugin>:init` — it stamps the bundle, then runs this file's pass
 # (`AI_BRIDGE_INIT_PASS=1`, same tiers, same refusals). This form is a pointer for one release.
 #
 # WHAT THIS IS NOT, because the rejected shape is the one that keeps getting proposed. It
@@ -44,7 +44,7 @@
 #               UNCOMMITTED CONFIG IS A QUESTION, NEVER A DEFECT.
 #   human       acting is unsafe even when the diagnosis is right. `fix` PRINTS. The live
 #               case is `.tick-lock`: `tick-lock.sh release` is documented as the
-#               human's override (`/ai-bridge:dispatch`, `SCHEMA.md`), and a `fix` that cleared a
+#               human's override (`/<plugin>:dispatch`, `SCHEMA.md`), and a `fix` that cleared a
 #               lock it judged stale re-opens the double-dispatch that ran two ticks
 #               concurrently for 34 minutes on 2026-08-29. A long tick is not a dead one.
 #
@@ -69,7 +69,7 @@
 # read three ways and two of them render different things — Claude Code 2.1.251, probed
 # 2026-08-30 by emitting candidates and reading the bytes the terminal received:
 #
-#   relayed by the model (`/ai-bridge:welcome check` in a session)   markdown renders; ANSI DOES NOT.
+#   relayed by the model (`/<plugin>:welcome check` in a session)   markdown renders; ANSI DOES NOT.
 #       0 of 4 ESC bytes survived the relay and the human was left reading a literal `[1m`.
 #       Single newlines and leading indent survive, so the block keeps its shape.
 #   a human's terminal (`bash ai-bridge.sh check`)   ANSI renders; markdown does not.
@@ -259,7 +259,7 @@ if [ "$FORM" = banner ]; then
   if [ ! -f "$hook" ]; then
     echo "ai-bridge: the session banner is not where this script expects it ($hook)." >&2
     echo "           That is a broken plugin install, not a bundle problem. Re-install:" >&2
-    echo "           /plugin install ai-bridge@ai-bridge, then restart Claude Code." >&2
+    echo "           /plugin install ${AB_PLUGIN}@${AB_MARKETPLACE}, then restart Claude Code." >&2
     exit 2
   fi
   export CLAUDE_PROJECT_DIR="$ROOT"
@@ -502,7 +502,7 @@ fix_template_behind() {
     return 0
   fi
   note "the pull did not fast-forward — the checkout is unchanged. The supported route is"
-  note "/plugin update ai-bridge@ai-bridge, then restart Claude Code."
+  note "/plugin update ${AB_PLUGIN}@${AB_MARKETPLACE}, then restart Claude Code."
   return 0
 }
 
@@ -538,7 +538,7 @@ check_bundle_unconverted() {
     [ -n "$l" ] || continue
     rel="${l#"$ROOT"/}"
     # THE SAME EXCLUSIONS THE SWEEP USES, and they have to be the same or this row warns
-    # about something `/ai-bridge:init` will never remove: `repos/` is the derived view,
+    # about something `/<plugin>:init` will never remove: `repos/` is the derived view,
     # and `projects/`, `knowledge/` and `objectives/` are DATA, where no installer ever
     # stamped machinery and a symlink is therefore the human's own.
     case "$rel" in
@@ -561,7 +561,7 @@ EOF
   printf '%s\n' "$shown"
   [ "$n" -gt 12 ] && note "… and $((n - 12)) more"
   note "the machinery ships in the plugin now; a link into a checkout is frozen there"
-  hint "/ai-bridge:init $ROOT"
+  hint "/${AB_PLUGIN}:init $ROOT"
   return "$_warned"
 }
 
@@ -631,7 +631,7 @@ check_seed_drift() {
     _warned=1
     warn "seed documents have drifted from this template — a stamp cannot deliver a seed edit"
     printf '%s\n' "$drift" | sed 's/^  /    /'
-    hint "/ai-bridge:init $ROOT   (3-way merges what it can; conflicts stay yours)"
+    hint "/${AB_PLUGIN}:init $ROOT   (3-way merges what it can; conflicts stay yours)"
   else
     good "seed documents are in step with this template — nothing to port"
   fi
@@ -803,7 +803,7 @@ check_config_layers() {
 #     `link-repos.sh`, `prune-worktrees.sh` and `build-board.sh` from EITHER file, so they
 #     are known in both. `normalise-config.sh` is what reports a tracked copy, because
 #     that is misplacement rather than a key nothing reads;
-#   · `boardArtifactUrl` — the page `/ai-bridge:board publish` published FROM THIS CLONE.
+#   · `boardArtifactUrl` — the page `/<plugin>:board publish` published FROM THIS CLONE.
 #     **Known in `instance.config.local.json` ONLY**, which is where it differs from the
 #     entry above and why the known set is built per file. Publishing is account-scoped,
 #     so exactly one account can update a given page; `session-banner.sh` reads it from
@@ -896,7 +896,7 @@ EOF
 # =========================================================================================
 # CHECK 7 — tick-lock (HUMAN — SHIP-BLOCKER: never repaired)
 # =========================================================================================
-# THE FACT: whether an `/ai-bridge:dispatch` tick lock is held, claimed, or past its staleness
+# THE FACT: whether an `/<plugin>:dispatch` tick lock is held, claimed, or past its staleness
 # threshold. The verdict is `tick-lock.sh status`'s, replayed here — this file has no
 # opinion about what stale means and must never grow one, or the two would drift about the
 # only question that matters.
@@ -909,7 +909,7 @@ EOF
 # `.tick-lock.claim` is written, removed or rewritten anywhere in this file.
 #
 # `status` IS THE READ-ONLY PROBE and it is the right one to call here — the prohibition in
-# `/ai-bridge:dispatch` is on a LAUNCHER calling `status` before `acquire`, which would rebuild the
+# `/<plugin>:dispatch` is on a LAUNCHER calling `status` before `acquire`, which would rebuild the
 # check-then-write race `acquire` exists to close. This command dispatches nothing.
 check_tick_lock() {
   _warned=0
@@ -928,7 +928,7 @@ check_tick_lock() {
   case "$rc" in
     0) good "no tick lock held — the next dispatch tick takes it"
        case "$out" in *"$AB_LOCK_CLAIM"*) note "note: a claim file outlived its lock; the next acquire clears it" ;; esac ;;
-    1) good "an /ai-bridge:dispatch tick is in flight (this is a live lock, not a fault)"
+    1) good "an /${AB_PLUGIN}:dispatch tick is in flight (this is a live lock, not a fault)"
        printf '%s\n' "$out" | sed -n '1,3p' | sed 's/^/    /'
        case "$out" in *"No tick has claimed it yet"*) note "unclaimed: taken for a dispatch that is starting" ;; esac ;;
     *) warn "the tick lock needs YOUR decision — this is not repaired for you"
@@ -1227,7 +1227,7 @@ fi
 # The two ship-blockers therefore hold by construction rather than by care: there is no
 # branch here that could be pointed at a config file or a lock file.
 if [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
-  echo "ai-bridge fix has moved into /ai-bridge:init — run that instead; it stamps the bundle and then runs this same pass."
+  echo "ai-bridge fix has moved into /${AB_PLUGIN}:init — run that instead; it stamps the bundle and then runs this same pass."
   exit 0
 fi
 echo "ai-bridge fix — acting ONLY on the idempotent tier."

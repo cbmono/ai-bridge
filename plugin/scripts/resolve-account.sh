@@ -6,7 +6,7 @@
 #
 #   Prints one TSV line: <declared><TAB><active><TAB><launcher>
 #   exit 0  match      declared == active
-#   exit 1  inert      no `ai-bridge-accounts` companion, or no `account:` declared — silent
+#   exit 1  inert      no accounts companion, or no `account:` declared — silent
 #   exit 3  MISMATCH   declared != active
 #   exit 4  NO ACCOUNT declared, but this session was not started on one
 #   exit 2  usage
@@ -16,10 +16,11 @@
 # GENERIC TEMPLATE FILE — ships with the `ai-bridge` plugin; do not edit per instance.
 # Verified by tests/companion-account-switch.test.sh.
 set -uo pipefail
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh" 2>/dev/null || true
 
 COMPANION_REL="companion/accounts.md"
 LAUNCHER_REL="bin/ai-bridge-claude"
-DEFAULT_MARKETPLACE="ai-bridge"
+DEFAULT_MARKETPLACE="${AB_MARKETPLACE:-}"
 
 bundle="."
 while [ $# -gt 0 ]; do

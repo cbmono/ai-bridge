@@ -95,6 +95,9 @@ ab_expand() {   # stdin -> stdout, __AB_SCHEMA__ and friends replaced by their v
   sed "${e[@]}"
 }
 
+# The plugin's own name rides along: a script that knows the layout can spell its slugs.
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh" 2>/dev/null || true
+
 # Sourced ⇒ stop here. Executed ⇒ answer, so a harness, a doc or a non-bash reader gets
 # the same answer as a script does.
 (return 0 2>/dev/null) && return 0

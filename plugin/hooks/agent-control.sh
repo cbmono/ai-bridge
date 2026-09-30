@@ -152,7 +152,7 @@
 # the exact `log.md` bullet plus its `commit-as.sh` command for the human to
 # commit if the halt is worth the bundle's permanent history. That is the same
 # report-the-command-never-run-it shape as `RETIRED`, `prune-worktrees.sh` and
-# `/ai-bridge:init`'s `git rm --cached`. Whether a halt deserves a permanent entry is a
+# `/<plugin>:init`'s `git rm --cached`. Whether a halt deserves a permanent entry is a
 # judgement — a fat-fingered dispatch and an agent pushing to the wrong repo are
 # not the same event.
 #
@@ -253,7 +253,7 @@ digest() { if command -v shasum >/dev/null 2>&1; then shasum -a 256; else cksum;
 # The budget, cached per role on the same terms as the repeat limit. Precedence is NOT
 # re-implemented here: `resolve-config.sh` owns it, exit 1 is its "absent" — which falls to
 # the next source — and anything else is a read that did not happen, so the cap is off and
-# says so. `agent_type` arrives namespaced (`ai-bridge:project-manager`); roles are bare.
+# says so. `agent_type` arrives namespaced (`<plugin>:project-manager`); roles are bare.
 CAP_N=off; CAP_SRC=maxAgentMinutes
 cap_limit_load() {
   local cfg="$root/instance.config.json" loc="$root/instance.config.local.json" n rc when

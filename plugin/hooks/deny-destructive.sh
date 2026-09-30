@@ -1016,7 +1016,7 @@ EOF
 # The reason names the dispatch to make instead, namespaced — a bare role name does not
 # resolve — because a refusal with no route is a refusal that gets worked around.
 _launcher_reason() { # <what was read> <the shape>
-  printf '%s from the control-panel root, in the MAIN session (%s). The answer is discarded the moment this session dispatches, so it is paid for in the context that has to survive the day. Dispatch a background `ai-bridge:failure-analyst` — read-only, namespaced — with the ref, the repo and "root cause + ranked next steps", and let it read this. A dispatched agent runs the identical command untouched, as does this session anywhere but a bundle root.' "$1" "$2"
+  printf '%s from the control-panel root, in the MAIN session (%s). The answer is discarded the moment this session dispatches, so it is paid for in the context that has to survive the day. Dispatch a background `%s:failure-analyst` — read-only, namespaced — with the ref, the repo and "root cause + ranked next steps", and let it read this. A dispatched agent runs the identical command untouched, as does this session anywhere but a bundle root.' "$1" "$2" "$AB_PLUGIN"
 }
 
 rule_launcher_diagnoses_nothing() {

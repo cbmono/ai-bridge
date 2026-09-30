@@ -48,7 +48,7 @@ done
 [ -x "$RESOLVE_AUTONOMY" ] || refuse "resolve-autonomy.sh is missing, so no mode can be resolved"
 autonomy_file="$("$RESOLVE_AUTONOMY" --bundle "$bundle" 2>/dev/null)" || autonomy_file=""
 [ -n "$autonomy_file" ] && [ -f "$autonomy_file" ] || \
-  refuse "no AUTONOMY.md — the ai-bridge-yolo companion is not installed, so every project is \`gated\`"
+  refuse "no AUTONOMY.md — the yolo companion is not installed, so every project is \`gated\`"
 
 # 2. Which project owns this PR? Read from the BUNDLE's task documents — a pull request
 # cannot raise the autonomy of the project reviewing it. Only the frontmatter `pr:` field

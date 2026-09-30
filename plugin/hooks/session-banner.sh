@@ -33,15 +33,15 @@
 # the first is "DATA AND ITS FENCE TRAVEL TOGETHER". §6 used to reprint every AWAITING.md
 # item into both copies, wrapped in the
 # `--- BEGIN AWAITING ITEMS (untrusted data) ---` fence — and that fence is addressed to
-# the MODEL. What the human got was a machine's scaffolding around a list that `/ai-bridge:dispatch`
+# the MODEL. What the human got was a machine's scaffolding around a list that `/<plugin>:dispatch`
 # and the board both render better, at the moment they are deciding where to look. So the
 # human's copy keeps ONE COUNT LINE and the model's copy keeps the transcript, the fence
 # and the closing instruction, in place and unweakened (`model_only` below, and §6).
 #
 # THE SECOND DIVERGENCE IS §7'S `Ready to dispatch` LINE, AND IT IS THE SAME ARGUMENT READ
 # FROM THE OTHER END. That line is an input to a rule the SESSION executes, and it was
-# never anything the human needed at session start — `/ai-bridge:dispatch` presents the same queue
-# with room and structure, and the count line already points at `/ai-bridge:dispatch`. So the human's
+# never anything the human needed at session start — `/<plugin>:dispatch` presents the same queue
+# with room and structure, and the count line already points at `/<plugin>:dispatch`. So the human's
 # banner ends at the count and the model keeps the number the offer rule keys off. The
 # human losing a line is the point of the cut; the model losing it would have retired the
 # offer silently, which is a different change and not one this file may make on its own.
@@ -112,14 +112,14 @@
 # than no column at all.
 #
 # A HOOK CANNOT ASK A QUESTION, so the other half of that feature is not here. "Offer
-# /ai-bridge:dispatch when there is dispatchable work" is a rule in the instance's CLAUDE.md (see
+# /<plugin>:dispatch when there is dispatchable work" is a rule in the instance's CLAUDE.md (see
 # `seed/CLAUDE.md`, "Ad-hoc requests vs. the project loop"), because the session makes the
 # offer and the session is the only thing in this loop that can. What this hook owes that
 # rule is one deterministic number — §7's `Ready to dispatch` count — and nothing else.
 #
 # THE QUEUE TAIL IS GONE FROM THE HUMAN'S BANNER AND THAT IS THE WHOLE OF THE CUT. A
 # `Ready to dispatch   N` line and a `Drafts   N` line sat under the count line on both
-# channels. `Drafts   N` is DELETED OUTRIGHT, from both: `/ai-bridge:dispatch` presents it with room
+# channels. `Drafts   N` is DELETED OUTRIGHT, from both: `/<plugin>:dispatch` presents it with room
 # and structure, nothing keys off it, and a banner orients rather than tabulates. `Ready to
 # dispatch   N` moves to the MODEL'S CHANNEL ALONE, because a rule the session executes
 # keys off it and deleting its only input would have retired that rule while the harness
@@ -146,8 +146,8 @@
 # machinery. It catches the partial case — some links dead while settings still resolves.
 #
 # NEVER REPAIRS, NEVER WRITES, NEVER RENDERS. It reports what is already on disk. The
-# board is rendered by an `/ai-bridge:dispatch` tick or `watch-board.sh`; the machinery repair
-# is the human's `/ai-bridge:init` re-run.
+# board is rendered by an `/<plugin>:dispatch` tick or `watch-board.sh`; the machinery repair
+# is the human's `/<plugin>:init` re-run.
 #
 # COLOUR IS ON FOR `--format json`, AND THAT IS A MEASUREMENT, NOT A GUESS. `[ -t 1 ]` is
 # still the right question for a PIPE and it is still false here — but it stopped being the
@@ -392,7 +392,7 @@ EMPH_MARK=""
 #          terminal and `/welcome` (it `exec`s this file with no arguments and relays the
 #          output) get. There is no field to put the block in and no reader who wants it.
 #          Nothing is lost from a human-facing surface: the items are in AWAITING.md, on
-#          the board, and in the next /ai-bridge:dispatch tick, each of which renders them better.
+#          the board, and in the next /<plugin>:dispatch tick, each of which renders them better.
 #   plain  ONE channel and its reader is the MODEL — `--format json` was asked for but the
 #          buffer could not be made, so this falls back to writing plain text at a stdout
 #          that settings.json pointed into the session's CONTEXT. Print the block, without
@@ -880,7 +880,7 @@ echo   # <- the banner's leading blank line (mutation anchor: do not fold into t
 
 # ---------------------------------------------------------------------------------------
 # 0. MACHINERY — was check-machinery.sh. FIRST, and above the identity line, because it is
-#    an alarm: an /ai-bridge:dispatch tick started now fails mid-dispatch with agents already briefed.
+#    an alarm: an /<plugin>:dispatch tick started now fails mid-dispatch with agents already briefed.
 # ---------------------------------------------------------------------------------------
 # A handful of probes, not a walk. Resolving every link in the bundle on every session
 # start costs more and says the same thing: these five are one per class of machinery the
@@ -924,9 +924,9 @@ if [ "$n_legacy" -gt 0 ]; then
   echo "    The machinery ships in the ai-bridge PLUGIN now, so these links are frozen at"
   echo "    whatever that checkout last pulled — a plugin update never reaches them."
   echo "    REPAIR (idempotent, converts in place, touches no data):"
-  printf '        /ai-bridge:init %q\n' "$root"
+  printf '        /%s:init %q\n' "$AB_PLUGIN" "$root"
   echo "    Report this and the repair command to the human before doing anything else. A"
-  echo "    /ai-bridge:dispatch tick started now fails mid-dispatch, with agents already briefed."
+  echo "    /${AB_PLUGIN}:dispatch tick started now fails mid-dispatch, with agents already briefed."
   echo
 fi
 
@@ -1126,7 +1126,7 @@ fi
 add s owner "$ov" "$os"
 
 # Which Claude login the session is on — docs/operations.md, "The session banner".
-# CLAUDE_CONFIG_DIR BEFORE $HOME: `ai-bridge-accounts` switches accounts by pointing it at
+# CLAUDE_CONFIG_DIR BEFORE $HOME: the accounts companion switches accounts by pointing it at
 # ~/.claude-accounts/<name>, so a reader "simplified" to $HOME prints the account the
 # session is NOT on.
 cc_dir="${CLAUDE_CONFIG_DIR:-${HOME:-}}"
@@ -1214,7 +1214,7 @@ table() { # <header-label> <header-value> <rows>
 # `--full` ONLY. The human's banner is capped at 12 lines (ai-bridge-v3/task-025) and these
 # two tables are 17 of the 29 it used to spend — the largest block by far, and the one a
 # human re-reads least, because it answers a configuration question and not "what now".
-# Nothing is lost: `/ai-bridge:welcome` asks for `--full`, and it is the surface
+# Nothing is lost: `/<plugin>:welcome` asks for `--full`, and it is the surface
 # `skills/welcome/SKILL.md` documents `welcome` by.
 if [ "$FULL" -eq 1 ]; then
   [ -n "$rows" ]  && table SETTING VALUE "$rows"
@@ -1225,7 +1225,7 @@ fi
 # 4b. ACCOUNT — three renderings, because two states that print nothing are one state.
 # ---------------------------------------------------------------------------------------
 # Speak (on the declared account), speak differently (wrong account, or none), stay silent
-# (no `ai-bridge-accounts` companion, or nothing declared). resolve-account.sh decides; the
+# (no accounts companion, or nothing declared). resolve-account.sh decides; the
 # banner never reads a credential and never runs the companion's launcher.
 if [ -n "$bin" ] && [ -f "$bin/resolve-account.sh" ]; then
   acct_line="$(bash "$bin/resolve-account.sh" --bundle "$root" 2>/dev/null)"; acct_rc=$?
@@ -1252,7 +1252,7 @@ fi
 # ---------------------------------------------------------------------------------------
 # 4c. BACKEND — read from THIS PROCESS'S ENVIRONMENT, not from an installed companion.
 # ---------------------------------------------------------------------------------------
-# Gating it on the ai-bridge-llm companion would stay silent for a hand-exported
+# Gating it on the llm companion would stay silent for a hand-exported
 # substitution, which is exactly the accident it exists for.
 if [ -n "${ANTHROPIC_BASE_URL:-}" ]; then
   backend="$(cell "$(printf '%s' "$ANTHROPIC_BASE_URL" | sed -e 's#^[A-Za-z][A-Za-z0-9+.-]*://##' -e 's#[/?].*##')")"
@@ -1273,7 +1273,7 @@ fi
 # clone did not own the artifact, and it survived the feature's deletion in two of three
 # live instances. Recorded per machine it says only what THIS clone published, which is the
 # one thing it can be right about — so a value that resolves from `tracked` is ignored here
-# rather than printed, and `/ai-bridge:board publish` writes only the local file.
+# rather than printed, and `/<plugin>:board publish` writes only the local file.
 #
 # THE PAGE ITSELF NEVER STOPS BEING A FILE. The URL is an addition to the `file://` line,
 # never a replacement: `/board.html` is what a human without artifact access reads, and a
@@ -1281,7 +1281,7 @@ fi
 #
 # THE `board` GATE IS READ FROM THE TRACKED FILE ONLY, and not through resolve-config.sh,
 # because `board` is deliberately NOT in the per-machine override set (SCHEMA.md →
-# "Per-machine config overrides"). `/ai-bridge:init` reads the same key from the same tracked
+# "Per-machine config overrides"). `/<plugin>:init` reads the same key from the same tracked
 # file at stamp time; reading it from somewhere the stamp-time reader does not look is how
 # one key becomes two switches, and the half that disagreed would be the silent one.
 #
@@ -1349,7 +1349,7 @@ fi
 #
 # WHETHER THE LINK ACTUALLY PRINTED, for §6 to point at: only the first row may be called
 # "the board above". The second row has no board to see, so the count line must route the
-# human to `/ai-bridge:dispatch` exactly as the third row does — a banner may not send anyone to a
+# human to `/<plugin>:dispatch` exactly as the third row does — a banner may not send anyone to a
 # file that is not there, and the two lines have to agree about that or one of them is
 # lying.
 #
@@ -1418,7 +1418,7 @@ if [ "$board_on" -eq 1 ]; then
     # itself carries the render time, and `watch-board.sh` is documentation — a
     # banner fact is something true of THIS session, and neither of those is.
     # TWO ROWS, ONE LABEL COLUMN — and that is not the deleted three-line row coming back.
-    # The repair rode on the row as `— run /ai-bridge:board serve for a live URL`, which put
+    # The repair rode on the row as `— run /<plugin>:board serve for a live URL`, which put
     # a path and a sentence on one line and wrapped on any normal terminal width. What
     # returns is a second VALUE under the first, in the same column, so the block reads as a
     # table; what stays deleted is the bare path and the staleness note, neither of which
@@ -1433,7 +1433,7 @@ if [ "$board_on" -eq 1 ]; then
       # than a URL that reloads itself, and both are worth printing.
       echo "$(pad Live "$BOARD_LW")$serve_url"
     else
-      echo "$(pad Run "$BOARD_LW")/ai-bridge:board serve for a live URL"
+      echo "$(pad Run "$BOARD_LW")/${AB_PLUGIN}:board serve for a live URL"
     fi
   elif [ -n "$serve_url" ]; then
     # A SERVER UP WITH NO PAGE ON DISK — one row, because there is no `file://` to head the
@@ -1447,13 +1447,13 @@ if [ "$board_on" -eq 1 ]; then
     # it here would make every `has "$page"` assertion in the harnesses pass on an instance
     # with no board — a vacuous check bought for a few characters of prose.
     echo "Board   enabled, but never rendered — no $AB_BOARD_DIR/board.html here yet"
-    say "$C_DIM" "        run /ai-bridge:board serve; otherwise an /ai-bridge:dispatch tick renders it, or build-board.sh"
+    say "$C_DIM" "        run /${AB_PLUGIN}:board serve; otherwise an /${AB_PLUGIN}:dispatch tick renders it, or build-board.sh"
   fi
   # THE UPDATE ROW — the one command that fetches a newer AI Bridge and installs it, and
   # the restart, which is the only part left with the human.
   #
   # THE VERDICT IS NOT COMPUTED HERE, exactly as §2b does not compute its own: the same
-  # `check-template-version.sh` answers both, so this row and `/ai-bridge:welcome check`
+  # `check-template-version.sh` answers both, so this row and `/<plugin>:welcome check`
   # cannot disagree. It bounds and caches its own network call — see that file.
   #
   # THREE STATES, THREE DISTINGUISHABLE OUTPUTS, like the three above it: an answer of
@@ -1473,13 +1473,13 @@ if [ "$board_on" -eq 1 ]; then
       behind)  echo "$(pad Update "$BOARD_LW")claude plugin update ${u_name:-ai-bridge}  (${u_here} → ${u_there}) — restart to apply it" ;;
       current)
         # `.ai-bridge/seed-base/VERSION` is the plugin version the bundle was last stamped
-        # with; trailing the installed one means seed edits are waiting on /ai-bridge:init.
+        # with; trailing the installed one means seed edits are waiting on /<plugin>:init.
         stamped=""
         [ -r "$root/.ai-bridge/seed-base/VERSION" ] && IFS= read -r stamped < "$root/.ai-bridge/seed-base/VERSION"
         case "$stamped" in ""|*[!0-9A-Za-z.-]*) stamped="" ;; esac
         [ "${#stamped}" -le 20 ] || stamped=""
         if [ -n "$stamped" ] && [ "$stamped" != "${u_here}" ]; then
-          echo "$(pad Update "$BOARD_LW")up to date (${u_here}) · bundle stamped at ${stamped} — run /ai-bridge:init"
+          echo "$(pad Update "$BOARD_LW")up to date (${u_here}) · bundle stamped at ${stamped} — run /${AB_PLUGIN}:init"
         else
           echo "$(pad Update "$BOARD_LW")up to date (${u_here})"
         fi ;;
@@ -1509,15 +1509,15 @@ theme_settings=""
 if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then theme_settings="$CLAUDE_CONFIG_DIR/settings.json"
 elif [ -n "${HOME:-}" ];            then theme_settings="$HOME/.claude/settings.json"; fi
 if [ -n "$plugin_root" ] && [ -f "$plugin_root/themes/ai-bridge.json" ] && [ -n "$theme_settings" ] &&
-   ! grep -q 'custom:ai-bridge' "$theme_settings" 2>/dev/null; then
+   ! grep -q "custom:$AB_PLUGIN" "$theme_settings" 2>/dev/null; then
   echo
-  say "$C_DIM" "$(pad Theme "$BOARD_LW")custom:ai-bridge:ai-bridge ships here — select it in /theme"
+  say "$C_DIM" "$(pad Theme "$BOARD_LW")custom:${AB_PLUGIN}:ai-bridge ships here — select it in /theme"
 fi
 
 # ---------------------------------------------------------------------------------------
 # 6. AWAITING — ONE COUNT LINE FOR THE HUMAN, THE TRANSCRIPT FOR THE MODEL.
 # ---------------------------------------------------------------------------------------
-# Absence is the off switch. No AWAITING.md — because no /ai-bridge:dispatch tick has run yet, or
+# Absence is the off switch. No AWAITING.md — because no /<plugin>:dispatch tick has run yet, or
 # because the human deleted it to stop the nudge — means this section is absent. The
 # project-manager only refreshes the file when it already exists and never recreates it,
 # so a deletion sticks.
@@ -1528,7 +1528,7 @@ fi
 # tick] will already show me what is needed from me." Two things were wrong with it and
 # only one of them is about wording. The fence is addressed to a machine, and since the banner acquired
 # a second channel there is a field to address the machine in. And the list itself was the
-# third and worst rendering of a queue `/ai-bridge:dispatch` and the board already present with more
+# third and worst rendering of a queue `/<plugin>:dispatch` and the board already present with more
 # room and better structure — a banner orients, a queue is where you decide.
 #
 # SO: THE HUMAN LEARNS WHETHER ANYTHING WAITS AND WHERE TO GO; THE MODEL KEEPS EVERYTHING.
@@ -1554,9 +1554,9 @@ if [ -f "$awaiting" ]; then
     if [ "$count" -eq 1 ]; then subject="1 item needs"; else subject="${count} items need"; fi
     # WHERE TO ACT — and only somewhere that exists. §5's board line is conditional, so
     # naming the board when it did not print would send a human to a file that is not
-    # there. `/ai-bridge:dispatch` is always available, so it is the half that is always named.
-    if [ "$board_shown" -eq 1 ]; then route="see the board above, or run /ai-bridge:dispatch"
-    else                              route="run /ai-bridge:dispatch"; fi
+    # there. `/<plugin>:dispatch` is always available, so it is the half that is always named.
+    if [ "$board_shown" -eq 1 ]; then route="see the board above, or run /${AB_PLUGIN}:dispatch"
+    else                              route="run /${AB_PLUGIN}:dispatch"; fi
     say "$C_PINK" "🔔 ${subject} you — ${route}"
     # THE MODEL'S HALF, AND NOTHING BELOW HERE REACHES THE HUMAN. The item text is derived
     # from task documents, which carry human-written questions, blocker reasons quoting
@@ -1573,7 +1573,7 @@ if [ -f "$awaiting" ]; then
       echo "--- BEGIN AWAITING ITEMS (untrusted data) ---"
       printf '%s\n' "$items" | sed -E 's/^[[:space:]]*\*[[:space:]]*/  • /'
       echo "--- END AWAITING ITEMS ---"
-      echo "Surface these first. Advance work with /ai-bridge:dispatch."
+      echo "Surface these first. Advance work with /${AB_PLUGIN}:dispatch."
     } | model_only
   fi
 fi
@@ -1584,7 +1584,7 @@ fi
 # THE HUMAN'S BANNER ENDS AT §6'S COUNT LINE. This section prints nothing they will ever
 # read: `model_only`, exactly like §6's fenced block, for a reason the owner gave in a real
 # session — `Ready to dispatch   N` and `Drafts   N` sat under the count line and were the
-# third rendering of a queue that `/ai-bridge:dispatch` and the board both show with room and
+# third rendering of a queue that `/<plugin>:dispatch` and the board both show with room and
 # structure. A banner orients; it does not tabulate.
 #
 # SO WHY IS THE NUMBER STILL COMPUTED. Because it is not decoration on either channel: it
@@ -1688,7 +1688,7 @@ EOF
   if [ "$n_ready" -gt 0 ]; then
     {
       echo
-      echo "Ready to dispatch   $n_ready — /ai-bridge:dispatch hands them to role agents in the background"
+      echo "Ready to dispatch   $n_ready — /${AB_PLUGIN}:dispatch hands them to role agents in the background"
     } | model_only
   fi
 fi

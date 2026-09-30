@@ -39,7 +39,7 @@ case "$tok" in ''|*[!A-Za-z0-9_.:-]*) tok="-" ;; esac
 dir="$root/$AB_MODE_DIR"
 mkdir -p "$dir" 2>/dev/null || exit 0
 # Self-ignoring, so every bundle already stamped keeps the record out of git with no
-# re-stamp — an ignore line added by /ai-bridge:init reaches only bundles stamped after it.
+# re-stamp — an ignore line added by /<plugin>:init reaches only bundles stamped after it.
 [ -e "$dir/.gitignore" ] || printf '*\n' > "$dir/.gitignore" 2>/dev/null || true
 tmp="$dir/.$sid.$$"
 printf '%s %s %s\n' "$(date +%s)" "$mode" "$tok" > "$tmp" 2>/dev/null && mv -f "$tmp" "$dir/$sid" 2>/dev/null \

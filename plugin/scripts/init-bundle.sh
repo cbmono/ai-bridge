@@ -20,7 +20,7 @@
 #     init-bundle.sh --config --uninstall   # remove only the config-layer symlinks this created
 #     init-bundle.sh --help
 #
-# THE ENGINE BEHIND `/ai-bridge:init`. It ships in the PLUGIN, and a human never needs a
+# THE ENGINE BEHIND `/<plugin>:init`. It ships in the PLUGIN, and a human never needs a
 # clone of this repo: the skill invokes it as ${CLAUDE_PLUGIN_ROOT}/scripts/init-bundle.sh.
 # It replaces install.sh, which now exists only as a deprecation stub.
 #
@@ -76,7 +76,7 @@ set -euo pipefail
 # `source: ./plugin` in the marketplace manifest means an INSTALLED plugin is the CONTENTS
 # of `plugin/`, not the repo around it: the cache holds `agents/ evals/ hooks/ scripts/
 # skills/` and nothing else. The previous rule ("two directories up from scripts/") was
-# written against a checkout and only ever verified against one, so `/ai-bridge:init` exited
+# written against a checkout and only ever verified against one, so `/<plugin>:init` exited
 # 2 with "cannot locate the ai-bridge template root" on every machine that installed the
 # plugin the supported way — measured on 0.15.0, 2026-09-05.
 #
@@ -1038,7 +1038,7 @@ fi
 
 # CREATE THE DIRECTORY IF IT IS NOT THERE — the one behaviour `install.sh` did not have.
 # It required the target to exist, because `mkdir && cd && install.sh .` was the documented
-# first step. `/ai-bridge:init <dir>` is supposed to BE that first step, so refusing an
+# first step. `/<plugin>:init <dir>` is supposed to BE that first step, so refusing an
 # absent directory would leave the command unable to do the thing it is named for. Only
 # the leaf is created (`mkdir -p` on the whole path), and an existing path that is not a
 # directory is refused rather than replaced.
@@ -1115,7 +1115,7 @@ if [ -n "$ORG_FLAG" ]; then
     echo "       Run 'gh auth login' and re-run — this refuses rather than seeding blind." >&2; exit 3; }
   if [ -n "$(ls -A "$TARGET" 2>/dev/null)" ]; then
     echo "error: --org needs an empty or absent directory; $TARGET has content." >&2
-    echo "       A bundle that is already here is refreshed by: /ai-bridge:init $TARGET" >&2; exit 3
+    echo "       A bundle that is already here is refreshed by: /${AB_PLUGIN}:init $TARGET" >&2; exit 3
   fi
 
   if gh repo view "$ORG_SLUG" --json name >/dev/null 2>&1; then
@@ -1209,7 +1209,7 @@ WS_NAME="${WS_GROUP}.code-workspace"
 #
 # AUTONOMY.md IS NOT REPLACED, AND THAT IS DELIBERATE. It is the "one deletable file"
 # capability, so shipping it with CORE would arm delegated authority everywhere — which is
-# why it ships from the separate `ai-bridge-yolo` companion plugin instead, and why the
+# why it ships from the separate yolo companion plugin instead, and why the
 # note below names an install rather than a `cp`. A
 # bundle that had it loses it here, in the safe direction (no file = always ask), and the
 # removal is reported LOUDLY with the exact command to put it back, because a capability
@@ -1425,7 +1425,7 @@ if [ "$FIRST_STAMP" = yes ] && [ ! -e "$TARGET/$AB_AWAITING" ]; then
 # Awaiting you
 
 Derived and gitignored — **do not hand-edit**. Rewritten from `projects/*/tasks/*.md`
-by each `/ai-bridge:dispatch` tick that changed something. Delete this file to turn the queue off for good;
+by each dispatch tick that changed something. Delete this file to turn the queue off for good;
 the loop never recreates it. Last refreshed: never (no tick has run yet).
 
 ## 🔴 Awaiting you (0)
@@ -1492,7 +1492,7 @@ elif [ ! -e "$TARGET/$AB_SNAPSHOT" ]; then
   cat > "$TARGET/$AB_SNAPSHOT" <<'SNAPSHOT'
 {
   "_schema": "ai-bridge board snapshot v1",
-  "_sensitivity": "Derived and gitignored. Rewritten by write-snapshot.sh each /ai-bridge:dispatch tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
+  "_sensitivity": "Derived and gitignored. Rewritten by write-snapshot.sh each dispatch tick. Delete this file to drop off the board until the next stamp; set \"board\": false in instance.config.json to stay off.",
   "group": "",
   "generated_at": "",
   "counts": {"projects": 0, "tasks": 0, "awaiting": 0},
@@ -1571,7 +1571,7 @@ AL_OPEN='"allow"[[:space:]]*:[[:space:]]*\[[[:space:]]*$'
 al_mk="${PLUGIN_ROOT%/*}"
 case "${al_mk##*/}|${al_mk%/*/*}|$PLUGIN_ROOT" in
   *'"'*|*'\'*|*'('*|*')'*) al_mk="" ;;
-  ai-bridge\|*/plugins/cache\|*) ;;
+  "$AB_PLUGIN"\|*/plugins/cache\|*) ;;
   *) al_mk="" ;;
 esac
 al_write() { # <missing entries, one per line> -> the rewritten file on stdout, or nothing
@@ -1681,7 +1681,7 @@ if ! grep -qE '^/?repos/?$' "$gi"; then
 
 # Derived view of the group's product repos (link-repos.sh) — symlinks
 # into reposRoot, never content, and machine-local like the rest. Delete it
-# freely; the next /ai-bridge:init run recreates it.
+# freely; the next /<plugin>:init run recreates it.
 /repos/
 GI
 fi
@@ -1718,7 +1718,7 @@ fi
 if ! grep -qE "^/?${AB_LOCK//./\\.}$" "$gi"; then
   gi_add <<'GI'
 
-# The PM dispatch lock (tick-lock.sh) — written by /ai-bridge:dispatch
+# The PM dispatch lock (tick-lock.sh) — written by /<plugin>:dispatch
 # immediately before it dispatches a tick and released when that tick reports, so the
 # one-tick-at-a-time guarantee survives a compaction instead of resting on a session's
 # memory. PER CLONE and never committed: two humans sharing one bundle work from two
@@ -1799,7 +1799,7 @@ fi
 if [ "$(grep -E '^!?/?board\.html$' "$gi" | tail -1)" != "/board.html" ]; then
   gi_add <<'GI'
 
-# The bundle's board page (build-board.sh) — DERIVED, never tracked. `/ai-bridge:board
+# The bundle's board page (build-board.sh) — DERIVED, never tracked. `/<plugin>:board
 # serve` serves it out of AB_BOARD_DIR (bundle-paths.sh) on 127.0.0.1, so nothing is pushed.
 # This line re-ignores it for instances stamped while it was tracked; git takes the LAST
 # matching pattern, so it wins over an older `!/board.html` without editing it.
@@ -1814,7 +1814,7 @@ if [ -e "$TARGET/board.html" ] && git -C "$TARGET" ls-files --error-unmatch boar
   if git -C "$TARGET" rm --cached --quiet board.html 2>/dev/null; then
     rm -f "$TARGET/board.html"
     echo "  drop  board.html — removed and STAGED; commit it. The board is served"
-    echo "        locally now: /ai-bridge:board serve."
+    echo "        locally now: /${AB_PLUGIN}:board serve."
   fi
 fi
 
@@ -1848,7 +1848,7 @@ fi
 if ! grep -qxF '.env' "$gi"; then
   gi_add <<'GI'
 
-# API keys — for a substituted model backend (the ai-bridge-llm companion) or anything
+# API keys — for a substituted model backend (the llm companion) or anything
 # else. NEVER tracked: a key in a tracked file is a published key.
 .env
 GI
@@ -1875,7 +1875,7 @@ IDX_END_MARK="# <<< ai-bridge index ignore <<<"
 idxbody="$(mktemp)"
 cat <<'GI' | ab_expand > "$idxbody"
 # Derived navigation indexes — the root one and each project's, rewritten by every
-# /ai-bridge:dispatch tick from the documents they summarise. A view, not source: on
+# /<plugin>:dispatch tick from the documents they summarise. A view, not source: on
 # a bundle shared by more than one human it would otherwise conflict on every push.
 # `knowledge/index.md` is deliberately NOT ignored: it is the KB's curated lookup
 # surface, changes only when the KB changes, and a fresh clone needs it present.
@@ -1884,11 +1884,11 @@ cat <<'GI' | ab_expand > "$idxbody"
 # the tick stops touching a retained project at all, so its index.md becomes a
 # permanent, hand-committed front door instead of a rewritten view. To retain one,
 # add a negation line AFTER the two blanket lines below (i.e. after this block's END
-# marker, never inside it — /ai-bridge:init rewrites everything between the markers on
+# marker, never inside it — /<plugin>:init rewrites everything between the markers on
 # every run), then `git add -f` the file once — e.g. `!projects/<slug>/index.md`.
 # Git applies .gitignore patterns in file order, so a LATER negation overrides an
 # earlier blanket pattern; putting the override before the two blanket lines below,
-# or inside this block, does not survive the next `/ai-bridge:init` run.
+# or inside this block, does not survive the next `/<plugin>:init` run.
 /__AB_INDEX__
 /projects/*/index.md
 GI
@@ -2016,7 +2016,7 @@ fi
 # the script exits 0 with an explanation in that case rather than failing the
 # install. Template copy, for the same reason as in --uninstall.
 ( cd "$TARGET" && bash "$BIN_DIR/link-repos.sh" ) \
-  || echo "  warn  repos/ view not refreshed; run /ai-bridge:init again" >&2
+  || echo "  warn  repos/ view not refreshed; run /${AB_PLUGIN}:init again" >&2
 
 # ===========================================================================
 # 4b. THE TEAM ROSTER — offered once, on a first stamp, only at a terminal.
@@ -2364,7 +2364,7 @@ if [ "${team_state:-}" = write ]; then
     fi
   done < "$TEAM_ROSTER"
 
-  team_note="Collected by /ai-bridge:init when this bundle was stamped: GitHub login -> commit email, for THIS instance. The address is PER-INSTANCE, not per-person -- it says which entity the work belongs to -- so never derive it from the login, and never move it into instance.config.local.json (that file says which login this clone IS). Read by commit-as.sh via ownerGithubUser; see $AB_SCHEMA 'Per-machine config overrides' and docs/sharing.md. Edit by hand to add or remove someone."
+  team_note="Collected by /${AB_PLUGIN}:init when this bundle was stamped: GitHub login -> commit email, for THIS instance. The address is PER-INSTANCE, not per-person -- it says which entity the work belongs to -- so never derive it from the login, and never move it into instance.config.local.json (that file says which login this clone IS). Read by commit-as.sh via ownerGithubUser; see $AB_SCHEMA 'Per-machine config overrides' and docs/sharing.md. Edit by hand to add or remove someone."
 
   # Temp file BESIDE the target, carrying the target's mode: mktemp creates 0600, so a
   # rename from $TMPDIR would silently make this config 0600, and a cross-filesystem mv
@@ -2466,7 +2466,7 @@ fi
 # (docs/sharing.md). All three are knowable on the machine running this, so they are
 # DERIVED — and a value that cannot be derived is NAMED on a `needs` line, never guessed.
 # `--owner/--email/--repos-root` supply one without a terminal, which is how
-# /ai-bridge:init hands a human's answer back to this script.
+# /<plugin>:init hands a human's answer back to this script.
 #
 # ABSENT ONLY, and that is the whole guard: an existing local file is somebody's config,
 # 4e's normaliser owns its shape, and a file already carrying the three keys makes this
@@ -2635,13 +2635,13 @@ else
       # reposRoot only became readable now, so step 4 above had nothing to link.
       if [ -n "$id_repos" ]; then
         ( cd "$TARGET" && bash "$BIN_DIR/link-repos.sh" ) \
-          || echo "  warn  repos/ view not refreshed; run /ai-bridge:init again" >&2
+          || echo "  warn  repos/ view not refreshed; run /${AB_PLUGIN}:init again" >&2
       fi
     fi
   fi
 
   # What it could NOT derive, named one key at a time. `needs` is the marker
-  # /ai-bridge:init reads: one batched question for exactly these, then re-run with the
+  # /<plugin>:init reads: one batched question for exactly these, then re-run with the
   # flags. Never a guess, and never a question about a value that was derived.
   id_needs() { # <key> <value> <flag>
     [ -z "$2" ] || return 0
@@ -2902,9 +2902,9 @@ if [ -f "$NORMALISER" ]; then
 fi
 
 echo "Done. Seed content in place; this bundle carries no machinery and no template links."
-echo "Next: edit instance.config.json, then run /ai-bridge:dispatch from this directory."
+echo "Next: edit instance.config.json, then run /${AB_PLUGIN}:dispatch from this directory."
 echo "      (Set reposRoot in instance.config.local.json — it is per-machine — then"
-echo "       re-run /ai-bridge:init to fill in repos/.)"
+echo "       re-run /${AB_PLUGIN}:init to fill in repos/.)"
 # THE OTHER HALF, and it is not this script's to install. Every slash command ships in the
 # ai-bridge PLUGIN now, per machine rather than per instance, so a perfect stamp still
 # leaves a bundle nobody can drive if the plugin is missing — and the only symptom is
@@ -2913,7 +2913,7 @@ echo "       re-run /ai-bridge:init to fill in repos/.)"
 # fire at all. See docs/operations.md § 1.
 echo "      (The commands are the ai-bridge PLUGIN, installed once per machine:"
 echo "       /plugin marketplace add cbmono/ai-bridge, then"
-echo "       /plugin install ai-bridge@ai-bridge — then restart Claude Code.)"
+echo "       /plugin install ${AB_PLUGIN}@${AB_MARKETPLACE} — then restart Claude Code.)"
 
 # Retired seed content — REPORT, never remove. See RETIRED for why the conversion sweep
 # above may delete and this may not: a machinery symlink into a template checkout has one
@@ -2987,7 +2987,7 @@ fi
 #
 # AND IT IS THE WELCOME CHECK-AND-FIX PASS, NOT THE SEED REFRESH ALONE. A bundle used to
 # be brought up to the installed plugin by two commands in an order nobody could derive —
-# this stamp, then `/ai-bridge:welcome fix`. One command does it now: the pass runs the
+# this stamp, then `/<plugin>:welcome fix`. One command does it now: the pass runs the
 # same rows, the same tiers and the same refusals (config files and tick locks are
 # reported, never written).
 #
@@ -3031,7 +3031,7 @@ if [ "$FIRST_STAMP" = no ] && [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
 fi
 
 # 5b. The plugin version this stamp ran with, tracked with the rest of the record. The
-# banner's Update row compares it with the installed plugin and names /ai-bridge:init when
+# banner's Update row compares it with the installed plugin and names /<plugin>:init when
 # they differ — "re-run init after every plugin update" had no reader before this file.
 if [ -f "$PLUGIN_ROOT/VERSION" ] && mkdir -p "$SEED_BASE_DIR" 2>/dev/null; then
   cp "$PLUGIN_ROOT/VERSION" "$SEED_BASE_DIR/VERSION" 2>/dev/null || true
@@ -3045,7 +3045,7 @@ if [ -f "$BIN_DIR/validate-bundle.sh" ]; then
   ( cd "$TARGET" && bash "$BIN_DIR/validate-bundle.sh" ) >/dev/null 2>&1 || vrc=$?
   if [ "$vrc" -eq 1 ]; then
     echo "Note: this bundle has schema errors. To see and repair them, run:"
-    echo "      /ai-bridge:welcome check   (or: bash $BIN_DIR/validate-bundle.sh from $TARGET)"
+    echo "      /${AB_PLUGIN}:welcome check   (or: bash $BIN_DIR/validate-bundle.sh from $TARGET)"
   fi
 fi
 
