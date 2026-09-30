@@ -12,6 +12,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 THEME="$REPO/plugin/themes/ai-bridge.json"
 TOKENS="$REPO/tests/fixtures/theme-tokens.txt"
 PALETTE="$REPO/tests/fixtures/theme-palette.txt"

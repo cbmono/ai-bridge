@@ -58,6 +58,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 LAUNCHER="$REPO/plugin/skills/dispatch/SKILL.md"
 TICK="$REPO/plugin/agents/project-manager.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")" || {

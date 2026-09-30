@@ -259,7 +259,7 @@ if [ "$FORM" = banner ]; then
   if [ ! -f "$hook" ]; then
     echo "ai-bridge: the session banner is not where this script expects it ($hook)." >&2
     echo "           That is a broken plugin install, not a bundle problem. Re-install:" >&2
-    echo "           /plugin install ${AB_PLUGIN}@${AB_MARKETPLACE}, then restart Claude Code." >&2
+    echo "           /plugin install ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}, then restart Claude Code." >&2
     exit 2
   fi
   export CLAUDE_PROJECT_DIR="$ROOT"
@@ -502,7 +502,7 @@ fix_template_behind() {
     return 0
   fi
   note "the pull did not fast-forward — the checkout is unchanged. The supported route is"
-  note "/plugin update ${AB_PLUGIN}@${AB_MARKETPLACE}, then restart Claude Code."
+  note "/plugin update ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}, then restart Claude Code."
   return 0
 }
 
@@ -561,7 +561,7 @@ EOF
   printf '%s\n' "$shown"
   [ "$n" -gt 12 ] && note "… and $((n - 12)) more"
   note "the machinery ships in the plugin now; a link into a checkout is frozen there"
-  hint "/${AB_PLUGIN}:init $ROOT"
+  hint "/${PLUGIN_NAME}:init $ROOT"
   return "$_warned"
 }
 
@@ -631,7 +631,7 @@ check_seed_drift() {
     _warned=1
     warn "seed documents have drifted from this template — a stamp cannot deliver a seed edit"
     printf '%s\n' "$drift" | sed 's/^  /    /'
-    hint "/${AB_PLUGIN}:init $ROOT   (3-way merges what it can; conflicts stay yours)"
+    hint "/${PLUGIN_NAME}:init $ROOT   (3-way merges what it can; conflicts stay yours)"
   else
     good "seed documents are in step with this template — nothing to port"
   fi
@@ -928,7 +928,7 @@ check_tick_lock() {
   case "$rc" in
     0) good "no tick lock held — the next dispatch tick takes it"
        case "$out" in *"$AB_LOCK_CLAIM"*) note "note: a claim file outlived its lock; the next acquire clears it" ;; esac ;;
-    1) good "an /${AB_PLUGIN}:dispatch tick is in flight (this is a live lock, not a fault)"
+    1) good "an /${PLUGIN_NAME}:dispatch tick is in flight (this is a live lock, not a fault)"
        printf '%s\n' "$out" | sed -n '1,3p' | sed 's/^/    /'
        case "$out" in *"No tick has claimed it yet"*) note "unclaimed: taken for a dispatch that is starting" ;; esac ;;
     *) warn "the tick lock needs YOUR decision — this is not repaired for you"
@@ -1227,7 +1227,7 @@ fi
 # The two ship-blockers therefore hold by construction rather than by care: there is no
 # branch here that could be pointed at a config file or a lock file.
 if [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
-  echo "ai-bridge fix has moved into /${AB_PLUGIN}:init — run that instead; it stamps the bundle and then runs this same pass."
+  echo "ai-bridge fix has moved into /${PLUGIN_NAME}:init — run that instead; it stamps the bundle and then runs this same pass."
   exit 0
 fi
 echo "ai-bridge fix — acting ONLY on the idempotent tier."

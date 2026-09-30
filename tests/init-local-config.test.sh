@@ -28,6 +28,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/initlocal.XXXXXX")" || {
   echo "init-local-config.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}" >&2; exit 2; }
 TMP="$(cd "$TMP" && pwd)"   # a TMPDIR ending in `/` yields `//`, which no `pwd` returns

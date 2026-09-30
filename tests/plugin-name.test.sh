@@ -22,11 +22,11 @@ ok() { # <name> <actual> <expected>
 names() { bash "$1" ${2:+"$2"} 2>/dev/null | tr '\n' ' ' | sed 's/ $//'; }
 
 echo "== 1. a checkout reads the two manifests =="
-ok "the checkout names itself from the manifests" "$(names "$PNS")" "AB_PLUGIN=$PN AB_MARKETPLACE=$PMK"
+ok "the checkout names itself from the manifests" "$(names "$PNS")" "PLUGIN_NAME=$PN PLUGIN_MARKETPLACE=$PMK"
 ok "…the same answer when sourced, with nothing printed" \
-   "$(bash -c '. "$1" >"$2/src.out"; printf "%s@%s" "$AB_PLUGIN" "$AB_MARKETPLACE"' _ "$PNS" "$TMP"):$(wc -c <"$TMP/src.out" | tr -d ' ')" "$PN@$PMK:0"
+   "$(bash -c '. "$1" >"$2/src.out"; printf "%s@%s" "$PLUGIN_NAME" "$PLUGIN_MARKETPLACE"' _ "$PNS" "$TMP"):$(wc -c <"$TMP/src.out" | tr -d ' ')" "$PN@$PMK:0"
 ok "…and through bundle-paths.sh, which every layout reader sources" \
-   "$(bash -c '. "$1/bundle-paths.sh"; printf "%s@%s" "$AB_PLUGIN" "$AB_MARKETPLACE"' _ "$REPO/plugin/scripts")" "$PN@$PMK"
+   "$(bash -c '. "$1/bundle-paths.sh"; printf "%s@%s" "$PLUGIN_NAME" "$PLUGIN_MARKETPLACE"' _ "$REPO/plugin/scripts")" "$PN@$PMK"
 
 echo
 echo "== 2. an install is named by its path, not by its manifest =="
@@ -35,9 +35,9 @@ mkdir -p "$INST" && cp -R "$REPO/plugin/." "$INST/"
 ok "the fixture really is an install: no marketplace manifest beside it" \
    "$([ -e "$INST/../.claude-plugin/marketplace.json" ] && echo present || echo absent)" absent
 ok "…and its own manifest still says $PN" "$(sed -n 's/^  "name": *"\([^"]*\)".*/\1/p' "$INST/.claude-plugin/plugin.json")" "$PN"
-ok "the install path wins" "$(names "$INST/scripts/plugin-name.sh")" "AB_PLUGIN=loopd AB_MARKETPLACE=loopd"
+ok "the install path wins" "$(names "$INST/scripts/plugin-name.sh")" "PLUGIN_NAME=loopd PLUGIN_MARKETPLACE=loopd"
 ok "…the plugin and marketplace segments are not swapped" \
-   "$(names "$PNS" "$TMP/x/plugins/cache/mkt-a/plug-b/1.0.0/")" "AB_PLUGIN=plug-b AB_MARKETPLACE=mkt-a"
+   "$(names "$PNS" "$TMP/x/plugins/cache/mkt-a/plug-b/1.0.0/")" "PLUGIN_NAME=plug-b PLUGIN_MARKETPLACE=mkt-a"
 ok "a path merely NAMED cache is not an install" \
    "$(names "$PNS" "$TMP/x/notplugins/cache/mkt-a/plug-b/1.0.0")" ""
 ok "…nor is one with nothing readable, which exits 1" \
@@ -79,10 +79,10 @@ M="$TMP/mutant/plugins/cache/loopd/loopd/3.0.0"
 mkdir -p "$M" && cp -R "$REPO/plugin/." "$M/"
 sed 's/= cache \]/= nocache ]/' "$PNS" > "$M/scripts/plugin-name.sh"
 ok "mutant A: without the path shape, an install reports its manifest" \
-   "$(names "$M/scripts/plugin-name.sh")" "AB_PLUGIN=$PN AB_MARKETPLACE=$PN"
-sed 's/AB_PLUGIN="${p##\*\/}" AB_MARKETPLACE="${mk##\*\/}"/AB_PLUGIN="${mk##*\/}" AB_MARKETPLACE="${p##*\/}"/' "$PNS" > "$TMP/swapped.sh"
+   "$(names "$M/scripts/plugin-name.sh")" "PLUGIN_NAME=$PN PLUGIN_MARKETPLACE=$PN"
+sed 's/PLUGIN_NAME="${p##\*\/}" PLUGIN_MARKETPLACE="${mk##\*\/}"/PLUGIN_NAME="${mk##*\/}" PLUGIN_MARKETPLACE="${p##*\/}"/' "$PNS" > "$TMP/swapped.sh"
 ok "mutant B: swapped segments are caught" \
-   "$(names "$TMP/swapped.sh" "$TMP/x/plugins/cache/mkt-a/plug-b/1.0.0")" "AB_PLUGIN=mkt-a AB_MARKETPLACE=plug-b"
+   "$(names "$TMP/swapped.sh" "$TMP/x/plugins/cache/mkt-a/plug-b/1.0.0")" "PLUGIN_NAME=mkt-a PLUGIN_MARKETPLACE=plug-b"
 
 sed 's/^DEFAULT_MARKETPLACE=.*/DEFAULT_MARKETPLACE="ai-bridge"/' "$REPO/plugin/scripts/resolve-autonomy.sh" > "$INST/scripts/resolve-autonomy.sh"
 ok "mutant C: a hardcoded default turns the renamed install gated" "$(autonomy)" "rc=1"

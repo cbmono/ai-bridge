@@ -64,7 +64,7 @@ set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh" 2>/dev/null || true
 
 COMPANION_REL="companion/AUTONOMY.md"
-DEFAULT_MARKETPLACE="${AB_MARKETPLACE:-}"
+DEFAULT_MARKETPLACE="${PLUGIN_MARKETPLACE:-}"
 
 bundle="."
 while [ $# -gt 0 ]; do

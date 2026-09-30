@@ -29,6 +29,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 TPL="$(cd "$HERE/.." && pwd)"
 SK="$TPL/plugin/skills"
 [ -d "$SK" ] || { echo "plugin-skills.test: missing $SK" >&2; exit 2; }

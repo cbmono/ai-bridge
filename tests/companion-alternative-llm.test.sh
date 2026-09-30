@@ -19,6 +19,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 LAUNCH="$REPO/plugin-llm/bin/ai-bridge-deepseek"
 CAP="$REPO/plugin-llm/companion/llm.md"
 BANNER="$REPO/plugin/hooks/session-banner.sh"

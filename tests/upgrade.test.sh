@@ -44,6 +44,7 @@ set -euo pipefail
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 TPL_SRC="$HERE/.."
 [[ -f "$TPL_SRC/plugin/scripts/refresh-seeds.sh" ]] || { echo "upgrade.test: not found at $TPL_SRC/plugin/scripts/refresh-seeds.sh" >&2; exit 2; }
 

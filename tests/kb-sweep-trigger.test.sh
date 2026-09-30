@@ -24,6 +24,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 DUE="$REPO/plugin/scripts/kb-sweep-due.sh"
 BUILD="$REPO/plugin/scripts/build-kb-index.sh"
 PM="$REPO/plugin/tick-steps/step-7-knowledge-base.md"

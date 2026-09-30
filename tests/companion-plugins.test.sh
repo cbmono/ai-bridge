@@ -27,6 +27,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 RESOLVE="$REPO/plugin/scripts/resolve-autonomy.sh"
 MJ="$REPO/.claude-plugin/marketplace.json"
 YOLO="$REPO/plugin-yolo"
@@ -99,7 +100,7 @@ ok "a registry listing no companion -> exit 1" "$rc" 1
 
 echo
 echo "== 2. an installed companion answers — the extension point itself =="
-write_registry "ai-bridge-yolo@ai-bridge"
+write_registry "ai-bridge-yolo@${PMK}"
 resolve "$CFG"
 ok "companion installed -> exit 0"             "$rc" 0
 ok "…and it prints that companion's file"      "$out" "$COMPANION/companion/AUTONOMY.md"
@@ -130,7 +131,7 @@ ok "right path, wrong marketplace -> exit 1"   "$rc" 1
 
 # (b) THE RELATIVE PATH IS FIXED. A file at the companion's plugin ROOT is not what core
 #     reads — otherwise a companion's own README or docs could be mistaken for it.
-write_registry "ai-bridge-yolo@ai-bridge"
+write_registry "ai-bridge-yolo@${PMK}"
 mv "$COMPANION/companion/AUTONOMY.md" "$COMPANION/AUTONOMY.md"
 resolve "$CFG"
 ok "file at the plugin root, not companion/ -> exit 1" "$rc" 1
@@ -253,7 +254,7 @@ echo "==    real cache is. This is a security boundary, not a refactor.         
 # So the fixture below is cache-SHAPED: the exact path the plugin manager writes, several
 # stale versions deep, under the same CLAUDE_CONFIG_DIR the resolver reads its registry
 # from. Every assertion here must answer `gated`.
-CACHE="$CFG/plugins/cache/ai-bridge/ai-bridge-yolo"
+CACHE="$CFG/plugins/cache/${PMK}/ai-bridge-yolo"
 for v in 0.13.0 0.14.0 0.15.0; do
   mkdir -p "$CACHE/$v/companion"
   printf '# a capability file left behind by version %s\n' "$v" > "$CACHE/$v/companion/AUTONOMY.md"
@@ -301,7 +302,7 @@ mv "$CFG/plugins/installed_plugins.json.away" "$CFG/plugins/installed_plugins.js
 #     that no longer exists is a companion that is not installed, and falling through to a
 #     sibling version would resolve a capability the registry never granted. This is the
 #     half-uninstalled state a failed upgrade leaves behind.
-write_registry_at "ai-bridge-yolo@ai-bridge" "$CACHE/9.9.9"
+write_registry_at "ai-bridge-yolo@${PMK}" "$CACHE/9.9.9"
 resolve "$CFG"
 ok "registry names a missing version, 0.15.0 cached -> exit 1" "$rc" 1
 
@@ -309,7 +310,7 @@ ok "registry names a missing version, 0.15.0 cached -> exit 1" "$rc" 1
 #     the registry pointing at a version that IS on disk must clear — otherwise (a)-(c)
 #     would pass on a resolver that says no to everything, and this whole section would
 #     be measuring nothing.
-write_registry_at "ai-bridge-yolo@ai-bridge" "$CACHE/0.15.0"
+write_registry_at "ai-bridge-yolo@${PMK}" "$CACHE/0.15.0"
 resolve "$CFG"
 ok "the SAME cached tree, this time installed -> exit 0"  "$rc" 0
 ok "…and it is the registry's version that answers"       "$out" "$CACHE/0.15.0/companion/AUTONOMY.md"
@@ -320,7 +321,14 @@ ok "…and it is the registry's version that answers"       "$out" "$CACHE/0.15.
 #     things at once: the new cases KILL it, and 4(c)'s non-cache-shaped fixture does NOT.
 #     Without this, a later tidy-up could delete the cache-shaped fixture, keep the
 #     assertions, and leave the hole open with the suite still green.
-MUTANT="$TMP/resolve-autonomy.mutant.sh"
+# Checkout-shaped, beside the real name helper and both manifests: a lone copy derives no
+# marketplace at all and refuses for that reason, which would prove nothing about the splice.
+MUT_ROOT="$TMP/mutant-checkout"
+mkdir -p "$MUT_ROOT/plugin/scripts" "$MUT_ROOT/plugin/.claude-plugin" "$MUT_ROOT/.claude-plugin"
+cp "$REPO/plugin/scripts/plugin-name.sh" "$MUT_ROOT/plugin/scripts/"
+cp "$REPO/plugin/.claude-plugin/plugin.json" "$MUT_ROOT/plugin/.claude-plugin/"
+cp "$MJ" "$MUT_ROOT/.claude-plugin/"
+MUTANT="$MUT_ROOT/plugin/scripts/resolve-autonomy.sh"
 awk '
   /^exit 1$/ && !done {
     print "cache_root=\"${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/plugins/cache/$marketplace\""

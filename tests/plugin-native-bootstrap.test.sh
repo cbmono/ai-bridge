@@ -27,6 +27,7 @@ set -uo pipefail
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/plugin-native.XXXXXX")" || {
   echo "plugin-native-bootstrap.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 TMP="$(cd "$TMP" && pwd -P)"

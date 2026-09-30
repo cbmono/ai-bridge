@@ -31,6 +31,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 HOOK_SRC="$REPO/plugin/hooks/agent-control.sh"
 HOOKSJSON="$REPO/plugin/hooks/hooks.json"
 CTL_SRC="$REPO/plugin/scripts/control.sh"

@@ -87,7 +87,7 @@ unresolved() { # <what-is-missing> <fix>
   echo "  the SESSION model instead of a chosen one, silently, for this agent." >&2
   echo "  Fix: $2" >&2
   echo "       to instance.config.local.json — per-machine spend, and the tracked" >&2
-  echo "       instance.config.json is the fallback. Or re-run /${AB_PLUGIN}:init on this" >&2
+  echo "       instance.config.json is the fallback. Or re-run /${PLUGIN_NAME}:init on this" >&2
   echo "       bundle, which seeds both keys into the local file." >&2
   exit 1
 }

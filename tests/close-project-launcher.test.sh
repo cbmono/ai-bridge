@@ -35,6 +35,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 SKILL="$REPO/plugin/skills/close-project/SKILL.md"
 DISPATCH="$REPO/plugin/skills/dispatch/SKILL.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/closelaunch.XXXXXX")" || {

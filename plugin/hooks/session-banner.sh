@@ -924,9 +924,9 @@ if [ "$n_legacy" -gt 0 ]; then
   echo "    The machinery ships in the ai-bridge PLUGIN now, so these links are frozen at"
   echo "    whatever that checkout last pulled — a plugin update never reaches them."
   echo "    REPAIR (idempotent, converts in place, touches no data):"
-  printf '        /%s:init %q\n' "$AB_PLUGIN" "$root"
+  printf '        /%s:init %q\n' "$PLUGIN_NAME" "$root"
   echo "    Report this and the repair command to the human before doing anything else. A"
-  echo "    /${AB_PLUGIN}:dispatch tick started now fails mid-dispatch, with agents already briefed."
+  echo "    /${PLUGIN_NAME}:dispatch tick started now fails mid-dispatch, with agents already briefed."
   echo
 fi
 
@@ -1433,7 +1433,7 @@ if [ "$board_on" -eq 1 ]; then
       # than a URL that reloads itself, and both are worth printing.
       echo "$(pad Live "$BOARD_LW")$serve_url"
     else
-      echo "$(pad Run "$BOARD_LW")/${AB_PLUGIN}:board serve for a live URL"
+      echo "$(pad Run "$BOARD_LW")/${PLUGIN_NAME}:board serve for a live URL"
     fi
   elif [ -n "$serve_url" ]; then
     # A SERVER UP WITH NO PAGE ON DISK — one row, because there is no `file://` to head the
@@ -1447,7 +1447,7 @@ if [ "$board_on" -eq 1 ]; then
     # it here would make every `has "$page"` assertion in the harnesses pass on an instance
     # with no board — a vacuous check bought for a few characters of prose.
     echo "Board   enabled, but never rendered — no $AB_BOARD_DIR/board.html here yet"
-    say "$C_DIM" "        run /${AB_PLUGIN}:board serve; otherwise an /${AB_PLUGIN}:dispatch tick renders it, or build-board.sh"
+    say "$C_DIM" "        run /${PLUGIN_NAME}:board serve; otherwise an /${PLUGIN_NAME}:dispatch tick renders it, or build-board.sh"
   fi
   # THE UPDATE ROW — the one command that fetches a newer AI Bridge and installs it, and
   # the restart, which is the only part left with the human.
@@ -1479,7 +1479,7 @@ if [ "$board_on" -eq 1 ]; then
         case "$stamped" in ""|*[!0-9A-Za-z.-]*) stamped="" ;; esac
         [ "${#stamped}" -le 20 ] || stamped=""
         if [ -n "$stamped" ] && [ "$stamped" != "${u_here}" ]; then
-          echo "$(pad Update "$BOARD_LW")up to date (${u_here}) · bundle stamped at ${stamped} — run /${AB_PLUGIN}:init"
+          echo "$(pad Update "$BOARD_LW")up to date (${u_here}) · bundle stamped at ${stamped} — run /${PLUGIN_NAME}:init"
         else
           echo "$(pad Update "$BOARD_LW")up to date (${u_here})"
         fi ;;
@@ -1509,9 +1509,9 @@ theme_settings=""
 if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then theme_settings="$CLAUDE_CONFIG_DIR/settings.json"
 elif [ -n "${HOME:-}" ];            then theme_settings="$HOME/.claude/settings.json"; fi
 if [ -n "$plugin_root" ] && [ -f "$plugin_root/themes/ai-bridge.json" ] && [ -n "$theme_settings" ] &&
-   ! grep -q "custom:$AB_PLUGIN" "$theme_settings" 2>/dev/null; then
+   ! grep -q "custom:$PLUGIN_NAME" "$theme_settings" 2>/dev/null; then
   echo
-  say "$C_DIM" "$(pad Theme "$BOARD_LW")custom:${AB_PLUGIN}:ai-bridge ships here — select it in /theme"
+  say "$C_DIM" "$(pad Theme "$BOARD_LW")custom:${PLUGIN_NAME}:ai-bridge ships here — select it in /theme"
 fi
 
 # ---------------------------------------------------------------------------------------
@@ -1555,8 +1555,8 @@ if [ -f "$awaiting" ]; then
     # WHERE TO ACT — and only somewhere that exists. §5's board line is conditional, so
     # naming the board when it did not print would send a human to a file that is not
     # there. `/<plugin>:dispatch` is always available, so it is the half that is always named.
-    if [ "$board_shown" -eq 1 ]; then route="see the board above, or run /${AB_PLUGIN}:dispatch"
-    else                              route="run /${AB_PLUGIN}:dispatch"; fi
+    if [ "$board_shown" -eq 1 ]; then route="see the board above, or run /${PLUGIN_NAME}:dispatch"
+    else                              route="run /${PLUGIN_NAME}:dispatch"; fi
     say "$C_PINK" "🔔 ${subject} you — ${route}"
     # THE MODEL'S HALF, AND NOTHING BELOW HERE REACHES THE HUMAN. The item text is derived
     # from task documents, which carry human-written questions, blocker reasons quoting
@@ -1573,7 +1573,7 @@ if [ -f "$awaiting" ]; then
       echo "--- BEGIN AWAITING ITEMS (untrusted data) ---"
       printf '%s\n' "$items" | sed -E 's/^[[:space:]]*\*[[:space:]]*/  • /'
       echo "--- END AWAITING ITEMS ---"
-      echo "Surface these first. Advance work with /${AB_PLUGIN}:dispatch."
+      echo "Surface these first. Advance work with /${PLUGIN_NAME}:dispatch."
     } | model_only
   fi
 fi
@@ -1688,7 +1688,7 @@ EOF
   if [ "$n_ready" -gt 0 ]; then
     {
       echo
-      echo "Ready to dispatch   $n_ready — /${AB_PLUGIN}:dispatch hands them to role agents in the background"
+      echo "Ready to dispatch   $n_ready — /${PLUGIN_NAME}:dispatch hands them to role agents in the background"
     } | model_only
   fi
 fi

@@ -20,7 +20,7 @@ set -uo pipefail
 
 COMPANION_REL="companion/accounts.md"
 LAUNCHER_REL="bin/ai-bridge-claude"
-DEFAULT_MARKETPLACE="${AB_MARKETPLACE:-}"
+DEFAULT_MARKETPLACE="${PLUGIN_MARKETPLACE:-}"
 
 bundle="."
 while [ $# -gt 0 ]; do

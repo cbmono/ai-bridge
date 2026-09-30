@@ -989,7 +989,7 @@ case "$cmd" in
         echo "     and the identity on it EQUALS yours — which is not proof that it is you." >&2
         identity_lines "     " >&2
         echo "     A session-derived id names the SESSION, not the tick: every tick one" >&2
-        echo "     /${AB_PLUGIN}:dispatch session starts shares it, so this reads the same whether you are" >&2
+        echo "     /${PLUGIN_NAME}:dispatch session starts shares it, so this reads the same whether you are" >&2
         echo "     re-entering your own claim or meeting a sibling that session resumed." >&2
         echo "     Do not dispatch and do not delete anything. A human decides:" >&2
         echo "       - if no other tick is running:  tick-lock.sh release, then re-run" >&2

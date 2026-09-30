@@ -27,6 +27,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$REPO/plugin/scripts/bundle-paths.sh"
 SCRIPT="$REPO/plugin/scripts/check-dispatch.sh"

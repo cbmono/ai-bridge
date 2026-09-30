@@ -30,6 +30,7 @@
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
+. "$(dirname "$0")/tools/plugin-name.sh"
 
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"

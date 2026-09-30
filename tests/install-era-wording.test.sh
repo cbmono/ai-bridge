@@ -72,6 +72,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/install-era-wording.XXXXXX")" || {
   echo "install-era-wording.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }

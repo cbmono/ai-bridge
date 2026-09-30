@@ -29,6 +29,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 STAMP="$REPO/plugin/scripts/decision-stamp.sh"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 SEED_CLAUDE="$REPO/plugin/seed/CLAUDE.md"

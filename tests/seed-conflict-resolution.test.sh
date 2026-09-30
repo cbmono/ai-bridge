@@ -18,6 +18,7 @@ set -euo pipefail
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 REPO="$HERE/.."
 [ -f "$REPO/plugin/scripts/refresh-seeds.sh" ] || {
   echo "seed-conflict-resolution.test: no plugin/scripts/refresh-seeds.sh at $REPO" >&2; exit 2; }

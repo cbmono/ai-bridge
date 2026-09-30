@@ -192,7 +192,7 @@ with open(status_path, "w") as fh:
 if not total:
     raise SystemExit(0)
 if not apply_mode:
-    print("  %d finding(s). Apply them with: /%s:init --normalise-config" % (total, os.environ.get("AB_PLUGIN", "")))
+    print("  %d finding(s). Apply them with: /%s:init --normalise-config" % (total, os.environ.get("PLUGIN_NAME", "")))
     raise SystemExit(1)
 
 

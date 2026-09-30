@@ -1115,7 +1115,7 @@ if [ -n "$ORG_FLAG" ]; then
     echo "       Run 'gh auth login' and re-run — this refuses rather than seeding blind." >&2; exit 3; }
   if [ -n "$(ls -A "$TARGET" 2>/dev/null)" ]; then
     echo "error: --org needs an empty or absent directory; $TARGET has content." >&2
-    echo "       A bundle that is already here is refreshed by: /${AB_PLUGIN}:init $TARGET" >&2; exit 3
+    echo "       A bundle that is already here is refreshed by: /${PLUGIN_NAME}:init $TARGET" >&2; exit 3
   fi
 
   if gh repo view "$ORG_SLUG" --json name >/dev/null 2>&1; then
@@ -1571,7 +1571,7 @@ AL_OPEN='"allow"[[:space:]]*:[[:space:]]*\[[[:space:]]*$'
 al_mk="${PLUGIN_ROOT%/*}"
 case "${al_mk##*/}|${al_mk%/*/*}|$PLUGIN_ROOT" in
   *'"'*|*'\'*|*'('*|*')'*) al_mk="" ;;
-  "$AB_PLUGIN"\|*/plugins/cache\|*) ;;
+  "$PLUGIN_NAME"\|*/plugins/cache\|*) ;;
   *) al_mk="" ;;
 esac
 al_write() { # <missing entries, one per line> -> the rewritten file on stdout, or nothing
@@ -1814,7 +1814,7 @@ if [ -e "$TARGET/board.html" ] && git -C "$TARGET" ls-files --error-unmatch boar
   if git -C "$TARGET" rm --cached --quiet board.html 2>/dev/null; then
     rm -f "$TARGET/board.html"
     echo "  drop  board.html — removed and STAGED; commit it. The board is served"
-    echo "        locally now: /${AB_PLUGIN}:board serve."
+    echo "        locally now: /${PLUGIN_NAME}:board serve."
   fi
 fi
 
@@ -2016,7 +2016,7 @@ fi
 # the script exits 0 with an explanation in that case rather than failing the
 # install. Template copy, for the same reason as in --uninstall.
 ( cd "$TARGET" && bash "$BIN_DIR/link-repos.sh" ) \
-  || echo "  warn  repos/ view not refreshed; run /${AB_PLUGIN}:init again" >&2
+  || echo "  warn  repos/ view not refreshed; run /${PLUGIN_NAME}:init again" >&2
 
 # ===========================================================================
 # 4b. THE TEAM ROSTER — offered once, on a first stamp, only at a terminal.
@@ -2364,7 +2364,7 @@ if [ "${team_state:-}" = write ]; then
     fi
   done < "$TEAM_ROSTER"
 
-  team_note="Collected by /${AB_PLUGIN}:init when this bundle was stamped: GitHub login -> commit email, for THIS instance. The address is PER-INSTANCE, not per-person -- it says which entity the work belongs to -- so never derive it from the login, and never move it into instance.config.local.json (that file says which login this clone IS). Read by commit-as.sh via ownerGithubUser; see $AB_SCHEMA 'Per-machine config overrides' and docs/sharing.md. Edit by hand to add or remove someone."
+  team_note="Collected by /${PLUGIN_NAME}:init when this bundle was stamped: GitHub login -> commit email, for THIS instance. The address is PER-INSTANCE, not per-person -- it says which entity the work belongs to -- so never derive it from the login, and never move it into instance.config.local.json (that file says which login this clone IS). Read by commit-as.sh via ownerGithubUser; see $AB_SCHEMA 'Per-machine config overrides' and docs/sharing.md. Edit by hand to add or remove someone."
 
   # Temp file BESIDE the target, carrying the target's mode: mktemp creates 0600, so a
   # rename from $TMPDIR would silently make this config 0600, and a cross-filesystem mv
@@ -2635,7 +2635,7 @@ else
       # reposRoot only became readable now, so step 4 above had nothing to link.
       if [ -n "$id_repos" ]; then
         ( cd "$TARGET" && bash "$BIN_DIR/link-repos.sh" ) \
-          || echo "  warn  repos/ view not refreshed; run /${AB_PLUGIN}:init again" >&2
+          || echo "  warn  repos/ view not refreshed; run /${PLUGIN_NAME}:init again" >&2
       fi
     fi
   fi
@@ -2902,9 +2902,9 @@ if [ -f "$NORMALISER" ]; then
 fi
 
 echo "Done. Seed content in place; this bundle carries no machinery and no template links."
-echo "Next: edit instance.config.json, then run /${AB_PLUGIN}:dispatch from this directory."
+echo "Next: edit instance.config.json, then run /${PLUGIN_NAME}:dispatch from this directory."
 echo "      (Set reposRoot in instance.config.local.json — it is per-machine — then"
-echo "       re-run /${AB_PLUGIN}:init to fill in repos/.)"
+echo "       re-run /${PLUGIN_NAME}:init to fill in repos/.)"
 # THE OTHER HALF, and it is not this script's to install. Every slash command ships in the
 # ai-bridge PLUGIN now, per machine rather than per instance, so a perfect stamp still
 # leaves a bundle nobody can drive if the plugin is missing — and the only symptom is
@@ -2913,7 +2913,7 @@ echo "       re-run /${AB_PLUGIN}:init to fill in repos/.)"
 # fire at all. See docs/operations.md § 1.
 echo "      (The commands are the ai-bridge PLUGIN, installed once per machine:"
 echo "       /plugin marketplace add cbmono/ai-bridge, then"
-echo "       /plugin install ${AB_PLUGIN}@${AB_MARKETPLACE} — then restart Claude Code.)"
+echo "       /plugin install ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE} — then restart Claude Code.)"
 
 # Retired seed content — REPORT, never remove. See RETIRED for why the conversion sweep
 # above may delete and this may not: a machinery symlink into a template checkout has one
@@ -3045,7 +3045,7 @@ if [ -f "$BIN_DIR/validate-bundle.sh" ]; then
   ( cd "$TARGET" && bash "$BIN_DIR/validate-bundle.sh" ) >/dev/null 2>&1 || vrc=$?
   if [ "$vrc" -eq 1 ]; then
     echo "Note: this bundle has schema errors. To see and repair them, run:"
-    echo "      /${AB_PLUGIN}:welcome check   (or: bash $BIN_DIR/validate-bundle.sh from $TARGET)"
+    echo "      /${PLUGIN_NAME}:welcome check   (or: bash $BIN_DIR/validate-bundle.sh from $TARGET)"
   fi
 fi
 

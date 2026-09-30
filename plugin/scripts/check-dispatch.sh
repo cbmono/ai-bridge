@@ -223,7 +223,7 @@ agent_file() { # <bundle-root> <agent-name>
   # through to source 3 rather than failing.
   if [ -f "$cfgdir/plugins/installed_plugins.json" ]; then
     p="$(tr -d ' \n' < "$cfgdir/plugins/installed_plugins.json" \
-         | sed -n 's/.*"'"${AB_PLUGIN}@${AB_MARKETPLACE}"'":\[{[^}]*"installPath":"\([^"]*\)".*/\1/p' | head -1)"
+         | sed -n 's/.*"'"${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}"'":\[{[^}]*"installPath":"\([^"]*\)".*/\1/p' | head -1)"
     [ -n "$p" ] && [ -f "$p/agents/$agent.md" ] && { printf '%s\n' "$p/agents/$agent.md"; return 0; }
   fi
 
@@ -231,7 +231,7 @@ agent_file() { # <bundle-root> <agent-name>
   # the cache entry. A GLOB, not `ls`: the glob's own order is lexical, and lexical order
   # puts 0.2.0 after 0.10.0 — so the version is compared numerically, field by field,
   # rather than taken from the last match.
-  local best="" bestv="" cache="$cfgdir/plugins/cache/$AB_MARKETPLACE/$AB_PLUGIN" v
+  local best="" bestv="" cache="$cfgdir/plugins/cache/$PLUGIN_MARKETPLACE/$PLUGIN_NAME" v
   for p in "$cache"/*/agents/"$agent".md; do
     [ -f "$p" ] || continue
     v="${p#"$cache"/}"; v="${v%%/*}"

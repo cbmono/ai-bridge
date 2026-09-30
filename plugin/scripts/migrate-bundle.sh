@@ -303,7 +303,7 @@ if [[ -n "$PENDING" ]]; then
       echo "           knowledge/ is MOUNTED: its relinked files are uncommitted in that"
       echo "           repository. Review and push them with: kb-sync.sh commit"
     fi
-    echo "           Now run /${AB_PLUGIN}:init to re-seed the ignore lines at their new paths."
+    echo "           Now run /${PLUGIN_NAME}:init to re-seed the ignore lines at their new paths."
   fi
   echo "---"
 fi

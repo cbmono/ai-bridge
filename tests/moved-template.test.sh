@@ -38,6 +38,7 @@
 #
 # assert(): 0 is a PASS, matching the other harnesses here.
 set -uo pipefail
+. "$(dirname "$0")/tools/plugin-name.sh"
 
 TPLSRC="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=../plugin/scripts/bundle-paths.sh

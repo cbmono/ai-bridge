@@ -276,6 +276,6 @@ label="TEMPLATE UPDATE"
 printf '%s\n' "⬆️  $label — this machine runs ${HERE}, ${REF_NAME} has ${THERE}"
 echo "    Update the plugin, then re-stamp this bundle (a seed change reaches a bundle"
 echo "    only through a stamp, and only that way):"
-echo "        /plugin update ${AB_PLUGIN}@${AB_MARKETPLACE}      (then restart Claude Code)"
-printf '        /%s:init %q\n' "$AB_PLUGIN" "$INSTANCE"
+echo "        /plugin update ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}      (then restart Claude Code)"
+printf '        /%s:init %q\n' "$PLUGIN_NAME" "$INSTANCE"
 exit 0

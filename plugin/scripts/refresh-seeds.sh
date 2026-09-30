@@ -208,7 +208,7 @@ TARGET="$(cd "${TARGET:-$PWD}" 2>/dev/null && pwd || true)"
 if ! ab_is_bundle "$TARGET"; then
   cat >&2 <<EOF
 refresh-seeds: $TARGET is not an ai-bridge bundle root (expected instance.config.json).
-               To create a NEW bundle, run /${AB_PLUGIN}:init $TARGET
+               To create a NEW bundle, run /${PLUGIN_NAME}:init $TARGET
 EOF
   exit 2
 fi
@@ -825,7 +825,7 @@ if [ "$HIST_KIND" != git ] && [ "$unknown" -gt 0 ]; then
   left_more "  content). ${MKT_WHY:-not derivable from this install path}."
   [ -z "$MKT_DIR" ] || left_more "  claude plugin marketplace add <the marketplace> re-creates it at $MKT_DIR"
   left_more "· or record the base in the bundle itself, so no clone is needed at all:"
-  left_more "  /${AB_PLUGIN}:init '$TARGET'  — a stamp writes .ai-bridge/seed-base/ for every"
+  left_more "  /${PLUGIN_NAME}:init '$TARGET'  — a stamp writes .ai-bridge/seed-base/ for every"
   left_more "  seed file IT copies, which is the merge base by construction."
 fi
 if [ "$HIST_SHALLOW" -eq 1 ]; then

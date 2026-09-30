@@ -39,6 +39,7 @@
 # nobody saw kept 214 stdout-greping assertions green, because the text was never what was
 # missing. "The human is told" is a claim about a FIELD.
 set -uo pipefail
+. "$(dirname "$0")/tools/plugin-name.sh"
 
 TPL="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
