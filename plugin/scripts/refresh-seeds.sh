@@ -134,6 +134,7 @@ DIFF_CAP="${UPGRADE_DIFF_LINES:-40}"   # lines of a conflicting diff to print in
 # `<seed path>|<class>|<the rule that resolves it>`. One row per class of conflict that has
 # the same right answer on every bundle. Anything not named here stays a CONFLICT.
 DECIDABLE='knowledge/index.md|derived|derived from frontmatter — regenerated with build-kb-index.sh, never merged
+index.md|derived-gitignored|derived and gitignored — the project-manager rewrites it at tick step 8 (Curate), so a conflicting hunk keeps the bundle'"'"'s copy and writes nothing
 .gitignore|seed-managed-lines|conflicting hunks that touch only seed-managed lines take the seed side; every bundle-added line is kept, and the trailing "# Instance additions" block is the bundle'"'"'s own
 CLAUDE.md|instance-additions|the trailing "## Instance additions (kept across seed refreshes)" block is the bundle'"'"'s own — split off both sides before the merge, re-appended verbatim, and everything above it judged against the seed'
 
@@ -177,6 +178,7 @@ split_additions() { # <file> <body-out> <block-out> <heading-ere>; no heading �
 }
 
 rule_for() { printf '%s\n' "$DECIDABLE" | awk -F'|' -v p="$1" '$1==p {print $3; exit}'; }
+class_for() { printf '%s\n' "$DECIDABLE" | awk -F'|' -v p="$1" '$1==p {print $2; exit}'; }
 
 APPLY=0
 DEEPEN=1
@@ -516,7 +518,8 @@ while IFS= read -r rel; do
       # seed's stub is only the shape of an empty bundle and merging it onto a populated
       # one re-appends the stub every run (measured 2026-09-07, proceso). Regenerating is
       # the answer, and it is the same answer on every bundle — so --apply takes it.
-      # The bundle-root index.md is NOT in this class: nothing generates it, it is a seed doc.
+      # The bundle's .ai-bridge/index.md is NOT in this class: no script builds it, so it
+      # is `derived-gitignored` and resolved after the merge instead.
       builder="$BIN_DIR/build-kb-index.sh"
       if [ ! -e "$inst_f" ] || [ ! -f "$builder" ] || [ ! -d "$TARGET/knowledge" ]; then
         continue
@@ -705,6 +708,13 @@ EOF
     report "FAILED" "$rel" >&2
     printf '            %s\n' "the resolution did not land — the file was left as it was." >&2
     [ -z "$kept" ] || printf '            %s\n' "kept: $kept" >&2
+    continue
+  fi
+
+  if [ "$merge_rc" -gt 0 ] && [ "$(class_for "$rel")" = derived-gitignored ]; then
+    resolved=$((resolved+1))
+    if [ "$APPLY" -eq 1 ]; then report "RESOLVED" "$rel"; else report "DECIDABLE" "$rel"; fi
+    detail "rule: $(rule_for "$rel")"
     continue
   fi
 

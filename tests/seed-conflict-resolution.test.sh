@@ -198,5 +198,39 @@ assert "the seed CLAUDE.md names init after a plugin update" \
   "$(has 'After every plugin update, run ..ai-bridge:init' "$SEEDCM")"
 assert "…and says what welcome is for"          "$(has 'is the banner and' "$SEEDCM")"
 
+# Driven by the table's CLASS, not by a path: the next derived file added as a row is
+# covered here without touching this harness. dispatch-reporting-defects/task-018.
+echo "== every derived-gitignored row keeps the bundle's copy instead of reporting CONFLICT =="
+hasf() { grep -qF <<<"$2" -- "$1" && echo 0 || echo 1; }
+DG="$(printf '%s\n' "$TABLE" | awk -F'\t' '$2=="derived-gitignored" {print $1}')"
+assert "the table has at least one derived-gitignored row" "$([ -n "$DG" ] && echo 0 || echo 1)"
+TPL2="$TMP/tpl2"; cp -R "$TPL" "$TPL2"
+INST2="$TMP/group2/_ai-bridge-derived"; mkdir -p "$INST2"
+bash "$TPL2/plugin/scripts/init-bundle.sh" "$INST2" > "$TMP/stamp2.out" 2>&1
+( cd "$INST2" && git init -q -b main . && git add -A && gc "bundle init" )
+for p in $DG; do
+  dest="$(ab_seed_dest "$p")"
+  assert "$dest is gitignored in a stamped bundle" "$(yes_if git -C "$INST2" check-ignore -q "$dest")"
+  sed '1s/.*/written by the generator/' "$INST2/$dest" > "$TMP/x" && mv "$TMP/x" "$INST2/$dest"
+  cp "$INST2/$dest" "$TMP/dg.$(printf '%s' "$p" | tr / _)"
+  sed '1s/.*/seed prose, v2/' "$TPL2/plugin/seed/$p" > "$TMP/x" && mv "$TMP/x" "$TPL2/plugin/seed/$p"
+done
+[ -z "$DG" ] || ( cd "$TPL2" && git add -A && gc "template, derived seed edit" )
+DG_REPORT="$(bash "$TPL2/plugin/scripts/refresh-seeds.sh" "$INST2" 2>&1)"
+DG_RC=0
+DG_APPLY="$(bash "$TPL2/plugin/scripts/refresh-seeds.sh" "$INST2" --apply 2>&1)" || DG_RC=$?
+assert "--apply exits 0" "$([ "$DG_RC" -eq 0 ] && echo 0 || echo 1)"
+for p in $DG; do
+  rule="$(printf '%s\n' "$TABLE" | awk -F'\t' -v p="$p" '$1==p {print $3}')"
+  assert "$p: report mode says DECIDABLE"         "$(has "DECIDABLE  *$p\$" "$DG_REPORT")"
+  assert "…and never CONFLICT"                    "$(hasnt "CONFLICT  *$p\$" "$DG_REPORT")"
+  assert "--apply says RESOLVED"                  "$(has "RESOLVED  *$p\$" "$DG_APPLY")"
+  assert "…naming its rule"                       "$(hasf "rule: $rule" "$DG_APPLY")"
+  assert "…and never CONFLICT"                    "$(hasnt "CONFLICT  *$p\$" "$DG_APPLY")"
+  assert "…nor lists it as left for the human"    "$(hasnt "port the seed change into $p" "$DG_APPLY")"
+  assert "…and the bundle's copy is byte-identical" \
+    "$(yes_if cmp -s "$TMP/dg.$(printf '%s' "$p" | tr / _)" "$INST2/$(ab_seed_dest "$p")")"
+done
+
 printf '\npass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
