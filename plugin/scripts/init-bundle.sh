@@ -1563,6 +1563,64 @@ else
   fi
 fi
 
+# 1e. THE SCRIPT ALLOWLIST — into the gitignored .claude/settings.local.json, because the
+# rule is an absolute $HOME path. Only the version is wild: `*.sh:*` and `~` forms match
+# nothing (Claude Code 2.1.284, task-016). jq-free and fail-closed like 1d.
+AL_FILE="$TARGET/.claude/settings.local.json"
+AL_OPEN='"allow"[[:space:]]*:[[:space:]]*\[[[:space:]]*$'
+al_mk="${PLUGIN_ROOT%/*}"
+case "${al_mk##*/}|${al_mk%/*/*}|$PLUGIN_ROOT" in
+  *'"'*|*'\'*|*'('*|*')'*) al_mk="" ;;
+  ai-bridge\|*/plugins/cache\|*) ;;
+  *) al_mk="" ;;
+esac
+al_write() { # <missing entries, one per line> -> the rewritten file on stdout, or nothing
+  local body add
+  add="$1"
+  body="$(tr -d '[:space:]' < "$AL_FILE" 2>/dev/null)"
+  if [ -z "$body" ] || [ "$body" = "{}" ]; then
+    printf '{\n  "permissions": {\n    "allow": [\n%s\n    ]\n  }\n}\n' "$(printf '%s' "$add" | sed '$s/,$//')"
+  elif [ "$(grep -c "$AL_OPEN" "$AL_FILE")" = 1 ]; then
+    # Blank lines between `[` and `]` still mean an empty array, which takes the entries
+    # WITHOUT the trailing comma; a non-empty one keeps it, ahead of its first element.
+    if O="$AL_OPEN" awk '$0 ~ ENVIRON["O"] {
+           while ((getline) > 0) if ($0 !~ /^[[:space:]]*$/) exit !/^[[:space:]]*\]/
+           exit 0 }' "$AL_FILE"; then
+      add="$(printf '%s' "$add" | sed '$s/,$//')"
+    fi
+    O="$AL_OPEN" AL="$add" awk '{ print } $0 ~ ENVIRON["O"] { print ENVIRON["AL"] }' "$AL_FILE"
+  fi
+}
+if [ -z "$al_mk" ]; then
+  echo "  skip  script allowlist (not run from a plugin cache install)"
+else
+  al_missing=""
+  for r in "Bash($al_mk/*/scripts/*)" "Bash(bash $al_mk/*/scripts/*)"; do
+    grep -qF "\"$r\"" "$AL_FILE" 2>/dev/null || al_missing="${al_missing:+$al_missing
+}      \"$r\","
+  done
+  al_tmp="$AL_FILE.allow.$$"
+  if [ -z "$al_missing" ]; then
+    echo "  keep  script allowlist (.claude/settings.local.json already has both rules)"
+  elif [ ! -L "$AL_FILE" ] && mkdir -p "$TARGET/.claude" && al_write "$al_missing" > "$al_tmp" &&
+       [ -s "$al_tmp" ] &&
+       printf '%s\n' "$al_missing" | while IFS= read -r l; do grep -qF "${l%,}" "$al_tmp" || exit 1; done &&
+       { ! command -v python3 >/dev/null 2>&1 ||
+         python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$al_tmp" 2>/dev/null; } &&
+       mv "$al_tmp" "$AL_FILE"; then
+    echo "  wrote script allowlist into .claude/settings.local.json:"
+    printf '%s\n' "$al_missing" | sed 's/,$//'
+  else
+    rm -f "$al_tmp"
+    echo "  warn  script allowlist not written: no safe edit of $AL_FILE (a multi-line \"allow\": [ is the one shape edited)." >&2
+    echo "        Add to permissions.allow by hand:" >&2
+    printf '%s\n' "$al_missing" | sed 's/,$//' >&2
+  fi
+  if grep -qF '/scripts/*.sh:*)' "$AL_FILE" 2>/dev/null; then
+    echo "  note  .claude/settings.local.json has a \`scripts/*.sh:*\` rule; that form matches nothing — drop it."
+  fi
+fi
+
 # 2. RETIRE the managed machinery block from the bundle's .gitignore.
 #
 # The block used to be REWRITTEN on every stamp from the list of files this template

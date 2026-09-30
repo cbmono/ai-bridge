@@ -59,7 +59,10 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # in the seed because the main thread reads this file and not that one, and a rule with no
 # route to its general form is re-derived narrowly. Measured, not rounded; flagged in the PR
 # body.
-CEILING=14737
+# 14737 -> 14938 (dispatch-reporting-defects/task-016). +201 bytes: the `AB="$(ls …)"`
+# snippet, which no permission rule can match, is replaced by the one-command-per-call
+# shape and the one-line why the task's criterion 4 requires. Measured, not rounded.
+CEILING=14938
 
 pass=0; fail=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-58s (%s)\n' "$1" "$2"; pass=$((pass+1))
