@@ -40,7 +40,7 @@ ok "the one-line report template"       "$([ -n "$line_tpl" ] && echo yes || ech
 ok "three refusal kinds in the table"   "$(printf '%s\n' "$table" | grep -c '|' | tr -d ' ')" 3
 ok "the classifier is named by its reason" "$(yn grep -qF 'Reason: [Create Unsafe Agents]' <<<"$table")" yes
 ok "workspace trust is named by its text"  "$(yn grep -qF 'Workspace not trusted' <<<"$table")" yes
-ok "neither ⇒ the refusal quoted verbatim" "$(yn grep -qF 'verbatim: <the refusal text, unedited>' <<<"$table")" yes
+ok "neither ⇒ the refusal quoted verbatim" "$(yn grep -qF 'verbatim: <the refusal text, sanitised>' <<<"$table")" yes
 
 cell() { # <row> <n> — the nth cell, backticks stripped
   printf '%s' "$1" | awk -F' [|] ' -v n="$2" '{ gsub(/^[[:space:]]*[|] | [|][[:space:]]*$/, ""); print $n }' \
@@ -49,7 +49,7 @@ cell() { # <row> <n> — the nth cell, backticks stripped
 fill() { # <template> <which> <remedy>
   local s="$1"
   s="${s//<n>/2}"; s="${s//<which>/$2}"; s="${s//<remedy>/$3}"
-  s="${s//<the refusal text, unedited>/Bash command blocked by [Some Future Rule]}"
+  s="${s//<the refusal text, sanitised>/Bash command blocked by [Some Future Rule]}"
   s="${s//<task>/task-001-a}"; s="${s//<k>/3}"
   printf '%s' "$s"
 }
@@ -84,6 +84,24 @@ $table
 EOF
 
 echo
+echo "== a verbatim refusal is sanitised before it enters the flow list =="
+sanitise() { # the step's rule: ONE line, `"` -> `'`, backslashes dropped, ` --- ` -> ` - `
+  local s="$1" sq="'"; s="${s//\"/$sq}"; s="${s//\\/}"; s="${s// --- / - }"; printf '%s' "$s"
+}
+raw='Bash blocked: policy said "no" \ retry --- x'
+which4="unrecognised, verbatim: $(sanitise "$raw")"
+entry4="${entry_tpl//<n>/2}"; entry4="${entry4//<which>/$which4}"
+entry4="${entry4//<remedy>/unknown, read the refusal text}"
+ok "kind 4: the sanitised entry needs no YAML escaping" "$(yn plain_yaml "$entry4")" yes
+D="$TMP/k4"; inst "$D" "\"Q1: which colour? --- blue\", \"$entry4\""
+bash "$AW" --instance "$D" >/dev/null 2>&1
+ok "kind 4: exactly one 🧰 grant row" "$(grep -c '^\* 🧰 \*\*grant\*\* — \[Refused\]' "$D/$AB_AWAITING" | tr -d ' ')" 1
+T4="$D/projects/demo/tasks/task-001-a.md"
+bash "$REPO/plugin/scripts/fold-answers.sh" --instance "$D" "$T4" >/dev/null 2>&1
+ok "kind 4: a fold leaves the blocker OPEN" \
+   "$(bash "$REPO/plugin/scripts/fold-answers.sh" --list "$T4" open_questions | grep -cF -- "$which4" | tr -d ' ')" 1
+
+echo
 echo "== the status line shows a refused wave apart from an idle machine =="
 sgr_of() { printf '%s' "$1" | tr '\033' '\n' | grep -F "$2" | sed -n 's/^\[\([0-9;]*\)m.*/\1/p' | head -n1; }
 IDLE="$TMP/idle"; inst "$IDLE" ''; bash "$AW" --instance "$IDLE" >/dev/null 2>&1
@@ -99,7 +117,11 @@ ok "…and the rest are not touched"                   "$(has "$S3" 'no status w
 ok "no stall round, on this task or any other"       "$(has "$S3" 'Do not run `stall-counter.sh` for it, on this task or any other.')" yes
 ok "the SKILL guardrail carves the refusal out"      "$(has "$SKILL" 'refused is not a round and is never recorded')" yes
 ok "one condition, one row"                          "$(has "$S3" 'already sits')" yes
+ok "…keyed on <which>, so a new cause REPLACES"      "$(has "$S3" '⇒ **replace that entry in place** with the new one rather than skipping.')" yes
+ok "the verbatim text is sanitised first"            "$(has "$S3" 'is copied onto ONE line, with every `"` replaced by')" yes
+ok "…because a separator would fold the blocker away" "$(has "$S3" '` --- ` makes `fold-answers.sh` read the entry as ANSWERED')" yes
 ok "a later successful spawn clears it"              "$(has "$S3" 'cleared: a spawn succeeded')" yes
+ok "…said where the spawn succeeds, too"             "$(has "$S3" 'A spawn that succeeds also clears every open `dispatch refused:` entry')" yes
 ok "the remedy: exit auto mode for the WHOLE tick"   "$(has "$S3" 'exit auto mode for the WHOLE tick, not just the spawn (shift+tab cycles it)')" yes
 ok "…in the tick's session, not the child's flag"    "$(has "$S3" 'the mode of the session RUNNING THE TICK')" yes
 ok "an allow rule for claude --bg is NOT the remedy" "$(has "$S3" 'An allow rule for `claude --bg`')" yes

@@ -43,6 +43,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    It returns in about a second printing `backgrounded · <id>`. **Record that id as
    `session:` on the task as the very next thing you do** (`SCHEMA.md`), then move on.
+   A spawn that succeeds also clears every open `dispatch refused:` entry in the bundle
+   (below).
 
    **This is the form for EVERY role agent this document tells you to dispatch** — the
    `qa-reviewer` at step 4, the `cataloguer` at step 7, a rebase round, a resume —
@@ -110,8 +112,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      Q<n>: dispatch refused: <which>. The host denied this tick permission to spawn an agent. Remedy: <remedy>. Cleared by the next spawn that succeeds.
      ```
 
-     Skip the write when an unanswered entry containing `dispatch refused:` already sits
-     on any task in the bundle — one condition, one row. When a later spawn succeeds, move
+     **One row per condition, and the condition is `<which>`.** When an unanswered entry
+     containing `dispatch refused:` already sits on any task in the bundle, compare its
+     `<which>` with this refusal's: the SAME `<which>` ⇒ skip the write; a DIFFERENT
+     `<which>` ⇒ **replace that entry in place** with the new one rather than skipping.
+     The classifier and workspace trust were both live on one machine in one day and
+     their remedies are different keystrokes, so a second cause dropped as a duplicate
+     leaves the operator reading the wrong fix. When a later spawn succeeds, move
      every such entry to `answered_questions` with ` --- cleared: a spawn succeeded`
      appended and no `by` (the loop wrote it).
    - **`<which>` and `<remedy>` are one of three pairs, chosen from the refusal text:**
@@ -120,7 +127,14 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      |---|---|---|
      | `Reason: [Create Unsafe Agents]` | `auto-mode classifier (Reason: [Create Unsafe Agents])` | `exit auto mode for the WHOLE tick, not just the spawn (shift+tab cycles it), then run the tick again` |
      | `Workspace not trusted` | `workspace trust (Workspace not trusted)` | `run claude once, interactively, in the worktree and accept the trust prompt` |
-     | neither | `unrecognised, verbatim: <the refusal text, unedited>` | `unknown, read the refusal text` |
+     | neither | `unrecognised, verbatim: <the refusal text, sanitised>` | `unknown, read the refusal text` |
+
+     **Sanitised** — the refusal text is copied onto ONE line, with every `"` replaced by
+     `'`, every backslash dropped, and every ` --- ` replaced by ` - `, before it goes in.
+     A `"` breaks the YAML flow list the entry is written into; and worse,
+     ` --- ` makes `fold-answers.sh` read the entry as ANSWERED, so the next fold moves a
+     live blocker into `answered_questions` and clears the only row telling the human
+     that dispatch is refused. The report line below may still quote the refusal raw.
 
      **The auto mode here is the mode of the session RUNNING THE TICK** — the one
      `shift+tab` cycles — not the child's `--permission-mode bypassPermissions` above,
