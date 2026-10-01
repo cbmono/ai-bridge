@@ -1,6 +1,6 @@
 # The loopd palette, copied verbatim from the owner's design handoff — tokens.css, the
 # `:root` block. THE ONE SOURCE: tests/plugin-theme.test.sh reads this file, and every
-# colour in plugin/themes/ai-bridge.json must appear here.
+# colour in plugin/themes/loopd.json must appear here.
 # Two colours only: blue is the machine's, pink is yours. A third accent is the bug.
 #101318  --loopd-bg
 #14171c  --loopd-terminal

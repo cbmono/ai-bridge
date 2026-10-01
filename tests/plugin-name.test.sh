@@ -68,6 +68,8 @@ write_registry "loopd@loopd" "loopd-yolo@loopd"
 ok "the companion resolves under the renamed marketplace" "$(autonomy | tr '\n' ' ')" "$YOLO/companion/AUTONOMY.md rc=0 "
 write_registry "loopd@loopd" "loopd-yolo@ai-bridge"
 ok "…and one from another marketplace is still refused" "$(autonomy)" "rc=1"
+write_registry "loopd@loopd" "ai-bridge-yolo@ai-bridge"
+ok "…and so is the pre-rename id, ai-bridge-yolo@ai-bridge: gated" "$(autonomy)" "rc=1"
 printf '{\n  "version": 2,\n  "plugins": {\n    "loopd-yolo@loopd": [\n      { "installPath": "%s" }\n    ]\n  }\n}\n' \
   "$YOLO" > "$TMP/cfg/plugins/installed_plugins.json"
 ok "no core entry: the default marketplace is the path's, so it still resolves" \

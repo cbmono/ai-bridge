@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# companion-account-switch.test.sh — the `ai-bridge-accounts` companion: which account a
+# companion-account-switch.test.sh — the `loopd-accounts` companion: which account a
 # bundle is on, the three renderings that answer says, the launcher's refusals, and the
 # one boundary that is not a preference — NO CREDENTIAL EVER REACHES A BUNDLE REPO.
 #
@@ -50,7 +50,7 @@ cat > "$CFG/plugins/installed_plugins.json" <<JSON
 {
   "version": 2,
   "plugins": {
-    "ai-bridge-accounts@${PMK}": [
+    "loopd-accounts@${PMK}": [
       { "scope": "user", "installPath": "$COMPANION", "version": "1.0.0" }
     ]
   }
@@ -177,8 +177,8 @@ ok "no companion -> the banner says nothing at all" \
 
 echo
 echo "== 5. it ships as a companion, on the contract core already has =="
-ok "the marketplace registers ai-bridge-accounts"  \
-   "$(grep -c '"name": "ai-bridge-accounts"' "$MJ")" 1
+ok "the marketplace registers loopd-accounts"  \
+   "$(grep -c '"name": "loopd-accounts"' "$MJ")" 1
 ok "…from ./plugin-accounts"                       \
    "$(grep -c '"source": "./plugin-accounts"' "$MJ")" 1
 ok "the capability file is at the fixed path"      \
