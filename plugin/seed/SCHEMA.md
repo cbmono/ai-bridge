@@ -278,6 +278,30 @@ label costs nothing, a wrong `machine` one licenses rewriting what a person wrot
 `commit-as.sh` role name being the only one that reads as machine. `author:` and
 `source:` are unrelated and unchanged: a login and a URL, neither of which says which.
 
+### The ledger — why an item changed  (`ledger:`, in the item's own frontmatter)
+
+Any of the five types may carry **one** `ledger:` line, the append-only record of why the item
+changed. Frontmatter keeps it out of the body recall reads, and it moves with the file, so a
+rename keeps it where `git log --follow` loses everything below 50% similarity.
+
+```yaml
+ledger: [ "L12 · 2026-10-01T09:00:00Z · merge · by <login> · items <this-slug>,<absorbed-slug> · <why a human approved it>" ]
+```
+
+- **One writer, one reader: `scripts/ledger.sh`.** `append` is the only write and has no
+  edit or remove sibling; it refuses a ledger whose ids no longer rise. `show <path|slug>`
+  opens that one file — the directory listing is the index.
+- **Fields, in order:** `L<n>`, global and monotonic — `max(knowledge/.ledger-floor, every id
+  in the KB) + 1`, never reused; a timestamp; a kind (`create edit status merge rename
+  supersede`); `by <login>`, the **human** who applied it and never a role, because
+  `commit-as.sh` authors commits as the role; the items, this one first — `merge`, `rename`
+  and `supersede` must name the other, so a survivor leads to what it absorbed; the reason.
+- **Neither git history nor a second store.** A SHA does not order and a rebase rewrites it;
+  a separate file can disagree with the items. Writes are serialised by what already
+  serialises `knowledge/` — the tick behind `.tick-lock`, then git sync — so there is no
+  pull-before-write and no floor-conflict resolution.
+- **Not counted** against a Finding's 40 lines, like `provenance:`.
+
 ### type: Service  (`knowledge/services/<name>.md`)
 
 ```yaml
