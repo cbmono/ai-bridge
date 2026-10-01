@@ -297,9 +297,25 @@ if [[ "$RETAIN" != "true" ]]; then
     # files are a different matter: `git rm` leaves them, and this script does NOT
     # delete them behind a human's back — it reports that they are there.
     git rm -r -q -f -- "$PROJ"
+    # The ONE exception, by name: the tick regenerates index.md and the bundle ignores
+    # it. Never widen this to a class — "all ignored files" includes a closed project's .env.
+    if [[ -f "$PROJ/index.md" && ! -L "$PROJ/index.md" ]]; then
+      rm -f -- "$PROJ/index.md"
+      note "PRUNE" "$PROJ/index.md (derived — the tick regenerates it)"
+    fi
+    rmdir -- "$PROJ" 2>/dev/null || true
     if [[ -e "$PROJ" ]]; then
-      left="$(find "$PROJ" -type f 2>/dev/null | grep -c . || true)"
-      note "LEFT" "$PROJ/ still holds $left untracked file(s) — inspect and remove by hand."
+      note "LEFT" "$PROJ/ still holds untracked files — inspect and remove by hand:"
+      while IFS= read -r p; do
+        [[ -n "$p" ]] || continue
+        if [[ -d "$p" ]]; then
+          note "" "$p/ ($(find "$p" -mindepth 1 2>/dev/null | grep -c . || true) entries, contents not listed)"
+        else
+          note "" "$p"
+        fi
+      done <<EOF
+$(find "$PROJ" -mindepth 1 \( -type d \( -iname tmp -o -iname temp \) -prune -print \) -o \( ! -type d -print \) 2>/dev/null | sort || true)
+EOF
     fi
     echo "---"
     echo "close-project-folder: $SLUG removed (staged). Commit it with the roll-up edits."
@@ -307,6 +323,9 @@ if [[ "$RETAIN" != "true" ]]; then
       echo "Name $CLOSED_MD in the commit's paths — the entry must land in THIS commit."
     fi
   else
+    if [[ -f "$PROJ/index.md" ]] && ! git ls-files --error-unmatch -- "$PROJ/index.md" >/dev/null 2>&1; then
+      note "PRUNE" "would remove $PROJ/index.md (derived — the tick regenerates it)"
+    fi
     echo "---"
     echo "close-project-folder: report only — nothing changed. Re-run with --apply."
   fi
