@@ -241,8 +241,17 @@ if [ -n "$BASE" ]; then
     git -C "$REPO" show "$1:$2" 2>/dev/null \
       | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | tr '\n' ' '
   }
+  # A marketplace entry the branch ADDS carries a version and changes none, so the
+  # marketplace is compared per source: every base entry keeps its number.
+  if command -v jq >/dev/null 2>&1; then
+    vers_mk() { git -C "$REPO" show "$1:.claude-plugin/marketplace.json" 2>/dev/null \
+      | jq -r '.plugins[] | "\(.source)=\(.version)"' 2>/dev/null | LC_ALL=C sort; }
+    ok "every base marketplace entry keeps its version" \
+       "$(LC_ALL=C comm -23 <(vers_mk "$BASE") <(vers_mk HEAD) | tr '\n' ' ')" ""
+  fi
   for m in plugin/.claude-plugin/plugin.json .claude-plugin/marketplace.json; do
-    ok "$m carries the merge base's version" "$(vers HEAD "$m")" "$(vers "$BASE" "$m")"
+    [ "$m" = .claude-plugin/marketplace.json ] && command -v jq >/dev/null 2>&1 \
+      || ok "$m carries the merge base's version" "$(vers HEAD "$m")" "$(vers "$BASE" "$m")"
     # Two empty reads compare equal, which is how a renamed path would pass this vacuously.
     ok "…and that read found a version at all" \
        "$([ -n "$(vers "$BASE" "$m")" ] && echo yes || echo no)" yes
