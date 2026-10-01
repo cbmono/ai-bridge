@@ -309,7 +309,9 @@ if [[ "$RETAIN" != "true" ]]; then
       while IFS= read -r p; do
         [[ -n "$p" ]] || continue
         if [[ -d "$p" ]]; then
-          note "" "$p/ ($(find "$p" -mindepth 1 2>/dev/null | grep -c . || true) entries, contents not listed)"
+          n="$(find "$p" -mindepth 1 2>/dev/null | grep -c . || true)"
+          if [[ "$n" == 1 ]]; then unit="entry"; else unit="entries"; fi
+          note "" "$p/ ($n $unit, contents not listed)"
         else
           note "" "$p"
         fi
