@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# install.sh — RETIRED. `/ai-bridge:init` replaces it.
+# install.sh — RETIRED. `/loopd:init` replaces it.
 #
 # It shipped for one version as this stub so a bookmarked command, a stale doc or a
 # muscle-memory `./install.sh ~/workspace/foo/_ai-bridge-foo` says what to run instead
@@ -14,12 +14,12 @@ cat >&2 <<'EOF'
 install.sh is retired. The bundle installer ships in the ai-bridge PLUGIN now.
 
   1. Install the plugin, once per machine:
-       /plugin marketplace add cbmono/ai-bridge
-       /plugin install ai-bridge@ai-bridge
+       /plugin marketplace add cbmono/loopd
+       /plugin install loopd@loopd
      …then restart Claude Code.
 
   2. Create or refresh a bundle, from any session:
-       /ai-bridge:init <dir>
+       /loopd:init <dir>
 
 That command creates a bundle, refreshes an existing one, and CONVERTS a bundle
 stamped by this script: it removes the machinery symlinks into a template checkout
@@ -29,7 +29,7 @@ this machine at all.
   · the ~/.claude config layer (was `install.sh --config`):
        bash <clone>/plugin/scripts/init-bundle.sh --config
   · the seed 3-way merge (was `upgrade.sh`):
-       /ai-bridge:welcome fix
+       /loopd:welcome fix
 
 Why: a plugin-shipped installer cannot stamp absolute symlinks into a plugin cache
 whose path changes on every update. docs/migrating.md walks the conversion.

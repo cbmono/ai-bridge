@@ -163,7 +163,7 @@ failed" defect the control arm exists to catch.
   retired the four cases above, and it is why a prompt here carries its own material.
 - **The gated skills, beyond the refusal itself.** Inside an eval the model can only ever
   be refused the Skill tool, which the three `*-is-human-gated` cases already grade, so
-  `/ai-bridge:init`, `/new-project`, the tick and `/work` get no case of their own.
+  `/loopd:init`, `/new-project`, the tick and `/work` get no case of their own.
 - **The clearance scripts' own exit codes.** `tests/pr-body-clearance.test.sh` and
   `tests/review-clearance.test.sh` own those; the two cases here grade the session's
   decision in front of them, which is the half no exit code sees.

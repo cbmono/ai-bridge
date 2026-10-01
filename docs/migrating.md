@@ -22,7 +22,7 @@ read only that section.
 **One command, idempotent, and it never touches your data.**
 
 ```
-/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group>
+/loopd:init ~/workspace/<group>/_ai-bridge-<group>
 ```
 
 That is the whole migration for the machinery half. It is safe to run on a bundle full of
@@ -43,15 +43,15 @@ somebody's work, and safe to run again.
    capability, so shipping it with core would arm it everywhere. If your bundle had one,
    the conversion removes the link and says so loudly, and the bundle is back to
    ask-first — the safe end. To opt back in, install the companion plugin that carries it:
-   `/plugin install ai-bridge-yolo@ai-bridge`; the run prints that line.
+   `/plugin install loopd-yolo@loopd`; the run prints that line.
 2. **Seed drift is reported, never merged.** A seed document this repo changed since your
-   bundle was stamped is listed and left alone. `/ai-bridge:welcome fix` — or
-   `/ai-bridge:init <dir> --refresh-seeds` — 3-way merges the ones that merge cleanly; a
+   bundle was stamped is listed and left alone. `/loopd:welcome fix` — or
+   `/loopd:init <dir> --refresh-seeds` — 3-way merges the ones that merge cleanly; a
    hand-diverged file is never forced, and its conflicted merge is saved beside it as
    `.bak.<epoch>`. `instance.config.json` is never merged at all.
 
-**Afterwards**, `/ai-bridge:welcome` should print no machinery alarm, and
-`/ai-bridge:welcome check` should say *"no symlinks outside repos/ — this bundle carries
+**Afterwards**, `/loopd:welcome` should print no machinery alarm, and
+`/loopd:welcome check` should say *"no symlinks outside repos/ — this bundle carries
 no machinery and no template link"*. If it does not, it names what is left and the repair.
 
 **You no longer need a clone of `cbmono/ai-bridge` on the machine.** Once every bundle on
@@ -77,9 +77,9 @@ for it with the history. If you cannot name why you want that, you want A.
 
 **Either way, the plugin is `ai-bridge`.** `ai-bridge-v2` was the transition name; its
 stub shipped for one version and was removed in 1.0.0, so install the bare name.
-Every command is namespaced — `/ai-bridge:dispatch`, `/ai-bridge:welcome`,
-`/ai-bridge:new-project`, and the [rest](../README.md#commands) — and so is every role agent
-(`ai-bridge:software-engineer`), because a bare name does not resolve.
+Every command is namespaced — `/loopd:dispatch`, `/loopd:welcome`,
+`/loopd:new-project`, and the [rest](../README.md#commands) — and so is every role agent
+(`loopd:software-engineer`), because a bare name does not resolve.
 
 ---
 
@@ -88,7 +88,7 @@ Every command is namespaced — `/ai-bridge:dispatch`, `/ai-bridge:welcome`,
 **Written once, in one place, and not repeated here:**
 [operations.md § Moving a stamped instance into the plugin era](operations.md#moving-a-stamped-instance-into-the-plugin-era--run-this-once).
 
-Three steps — plugin install (per machine), `/ai-bridge:init <bundle>`, restart. The
+Three steps — plugin install (per machine), `/loopd:init <bundle>`, restart. The
 stamp converts, so the sweep below removes the symlink-era command links for you, and it
 never removes bundle content. `upgrade.sh` was the old spelling of this and is now a stub
 that says so.
@@ -144,7 +144,7 @@ if this machine already has `ai-bridge`, skip the step. If it has `ai-bridge-v2`
 ### 3. Stamp the new folder
 
 ```
-/ai-bridge:init ~/workspace/<group>/<new-folder>
+/loopd:init ~/workspace/<group>/<new-folder>
 ```
 
 It creates the directory too. Name it `_ai-bridge-<group>` unless you are deliberately
@@ -189,7 +189,7 @@ Same shell as step 4 — `$old` and `$new` are still set.
 ```bash
 # a) the SECOND stamp: reposRoot is real now, so repos/ is linked, and the derived
 #    ignore lines are refreshed against the content you just copied
-#      /ai-bridge:init "$new"
+#      /loopd:init "$new"
 
 # b) a fresh repo — the old history stayed in the backup, deliberately
 cd "$new"
@@ -220,9 +220,9 @@ Then, in the session:
 
 | Run | What proves it worked |
 |---|---|
-| `/ai-bridge:welcome` | the banner renders and names **this** instance. *Unknown command* accuses the **plugin**, never the stamp |
-| `/ai-bridge:welcome check` | each line a fact with its evidence — read the `⚠` lines |
-| `/ai-bridge:dispatch`, then say **DRY RUN** | it reports what it *would* dispatch and spawns nothing. Your projects and tasks appearing **by name** is the proof `projects/` arrived intact |
+| `/loopd:welcome` | the banner renders and names **this** instance. *Unknown command* accuses the **plugin**, never the stamp |
+| `/loopd:welcome check` | each line a fact with its evidence — read the `⚠` lines |
+| `/loopd:dispatch`, then say **DRY RUN** | it reports what it *would* dispatch and spawns nothing. Your projects and tasks appearing **by name** is the proof `projects/` arrived intact |
 
 Only once this passes do you delete anything — see
 [below](#uninstalling-the-old-symlink-era-install).
@@ -247,14 +247,14 @@ Only once this passes do you delete anything — see
 
 | Path | What it is |
 |---|---|
-| `instance.config.local.json` | **per machine**: `ownerGithubUser`, `authorEmail`, `models`/`roleTiers`. Copying it to another machine is how a bundle ends up authoring as somebody else. `/ai-bridge:init` writes a fresh one |
+| `instance.config.local.json` | **per machine**: `ownerGithubUser`, `authorEmail`, `models`/`roleTiers`. Copying it to another machine is how a bundle ends up authoring as somebody else. `/loopd:init` writes a fresh one |
 | `.tick-lock`, `.tick-lock.claim` | the dispatch lock, **per clone**. A copied lock is one nobody holds and nothing releases |
 | `.tick-state` | the tick delta cache, per clone |
 | `.board-live/`, `.board-others.json`, `board.html`, `SNAPSHOT.json` | the board's derived output and its caches |
 | `AWAITING.md` | the derived awaiting-you queue, rewritten every tick |
 | root `index.md`, `projects/*/index.md` | derived navigation, rewritten every tick. **One exception:** a *retained* project's `index.md` is written once at closeout and is committed |
 | `repos/` | a derived symlink view of the group's repos; `scripts/link-repos.sh` rebuilds it |
-| `scripts/`, `.claude/hooks/`, `AUTONOMY.md` | on a symlink-era bundle these are **absolute symlinks into a template checkout**. Copying one gets you a link into the old folder's template, or a dangling one. `/ai-bridge:init` removes them; the machinery runs from the plugin |
+| `scripts/`, `.claude/hooks/`, `AUTONOMY.md` | on a symlink-era bundle these are **absolute symlinks into a template checkout**. Copying one gets you a link into the old folder's template, or a dangling one. `/loopd:init` removes them; the machinery runs from the plugin |
 | `tmp/`, `*.bak.*` | scratch, and the files a stamp moved aside |
 
 **`SCHEMA.md`, `CONVENTIONS.md` and `agents/index.md` are seed content now**, not links:
@@ -264,12 +264,12 @@ copy your bundle's own edits across if you made any, exactly as for `CLAUDE.md`.
 puts it back. Delegated autonomy is honoured when the file is found and every project is
 `gated` when it is not, so a bundle that had `rm`'d it was making a decision — and one that
 had it was making the other. Decide once, then turn it on by installing the companion that
-ships it: `/plugin install ai-bridge-yolo@ai-bridge`. Nothing recreates anything for you.
+ships it: `/plugin install loopd-yolo@loopd`. Nothing recreates anything for you.
 
 **A v1-era bundle carrying a REAL `AUTONOMY.md` at its root keeps working unchanged, and
 the root copy WINS.** `resolve-autonomy.sh` reads the bundle root first and only then an
 installed companion, so such a bundle behaves byte for byte as it did — with or without
-`ai-bridge-yolo` installed, and a companion can never override what it says. There is
+`loopd-yolo` installed, and a companion can never override what it says. There is
 nothing to migrate: leave the file where it is. Turning it off there means deleting **that
 file**, because uninstalling the companion alone would not reach it.
 ([autonomy.md](autonomy.md#the-onoff-switch-is-one-plugin))
@@ -280,7 +280,7 @@ file**, because uninstalling the companion alone would not reach it.
 
 | Path | What removes the old command links |
 |---|---|
-| **A** | `/ai-bridge:init`'s **conversion sweep**. It removes a symlink outside `repos/` when it dangles, points through a `/symlink/` path, or resolves into a template checkout — so exactly the retired commands and the rest of the machinery, and nothing of yours. One `retire <path> — <reason>` line each ([operations.md § 2](operations.md#2-retiring-content-swept-vs-reported)) |
+| **A** | `/loopd:init`'s **conversion sweep**. It removes a symlink outside `repos/` when it dangles, points through a `/symlink/` path, or resolves into a template checkout — so exactly the retired commands and the rest of the machinery, and nothing of yours. One `retire <path> — <reason>` line each ([operations.md § 2](operations.md#2-retiring-content-swept-vs-reported)) |
 | **B** | you delete the whole old folder, so there is nothing to sweep |
 
 **The sweep is not cosmetic and it is not optional.** Without it, the dangling files still

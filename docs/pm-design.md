@@ -40,7 +40,7 @@ slice) and a sibling's package install corrupts an in-flight worktree. So the lo
 on **completion**.
 
 **That is no longer an argument against a clock, and the distinction matters because
-`/loop 10m /ai-bridge:dispatch` is now the documented cadence** (`docs/operations.md` →
+`/loop 10m /loopd:dispatch` is now the documented cadence** (`docs/operations.md` →
 "Running the loop on a cadence"). A clock is allowed to *ask*; it is not allowed to
 *overlap*. The firing that lands mid-tick is refused by `acquire` before anything is
 spawned — one line, exit 1, `--as loop` — so the interval decides how often the loop
@@ -52,7 +52,7 @@ a time" serialization lives in the session's wakeup chain — and a session's me
 "I dispatched" does not survive a compaction, a `--resume`, or a human asking "what's
 next?". Measured 2026-08-29: two ticks ran concurrently for about 34 minutes for
 exactly that reason, doing the same refinement work twice. So step 1 takes `.tick-lock`
-immediately before it dispatches, and a second session running `/ai-bridge:dispatch`
+immediately before it dispatches, and a second session running `/loopd:dispatch`
 against the
 same working tree is refused rather than overlapping. The lock catches the mistake; it
 does not make two loops a good idea.
@@ -298,7 +298,7 @@ beside it is exactly that missing signal.
 
 **What the open entry proves, precisely.** It proves a tick started and did not finish.
 It does **not** prove the agents it dispatched are still alive — nothing on disk can,
-which is why `/ai-bridge:dispatch` step 2 makes the `<task-notification>` the only valid
+which is why `/loopd:dispatch` step 2 makes the `<task-notification>` the only valid
 finished
 signal. Orient-then-report-then-hold is what turns "there is an open entry" into "these
 three tasks claim in-flight, none has a worktree on disk, one has an open PR" — the
@@ -563,7 +563,7 @@ reader who wants money converts it with today's prices rather than last quarter'
 **Why the ledger close line is reconstructible, not descriptive**: "Refined two tasks,
 dispatched work" is useless to the next tick; "dispatched task-004, task-007; reflected
 task-002 merged" is what a successor reads instead of its own memory (see
-`/ai-bridge:dispatch` step 2).
+`/loopd:dispatch` step 2).
 
 **Why the sync re-checks the tree instead of trusting the commit**: `commit-as.sh`
 commits only the paths named — the entire point of the explicit-path rule — so a
@@ -593,7 +593,7 @@ not a format.
 [#launcher-no-publish](#launcher-no-publish). The render's three load-bearing details:
 `--standalone` is required because a file opened straight in a browser needs the
 `<!doctype>`/`<html>`/`<head>`/`<body>` wrapper no host supplies any more; the path is
-the one `watch-board.sh` already writes and `/ai-bridge:init` already gitignores, so the
+the one `watch-board.sh` already writes and `/loopd:init` already gitignores, so the
 tick and the watcher refresh one board rather than two; and there is no markup flag to
 pass — the kanban page was deleted and the renderer refuses the flag that used to
 select it **by name**, so a stale command exits 2 and renders nothing rather than
@@ -634,7 +634,7 @@ skipped is not measuring anything; it is a form.
 So the anchor moved down one level. A project carries its own `success_criteria`
 (`SCHEMA.md` → "Where a project's success is measured"), `objective:` stays optional,
 and `objectives/` is the **opt-in layer for a goal that outlives one project** — several
-projects serving one measurable end. `/ai-bridge:init <dir> --with-objectives` creates
+projects serving one measurable end. `/loopd:init <dir> --with-objectives` creates
 the directory; a plain stamp ships none, and an existing `objectives/` is data the
 stamp never touches.
 

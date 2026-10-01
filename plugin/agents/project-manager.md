@@ -64,7 +64,7 @@ Anything other than `gated` names a mode defined in **`AUTONOMY.md`**. **Ask
 `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-autonomy.sh --bundle <bundle>` where that file
 is — never look for it yourself.** It resolves the **bundle root first** (a v1-era
 bundle's own file always wins), else an installed **companion plugin** — today
-`ai-bridge-yolo@ai-bridge`, which is the only thing that ships one. Exit 0 prints the
+`loopd-yolo@loopd`, which is the only thing that ships one. Exit 0 prints the
 path to read; **exit 1 is absent**, and so is every unknown.
 
 - **`AUTONOMY.md` absent** → the field is **inert**. Every project is `gated`, both rules
@@ -209,7 +209,7 @@ state, and act only on deltas.
      resumed or hand-started, and **a tick is never resumed** (`CONVENTIONS.md` → "A
      subagent works ONE task"). End the tick: dispatch nothing, adopt nothing, open no
      ledger entry, take no lock of your own. Say in one line that a fresh tick comes
-     from `/ai-bridge:dispatch`.
+     from `/loopd:dispatch`.
    - **The script itself missing** — likely on an instance stamped before the lock
      shipped — is none of those: carry on with the tick, and say so in one line:
      `TICK LOCK: absent — re-stamp this instance`. Never silently.
@@ -233,7 +233,7 @@ state, and act only on deltas.
    documents' own `status:`, then `git log` and `gh pr list` for what actually landed.
    If the ledger and a task's `status:` disagree, **the task document wins**. It prevents
    re-dispatching a finished task sequence — the most expensive failure this loop has,
-   costing a full set of agent runs and opening duplicate PRs. `/ai-bridge:dispatch` deliberately reads none of this
+   costing a full set of agent runs and opening duplicate PRs. `/loopd:dispatch` deliberately reads none of this
    before spawning you — its **allowlist of three** holds a cwd probe, the tick lock and a
    cron cleanup that reads the scheduler and not this bundle, and everything else is yours
    by category (see its "The launcher reads nothing else") — so if you skip it, nobody did
@@ -446,7 +446,7 @@ state, and act only on deltas.
    tasks are **all** terminal (`done`/`cancelled`), do **not** close it yourself —
    surface it as a 🔴 *Awaiting you* item. Only on the human's OK (in-session or via
    `/close-project <slug>`) run closeout, in order (`SCHEMA.md` "Project & objective
-   completion"): (a) dispatch the `ai-bridge:cataloguer` for a final consolidation pass (counts
+   completion"): (a) dispatch the `loopd:cataloguer` for a final consolidation pass (counts
    toward the cap) — and it is THE cataloguer for this tick: step 7's throttle is
    tick-wide, not step-7-local, so brief this one to cover the closeout consolidation
    AND anything this tick's merges produced; for a research project, graduate the
@@ -473,7 +473,7 @@ state, and act only on deltas.
 7. **Refresh the knowledge base.** If this tick reflected one or more merges (or a
    task reached `done`) whose work produced durable, reusable knowledge, dispatch the
    `cataloguer` (subagent) to capture `Finding`s / update the `Service` catalog / add
-   or update a `Runbook` (`ai-bridge:cataloguer`), and link the `Finding`s from the
+   or update a `Runbook` (`loopd:cataloguer`), and link the `Finding`s from the
    relevant task doc. **Skip this refresh**
    if neither a merge nor a `done` task happened this tick, or the work is trivial —
    the sweep below has its own trigger and is not skipped with it.

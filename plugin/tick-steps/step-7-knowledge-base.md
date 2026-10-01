@@ -7,7 +7,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 7. **Refresh the knowledge base.** If this tick reflected one or more merges (or a
    task reached `done`) whose work produced durable, reusable knowledge, dispatch the
    `cataloguer` (subagent) to capture `Finding`s / update the `Service` catalog / add
-   or update a `Runbook` (`ai-bridge:cataloguer`), and link the `Finding`s from the
+   or update a `Runbook` (`loopd:cataloguer`), and link the `Finding`s from the
    relevant task doc. **Skip this refresh**
    if neither a merge nor a `done` task happened this tick, or the work is trivial —
    the sweep below has its own trigger and is not skipped with it.
@@ -44,7 +44,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      --in-flight <still running> [--cataloguer-in-flight]   # exit 0 = due
    ```
 
-   Exit 0 ⇒ it prints the trigger line and the ERROR list; dispatch `ai-bridge:cataloguer`
+   Exit 0 ⇒ it prints the trigger line and the ERROR list; dispatch `loopd:cataloguer`
    with **that output pasted into the brief verbatim**, inside the same one-dispatch
    throttle. Exit 1 is silence: no line in the report, no dispatch. Exit 2 could not answer
    — report its line and dispatch nothing. Never re-derive the answer by running

@@ -2,8 +2,8 @@
 
 **The normative contract is [`plugin/seed/SCHEMA.md`](../plugin/seed/SCHEMA.md), not this page.**
 
-That file is **seed**, not machinery: `/ai-bridge:init` copies it into a bundle once and
-the bundle owns it from then on, with `/ai-bridge:welcome fix` 3-way merging a later
+That file is **seed**, not machinery: `/loopd:init` copies it into a bundle once and
+the bundle owns it from then on, with `/loopd:welcome fix` 3-way merging a later
 template change onto local edits. Every role agent reads it, and
 `scripts/validate-bundle.sh` enforces it. Duplicating its field lists here would
 create a second copy that drifts, so this page is a **map** — what the types are, where
@@ -36,7 +36,7 @@ task/project/objective/agent constructs — those are producer-defined extension
 
 **`objectives/` is an optional layer.** A project is normally self-contained and measured
 against its own `success_criteria`; an `Objective` is for a goal that outlives one project.
-A plain `/ai-bridge:init <dir>` creates no `objectives/` directory —
+A plain `/loopd:init <dir>` creates no `objectives/` directory —
 `--with-objectives` does, and an existing one is never touched. Why:
 [pm-design.md § Why `objectives/` is optional](pm-design.md#objectives-optional).
 

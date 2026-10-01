@@ -3,20 +3,20 @@
 The OKF control panel, delivered as a Claude Code plugin instead of a symlink farm.
 Skills, agents, hooks **and the machinery itself** ship here, reading and writing bundles
 (`projects/`, `knowledge/`, `instance.config.json`) that hold data and nothing else. A
-bundle carries no machinery and no link into any checkout: `/ai-bridge:init` stamps one,
+bundle carries no machinery and no link into any checkout: `/loopd:init` stamps one,
 and converts one stamped by the retired `install.sh`.
 
 ## Install
 
 ```
-/plugin marketplace add cbmono/ai-bridge
-/plugin install ai-bridge@ai-bridge
+/plugin marketplace add cbmono/loopd
+/plugin install loopd@loopd
 ```
 
 Updates ship by version bump (no ambient auto-update): `/plugin` → Marketplaces.
 
-**It also ships a colour theme.** `themes/ai-bridge.json`, declared by `experimental.themes`
-and listed in `/theme` as `custom:ai-bridge:ai-bridge` — select it there, because nothing
+**It also ships a colour theme.** `themes/loopd.json`, declared by `experimental.themes`
+and listed in `/theme` as `custom:loopd:loopd` — select it there, because nothing
 here writes your `theme` setting. The palette is a duotone — blue is the machine's, pink is
 yours — and every colour in it comes from
 [`tests/fixtures/theme-palette.txt`](../tests/fixtures/theme-palette.txt); the token names a
@@ -26,7 +26,7 @@ theme file may use are listed once, in
 **What ships here, and the one thing that does not.** An installed plugin is the CONTENTS
 of this directory — `agents/ evals/ hooks/ scripts/ skills/` and, since task-022, the three
 files a stamp reads: `seed/`, `RETIRED` and a mirror of the template `VERSION`. So
-`/ai-bridge:init` needs **no clone of `cbmono/ai-bridge`**, which is the whole point of
+`/loopd:init` needs **no clone of `cbmono/ai-bridge`**, which is the whole point of
 shipping the installer in the plugin and was not true before 0.15.0: the root detection
 looked two directories above `scripts/` for `seed/`, which is where a *checkout* keeps it
 and not where a plugin cache does, so init exited 2 on every machine that installed it the
@@ -52,7 +52,7 @@ prints the clone command rather than reporting a missing directory.
 | `/welcome` | The welcome screen: bundle, owner, config layers, tier→model routing, board path, what awaits you. `check` reports state that could be wrong; `fix` repairs only the idempotent tier. |
 | `/init <dir>` | Create a bundle, refresh one, or convert one stamped by the retired `install.sh` — data only, and the only symlinks it leaves are under `repos/`. |
 
-Both also answer to their namespaced forms (`/ai-bridge:brief-me`, `/ai-bridge:capture`).
+Both also answer to their namespaced forms (`/loopd:brief-me`, `/loopd:capture`).
 **`ai-bridge-v2` was the transition name** — its one-version deprecation stub was
 removed in 1.0.0; the swap is in [`docs/migrating.md`](../docs/migrating.md).
 Run them from a bundle root (where `SCHEMA.md` and `instance.config.json` live).
@@ -94,7 +94,7 @@ the bundles somebody had re-stamped, and a template that moved took the registra
 it. A detector made of symlinks cannot see its own failure; a plugin hook is a real file
 the plugin manager replaces whole.
 
-**`permissions.deny` stays in the bundle's `settings.json`**, which `/ai-bridge:init`
+**`permissions.deny` stays in the bundle's `settings.json`**, which `/loopd:init`
 seeds. It is the second, unconditional layer behind the deny baseline, and a plugin
 manifest has no permissions block to carry it.
 
@@ -109,7 +109,7 @@ it and it doesn't.
 **One rule, and it is not negotiable: a companion may ADD behaviour but may never remove a core gate.**
 The two human authorities (`SCHEMA.md`) — the human promotes
 `draft → ready`, the human merges — hold with no companion installed, and no companion
-may make either of them hold *less*. `ai-bridge-yolo` is not a counter-example: it does
+may make either of them hold *less*. `loopd-yolo` is not a counter-example: it does
 not delete a gate, it ships the file that defines a mode in which the loop may hold one,
 and the human still chooses that mode per project. A companion that removed a gate would
 be indistinguishable from a supply-chain downgrade of the thing this whole design exists
@@ -130,7 +130,7 @@ held to it too, and a companion that could remove a core gate would not be a com
 ### How a companion is versioned
 
 **A companion tracks core's MAJOR and moves its own MINOR and PATCH independently.**
-`ai-bridge-yolo 1.0.x` is the companion of `ai-bridge 1.x`, and it releases a MINOR or a
+`loopd-yolo 1.0.x` is the companion of `ai-bridge 1.x`, and it releases a MINOR or a
 PATCH whenever its own contents change, without waiting for core to move. **The reason:**
 MAJOR is the only field carrying a compatibility claim — the fixed `companion/<file>` path
 and the names core reads out of it — so a shared MAJOR says *this companion speaks the core
@@ -144,9 +144,9 @@ halves for every companion entry in the marketplace, so a companion cannot drift
 
 | Companion | Ships | Read by |
 |---|---|---|
-| [`ai-bridge-yolo`](../plugin-yolo/README.md) | `companion/AUTONOMY.md` — the delegated-autonomy capability and the `yolo` preflight | `scripts/resolve-autonomy.sh`, and through it `scripts/commit-as.sh`'s promotion guard |
-| [`ai-bridge-accounts`](../plugin-accounts/README.md) | `companion/accounts.md` — the per-bundle account capability — and `bin/ai-bridge-claude`, the launcher the **human** runs | `scripts/resolve-account.sh`, and through it the SessionStart banner's account line |
-| [`ai-bridge-llm`](../plugin-llm/README.md) | `companion/llm.md` — the alternative-LLM-backend capability — and `bin/ai-bridge-deepseek`, the launcher the **human** runs, opt-in per machine | nothing — core reads its presence nowhere. The banner's backend warning reads `ANTHROPIC_BASE_URL` from its own environment, so it fires with or without this companion |
+| [`loopd-yolo`](../plugin-yolo/README.md) | `companion/AUTONOMY.md` — the delegated-autonomy capability and the `yolo` preflight | `scripts/resolve-autonomy.sh`, and through it `scripts/commit-as.sh`'s promotion guard |
+| [`loopd-accounts`](../plugin-accounts/README.md) | `companion/accounts.md` — the per-bundle account capability — and `bin/ai-bridge-claude`, the launcher the **human** runs | `scripts/resolve-account.sh`, and through it the SessionStart banner's account line |
+| [`loopd-llm`](../plugin-llm/README.md) | `companion/llm.md` — the alternative-LLM-backend capability — and `bin/ai-bridge-deepseek`, the launcher the **human** runs, opt-in per machine | nothing — core reads its presence nowhere. The banner's backend warning reads `ANTHROPIC_BASE_URL` from its own environment, so it fires with or without this companion |
 
 `scripts/resolve-autonomy.sh` is the **one** reader of "does delegated autonomy exist
 here": the **bundle root wins outright** (a v1-era bundle carrying its own real
@@ -170,5 +170,5 @@ they follow.
 project agent shadows the plugin copy (plugins are the lowest agent scope). So the eight
 role agents shipped here in byte-parity with the instance copies first, and the name swap
 retired those copies — the plugin is the only place they ship from now.
-**Dispatch them namespaced, `ai-bridge:<role>`.** A bare agent name does NOT resolve
+**Dispatch them namespaced, `loopd:<role>`.** A bare agent name does NOT resolve
 (measured 2026-09-02), which is why the strings changed exactly once, here.

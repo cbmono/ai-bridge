@@ -1,4 +1,4 @@
-# ai-bridge-llm — the alternative LLM backend companion
+# loopd-llm — the alternative LLM backend companion
 
 Run one Claude Code session against **DeepSeek** instead of Anthropic. This is a
 **backend substitution**: every prompt, file read and tool result in that session leaves
@@ -6,8 +6,8 @@ for a third party. It is opt-in per machine, it is one auditable script, and the
 `--force`.
 
 ```
-/plugin marketplace add cbmono/ai-bridge     # already added? skip
-/plugin install ai-bridge-llm@ai-bridge
+/plugin marketplace add cbmono/loopd     # already added? skip
+/plugin install loopd-llm@loopd
 ```
 
 Uninstall it and there is no launcher, with **no other edits** anywhere. Core's backend
@@ -39,7 +39,7 @@ warning is *not* removed by uninstalling — it reads the environment, not this 
 3. Run it from the bundle root:
 
    ```sh
-   alias abds='bash "$(ls -d ~/.claude/plugins/cache/*/ai-bridge-llm/*/bin/ai-bridge-deepseek | tail -1)"'
+   alias abds='bash "$(ls -d ~/.claude/plugins/cache/*/loopd-llm/*/bin/ai-bridge-deepseek | tail -1)"'
    abds --print-env      # dry run: the endpoint and the model IDs, never the key
    abds                  # a session on DeepSeek
    ```

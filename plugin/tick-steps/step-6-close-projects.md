@@ -8,7 +8,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    tasks are **all** terminal (`done`/`cancelled`), do **not** close it yourself —
    surface it as a 🔴 *Awaiting you* item. Only on the human's OK (in-session or via
    `/close-project <slug>`) run closeout, in order (`SCHEMA.md` "Project & objective
-   completion"): (a) dispatch the `ai-bridge:cataloguer` for a final consolidation pass (counts
+   completion"): (a) dispatch the `loopd:cataloguer` for a final consolidation pass (counts
    toward the cap) — and it is THE cataloguer for this tick: step 7's throttle is
    tick-wide, not step-7-local, so brief this one to cover the closeout consolidation
    AND anything this tick's merges produced; for a research project, graduate the

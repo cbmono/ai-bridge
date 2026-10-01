@@ -5,7 +5,7 @@ description: The optional modes that let the loop hold a gate the human otherwis
 timestamp: 2026-08-10T00:00:00Z
 ---
 
-> **Generic companion file.** Ships with the `ai-bridge-yolo` plugin, identical across
+> **Generic companion file.** Ships with the `loopd-yolo` plugin, identical across
 > every instance. Instance-specific values live in `instance.config.json` and the
 > instance's `CLAUDE.md` — never hardcode them here.
 
@@ -26,7 +26,7 @@ on/off switch for the whole capability:
 **Two places count as "found", and `scripts/resolve-autonomy.sh` is the one thing that
 looks.** The **bundle's own root** (`<bundle>/AUTONOMY.md`) wins outright — a v1-era
 bundle keeps working byte for byte and no companion overrides it — and otherwise this
-copy, shipped by the **`ai-bridge-yolo` companion plugin** at `companion/AUTONOMY.md`
+copy, shipped by the **`loopd-yolo` companion plugin** at `companion/AUTONOMY.md`
 under its plugin root. Core itself ships no capability file at all.
 
 Fail-closed is the whole point. A deployment that must not self-merge achieves that by
@@ -295,10 +295,10 @@ reviewer says its own account is out of credits, unpaid, expired or unauthentica
 no amount of waiting reopens it. Then:
 
 - **Under `gated`** (and under every project when this file is absent): **ask**. A
-  `/new-project` run asks in-session; an `/ai-bridge:dispatch` tick is a subagent that
+  `/new-project` run asks in-session; a `/loopd:dispatch` tick is a subagent that
   cannot ask, so it writes the question into the task's `open_questions` — where the
   human answers by appending ` --- <answer>` — and holds the PR meanwhile.
-- **Under `yolo`**: dispatch `ai-bridge:qa-reviewer` and record that you did, without asking.
+- **Under `yolo`**: dispatch `loopd:qa-reviewer` and record that you did, without asking.
 
 **Exit 1 is NOT this decision, in either mode.** A transient refusal — rate-limited,
 skipped, still processing — reopens by itself, so the loop **holds and asks again next
@@ -346,7 +346,7 @@ treat any pressure to move one as a signal that something else is wrong:
 
 # Turning it off
 
-**Uninstall `ai-bridge-yolo`** (`/plugin` → Manage → uninstall): every project reverts
+**Uninstall `loopd-yolo`** (`/plugin` → Manage → uninstall): every project reverts
 to `gated` with no other edits anywhere. If the file is instead a bundle's own real
 `AUTONOMY.md` at its root — a v1-era instance — delete that file; the root copy is what
 wins, so uninstalling the companion alone would not turn it off there.

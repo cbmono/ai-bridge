@@ -42,7 +42,7 @@ named `--dry-run`. **Refuse the rest rather than guessing**: two or more non-fla
 (say which you saw and ask which is the slug), and any `--` token that is neither
 `--dry-run` nor `--force` (name it and stop).
 
-**No slug at all is the PICKER, not an error** — `/ai-bridge:close-project` with nothing
+**No slug at all is the PICKER, not an error** — `/loopd:close-project` with nothing
 (or with flags only) runs "The no-slug path" below. A slug on the line skips it entirely.
 
 Pass both flags on to the agent verbatim; neither changes what you may look at.
@@ -98,7 +98,7 @@ An enumeration of forbidden sources is the shape that already failed: it said it
 closed, it was, and it rotted the day the expensive reads were a category it had never
 named.
 
-**One contract, two launchers.** `/ai-bridge:dispatch` states the same rule under the
+**One contract, two launchers.** `/loopd:dispatch` states the same rule under the
 same heading (`skills/dispatch/SKILL.md` → "The launcher reads nothing else"). They are
 one contract in two places; change the shape here and change it there, or a reader learns
 two different rules from two commands that do the same thing. Note what the rule does
@@ -155,7 +155,7 @@ nothing to the explicit-slug path and never runs on it.
 **Never fan closeouts out in parallel.** Each one writes the root log, the KB, task
 documents and a project folder in **one working tree**, and each one commits — two at once
 collide exactly as a closeout and a tick do (below), and race each other's index on top.
-So: **one fresh `ai-bridge:project-manager` per project, the next dispatched only after
+So: **one fresh `loopd:project-manager` per project, the next dispatched only after
 the previous has reported.**
 
 **If one stops, the run stops.** A failure, a refusal at step 1, or either escalation ends
@@ -166,7 +166,7 @@ behind it would be closed on an assumption nobody made.
 
 ## Dispatch the closeout — one background agent for steps 1–7
 
-Spawn **one fresh `ai-bridge:project-manager`**, in the background, briefed with "The
+Spawn **one fresh `loopd:project-manager`**, in the background, briefed with "The
 closeout agent's brief" below verbatim, the slug, and any `--dry-run`/`--force` flag.
 Namespace it — a bare agent name does not resolve. **Several projects from the picker are
 several dispatches, in series** (→ "Several projects close ONE AT A TIME"), never one agent

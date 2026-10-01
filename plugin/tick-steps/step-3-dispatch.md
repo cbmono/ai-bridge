@@ -64,7 +64,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
    ```bash
    cd <worktree> && claude --bg "<the whole brief>" \
-     --agent ai-bridge:<assignee> --model <the alias you resolved> \
+     --agent loopd:<assignee> --model <the alias you resolved> \
      --permission-mode bypassPermissions --add-dir <bundle root> < /dev/null
    ```
 
@@ -95,7 +95,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    - **The namespace is not optional** — the role agents ship in the `ai-bridge` plugin
      and a bare agent name does NOT resolve (measured 2026-09-02); it fails with "no
      such agent", never with "you forgot the namespace". **It applies to every one of
-     the eight** — `ai-bridge:cataloguer`, `ai-bridge:advisor`, `ai-bridge:qa-reviewer`
+     the eight** — `loopd:cataloguer`, `loopd:advisor`, `loopd:qa-reviewer`
      and the rest, wherever this document tells you to dispatch one. The three
      USER-level agents `init-bundle.sh --config` puts in `~/.claude/agents/` —
      `code-architect`, `deep-bug-scan`, `plan-architect` — are not plugin agents, stay
@@ -170,7 +170,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      which stays exactly as it is. **Never print an allow rule for `claude --bg`, or
      running the tick under `bypassPermissions`, as a remedy.** A grant is the
      operator's to write, never the plugin's, because a plugin must not be able to grant
-     itself a bypass (owner, 2026-09-25 and 2026-09-30); `/ai-bridge:init` prints the
+     itself a bypass (owner, 2026-09-25 and 2026-09-30); `/loopd:init` prints the
      one notice there is. The `Bash(claude --bg ' *)` rule once cited as "measured to
      change nothing" matches no spawn form at all (2026-10-01), so that result says
      nothing about a rule that matches.

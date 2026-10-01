@@ -79,7 +79,7 @@ say "7 Write, --allowedTools Write" "$(res "$LAB/p7.json")"
 Q='Report an idle tick as structured output: status idle.'
 "${C[@]}" --json-schema "$SCHEMA" --agents '{"tiny":{"description":"probe","prompt":"You are terse."}}' --agent tiny -- "$Q" </dev/null > "$LAB/p8.json" 2>/dev/null
 say "8 --json-schema under an inline --agents agent" "$(res "$LAB/p8.json")"
-"${C[@]}" --json-schema "$SCHEMA" --plugin-dir "$AP" --agent ai-bridge:project-manager -- "$Q" </dev/null > "$LAB/p9.json" 2>/dev/null
+"${C[@]}" --json-schema "$SCHEMA" --plugin-dir "$AP" --agent loopd:project-manager -- "$Q" </dev/null > "$LAB/p9.json" 2>/dev/null
 say "9 --json-schema under a PLUGIN --agent" "$(res "$LAB/p9.json")"
 
 "${C[@]}" --max-budget-usd 0.0001 -- "$Q" </dev/null > "$LAB/p10.json" 2>/dev/null

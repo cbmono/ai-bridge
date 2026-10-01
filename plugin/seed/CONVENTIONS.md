@@ -368,7 +368,7 @@ above it so none may grow its share.
   round-trip costs **about 9 minutes of wall clock and no tokens** (8-10 minutes on a
   clean runner, measured across `cbmono/ai-bridge`'s recent runs); the local full run
   measured **2026-08-29** cost **39m 47s and 269.4k tokens** on a machine that was also
-  running an `/ai-bridge:dispatch` tick. Same answer, several times the wall clock, and tokens on top.
+  running a `/loopd:dispatch` tick. Same answer, several times the wall clock, and tokens on top.
   This is a **proportion argument, not a ban**: a *red* local run would have saved a CI
   round-trip, and the day a repo's CI is slower than its local suite, this rule inverts.
   **The local run never was the gate.** In `cbmono/ai-bridge`, the `harness suite` job is a
@@ -710,7 +710,7 @@ above it so none may grow its share.
   then inherit the session model and do not guess.** Exiting silently was the failure
   shape rather than the fallback: an unresolved role looks exactly like a resolved one at
   the call site, so every role can run on the wrong tier with nothing anywhere saying so.
-  `/ai-bridge:init` seeds `models`/`roleTiers` into `instance.config.local.json`, which is where
+  `/loopd:init` seeds `models`/`roleTiers` into `instance.config.local.json`, which is where
   the fix goes. This applies to **every** dispatch, including an ad-hoc dispatch from a
   main session, which is exactly the path the prose never reached.
 - **Don't grow the harness without a reason — and past ~150 lines, ask.** This machinery
@@ -790,7 +790,7 @@ above it so none may grow its share.
   **Two readers, because what stood here was prose and prose did not stop this:**
   `tests/background-teardown.test.sh` fails the build on a background spawn in this repo's
   own `scripts/` and `tests/` that carries no bound (an allowlist entry has to state its
-  reason), and the welcome skill’s `check` (`/ai-bridge:welcome check`) carries a row naming every orphaned process whose cwd is
+  reason), and the welcome skill’s `check` (`/loopd:welcome check`) carries a row naming every orphaned process whose cwd is
   under `worktreeRoot` — the one line that would have printed all 34. `prune-worktrees.sh`
   still reports a worktree with a live process attached. All three only ever REPORT, so the
   teardown is yours, and your report still says what you stopped.
@@ -812,7 +812,7 @@ above it so none may grow its share.
   no coverage at all today, because no tick ever reads it.
   **It is report-only, and that is the point: a non-zero verdict is never a licence to
   re-dispatch.** Re-running a task sequence that already finished is the most expensive
-  failure this loop has (`/ai-bridge:dispatch` step 2), and the usual recovery is one message to the
+  failure this loop has (`/loopd:dispatch` step 2), and the usual recovery is one message to the
   parked agent telling it to open the PR on what it already has.
 - **Wide work: fan out only if you actually can — most of you can't.** For genuinely wide,
   *independent* work a parallel fan-out beats grinding serially (find the real edges → fan
@@ -830,7 +830,7 @@ above it so none may grow its share.
   `maxAgentsInFlight` cap) — it does **not** license unlimited dispatches; a **write**
   fan-out must *also* give each subagent its own worktree — never parallel writes to a
   shared clone/worktree (the same collision the per-task isolation rule prevents). Skip it
-  for small/sequential work (pure overhead). `/ai-bridge:dispatch` stays serial — a fan-out lives
+  for small/sequential work (pure overhead). `/loopd:dispatch` stays serial — a fan-out lives
   *inside* a task, never at the loop level.
 - **A subagent works ONE task, and is resumed only for that task's next round.** Waking a
   completed agent with a message reuses its context, and reuse is right exactly while that

@@ -9,10 +9,10 @@ agents, the scripts and the `SessionStart` hook) ships in the `ai-bridge`
 **plugin**, installed once per machine — this bundle holds no copy of it and no link into
 any checkout. Its seed docs (`SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, this file)
 were **copied once and are yours**. The slash commands come from the same **plugin**
-(`/ai-bridge:dispatch`, `/ai-bridge:new-project`,
-`/ai-bridge:close-project`, `/ai-bridge:pr-review-request`,
-`/ai-bridge:answer`, `/ai-bridge:audit`, `/ai-bridge:board`,
-`/ai-bridge:fanout`) and are
+(`/loopd:dispatch`, `/loopd:new-project`,
+`/loopd:close-project`, `/loopd:pr-review-request`,
+`/loopd:answer`, `/loopd:audit`, `/loopd:board`,
+`/loopd:fanout`) and are
 installed per machine, not per instance. This repo tracks only its own
 **content**: `projects/`, `knowledge/`, `log.md`, an optional `objectives/`, and
 `instance.config.json`.
@@ -66,22 +66,22 @@ nothing links `repos/` until it resolves. `worktreeRoot` is where agent build wo
 live; keep it **outside** any synced folder (Dropbox/iCloud rewrite files inside a
 worktree mid-run), and absent it worktrees fall back to `<reposRoot>/_wt`, which is also
 still swept as the legacy root. Neither belongs in the tracked file — an absolute path on
-one machine cannot be right on the other — and `/ai-bridge:init` reports one that is
+one machine cannot be right on the other — and `/loopd:init` reports one that is
 there (`normalise-config.sh`) rather than leaving it to be noticed.
-- `defaultRepo` — optional; default repo for `/ai-bridge:pr-review-request` (bare name is
+- `defaultRepo` — optional; default repo for `/loopd:pr-review-request` (bare name is
   qualified with `org`, or give `owner/name`).
-- `prReviewSlackChannel` — optional; channel name or id for `/ai-bridge:pr-review-request`.
+- `prReviewSlackChannel` — optional; channel name or id for `/loopd:pr-review-request`.
 
 Per-instance permission/env overrides go in `.claude/settings.local.json`
 (gitignored) — keep them out of `.claude/settings.json` beside it, which is a seed file
 copied once from the plugin, so an edit there becomes a conflict the next time
-`/ai-bridge:init` 3-way merges a template change onto it.
+`/loopd:init` 3-way merges a template change onto it.
 
 ## Shared by several people
 
 **One organisation, one bundle: this repo.** Everyone clones the same one and runs their
-own `/ai-bridge:dispatch` loop. The front door — creating or cloning it with
-`/ai-bridge:init <dir> --org <org>`, the `people` map, `defaultOwner`, and what each
+own `/loopd:dispatch` loop. The front door — creating or cloning it with
+`/loopd:init <dir> --org <org>`, the `people` map, `defaultOwner`, and what each
 person sets on their own machine — is
 [docs/sharing.md](https://github.com/cbmono/ai-bridge/blob/main/docs/sharing.md).
 
@@ -89,8 +89,8 @@ person sets on their own machine — is
 ```
 (Objective) ──► Project ──► Task ──► (PM refines) ──► (human approves) ──► (PM dispatches) ──► role agent ──► PR ──► you merge
 ```
-The spine you drive is **`/ai-bridge:new-project` → approve `draft → ready` →
-`/ai-bridge:dispatch` → merge**.
+The spine you drive is **`/loopd:new-project` → approve `draft → ready` →
+`/loopd:dispatch` → merge**.
 You set direction and approve at two gates; the PM and role agents do the rest in
 the background. **Steer, don't watch** — act on what `AWAITING.md` asks of you, not
 on each agent's steps.
@@ -99,7 +99,7 @@ See `SCHEMA.md` for the types and lifecycle, and `CLAUDE.md` for the operational
 rules (two human gates, per-agent authorship, parallel-safety).
 
 ## Add a project
-Run **`/ai-bridge:new-project <one-line description>`** from a session in this
+Run **`/loopd:new-project <one-line description>`** from a session in this
 instance. It
 scaffolds `projects/<slug>/` (schema-valid `project.md`, `index.md`, `log.md`, and
 seed `draft` tasks), registers it in the bundle index/log, and commits. It links the
@@ -124,7 +124,7 @@ then promote `draft → ready`. (To hand-roll one instead, copy the shape in `SC
 When a project's tasks are all `done`/`cancelled`, the PM flags it in the awaiting-you queue as
 **ready to close** — it never closes one on its own. Close it with:
 ```
-/ai-bridge:close-project <slug>
+/loopd:close-project <slug>
 ```
 Or run it with **no slug**: it offers a picker of the projects with their task counts,
 takes more than one, asks whether to `--force` or `--dry-run`, and closes them one after
@@ -151,11 +151,11 @@ gitignored and safe to delete.
 ## Run the Project Manager
 From a fresh session **in this instance directory** (so the role agents, the
 clones, and `gh` are available), with the `ai-bridge` plugin installed on this
-machine (`/plugin marketplace add cbmono/ai-bridge`, then `/plugin install
-ai-bridge@ai-bridge`):
+machine (`/plugin marketplace add cbmono/loopd`, then `/plugin install
+loopd@loopd`):
 
 ```text
-/ai-bridge:dispatch 10m
+/loopd:dispatch 10m
 ```
 
 A SERIAL, completion-gated loop — exactly one tick at a time. Preview safely with
@@ -191,7 +191,7 @@ its verb and a real link:
 * 🏁 **close** — a project whose tasks are all terminal
 
 In-flight and upcoming work is deliberately **not** here: it needs no decision from
-you, and scrolling past it is how a queue stops getting read. Each `/ai-bridge:dispatch` tick
+you, and scrolling past it is how a queue stops getting read. Each `/loopd:dispatch` tick
 rewrites the file, and a `SessionStart` hook injects these items when you launch
 Claude here — so you see what needs a decision without reading the loop.
 
@@ -208,11 +208,11 @@ documents live in the **bundle** (per instance). Neither half updates the other.
 
 | Half | Reaches you by | Run |
 |---|---|---|
-| the slash commands (`/ai-bridge:*`) | the plugin, installed once per machine | `/plugin marketplace add cbmono/ai-bridge` then `/plugin install ai-bridge@ai-bridge` — and `/plugin` to update it later |
+| the slash commands (`/loopd:*`) | the plugin, installed once per machine | `/plugin marketplace add cbmono/loopd` then `/plugin install loopd@loopd` — and `/plugin` to update it later |
 | role agents, machinery scripts, the `SessionStart` and `UserPromptSubmit` hooks | the same plugin, per machine — this bundle holds no link into any checkout | nothing per bundle: `/plugin` updates all of it at once |
-| the bundle's own seed docs (`CLAUDE.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`) | copied once, then yours | `/ai-bridge:init` 3-way merges a later change onto your edits |
+| the bundle's own seed docs (`CLAUDE.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`) | copied once, then yours | `/loopd:init` 3-way merges a later change onto your edits |
 
-`/ai-bridge:init` also **converts** a bundle stamped before the plugin era: it removes
+`/loopd:init` also **converts** a bundle stamped before the plugin era: it removes
 every machinery symlink into a template checkout — dangling or live — and the managed
 `.gitignore` block, and touches no data. Full
 procedure, including what a stamped instance has to run **once** to reach the

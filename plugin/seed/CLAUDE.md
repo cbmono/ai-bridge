@@ -7,7 +7,7 @@ configured in `instance.config.json`.
 ## Start here
 You steer; background agents do the work. **The core loop — memorise this:**
 
-> ### `/ai-bridge:new-project` → you approve `draft → ready` → `/ai-bridge:dispatch` → you merge the PR
+> ### `/loopd:new-project` → you approve `draft → ready` → `/loopd:dispatch` → you merge the PR
 >
 > You create work and set direction; the PM refines it; you approve at the first
 > gate; role agents build **in the background** and open PRs; you merge at the
@@ -18,33 +18,33 @@ You steer; background agents do the work. **The core loop — memorise this:**
 None of them resolving means it is not installed here. Install once, then restart:
 
 ```text
-/plugin marketplace add cbmono/ai-bridge
-/plugin install ai-bridge@ai-bridge
+/plugin marketplace add cbmono/loopd
+/plugin install loopd@loopd
 ```
 
-**After every plugin update, run `/ai-bridge:init` here** — it stamps the seed, then runs
+**After every plugin update, run `/loopd:init` here** — it stamps the seed, then runs
 the check-and-fix pass (idempotent repairs only; config files and tick locks are reported,
-never written). **`/ai-bridge:welcome` is the banner and `check`** — facts, no repairs.
+never written). **`/loopd:welcome` is the banner and `check`** — facts, no repairs.
 
 **A bare `scripts/<x>.sh` in this bundle means the installed plugin's scripts directory —
 `<scripts>` below — never a folder here.** Agents reach it as
 `${CLAUDE_PLUGIN_ROOT}/scripts/<x>.sh`. **Call a script one command per call, by its
 absolute path** — no `VAR=` path, `$(…)`, `~` or `; echo "EXIT=$?"`: a permission rule
 matches the command text, so those re-prompt every call and each approval covers nothing
-else; `/ai-bridge:init` writes the rules that match. Find the path:
+else; `/loopd:init` writes the rules that match. Find the path:
 
 ```sh
-ls -d ~/.claude/plugins/cache/*/ai-bridge/*/scripts | sort -V | tail -1
+ls -d ~/.claude/plugins/cache/*/loopd/*/scripts | sort -V | tail -1
 <scripts>/commit-as.sh human "<msg>" -- <path>...   # likewise validate-bundle.sh, pr-body-clearance.sh
 ```
 
 | To… | Run |
 |---|---|
-| See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/ai-bridge:dispatch`** — one safe, idempotent tick. Add `10m` to loop on an interval; say "DRY RUN" to preview without spawning agents. |
-| Start a new project | **`/ai-bridge:new-project <description>`** — a build project (code → PRs), or add `kind=research` for docs/decks/assets (no repo). |
-| Close a finished project | **`/ai-bridge:close-project <slug>`** — when its tasks are all done/cancelled. Removes the folder (git history + KB are the record; no archive) unless `project.md` says `retain: true`, which keeps it frozen and pruned. The PM flags candidates; you run it. |
-| Request grouped PR reviews | **`/ai-bridge:pr-review-request <filter>`** |
-| Fan a batch of independent ad-hoc asks out to parallel background agents | **`/ai-bridge:fanout`** — or just give the assistant ≥2 independent asks at once (see _Ad-hoc requests_) |
+| See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/loopd:dispatch`** — one safe, idempotent tick. Add `10m` to loop on an interval; say "DRY RUN" to preview without spawning agents. |
+| Start a new project | **`/loopd:new-project <description>`** — a build project (code → PRs), or add `kind=research` for docs/decks/assets (no repo). |
+| Close a finished project | **`/loopd:close-project <slug>`** — when its tasks are all done/cancelled. Removes the folder (git history + KB are the record; no archive) unless `project.md` says `retain: true`, which keeps it frozen and pruned. The PM flags candidates; you run it. |
+| Request grouped PR reviews | **`/loopd:pr-review-request <filter>`** |
+| Fan a batch of independent ad-hoc asks out to parallel background agents | **`/loopd:fanout`** — or just give the assistant ≥2 independent asks at once (see _Ad-hoc requests_) |
 
 Your two gates: promote a task `draft → ready`, then merge the PR (build) or
 approve the deliverable (research). When a request matches a command above,
@@ -80,7 +80,7 @@ this file so product-repo sessions aren't told they are a control panel. -->
   never closes them itself.
 - **Two human authorities** (`SCHEMA.md`): only the human promotes `draft → ready`,
   and only the human merges. The PM never sets `ready` and never merges.
-- **One active `/ai-bridge:dispatch` loop per clone**, run from a session **in this
+- **One active `/loopd:dispatch` loop per clone**, run from a session **in this
   repo**. The one-tick-at-a-time guarantee is backed by `.tick-lock` (per clone, gitignored) —
   the launcher takes it before dispatching and the tick checks it on entry — but the
   lock catches the mistake; it does not make two loops on one clone a good idea.
@@ -109,7 +109,7 @@ Reasoning belongs where it is durable — the task doc, the commit message, a
 **Tracked work** (anything that becomes a PR or a `projects/` deliverable) flows
 through the gated loop above — heavyweight on purpose. **Ad-hoc chat requests**
 (rephrase a doc, "status of X") are not project tasks and must **not** be funnelled
-through `/ai-bridge:dispatch`.
+through `/loopd:dispatch`.
 
 **Never manufacture a decision out of a side effect that isn't live yet.** Establish
 the condition exists **today** before you raise it. A deferred one-line mitigation goes
@@ -119,21 +119,21 @@ on the task's `# Notes` — never into a three-option architecture question — 
 
 **Offer the loop when there is work to dispatch — once, and only then.** The
 SessionStart banner prints `Ready to dispatch   N` only when at least one task is
-genuinely dispatchable. When that line is present, **offer `/ai-bridge:dispatch`
+genuinely dispatchable. When that line is present, **offer `/loopd:dispatch`
 in your first reply** — one sentence, naming the count, riding along with the answer
 to what they asked. Bounded: **once per session**; only off that line (never count the documents
 yourself); never instead of the answer; never for ad-hoc work.
 
 **Ad-hoc batches:** ≥2 independent, well-specified asks in one turn ⇒ act as
 coordinator — dispatch each to a **background `general-purpose` agent** in a single
-message, report results as they land. `/ai-bridge:fanout` forces this. Handle
+message, report results as they land. `/loopd:fanout` forces this. Handle
 **in-thread** instead when: the ask needs an interactive decision; it's a trivial lookup; or two
 asks would write the same files (serialise, or one worktree each).
 
 **Failure diagnosis always goes to the background.** "Build failed", "CI is red",
 "the PR isn't green" — including a bare PR ref with such a note — dispatch a
-**background `ai-bridge:failure-analyst`** (read-only; it never changes code or opens a
-PR; the `ai-bridge:` namespace is required — a bare role-agent name does not resolve)
+**background `loopd:failure-analyst`** (read-only; it never changes code or opens a
+PR; the `loopd:` namespace is required — a bare role-agent name does not resolve)
 with the full brief: the ref, the repo, "root cause + ranked next steps, and a
 Finding draft if durable". Report the result when it lands; a known fix is a
 separate dispatch or a tracked task.

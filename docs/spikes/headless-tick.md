@@ -8,16 +8,16 @@ touched. Reproduce the capability half: `bash docs/spikes/headless-tick-probe.sh
 **Verdict: adoptable, with one flag change nobody would have guessed.** The tick runs
 headless, returns one typed JSON object per tick, and carries its own cost and duration —
 **but only if the `project-manager` prompt is inlined via `--agents`.** Under
-`--agent ai-bridge:project-manager` the `--json-schema` flag is silently dropped and the
+`--agent loopd:project-manager` the `--json-schema` flag is silently dropped and the
 tick answers in prose.
 
 ## Q1 — do this plugin's agents, skills and hooks load under `-p`? Yes, all three
 
 | Probe | Answer |
 |---|---|
-| subagent types | all 8 `ai-bridge:*` agents |
-| model-invocable skills | `ai-bridge:brief-me`, `ai-bridge:welcome` — and only those, which is exactly the 2 of 15 `SKILL.md` without `disable-model-invocation: true` |
-| a slash-only skill as the `-p` prompt | runs — so `/ai-bridge:dispatch` itself is invocable headless |
+| subagent types | all 8 `loopd:*` agents |
+| model-invocable skills | `loopd:brief-me`, `loopd:welcome` — and only those, which is exactly the 2 of 15 `SKILL.md` without `disable-model-invocation: true` |
+| a slash-only skill as the `-p` prompt | runs — so `/loopd:dispatch` itself is invocable headless |
 | plugin hooks | `SessionStart`, `UserPromptSubmit`, `PreToolUse:Bash`, `Stop` all fired |
 | `CLAUDE.md` | loaded (marker string present) |
 | **control** — the same slash-only skill under `--safe-mode` | `Unknown command` |
@@ -61,13 +61,13 @@ hook still refused a bare force push and the refusal still landed in
 
 The `--json-schema` row is the one that decides the design. Same schema, same prompt, same
 settings: `--agent tiny` (inline, via `--agents`) returned the object; `--agent
-ai-bridge:project-manager` returned prose — twice, including once with an explicit output
+loopd:project-manager` returned prose — twice, including once with an explicit output
 contract in the brief, and once from a real 20-turn tick that did honest work.
 
 ## Ten consecutive ticks, both ways
 
 Arm **H** — a launcher session running `bash tick-once.sh` ten times. Arm **A** — a
-launcher session dispatching `ai-bridge:project-manager` ten times with the same brief.
+launcher session dispatching `loopd:project-manager` ten times with the same brief.
 Both launchers are `claude -p --output-format stream-json`, sonnet, same fixture shape.
 `cache_read_input_tokens` is read from each launcher's own assistant turns.
 
@@ -130,6 +130,6 @@ instead of waiting the lock out. A killed `Agent`-tool subagent gives the launch
 ## Recommendation
 
 Adopt, as `plugin/scripts/tick-run.sh` invoked from one Bash step in
-`/ai-bridge:dispatch`, inlining `project-manager.md` through `--agents` so the schema
+`/loopd:dispatch`, inlining `project-manager.md` through `--agents` so the schema
 survives. The lock contract, the `project-manager` agent file and `tick-lock.sh` are all
 unchanged. Sized as `task-035` in the control panel; **this PR migrates nothing.**

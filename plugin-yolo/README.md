@@ -1,11 +1,11 @@
-# ai-bridge-yolo — the delegated-autonomy companion
+# loopd-yolo — the delegated-autonomy companion
 
 `ai-bridge` core is **gated-only**: the human promotes `draft → ready`, and the human
 merges. This companion is the *only* thing that makes any other mode exist.
 
 ```
-/plugin marketplace add cbmono/ai-bridge     # already added? skip
-/plugin install ai-bridge-yolo@ai-bridge
+/plugin marketplace add cbmono/loopd     # already added? skip
+/plugin install loopd-yolo@loopd
 ```
 
 Uninstall it and every project is `gated` again, with **no other edits** anywhere. That

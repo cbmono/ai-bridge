@@ -50,7 +50,7 @@ person. No third accent, no status rainbow.
 Normative contracts live in the machinery itself: [`plugin/seed/SCHEMA.md`](plugin/seed/SCHEMA.md)
 (document types, the verification predicate) and
 [`plugin-yolo/companion/AUTONOMY.md`](plugin-yolo/companion/AUTONOMY.md) (the
-delegated-autonomy modes, shipped by the `ai-bridge-yolo` companion plugin).
+delegated-autonomy modes, shipped by the `loopd-yolo` companion plugin).
 
 ---
 
@@ -61,7 +61,7 @@ enforcement hooks and the eight role agents, and is installed once **per machine
 **bundle** carries the scripts, the `SessionStart` hook and the root documents, and is
 stamped once **per instance**. A
 machine with only the plugin has commands and nothing to read; a bundle with only the
-stamp has the data and no way to drive it, and every `/ai-bridge:…` reports *unknown
+stamp has the data and no way to drive it, and every `/loopd:…` reports *unknown
 command*. Do the plugin first — it is one line, and it is what step 7 needs.
 ([docs/operations.md § 1](docs/operations.md#1-installing-and-upgrading-two-halves-and-neither-updates-the-other))
 
@@ -70,17 +70,17 @@ command*. Do the plugin first — it is one line, and it is what step 7 needs.
 This repo is its own marketplace. In any Claude Code session:
 
 ```text
-/plugin marketplace add cbmono/ai-bridge
-/plugin install ai-bridge@ai-bridge
+/plugin marketplace add cbmono/loopd
+/plugin install loopd@loopd
 ```
 
-Every command is namespaced: `/ai-bridge:dispatch`, `/ai-bridge:new-project`, and
+Every command is namespaced: `/loopd:dispatch`, `/loopd:new-project`, and
 the rest of the table [below](#commands); so is every role agent —
-`ai-bridge:software-engineer` and the rest — because a bare agent name does not resolve.
+`loopd:software-engineer` and the rest — because a bare agent name does not resolve.
 See [`plugin/README.md`](plugin/README.md).
 
-**The marketplace, the plugin and every command still carry the old name**, and the lines
-above are what resolves today. loopd is the product name; the rename ships on its own.
+**Installed as `ai-bridge@ai-bridge` before the rename?** [`MIGRATION.md`](MIGRATION.md)
+moves the machine and each bundle over, in order.
 
 **Already on `ai-bridge-v2`?** That name is gone in 1.0.0 — [the swap](docs/migrating.md).
 
@@ -96,14 +96,14 @@ mkdir -p ~/workspace/<group>/_ai-bridge-<group>
 - The `-<group>` suffix distinguishes it from other groups' bundles.
 - The group folder itself is **not** a repo — just a plain directory holding this bundle plus the group's repos, side by side, each its own repo.
 
-**No clone of this repo is needed.** The installer ships in the plugin. `/ai-bridge:init`
+**No clone of this repo is needed.** The installer ships in the plugin. `/loopd:init`
 creates the directory too, so this step is optional — it is here because naming it right
 is the part worth doing deliberately.
 
 ### 3. Stamp it
 
 ```
-/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group>
+/loopd:init ~/workspace/<group>/_ai-bridge-<group>
 ```
 
 It does three things, and **none of them is a symlink into a checkout**:
@@ -111,18 +111,18 @@ It does three things, and **none of them is a symlink into a checkout**:
 | # | Action | Detail |
 |---|---|---|
 | 1 | **Copies** `plugin/seed/` content — only if absent | never clobbers bundle data |
-| 2 | **Converts** a bundle stamped by the retired `/ai-bridge:init` | removes its machinery links and the managed `.gitignore` block; the data is untouched |
+| 2 | **Converts** a bundle stamped by the retired `/loopd:init` | removes its machinery links and the managed `.gitignore` block; the data is untouched |
 | 3 | **Links** the group's repos into `<bundle>/repos/` | skipped while `reposRoot` is the seeded placeholder. **The only symlinks a stamped bundle holds.** |
 
 It is idempotent. It backs up any conflicting real file as `<name>.bak.<epoch>`.
 `--refresh-seeds` additionally 3-way merges a seed change this repo has made since the
 bundle was stamped; without it that drift is reported and nothing is written.
 
-> **This replaced `/ai-bridge:init`, and the reason is structural.** A plugin-shipped installer
+> **This replaced `/loopd:init`, and the reason is structural.** A plugin-shipped installer
 > cannot stamp absolute symlinks into a plugin cache whose path changes on every update —
 > every one of them would dangle. The symlinks existed so a `git pull` of this repo
 > propagated into every bundle; `claude plugin update` gives that property for the whole
-> tree, so they lost their reason to exist. `/ai-bridge:init` and `/ai-bridge:welcome fix` ship for one
+> tree, so they lost their reason to exist. `/loopd:init` and `/loopd:welcome fix` ship for one
 > version as stubs that print the command to run instead.
 
 #### It also asks who the team is — once
@@ -167,19 +167,19 @@ claude
 Then, inside the session:
 
 ```text
-/ai-bridge:new-project add rate limiting to the public API
+/loopd:new-project add rate limiting to the public API
 ```
 
 Answer its questions. Review the draft tasks. Promote the ones you want (`draft → ready`).
 Then:
 
 ```text
-/loop 10m /ai-bridge:dispatch
+/loop 10m /loopd:dispatch
 ```
 
 `/loop` is Claude Code's own repeat-a-slash-command primitive, and it is the standard way
 to run the cadence: one pass every ten minutes, in the session you are already in, with
-nothing installed to drive it. Omit the interval (`/loop /ai-bridge:dispatch`) on a quiet
+nothing installed to drive it. Omit the interval (`/loop /loopd:dispatch`) on a quiet
 bundle and the model paces itself. A pass that fires while a tick is still running prints
 one line and skips — the dispatch lock refuses it, so a clock can never start a second
 orchestrator. `docs/operations.md` → "Running the loop on a cadence" has the reasoning.
@@ -194,10 +194,10 @@ open. Everything the plugin carries is per machine and resolves anywhere.
 ## The core loop
 
 ```text
-/ai-bridge:new-project  →  you promote draft → ready  →  /ai-bridge:dispatch  →  you merge the PR
+/loopd:new-project  →  you promote draft → ready  →  /loopd:dispatch  →  you merge the PR
 ```
 
-`/ai-bridge:dispatch` is serial and completion-gated — one tick at a time. Run **one per
+`/loopd:dispatch` is serial and completion-gated — one tick at a time. Run **one per
 instance**. The launcher takes a per-clone lock (`.tick-lock`) immediately before each
 dispatch, and the tick runs the same check on entry — a resumed tick never passes through
 the launcher, so one that finds no lock is refused rather than allowed to run. That
@@ -214,12 +214,12 @@ results and questions, not every step.
 
 Both gates can be delegated — see [docs/autonomy.md](docs/autonomy.md). That capability is
 **off unless installed**, literally: it lives entirely in the separate
-[`ai-bridge-yolo`](plugin-yolo/README.md) companion plugin, and uninstalling that plugin
+[`loopd-yolo`](plugin-yolo/README.md) companion plugin, and uninstalling that plugin
 makes every project `gated` again with no other edits.
 
 ### Who runs what, end to end
 
-One `kind: build` project, from `/ai-bridge:new-project` to merge. Every step links to the document
+One `kind: build` project, from `/loopd:new-project` to merge. Every step links to the document
 that **owns** its rule; nothing here restates one. Tiers are the **seed defaults** — each
 instance sets its own in `roleTiers`/`models`
 ([model routing](docs/operations.md#model-routing)).
@@ -257,21 +257,21 @@ Run these inside an instance.
 
 | Command | What it does |
 |---|---|
-| `/ai-bridge:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
-| `/ai-bridge:dispatch [gap]` | (plugin) the serial background loop: dispatch, track, report. `/ai-bridge:dispatch 10m` ticks every ten minutes |
-| `/ai-bridge:answer` | (plugin) answer the PM's open questions from inside the session |
-| `/ai-bridge:board` | (plugin) `serve` — **the default, so a bare call serves** — the board on a local URL, one process per bundle; `publish` — the same page as a private artifact, at the same URL every run |
-| `/ai-bridge:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
-| `/ai-bridge:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
-| `/ai-bridge:fanout <task>` | (plugin) parallel work across several repos |
-| `/ai-bridge:close-project [<slug>]` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. No slug opens a picker of the projects, multi-select, and asks about `--force`. [→](docs/schema.md#closing-a-project) |
-| `/ai-bridge:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
-| `/ai-bridge:brief-me [project]` | (plugin) a since-you-last-looked digest, or a meeting-ready brief for one project. Read-only |
-| `/ai-bridge:capture <notes>` | (plugin) turn a decision or meeting notes into drafted projects and tasks, with provenance — never promoted |
-| `/ai-bridge:work <task>` | (plugin) work one task in **this** session, ledger kept for you — the solo alternative to dispatching an agent |
-| `/ai-bridge:handoff <path> <login>` | (plugin) transfer a task or project to another human, with the context that makes the transfer real |
+| `/loopd:new-project <description>` | (plugin) scaffolds a project: phases, draft tasks, acceptance criteria. Asks for the capability flags you didn't pass |
+| `/loopd:dispatch [gap]` | (plugin) the serial background loop: dispatch, track, report. `/loopd:dispatch 10m` ticks every ten minutes |
+| `/loopd:answer` | (plugin) answer the PM's open questions from inside the session |
+| `/loopd:board` | (plugin) `serve` — **the default, so a bare call serves** — the board on a local URL, one process per bundle; `publish` — the same page as a private artifact, at the same URL every run |
+| `/loopd:pr-review-request <pr>` | (plugin) ask for an independent review of a PR |
+| `/loopd:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
+| `/loopd:fanout <task>` | (plugin) parallel work across several repos |
+| `/loopd:close-project [<slug>]` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. No slug opens a picker of the projects, multi-select, and asks about `--force`. [→](docs/schema.md#closing-a-project) |
+| `/loopd:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
+| `/loopd:brief-me [project]` | (plugin) a since-you-last-looked digest, or a meeting-ready brief for one project. Read-only |
+| `/loopd:capture <notes>` | (plugin) turn a decision or meeting notes into drafted projects and tasks, with provenance — never promoted |
+| `/loopd:work <task>` | (plugin) work one task in **this** session, ledger kept for you — the solo alternative to dispatching an agent |
+| `/loopd:handoff <path> <login>` | (plugin) transfer a task or project to another human, with the context that makes the transfer real |
 
-Flags `/ai-bridge:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
+Flags `/loopd:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 `browser=off|claude-for-chrome` (default `off`), `/yolo`, `/cli …`, `/claudeforchrome`,
 `--no-commit`.
 
@@ -284,11 +284,11 @@ Flags `/ai-bridge:new-project` accepts: `kind=research`, `autonomy=<mode>`, `cli
 | `devops-engineer` | infrastructure, CI, deploys |
 | `qa-reviewer` | the **independent** verification gate — fresh context, real signals |
 | `cataloguer` | folds conclusions into `knowledge/` |
-| `auditor` | read-only drift check for `/ai-bridge:audit` |
+| `auditor` | read-only drift check for `/loopd:audit` |
 | `failure-analyst` | diagnoses a failing check or a broken build |
 
 All eight ship in the **plugin** and are dispatched **namespaced** —
-`ai-bridge:software-engineer`, `ai-bridge:qa-reviewer`, and so on. A bare agent name does
+`loopd:software-engineer`, `loopd:qa-reviewer`, and so on. A bare agent name does
 not resolve (measured 2026-09-02). A task's `assignee:` field stays bare; the PM adds the
 namespace when it spawns.
 
@@ -299,7 +299,7 @@ Role dispatches are routed to a cost-appropriate model per tier
 
 ```
 _ai-bridge-<group>/
-├── objectives/        OPTIONAL — goals that outlive one project (`/ai-bridge:init <dir> --with-objectives`)
+├── objectives/        OPTIONAL — goals that outlive one project (`/loopd:init <dir> --with-objectives`)
 ├── projects/<slug>/
 │   ├── project.md     kind, status, autonomy, owner, target_repo
 │   ├── phases/        ordered stages
@@ -344,7 +344,7 @@ When a `draft` is blocked it lists numbered `open_questions` (`Q1:`, `Q2:`, …)
    task, and clears the question.
 4. The `draft` becomes promotable once the list empties.
 
-Answering in chat during a session works too (`/ai-bridge:answer`).
+Answering in chat during a session works too (`/loopd:answer`).
 
 The cleared entry is **moved, not deleted** — it lands in `answered_questions` as one flat
 line, `<ISO 8601> by <login> · <the entry verbatim>`. It is a human audit record: nothing reads it and
@@ -364,7 +364,7 @@ decision unblocks.
 | ⛔ | unblock |
 | 🏁 | close |
 
-Each item carries a real link. Every `/ai-bridge:dispatch` tick rewrites the file, and a `SessionStart`
+Each item carries a real link. Every `/loopd:dispatch` tick rewrites the file, and a `SessionStart`
 hook injects its items at launch.
 
 In-flight and upcoming work is deliberately **excluded** — it needs no decision, and a
@@ -395,7 +395,7 @@ are doing, not by which is newest.
 |---|---|---|
 | a look right now, in the terminal you are in | `scripts/print-board.sh` | nothing |
 | a page to open locally — the one each tick renders | `scripts/build-board.sh --standalone .` | a re-run, or a looping instance |
-| **a live page in the browser, on a fixed local URL** | `/ai-bridge:board serve` | **a process you keep running** |
+| **a live page in the browser, on a fixed local URL** | `/loopd:board serve` | **a process you keep running** |
 | a page that updates itself as you work, no browser | `scripts/watch-board.sh` | **a process you keep running** |
 
 ```bash
@@ -407,7 +407,7 @@ scripts/watch-board.sh                      # ./.board-live/board.html, re-rende
 scripts/board-serve.sh                      # http://localhost:<boardPort> — the same page, served and auto-reloading
 ```
 
-**The page keeps itself current, locally.** Every `/ai-bridge:dispatch` tick re-renders it to
+**The page keeps itself current, locally.** Every `/loopd:dispatch` tick re-renders it to
 `.board-live/board.html` — gitignored, on this machine — and reports the path; a
 `SessionStart` hook prints the same path when a session starts. `board: false` in
 `instance.config.json` turns that off; absent or `true` leaves it on, which is the seeded
@@ -416,20 +416,20 @@ tick](docs/operations.md#rendering-it-from-each-tick)). It
 is only as fresh as the last tick — the page's masthead says when that was, and
 `watch-board.sh` is the view that follows your work in between.
 
-**`/ai-bridge:board serve` is the local web app, and it is what a bare
-`/ai-bridge:board` does**: one process per bundle, on a port
+**`/loopd:board serve` is the local web app, and it is what a bare
+`/loopd:board` does**: one process per bundle, on a port
 derived from the bundle path (`boardPort` in `instance.config.local.json` overrides it),
 serving `.board-live/` on `127.0.0.1` and nothing else. It re-renders within two seconds of
 `SNAPSHOT.json` changing and the page reloads itself. No LLM is in that path — a tick used
 to commit a `/board.html` into the bundle repo instead, and no longer does.
 
-**`/ai-bridge:board publish` publishes the same page as a private artifact**, at a URL that does
+**`/loopd:board publish` publishes the same page as a private artifact**, at a URL that does
 not change between runs and that the session banner prints. It is the route to a phone
 with no clone on it; `serve` stays the route on the machine itself. The
 URL is recorded per machine, in `instance.config.local.json`, because artifact publishing
 is account-scoped — no share level lets a second account update your page. **A headless
 tick never publishes**: measured 2026-09-05 on Claude Code 2.1.261, a `claude -p` session
-has no artifact tool at all, so the tick prints `run /ai-bridge:board publish to refresh` and stops
+has no artifact tool at all, so the tick prints `run /loopd:board publish to refresh` and stops
 there. Opening it, including from a phone: [docs/operations.md §
 opening-the-board](docs/operations.md#opening-the-board-laptop-phone-published-live).
 
@@ -477,7 +477,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Review gate** | `review-clearance.sh` — a **green check from a reviewer that declined to review is not verification.** It reads the reviewer's artifacts, takes evidence and pinning from the reviews **API** (`state` + `commit_id`), leaves text matching only the job of spotting a refusal, and refuses on unknown state. `required-checks.sh` asks it on **every** PR, so a check's name never settles whether anybody looked. [→](docs/autonomy.md#the-verification-gate) |
 | **Review rounds** | `review-rounds.sh` — **two rounds, then the human decides**, as a number a dispatcher reads rather than a rule it must remember. Exits non-zero at or past two, so a third verifier is refused. [→](docs/autonomy.md#two-rounds-then-the-human-decides) |
 | **Dispatch check** | `check-dispatch.sh` — an agent's "done" is not evidence that a PR exists. Did `status:` move, does `pr:` name a URL, does that PR resolve. **Report-only.** [→](docs/autonomy.md#did-the-dispatch-produce-its-pr) |
-| **Delegated autonomy** | one uninstallable plugin. Uninstall `ai-bridge-yolo` and every project is `gated`; `resolve-autonomy.sh` is the one reader, and a bundle's own root file still wins. [→](docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) |
+| **Delegated autonomy** | one uninstallable plugin. Uninstall `loopd-yolo` and every project is `gated`; `resolve-autonomy.sh` is the one reader, and a bundle's own root file still wins. [→](docs/conventions.md#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) |
 | **Dispatch lock** | `tick-lock.sh` — one PM tick at a time, taken by the launcher in the same operation that checks it, **and checked again by the tick itself**, since a resumed tick never passes through the launcher. A dispatched tick does not refuse its own lock: unclaimed means it is that dispatch. A tick that finds **no** lock was not dispatched at all — it is refused (exit 4), because **a tick is never resumed**. The claim on a lock records **whose** it is and from **which source**, and the trust is asymmetric — a runtime-derived id (`CLAUDE_CODE_SESSION_ID` names the *session*, not the tick) may refuse a claim but never clears one, so a merely-matching identity is exit 2 rather than a guess in either direction. Stale, or unattributable, means **ask the human**, never silently delete and never silently adopt. Per clone, not cross-machine. [→](docs/operations.md#one-tick-at-a-time-the-dispatch-lock) |
 | **Worktrees** | `prune-worktrees.sh` **reports, never deletes.** Do not add a delete, not even behind a flag — it destroyed three running agents' worktrees once. [→](docs/conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing) |
 | **Bundle repair** | `migrate-bundle.sh` is report-only by default and fixes only what has one right answer. **A false success is worse than the error it claims to fix.** [→](docs/conventions.md#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) |
@@ -485,7 +485,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Board data** | the board's field list is a data-governance boundary — no question text, no document bodies, no author identity, no out-of-bundle paths. Nothing publishes it now, and a rendered file is still copyable. [→](docs/operations.md#before-it-leaves-the-machine-know-what-it-carries) |
 | **Untrusted text** | `AWAITING.md` items and the per-turn state injection are fenced as data before they enter session context. Keep the boundary. [→](docs/conventions.md#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) |
 | **No customer PII** | not in a task title, not in an answer, not in a `Finding`. Titles reach the board; answers persist for the life of the repo. |
-| **Drift check** | `/ai-bridge:audit` is read-only and advisory. It catches an autonomous loop gaming itself; it is not a merge-blocking guarantee. [→](docs/autonomy.md#the-audit-counter-metric) |
+| **Drift check** | `/loopd:audit` is read-only and advisory. It catches an autonomous loop gaming itself; it is not a merge-blocking guarantee. [→](docs/autonomy.md#the-audit-counter-metric) |
 
 ## Configuration reference
 
@@ -509,7 +509,7 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | `externalReviewer` | the CodeRabbit CLI | yes |
 | `boardInstances` | the board is just this instance | yes |
 | `boardPort` | derived from the bundle path, in the 4xxxx band | **per machine only** — a port belongs to a laptop, not to a bundle everyone clones |
-| `board` | **on** — `SNAPSHOT.json` is seeded and each tick renders `.board-live/board.html`, which `/ai-bridge:board serve` serves | **no** — one instance, one answer |
+| `board` | **on** — `SNAPSHOT.json` is seeded and each tick renders `.board-live/board.html`, which `/loopd:board serve` serves | **no** — one instance, one answer |
 | `codegraphSkip` | index every product repo | yes |
 
 Environment knobs: `PUSH_STATE_MAX` (default **12**), `PRUNE_ACTIVE_MINUTES`,
@@ -524,10 +524,10 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 
 | Script | Does | Writes? |
 |---|---|---|
-| `init-bundle.sh` | `<dir>` — creates or refreshes a bundle, and converts one stamped by the retired `/ai-bridge:init`: seed content copied where absent, machinery links removed, `repos/` linked. `--config` links the `~/.claude` layer instead | yes, that bundle |
+| `init-bundle.sh` | `<dir>` — creates or refreshes a bundle, and converts one stamped by the retired `/loopd:init`: seed content copied where absent, machinery links removed, `repos/` linked. `--config` links the `~/.claude` layer instead | yes, that bundle |
 | `refresh-seeds.sh` | `<dir>` — 3-way merges a seed change this repo made since the bundle was stamped; a hand-diverged file is reported, never forced, and its conflicted merge is saved as `.bak.<epoch>` | only with `--apply` |
 | `validate-bundle.sh` | schema errors + dangling frontmatter references | no |
-| `normalise-config.sh` | `<dir>` — reports what is out of place across the two config files: MISPLACED (a per-machine key in the tracked `instance.config.json`, or a tracked-only key such as `defaultOwner` in `instance.config.local.json`), MISSING (a seed key the tracked file lacks) and ORDER. Values are never changed — only placed, ordered, or added when absent — and the tracked file is left **staged**, never committed. Run by every `/ai-bridge:init` stamp | only with `--apply` |
+| `normalise-config.sh` | `<dir>` — reports what is out of place across the two config files: MISPLACED (a per-machine key in the tracked `instance.config.json`, or a tracked-only key such as `defaultOwner` in `instance.config.local.json`), MISSING (a seed key the tracked file lacks) and ORDER. Values are never changed — only placed, ordered, or added when absent — and the tracked file is left **staged**, never committed. Run by every `/loopd:init` stamp | only with `--apply` |
 | `migrate-bundle.sh` | mechanical schema repairs | only with `--apply` |
 | `project-paused.sh` | answers whether a project is paused, as one predicate with a three-value exit | no |
 | `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
@@ -557,7 +557,7 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `write-snapshot.sh` | refreshes `SNAPSHOT.json` | only if it already exists |
 | `build-board.sh` | renders the HTML board (anywhere; needs `python3`) — pass `.` to render THIS instance only | yes, the output file |
 | `print-board.sh` | prints the board in the terminal | no |
-| `status-line.sh` | the bundle's Claude Code `statusLine`: one coloured line — `AI Bridge · <n> in flight · <n> need you · lock free\|held · last tick <hh:mm>` — from task frontmatter, `AWAITING.md`, `.tick-lock` and `log.md`'s last `* TICK`. No `jq`, no `gh`, no model; a number it cannot establish renders `?`, and outside a bundle it prints nothing. `/ai-bridge:init` installs it into the BUNDLE's `.claude/settings.json` and never the user's | no |
+| `status-line.sh` | the bundle's Claude Code `statusLine`: one coloured line — `AI Bridge · <n> in flight · <n> need you · lock free\|held · last tick <hh:mm>` — from task frontmatter, `AWAITING.md`, `.tick-lock` and `log.md`'s last `* TICK`. No `jq`, no `gh`, no model; a number it cannot establish renders `?`, and outside a bundle it prints nothing. `/loopd:init` installs it into the BUNDLE's `.claude/settings.json` and never the user's | no |
 | `watch-board.sh` | renders the board into `.board-live/` and re-renders on every change | yes, the page (gitignored) |
 | `board-serve.sh` | serves `.board-live/` on `127.0.0.1:<boardPort>` and re-renders it when `SNAPSHOT.json` changes — one process per bundle | yes, the page (gitignored) |
 | `link-repos.sh` | refreshes `<instance>/repos/` | yes |
@@ -584,7 +584,7 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | `resolve-max-agents.sh` | prints the concurrency cap **this machine** should honour, from the same two files | no |
 | `spawn-preflight.sh` | step 3's read before a wave: what permission mode is **this session** in? Reads the mode `hooks/permission-mode.sh` recorded for this call, matched by its `--token` — no probe, no spawn. Exit 1 `auto`, 0 `not-auto`, 2 `could-not-read`, never folded into either. It reports the mode and predicts no launch outcome: the classifier judges the brief, not the command | no |
 | `agent-sessions.sh` | the one reader of a dispatched role agent's **background** session — `state <id>` prints `working`/`blocked`/`done`/`gone`, `in-flight <bundle>` counts the recorded `session:` ids that still hold a `maxAgentsInFlight` slot. Exit 2 is unknown, never a free slot | no |
-| `resolve-account.sh` | the one reader of *which Claude account is this bundle on* — prints `declared`/`active`/launcher path, exit 0 match, 3 mismatch, 4 no account on this session, 1 inert (no `ai-bridge-accounts` companion, or nothing declared). Reads no credential | no |
+| `resolve-account.sh` | the one reader of *which Claude account is this bundle on* — prints `declared`/`active`/launcher path, exit 0 match, 3 mismatch, 4 no account on this session, 1 inert (no `loopd-accounts` companion, or nothing declared). Reads no credential | no |
 | `resolve-autonomy.sh` | the one reader of *does delegated autonomy exist here* — prints the `AUTONOMY.md` in force (bundle root first, else an installed companion plugin from core's own marketplace), exit 1 when there is none, which is `gated` | no |
 | `merge-permit.sh` | the policy half of the deny baseline's `subagent_merge` rule — 0 only where the owning project's mode delegates the merge, the caller is the `project-manager` and all four clearances are recorded at the head being merged; 1 refuses, printing why | no |
 | `clearance-receipt.sh` | `record`/`verify`/`path` for those clearance records — one file per repo, PR and head under `.tick-receipts/`, written by the four clearance scripts and read offline by the hook | `record` only, `.tick-receipts/` (gitignored) |
@@ -593,10 +593,10 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `/ai-bridge:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine (or Claude Code has not restarted since) — never the stamp, which delivers no commands at all now | `/plugin marketplace add cbmono/ai-bridge`, `/plugin install ai-bridge@ai-bridge`, then `/exit` and relaunch |
-| A command or agent is missing after a pull | it is a **new** `plugin/` file, so no symlink exists yet | `/ai-bridge:init <bundle>` |
-| A seed change from a pull never arrived | seed is copied only when absent, by design | `/ai-bridge:init` and port what it reports |
-| Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `/ai-bridge:init` from the main working tree |
+| `/loopd:dispatch` reports "Unknown command" | the **plugin** is not installed on this machine (or Claude Code has not restarted since) — never the stamp, which delivers no commands at all now | `/plugin marketplace add cbmono/loopd`, `/plugin install loopd@loopd`, then `/exit` and relaunch |
+| A command or agent is missing after a pull | it is a **new** `plugin/` file, so no symlink exists yet | `/loopd:init <bundle>` |
+| A seed change from a pull never arrived | seed is copied only when absent, by design | `/loopd:init` and port what it reports |
+| Commands and hooks vanished later, having worked | the installer was run from a git **worktree** | re-run `/loopd:init` from the main working tree |
 | Installer exits 2, "refusing to install from a git worktree" | working as designed | `git -C <src> worktree list` — the first entry is the main tree |
 | The startup nudge is empty | `AWAITING.md` was deleted, or the PM reshaped its layout | `touch AWAITING.md`; `session-banner.sh` greps the heading and bullets **literally** |
 | An instance is missing from the board | it has no `SNAPSHOT.json`, or `boardInstances` doesn't name it | `touch SNAPSHOT.json` in it |
@@ -606,9 +606,9 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | A `yolo` project never merges anything | preflight failed: one `gh` identity, no external reviewer, or no required checks | the loop says which; fix that, or merge by hand |
 | `required-checks.sh` exits 2 | the platform probe returned something it cannot classify | that is a refusal by design — read the message, don't loosen the script |
 | A PR is all-green but not merge-eligible | the reviewer published "Review limit reached" behind a green check — `review-clearance.sh` exit 1 | wait for the reopen time it quotes, then ask for a **first** review; nothing re-reviews a skipped PR by itself |
-| `required-checks.sh` exits 2, "review-clearance.sh not found" | the instance predates the review gate, so the new machinery isn't linked yet | `/ai-bridge:init <bundle>` — until then it refuses rather than clear a reviewer check it cannot interpret |
+| `required-checks.sh` exits 2, "review-clearance.sh not found" | the instance predates the review gate, so the new machinery isn't linked yet | `/loopd:init <bundle>` — until then it refuses rather than clear a reviewer check it cannot interpret |
 | `required-checks.sh` exits 1, "no independent review clears" | every required check is green but no review artifact clears the head — the gate no longer decides from a check's *name* whether a reviewer is involved | ask for a review at the current head; if the repo genuinely has no reviewer, that is the thing to fix, not the gate |
-| `required-checks.sh` exits 2, "present but does not run" | the linked sibling is broken, or predates its `--self-test` contract; a mode bit is not proof a file executes | `/ai-bridge:init <bundle>` to relink — a sibling that fails every call looks exactly like "no reviewer is required", so this refuses |
+| `required-checks.sh` exits 2, "present but does not run" | the linked sibling is broken, or predates its `--self-test` contract; a mode bit is not proof a file executes | `/loopd:init <bundle>` to relink — a sibling that fails every call looks exactly like "no reviewer is required", so this refuses |
 | `review-rounds.sh` exits 1 | the PR has already had its two verification rounds — this is the cap doing its job, not a fault | stop reviewing: put both positions (reviewer / implementer / what the criterion asks) in front of the human and let them decide |
 | An agent reported "done" but no PR ever appeared | it parked before opening one — `check-dispatch.sh` exit 1, the parked signature | one message to that agent: open the PR on what it already committed. Never re-dispatch the task |
 | `review-clearance.sh` exits 4 on a PR that *was* reviewed | the reviewer read an earlier push and does not re-review (`auto_incremental_review: false`) — the review is **stale**, not absent | ask for a review at the current head; this is the common case here, not a bug |
@@ -617,9 +617,9 @@ the table above accounts for **every** script in `plugin/scripts/`, which
 | `review-clearance.sh` exits 2, "is not a usable answer" on `mergeable`/`mergeStateStatus` | the host computes mergeability lazily and says UNKNOWN for seconds after the base moves; a token without push access never gets `mergeStateStatus` at all | ask again next tick. If it never clears, check that the `gh` token has push access on the repo — the merge gate needs one anyway |
 | `review-clearance.sh` exits 4, "carries no evidence that a review was COMPLETED" | the only artifact is the reviewer's *"currently processing"* placeholder or similar — it names the head but nothing says anybody read it | wait for the real review, or ask for one; not-a-refusal is not a review, and clearing on it was a live false pass |
 | CodeRabbit: "Unable to determine base branch" | a remote-less instance has no `origin/HEAD` to infer one from | `git config coderabbit.baseBranch <branch>` |
-| Validator errors right after an upgrade | the machinery updated, the data didn't | `/ai-bridge:init` runs the stamp and the check-and-fix pass in the right order |
+| Validator errors right after an upgrade | the machinery updated, the data didn't | `/loopd:init` runs the stamp and the check-and-fix pass in the right order |
 | Two loops dispatched the same task | `defaultOwner` is not set on a shared bundle | [docs/sharing.md](docs/sharing.md) |
-| Machinery symlinks all dangle on a second machine | intentional — machinery is machine-local | re-run `/ai-bridge:init` there |
+| Machinery symlinks all dangle on a second machine | intentional — machinery is machine-local | re-run `/loopd:init` there |
 
 ---
 
@@ -659,7 +659,7 @@ behaviour that already shipped, **minor** for a new capability or a new file und
 **Why the number matters more than a label.** A bundle consumes nothing from this checkout
 any more — the machinery ships in the plugin, replaced whole on every update — but
 `plugin/seed/` content is copied into a bundle once, ever, so a seed edit reaches a stamped
-bundle only through `/ai-bridge:init`. That gap has cost real time: two hooks
+bundle only through `/loopd:init`. That gap has cost real time: two hooks
 merged and sat inert in every instance for a week, back when a stamp was the only route.
 
 So the session banner prints one line — and only one, and only sometimes. The two numbers
@@ -719,7 +719,7 @@ Agent-facing rules are in [`CLAUDE.md`](CLAUDE.md) and [`.claude/rules/`](.claud
 loopd used to live as an `ai-bridge/` subtree inside
 [`ai-setup`](https://github.com/cbmono/ai-setup), the Claude Code defaults repo. **This
 repo is now the canonical copy** — every instance's machinery ships from *this* repo as
-the `ai-bridge` plugin, and `/ai-bridge:init` and `/ai-bridge:welcome fix` here are the
+the `ai-bridge` plugin, and `/loopd:init` and `/loopd:welcome fix` here are the
 ones to run.
 
 `ai-setup` **no longer carries the subtree** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69)
@@ -748,7 +748,7 @@ section is inlined in `plugin/seed/CLAUDE.md`, so nothing can dangle.
 
 **`${CLAUDE_CONFIG_DIR:-~/.claude}` is owned by
 [`cbmono/ai-setup`](https://github.com/cbmono/ai-setup)** — the commands, hooks, output
-style, skills and `settings.json` all install from there. Run *that* repo's `/ai-bridge:init`
+style, skills and `settings.json` all install from there. Run *that* repo's `/loopd:init`
 for those.
 
 loopd installs into that directory too, but only the paths **it probes for**: three
@@ -764,7 +764,7 @@ existed only in the fork closed *secret-exposure* paths the public repo was stil
 ```bash
 # THE ONE THING THAT STILL WANTS A CLONE of this repo: it writes absolute symlinks INTO
 # ~/.claude that point at the source tree, so it has to know where that tree is.
-git clone git@github.com:cbmono/ai-bridge.git ~/workspace/ai-bridge   # if you have none
+git clone git@github.com:cbmono/loopd.git ~/workspace/loopd   # if you have none
 bash ~/workspace/ai-bridge/plugin/scripts/init-bundle.sh --config
 ```
 
@@ -813,5 +813,5 @@ still resolving into the checkout you had just detached from). Real files, `*.ba
 
 An instance stamped before this existed carries one line in its `CLAUDE.md`:
 `@~/.claude/claude-defaults.md`. That file is no longer shipped, and a missing `@import`
-fails **silently**. `/ai-bridge:init <bundle>` now reports it. Replace that line with the
+fails **silently**. `/loopd:init <bundle>` now reports it. Replace that line with the
 `## Session defaults` section from [`plugin/seed/CLAUDE.md`](plugin/seed/CLAUDE.md).
