@@ -75,7 +75,7 @@ done
 BIN="$(cd "$(dirname "$0")" && pwd)"
 
 # The bundle is the nearest ancestor of the task document holding instance.config.json —
-# the same anchor `/ai-bridge:init` writes, so nothing has to be passed in.
+# the same anchor `/<plugin>:init` writes, so nothing has to be passed in.
 if [ -z "$INSTANCE" ]; then
   d="$(cd "$(dirname "$TASK")" && pwd)"
   while [ "$d" != "/" ]; do

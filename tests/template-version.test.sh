@@ -30,6 +30,7 @@
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
+. "$(dirname "$0")/tools/plugin-name.sh"
 
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
@@ -461,9 +462,9 @@ ok "…so the compare is numeric per field, not lexicographic" \
   "$(printf '%s\n' "$OUT" | grep -qF 'UPDATE' && echo yes || echo no)" yes
 # THE REPAIR IS TWO COMMANDS AND THE SECOND ONE IS STILL THE POINT: updating the plugin
 # refreshes the machinery, but a SEED change reaches a bundle only through a stamp. It was
-# `install.sh`; it is `/ai-bridge:init` since the bundle stopped carrying machinery.
+# `install.sh`; it is `/<plugin>:init` since the bundle stopped carrying machinery.
 ok "…and it names the RE-STAMP, not just the update" \
-  "$(printf '%s\n' "$OUT" | grep -qF '/ai-bridge:init' && echo yes || echo no)" yes
+  "$(printf '%s\n' "$OUT" | grep -qF '/'"${PN}:"'init' && echo yes || echo no)" yes
 
 equal="$(mkfixture equal 1.2.3 1.2.3)"
 run_check "$equal"
@@ -646,7 +647,7 @@ wire "$equal"
 banner "$equal"
 ok "up to date: the banner says nothing about versions" \
   "$(printf '%s\n' "$OUT" | grep -c 'UPDATE' || true)" 0
-ok "…and the rest of the banner is intact"     "$(printf '%s\n' "$OUT" | grep -c 'loopd' )" 1
+ok "…and the rest of the banner is intact"     "$(printf '%s\n' "$OUT" | grep -c 'loopd v' )" 1
 
 # An instance stamped before this script shipped has no file to run. Absence is silence —
 # the same contract every other optional section of the banner keeps.
@@ -665,9 +666,9 @@ echo "== 8. THE PLUGIN INSTALL is the other subject, and it is bounded and cache
 #
 # The remote is a local bare repo: nothing here touches the network.
 PHOME="$TMP/phome/plugins"
-PINST="$PHOME/cache/mkt/ai-bridge/1.0.0"
+PINST="$PHOME/cache/mkt/${PN}/1.0.0"
 PMKT="$PHOME/marketplaces/mkt"
-PCACHE="$PHOME/data/ai-bridge-mkt/version-check"
+PCACHE="$PHOME/data/${PN}-mkt/version-check"
 # THE WHOLE PLUGIN, not just this one script: `ai-bridge.sh check` is asserted against the
 # same fixture below, and it resolves its own root from where it is executing.
 mkdir -p "$PINST" "$PHOME/marketplaces"
@@ -687,11 +688,11 @@ pcheck() { OUT="$(bash "$PINST/scripts/check-template-version.sh" "$@" 2>/dev/nu
 rm -f "$PCACHE"; pcheck --state
 ok "level with the marketplace: state is current"  "$(printf '%s' "$OUT" | cut -f1)" current
 ok "…and it names the installed version"           "$(printf '%s' "$OUT" | cut -f2)" 1.0.0
-ok "…and the plugin, so a caller need not spell it" "$(printf '%s' "$OUT" | cut -f4)" ai-bridge
+ok "…and the plugin, so a caller need not spell it" "$(printf '%s' "$OUT" | cut -f4)" "$PN"
 pcheck
 ok "…and the human line stays byte-empty"          "$(printf '%s' "$OUT" | wc -c | tr -d ' ')" 0
 
-# THE SAME HELPER ANSWERS `/ai-bridge:welcome check`, which is what stops that row and the
+# THE SAME HELPER ANSWERS `/<plugin>:welcome check`, which is what stops that row and the
 # banner's from ever disagreeing — asserted on both verdicts, against this same install.
 abcheck() { AOUT="$(CLAUDE_PLUGIN_ROOT="$PINST" bash "$PINST/scripts/ai-bridge.sh" check --instance "$TMP/inst" 2>/dev/null)"; }
 abcheck
@@ -708,7 +709,7 @@ rm -f "$PCACHE"; abcheck
 ok "welcome check agrees it is behind, with both versions" \
   "$(printf '%s\n' "$AOUT" | grep -qF 'plugin 1.0.0 is behind the marketplace, which carries 1.0.1' && echo yes || echo no)" yes
 ok "…and names the one command that fixes it"       \
-  "$(printf '%s\n' "$AOUT" | grep -qF 'claude plugin update ai-bridge' && echo yes || echo no)" yes
+  "$(printf '%s\n' "$AOUT" | grep -qF "claude plugin update $PN" && echo yes || echo no)" yes
 
 # THE CACHE IS THE REASON A SESSION MAKES NO NETWORK CALL. With a fresh stamp the remote may
 # move as far as it likes and the answer does not — and `--fetch` is what forces past it.

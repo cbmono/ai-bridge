@@ -8,7 +8,7 @@
 # `roleTiers`/`models` lived only as prose in SCHEMA.md, project-manager.md,
 # advisor.md, audit.md and the loop's step file — five files telling an agent to go and
 # look something up, and NO code that read it. So the config governed exactly the dispatch
-# paths whose markdown happened to mention it (the /ai-bridge:dispatch tick, the PM's own
+# paths whose markdown happened to mention it (the /<plugin>:dispatch tick, the PM's own
 # dispatches) and nothing else. Every ad-hoc `Agent` dispatch from a main session — a
 # documented, legitimate mode — silently ignored it, because the Agent tool takes its
 # model from its own parameter, else the agent's frontmatter, else the parent. Measured
@@ -41,6 +41,7 @@
 # is how the two would come to disagree. This file owns the two-step lookup below and the
 # contract that absence is not an error; precedence is that file's.
 set -uo pipefail
+_pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then . "$_pn"; fi
 
 agent=""; inst="."
 while [ $# -gt 0 ]; do
@@ -86,7 +87,7 @@ unresolved() { # <what-is-missing> <fix>
   echo "  the SESSION model instead of a chosen one, silently, for this agent." >&2
   echo "  Fix: $2" >&2
   echo "       to instance.config.local.json — per-machine spend, and the tracked" >&2
-  echo "       instance.config.json is the fallback. Or re-run /ai-bridge:init on this" >&2
+  echo "       instance.config.json is the fallback. Or re-run /${PLUGIN_NAME}:init on this" >&2
   echo "       bundle, which seeds both keys into the local file." >&2
   exit 1
 }

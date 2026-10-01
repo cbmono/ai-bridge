@@ -7,7 +7,7 @@
 # So: each class in `plugin/scripts/refresh-seeds.sh`'s DECIDABLE table is pinned against
 # a fixture, an undecidable hunk in the SAME file must still reach the human, and the
 # bundle tree must gain no `.bak` at all. Plus the two pointers criterion 6/7 name:
-# `/ai-bridge:init` runs the check-and-fix pass itself, and `welcome fix` points at it.
+# `/<plugin>:init` runs the check-and-fix pass itself, and `welcome fix` points at it.
 #
 # The fixture builds its own template in a temp git repo — its own controlled seed
 # content — so these assertions describe this test's edits and not today's real seed.
@@ -18,6 +18,7 @@ set -euo pipefail
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 REPO="$HERE/.."
 [ -f "$REPO/plugin/scripts/refresh-seeds.sh" ] || {
   echo "seed-conflict-resolution.test: no plugin/scripts/refresh-seeds.sh at $REPO" >&2; exit 2; }
@@ -152,7 +153,7 @@ assert "a bundle with nothing to decide omits the section" "$(hasnt "what.s left
 assert "…and does not print the old 'Nothing.' line"       "$(hasnt 'This bundle is up to date' "$CLEAN")"
 assert "…and is idempotent on the decidable classes"       "$(hasnt 'RESOLVED' "$CLEAN")"
 
-echo "== /ai-bridge:init runs the check-and-fix pass itself =="
+echo "== /${PN}:init runs the check-and-fix pass itself =="
 # Re-diverge one seed-managed .gitignore line so the pass has something to do.
 printf 'node_modules/\n# derived, never tracked\n/board.html\n/%s/\n/%s\n/%s\n' "$AB_BOARD_DIR" "$AB_STATE_DIR" "$AB_LOCK" > "$TPL/plugin/seed/.gitignore"
 ( cd "$TPL" && git add -A && gc "template, seed v3" )
@@ -181,7 +182,7 @@ echo "== welcome fix points at init and exits 0 =="
 FIX_RC=0
 FIX="$(bash "$TPL/plugin/scripts/ai-bridge.sh" fix --instance "$INST" 2>&1)" || FIX_RC=$?
 assert "welcome fix exits 0"                   "$([ "$FIX_RC" -eq 0 ] && echo 0 || echo 1)"
-assert "…and points at /ai-bridge:init"        "$(has 'ai-bridge:init' "$FIX")"
+assert "…and points at /${PN}:init"        "$(has ''"${PN}:"'init' "$FIX")"
 assert "…in ONE line"                          "$([ "$(printf '%s\n' "$FIX" | wc -l | tr -d ' ')" = 1 ] && echo 0 || echo 1)"
 assert "…and repairs nothing itself"           "$(hasnt 'idempotent tier' "$FIX")"
 CHECK="$(bash "$TPL/plugin/scripts/ai-bridge.sh" check --instance "$INST" 2>&1 || true)"
@@ -195,7 +196,7 @@ assert "…and says what welcome is for"          "$(has 'the banner, and' "$OPS
 assert "…and carries the decidable table"       "$(has 'decidable conflict classes' "$OPS")"
 SEEDCM="$(cat "$REPO/plugin/seed/CLAUDE.md")"
 assert "the seed CLAUDE.md names init after a plugin update" \
-  "$(has 'After every plugin update, run ..ai-bridge:init' "$SEEDCM")"
+  "$(has 'After every plugin update, run ..'"${PN}:"'init' "$SEEDCM")"
 assert "…and says what welcome is for"          "$(has 'is the banner and' "$SEEDCM")"
 
 # Driven by the table's CLASS, not by a path: the next derived file added as a row is

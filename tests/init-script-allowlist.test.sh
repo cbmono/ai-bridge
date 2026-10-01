@@ -7,6 +7,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/initallow.XXXXXX")" || {
   echo "init-script-allowlist.test: mktemp -d failed" >&2; exit 2; }
 TMP="$(cd "$TMP" && pwd -P)"
@@ -22,7 +23,7 @@ copy_plugin() { # <dest> — the tracked plugin/ tree as plain files
   done
   chmod +x "$1"/scripts/*.sh
 }
-MK="$TMP/home/.claude/plugins/cache/mk/ai-bridge"
+MK="$TMP/home/.claude/plugins/cache/mk/${PN}"
 copy_plugin "$MK/9.9.9"
 copy_plugin "$TMP/checkout/plugin"
 
@@ -90,7 +91,7 @@ echo "== 6. the shipped rules grant no spawn and no bypass =="
 ok "no claude --bg / bypassPermissions in what init writes" \
   "$(grep -cE 'claude --bg|bypassPermissions' "$TMP/i1/.claude/settings.local.json" | tr -d ' ')" 0
 ok "the version is the only wildcard besides the script" \
-  "$(grep -oF "$TMP/home/.claude/plugins/cache/mk/ai-bridge/*/scripts/*)" "$TMP/i1/.claude/settings.local.json" | wc -l | tr -d ' ')" 2
+  "$(grep -oF "$TMP/home/.claude/plugins/cache/mk/${PN}/*/scripts/*)" "$TMP/i1/.claude/settings.local.json" | wc -l | tr -d ' ')" 2
 
 echo "== 7. a multi-line EMPTY allow array is filled, valid, with python3 unavailable =="
 # No python3 means init's JSON check is skipped, so a malformed rewrite would replace a good

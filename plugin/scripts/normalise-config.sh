@@ -11,6 +11,7 @@
 # The overridable set has one source, SCHEMA.md → "Per-machine config overrides"; the
 # reasoning lives in docs/operations.md § 1.
 set -uo pipefail
+_pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then . "$_pn"; fi
 
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 SEED="$BIN_DIR/../seed/instance.config.json"
@@ -191,7 +192,7 @@ with open(status_path, "w") as fh:
 if not total:
     raise SystemExit(0)
 if not apply_mode:
-    print("  %d finding(s). Apply them with: /ai-bridge:init --normalise-config" % total)
+    print("  %d finding(s). Apply them with: /%s:init --normalise-config" % (total, os.environ.get("PLUGIN_NAME", "")))
     raise SystemExit(1)
 
 

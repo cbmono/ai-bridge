@@ -12,6 +12,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 THEME="$REPO/plugin/themes/ai-bridge.json"
 TOKENS="$REPO/tests/fixtures/theme-tokens.txt"
 PALETTE="$REPO/tests/fixtures/theme-palette.txt"
@@ -60,8 +61,8 @@ echo "== 3. the manifest declares the directory, with every existing key intact 
 ok "experimental.themes points at ./themes/" "$(jq -r '.experimental.themes // ""' "$PJ")" "./themes/"
 ok "…and that path resolves to a directory" \
    "$([ -d "$REPO/plugin/$(jq -r '.experimental.themes // "."' "$PJ")" ] && echo yes || echo no)" yes
-ok "…so /theme lists custom:ai-bridge:ai-bridge" \
-   "custom:$(jq -r .name "$PJ"):$(basename "$THEME" .json)" "custom:ai-bridge:ai-bridge"
+ok "…so /theme lists custom:${PN}:ai-bridge" \
+   "custom:$(jq -r .name "$PJ"):$(basename "$THEME" .json)" "custom:${PN}:ai-bridge"
 miss=""
 for k in name displayName version description author repository license keywords; do
   [ "$(jq -r "has(\"$k\")" "$PJ")" = true ] || miss="${miss:+$miss }$k"
@@ -82,7 +83,7 @@ echo "== 5. nothing the plugin ships writes the user's theme key =="
 # Selecting a theme is the human's action in /theme. The JSON key is the thing a writer
 # would have to spell, so its absence from the whole shipped tree is the assertion.
 ok "no shipped file spells the settings key" "$(files_naming "$REPO/plugin" '"theme"')" 0
-printf '{"theme": "custom:ai-bridge:ai-bridge"}\n' > "$TMP/settings.json"
+printf '{"theme": "custom:'"${PN}:"'ai-bridge"}\n' > "$TMP/settings.json"
 ok "…and the same scanner finds it when it is there" "$(files_naming "$TMP" '"theme"')" 1
 
 echo "== 6. the palette is the handoff's, and the duotone keys carry their own hex =="

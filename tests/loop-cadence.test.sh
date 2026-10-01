@@ -5,7 +5,7 @@
 #
 # WHY THIS EXISTS. `/loop [interval] <prompt>` and `/schedule` (remote routines) both ship
 # with Claude Code, and until now ai-bridge documented neither: the cadence was the owner
-# re-running `/ai-bridge:dispatch` by hand, or a session babysitting it. Naming `/loop` in
+# re-running `/<plugin>:dispatch` by hand, or a session babysitting it. Naming `/loop` in
 # a document is cheap and unenforced — the control panel's
 # knowledge/findings/a-rule-with-no-reader-is-not-a-rule.md counts six rules in one month
 # that were prose and therefore were not rules — so the half that is BEHAVIOUR is driven
@@ -42,6 +42,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 
@@ -131,8 +132,8 @@ echo "== 2. CONTRACT: the dispatch skill names /loop as the way to run the caden
 # =======================================================================================
 D="$(flatten "$DISPATCH")"
 
-ok "the standard form is named"           "$(saw "$D" '`/loop 10m /ai-bridge:dispatch` is the standard way to run this loop in a session')" yes
-ok "…the self-paced form, for a quiet bundle" "$(saw "$D" '`/loop /ai-bridge:dispatch`, with no interval')" yes
+ok "the standard form is named"           "$(saw "$D" '`/loop 10m /'"${PN}:"'dispatch` is the standard way to run this loop in a session')" yes
+ok "…the self-paced form, for a quiet bundle" "$(saw "$D" '`/loop /'"${PN}:"'dispatch`, with no interval')" yes
 ok "…and that omitting it is dynamic mode" "$(saw "$D" 'dynamic mode — the model paces its own iterations')" yes
 
 # THE REASON FOR THE NUMBER, not just the number. An interval with no stated basis is one
@@ -171,7 +172,7 @@ ok "…the old 'never on a clock' absolute is gone" "$(saw "$D" 'never on a cloc
 ok "…(control: the phrase is findable)"   "$(saw 'Serial, gated on completion, never on a clock.' 'never on a clock')" yes
 ok "…a clock may ASK, not overlap"        "$(saw "$D" 'A clock is allowed to ASK — it is not allowed to overlap')" yes
 ok "…and pm-design.md agrees"             "$(saw "$(flatten "$REPO/docs/pm-design.md")" 'A clock is allowed to *ask*; it is not allowed to *overlap*')" yes
-ok "…README shows the /loop form"         "$(saw "$(flatten "$REPO/README.md")" '/loop 10m /ai-bridge:dispatch')" yes
+ok "…README shows the /loop form"         "$(saw "$(flatten "$REPO/README.md")" '/loop 10m /'"${PN}:"'dispatch')" yes
 
 # =======================================================================================
 echo "== 3. MEASURED: a remote routine's clone has none of a bundle's operating inputs =="
@@ -196,7 +197,7 @@ ok "…and SCHEMA.md is tracked"            \
   "$( ( cd "$CLONE" && git check-ignore -q "$AB_SCHEMA" ) && echo no || echo yes)" yes
 
 O="$(flatten "$OPS")"
-ok "operations.md names the standard form" "$(saw "$O" '**`/loop 10m /ai-bridge:dispatch`.** That is the whole answer')" yes
+ok "operations.md names the standard form" "$(saw "$O" '**`/loop 10m /'"${PN}:"'dispatch`.** That is the whole answer')" yes
 ok "…and the self-paced form"             "$(saw "$O" "no interval ⇒ \`/loop\`'s dynamic mode")" yes
 ok "…the measured Claude Code build"      "$(saw "$O" 'measured on **2.1.261**')" yes
 ok "…that nothing is installed for cadence" "$(saw "$O" 'no watcher process, no `sleep` loop, no cron entry, and no script in this repo')" yes
@@ -207,12 +208,12 @@ ok "…and that the exit code does not move" "$(saw "$O" '**The exit code delibe
 
 ok "…/schedule is quoted as REMOTE"       "$(saw "$O" 'scheduled **remote** Claude Code agents (routines)')" yes
 ok "…the 7-of-7 measurement is stated"    "$(saw "$O" '**7 of 7 operating inputs are gitignored, so a fresh clone has none of them**')" yes
-ok "…the per-clone lock is the unsafe row" "$(saw "$O" 'a routine driving `/ai-bridge:dispatch` would be a **second orchestrator**')" yes
-ok "…and the fallback is /loop at 7d"     "$(saw "$O" '**`/loop 7d /ai-bridge:audit`**')" yes
+ok "…the per-clone lock is the unsafe row" "$(saw "$O" 'a routine driving `/'"${PN}:"'dispatch` would be a **second orchestrator**')" yes
+ok "…and the fallback is /loop at 7d"     "$(saw "$O" '**`/loop 7d /'"${PN}:"'audit`**')" yes
 ok "…pointing at the recorded Finding"    "$(saw "$O" 'a-cloud-routine-cannot-run-a-bundle-checkout')" yes
 
 A="$(flatten "$AUDIT")"
-ok "the audit skill's fallback is /loop 7d" "$(saw "$A" '`/loop 7d /ai-bridge:audit`')" yes
+ok "the audit skill's fallback is /loop 7d" "$(saw "$A" '`/loop 7d /'"${PN}:"'audit`')" yes
 ok "…it says a routine is remote"         "$(saw "$A" 'creates *remote* Claude Code agents')" yes
 # THE BABYSITTER THAT WAS REMOVED. "a cron job or your scheduler of choice" was the whole
 # of the audit cadence, and it is exactly the hand-driven instruction this task deletes.

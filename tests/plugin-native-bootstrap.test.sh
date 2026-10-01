@@ -27,6 +27,7 @@ set -uo pipefail
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/plugin-native.XXXXXX")" || {
   echo "plugin-native-bootstrap.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
 TMP="$(cd "$TMP" && pwd -P)"
@@ -118,10 +119,10 @@ ok "…and every registered hook file exists"  "${HOOKMISS:-none}" none
 # path-scan: absent — asserted GONE; this line IS the assertion that it went
 ok "the repo ships no symlink/ directory"    "$(yn test -e "$REPO/symlink")" no
 ok "install.sh is a stub that refuses"       "$(bash "$REPO/install.sh" /tmp >/dev/null 2>&1; echo $?)" 2
-ok "…naming /ai-bridge:init"                 "$(bash "$REPO/install.sh" 2>&1 | grep -c '/ai-bridge:init' | tr -d ' ')" 1
+ok "…naming /${PN}:init"                 "$(bash "$REPO/install.sh" 2>&1 | grep -c '/'"${PN}:"'init' | tr -d ' ')" 1
 ok "…on ONE screen (≤ 40 lines)"             "$([ "$(bash "$REPO/install.sh" 2>&1 | grep -c .)" -le 40 ] && echo yes || echo no)" yes
 ok "upgrade.sh is a stub that refuses"       "$(bash "$REPO/upgrade.sh" /tmp >/dev/null 2>&1; echo $?)" 2
-ok "…naming /ai-bridge:welcome fix"          "$(bash "$REPO/upgrade.sh" 2>&1 | grep -c 'ai-bridge:welcome fix' | tr -d ' ')" 1
+ok "…naming /${PN}:welcome fix"          "$(bash "$REPO/upgrade.sh" 2>&1 | grep -c ''"${PN}:"'welcome fix' | tr -d ' ')" 1
 ok "…on ONE screen (≤ 40 lines)"             "$([ "$(bash "$REPO/upgrade.sh" 2>&1 | grep -c .)" -le 40 ] && echo yes || echo no)" yes
 
 # =========================================================================================
@@ -272,7 +273,7 @@ echo "== 5. the INSTALLED layout: a stamp from a plugin cache, with no checkout 
 # The fixture is therefore built from `git ls-files plugin/` ALONE, flattened by one level,
 # under a parent that holds nothing else — so a rule that reaches upward finds what the
 # real cache offers it, which is nothing.
-CACHE="$TMP/cache/ai-bridge/ai-bridge/9.9.9"
+CACHE="$TMP/cache/${PMK}/${PN}/9.9.9"
 mkdir -p "$CACHE"
 ( cd "$REPO" && git ls-files plugin ) | while IFS= read -r f; do
   [ -n "$f" ] || continue

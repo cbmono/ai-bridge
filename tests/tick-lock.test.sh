@@ -178,7 +178,7 @@ attempt() { # <instance-dir> [agent-id]
   [ "$ATTEMPT_RC" -eq 0 ] && printf 'tick dispatched: %s\n' "$agent" >> "$inst/dispatched.log"
   return 0
 }
-# The same launcher, declaring the per-tick id it minted — `/ai-bridge:dispatch` step 1
+# The same launcher, declaring the per-tick id it minted — `/<plugin>:dispatch` step 1
 # since 2026-09-06. Separate from attempt() so the un-declared path above stays driven too:
 # a bundle whose launcher declares nothing must behave exactly as it did before.
 attempt_as() { # <instance-dir> <minted-id>

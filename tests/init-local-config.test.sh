@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# init-local-config.test.sh — `/ai-bridge:init` writes this clone's
+# init-local-config.test.sh — `/<plugin>:init` writes this clone's
 # `instance.config.local.json` when there is none, DERIVING what the machine already knows
 # and REPORTING by name what it cannot. ai-bridge-2x/task-009.
 #
@@ -28,6 +28,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/initlocal.XXXXXX")" || {
   echo "init-local-config.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}" >&2; exit 2; }
 TMP="$(cd "$TMP" && pwd)"   # a TMPDIR ending in `/` yields `//`, which no `pwd` returns
@@ -209,8 +210,8 @@ ok "…and to re-run with the flags"         "$(yn grep -q 're-run the same comm
 ok "the flags are in the argument-hint"    "$(yn grep -q 'argument-hint.*--owner' "$SKILL")" yes
 SHARING="$TPL/docs/sharing.md"
 ok "sharing.md keeps the hand-clone route"  "$(yn grep -q 'git clone <bundle-remote>' "$SHARING")" yes
-ok "…naming the plugin install"            "$(yn grep -q '/plugin install ai-bridge@ai-bridge' "$SHARING")" yes
-ok "…stamped by /ai-bridge:init ."          "$(yn grep -q '^/ai-bridge:init \.$' "$SHARING")" yes
+ok "…naming the plugin install"            "$(yn grep -q '/plugin install '"${PN}@${PMK}"'' "$SHARING")" yes
+ok "…stamped by /${PN}:init ."          "$(yn grep -q '^/'"${PN}:"'init \.$' "$SHARING")" yes
 ok "…and what init derives each from"      "$(yn grep -q 'the bundle.s parent directory' "$SHARING")" yes
 ok "…and that no hand-written file is needed" "$(yn grep -q 'writes the gitignored' "$SHARING")" yes
 PATH="$STUB:$PATH" bash "$INIT" --help >"$TMP/out" 2>&1

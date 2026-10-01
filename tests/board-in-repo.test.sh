@@ -6,7 +6,7 @@
 # WHY THE PAGE LEFT THE REPO. Committing it bought visibility for free — who may read the
 # page IS the repo's permission list — and cost one contended path per tick: on a bundle
 # two humans clone, both ticks render the file from their own snapshot and push it, for
-# output either of them regenerates in a second. `/ai-bridge:board serve` replaced it with
+# output either of them regenerates in a second. `/<plugin>:board serve` replaced it with
 # a local server on 127.0.0.1, so nothing about the board is pushed at all.
 #
 # THE MIGRATION IS STILL ADDITIVE, WHICH IS WHY SECTION 2 IS BEHAVIOURAL. Instances exist
@@ -20,12 +20,13 @@
 # SECTION 3 OUTLIVED THE TRACKED PAGE. Given no instance directory, build-board.sh
 # discovers instances from `boardInstances`, which on a real machine names SIBLING
 # BUNDLES — so the trailing `.` is a data-governance boundary wherever the output travels,
-# and `/ai-bridge:board publish` is now the path it travels on. The section renders BOTH
+# and `/<plugin>:board publish` is now the path it travels on. The section renders BOTH
 # ways from one fixture, so it fails if the scoping breaks AND fails if the fixture stopped
 # being able to leak.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
+. "$(dirname "$0")/tools/plugin-name.sh"
 
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
@@ -187,20 +188,20 @@ ok "…at the resolved path, not the pre-3.0 root one" \
 ok "…names no tracked render"    "$(yes_if grep -qF -- '--standalone --out board.html .' "$PM")" no
 ok "…and no board commit"        "$(grep -cF -- 'chore: refresh board.html' "$PM")" 0
 ok "…and points a human at the local server" \
-  "$(yes_if grep -qF -- '/ai-bridge:board serve' "$PM")" yes
+  "$(yes_if grep -qF -- '/'"${PN}:"'board serve' "$PM")" yes
 # The launcher's standing facts are what a human reads to know what the loop does.
 SK="$TPL/plugin/skills/dispatch/SKILL.md"
 ok "the dispatch skill names no tracked board" \
   "$(yes_if grep -qF -- '--standalone --out board.html .' "$SK")" no
 ok "…and names the local server instead" \
-  "$(yes_if grep -qF -- '/ai-bridge:board serve' "$SK")" yes
+  "$(yes_if grep -qF -- '/'"${PN}:"'board serve' "$SK")" yes
 
 # =======================================================================================
-echo "== 5. THE SAME BOUNDARY ON THE ARTIFACT PATH: /ai-bridge:board publishes =="
+echo "== 5. THE SAME BOUNDARY ON THE ARTIFACT PATH: /${PN}:board publishes =="
 # =======================================================================================
 # WHY THIS SECTION EXISTS ALONGSIDE SECTION 3 RATHER THAN INSTEAD OF IT. Section 3 renders
 # `--standalone --out board.html .` — the tick's tracked page, whose audience is the repo's
-# permission list. `/ai-bridge:board` renders the SAME script with the SAME trailing `.`
+# permission list. `/<plugin>:board` renders the SAME script with the SAME trailing `.`
 # but WITHOUT `--standalone`, because the artifact host supplies the wrapper — a different
 # invocation, and an invocation is what the scoping lives in. A guard asserted only against
 # the flag combination the tick happens to use would go green on a publish path that
@@ -286,7 +287,7 @@ ok "…and names the SCOPED artifact render" \
 ok "…and never writes the tracked board.html" \
   "$(yes_if grep -qF -- '--out board.html' "$SK_BOARD")" no
 ok "the tick tells the human what refreshes the published page" \
-  "$(yes_if grep -qF -- 'run /ai-bridge:board publish to refresh' "$PM")" yes
+  "$(yes_if grep -qF -- 'run /'"${PN}:"'board publish to refresh' "$PM")" yes
 
 printf '\nboard-in-repo.test: pass=%d fail=%d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

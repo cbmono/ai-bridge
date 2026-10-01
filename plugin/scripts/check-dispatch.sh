@@ -4,7 +4,7 @@
 #
 #   Usage: check-dispatch.sh <task-doc>
 #
-# Run it whenever a dispatched agent reports — from an `/ai-bridge:dispatch` tick or from an ad-hoc
+# Run it whenever a dispatched agent reports — from an `/<plugin>:dispatch` tick or from an ad-hoc
 # dispatch in a main session. It reads three things and judges nothing else:
 #
 #   1. did the task's `status:` advance off `ready`/`in-progress`;
@@ -21,7 +21,7 @@
 #
 # IT IS REPORT-ONLY, AND THAT IS THE LOAD-BEARING PROPERTY. It never re-dispatches, never
 # writes to the task document, never touches a branch, and asks the host only to READ.
-# `/ai-bridge:dispatch` step 2 calls re-dispatching an already-finished task sequence the most
+# `/<plugin>:dispatch` step 2 calls re-dispatching an already-finished task sequence the most
 # expensive failure a loop of this shape has — a checker that acted on its own reading
 # would reintroduce exactly that, and would do it automatically. The verdict goes to a
 # human or to the loop's own reasoning; the recovery is usually one message to the parked
@@ -209,7 +209,7 @@ bundle_root() { # <task-doc>
 #      `installPath`, which is the only source that knows WHICH cached version is live;
 #   3. the newest cached version, for a machine whose install record cannot be parsed.
 #
-# `CLAUDE_CONFIG_DIR` is honoured because `/ai-bridge:init` honours it: a machine that moved its
+# `CLAUDE_CONFIG_DIR` is honoured because `/<plugin>:init` honours it: a machine that moved its
 # config dir has its plugins there too.
 agent_file() { # <bundle-root> <agent-name>
   local root="$1" agent="$2" cfgdir p
@@ -223,7 +223,7 @@ agent_file() { # <bundle-root> <agent-name>
   # through to source 3 rather than failing.
   if [ -f "$cfgdir/plugins/installed_plugins.json" ]; then
     p="$(tr -d ' \n' < "$cfgdir/plugins/installed_plugins.json" \
-         | sed -n 's/.*"ai-bridge@ai-bridge":\[{[^}]*"installPath":"\([^"]*\)".*/\1/p' | head -1)"
+         | sed -n 's/.*"'"${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}"'":\[{[^}]*"installPath":"\([^"]*\)".*/\1/p' | head -1)"
     [ -n "$p" ] && [ -f "$p/agents/$agent.md" ] && { printf '%s\n' "$p/agents/$agent.md"; return 0; }
   fi
 
@@ -231,7 +231,7 @@ agent_file() { # <bundle-root> <agent-name>
   # the cache entry. A GLOB, not `ls`: the glob's own order is lexical, and lexical order
   # puts 0.2.0 after 0.10.0 — so the version is compared numerically, field by field,
   # rather than taken from the last match.
-  local best="" bestv="" cache="$cfgdir/plugins/cache/ai-bridge/ai-bridge" v
+  local best="" bestv="" cache="$cfgdir/plugins/cache/$PLUGIN_MARKETPLACE/$PLUGIN_NAME" v
   for p in "$cache"/*/agents/"$agent".md; do
     [ -f "$p" ] || continue
     v="${p#"$cache"/}"; v="${v%%/*}"

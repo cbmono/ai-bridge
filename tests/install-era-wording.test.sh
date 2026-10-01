@@ -40,7 +40,7 @@
 #      that does not depend on anyone maintaining a number. `./install.sh`, `bash
 #      upgrade.sh`, "run install.sh" and friends are matched wherever they appear in
 #      scope, and there is no allowlist for them at all — a bundle installed today has
-#      `/ai-bridge:init` and `/ai-bridge:welcome fix`, and any surviving imperative for
+#      `/<plugin>:init` and `/<plugin>:welcome fix`, and any surviving imperative for
 #      the old pair sends its reader to a script that exits 2.
 #
 #   3. NOTHING IN SCOPE CLAIMS, IN THE PRESENT TENSE, THAT A SHIPPED FILE IS SYMLINKED,
@@ -72,6 +72,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/install-era-wording.XXXXXX")" || {
   echo "install-era-wording.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp} — create that directory first." >&2; exit 2; }
@@ -137,7 +138,7 @@ ALLOWED='
 docs/conventions.md	2	the relocation History blockquote, and the retired unstamped-machinery row, both past tense
 docs/operations.md	2	the /symlink/ target test the conversion sweep STILL applies, and the eight commands that became skills
 docs/pm-design.md	1	where the two step files moved FROM, past tense
-plugin/README.md	2	names the retired install.sh as the thing /ai-bridge:init converts a bundle from
+plugin/README.md	2	names the retired install.sh as the thing /'"${PN}:"'init converts a bundle from
 plugin/RETIRED	2	the plugin-migration audit: sixteen machinery paths, none of them seed content
 plugin/hooks/session-banner.sh	3	live legacy-link detection, plus two past-tense incident notes
 plugin/scripts/init-bundle.sh	23	the replacement itself — its header is the record of what install.sh and upgrade.sh did
@@ -290,7 +291,7 @@ echo
 echo "== 4. the retired /pm-loop command name is gone from the shipped surface =="
 # =======================================================================================
 # THE SAME REPLATFORM RETIRED A SECOND NAME, and it rots the same way. `/pm-loop` became
-# `/ai-bridge:dispatch` in ai-bridge-v2/task-005, and the sweep reached the command file
+# `/<plugin>:dispatch` in ai-bridge-v2/task-005, and the sweep reached the command file
 # and not the strings around it: the first 1.0.0 session on a real bundle printed
 # "18 items need you — see the board above, or run /pm-loop" out of `session-banner.sh`,
 # a command the installed plugin does not have. `grep` found ~60 more across `plugin/`.
@@ -340,7 +341,7 @@ echo "== 5. nothing in scope claims a shipped file IS symlinked, shared or ident
 # `symlink/`, and are STRUCTURALLY unable to see the defect ai-bridge-v2/task-031 found:
 # the false sentence says the WORD `symlinked`, which contains none of those three
 # strings. Five documents still described the pre-plugin model, and four of them SHIP INTO
-# EVERY BUNDLE a `/ai-bridge:init` stamp creates — `plugin/seed/SCHEMA.md` told its owner
+# EVERY BUNDLE a `/<plugin>:init` stamp creates — `plugin/seed/SCHEMA.md` told its owner
 # "this file is symlinked from the `ai-bridge` template and is identical across every
 # instance", which is the opposite of the copy-once contract 1.0.0 shipped, and reads to
 # that owner as "your edits here are pointless". The same file's own README already said
@@ -368,7 +369,7 @@ echo "== 5. nothing in scope claims a shipped file IS symlinked, shared or ident
 #   THE CONVERSION   symlinked on macOS" — all true, all about somebody's machine rather
 #   SWEEP            than about a shipped file, and all outside the closed noun lists.
 #   NAMING A STUB    a sentence may call `install.sh` a deprecation stub; what it may not
-#                    do is call a LIVE `/ai-bridge:` command one.
+#                    do is call a LIVE `/<plugin>:` command one.
 #
 # THE GRAMMAR IS MATCHED AGAINST A NORMALIZED LINE, not the raw one, because the claim is
 # written four different ways with markdown in the middle of it — `is **symlinked in**
@@ -407,14 +408,14 @@ CLAIM_RE="$CLAIM_RE"'|(identical|shared|the same) across (all|every|each|any) in
 
 # The second clause, which needs three conditions and so cannot be one regex: a line that
 # calls a LIVE slash command a retirement stub. `.claude/rules/installer.md:15` said
-# `/ai-bridge:init` and `/ai-bridge:welcome fix` were the one-screen stubs that exit 2 —
+# `/<plugin>:init` and `/<plugin>:welcome fix` were the one-screen stubs that exit 2 —
 # backwards, and that file's frontmatter hands the rule to an agent exactly when it is
 # about to edit the installer, so the agent is told at load time that the command it is
 # fixing is retired. Naming `install.sh` or `upgrade.sh` on the line is what makes the
 # CORRECT sentence green, and is also why `plugin/README.md`'s note about the retired
 # `ai-bridge-v2` marketplace name — which names no slash command — is not a hit.
 STUB_RE='(deprecation|refusal|one-screen) stubs?'
-LIVE_CMD_RE='/ai-bridge:[a-z-]+'
+LIVE_CMD_RE='/'"$PN"':[a-z-]+'
 
 # claim_hits — `<path>:<line>:<the real line>` for every present-tense claim in scope.
 # The match runs on the normalized text; the REPORT quotes the file, so a failure names
@@ -448,7 +449,7 @@ ok "no present-tense symlinked/shared/identical claim in scope" \
    "$([ -z "$claims" ] && echo none || printf '%s' "$claims" | cut -d: -f1-2 | head -3 | tr '\n' ' ')" none
 
 stubs="$(stub_hits "$REPO")"
-ok "no live /ai-bridge: command is called a deprecation stub" \
+ok "no live /${PN}: command is called a deprecation stub" \
    "$([ -z "$stubs" ] && echo none || printf '%s' "$stubs" | cut -d: -f1-2 | head -3 | tr '\n' ' ')" none
 
 # =======================================================================================
@@ -475,9 +476,9 @@ PRE_EOF
 cat > "$PRE/docs/schema.md" <<'PRE_EOF'
 That file is machinery: it is symlinked into every instance, every role agent reads it,
 PRE_EOF
-cat > "$PRE/.claude/rules/installer.md" <<'PRE_EOF'
-`plugin/seed/`. **`/ai-bridge:init` and `/ai-bridge:welcome fix` at the root are one-screen deprecation stubs**
-that print the `/ai-bridge:init` line and exit 2; they ship for one version and are then
+sed "s/__PN__/$PN/g" > "$PRE/.claude/rules/installer.md" <<'PRE_EOF'
+`plugin/seed/`. **`/__PN__:init` and `/__PN__:welcome fix` at the root are one-screen deprecation stubs**
+that print the `/__PN__:init` line and exit 2; they ship for one version and are then
 PRE_EOF
 ( cd "$PRE" && git init -q . && git add -A && \
   git -c user.email=test@example.com -c user.name=Test -c commit.gpgsign=false commit -qm p ) >/dev/null 2>&1
@@ -507,9 +508,9 @@ another provider owns it. Read the paths `git worktree list` emits, or a symlink
 makes the comparison wrong. ($TMPDIR is symlinked on macOS, so this bites the fixture.)
 `repos/<name>` is a symlink view of those clones, and the only symlinks a stamp leaves.
 QUIET_EOF
-cat > "$QUIET/.claude/rules/installer.md" <<'QUIET_EOF'
+sed "s/__PN__/$PN/g" > "$QUIET/.claude/rules/installer.md" <<'QUIET_EOF'
 **`install.sh` and `upgrade.sh` at the root are one-screen deprecation stubs** that print
-the `/ai-bridge:init` line and exit 2. `/ai-bridge:init` is the working replacement.
+the `/__PN__:init` line and exit 2. `/__PN__:init` is the working replacement.
 QUIET_EOF
 ( cd "$QUIET" && git init -q . && git add -A && \
   git -c user.email=test@example.com -c user.name=Test -c commit.gpgsign=false commit -qm q ) >/dev/null 2>&1

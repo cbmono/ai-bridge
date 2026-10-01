@@ -11,7 +11,7 @@
 #
 # WHY IT NARROWED (ai-bridge-v2/task-013). The guard used to cover BOTH halves, because a
 # bundle stamp also wrote absolute symlinks into the source checkout — 37 of them, an
-# instance's whole machinery set. A bundle carries no machinery now: `/ai-bridge:init`
+# instance's whole machinery set. A bundle carries no machinery now: `/<plugin>:init`
 # copies seed content and links only `repos/`, which points at reposRoot and never at this
 # checkout. So for that half the hazard is gone, and with it the refusal — which had a
 # cost of its own, since every role agent works in a worktree and every fixture in this

@@ -29,6 +29,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 STAMP="$REPO/plugin/scripts/decision-stamp.sh"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 SEED_CLAUDE="$REPO/plugin/seed/CLAUDE.md"
@@ -253,10 +254,10 @@ ok "PM's ledger line names the login it ran as" \
 ok "…the idle line too"               "$(hasf "$PM" '`* TICK <ISO-8601> by <login> idle')" yes
 ok "…and the close keeps it"          "$(hasf "$PM" 'copies its timestamp and its `by <login>`')" yes
 ok "PM stamps a project closeout"     "$(hasf "$S6" 'stamped `by <login>` from')" yes
-ok "/ai-bridge:answer writes the by"  "$(hasf "$ANSWER" 'then ` by <login> · `')" yes
+ok "/${PN}:answer writes the by"  "$(hasf "$ANSWER" 'then ` by <login> · `')" yes
 ok "…and may actually run the resolver" \
    "$(hasf "$ANSWER" 'scripts/decision-stamp.sh:*)')" yes
-ok "/ai-bridge:close-project writes the by" "$(hasf "$CLOSE" '`by <login>`, naming the')" yes
+ok "/${PN}:close-project writes the by" "$(hasf "$CLOSE" '`by <login>`, naming the')" yes
 ok "…names the resolver in its own steps" "$(hasf "$CLOSE" '/scripts/decision-stamp.sh --self')" yes
 ok "…and may actually run it"         "$(hasf "$CLOSE" 'scripts/decision-stamp.sh:*)')" yes
 ok "the dispatch skill's summary agrees" \

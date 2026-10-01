@@ -27,6 +27,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$REPO/plugin/scripts/bundle-paths.sh"
 SCRIPT="$REPO/plugin/scripts/check-dispatch.sh"
@@ -336,7 +337,7 @@ echo "== the agent file is resolved from the PLUGIN, not only from the bundle ==
 # this guards against is a resolver that finds nothing and stays silent, which reads
 # exactly like a task with no contradiction in it.
 AF="$TMP/agentfile"; mkdir -p "$AF/cfg/plugins" "$AF/inst"
-CACHE="$AF/cfg/plugins/cache/ai-bridge/ai-bridge"
+CACHE="$AF/cfg/plugins/cache/${PMK}/${PN}"
 mkdir -p "$CACHE/0.9.0/agents" "$CACHE/0.11.0/agents"
 printf 'v0.9.0\n'  > "$CACHE/0.9.0/agents/software-engineer.md"
 printf 'v0.11.0\n' > "$CACHE/0.11.0/agents/software-engineer.md"
@@ -355,7 +356,7 @@ resolve() { # — run the script's own agent_file() against the fixture config d
 
 # Newest, not last: the glob is lexical, and lexically 0.9.0 sorts after 0.11.0.
 ok "no install record -> newest cached version" "$(resolve)" "$CACHE/0.11.0/agents/software-engineer.md"
-printf '{"version":2,"plugins":{"ai-bridge@ai-bridge":[{"scope":"user","installPath":"%s/0.9.0","version":"0.9.0"}]}}\n' \
+printf '{"version":2,"plugins":{"'"${PN}@${PMK}"'":[{"scope":"user","installPath":"%s/0.9.0","version":"0.9.0"}]}}\n' \
   "$CACHE" > "$AF/cfg/plugins/installed_plugins.json"
 ok "…the install record wins over the newest" "$(resolve)" "$CACHE/0.9.0/agents/software-engineer.md"
 mkdir -p "$AF/inst/.claude/agents"; printf 'bundle\n' > "$AF/inst/.claude/agents/software-engineer.md"

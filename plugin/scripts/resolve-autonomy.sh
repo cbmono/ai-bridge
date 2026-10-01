@@ -14,7 +14,7 @@
 # check used to be one `[ -f "$root/AUTONOMY.md" ]` inside `commit-as.sh`, against a file
 # `install.sh` stamped from `symlink/`. Nothing stamps it any more (ai-bridge-v2/task-013),
 # so this turns the presence check into the EXTENSION POINT: core stays gated-only and
-# ships no capability file at all, and `ai-bridge-yolo@ai-bridge` — a separate plugin in
+# ships no capability file at all, and the yolo companion — a separate plugin in
 # the same marketplace — is what ships one.
 #
 # THE ORDER IS ROOT FIRST, AND THAT IS A COMPATIBILITY GUARANTEE, NOT A PREFERENCE. A
@@ -57,13 +57,14 @@
 # never a merge nobody approved.
 #
 # GENERIC TEMPLATE FILE — ships with the `ai-bridge` plugin; do not edit per instance. It
-# reads no org, repo or path literal beyond its own marketplace's name.
+# reads no org, repo or path literal, and derives even its own marketplace's name.
 #
-# Verified by tests/companion-plugins.test.sh.
+# Verified by tests/companion-plugins.test.sh and tests/plugin-name.test.sh.
 set -uo pipefail
+_pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then . "$_pn"; fi
 
 COMPANION_REL="companion/AUTONOMY.md"
-DEFAULT_MARKETPLACE="ai-bridge"
+DEFAULT_MARKETPLACE="${PLUGIN_MARKETPLACE:-}"
 
 bundle="."
 while [ $# -gt 0 ]; do

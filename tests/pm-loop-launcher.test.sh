@@ -58,6 +58,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 LAUNCHER="$REPO/plugin/skills/dispatch/SKILL.md"
 TICK="$REPO/plugin/agents/project-manager.md"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pmloop.XXXXXX")" || {
@@ -319,7 +320,7 @@ ok "tick reports the path, once"         "$(has "$TICK_RENDER" 'BOARD: rendered 
 ok "…and never claims the page is live"  "$(has "$TICK_RENDER" 'Say the path, never that it is live')" yes
 ok "tick: a render is not a change"      "$(has "$TICK_RENDER" 'A render is not a state change')" yes
 # THE KEY IS BACK, AND ITS SHAPE IS WHAT IS ASSERTED NOW. This line used to demand the
-# tick never name it, because publishing had been deleted. `/ai-bridge:board` reinstates
+# tick never name it, because publishing had been deleted. `/<plugin>:board` reinstates
 # publishing PER MACHINE, so the tick may name the key — but only to ask WHICH LAYER
 # answers, because the tick still cannot publish: measured 2026-09-05 on Claude Code
 # 2.1.261, a headless `claude -p` session's tool inventory carries no artifact tool and a
@@ -328,7 +329,7 @@ ok "tick: a render is not a change"      "$(has "$TICK_RENDER" 'A render is not 
 ok "tick asks the resolver which layer holds the URL key" \
   "$(has "$TICK_RENDER" "scripts/resolve-config.sh --source $URL_KEY")" yes
 ok "…and prints the refresh line instead of publishing" \
-  "$(has "$TICK_RENDER" 'BOARD: run /ai-bridge:board publish to refresh the published page')" yes
+  "$(has "$TICK_RENDER" 'BOARD: run /'"${PN}:"'board publish to refresh the published page')" yes
 ok "…and is told not to attempt one"     "$(has "$TICK_RENDER" 'not attempt a publish')" yes
 # A `tracked` value is the deleted shape and the banner drops it; the two readers of this
 # key must agree, or one of them is publishing a promise the other silently breaks.

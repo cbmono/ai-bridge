@@ -287,7 +287,7 @@ if [[ -n "$PENDING" ]]; then
     while IFS=$'\t' read -r old new; do
       layout_move "$old" "$new" && echo "  MOVED    $old -> $new"
     done <<< "$PENDING"
-    # The five gitignored paths need their ignore lines moved with them; /ai-bridge:init
+    # The five gitignored paths need their ignore lines moved with them; /<plugin>:init
     # appends the new ones, so this only has to drop the stale root spellings.
     if [[ -f .gitignore ]]; then
       tmp="$(temp_beside .gitignore)" \
@@ -303,7 +303,7 @@ if [[ -n "$PENDING" ]]; then
       echo "           knowledge/ is MOUNTED: its relinked files are uncommitted in that"
       echo "           repository. Review and push them with: kb-sync.sh commit"
     fi
-    echo "           Now run /ai-bridge:init to re-seed the ignore lines at their new paths."
+    echo "           Now run /${PLUGIN_NAME}:init to re-seed the ignore lines at their new paths."
   fi
   echo "---"
 fi

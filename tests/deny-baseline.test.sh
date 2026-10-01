@@ -33,6 +33,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 HOOK="$REPO/plugin/hooks/deny-destructive.sh"
@@ -669,7 +670,7 @@ ok "…and neither is gh run list" \
 # gets a variant issued at it; this one has to carry the alternative, namespaced.
 LREASON="$(raw "$CPROOT" 'gh run view 1 --log' | jq -r '.hookSpecificOutput.permissionDecisionReason')"
 lsays() { printf '%s' "$LREASON" | grep -qF -- "$1" && echo yes || echo no; }
-ok "…the reason names the failure-analyst" "$(lsays 'ai-bridge:failure-analyst')" "yes"
+ok "…the reason names the failure-analyst" "$(lsays ''"${PN}:"'failure-analyst')" "yes"
 ok "…as a BACKGROUND dispatch"             "$(lsays 'background')" "yes"
 ok "…and says a dispatched agent may"      "$(lsays 'A dispatched agent runs the identical command untouched')" "yes"
 

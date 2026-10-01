@@ -11,6 +11,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 SEED="$REPO/plugin/seed"
 SCRIPTS="$REPO/plugin/scripts"
 [ -d "$SEED" ]    || { echo "seed-script-paths.test: missing $SEED" >&2; exit 2; }
@@ -48,7 +49,7 @@ echo "== 3. the seed defines what a bare path means — agent side and human sid
 ok "CLAUDE.md gives the agent resolution" \
    "$(grep -c 'CLAUDE_PLUGIN_ROOT}/scripts/' "$SEED/CLAUDE.md" | tr -d ' ')" 1
 ok "…and the human one, versionless" \
-   "$(grep -c 'plugins/cache/\*/ai-bridge/\*/scripts' "$SEED/CLAUDE.md" | tr -d ' ')" 1
+   "$(grep -c 'plugins/cache/\*/'"$PN"'/\*/scripts' "$SEED/CLAUDE.md" | tr -d ' ')" 1
 
 echo
 echo "== 4. the mutant goes RED — the check discriminates =="

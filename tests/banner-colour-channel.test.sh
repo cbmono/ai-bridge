@@ -40,6 +40,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 
 TPL="$(cd "$HERE/.." && pwd)"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
@@ -262,7 +263,7 @@ assert "…and that line is coloured" \
 # THE OTHER HALF. A settings row is a fact that is TRUE and must be quiet — this is what
 # stops the feature from being "colour every row by what kind of row it is".
 # THE TABLES ARE `--full` SINCE task-025 — the SessionStart banner holds 12 lines and drops
-# them, `/ai-bridge:welcome` asks for them by name. The colour discipline they demonstrate is
+# them, `/<plugin>:welcome` asks for them by name. The colour discipline they demonstrate is
 # unchanged, so it is asserted where they actually render.
 SM_FULL="$(field "$(CLAUDE_PLUGIN_ROOT="$TPL/plugin" CLAUDE_PROJECT_DIR="$INST" \
   bash "$HOOK" --format json --full 2>/dev/null)" systemMessage)"
@@ -318,7 +319,7 @@ assert "the inlined ai-bridge check block fired"   "$(has 'ai-bridge check — s
 assert "…its ⚠ line is coloured" \
   "$(has_esc "$(grep 'this bundle has not been converted' <<<"$SM")")"
 assert "…while its ↳ hint line, which is context, is not" \
-  "$(no_esc "$(grep -F '↳ /ai-bridge:init' <<<"$SM")")"
+  "$(no_esc "$(grep -F '↳ /'"${PN}:"'init' <<<"$SM")")"
 
 # =======================================================================================
 echo "== 4. it DEGRADES, and the degradation is demonstrated rather than asserted =="

@@ -29,6 +29,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 TPL="$(cd "$HERE/.." && pwd)"
 SK="$TPL/plugin/skills"
 [ -d "$SK" ] || { echo "plugin-skills.test: missing $SK" >&2; exit 2; }
@@ -175,7 +176,7 @@ ok "…and stays human-gated" \
 # comes from the renderer, so the pins are about SCOPE and DESTINATION, not about prose.
 # THE DEFAULT IS THE ONE EXCEPTION, because it is prose and nothing else carries it: a
 # bare call serves, and the argument-hint is where a human reads that before typing.
-ok "a bare /ai-bridge:board serves, and the skill says so" \
+ok "a bare /${PN}:board serves, and the skill says so" \
   "$(ge1 "$(grep -cF 'no argument means' "$SK/board/SKILL.md")")" yes
 ok "…and the argument-hint shows serve as the default" \
   "$(ge1 "$(grep -cF 'argument-hint: "[serve] | publish"' "$SK/board/SKILL.md")")" yes
@@ -204,7 +205,7 @@ ok "…and updating the SAME artifact rather than making a second one" \
 # The measured limit, carried where the human running the skill reads it. A skill that
 # silently did nothing headless would be indistinguishable from one that was broken.
 ok "…and states the measured headless limit" \
-  "$(ge1 "$(grep -c 'run /ai-bridge:board publish to refresh' "$SK/board/SKILL.md")")" yes
+  "$(ge1 "$(grep -c 'run /'"${PN}:"'board publish to refresh' "$SK/board/SKILL.md")")" yes
 # Publishing is irreversible and recording the URL is not, so the gap between them is the
 # one place this skill can strand an artifact nobody can name. Three pins, one per half of
 # the fix: the ordering, the failure report that carries the URL out of the session, and

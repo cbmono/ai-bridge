@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# readme-brand-mark.test.sh — the README's loopd mark is COPIED, and the command slugs are
-# NOT renamed yet.
+# readme-brand-mark.test.sh — the README's loopd mark is COPIED, and every command slug is
+# spelled under the plugin's own manifest name.
 #
 # WHY THE MARK IS PINNED AS BYTES. The three rows are box-drawing glyphs (▄ ▐ ▌ ▝ ◀ ━),
 # not ASCII, and nothing else in this repo holds a copy to compare against. A row retyped
@@ -9,11 +9,12 @@
 # loop no longer closes in a terminal. So the owner's `assets/ascii-logo.txt` rows are the
 # fixture below, and the README is diffed against them (loopd/task-001).
 #
-# AND THE HALF THAT IS EASY TO SHIP EARLY. Every command is still `/ai-bridge:*` until the
-# rename lands (loopd/task-007): a README that renames them first documents instructions
-# nobody can run, and the marketplace lines must keep resolving to what is published today.
-# The zero-mention assertion therefore runs over the whole shipped surface rather than over
-# this one file — the control panel's
+# AND THE HALF THAT IS EASY TO SHIP EARLY OR LATE. A slug under any name but the manifest's
+# documents an instruction nobody can run, so the name is read from the manifests
+# (tests/tools/plugin-name.sh) and the rename (loopd/task-007) moves both together. Each
+# command is checked against an EXPLICIT baseline, one by one: a count of surviving slugs
+# passes while one command is silently dropped (ai-bridge#231, r4119584839). The
+# foreign-slug assertion runs over the whole shipped surface rather than this one file — the
 # knowledge/findings/a-zero-mention-assertion-scoped-to-the-renamed-file-is-not-a-sweep.md
 # is the measured cost of the narrower version (104 surviving mentions behind a green check).
 #
@@ -22,6 +23,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 README="$REPO/README.md"
 [ -f "$README" ] || { echo "readme-brand-mark.test: missing $README" >&2; exit 2; }
 
@@ -48,7 +50,7 @@ rows() { sed -n '2,4p' "$1"; }
 mark_matches() { diff -q "$TMP/mark.txt" <(rows "$1") >/dev/null 2>&1 && echo yes || echo no; }
 
 # Every tracked path a reader is shipped: the docs plus CLAUDE.md's closed `core` list —
-# the companion plugins and both deprecation stubs still carry `/ai-bridge:` slugs.
+# the companion plugins and both deprecation stubs carry slugs too.
 shipped_surface() {
   ( cd "$REPO" && git ls-files -- README.md docs .claude plugin 'plugin-*' config \
       install.sh upgrade.sh 2>/dev/null )
@@ -71,32 +73,48 @@ ok "blue is the machine's"            "$(count "$README" "Blue \`#5ea2ff\` is th
 ok "pink is the human's"              "$(count "$README" 'Pink `#ff7ac2` is yours')" 1
 
 echo
-echo "== 3. the slugs are untouched until task-007 =="
-ok "no /loopd: slug in the README"    "$(count "$README" '/loopd:')" 0
+echo "== 3. every command is documented, and only under /${PN}: =="
+# The baseline is EXPLICIT, never derived from plugin/skills/: a derived list would let a
+# deleted skill take its README line with it and stay green. The first check keeps it honest.
+COMMANDS="answer audit board brief-me capture close-project dispatch fanout handoff init new-project pr-review-request welcome work"
+ok "the baseline is exactly plugin/skills/" "$(ls "$REPO/plugin/skills" | tr '\n' ' ' | sed 's/ $//')" "$COMMANDS"
+undocumented() { # <file> -> each baseline command it never names as /$PN:<cmd>, or none
+  local c miss=""
+  for c in $COMMANDS; do grep -qE "/${PN}:${c}([^a-z-]|\$)" "$1" || miss="${miss:+$miss }$c"; done
+  echo "${miss:-none}"
+}
+CMD_ALT="$(printf '%s' "$COMMANDS" | tr ' ' '|')"
+foreign() { # <file>... -> how many /<name>:<command> slugs name something other than $PN
+  grep -ohE "/[a-z][a-z0-9-]*:(${CMD_ALT})([^a-z-]|\$)" "$@" 2>/dev/null | grep -vc "^/${PN}:" | tr -d ' '
+}
+ok "the README names every command as /${PN}:<cmd>" "$(undocumented "$README")" none
+ok "no slug under another name in the README" "$(foreign "$README")" 0
 ok "…nor anywhere on the shipped surface" \
-   "$(shipped_surface | tr '\n' '\0' | (cd "$REPO" && xargs -0 grep -lF -- '/loopd:' 2>/dev/null) | wc -l | tr -d ' ')" 0
+   "$(shipped_surface | tr '\n' '\0' | (cd "$REPO" && xargs -0 grep -ohE "/[a-z][a-z0-9-]*:(${CMD_ALT})([^a-z-]|\$)" 2>/dev/null) | grep -vc "^/${PN}:" | tr -d ' ')" 0
 ok "the sweep covers the install.sh stub"   "$(in_surface install.sh)" yes
 ok "the sweep covers the upgrade.sh stub"   "$(in_surface upgrade.sh)" yes
 ok "the sweep covers the plugin-yolo companion" "$(in_surface plugin-yolo/companion/AUTONOMY.md)" yes
-ok "the README still documents /ai-bridge: commands" \
-   "$([ "$(count "$README" '/ai-bridge:')" -gt 0 ] && echo yes || echo no)" yes
-ok "the marketplace line resolves today" \
-   "$([ "$(count "$README" '/plugin marketplace add cbmono/ai-bridge')" -gt 0 ] && echo yes || echo no)" yes
-ok "the install line resolves today" \
-   "$([ "$(count "$README" '/plugin install ai-bridge@ai-bridge')" -gt 0 ] && echo yes || echo no)" yes
+ok "the marketplace line names this repo" \
+   "$([ "$(count "$README" "/plugin marketplace add $GH")" -gt 0 ] && echo yes || echo no)" yes
+ok "the install line names this plugin and marketplace" \
+   "$([ "$(count "$README" "/plugin install $PN@$PMK")" -gt 0 ] && echo yes || echo no)" yes
 
 echo
-echo "== 4. three mutants go RED — the checks discriminate =="
+echo "== 4. four mutants go RED — the checks discriminate =="
 sed '3s/▐/|/' "$README" > "$TMP/redrawn.md"
 ok "mutant A: one retyped glyph fails the byte check" "$(mark_matches "$TMP/redrawn.md")" no
 
-sed 's|/ai-bridge:dispatch|/loopd:dispatch|' "$README" > "$TMP/renamed.md"
-ok "mutant B: an early slug rename is reported" \
-   "$([ "$(count "$TMP/renamed.md" '/loopd:')" -gt 0 ] && echo yes || echo no)" yes
+sed "s|/${PN}:dispatch|/not-${PN}:dispatch|" "$README" > "$TMP/renamed.md"
+ok "mutant B: a slug under another name is reported" \
+   "$([ "$(foreign "$TMP/renamed.md")" -gt 0 ] && echo yes || echo no)" yes
 
-sed 's|ai-bridge@ai-bridge|loopd@loopd|' "$README" > "$TMP/unresolvable.md"
+sed "s|${PN}@${PMK}|not-${PN}@not-${PMK}|" "$README" > "$TMP/unresolvable.md"
 ok "mutant C: a renamed install line is reported" \
-   "$(count "$TMP/unresolvable.md" '/plugin install ai-bridge@ai-bridge')" 0
+   "$(count "$TMP/unresolvable.md" "/plugin install $PN@$PMK")" 0
+
+sed "s|/${PN}:new-project||g" "$README" > "$TMP/dropped.md"
+ok "mutant D: one dropped command is named, while the rest survive" \
+   "$(undocumented "$TMP/dropped.md")" new-project
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

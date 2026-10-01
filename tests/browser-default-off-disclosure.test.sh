@@ -18,6 +18,7 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+. "$(dirname "$0")/tools/plugin-name.sh"
 SCHEMA="$REPO/plugin/seed/SCHEMA.md"
 SKILL="$REPO/plugin/skills/new-project/SKILL.md"
 CONV="$REPO/plugin/seed/CONVENTIONS.md"
@@ -131,11 +132,11 @@ cat > "$TMP/gate-schema.expected" <<'GATE'
    what you're about to do and continue unless told otherwise.
 GATE
 
-cat > "$TMP/gate-skill.expected" <<'GATE'
+sed "s/__PN__/$PN/g" > "$TMP/gate-skill.expected" <<'GATE'
    If **browser = claude-for-chrome** and the chosen mode **delegates browser writes**,
    don't block it — that combination is supported and deliberate. State once what it means
    so the choice is informed: agents may **write** in the human's logged-in browser
-   (submit forms, change settings) without asking, including from background `/ai-bridge:dispatch`
+   (submit forms, change settings) without asking, including from background `/__PN__:dispatch`
    dispatches, and the extension's **per-site permissions** are then the effective
    boundary. Record that in `# Context` and continue. Otherwise browser writes ask first
    (see `SCHEMA.md` → "Browser access").

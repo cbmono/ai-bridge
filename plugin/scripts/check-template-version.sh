@@ -45,6 +45,7 @@
 #
 # Verified by tests/template-version.test.sh.
 set -uo pipefail
+_pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then . "$_pn"; fi
 
 TEMPLATE=""; PLUGIN=""; PLUGIN_SET=0; INSTANCE=""; REF=""; FETCH=0; STATE=0
 # Six hours, and a two-second cap: the SessionStart banner may not wait on a socket, and a
@@ -275,6 +276,6 @@ label="TEMPLATE UPDATE"
 printf '%s\n' "⬆️  $label — this machine runs ${HERE}, ${REF_NAME} has ${THERE}"
 echo "    Update the plugin, then re-stamp this bundle (a seed change reaches a bundle"
 echo "    only through a stamp, and only that way):"
-echo "        /plugin update ai-bridge@ai-bridge      (then restart Claude Code)"
-printf '        /ai-bridge:init %q\n' "$INSTANCE"
+echo "        /plugin update ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}      (then restart Claude Code)"
+printf '        /%s:init %q\n' "$PLUGIN_NAME" "$INSTANCE"
 exit 0

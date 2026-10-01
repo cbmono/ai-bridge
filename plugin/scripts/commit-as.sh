@@ -517,7 +517,7 @@ EOF
     printf '%s' "$violations" >&2
     echo "       draft→ready is the human's authority ($AB_SCHEMA). The loop may promote a task" >&2
     echo "       only where AUTONOMY.md exists (no file = no delegated modes) — at this" >&2
-    echo "       bundle's root, or from the ai-bridge-yolo companion plugin — the owning" >&2
+    echo "       bundle's root, or from the yolo companion plugin — the owning" >&2
     echo "       project's 'autonomy' is exactly 'yolo' — the one mode AUTONOMY.md defines;" >&2
     echo "       any other value fails closed — the task is 'kind: build' (research stays" >&2
     echo "       human-driven), AND this commit does not itself edit that 'autonomy:' line:" >&2

@@ -37,9 +37,9 @@ SEED="$REPO/plugin/seed/CLAUDE.md"
 # resolved `commitAttribution`, `none` is the opt-out. Trimmed twice before raising, and
 # an invariant an agent must hold before its first commit has to be always-loaded, exactly
 # as the prohibition it replaces was. Measured, not rounded; flagged in the PR body.
-# 13650 -> 13924 (ai-bridge-2x/task-004). +274 bytes: `/ai-bridge:init` is now the one
+# 13650 -> 13924 (ai-bridge-2x/task-004). +274 bytes: `/<plugin>:init` is now the one
 # command to run after a plugin update — it stamps the seed AND runs the check-and-fix
-# pass — and `/ai-bridge:welcome` no longer fixes anything. Which command brings a bundle
+# pass — and `/<plugin>:welcome` no longer fixes anything. Which command brings a bundle
 # up to the installed plugin is something an agent must know before its first stamp, so
 # it is always-loaded like the invariants around it. Measured, not rounded; flagged in
 # the PR body.

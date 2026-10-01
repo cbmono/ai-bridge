@@ -69,7 +69,7 @@ root, v = sys.argv[1], sys.argv[2]
 p = root + "/.claude-plugin/marketplace.json"
 mkt = json.load(io.open(p, encoding="utf-8"))
 for e in mkt["plugins"]:
-    if e["name"] == "ai-bridge": continue
+    if e["source"] == "./plugin": continue
     e["version"] = v
     m = root + "/" + e["source"].lstrip("./") + "/.claude-plugin/plugin.json"
     d = json.load(io.open(m, encoding="utf-8")); d["version"] = v
@@ -90,7 +90,7 @@ for rel in ("plugin/.claude-plugin/plugin.json",):
     io.open(root + "/" + rel, "w", encoding="utf-8").write(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
 p = root + "/.claude-plugin/marketplace.json"; mkt = json.load(io.open(p, encoding="utf-8"))
 for e in mkt["plugins"]:
-    if e["name"] == "ai-bridge": e["version"] = v
+    if e["source"] == "./plugin": e["version"] = v
 io.open(p, "w", encoding="utf-8").write(json.dumps(mkt, indent=2, ensure_ascii=False) + "\n")
 p = root + "/docs/operations.md"; lines = io.open(p, encoding="utf-8").read().split("\n")
 for i, l in enumerate(lines):

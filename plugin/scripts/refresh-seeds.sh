@@ -39,7 +39,7 @@
 #     way of the bundle's own git status — and the report names the path.
 #   · `instance.config.json` / `instance.config.local.json` ⇒ NEVER merged, only reported.
 #     Config is the one seed file whose purpose is to diverge, and a value in it is
-#     routinely a decision somebody made minutes ago. Same reason `/ai-bridge:welcome` has
+#     routinely a decision somebody made minutes ago. Same reason `/<plugin>:welcome` has
 #     no fixer for its `config-uncommitted` row.
 #   · No git history at all for the seed file (no repo, shallow clone, an uncommitted seed
 #     file) ⇒ no merge base, no evidence, no action. Reported for a human.
@@ -101,13 +101,13 @@
 # THIS WAS `upgrade.sh`, AND IT LOST THREE OF ITS FOUR STAGES ON THE WAY HERE. Stage 1 was
 # `install.sh` — machinery symlinks, which a bundle no longer has. Stages 2 and 3 ran the
 # bundle's own `validate-bundle.sh` and `migrate-bundle.sh` through symlinks that are also
-# gone; both ship in the plugin now and are reachable directly, and `/ai-bridge:welcome
+# gone; both ship in the plugin now and are reachable directly, and `/<plugin>:welcome
 # check` is the one command that surveys a bundle. What was left is the stage nothing else
 # can do, which is this one.
 #
 # REPORT-ONLY BY DEFAULT, like `migrate-bundle.sh` and `prune-worktrees.sh`. A default run
 # writes nothing at all. Read the report, then re-run with --apply — or reach it as
-# `/ai-bridge:init <dir>`, which runs the whole check-and-fix pass.
+# `/<plugin>:init <dir>`, which runs the whole check-and-fix pass.
 #
 # Idempotent: a second run finds nothing to do. Refuses a directory that is not already a
 # bundle root — creating a NEW bundle is `init-bundle.sh`'s job, not a refresh.
@@ -210,7 +210,7 @@ TARGET="$(cd "${TARGET:-$PWD}" 2>/dev/null && pwd || true)"
 if ! ab_is_bundle "$TARGET"; then
   cat >&2 <<EOF
 refresh-seeds: $TARGET is not an ai-bridge bundle root (expected instance.config.json).
-               To create a NEW bundle, run /ai-bridge:init $TARGET
+               To create a NEW bundle, run /${PLUGIN_NAME}:init $TARGET
 EOF
   exit 2
 fi
@@ -508,7 +508,7 @@ while IFS= read -r rel; do
   # THE CONFIG FILES ARE NEVER MERGED, AND THAT IS A SHIP-BLOCKER, NOT AN OMISSION.
   # `instance.config.json` is the one seed file whose entire purpose is to diverge — it
   # carries the group's org, its reposRoot, its roster and its spend — and a value in it is
-  # routinely a decision somebody made minutes ago. `/ai-bridge:welcome` already refuses to
+  # routinely a decision somebody made minutes ago. `/<plugin>:welcome` already refuses to
   # repair an uncommitted config for exactly that reason (its `config-uncommitted` row is
   # `ambiguous` and has no fixer at all), so a merge here would be the same write arriving
   # by another door. It is REPORTED, with the diff to run, and never touched.
@@ -835,7 +835,7 @@ if [ "$HIST_KIND" != git ] && [ "$unknown" -gt 0 ]; then
   left_more "  content). ${MKT_WHY:-not derivable from this install path}."
   [ -z "$MKT_DIR" ] || left_more "  claude plugin marketplace add <the marketplace> re-creates it at $MKT_DIR"
   left_more "· or record the base in the bundle itself, so no clone is needed at all:"
-  left_more "  /ai-bridge:init '$TARGET'  — a stamp writes .ai-bridge/seed-base/ for every"
+  left_more "  /${PLUGIN_NAME}:init '$TARGET'  — a stamp writes .ai-bridge/seed-base/ for every"
   left_more "  seed file IT copies, which is the merge base by construction."
 fi
 if [ "$HIST_SHALLOW" -eq 1 ]; then
