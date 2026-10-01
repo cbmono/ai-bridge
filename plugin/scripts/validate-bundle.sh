@@ -422,8 +422,9 @@ while IFS= read -r file; do
 
   if [[ "$type" == Finding ]]; then
     lines="$(grep -c '' "$file" || true)"
-    # The mandatory `provenance:` line is not the author's to shorten, so it is not counted.
+    # `provenance:` and `ledger:` are not the author's to shorten, so neither is counted.
     [[ -z "${prov:-}" ]] || lines=$((lines-1))
+    if grep -q '^ledger:' <<<"$fm"; then lines=$((lines-1)); fi
     if [[ -n "$lines" && "$lines" -gt $FINDING_MAX_LINES ]]; then
       warn "$rel" "Finding is $lines lines; $AB_CONVENTIONS 'Write less' caps it at $FINDING_MAX_LINES — the history behind it belongs in the task doc"
     fi
