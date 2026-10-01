@@ -130,7 +130,7 @@ held to it too, and a companion that could remove a core gate would not be a com
 ### How a companion is versioned
 
 **A companion tracks core's MAJOR and moves its own MINOR and PATCH independently.**
-`loopd-yolo 1.0.x` is the companion of `ai-bridge 1.x`, and it releases a MINOR or a
+`loopd-yolo 2.0.x` is the companion of `loopd 2.x`, and it releases a MINOR or a
 PATCH whenever its own contents change, without waiting for core to move. **The reason:**
 MAJOR is the only field carrying a compatibility claim — the fixed `companion/<file>` path
 and the names core reads out of it — so a shared MAJOR says *this companion speaks the core

@@ -1028,7 +1028,7 @@ the same file `/status` reads — which Anthropic login is *authorising* the ses
 machine carrying more than one login those two addresses routinely differ, and answering the
 second one used to mean leaving the banner for `/status`. Its `FROM` cell reads `session`
 rather than `tracked`/`local`, because the value is in neither config file. `CLAUDE_CONFIG_DIR`
-is consulted before `$HOME` so an `loopd-accounts` switch is reflected rather than hidden;
+is consulted before `$HOME` so a `loopd-accounts` switch is reflected rather than hidden;
 no file, no key or no `python3` prints no row at all. Nothing else from that object — the
 account and organisation UUIDs beside the address — ever reaches the banner.
 
