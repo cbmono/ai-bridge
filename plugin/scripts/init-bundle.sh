@@ -1621,6 +1621,20 @@ else
   fi
 fi
 
+# 1f. THE `claude --bg` GRANT IS NOTICED, NEVER WRITTEN: a plugin must not grant itself a
+# permissions bypass (owner, 2026-09-25/30). tests/no-bg-grant.test.sh pins it; task-019.
+BG_RULE="Bash(claude --bg * --agent ${PLUGIN_NAME}:* --permission-mode bypassPermissions --add-dir *)"
+BG_INERT="Bash(claude --bg ' *)"
+if grep -qF "\"$BG_INERT\"" "$AL_FILE" 2>/dev/null; then
+  echo "  note  .claude/settings.local.json has \`$BG_INERT\`; it matches no spawn form measured (Claude Code 2.1.285)."
+  echo "        The narrowest that does: $BG_RULE"
+elif ! grep -qE '"Bash\(claude --bg' "$AL_FILE" 2>/dev/null; then
+  echo "  note  init writes no \`claude --bg\` grant. The narrowest rule measured to match the tick's spawn:"
+  echo "          $BG_RULE"
+  echo "        It lets any brief run as any ${PLUGIN_NAME} role with bypassPermissions, unprompted."
+  echo "        Adding it to .claude/settings.local.json is yours, not the plugin's."
+fi
+
 # 2. RETIRE the managed machinery block from the bundle's .gitignore.
 #
 # The block used to be REWRITTEN on every stamp from the list of files this template
