@@ -60,7 +60,9 @@ gone()    { [[ -e "$1" ]] && echo 1 || echo 0; }
 # into terminals and log entries.
 PII_NAME="roster-export-2026.csv"
 
-git_c() { git -c user.name=fixture -c user.email=fixture@example.com -c commit.gpgsign=false "$@"; }
+# No global excludes: a machine whose ~/.gitignore lists .DS_Store would leave the
+# fixture's copies untracked, and the folder would survive `git rm -r` on that machine only.
+git_c() { git -c core.excludesFile=/dev/null -c user.name=fixture -c user.email=fixture@example.com -c commit.gpgsign=false "$@"; }
 
 # ---------------------------------------------------------------- fixture
 # Rebuilt from scratch for each scenario, because every scenario deletes something.
@@ -387,6 +389,45 @@ run "$ROOT" adoption
 assert "no --apply: exits 0"                           "$(eq "$RC" 0)"
 assert "…nothing is staged"                            "$(yes_if sh -c 'cd "$1" && [ -z "$(git diff --cached --name-only)" ]' _ "$ROOT")"
 assert "…and the folder is intact"                     "$(exists "$ROOT/projects/adoption/tasks/task-001.md")"
+
+echo "== untracked leftovers: the derived index goes, everything else is named and kept =="
+# The bundle's own ignore lines, so these files are UNTRACKED as they are on a real
+# instance and `git rm -r` leaves them. Removing every ignored file would pass the first
+# block below and fail the second: that is the mutant this section is built to kill.
+ROOT="$TMP/left"
+left_instance() { # <untrack...>
+  new_instance "$ROOT" adoption ""
+  printf '%s\n' 'tmp/' '.env' '/projects/*/index.md' > "$ROOT/.gitignore"
+  ( cd "$ROOT" && git_c rm -rq --cached -- "$@" && git_c add .gitignore && git_c commit -qm ignore ) >/dev/null 2>&1
+}
+P="$ROOT/projects/adoption"
+
+left_instance projects/adoption/index.md
+run "$ROOT" adoption --apply
+assert "derived index only: exits 0"                  "$(eq "$RC" 0)"
+assert "…index.md is removed"                         "$(gone "$P/index.md")"
+assert "…and the now-empty folder with it"            "$(gone "$P")"
+assert "…reported as removed, by name"                "$(has 'PRUNE  projects/adoption/index.md' "$OUT")"
+assert "…and nothing is left to inspect"              "$(hasnt 'inspect' "$OUT")"
+
+left_instance projects/adoption/index.md projects/adoption/tmp
+echo 'TOKEN=x' > "$P/.env"
+run "$ROOT" adoption --apply
+assert "index.md + a gitignored .env: exits 0"        "$(eq "$RC" 0)"
+assert "…index.md is removed"                         "$(gone "$P/index.md")"
+assert "….env is STILL THERE"                         "$(exists "$P/.env")"
+assert "…so is the untracked tmp/"                    "$(exists "$P/tmp/$PII_NAME")"
+assert "…and the folder is not removed"               "$(exists "$P")"
+assert "…the notice names .env"                       "$(has 'projects/adoption/.env' "$OUT")"
+assert "…and asks a human to inspect it"              "$(has 'inspect and remove by hand' "$OUT")"
+assert "…tmp/ is listed by directory and count"       "$(has 'projects/adoption/tmp/ (3 entries, contents not listed)' "$OUT")"
+assert "…and no filename from inside it is printed"   "$(hasnt "$PII_NAME" "$OUT")"
+
+left_instance projects/adoption/index.md
+run "$ROOT" adoption
+assert "report-only with an untracked index: exits 0" "$(eq "$RC" 0)"
+assert "…index.md still exists"                       "$(exists "$P/index.md")"
+assert "…and it says it would remove it"              "$(has 'would remove projects/adoption/index.md' "$OUT")"
 
 echo "== the closeout PROSE routes to this script, and invents no status value =="
 # The steps around this script are prose an agent executes, which cannot be driven from
