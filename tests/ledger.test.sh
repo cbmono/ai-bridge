@@ -80,6 +80,7 @@ cp knowledge/findings/survivor.md "$TMP/survivor.keep"
 sed -i.bak 's/"L1 · /"L9 · /' knowledge/findings/survivor.md && rm -f knowledge/findings/survivor.md.bak
 tampered="$(sum knowledge/findings/survivor.md)"
 ok "a hand-rewritten ledger is refused, not blessed" "$(L append survivor --kind edit --by example-user-007 --why w)/$(sum knowledge/findings/survivor.md)" "1/$tampered"
+ok "…while show still reads it"            "$("$LEDGER" show survivor | wc -l | tr -d ' ')" 3
 cp "$TMP/survivor.keep" knowledge/findings/survivor.md
 rm -f knowledge/findings/other.md
 ok "an id is never reused after its item is gone" "$("$LEDGER" append survivor --kind edit --by example-user-007 --why w 2>/dev/null | cut -d' ' -f1)" L5

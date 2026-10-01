@@ -48,9 +48,8 @@ check_order() { # <file> — ids strictly increasing, or the ledger was edited b
     { n = substr($1, 2) + 0; if (n <= last) { print "id " $1 " does not rise"; bad=1; exit }; last = n }
     END { exit bad }'
 }
-bad="$(check_order "$FILE")" || die 1 "$FILE: $bad — refusing to append to a rewritten ledger"
-
 if [ "$VERB" = show ]; then entries "$FILE"; exit 0; fi
+bad="$(check_order "$FILE")" || die 1 "$FILE: $bad — refusing to append to a rewritten ledger"
 
 KIND=""; BY=""; WHY=""; WITH=""
 while [ $# -gt 0 ]; do
