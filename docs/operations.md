@@ -1214,6 +1214,70 @@ matches the command text, so it covers `<abs>/scripts/x.sh args` and never a `~`
 `$(…)`-derived path, a `; echo "EXIT=$?"` tail, or a rule mixing a mid-pattern `*` with
 `:*` — `…/scripts/*.sh:*` matches nothing at all.
 
+### The supported shape: one main thread, auto mode always on
+
+**The target** (owner, 2026-09-30): **one main thread** — the human's own session — and the
+**PM dispatching as many role agents as needed**, up to `maxAgentsInFlight` (4 when the key
+is absent), with **auto mode always on**. Judge a dispatch change by whether it moves
+towards that, not by whether it makes auto mode OFF more bearable — the gap three days of
+fixes drifted into because this was never written down (task-019).
+
+**What the plugin does, and will not do:**
+
+- **Role agents are detached `claude --bg` sessions, never `Agent`-tool children.** An
+  `Agent`-tool child holds the dispatch lock until it stops — ticks of 49, 75, 84 and 125
+  minutes whose own work ended inside ~5 (2026-09-13). Not reopened to dodge the classifier.
+- **The spawn preflight runs on every dispatching tick, permanently.** The auto-mode
+  refusal `[Create Unsafe Agents]` is **intermittent**: one task, role, model and command
+  shape was refused on 2026-09-30 and spawned on 2026-10-01. A refusal is rolled back and
+  reported (`plugin/tick-steps/step-3-dispatch.md`), never retried in another shape.
+- **It never writes a `claude --bg` grant or a trust key**, on any surface — a plugin must
+  not grant itself a bypass (owner, 2026-09-25 and 2026-09-30). `/ai-bridge:init` prints a
+  notice instead; `tests/no-bg-grant.test.sh` asserts it.
+
+**What the operator does, because the plugin must not:**
+
+| | Do this | Why it is yours |
+|---|---|---|
+| **Trust** (required) | run `claude` interactively **once in each product repo's main clone** and accept the prompt | trust is a `~/.claude.json` key; a plugin writing it grants itself trust |
+| **Grant** (optional) | add `Bash(claude --bg * --agent ai-bridge:* --permission-mode bypassPermissions --add-dir *)` to the bundle's `.claude/settings.local.json` | it lets any brief run as any role with `bypassPermissions`, unprompted |
+
+**Measured on Claude Code 2.1.285, 2026-10-01** (task-019): a headless `--permission-mode
+dontAsk` child with one rule each and a stub `claude` on `PATH`, so nothing spawned. Columns
+are the spawn's brief as `"one line"`, `'one line'`, and `"multi-line"` — step 3's form.
+
+| `permissions.allow` rule | `"…"` | `'…'` | `"…↵…"` |
+|---|---|---|---|
+| none, or `Bash(claude --bg)` | ✗ | ✗ | ✗ |
+| `Bash(claude --bg ' *)` — the rule that was present | ✗ | ✗ | ✗ |
+| `Bash(claude --bg " *)` | ✗ | ✗ | ✗ |
+| `Bash(claude --bg "*)` | ✓ | ✗ | ✗ |
+| `Bash(claude --bg '*)` | ✗ | ✓ | ✓ |
+| `Bash(claude --bg * --agent ai-bridge:*)` | ✗ | ✗ | ✗ |
+| **`Bash(claude --bg * --agent ai-bridge:* --permission-mode bypassPermissions --add-dir *)`** — narrowest | ✓ | ✓ | ✓ |
+| `Bash(claude --bg *)`, `Bash(claude --bg:*)`, `Bash(claude *)` | ✓ | ✓ | ✓ |
+
+Three traps it found:
+
+- **Never put a quote character in a rule.** A multi-line `"…"` brief is matched as if
+  re-quoted: `'*` matches it and `"*` does not. The `' *` rule matched no form at all.
+- **`ai-bridge:*` at the END of a rule is the legacy `:*` prefix form**, so it matches
+  nothing; mid-rule it is an ordinary wildcard.
+- **`cd <worktree> && claude --bg …` is judged in two halves.** The `claude` half matches
+  the rule; the `cd` half cleared only when its target was already a working directory —
+  `Bash(cd *)` did not help. The grant alone does not clear step 3's compound form.
+
+**`autoMode.allow` is a real key and the permission matcher does not read it.** `claude
+auto-mode config` lists an entry put there — and the entry **replaces** the 17 default
+exceptions rather than adding to them. `Bash(claude --bg *)` under it allowed nothing.
+
+**Still open:** the cause of the intermittent refusal; whether a matching rule skips the
+classifier in auto mode (the Claude Code docs say so — unmeasured); whether a prose
+`autoMode.allow` exception clears it; the 2026-09-25 entry's shape, which was not kept.
+**Trust:** a main-clone key cleared a fresh worktree of it in a scratch config; it does not
+settle the 2026-09-28 observation, whose two candidate causes stay UNRESOLVED
+(`projects/loopd/tasks/task-004-cli-output-semantics.md` in the private bundle).
+
 ---
 
 ## 7. Editor view (control panel + repos in one tree)
