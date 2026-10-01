@@ -2,7 +2,7 @@
 #
 # script-call-shape.test.sh — no shipped prompt teaches a plugin-script call that a
 # permission rule cannot match. Measured on Claude Code 2.1.284 (task-016): the rule
-# `Bash(<cache>/<mk>/ai-bridge/*/scripts/*)` matches `<abs>/x.sh args`, and never a call
+# `Bash(<cache>/<mk>/loopd/*/scripts/*)` matches `<abs>/x.sh args`, and never a call
 # whose path is a variable (plugin/seed/CLAUDE.md's old `AB="$(ls -d …)"; "$AB/x.sh"`),
 # a `~` path, or one chained to `$?`. `${CLAUDE_PLUGIN_ROOT}` is the one placeholder
 # allowed. Scans plugin/{skills,tick-steps,agents,seed}/**/*.md and plugin/hooks/hooks.json;

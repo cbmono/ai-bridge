@@ -25,9 +25,9 @@ read; a bundle with no stamp has the data and no way to drive it. Do the plugin 
 
 | # | Step | Where | Do this |
 |---|---|---|---|
-| 1 | Install the plugin | once per **machine**, in any Claude Code session | `/plugin marketplace add cbmono/ai-bridge`, then `/plugin install ai-bridge@ai-bridge` |
+| 1 | Install the plugin | once per **machine**, in any Claude Code session | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd` |
 | 2 | Get the bundle | once per **bundle** | **joining** one: `git clone <bundle-remote> ~/workspace/<group>/_ai-bridge-<group>` · **starting** one: [README § Install](../README.md#install), steps 2-5 |
-| 3 | Stamp it | **each** clone | `/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group>` — seeds what is absent and links `repos/` |
+| 3 | Stamp it | **each** clone | `/loopd:init ~/workspace/<group>/_ai-bridge-<group>` — seeds what is absent and links `repos/` |
 | 4 | Say which login this clone is | **each** clone | `{ "ownerGithubUser": "<login>" }` in `instance.config.local.json` (gitignored, per machine) |
 | 5 | Turn the nudges on — **joining only** | your clone | `touch ~/workspace/<group>/_ai-bridge-<group>/AWAITING.md`. A clone is not a first stamp, so the stamp deliberately does not create it |
 | 6 | Open a session | | `cd ~/workspace/<group>/_ai-bridge-<group>` then `claude` |
@@ -39,7 +39,7 @@ the whole of what a machine needs; the bundle holds data and nothing else.
 `SessionStart` banner and its `CLAUDE.md` load from the working directory — not from what
 your editor has open. Everything the plugin carries resolves anywhere.
 
-Then run **`/ai-bridge:welcome check`**. It reports the state that could be wrong — a
+Then run **`/loopd:welcome check`**. It reports the state that could be wrong — a
 template you are behind, machinery this clone was never linked to, uncommitted or unknown
 config keys, a tick lock, a stray background process — each line a fact with its evidence.
 `fix` repairs only the tier that has one right answer and prints the rest.
@@ -54,25 +54,25 @@ prints the commands the second machine has to run itself, which it cannot run fo
 
 ## 2. The skills — what to reach for
 
-Every command is namespaced (`/ai-bridge:…`); a bare name does not resolve. Run them
+Every command is namespaced (`/loopd:…`); a bare name does not resolve. Run them
 **inside the instance**, never from a product repo. **Twelve ship. These seven carry your
 first week**; the rest wait until you meet the problem they solve.
 
 | Skill | Reach for it when |
 |---|---|
-| `/ai-bridge:welcome [check\|fix]` | the banner scrolled past, or something looks off. `check` reports, `fix` repairs the idempotent tier |
-| `/ai-bridge:new-project <description>` | you have work. It scaffolds phases and `draft` tasks and asks for what it cannot infer |
-| `/ai-bridge:answer` | the PM left you numbered `open_questions` and you would rather answer in chat than in the file |
-| `/ai-bridge:dispatch [gap]` | you promoted something. One serial tick — `/ai-bridge:dispatch 10m` keeps ticking every ten minutes |
-| `/ai-bridge:work <task>` | you want to do this one yourself, in this session, instead of dispatching an agent |
-| `/ai-bridge:brief-me [project]` | you were away, or you are walking into a meeting |
-| `/ai-bridge:close-project <slug>` | its tasks are all `done` or `cancelled` |
+| `/loopd:welcome [check\|fix]` | the banner scrolled past, or something looks off. `check` reports, `fix` repairs the idempotent tier |
+| `/loopd:new-project <description>` | you have work. It scaffolds phases and `draft` tasks and asks for what it cannot infer |
+| `/loopd:answer` | the PM left you numbered `open_questions` and you would rather answer in chat than in the file |
+| `/loopd:dispatch [gap]` | you promoted something. One serial tick — `/loopd:dispatch 10m` keeps ticking every ten minutes |
+| `/loopd:work <task>` | you want to do this one yourself, in this session, instead of dispatching an agent |
+| `/loopd:brief-me [project]` | you were away, or you are walking into a meeting |
+| `/loopd:close-project <slug>` | its tasks are all `done` or `cancelled` |
 
 The other five — `pr-review-request`, `capture`, `fanout`, `handoff`, `audit` — and the
-flags `/ai-bridge:new-project` accepts are in the
+flags `/loopd:new-project` accepts are in the
 [README's table](../README.md#commands). None of them is needed on day one.
 
-**One `/ai-bridge:dispatch` per clone.** It is serial and completion-gated, and the lock
+**One `/loopd:dispatch` per clone.** It is serial and completion-gated, and the lock
 that enforces that is per clone: it refuses a second loop on **your** checkout. On a shared
 bundle each human runs their own, and what keeps those two from dispatching the same task
 is `owner`, not the lock ([sharing.md](sharing.md)).
@@ -85,8 +85,8 @@ Who actually does the work, and on which model:
 ## 3. The two gates — the decisions that stay yours
 
 ```text
-build     /ai-bridge:new-project  →  you promote draft → ready  →  /ai-bridge:dispatch  →  you merge the PR
-research  /ai-bridge:new-project  →  you promote draft → ready  →  you do the work  →  you approve the deliverable
+build     /loopd:new-project  →  you promote draft → ready  →  /loopd:dispatch  →  you merge the PR
+research  /loopd:new-project  →  you promote draft → ready  →  you do the work  →  you approve the deliverable
 ```
 
 A `research` project has no `target_repo`, dispatches no agent and opens no pull request —
@@ -116,11 +116,11 @@ nudges off for good, and `touch AWAITING.md` turns them back on.
 
 ## Day one, in order
 
-1. Install — the table in [§ 1](#1-install--about-ten-minutes), then `/ai-bridge:welcome check`.
+1. Install — the table in [§ 1](#1-install--about-ten-minutes), then `/loopd:welcome check`.
 2. Look around: `projects/` is the work, `knowledge/` is what has been learned, `AWAITING.md` is what needs you ([README § Where the work lives](../README.md#where-the-work-lives)).
-3. `/ai-bridge:new-project <something small and real>` — one you would be happy to merge or to throw away.
+3. `/loopd:new-project <something small and real>` — one you would be happy to merge or to throw away.
 4. Answer its questions, read the drafts it wrote, and promote **one** task to `ready`.
-5. `/ai-bridge:dispatch` — then leave it alone. **Steer, don't watch**: agents run in the background and bubble up results and questions, not every step.
+5. `/loopd:dispatch` — then leave it alone. **Steer, don't watch**: agents run in the background and bubble up results and questions, not every step.
 6. Read the PR's criteria table before you merge. That table, not the green check, is what you are deciding on.
 
 **And the one habit worth forming first:** when the PM asks you something, answer it in
@@ -138,7 +138,7 @@ owner's, 2026-09-06.
 
 | Plugin | What it adds, and to whom | Verdict |
 |---|---|---|
-| `ai-bridge-yolo` (our companion) | `AUTONOMY.md`: the `yolo` mode for a bundle whose loop you already trust | optional; never on a bundle with production credentials unless you mean it |
+| `loopd-yolo` (our companion) | `AUTONOMY.md`: the `yolo` mode for a bundle whose loop you already trust | optional; never on a bundle with production credentials unless you mean it |
 | `security-guidance` | pattern warnings on edits, an LLM diff review on stop, 25+ vulnerability classes | **install** — before Claude edits a repo |
 | `typescript-lsp` | TypeScript/JavaScript language server: real references, types, diagnostics | **install** on TS/JS repos |
 | `frontend-design` | production-grade UI generation that avoids generic AI aesthetics | **install** on UI repos |

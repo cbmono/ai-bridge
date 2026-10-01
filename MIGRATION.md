@@ -1,8 +1,8 @@
 # Migrating from ai-bridge to loopd
 
-**Nothing here applies yet.** The plugin, its marketplace and this repository are renamed
-`loopd` by the rename PR (loopd/task-007, the flip) and released as 3.0.0 (task-008).
-Until that release reaches your machine, keep running `/ai-bridge:*`.
+The plugin, its marketplace, its companions and this repository are renamed `loopd`
+(loopd/task-007) and released as 3.0.0 (task-008). Until that release reaches your
+machine, keep running `/ai-bridge:*`.
 
 Two parts, in order: the owner renames the repository once; then every machine and every
 bundle moves over.
@@ -64,9 +64,21 @@ Find them with `grep -rn 'ai-bridge[:@]\|/ai-bridge/' CLAUDE.md .claude/`. Commi
 /plugin marketplace remove ai-bridge
 ```
 
-Companions (`ai-bridge-yolo`, `ai-bridge-accounts`, `ai-bridge-llm`): uninstall each and
-install it again from `@loopd` under the name the flip PR gives it — that PR fills the names
-in here. Until you do, `yolo` projects read as `gated`, which is the safe direction.
+Companions move with core, because a companion counts only when it comes from core's own
+marketplace:
+
+| Old | New |
+|---|---|
+| `ai-bridge-yolo@ai-bridge` | `loopd-yolo@loopd` |
+| `ai-bridge-accounts@ai-bridge` | `loopd-accounts@loopd` — its launcher keeps the name `bin/ai-bridge-claude`; re-point your alias at `cache/*/loopd-accounts/*/bin/ai-bridge-claude` |
+| `ai-bridge-llm@ai-bridge` | `loopd-llm@loopd` — likewise `bin/ai-bridge-deepseek` under `cache/*/loopd-llm/*` |
+
+Uninstall each old one and install the new one. Until you do, `yolo` projects read as
+`gated` and no account line prints, which is the safe direction.
+
+**The `ai-bridge` entry left in the marketplace is an alias, for one release.** Updating
+`ai-bridge@ai-bridge` installs a stub with no hooks and no agents whose one skill,
+`/ai-bridge:renamed`, prints these steps. It keeps nothing working; it tells you to move.
 
 Edit first, uninstall second. The cache keeps old versions on disk, so an unedited
 scripts-path line may keep resolving to stale `ai-bridge` scripts instead of failing.

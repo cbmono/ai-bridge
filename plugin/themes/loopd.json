@@ -1,5 +1,5 @@
 {
-  "name": "AI Bridge",
+  "name": "loopd",
   "base": "dark",
   "overrides": {
     "claude": "#5ea2ff",

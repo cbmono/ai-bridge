@@ -18,7 +18,7 @@ account line and switches nothing. `plugin/scripts/resolve-account.sh` reads thi
 So there is no native switch to prefer, and setting the variable is a **complete**
 isolation: it scopes auth, plugins, settings, MCP servers and projects, not auth alone.
 That is the cost of the mechanism — each account directory needs its own one-time
-`claude auth login` **and** its own `/plugin install ai-bridge@ai-bridge`.
+`claude auth login` **and** its own `/plugin install loopd@loopd`.
 
 ## Where things live
 

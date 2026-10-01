@@ -189,7 +189,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
        not `❓ **answer**`. **Do not hand-write a row into `AWAITING.md` and stop there** —
        that file is derived and rewritten from the task docs every tick, so a row with
        no `open_questions` entry behind it is deleted on the next one.
-     * **A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch `ai-bridge:qa-reviewer`
+     * **A mode `AUTONOMY.md` defines as delegating this ⇒ dispatch `loopd:qa-reviewer`
        automatically**, and say in the tick summary that you did and why.
        **`AUTONOMY.md` absent means every project is `gated`**, so the ask always holds.
      **Ask once per reviewer failure, not once per PR** — raise it on one task, name

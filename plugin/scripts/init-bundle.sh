@@ -783,7 +783,7 @@ config_require_src() {
     echo "error: --config needs a checkout of this repo, and this is an installed plugin." >&2
     echo "       config/ is not shipped in the plugin: it links three agent files into" >&2
     echo "       \${CLAUDE_CONFIG_DIR:-~/.claude}, which is a machine decision, not a bundle one." >&2
-    echo "       git clone https://github.com/cbmono/ai-bridge && ai-bridge/plugin/scripts/init-bundle.sh --config" >&2
+    echo "       git clone https://github.com/cbmono/loopd && loopd/plugin/scripts/init-bundle.sh --config" >&2
     echo "       Bundle stamps (init-bundle.sh [TARGET]) need none of this." >&2
     exit 2
   fi
@@ -1281,7 +1281,7 @@ EOF
     echo "  NOTE: AUTONOMY.md was a machinery link and is GONE, so this bundle is back to" >&2
     echo "        ask-first for every delegated write. That is the safe end of the change," >&2
     echo "        and it is not silent: to opt back in, install the companion that ships it —" >&2
-    echo "          /plugin install ai-bridge-yolo@ai-bridge" >&2
+    echo "          /plugin install loopd-yolo@loopd" >&2
   fi
 }
 
@@ -2926,7 +2926,7 @@ echo "       re-run /${PLUGIN_NAME}:init to fill in repos/.)"
 # what Claude Code has installed, and a nudge that fires only when it is sure would never
 # fire at all. See docs/operations.md § 1.
 echo "      (The commands are the ai-bridge PLUGIN, installed once per machine:"
-echo "       /plugin marketplace add cbmono/ai-bridge, then"
+echo "       /plugin marketplace add cbmono/loopd, then"
 echo "       /plugin install ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE} — then restart Claude Code.)"
 
 # Retired seed content — REPORT, never remove. See RETIRED for why the conversion sweep

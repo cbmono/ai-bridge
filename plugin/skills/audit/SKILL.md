@@ -6,7 +6,7 @@ allowed-tools: Bash(pwd), Bash(ls:*), Bash(date:*), Bash(bash ${CLAUDE_PLUGIN_RO
 ---
 
 Run one **audit pass** over this control-panel instance — the slow counter-metric loop
-that complements `/ai-bridge:dispatch`. It is **read-only**: it surfaces drift, it never promotes,
+that complements `/loopd:dispatch`. It is **read-only**: it surfaces drift, it never promotes,
 merges, dispatches, or changes task status.
 
 ## Preconditions
@@ -31,7 +31,7 @@ merges, dispatches, or changes task status.
    routes dispatches: run `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh auditor` — it looks `auditor` up in `roleTiers` (default `deep`) and maps it to an
    alias via `models`; if those maps are absent it prints why on stderr — report that line,
    then inherit the session model rather than dispatching on a guess.
-2. Dispatch the **`auditor`** agent (`subagent_type: ai-bridge:auditor` — the plugin
+2. Dispatch the **`auditor`** agent (`subagent_type: loopd:auditor` — the plugin
    namespace, because a BARE agent name does not resolve) for one pass, passing the
    resolved model. It's read-only — it grounds each goal's `success_criteria` against
    live `gh`/`git` reality (an **objective**'s, or a **project's own** where it carries
@@ -48,10 +48,10 @@ merges, dispatches, or changes task status.
 ## Cadence
 This is a **slow** loop — run it weekly, or after a batch of projects close, not every
 tick. It changes no task state, but it **prepends to `log.md`** — as does each
-`/ai-bridge:dispatch` tick — so run it **between** ticks, not concurrently, to avoid a
+`/loopd:dispatch` tick — so run it **between** ticks, not concurrently, to avoid a
 write race on that file.
 
-**Run it with `/loop 7d /ai-bridge:audit`, in a session on the machine that holds the
+**Run it with `/loop 7d /loopd:audit`, in a session on the machine that holds the
 bundle** — the same first-party `/loop` the dispatch cadence uses, at a slow interval.
 Nothing is installed for it: no cron, no watcher, no script.
 

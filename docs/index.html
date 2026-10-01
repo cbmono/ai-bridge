@@ -166,7 +166,7 @@ footer nav{gap:16px;font-size:13px}
       <a class="hide-s" href="#loop">The loop</a>
       <a class="hide-s" href="#install">Install</a>
       <a class="hide-s" href="#rails">Safety rails</a>
-      <a class="btn" href="https://github.com/cbmono/ai-bridge">GitHub</a>
+      <a class="btn" href="https://github.com/cbmono/loopd">GitHub</a>
     </nav>
   </div>
 </header>
@@ -183,7 +183,7 @@ footer nav{gap:16px;font-size:13px}
         <a class="btn" href="#install">Install the plugin</a>
         <a class="btn quiet" href="#loop">Walk the loop</a>
       </div>
-      <p class="rename">Formerly ai-bridge. The plugin, its commands and the repository still answer to <code>ai-bridge</code> until the rename ships.</p>
+      <p class="rename">Formerly ai-bridge. An existing install moves over with <a href="https://github.com/cbmono/loopd/blob/main/MIGRATION.md">MIGRATION.md</a>.</p>
     </div>
     <figure><img src="assets/loopd-icon.png" alt="The loopd mark: a blue loop with a pink gate on its top edge and a pink exit arrow leaving to the left" width="700" height="480"></figure>
   </div>
@@ -193,7 +193,7 @@ footer nav{gap:16px;font-size:13px}
     <h2>Four steps. Two of them are yours.</h2>
     <p class="lede">Blue is the machine's — agents, code, refs, running state. <span class="pink">Pink is yours</span> — every pink pixel is a decision waiting. Nothing is dispatched until you promote, and nothing reaches main until you merge.</p>
 
-    <div class="diagram" role="img" aria-label="The core loop. /ai-bridge:new-project scaffolds draft tasks; you promote draft to ready; /ai-bridge:dispatch sends an agent to build and open a pull request; an independent review either sends it back to the agent, at most two rounds, or clears it; you merge, and it ships to main.">
+    <div class="diagram" role="img" aria-label="The core loop. /loopd:new-project scaffolds draft tasks; you promote draft to ready; /loopd:dispatch sends an agent to build and open a pull request; an independent review either sends it back to the agent, at most two rounds, or clears it; you merge, and it ships to main.">
       <svg class="wide" viewBox="0 0 1080 330" aria-hidden="true">
         <defs>
           <marker id="ah-blue" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#5ea2ff"/></marker>
@@ -222,13 +222,13 @@ footer nav{gap:16px;font-size:13px}
           <path d="M752 211 H1008" stroke="#5ea2ff"/>
           <path d="M382 211 H638" stroke="#ff7ac2"/>
         </g>
-        <text class="ref" x="22" y="56">/ai-bridge:new-project</text>
+        <text class="ref" x="22" y="56">/loopd:new-project</text>
         <text class="step" x="22" y="82">The PM scaffolds the work</text>
         <text class="note" x="22" y="104">phases, draft tasks, criteria</text>
         <text class="gate" x="392" y="56">GATE 1 · YOU</text>
         <text class="step" x="392" y="82">Promote draft → ready</text>
         <text class="note" x="392" y="104">nothing is dispatched until you do</text>
-        <text class="ref" x="762" y="56">/ai-bridge:dispatch</text>
+        <text class="ref" x="762" y="56">/loopd:dispatch</text>
         <text class="step" x="762" y="82">An agent builds it</text>
         <text class="note" x="762" y="104">own worktree, opens the PR</text>
         <text class="ref" x="762" y="246">review</text>
@@ -272,13 +272,13 @@ footer nav{gap:16px;font-size:13px}
           <path d="M22 421 H278" stroke="#5ea2ff"/>
           <path d="M22 561 H278" stroke="#ff7ac2"/>
         </g>
-        <text class="ref" x="30" y="36">/ai-bridge:new-project</text>
+        <text class="ref" x="30" y="36">/loopd:new-project</text>
         <text class="step" x="30" y="62">The PM scaffolds the work</text>
         <text class="note" x="30" y="84">phases, draft tasks, criteria</text>
         <text class="gate" x="30" y="176">GATE 1 · YOU</text>
         <text class="step" x="30" y="202">Promote draft → ready</text>
         <text class="note" x="30" y="224">nothing is dispatched until you do</text>
-        <text class="ref" x="30" y="316">/ai-bridge:dispatch</text>
+        <text class="ref" x="30" y="316">/loopd:dispatch</text>
         <text class="step" x="30" y="342">An agent builds it</text>
         <text class="note" x="30" y="364">own worktree, opens the PR</text>
         <text class="ref" x="30" y="456">review</text>
@@ -300,7 +300,7 @@ footer nav{gap:16px;font-size:13px}
     <ol class="steps">
       <li class="card">
         <div class="num">01 · agents</div>
-        <h3><code>/ai-bridge:new-project</code></h3>
+        <h3><code>/loopd:new-project</code></h3>
         <p>One sentence is enough. The project-manager agent scaffolds phases and <code>draft</code> tasks, then refines each one: acceptance criteria, and the questions only you can answer.</p>
       </li>
       <li class="card human">
@@ -310,7 +310,7 @@ footer nav{gap:16px;font-size:13px}
       </li>
       <li class="card">
         <div class="num">03 · agents</div>
-        <h3><code>/ai-bridge:dispatch</code></h3>
+        <h3><code>/loopd:dispatch</code></h3>
         <p>One tick at a time. Each <code>ready</code> task gets its own worktree and branch; an engineer agent builds it, reviews its own diff and opens a PR with the criteria as a ✓/✗ table.</p>
       </li>
       <li class="card human">
@@ -322,7 +322,7 @@ footer nav{gap:16px;font-size:13px}
 
     <div class="card retry">
       <div class="label">The retry edge · two rounds, then you decide</div>
-      <p>Review sends the PR back to its agent. Round 1: the reviewer reports, the agent fixes and replies once. Round 2: the reviewer checks only what it raised. There is no round 3 — whatever is still open comes to you in one short block. <a href="https://github.com/cbmono/ai-bridge/blob/main/docs/autonomy.md#two-rounds-then-the-human-decides">docs/autonomy.md</a></p>
+      <p>Review sends the PR back to its agent. Round 1: the reviewer reports, the agent fixes and replies once. Round 2: the reviewer checks only what it raised. There is no round 3 — whatever is still open comes to you in one short block. <a href="https://github.com/cbmono/loopd/blob/main/docs/autonomy.md#two-rounds-then-the-human-decides">docs/autonomy.md</a></p>
     </div>
   </section>
 
@@ -355,19 +355,19 @@ footer nav{gap:16px;font-size:13px}
 <pre><span class="logo">   <span class="pink">▄</span>▄▄▄
 <span class="arrow">◀━</span>▐    ▌   loopd — the loop, running
   ▝▄▄▄▄▘</span><span class="c"># once per machine</span>
-<span class="cmd">/plugin marketplace add cbmono/ai-bridge</span>
-<span class="cmd">/plugin install ai-bridge@ai-bridge</span>
+<span class="cmd">/plugin marketplace add cbmono/loopd</span>
+<span class="cmd">/plugin install loopd@loopd</span>
 
 <span class="c"># once per group of repositories</span>
-<span class="cmd">/ai-bridge:init ~/workspace/&lt;group&gt;/_ai-bridge-&lt;group&gt;</span>
+<span class="cmd">/loopd:init ~/workspace/&lt;group&gt;/_ai-bridge-&lt;group&gt;</span>
 
 <span class="c"># then, every time</span>
-<span class="cmd">/ai-bridge:new-project</span> add rate limiting to the public API
+<span class="cmd">/loopd:new-project</span> add rate limiting to the public API
 <span class="you">you promote draft → ready</span>
-<span class="cmd">/loop 10m /ai-bridge:dispatch</span>
+<span class="cmd">/loop 10m /loopd:dispatch</span>
 <span class="you">you merge the PR</span></pre>
     </div>
-    <p style="margin-top:16px"><a href="https://github.com/cbmono/ai-bridge#install">The full install guide</a> covers configuring the bundle, giving it a remote and sharing it between two people.</p>
+    <p style="margin-top:16px"><a href="https://github.com/cbmono/loopd#install">The full install guide</a> covers configuring the bundle, giving it a remote and sharing it between two people.</p>
   </section>
 
   <section id="rails">
@@ -388,11 +388,11 @@ footer nav{gap:16px;font-size:13px}
 
 <footer>
   <div class="wrap">
-    <span>loopd · MIT · <a href="https://github.com/cbmono/ai-bridge">github.com/cbmono/ai-bridge</a></span>
+    <span>loopd · MIT · <a href="https://github.com/cbmono/loopd">github.com/cbmono/loopd</a></span>
     <nav aria-label="Documentation">
-      <a href="https://github.com/cbmono/ai-bridge#readme">README</a>
-      <a href="https://github.com/cbmono/ai-bridge/blob/main/docs/autonomy.md">Autonomy</a>
-      <a href="https://github.com/cbmono/ai-bridge/blob/main/docs/operations.md">Operations</a>
+      <a href="https://github.com/cbmono/loopd#readme">README</a>
+      <a href="https://github.com/cbmono/loopd/blob/main/docs/autonomy.md">Autonomy</a>
+      <a href="https://github.com/cbmono/loopd/blob/main/docs/operations.md">Operations</a>
       <a href="assets/fonts/inter/LICENSE.txt">Inter OFL</a>
       <a href="assets/fonts/jetbrains-mono/OFL.txt">JetBrains Mono OFL</a>
     </nav>

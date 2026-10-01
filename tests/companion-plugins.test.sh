@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # companion-plugins.test.sh — the companion extension point: `resolve-autonomy.sh`'s
-# resolution order against a FIXTURE companion root, the `ai-bridge-yolo` marketplace
+# resolution order against a FIXTURE companion root, the `loopd-yolo` marketplace
 # entry, and the one rule the whole design rests on — a companion may ADD behaviour but
 # never remove a core gate.
 #
@@ -100,7 +100,7 @@ ok "a registry listing no companion -> exit 1" "$rc" 1
 
 echo
 echo "== 2. an installed companion answers — the extension point itself =="
-write_registry "ai-bridge-yolo@${PMK}"
+write_registry "loopd-yolo@${PMK}"
 resolve "$CFG"
 ok "companion installed -> exit 0"             "$rc" 0
 ok "…and it prints that companion's file"      "$out" "$COMPANION/companion/AUTONOMY.md"
@@ -125,13 +125,13 @@ echo "== 4. the three ways a lookup must still say NO =="
 # (a) THE MARKETPLACE IS PART OF THE CONTRACT. Arming delegated authority must not be
 #     reachable by an unrelated plugin someone installed for an unrelated reason, so a
 #     plugin carrying the right path under the WRONG marketplace is not a companion.
-write_registry "ai-bridge-yolo@somebody-elses-market"
+write_registry "loopd-yolo@somebody-elses-market"
 resolve "$CFG"
 ok "right path, wrong marketplace -> exit 1"   "$rc" 1
 
 # (b) THE RELATIVE PATH IS FIXED. A file at the companion's plugin ROOT is not what core
 #     reads — otherwise a companion's own README or docs could be mistaken for it.
-write_registry "ai-bridge-yolo@${PMK}"
+write_registry "loopd-yolo@${PMK}"
 mv "$COMPANION/companion/AUTONOMY.md" "$COMPANION/AUTONOMY.md"
 resolve "$CFG"
 ok "file at the plugin root, not companion/ -> exit 1" "$rc" 1
@@ -159,18 +159,18 @@ ok "…and still falls back to the root-only check it used to be" \
    "$(grep -c '\[ -f "\$repo_root/AUTONOMY.md" \] && delegation_possible=1' "$REPO/plugin/scripts/commit-as.sh" | tr -d ' ')" 1
 
 echo
-echo "== 6. ai-bridge-yolo is a real, installable marketplace entry =="
+echo "== 6. loopd-yolo is a real, installable marketplace entry =="
 if command -v jq >/dev/null 2>&1; then
-  ok "the marketplace lists ai-bridge-yolo" \
-     "$(jq -r '[.plugins[].name] | index("ai-bridge-yolo") | if . == null then "no" else "yes" end' "$MJ")" yes
-  SRC="$(jq -r '.plugins[] | select(.name=="ai-bridge-yolo") | .source' "$MJ")"
+  ok "the marketplace lists loopd-yolo" \
+     "$(jq -r '[.plugins[].name] | index("loopd-yolo") | if . == null then "no" else "yes" end' "$MJ")" yes
+  SRC="$(jq -r '.plugins[] | select(.name=="loopd-yolo") | .source' "$MJ")"
   ok "…its source is a same-repo relative path" "$(printf '%s' "$SRC" | grep -c '^\./' | tr -d ' ')" 1
   ok "…which resolves to a plugin manifest" \
      "$(yn test -f "$REPO/${SRC#./}/.claude-plugin/plugin.json")" yes
-  ok "…whose name matches the entry" "$(jq -r .name "$REPO/${SRC#./}/.claude-plugin/plugin.json")" "ai-bridge-yolo"
+  ok "…whose name matches the entry" "$(jq -r .name "$REPO/${SRC#./}/.claude-plugin/plugin.json")" "loopd-yolo"
   ok "…and whose versions agree" \
      "$([ "$(jq -r .version "$REPO/${SRC#./}/.claude-plugin/plugin.json")" \
-        = "$(jq -r '.plugins[] | select(.name=="ai-bridge-yolo") | .version' "$MJ")" ] && echo yes || echo no)" yes
+        = "$(jq -r '.plugins[] | select(.name=="loopd-yolo") | .version' "$MJ")" ] && echo yes || echo no)" yes
   # The deprecation stub was removed at 1.0.0 (ai-bridge-v2/task-019) after its one
   # version. Asserted from this file too, because the entry sat NEXT to the companion's
   # and a re-add would silently restore an install path for a name nothing maintains.
@@ -254,7 +254,7 @@ echo "==    real cache is. This is a security boundary, not a refactor.         
 # So the fixture below is cache-SHAPED: the exact path the plugin manager writes, several
 # stale versions deep, under the same CLAUDE_CONFIG_DIR the resolver reads its registry
 # from. Every assertion here must answer `gated`.
-CACHE="$CFG/plugins/cache/${PMK}/ai-bridge-yolo"
+CACHE="$CFG/plugins/cache/${PMK}/loopd-yolo"
 for v in 0.13.0 0.14.0 0.15.0; do
   mkdir -p "$CACHE/$v/companion"
   printf '# a capability file left behind by version %s\n' "$v" > "$CACHE/$v/companion/AUTONOMY.md"
@@ -302,7 +302,7 @@ mv "$CFG/plugins/installed_plugins.json.away" "$CFG/plugins/installed_plugins.js
 #     that no longer exists is a companion that is not installed, and falling through to a
 #     sibling version would resolve a capability the registry never granted. This is the
 #     half-uninstalled state a failed upgrade leaves behind.
-write_registry_at "ai-bridge-yolo@${PMK}" "$CACHE/9.9.9"
+write_registry_at "loopd-yolo@${PMK}" "$CACHE/9.9.9"
 resolve "$CFG"
 ok "registry names a missing version, 0.15.0 cached -> exit 1" "$rc" 1
 
@@ -310,7 +310,7 @@ ok "registry names a missing version, 0.15.0 cached -> exit 1" "$rc" 1
 #     the registry pointing at a version that IS on disk must clear — otherwise (a)-(c)
 #     would pass on a resolver that says no to everything, and this whole section would
 #     be measuring nothing.
-write_registry_at "ai-bridge-yolo@${PMK}" "$CACHE/0.15.0"
+write_registry_at "loopd-yolo@${PMK}" "$CACHE/0.15.0"
 resolve "$CFG"
 ok "the SAME cached tree, this time installed -> exit 0"  "$rc" 0
 ok "…and it is the registry's version that answers"       "$out" "$CACHE/0.15.0/companion/AUTONOMY.md"

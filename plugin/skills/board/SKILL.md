@@ -15,7 +15,7 @@ human typed.
 | empty or `serve` | the **local** board server, on this machine only. One command, no tokens. **The default.** |
 | `publish` | the **private artifact**, at a stable URL. Interactive only, and it leaves the machine. |
 
-## `serve` — the local board server, and what a bare `/ai-bridge:board` does
+## `serve` — the local board server, and what a bare `/loopd:board` does
 
 **Confirm you are at an instance root first** — `SCHEMA.md` and `instance.config.json` are
 both present. If they are not, say which directory this is, say that an instance root
@@ -42,7 +42,7 @@ says the port is already served and exits 0. The next session's banner prints th
 Publish this instance's board as a **private artifact**, at **one URL that never
 changes**. Run it from the instance root.
 
-**Only ever on an explicit `publish`.** A bare `/ai-bridge:board` serves, and no default,
+**Only ever on an explicit `publish`.** A bare `/loopd:board` serves, and no default,
 typo or empty argument reaches this section.
 
 The page is the same page the tick already renders — `${CLAUDE_PLUGIN_ROOT}/scripts/build-board.sh`, from
@@ -56,7 +56,7 @@ its own; what it publishes is the bytes the renderer wrote.
 2. **Refresh the data**: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/write-snapshot.sh --quiet`. No `SNAPSHOT.json` ⇒ the
    writer writes nothing and exits 0 — that is how a human takes this instance off the
    board, so say so in one line and stop. Never create the file.
-3. **Read `board` from the tracked `instance.config.json`** — the same key `/ai-bridge:init`
+3. **Read `board` from the tracked `instance.config.json`** — the same key `/loopd:init`
    reads at stamp time, and deliberately *not* per-machine overridable. `false` ⇒ say the
    board is switched off and stop. Absent or `true` ⇒ carry on.
 4. **Render, scoped to this instance**, from the instance root:
@@ -128,7 +128,7 @@ its own; what it publishes is the bytes the renderer wrote.
 **A headless tick cannot, and that is measured, not assumed.** On Claude Code 2.1.261 a
 `claude -p` session's tool inventory carries no artifact tool and a tool search for one
 returns nothing, so the dispatch tick never publishes — it renders the local page, and
-says `run /ai-bridge:board publish to refresh` instead.
+says `run /loopd:board publish to refresh` instead.
 
 So if this session has no artifact capability either: **say that in one line, name the
 rendered file, and stop.** It is not an error and not a failure of the instance —

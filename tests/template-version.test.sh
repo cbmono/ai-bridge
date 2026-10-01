@@ -269,14 +269,14 @@ globs="$(printf '%s\n' "$raw_globs" | awk '
 # the plugin (task-022), so their globs are `/plugin/seed/**` and `/plugin/RETIRED` and the
 # collapse above folds both under the directory glob that already covered them.
 ok "the two rule files cover exactly the core paths" \
-  "$globs" "config install.sh plugin plugin-accounts plugin-llm plugin-yolo upgrade.sh "
+  "$globs" "config install.sh plugin plugin-accounts plugin-alias plugin-llm plugin-yolo upgrade.sh "
 
 # Each of those names must appear in the core sentence the agent reads. Anchored on the
 # CLAUDE.md bullet rather than the whole file, so an unrelated mention elsewhere cannot
 # answer for it.
 core_bullet="$(grep -F 'A change to `core` carries NO version bump' "$TPL/CLAUDE.md" || true)"
 missing=0
-for p in plugin plugin-yolo plugin-accounts plugin-llm config install.sh upgrade.sh; do
+for p in plugin plugin-yolo plugin-accounts plugin-llm plugin-alias config install.sh upgrade.sh; do
   printf '%s' "$core_bullet" | grep -qF "\`$p" || { missing=$((missing+1)); printf '        NOT NAMED IN CLAUDE.md: %s\n' "$p" >&2; }
 done
 ok "…and CLAUDE.md's core bullet names every one of them" "$missing" 0
@@ -305,7 +305,7 @@ ok "the reasoning is in docs/conventions.md, once" \
 echo "== 3b. every COMPANION tracks core's MAJOR, and its two manifests agree =="
 # =======================================================================================
 # THE DRIFT THIS PINS, and why it needed a test rather than a convention. The marketplace
-# listed `ai-bridge@1.0.0` beside `ai-bridge-yolo@0.15.0` for a whole release with nothing
+# listed `ai-bridge@1.0.0` beside `loopd-yolo@0.15.0` for a whole release with nothing
 # anywhere saying whether that was a deliberate independent line or a companion nobody had
 # bumped — unreadable either way, which is the definition of silent drift. The rule is
 # stated in `plugin/README.md` ("How a companion is versioned"): a companion tracks core's

@@ -1,0 +1,15 @@
+{
+  "name": "ai-bridge",
+  "displayName": "AI Bridge (renamed loopd)",
+  "version": "2.0.0",
+  "description": "ALIAS, kept for one release. This plugin is now loopd: see MIGRATION.md. Ships one skill and no hooks or agents.",
+  "author": {
+    "name": "cbmono"
+  },
+  "repository": "https://github.com/cbmono/loopd",
+  "license": "MIT",
+  "keywords": [
+    "deprecated",
+    "alias"
+  ]
+}

@@ -2,30 +2,30 @@
 
 The roles the Project Manager can assign tasks to. Executable definitions ship in the
 **`ai-bridge` plugin**, installed once per machine (`/plugin install
-ai-bridge@ai-bridge`) — the bundle no longer carries a copy. This is the routing
+loopd@loopd`) — the bundle no longer carries a copy. This is the routing
 reference.
 
-**Dispatch by the NAMESPACED name, `ai-bridge:<role>`.** A bare agent name does not
+**Dispatch by the NAMESPACED name, `loopd:<role>`.** A bare agent name does not
 resolve (measured 2026-09-02), and it fails with *no such agent* rather than with
 anything that names the omission. **A task's `assignee:` field stays BARE** — it is a
 role name, not a dispatch string, and the PM adds the namespace when it spawns.
 
 > **Seed file — copied once, then yours.** Copied into this bundle from the `ai-bridge`
-> plugin and owned by it since; `/ai-bridge:welcome fix` 3-way merges a later template
+> plugin and owned by it since; `/loopd:welcome fix` 3-way merges a later template
 > change onto your edits.
 
 ## Roles
 
 **Task assignees** — the PM dispatches human-approved `ready` build tasks to these:
-* `ai-bridge:software-engineer` - features and bug fixes in product code
-* `ai-bridge:devops-engineer` - CI/CD, GitHub Actions, Helm, ArgoCD, Terraform, Docker images, observability
-* `ai-bridge:qa-reviewer` - writing/extending tests, reviewing PRs, and reviewing a new project scaffold when no usable external reviewer is available (the quality gate)
+* `loopd:software-engineer` - features and bug fixes in product code
+* `loopd:devops-engineer` - CI/CD, GitHub Actions, Helm, ArgoCD, Terraform, Docker images, observability
+* `loopd:qa-reviewer` - writing/extending tests, reviewing PRs, and reviewing a new project scaffold when no usable external reviewer is available (the quality gate)
 
 **Orchestration & read-only roles** — **never** task assignees (the PM invokes them, but they aren't dispatched a `ready` task):
-* `ai-bridge:project-manager` - orchestrator: refines, assigns, reviews, curates.
-* `ai-bridge:cataloguer` - librarian for the knowledge base (service catalog, findings, runbooks); read-only on product repos.
-* `ai-bridge:failure-analyst` - read-only diagnostician for a failing build / red CI / failed deploy (incl. from a pasted PR). Reports root cause + ranked next steps; never changes code. Dispatched ad-hoc (usually in the background).
-* `ai-bridge:auditor` - read-only audit loop (slow counter-metric): grounds objectives against reality and flags Goodhart drift / stale knowledge / green-but-not-progressing work / weakened anchors. Writes only an audit report; never acts. Run via `/audit`.
+* `loopd:project-manager` - orchestrator: refines, assigns, reviews, curates.
+* `loopd:cataloguer` - librarian for the knowledge base (service catalog, findings, runbooks); read-only on product repos.
+* `loopd:failure-analyst` - read-only diagnostician for a failing build / red CI / failed deploy (incl. from a pasted PR). Reports root cause + ranked next steps; never changes code. Dispatched ad-hoc (usually in the background).
+* `loopd:auditor` - read-only audit loop (slow counter-metric): grounds objectives against reality and flags Goodhart drift / stale knowledge / green-but-not-progressing work / weakened anchors. Writes only an audit report; never acts. Run via `/audit`.
 
 ## Routing guide
 
@@ -38,8 +38,8 @@ role name, not a dispatch string, and the PM adds the namespace when it spawns.
 
 Notes:
 - `failure-analyst` **diagnoses only** — it reports root cause + next steps and never
-  opens a PR. When the fix is known, dispatch `ai-bridge:devops-engineer` (CI/infra) or
-  `ai-bridge:software-engineer` (product code) to actually make it. It's usually fired in
+  opens a PR. When the fix is known, dispatch `loopd:devops-engineer` (CI/infra) or
+  `loopd:software-engineer` (product code) to actually make it. It's usually fired in
   the **background** so the main session isn't blocked; not a task assignee.
 - A task may benefit from a review pass by `qa-reviewer` after the implementing
   role opens its PR — the PM can chain these.

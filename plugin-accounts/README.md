@@ -1,12 +1,12 @@
-# ai-bridge-accounts — the per-bundle Claude account companion
+# loopd-accounts — the per-bundle Claude account companion
 
 One human, two Claude accounts, one bundle per organisation. A running session cannot
 change account, so the switch is **at launch**: the bundle names its account, the launcher
 starts `claude` on it, and core's welcome banner says which one you are on.
 
 ```
-/plugin marketplace add cbmono/ai-bridge     # already added? skip
-/plugin install ai-bridge-accounts@ai-bridge
+/plugin marketplace add cbmono/loopd     # already added? skip
+/plugin install loopd-accounts@loopd
 ```
 
 Uninstall it and core prints no account line and switches nothing, with **no other edits**
@@ -26,14 +26,14 @@ anywhere — a bundle's `account:` key goes inert.
 
    ```sh
    CLAUDE_CONFIG_DIR=~/.claude-accounts/proceso claude auth login
-   CLAUDE_CONFIG_DIR=~/.claude-accounts/proceso claude plugin marketplace add cbmono/ai-bridge
-   CLAUDE_CONFIG_DIR=~/.claude-accounts/proceso claude plugin install -y ai-bridge@ai-bridge
+   CLAUDE_CONFIG_DIR=~/.claude-accounts/proceso claude plugin marketplace add cbmono/loopd
+   CLAUDE_CONFIG_DIR=~/.claude-accounts/proceso claude plugin install -y loopd@loopd
    ```
 
 3. Alias the launcher once, then type one thing from any bundle:
 
    ```sh
-   alias abc='bash "$(ls -d ~/.claude/plugins/cache/*/ai-bridge-accounts/*/bin/ai-bridge-claude | tail -1)"'
+   alias abc='bash "$(ls -d ~/.claude/plugins/cache/*/loopd-accounts/*/bin/ai-bridge-claude | tail -1)"'
    ```
 
 Start a bundle any other way and the banner warns — a mismatch in red, no account at all

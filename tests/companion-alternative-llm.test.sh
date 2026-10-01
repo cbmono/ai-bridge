@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# companion-alternative-llm.test.sh — the `ai-bridge-llm` companion: v1's three secrecy
+# companion-alternative-llm.test.sh — the `loopd-llm` companion: v1's three secrecy
 # properties carried over intact, the per-machine opt-in gate, the banner's backend
 # warning, and the one boundary that is not a preference — NO KEY LITERAL IS EVER TRACKED.
 #
@@ -255,7 +255,7 @@ ok "/${PN}:welcome execs the hook, not a copy"  \
 
 echo
 echo "== 8. it ships as a companion, on the contract core already has =="
-ok "the marketplace registers ai-bridge-llm"        "$(grep -c '"name": "ai-bridge-llm"' "$MJ")" 1
+ok "the marketplace registers loopd-llm"        "$(grep -c '"name": "loopd-llm"' "$MJ")" 1
 ok "…from ./plugin-llm"                             "$(grep -c '"source": "./plugin-llm"' "$MJ")" 1
 ok "the capability file is at the fixed path"       "$(yn test -f "$CAP")" yes
 ok "it ships no hook and no agent"                  \

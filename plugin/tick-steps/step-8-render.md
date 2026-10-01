@@ -61,14 +61,14 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
       root. `--standalone` is required (a file opened straight in a browser needs the
       full HTML wrapper). **Pass no `--out`**: the renderer resolves `AB_BOARD_DIR`
       itself — today `.ai-bridge/.board-live/board.html` — which is the path
-      `watch-board.sh` writes, `board-serve.sh` serves and `/ai-bridge:init` gitignores. A hardcoded `--out` overrides that resolver, and
+      `watch-board.sh` writes, `board-serve.sh` serves and `/loopd:init` gitignores. A hardcoded `--out` overrides that resolver, and
       the one that used to stand here named the pre-3.0 root path — so the page
       landed where nothing reads it, untracked and un-ignored. Never stage or commit it. No
       readable snapshot ⇒ the renderer writes nothing and exits 0 ⇒ stop here, in
       silence.
    3. End your report with exactly one line — `BOARD: rendered <path>` — giving the
       **absolute** path from item 2. **No tracked `/board.html` is written or
-      committed**: the bundle's board is served locally by `/ai-bridge:board serve`
+      committed**: the bundle's board is served locally by `/loopd:board serve`
       (`board-serve.sh`), which reads the very file item 2 just wrote.
    4. **If this machine publishes a board, say that it is now stale, and stop there.**
       `boardArtifactUrl` in `instance.config.local.json` records the page this clone
@@ -84,7 +84,7 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
       A first field of `local` ⇒ add exactly one more line to your report:
 
       ```text
-      BOARD: run /ai-bridge:board publish to refresh the published page
+      BOARD: run /loopd:board publish to refresh the published page
       ```
 
       An instance that has never published does not need telling about a page it does not
@@ -99,10 +99,10 @@ commit-and-sync half of step 8 is in the core and runs every tick, before this o
 
    **Say the path, never that it is live.** A rendered file is only as fresh as the
    tick that wrote it; the masthead timestamp says how stale. A human who wants a live
-   view runs `/ai-bridge:board serve`, or `${CLAUDE_PLUGIN_ROOT}/scripts/watch-board.sh`.
+   view runs `/loopd:board serve`, or `${CLAUDE_PLUGIN_ROOT}/scripts/watch-board.sh`.
 
    **A render is not a state change.** A tick whose only act was refreshing the
-   snapshot and the live page still reports `noop: true` (`/ai-bridge:dispatch` step 3).
+   snapshot and the live page still reports `noop: true` (`/loopd:dispatch` step 3).
    Nothing in this step stages, commits or pushes anything.
 
 <!-- end of step 8 -->

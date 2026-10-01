@@ -113,15 +113,15 @@ and the write are deliberately one operation; looking first rebuilds the race th
 
 The board is a **local file** the tick
 renders as its last act (`project-manager.md` step 8, one `BOARD: rendered <path>`
-line). Publishing is a **human-typed skill**, `/ai-bridge:board publish`, for two independent
+line). Publishing is a **human-typed skill**, `/loopd:board publish`, for two independent
 reasons: it is account-scoped, so one URL can never be written by two humans
 (`docs/pm-design.md#launcher-no-publish`), and a headless `claude -p` session holds no
 artifact tool at all — measured 2026-09-05 on Claude Code 2.1.261, inventory and tool
-search both. So the tick prints `run /ai-bridge:board publish to refresh` and stops there.
+search both. So the tick prints `run /loopd:board publish to refresh` and stops there.
 
 ## Running it on a cadence: `/loop`, and nothing else
 
-**`/loop 10m /ai-bridge:dispatch` is the standard way to run this loop in a session.**
+**`/loop 10m /loopd:dispatch` is the standard way to run this loop in a session.**
 `/loop [interval] <prompt>` is first-party (Claude Code 2.1.261, `/loop 5m /foo`); it
 re-fires a slash command on a clock in the session you are already in. Nothing else is
 installed, started or supervised — **there is no watcher, no `sleep` loop, no cron and no
@@ -136,7 +136,7 @@ so a pass every 10 minutes meets a merged PR or a finished review roughly one pa
 happens, and a shorter interval buys nothing but passes that find the same state. Longer
 than ~30m and the loop stops being the thing that notices.
 
-**A quiet bundle wants the self-paced form: `/loop /ai-bridge:dispatch`, with no
+**A quiet bundle wants the self-paced form: `/loop /loopd:dispatch`, with no
 interval.** Omitting the interval is `/loop`'s dynamic mode — the model paces its own
 iterations instead of a clock doing it — which is the right shape when most passes would
 find nothing to do. Reach for it on a bundle with one or two active projects; reach for the
@@ -218,7 +218,7 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
    report — a lock with no tick behind it is the stale case, arriving hours early.
 
    The tick itself: spawn a **fresh** `project-manager` agent
-   (`subagent_type: ai-bridge:project-manager` — **namespaced**, because the role agents
+   (`subagent_type: loopd:project-manager` — **namespaced**, because the role agents
    ship in the `ai-bridge` plugin and a BARE agent name does not resolve, measured
    2026-09-02) for ONE LIVE tick (background), with the standing guardrails below. **Fresh every time — never wake a completed tick with a message**;
    step 0.5 refuses such a tick anyway. **Brief it with the gap, the guardrails and the tick
@@ -293,7 +293,7 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
      links, so the plugin ships `advisor` to every machine and a file that is always
      absent would have turned this step off everywhere, silently.
 
-   Dispatch it as `ai-bridge:advisor`, namespaced like every role agent.
+   Dispatch it as `loopd:advisor`, namespaced like every role agent.
 
    Its model comes from `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-model.sh advisor`, like every role; **absent ⇒
    `light`**, the cheapest tier — the script prints why on stderr, so report that line.
@@ -355,7 +355,7 @@ ticks, regardless of how long a tick runs.
   where `AUTONOMY.md` exists and defines the mode — resolved by
   `${CLAUDE_PLUGIN_ROOT}/scripts/resolve-autonomy.sh --bundle <bundle>`, which reads the
   **bundle root first** and then an installed **companion plugin**
-  (`ai-bridge-yolo@ai-bridge`); exit 1 is absent. Then follow that
+  (`loopd-yolo@loopd`); exit 1 is absent. Then follow that
   file exactly, including its preflight. **No `AUTONOMY.md` ⇒ every project is
   `gated`** and the field is inert. When `autonomy` is unset, act as `gated`.
 - Reconcile doc `status:` against live `gh`/`git` before acting; act only on deltas.
@@ -395,10 +395,10 @@ ticks, regardless of how long a tick runs.
   (absent, `<reposRoot>/_wt`) + a **private package store** (e.g. `pnpm install
   --store-dir <worktree>/.pnpm-store`) and **pushes early** — never two installs
   against the shared store at once.
-- A LIVE tick may also dispatch the **`cataloguer`** (`ai-bridge:cataloguer`) after
+- A LIVE tick may also dispatch the **`cataloguer`** (`loopd:cataloguer`) after
   reflecting merges — read-only on product repos, writes only to `knowledge/`,
   **counts toward the cap**, **throttled to one per tick**, never promotes or merges.
-- **Every role-agent dispatch is namespaced `ai-bridge:<role>`** — all eight of them.
+- **Every role-agent dispatch is namespaced `loopd:<role>`** — all eight of them.
   The three USER-level agents `init-bundle.sh --config` installs (`code-architect`, `deep-bug-scan`,
   `plan-architect`) are not plugin agents and stay bare.
 - Commit hygiene in this repo: commit only your own changed files, by explicit path
@@ -457,9 +457,9 @@ ticks, regardless of how long a tick runs.
   published anywhere. `board: false` in `instance.config.json` ⇒ no render and no
   mention; absent or `true` ⇒ it renders and the tick reports the path. The page is
   only as fresh as the last tick (its masthead timestamp says); `${CLAUDE_PLUGIN_ROOT}/scripts/watch-board.sh`
-  is the live view, and `/ai-bridge:board serve` is the same page on a local URL.
+  is the live view, and `/loopd:board serve` is the same page on a local URL.
 - **No tick commits a board page.** The tracked `/board.html` is gone: a derived file
   every clone re-rendered and pushed made the path contended on every tick, and the local
-  route replaced it. `/ai-bridge:board serve` serves the file above on
+  route replaced it. `/loopd:board serve` serves the file above on
   `http://localhost:<boardPort>`, 127.0.0.1 only, re-rendering when the snapshot changes.
   How to open it is `docs/operations.md` → "Opening the board".

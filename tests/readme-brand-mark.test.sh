@@ -51,9 +51,10 @@ mark_matches() { diff -q "$TMP/mark.txt" <(rows "$1") >/dev/null 2>&1 && echo ye
 
 # Every tracked path a reader is shipped: the docs plus CLAUDE.md's closed `core` list —
 # the companion plugins and both deprecation stubs carry slugs too.
+# Minus docs/releases/: a release note records what that version shipped under.
 shipped_surface() {
   ( cd "$REPO" && git ls-files -- README.md docs .claude plugin 'plugin-*' config \
-      install.sh upgrade.sh 2>/dev/null )
+      install.sh upgrade.sh ':!docs/releases' 2>/dev/null )
 }
 in_surface() { shipped_surface | grep -qxF -- "$1" && echo yes || echo no; }
 

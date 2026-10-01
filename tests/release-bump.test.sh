@@ -208,16 +208,20 @@ bad = [i for i, l in enumerate(lines[:-1])
 print(len(bad))' "$TMP/major")" 0
 # A companion tracks core's MAJOR (plugin/README.md), so the five are not the whole set on
 # a major bump — and template-version.test.sh section 3b is what goes red if they are missed.
+# Every non-./plugin entry counts, the ai-bridge alias included: its major bump is what
+# offers the stub to an install still on ai-bridge@ai-bridge (loopd/task-007).
+NC="$(python3 -c 'import json,sys; print(sum(p.get("source") != "./plugin" for p in json.load(open(sys.argv[1]))["plugins"]))' "$REPO/.claude-plugin/marketplace.json")"
+each() { local i out=""; for i in $(seq "$NC"); do out="${out:+$out }$1"; done; printf '%s' "$out"; }
 ok "…and every companion moved to 2.0.0 in BOTH its manifests" \
-  "$(companions "$TMP/major")" "2.0.0/2.0.0 2.0.0/2.0.0 2.0.0/2.0.0"
+  "$(companions "$TMP/major")" "$(each 2.0.0/2.0.0)"
 ok "…while a patch bump leaves the companions alone" \
-  "$(plant_companions "$TMP/five" 1.0.0; run patch --repo "$TMP/five" >/dev/null; companions "$TMP/five")" "1.0.0/1.0.0 1.0.0/1.0.0 1.0.0/1.0.0"
+  "$(plant_companions "$TMP/five" 1.0.0; run patch --repo "$TMP/five" >/dev/null; companions "$TMP/five")" "$(each 1.0.0/1.0.0)"
 ok "…and template-version.test.sh passes on 2.0.0" \
   "$(harness "$TMP/major" template-version.test.sh)" "fail=0 rc=0"
 ok "…in ONE commit naming the move"        \
   "$(GIT -C "$TMP/major" log -1 --format=%s)" "chore: VERSION 1.20.0 -> 2.0.0 (bumped on main after the merge)"
-ok "…carrying the five places and the three companion manifests, nothing else" \
-  "$(GIT -C "$TMP/major" show --name-only --format= HEAD | grep -c .)" 8
+ok "…carrying the five places and the $NC non-core manifests, nothing else" \
+  "$(GIT -C "$TMP/major" show --name-only --format= HEAD | grep -c .)" "$((5 + NC))"
 
 fixture "$TMP/dry"
 before="$(five "$TMP/dry")"

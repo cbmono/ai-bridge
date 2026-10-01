@@ -81,8 +81,8 @@ case "$status" in
   *)
     echo "ai-bridge-claude: account '$label' is not logged in. One-time setup:" >&2
     printf '    CLAUDE_CONFIG_DIR=%q claude auth login\n' "$dir" >&2
-    printf '    CLAUDE_CONFIG_DIR=%q claude plugin marketplace add cbmono/ai-bridge\n' "$dir" >&2
-    printf '    CLAUDE_CONFIG_DIR=%q claude plugin install -y ai-bridge@ai-bridge\n' "$dir" >&2
+    printf '    CLAUDE_CONFIG_DIR=%q claude plugin marketplace add cbmono/loopd\n' "$dir" >&2
+    printf '    CLAUDE_CONFIG_DIR=%q claude plugin install -y loopd@loopd\n' "$dir" >&2
     exit 4 ;;
 esac
 # orgName only — never the email the same payload carries.

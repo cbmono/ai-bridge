@@ -12,11 +12,11 @@ defines the clearance predicate. This page is orientation — don't implement fr
 
 ## The on/off switch is one plugin
 
-**Core ships no capability file at all.** `AUTONOMY.md` is what the **`ai-bridge-yolo`
+**Core ships no capability file at all.** `AUTONOMY.md` is what the **`loopd-yolo`
 companion plugin** carries, and core finds it by presence:
 
 ```
-/plugin install ai-bridge-yolo@ai-bridge     # on
+/plugin install loopd-yolo@loopd     # on
 /plugin  ->  Manage  ->  uninstall           # off
 ```
 
@@ -25,7 +25,7 @@ companion plugin** carries, and core finds it by presence:
 | `AUTONOMY.md` **found** | a project's `autonomy:` field is honoured |
 | `AUTONOMY.md` **not found** | every project is `gated`, whatever its `autonomy:` says |
 
-**Uninstalling `ai-bridge-yolo` disables delegated autonomy with no other edits** — that
+**Uninstalling `loopd-yolo` disables delegated autonomy with no other edits** — that
 is the point of the design, and it is the whole of turning it off. `commit-as.sh` gates
 its promotion guard on the same lookup, fail-closed. Full reasoning, including the one
 hazard the pattern does not cover:
@@ -44,10 +44,10 @@ that it may ADD behaviour but never remove a core gate) is in
 [`plugin/README.md`](../plugin/README.md) → "Companion plugins".
 
 > **The hazard, in one line.** The capability is now **per machine**, not per bundle: a
-> plugin is installed once per user, so installing `ai-bridge-yolo` arms every bundle on
+> plugin is installed once per user, so installing `loopd-yolo` arms every bundle on
 > that machine at once. The per-bundle opt-out is unchanged and still the human's — set
 > that project's `autonomy: gated` — and a bundle that must never delegate is best kept on
-> a machine without the companion. `/ai-bridge:init` no longer has anything to re-link
+> a machine without the companion. `/loopd:init` no longer has anything to re-link
 > here, which retires the older hazard in this slot: a per-instance `rm` that came back on
 > the next stamp.
 
@@ -402,11 +402,11 @@ There is **nothing to configure in the instance.** The Chrome extension *injects
 `.mcp.json`, and `claude mcp list` doesn't even show it. Machine-level setup is: install
 the extension, then grant it **per-site** permissions there.
 
-- **Background role agents can use it.** The connection is inherited by background subagents, so this is *not* foreground-only — agents dispatched by an `/ai-bridge:dispatch` tick can drive Chrome. To make that reachable, `software-engineer`, `devops-engineer` and `qa-reviewer` carry `ToolSearch, mcp__claude-in-chrome__*` in their `tools:` allowlist (a closed allowlist otherwise excludes every MCP tool). The pattern resolves to nothing when the extension isn't paired, which is harmless — the rest of the allowlist still resolves.
+- **Background role agents can use it.** The connection is inherited by background subagents, so this is *not* foreground-only — agents dispatched by a `/loopd:dispatch` tick can drive Chrome. To make that reachable, `software-engineer`, `devops-engineer` and `qa-reviewer` carry `ToolSearch, mcp__claude-in-chrome__*` in their `tools:` allowlist (a closed allowlist otherwise excludes every MCP tool). The pattern resolves to nothing when the extension isn't paired, which is harmless — the rest of the allowlist still resolves.
 - **Each agent gets its own tab group**, not the human's open tabs. Agents must navigate from an explicit URL; they can't "look at the tab you have open".
 - **A headless/cron tick has no browser.** Agents degrade to a non-browser route and say so, rather than reporting the task blocked.
 
-> **Upgrading an existing instance:** re-running `/ai-bridge:init` picks up `SCHEMA.md` and the
+> **Upgrading an existing instance:** re-running `/loopd:init` picks up `SCHEMA.md` and the
 > role agents (symlinked), but **not** `CLAUDE.md` — seed content is copied only when
 > absent, never clobbered. Add the **Browser** bullet from `plugin/seed/CLAUDE.md`'s "Conventions
 > for role agents working in target repos" to your instance's `CLAUDE.md` by hand.
@@ -415,7 +415,7 @@ the extension, then grant it **per-site** permissions there.
 
 ## The audit counter-metric
 
-`/ai-bridge:dispatch` optimizes throughput; **`/audit`** is the independent check that the throughput
+`/loopd:dispatch` optimizes throughput; **`/audit`** is the independent check that the throughput
 is actually moving the real goals. Run it on a **slow cadence** — weekly, or after a batch
 of projects close.
 

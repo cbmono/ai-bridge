@@ -2,13 +2,13 @@
 
 **Start here for anything with more than one human in it.** One organisation has **one**
 OKF knowledge bundle: a single repo, cloned once per person, each clone running its own
-`/ai-bridge:dispatch` loop. Everyone sees one set of projects and one knowledge base, and
+`/loopd:dispatch` loop. Everyone sees one set of projects and one knowledge base, and
 anyone can hand a project or a single task across.
 
 ## Step 0 — the bundle is the org's repo
 
 ```sh
-/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group> --org <org>
+/loopd:init ~/workspace/<group>/_ai-bridge-<group> --org <org>
 ```
 
 The **first** person runs it and gets `<org>/<org>-okf` created private, seeded and
@@ -32,7 +32,7 @@ exists but is not a bundle (no `instance.config.json`, no `SCHEMA.md`): pick ano
 The rest of this page is what the humans do around that repo.
 
 **The board is not shared either — each clone renders its own, and that costs nothing.**
-There is no published page to share: every `/ai-bridge:dispatch` tick renders
+There is no published page to share: every `/loopd:dispatch` tick renders
 `.board-live/board.html`
 on the machine it runs on. Each human's own projects come from their own snapshot, and
 every *other* owner's is a named, collapsed section read from the tracked task documents at
@@ -61,7 +61,7 @@ writing, parses the config back before claiming success, and refuses if `python3
 absent rather than editing JSON line-wise.
 
 It cannot do their half: their `ownerGithubUser` and their absolute paths live in a
-gitignored file on their machine, which `/ai-bridge:init` writes there.
+gitignored file on their machine, which `/loopd:init` writes there.
 
 ## Do it in this order
 
@@ -70,9 +70,9 @@ gitignored file on their machine, which `/ai-bridge:init` writes there.
 
 ```sh
 # in Claude Code, once per machine:
-#   /plugin marketplace add cbmono/ai-bridge
-#   /plugin install ai-bridge@ai-bridge
-/ai-bridge:init ~/workspace/<group>/_ai-bridge-<group> --org <org>
+#   /plugin marketplace add cbmono/loopd
+#   /plugin install loopd@loopd
+/loopd:init ~/workspace/<group>/_ai-bridge-<group> --org <org>
 ```
 
 They get the clone with the **tracked** config — `people`, `defaultOwner`, `org` — already
@@ -84,10 +84,10 @@ can carry because it is never committed.
 ```sh
 git clone <bundle-remote> _ai-bridge-<group>
 cd _ai-bridge-<group>
-/ai-bridge:init .
+/loopd:init .
 ```
 
-`/ai-bridge:init` writes the gitignored `instance.config.local.json` itself when the clone
+`/loopd:init` writes the gitignored `instance.config.local.json` itself when the clone
 has none — deriving what the machine already knows, naming what it cannot, and guessing
 nothing:
 
@@ -110,7 +110,7 @@ this instance alone.
 | 1 | Record who is who | either clone | `people` map in `instance.config.json` |
 | 2 | Name who owns unowned work | either clone | `defaultOwner` in `instance.config.json` |
 | 3 | Turn the nudges on (a clone is not a first stamp) | second clone | `touch AWAITING.md` — `SNAPSHOT.json` is seeded by the stamp itself |
-| 4 | Untrack the derived indexes if already committed | either clone | run the `git rm --cached` that `/ai-bridge:init` prints |
+| 4 | Untrack the derived indexes if already committed | either clone | run the `git rm --cached` that `/loopd:init` prints |
 | 5 | Assign work | either clone | `owner: <github-login>` on a `project.md` or one `tasks/<id>.md` |
 
 ## The config split at a glance
@@ -129,7 +129,7 @@ this instance alone.
 
 **No board artifact is shared any more, and that is the point.** The tracked `/board.html`
 was the one file two clones contended for — both rendered it from their own snapshot and
-pushed it every tick — and it is gone. Each clone now runs `/ai-bridge:board serve` against
+pushed it every tick — and it is gone. Each clone now runs `/loopd:board serve` against
 its own `.board-live/`, on its own port, and nothing about the board is pushed. Neither
 clone loses anything: the cross-owner half of the page was always read from the tracked
 task documents at `HEAD`, never from the other clone's page.
@@ -170,13 +170,13 @@ The value is a **GitHub username, never an email**: public, stable, and it keeps
 
 A derived `<login>@users.noreply.github.com` was **rejected, not skipped**: GitHub requires the ID-prefixed `<id>+<login>@…` form for accounts created after 2017-07-18, so a derived plain address silently fails to link — and the linking behaviour cannot be verified from here without pushing as that account. Real addresses in a private instance repo are fine; **this template is public, so `plugin/seed/instance.config.json` ships placeholder logins VERIFIED UNCLAIMED on github.com (`example-user-007`/`008`, both 404) and addresses at `example.com` (RFC 2606, cannot receive mail), and says so in a `$people` note** — the real map belongs in the instance. **Verify any new placeholder the same way**: `alice`, `bob` and `jane-doe` are all real accounts, so a plausible-looking example names a stranger, and an example is the thing people copy verbatim. Test fixtures follow the same rule, and `commit-as-identity.test.sh` asserts the seed carries no live-account name and no address outside `example.com`.
 
-`/ai-bridge:init` **does** ask for the map on a first stamp now — the tracked table's steps 1 and 2, collected at install time instead of hand-edited afterwards — and on a **clone**, where no first stamp ever happens, it derives this clone's own three values rather than leaving them to be hand-written. The three things that would have broken existing flows are the three guards it carries; they, and the failure the prompt's shape is designed around, are written up in ["The installer asks, once"](#the-installer-asks-once) at the end of this page.
+`/loopd:init` **does** ask for the map on a first stamp now — the tracked table's steps 1 and 2, collected at install time instead of hand-edited afterwards — and on a **clone**, where no first stamp ever happens, it derives this clone's own three values rather than leaving them to be hand-written. The three things that would have broken existing flows are the three guards it carries; they, and the failure the prompt's shape is designed around, are written up in ["The installer asks, once"](#the-installer-asks-once) at the end of this page.
 
 ### (c) The derived `index.md` files become gitignored
 
-…and only *untracked* when a human runs the printed command — and the split was decided per file. Root `index.md` and `projects/*/index.md` are rewritten every tick from the documents they summarise, so two loops conflict on them on every push, and nothing is lost — `validate-bundle.sh` never validated them (an earlier version did, and buried 6 real errors under 77 warnings). `knowledge/index.md` stays **tracked**: it changes only when the KB changes rather than every tick, its rows are curated prose, and every agent is told to scan it, so a fresh clone needs it present — do not blanket-ignore `index.md`, which as a bare pattern would swallow it silently. Unlike `AWAITING.md`/`SNAPSHOT.json` these have **no off switch and need none** — they are navigation, re-seeded by `/ai-bridge:init` and rewritten unconditionally.
+…and only *untracked* when a human runs the printed command — and the split was decided per file. Root `index.md` and `projects/*/index.md` are rewritten every tick from the documents they summarise, so two loops conflict on them on every push, and nothing is lost — `validate-bundle.sh` never validated them (an earlier version did, and buried 6 real errors under 77 warnings). `knowledge/index.md` stays **tracked**: it changes only when the KB changes rather than every tick, its rows are curated prose, and every agent is told to scan it, so a fresh clone needs it present — do not blanket-ignore `index.md`, which as a bare pattern would swallow it silently. Unlike `AWAITING.md`/`SNAPSHOT.json` these have **no off switch and need none** — they are navigation, re-seeded by `/loopd:init` and rewritten unconditionally.
 
-Two properties worth keeping in mind when you touch it. **A `.gitignore` line is inert for a file git already tracks**, so `/ai-bridge:init` appends the lines (outside the managed block, the `/repos/` pattern, because the seed is copied only when absent) and then *reports* the exact `git rm --cached` — it never untracks anything itself. And **the index lines must NOT go in `plugin/seed/.gitignore`**: that file is an active `.gitignore` inside the template's own `plugin/seed/` directory, so a `/index.md` line there matches `plugin/seed/index.md` and silently stops this repo from tracking its own seed file — measured, it broke the `/ai-bridge:welcome fix` fixture, which re-inits a repo over a copy of `plugin/seed/`. `instance.config.local.json` sits in both places because no seed file is named that. `derived-indexes.test.sh` asserts the trap stays closed, against `git check-ignore --no-index` rather than the pattern text.
+Two properties worth keeping in mind when you touch it. **A `.gitignore` line is inert for a file git already tracks**, so `/loopd:init` appends the lines (outside the managed block, the `/repos/` pattern, because the seed is copied only when absent) and then *reports* the exact `git rm --cached` — it never untracks anything itself. And **the index lines must NOT go in `plugin/seed/.gitignore`**: that file is an active `.gitignore` inside the template's own `plugin/seed/` directory, so a `/index.md` line there matches `plugin/seed/index.md` and silently stops this repo from tracking its own seed file — measured, it broke the `/loopd:welcome fix` fixture, which re-inits a repo over a copy of `plugin/seed/`. `instance.config.local.json` sits in both places because no seed file is named that. `derived-indexes.test.sh` asserts the trap stays closed, against `git check-ignore --no-index` rather than the pattern text.
 
 Covered by `tests/task-owner.test.sh` (74 assertions, mostly refusals), `commit-as-identity.test.sh` (46), `derived-indexes.test.sh` (26) and `config-override.test.sh` (39).
 
@@ -185,7 +185,7 @@ Covered by `tests/task-owner.test.sh` (74 assertions, mostly refusals), `commit-
 ## One thing a second clone does not get automatically
 
 The second clone is **not a first stamp** (`instance.config.json` arrives tracked), so
-`/ai-bridge:init` there will **not** create `AWAITING.md`. It says so, with the `touch` to turn
+`/loopd:init` there will **not** create `AWAITING.md`. It says so, with the `touch` to turn
 it on. See [conventions.md invariant 3](conventions.md#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence)
 for why that creation is gated on the first stamp.
 
@@ -199,7 +199,7 @@ not be the instance directory itself.
 
 **The tick syncs for you; ownership does not.** Since
 [#26](https://github.com/cbmono/ai-bridge/pull/26) and
-[#27](https://github.com/cbmono/ai-bridge/pull/27), an `/ai-bridge:dispatch` tick pulls
+[#27](https://github.com/cbmono/ai-bridge/pull/27), a `/loopd:dispatch` tick pulls
 `--rebase`
 before it re-derives anything and pushes after it commits, whenever the bundle has a
 remote — so neither human runs git by hand for the loop's own work. A dirty tree
@@ -217,7 +217,7 @@ dispatching the same task; it was never a lock on pushing.
 ## The installer asks, once
 
 The tracked roster used to be an eight-step checklist somebody performed
-after the stamp. On a **first stamp**, at a terminal, `/ai-bridge:init` now offers to collect
+after the stamp. On a **first stamp**, at a terminal, `/loopd:init` now offers to collect
 them instead: one line per person (`<github-login> <commit-email>`), yourself first, and
 it writes the tracked `people` map, the tracked `defaultOwner`, and this clone's
 gitignored `instance.config.local.json`. Nothing about the model above changed — this is
@@ -227,7 +227,7 @@ only the collection step it was missing.
 
 | Guard | Why it exists |
 |---|---|
-| Only on the **first stamp** | `/ai-bridge:welcome fix` calls `/ai-bridge:init` on *every* run, including its non-interactive report-only mode, so an unguarded prompt would block every upgrade. It reuses the same `FIRST_STAMP` that gates `AWAITING.md`, rather than inventing a second notion of "new" |
+| Only on the **first stamp** | `/loopd:welcome fix` calls `/loopd:init` on *every* run, including its non-interactive report-only mode, so an unguarded prompt would block every upgrade. It reuses the same `FIRST_STAMP` that gates `AWAITING.md`, rather than inventing a second notion of "new" |
 | Only when **stdin is a terminal** | otherwise it skips, leaves the placeholder, and prints the instruction. A prompt nobody can see is a hang, and a hang in a background agent is invisible |
 | **Never overwrite** | only the seeded placeholder is ever rewritten, and the local file only when absent. Seeds-if-absent is what makes the installer safe to re-run on a repo full of somebody's work |
 

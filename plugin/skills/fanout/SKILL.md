@@ -18,7 +18,7 @@ main session stays free as a coordinator, instead of working them one at a time.
 > **Generic plugin file** (ships inside the `ai-bridge` plugin, never copied into a bundle). This is for
 > **ad-hoc chat requests** (rephrase a doc, rename a folder, research a question) —
 > **not** tracked `projects/` work. Anything that becomes a PR or a `projects/`
-> deliverable goes through `/new-project` → promote `ready` → `/ai-bridge:dispatch`, never here.
+> deliverable goes through `/new-project` → promote `ready` → `/loopd:dispatch`, never here.
 
 ## Input
 `$ARGUMENTS` is an optional `;`-separated list of tasks. If empty, fan out the set
@@ -40,8 +40,8 @@ of independent asks the user has already given in this turn.
 4. **Dispatch in one message.** Spawn all units as **`general-purpose` agents with
    `run_in_background: true`** in a single turn so they run concurrently. Use a more
    specific agent type when one fits (e.g. `deep-bug-scan`, `Explore`, or one of this
-   plugin's eight role agents — **namespaced**, `ai-bridge:cataloguer`,
-   `ai-bridge:failure-analyst` for a failing build / red CI / failed deploy, read-only
+   plugin's eight role agents — **namespaced**, `loopd:cataloguer`,
+   `loopd:failure-analyst` for a failing build / red CI / failed deploy, read-only
    diagnosis — because a bare role-agent name does NOT resolve).
 5. **Coordinate.** Tell the user what was dispatched — and what you kept in-thread
    and why. As each agent finishes, **report its result**; don't block the session

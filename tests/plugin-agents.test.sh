@@ -110,5 +110,35 @@ ok "the namespace, plugin.json's name, is the marketplace's ./plugin entry" \
   "$PN" \
   "$(jq -r '.plugins[] | select(.source == "./plugin") | .name' "$TPL/.claude-plugin/marketplace.json")"
 
+# =======================================================================================
+echo "== 4. each of the eight roles, BY NAME, dispatches only under ${PN}: =="
+# =======================================================================================
+# A rename that misses one role's namespace fails at dispatch with "no such agent", so the
+# eight are asserted one by one (loopd/task-007): each is spelled ${PN}:<role> somewhere
+# the plugin ships, and no <other-name>:<role> survives on the shipped surface. `agent:`
+# is prose ("`agent:project-manager` has…"), not a namespace.
+surface() {
+  ( cd "$1" && git ls-files -- README.md docs .claude plugin 'plugin-*' config install.sh upgrade.sh \
+      ':!docs/releases' 2>/dev/null )
+}
+foreign_ns() { # <root> <role> -> how many namespaced dispatch names for <role> are not ${PN}:
+  surface "$1" | (cd "$1" && tr '\n' '\0' | xargs -0 grep -ohE "(^|[\`\"' (])[a-z][a-z0-9-]*:$2([^a-z-]|\$)" 2>/dev/null) \
+    | sed -E "s/^[\`\"' (]//" | grep -vE "^(${PN}|agent):" | grep -c . | tr -d ' '
+}
+for r in $AGENTS; do
+  ok "$r is dispatched as ${PN}:$r" \
+    "$(grep -rlF "${PN}:$r" "$TPL/plugin" | grep -c . | awk '{print ($1 > 0 ? "yes" : "no")}')" yes
+  ok "…and under no other namespace" "$(foreign_ns "$TPL" "$r")" 0
+done
+# Non-vacuity: one role re-namespaced in a scratch copy is caught, by name.
+MUT="$(mktemp -d "${TMPDIR:-/tmp}/plugin-agents.XXXXXX")" || { echo "plugin-agents.test: mktemp failed" >&2; exit 2; }
+trap 'rm -rf "$MUT"' EXIT
+git -C "$TPL" ls-files -z -- plugin/seed/agents/index.md | (cd "$TPL" && xargs -0 tar -cf -) | (cd "$MUT" && tar -xf -)
+git -C "$MUT" init -q && git -C "$MUT" add -A
+sed -i.bak "s/${PN}:devops-engineer/not-${PN}:devops-engineer/" "$MUT/plugin/seed/agents/index.md" && rm -f "$MUT/plugin/seed/agents/index.md.bak"
+ok "mutant: devops-engineer under another namespace is counted" \
+  "$([ "$(foreign_ns "$MUT" devops-engineer)" -gt 0 ] && echo yes || echo no)" yes
+ok "…while software-engineer, untouched, is not" "$(foreign_ns "$MUT" software-engineer)" 0
+
 printf '\npass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

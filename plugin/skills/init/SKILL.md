@@ -41,7 +41,7 @@ group's product repos, never at a checkout of this repo.
 ## One org, one bundle — `--org <org> [--name <repo>]`
 
 The bundle is the **organisation's repo**, and everyone clones the same one.
-`/ai-bridge:init <dir> --org <org>` resolves `<org>/<org>-okf` (`--name` overrides the
+`/loopd:init <dir> --org <org>` resolves `<org>/<org>-okf` (`--name` overrides the
 name) and does exactly one of three things, saying which:
 
 | | |
@@ -90,17 +90,17 @@ could not derive it prints as a `needs` line naming the key and its flag.
   a decision somebody made; the script reports it, names the diff, and stops. So do you.
 - **`AUTONOMY.md` disappearing is a real change, not noise.** If the conversion removed
   it, delegated authority is off and the bundle is back to ask-first. Relay that line and
-  the opt-back-in it prints (`/plugin install ai-bridge-yolo@ai-bridge` — the companion
+  the opt-back-in it prints (`/plugin install loopd-yolo@loopd` — the companion
   that ships the file); never re-create the file yourself.
 
 ## Afterwards
 
 `instance.config.json` needs the group's `org` before anything else works;
 `instance.config.local.json` is written for you, from what the machine already knows.
-Then `/ai-bridge:welcome` for the banner, and `/ai-bridge:dispatch` for the loop.
+Then `/loopd:welcome` for the banner, and `/loopd:dispatch` for the loop.
 **Run this command again after every plugin update** — it is the one that brings a
 bundle up to the installed plugin. The banner's `Update` row says when: `bundle stamped at
-<old> — run /ai-bridge:init`.
+<old> — run /loopd:init`.
 
 If the directory is not a bundle and was not meant to be one, say which directory it is
 and stop — never stamp somewhere on a guess.

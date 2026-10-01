@@ -10,9 +10,9 @@ producer-defined extensions. This document is the contract for the custom
 `type`s and frontmatter fields used in this bundle. All consumers must tolerate
 missing optional fields and unknown keys (per the OKF spec).
 
-> **Seed file — copied once, then yours.** `/ai-bridge:init` copied this file into the
+> **Seed file — copied once, then yours.** `/loopd:init` copied this file into the
 > bundle from the `ai-bridge` plugin; the bundle owns it from then on, so your edits stay
-> and this copy drifts from the template until `/ai-bridge:init` 3-way merges a
+> and this copy drifts from the template until `/loopd:init` 3-way merges a
 > later template change onto them. Instance-specific values (`<org>`, the clone root, the
 > author identity, team routing) live in `instance.config.json` and this instance's
 > `CLAUDE.md` — never hardcode them here.
@@ -50,7 +50,7 @@ exists, which is how `knowledge/references/` was already covered.)
 own `success_criteria` (below); the next iteration is the next project. An `Objective` is
 for a goal that **outlives one project** — several projects serving one measurable end. A
 bundle that has no such goal ships **no `objectives/` directory at all**, and nothing
-requires one: `/ai-bridge:init <dir> --with-objectives` creates it the day you want the
+requires one: `/loopd:init <dir> --with-objectives` creates it the day you want the
 layer, and an existing `objectives/` is never touched.
 
 ```yaml
@@ -238,8 +238,8 @@ pointer to the finished deliverable(s) on completion).
 ## type: Agent  (`agents/index.md` lists the roster)
 
 Executable definitions ship in the **`ai-bridge` plugin** (`/plugin install
-ai-bridge@ai-bridge`), one per machine — not in the bundle. Dispatch them by their
-**namespaced** name, `ai-bridge:<role>`: a bare agent name does NOT resolve (measured
+loopd@loopd`), one per machine — not in the bundle. Dispatch them by their
+**namespaced** name, `loopd:<role>`: a bare agent name does NOT resolve (measured
 2026-09-02). The roster doc is a human-readable routing reference.
 
 **`roles` vs `roleTiers` in `instance.config.json`.** The two lists look like they
@@ -689,7 +689,7 @@ blocks on it, and a missing stamp is a later tick's to add.
 # Ownership on a shared instance
 
 An instance may be shared by more than one human: each clones the same bundle repo
-and runs their own `/ai-bridge:dispatch`, so both see one set of projects and one knowledge base,
+and runs their own `/loopd:dispatch`, so both see one set of projects and one knowledge base,
 and can hand a project or a single task to the other. `owner` is what keeps their two
 loops from doing the same work twice — and it is also what lets each clone's **own**
 locally rendered board separate their projects from the other's, since every owner but
@@ -835,7 +835,7 @@ command rather than cloning over it.
 `instance.config.json` is **tracked**, so every value in it is a statement both clones
 read. Some values cannot be shared: an absolute path on one machine, or which human a
 clone belongs to. Those go in **`instance.config.local.json`** beside it — gitignored
-(`/ai-bridge:init` adds the line), read **first**, and **entirely optional: no local file
+(`/loopd:init` adds the line), read **first**, and **entirely optional: no local file
 means the tracked file answers exactly as it always did.**
 
 **JSON `null` is ABSENCE, not a value.** A key or entry set to `null` in either file reads
@@ -855,15 +855,15 @@ made `resolve-model.sh` print the literal alias `null` and exit 0.
 | `reposRoot` | **yes** — an absolute path on this machine | the readers report it as unset and skip; nothing is guessed |
 | `worktreeRoot` | **yes** — an absolute path on this machine | `<reposRoot>/_wt`, which is also still swept as the legacy root |
 | `boardInstances` | **yes** — a list of paths to sibling instances | just this instance |
-| `board` | **no** — one instance, one answer, and `/ai-bridge:init` reads it from the tracked file at stamp time | on: `SNAPSHOT.json` is seeded, and each tick renders `.ai-bridge/.board-live/board.html` |
-| `boardArtifactUrl` | **local ONLY** — the page **this clone** published with `/ai-bridge:board publish`. Never in the tracked file, and never seeded: publishing is account-scoped, so a shared value is one clone's URL that the other can never write | nothing was published from this machine; the banner prints the `file://` path alone and the tick says nothing about a published page |
-| `models` | **yes**, and **seeded** — which model each tier costs **this human**. `/ai-bridge:init` writes this key into the local file on any stamp that finds it missing, so local is normally the layer in force and the banner reads `local` | the tracked map, which stays as the fallback; absent from **both**, `resolve-model.sh` prints nothing on stdout, **says so on stderr**, and exits 1 |
+| `board` | **no** — one instance, one answer, and `/loopd:init` reads it from the tracked file at stamp time | on: `SNAPSHOT.json` is seeded, and each tick renders `.ai-bridge/.board-live/board.html` |
+| `boardArtifactUrl` | **local ONLY** — the page **this clone** published with `/loopd:board publish`. Never in the tracked file, and never seeded: publishing is account-scoped, so a shared value is one clone's URL that the other can never write | nothing was published from this machine; the banner prints the `file://` path alone and the tick says nothing about a published page |
+| `models` | **yes**, and **seeded** — which model each tier costs **this human**. `/loopd:init` writes this key into the local file on any stamp that finds it missing, so local is normally the layer in force and the banner reads `local` | the tracked map, which stays as the fallback; absent from **both**, `resolve-model.sh` prints nothing on stdout, **says so on stderr**, and exits 1 |
 | `roleTiers` | **yes**, and **seeded** on the same terms — the same bill, per agent. **A partial override replaces only the entries it names**, so moving one agent to a cheaper tier leaves every other agent's tier standing, and the installer never tops a partial map up | as `models` above |
 | `maxAgentsInFlight` | **yes** — how many agents **this machine** can carry (below) | the tracked value; absent from both, `resolve-max-agents.sh` prints nothing and exits 1, and the caller applies the fallback its own document states |
 | `maxRepeatedToolCalls` | **yes** — a doom loop is a spend, and how tolerant a machine is of one is a per-machine call | **off**: `agent-control.sh` hashes, counts and writes nothing, so a bundle that predates the key is unaffected. Set it (the seed ships **3**) and an armed instance refuses one agent's Nth identical tool call with a `deny`, never a kill |
 | `maxAgentMinutes` | **yes** — an hour of agent is a spend, and how long one machine tolerates is a per-machine call | **45**, for every role `roleMinutes` does not name: past it an armed instance refuses the agent's next tool call with a `deny` that says to commit, push, open or update the PR and report. `Read`/`Grep`/`Glob` and a shell command made only of `git add\|commit\|push`, `commit-as.sh`, `cd` and `gh pr create\|edit\|view\|checks` stay allowed so that report is accurate; `0` (or anything not a positive integer) is off |
 | `roleMinutes` | **yes**, merged **per role** like `roleTiers` — a map of role → minutes that replaces `maxAgentMinutes` for the roles it names | `project-manager` **180** (a tick walks the whole bundle and grows with it); every other role `maxAgentMinutes` |
-| `allowSubstituteBackend` | **local ONLY** — whether this machine may launch a session on a substituted LLM backend (the `ai-bridge-llm` companion). Never in the tracked file: which backend an installation runs is a per-machine data-governance call, and a tracked `true` is one clone's decision every other clone reads | not opted in — the launcher refuses and prints its governance warning |
+| `allowSubstituteBackend` | **local ONLY** — whether this machine may launch a session on a substituted LLM backend (the `loopd-llm` companion). Never in the tracked file: which backend an installation runs is a per-machine data-governance call, and a tracked `true` is one clone's decision every other clone reads | not opted in — the launcher refuses and prints its governance warning |
 | `defaultOwner` | **no, by design** | step 4 above: unowned, so every clone treats it as its own |
 | `people` | **no** — a shared directory of who is who | no lookup; the `authorEmail` chain answers |
 | `commitAttribution` | **yes** — the tracked file is where an organisation states its policy; the local file is how one machine departs from it | `claude`: a target-repo commit keeps the `Co-Authored-By: Claude` trailer, because Claude co-authored it. `none` drops the trailer and the session URL |
@@ -909,7 +909,7 @@ human decides, exactly as with every other refinement, and a task the human leav
 is dispatched whole.
 
 **`models` and `roleTiers` are SEEDED into the local file, and the tracked pair is the
-fallback — both halves are load-bearing.** `/ai-bridge:init` writes them into
+fallback — both halves are load-bearing.** `/loopd:init` writes them into
 `instance.config.local.json` on any stamp that finds the key missing, seeded from the
 tracked values when present and from the documented defaults (`light→haiku`,
 `standard→sonnet`, `deep→opus`, `apex→fable`) when not. That is what makes spend a
@@ -922,7 +922,7 @@ The tracked keys were **not** removed in the same change, and that is the design
 exit code inherits the session model — for every role at once, with nothing anywhere
 saying so. Removing the tracked pair first would open exactly that window on any instance
 the seeding step had not yet reached, and **a merge is not a stamp**: an instance is
-re-stamped only when somebody runs `/ai-bridge:init`. With both layers present there is no
+re-stamped only when somebody runs `/loopd:init`. With both layers present there is no
 ordering in which the pair resolves to nothing.
 
 **`maxAgentsInFlight` is deliberately NOT seeded.** It is overridable and per-machine
@@ -941,7 +941,7 @@ still exits 1 when a role has no tier or a tier has no alias — every caller ca
 stdout, and a word printed there becomes a model alias. But it now writes a line to
 **stderr** naming the agent, which lookup failed, both files, and the consequence: a
 caller that ignores the exit code dispatches on the session model. A caller must surface
-that line rather than dispatch on a guess. `/ai-bridge:init` asks the same resolver after
+that line rather than dispatch on a guess. `/loopd:init` asks the same resolver after
 seeding and warns by name about any role that still resolves to nothing.
 
 ### `maxAgentsInFlight` bounds an instance, not a machine — a known hole
@@ -984,7 +984,7 @@ account-scoping requires. `session-banner.sh` reads it through `resolve-config.s
 checks the **source**: a value resolving from `tracked` is dropped rather than printed, so
 the old shape cannot come back by someone pasting a URL into the wrong file.
 
-**`board` stays not overridable, and for its own reason** — `/ai-bridge:init` reads that key
+**`board` stays not overridable, and for its own reason** — `/loopd:init` reads that key
 from the tracked file at stamp time, and a per-machine override would give one switch two
 answers. It gates `boardArtifactUrl` too: `board: false` silences the published row like
 every other one.
@@ -1134,7 +1134,7 @@ claude-for-chrome` gives this project's agents **read access to every site this 
 logged into in that browser** — mail, cloud consoles, admin panels — because the browser
 carries their cookies. It is scoped to a project rather than to a session for exactly that
 reason, and it is defensible because **browser writes ask first unless the project's
-`autonomy` delegates them** (rule 4). A human answering `/ai-bridge:new-project`'s browser
+`autonomy` delegates them** (rule 4). A human answering `/loopd:new-project`'s browser
 question needs both halves to answer it, so the scaffold states them there too; a project
 that opts in records **why** in its `# Context`.
 

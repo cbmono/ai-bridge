@@ -1494,11 +1494,11 @@ fi
 # The plugin SHIPS a theme and never selects one: `theme` is the human's key, set in
 # /theme and nowhere else (ai-bridge-v3/task-034, Q2). "Once" is bought by the row's own
 # truth condition rather than by state something has to write and remember — it fires only
-# while no AI Bridge theme is selected, so the first /theme that picks one retires it for
+# while no loopd theme is selected, so the first /theme that picks one retires it for
 # good. That is "only fire what is true", not an exception to it: what the row asserts is
 # that a theme ships here and this machine is not using it.
 #
-# THE NEEDLE IS THE VALUE, NEVER THE KEY. `custom:ai-bridge` reaches a settings file only
+# THE NEEDLE IS THE VALUE, NEVER THE KEY. `custom:<plugin>` reaches a settings file only
 # as a chosen theme, and reading for it keeps the JSON key this hook must never write out
 # of the shipped tree altogether — the absence tests/plugin-theme.test.sh asserts.
 #
@@ -1508,10 +1508,10 @@ fi
 theme_settings=""
 if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then theme_settings="$CLAUDE_CONFIG_DIR/settings.json"
 elif [ -n "${HOME:-}" ];            then theme_settings="$HOME/.claude/settings.json"; fi
-if [ -n "$plugin_root" ] && [ -f "$plugin_root/themes/ai-bridge.json" ] && [ -n "$theme_settings" ] &&
+if [ -n "$plugin_root" ] && [ -f "$plugin_root/themes/loopd.json" ] && [ -n "$theme_settings" ] &&
    ! grep -q "custom:$PLUGIN_NAME" "$theme_settings" 2>/dev/null; then
   echo
-  say "$C_DIM" "$(pad Theme "$BOARD_LW")custom:${PLUGIN_NAME}:ai-bridge ships here — select it in /theme"
+  say "$C_DIM" "$(pad Theme "$BOARD_LW")custom:${PLUGIN_NAME}:loopd ships here — select it in /theme"
 fi
 
 # ---------------------------------------------------------------------------------------

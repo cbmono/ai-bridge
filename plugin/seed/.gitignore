@@ -6,13 +6,13 @@ node_modules/
 .claude/*.lock
 .claude/settings.local.json
 
-# Derived awaiting-you queue — rewritten by each /ai-bridge:dispatch tick from
+# Derived awaiting-you queue — rewritten by each /loopd:dispatch tick from
 # projects/*/tasks/*.md. A view, not source; never commit it. Delete the file
 # itself to turn the queue off (the loop never recreates it).
 /.ai-bridge/AWAITING.md
 
 # Derived board snapshot — rewritten by scripts/write-snapshot.sh at the end of each
-# /ai-bridge:dispatch tick, and read by scripts/build-board.sh (possibly from another instance).
+# /loopd:dispatch tick, and read by scripts/build-board.sh (possibly from another instance).
 # A view, not source. Delete the file itself to take this instance off the board (the
 # writer never recreates it).
 /.ai-bridge/SNAPSHOT.json
@@ -20,24 +20,24 @@ node_modules/
 # The board page is DERIVED and never tracked. It used to be committed on every tick that
 # changed something — which made one path contended by every clone of a shared bundle, for
 # a file both of them regenerate in a second. The board is served locally instead:
-# `/ai-bridge:board serve` binds 127.0.0.1 on a port derived from this bundle's path and
+# `/loopd:board serve` binds 127.0.0.1 on a port derived from this bundle's path and
 # serves it out of AB_BOARD_DIR (bundle-paths.sh), ignored below. Nothing is pushed.
 /board.html
 
 # The other-owners cache (scripts/build-board.sh) — the board's second half, read from
 # the tracked documents at HEAD and stored against the SHA it was computed for, because
 # that section can only change when HEAD moves. Derived and per-machine; delete it freely
-# and the next render rebuilds it. /ai-bridge:init appends this line too, so it reaches
+# and the next render rebuilds it. /loopd:init appends this line too, so it reaches
 # instances stamped before the cache existed.
 /.ai-bridge/.board-others.json
 
 # The local live board page (scripts/watch-board.sh, scripts/board-serve.sh) — the page
 # regenerated on every task-document change by a watcher you keep running. Derived,
-# per-machine, and safe to delete. /ai-bridge:init appends this line too, so it reaches
+# per-machine, and safe to delete. /loopd:init appends this line too, so it reaches
 # instances stamped before the directory existed.
 /.ai-bridge/.board-live/
 
-# The PM dispatch lock (scripts/tick-lock.sh) — written by /ai-bridge:dispatch immediately before it
+# The PM dispatch lock (scripts/tick-lock.sh) — written by /loopd:dispatch immediately before it
 # dispatches a tick and released when that tick reports, so the one-tick-at-a-time
 # guarantee survives a compaction instead of resting on a session's memory. PER CLONE and
 # never committed: two humans sharing one bundle work from two clones and each dispatches
@@ -50,10 +50,10 @@ node_modules/
 # tells "held by the launcher that dispatched me" from "held by another tick". Per clone and
 # derived exactly like the lock, removed with it by `scripts/tick-lock.sh release`. Its own
 # line because `/.tick-lock` does not match it and instances stamped before it exists carry
-# the first line already — /ai-bridge:init appends this one separately for that reason.
+# the first line already — /loopd:init appends this one separately for that reason.
 /.ai-bridge/.tick-lock.claim
 
-# API keys — for a substituted model backend (the ai-bridge-llm companion) or anything
+# API keys — for a substituted model backend (the loopd-llm companion) or anything
 # else. NEVER tracked: a key in a tracked file is a published key, and that launcher
 # refuses to read a .env git already knows about rather than trusting this line alone.
 .env
@@ -65,13 +65,13 @@ node_modules/
 instance.config.local.json
 
 # The derived navigation indexes (`/index.md`, `/projects/*/index.md`) are ignored
-# too — but the lines live in /ai-bridge:init, NOT here, and that is not an oversight.
+# too — but the lines live in /loopd:init, NOT here, and that is not an oversight.
 # THIS FILE IS ITSELF AN ACTIVE .gitignore INSIDE THE ai-bridge TEMPLATE'S OWN
 # `seed/` DIRECTORY, so a `/index.md` line here matches `seed/index.md`
 # and silently stops the template from tracking its own seed file. (Measured: it
 # broke the refresh-seeds.sh fixture, which re-inits a repo over a copy of seed/.) The
 # other entries above are safe because no seed file is named any of them.
-# /ai-bridge:init appends both lines to an instance's .gitignore if missing, which also
+# /loopd:init appends both lines to an instance's .gitignore if missing, which also
 # reaches instances stamped before they existed. `knowledge/index.md` is
 # deliberately NOT ignored anywhere — it is the KB's curated lookup surface, it
 # changes only when the KB changes, and an agent told to scan it needs it present
@@ -79,14 +79,14 @@ instance.config.local.json
 
 # Derived view of the group's product repos (scripts/link-repos.sh) — one symlink
 # per repo into reposRoot, never content, and machine-local like the machinery
-# below. Delete it freely; /ai-bridge:init or that script recreates it.
+# below. Delete it freely; /loopd:init or that script recreates it.
 /repos/
 
 # NO MACHINERY BLOCK, DELIBERATELY. A bundle used to carry 37 symlinks into a
-# template checkout, listed between a marker pair /ai-bridge:init rewrote on every
+# template checkout, listed between a marker pair /loopd:init rewrote on every
 # stamp. The machinery ships in the ai-bridge PLUGIN now — per machine, not per
 # bundle — so there is nothing here to ignore. A bundle stamped under the old design
-# still has the block; /ai-bridge:init RETIRES it, markers and all, on the next stamp.
+# still has the block; /loopd:init RETIRES it, markers and all, on the next stamp.
 
 # Copies refresh-seeds.sh keeps when it merges a seed change in — the file it replaced,
 # and any merge it could not resolve, with its conflict markers. Derived and per-machine:
@@ -98,4 +98,4 @@ instance.config.local.json
 # Instance additions (kept across seed refreshes)
 # Everything from the heading above to end of file is THIS bundle's own. refresh-seeds.sh
 # compares the seed against the file with this block removed and re-appends it unchanged,
-# so a pattern you add here never reads as seed drift. /ai-bridge:init appends here too.
+# so a pattern you add here never reads as seed drift. /loopd:init appends here too.

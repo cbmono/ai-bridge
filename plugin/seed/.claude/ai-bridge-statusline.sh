@@ -5,6 +5,6 @@
 set -uo pipefail
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." 2>/dev/null && pwd)" || exit 0
 cache="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/cache"
-line="$(ls -d "$cache"/*/ai-bridge/*/scripts/status-line.sh 2>/dev/null | sort -V | tail -n1)"
+line="$(ls -d "$cache"/*/loopd/*/scripts/status-line.sh 2>/dev/null | sort -V | tail -n1)"
 [ -n "$line" ] || exit 0
 exec bash "$line" --instance "$here"
