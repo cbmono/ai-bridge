@@ -124,8 +124,8 @@ ok "a later successful spawn clears it"              "$(has "$S3" 'cleared: a sp
 ok "…said where the spawn succeeds, too"             "$(has "$S3" 'A spawn that succeeds also clears every open `dispatch refused:` entry')" yes
 ok "the remedy: exit auto mode for the WHOLE tick"   "$(has "$S3" 'exit auto mode for the WHOLE tick, not just the spawn (shift+tab cycles it)')" yes
 ok "…in the tick's session, not the child's flag"    "$(has "$S3" 'the mode of the session RUNNING THE TICK')" yes
-ok "an allow rule for claude --bg is NOT the remedy" "$(has "$S3" 'An allow rule for `claude --bg`')" yes
-ok "…nor bypassPermissions, declined 2026-09-25"     "$(has "$S3" 'the owner declined both on 2026-09-25')" yes
+ok "an allow rule for claude --bg is NOT the remedy" "$(has "$S3" 'Never print an allow rule for `claude --bg`')" yes
+ok "…nor bypassPermissions: the grant is the operator's" "$(has "$S3" 'A grant is the')" yes
 
 echo
 echo "refused-dispatch.test: $pass passed, $fail failed"

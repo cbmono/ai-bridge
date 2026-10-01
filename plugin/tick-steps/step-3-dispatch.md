@@ -37,10 +37,12 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    ```
 
    It reports this session's permission mode as of that very call, off the hook payload — no
-   probe, no spawn, no slot. **It reports the MODE and predicts NOTHING.** Measured
-   2026-09-30: the auto-mode classifier judges the BRIEF's text and not the command, so
-   no mode predicts a refusal — `claude --bg` in this step's shape spawned under auto mode
-   (`knowledge/findings/the-auto-mode-classifier-reads-the-brief-not-the-command`).
+   probe, no spawn, no slot. **It reports the MODE and predicts NOTHING, and it is a
+   permanent fixture of every dispatching tick, not a rare diagnostic.** The auto-mode
+   refusal is INTERMITTENT: the same task, role, model and command shape was refused
+   `[Create Unsafe Agents]` on 2026-09-30 and spawned on 2026-10-01, so
+   no mode predicts a refusal, and neither does a shape or a brief
+   (`docs/operations.md` → "The supported shape").
    **Dispatch on every answer**, and quote its line in the report:
    - **exit 1, `auto`** — the mode the earlier refusals were seen under. It is not a
      refusal and never skips the wave; a refusal that does come is caught after the fact,
@@ -153,7 +155,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      | The text carries | `<which>` | `<remedy>` |
      |---|---|---|
      | `Reason: [Create Unsafe Agents]` | `auto-mode classifier (Reason: [Create Unsafe Agents])` | `exit auto mode for the WHOLE tick, not just the spawn (shift+tab cycles it), then run the tick again` |
-     | `Workspace not trusted` | `workspace trust (Workspace not trusted)` | `run claude once, interactively, in the worktree and accept the trust prompt` |
+     | `Workspace not trusted` | `workspace trust (Workspace not trusted)` | `run claude once, interactively, in the product repo's MAIN clone and accept the trust prompt; it covers every worktree of that clone` |
      | neither | `unrecognised, verbatim: <the refusal text, sanitised>` | `unknown, read the refusal text` |
 
      **Sanitised** — the refusal text is copied onto ONE line, with every `"` replaced by
@@ -165,12 +167,13 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
 
      **The auto mode here is the mode of the session RUNNING THE TICK** — the one
      `shift+tab` cycles — not the child's `--permission-mode bypassPermissions` above,
-     which stays exactly as it is. **An allow rule for `claude --bg`
-     (`permissions.allow`, `autoMode.allow`, `/permissions`) is NOT the remedy, and
-     neither is running the tick under `bypassPermissions`**: an allow rule for the exact
-     command was measured to change nothing, and the owner declined both on 2026-09-25,
-     because a plugin must not be able to grant itself a bypass. Never print either as
-     advice.
+     which stays exactly as it is. **Never print an allow rule for `claude --bg`, or
+     running the tick under `bypassPermissions`, as a remedy.** A grant is the
+     operator's to write, never the plugin's, because a plugin must not be able to grant
+     itself a bypass (owner, 2026-09-25 and 2026-09-30); `/ai-bridge:init` prints the
+     one notice there is. The `Bash(claude --bg ' *)` rule once cited as "measured to
+     change nothing" matches no spawn form at all (2026-10-01), so that result says
+     nothing about a rule that matches.
    - **Report it in one line, and never as a full cap** — the cap was not reached, so
      close the report without the in-flight count:
 
