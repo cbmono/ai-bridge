@@ -333,6 +333,28 @@ said "…still saying nothing is staged"  "nothing staged under the named path(s
 said "…and now naming --stage"          "--stage -- <path>..."
 eq "…and nothing was committed" "" "$(git show --name-only --format= HEAD | grep mine.txt || true)"
 
+# 5. The close-project step 7 shape: a directory `git rm -r`d, then an edit, one command.
+#    rm -rf drops setup's untracked empty tasks/, which `git add` would otherwise match.
+setup
+git rm -qr projects/gated-proj >/dev/null; rm -rf projects/gated-proj
+printf 'type: Project\nstatus: done\n' > projects/noauto-proj/project.md
+printf 'sibling unstaged\n' > sib-dirty.txt
+rc_of "--stage names a git-rm'd dir and an edit" 0 project-manager \
+  --stage -- projects/gated-proj projects/noauto-proj/project.md
+eq "…the removed directory is gone from HEAD" \
+  "" "$(git ls-tree -r --name-only HEAD -- projects/gated-proj)"
+eq "…and the edit landed" "status: done" \
+  "$(git show HEAD:projects/noauto-proj/project.md | grep '^status:')"
+eq "…and nothing unnamed rode along" \
+  "projects/gated-proj/project.md projects/noauto-proj/project.md" \
+  "$(git show --name-only --format= HEAD | tr '\n' ' ' | sed 's/ *$//')"
+
+# 6. A path that never existed has no staged deletion to vouch for it: still exit 3.
+setup
+printf 'mine\n' > mine.txt
+rc_of "--stage with a typo'd path -> exit 3" 3 software-engineer --stage -- mine.txt no-such-dir
+said "…saying it could not stage" "could not stage the named path(s)"
+
 echo
 echo "== the nothing-staged guard is PER PATH, not all-or-nothing =="
 

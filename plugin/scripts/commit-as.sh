@@ -322,7 +322,18 @@ if [ "${#paths[@]}" -gt 0 ]; then
   # --stage does the caller's `git add -- <the named paths>` and nothing wider. It is
   # the one thing here that writes the SHARED index — exactly the two-step it replaces,
   # so a sibling's staged entries are untouched and a refusal below leaves these staged.
-  if [ "$stage" -eq 1 ] && ! git add -- "${paths[@]}"; then
+  # A path `git rm -r` already removed matches nothing, so `git add` would refuse it; it
+  # is skipped only on evidence of a staged deletion against HEAD, so a typo still fails.
+  to_add=()
+  for p in "${paths[@]}"; do
+    if [ "$stage" -eq 1 ] && [ "$has_head" -eq 1 ] && [ ! -e "$p" ] && [ ! -L "$p" ] \
+       && [ -z "$(git ls-files -- "$p")" ] \
+       && [ -n "$(git diff --cached --name-only --diff-filter=D -- "$p")" ]; then
+      continue
+    fi
+    to_add+=("$p")
+  done
+  if [ "$stage" -eq 1 ] && [ "${#to_add[@]}" -gt 0 ] && ! git add -- "${to_add[@]}"; then
     echo "error: could not stage the named path(s) — refusing to commit as role" >&2
     echo "       '$role' (fail closed)." >&2
     exit 3
