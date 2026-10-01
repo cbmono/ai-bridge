@@ -1,12 +1,12 @@
 {
-  "name": "ai-bridge",
-  "displayName": "AI Bridge",
+  "name": "loopd",
+  "displayName": "loopd",
   "version": "2.4.3",
   "description": "The OKF control panel as a Claude Code plugin: brief yourself (/brief-me), capture decisions (/capture), work a task in-session (/work), run the gated loop (/dispatch), hand projects over (/handoff).",
   "author": {
     "name": "cbmono"
   },
-  "repository": "https://github.com/cbmono/ai-bridge",
+  "repository": "https://github.com/cbmono/loopd",
   "license": "MIT",
   "keywords": [
     "project-management",
