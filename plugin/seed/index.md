@@ -6,9 +6,9 @@ objectives and projects.)*
 
 ## Reference
 * Awaiting you — `AWAITING.md` **if present**: what needs a human decision (approve · answer · merge · unblock · close), rewritten each `/loopd:dispatch` tick. Absent means the queue is turned off
-* [Schema & status reference](/SCHEMA.md) - producer types and the task lifecycle
-* [Activity log](/log.md) - cross-project history
-* [Agent roster](/agents/index.md) - roles and routing rules
+* [Schema & status reference](SCHEMA.md) - producer types and the task lifecycle
+* [Activity log](log.md) - cross-project history
+* [Agent roster](agents/index.md) - roles and routing rules
 * [Knowledge base](/knowledge/index.md) - service catalog, findings/decisions, runbooks
 
 ## Objectives
