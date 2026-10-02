@@ -270,6 +270,7 @@ Run these inside an instance.
 | `/loopd:capture <notes>` | (plugin) turn a decision or meeting notes into drafted projects and tasks, with provenance — never promoted |
 | `/loopd:work <task>` | (plugin) work one task in **this** session, ledger kept for you — the solo alternative to dispatching an agent |
 | `/loopd:handoff <path> <login>` | (plugin) transfer a task or project to another human, with the context that makes the transfer real |
+| `/loopd:kb-apply <report>` | (plugin) apply one `knowledge/` reflection report after reading it — the only path that writes a proposal. The scheduled `kb-propose.sh` only ever proposes |
 
 Flags `/loopd:new-project` accepts: `kind=research`, `autonomy=<mode>`, `clis="…"`,
 `browser=off|claude-for-chrome` (default `off`), `/yolo`, `/cli …`, `/claudeforchrome`,

@@ -54,12 +54,12 @@ body() { # <skill> — everything after the closing `---`
     "$SK/$1/SKILL.md"
 }
 
-STATE_CHANGING="capture work dispatch handoff audit answer fanout pr-review-request new-project close-project board init"
+STATE_CHANGING="capture work dispatch handoff audit answer fanout pr-review-request new-project close-project board init kb-apply"
 READ_ONLY="brief-me welcome"
 ALL="$STATE_CHANGING $READ_ONLY"
 
 # =======================================================================================
-echo "== 1. every skill ships, well-formed, and no fourteenth skill appears unasserted =="
+echo "== 1. every skill ships, well-formed, and no further skill appears unasserted =="
 # =======================================================================================
 for s in $ALL; do
   ok "$s/SKILL.md ships"                    "$(yn test -f "$SK/$s/SKILL.md")" yes
@@ -69,7 +69,7 @@ for s in $ALL; do
 done
 # A skill added to the directory without being added to this harness is invisible to every
 # assertion here — the silence failure mode this repo's checks are written against.
-ok "the skill set is exactly the thirteen this file asserts" \
+ok "the skill set is exactly the ones this file asserts" \
   "$(ls "$SK" | sort | tr '\n' ' ' | sed 's/ $//')" \
   "$(printf '%s\n' $ALL | sort | tr '\n' ' ' | sed 's/ $//')"
 
@@ -148,6 +148,12 @@ ok "fanout is for INDEPENDENT asks" \
   "$(ge1 "$(grep -ci 'independent' "$SK/fanout/SKILL.md")")" yes
 ok "pr-review-request treats Slack as optional" \
   "$(ge1 "$(grep -ci 'optional' "$SK/pr-review-request/SKILL.md")")" yes
+# kb-apply is the ONLY path that writes a reflection proposal into knowledge/, so losing
+# either half of that — the apply call, or the human gate before it — is the whole defect.
+ok "kb-apply is the one path that applies a report" \
+  "$(ge1 "$(grep -c 'scripts/kb-apply.sh' "$SK/kb-apply/SKILL.md")")" yes
+ok "…and shows the human the proposals before it does" \
+  "$(ge1 "$(grep -c 'Show the human the proposals first' "$SK/kb-apply/SKILL.md")")" yes
 ok "new-project keeps the scaffold review's declared fallback" \
   "$(ge1 "$(grep -ci 'fallback' "$SK/new-project/SKILL.md")")" yes
 ok "…and the build/research asymmetry (clis from a flag or empty)" \
