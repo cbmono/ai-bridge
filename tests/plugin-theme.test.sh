@@ -6,11 +6,11 @@
 # IT PINS THE SHAPE, AND SINCE loopd/task-005 THE PALETTE TOO. The owner's design handoff
 # landed, so the colours are no longer a placeholder: §6 holds every override to the
 # palette in tests/fixtures/theme-palette.txt, the keys the amendment still pins to their
-# exact hex, and every token to its MEANING. Since loopd/task-009 accents are permitted
-# (the amendment in the palette fixture's header), so the exact-hex pin came off text,
-# success, warning and pink_FOR_SUBAGENTS_ONLY and the semantic check replaces it: blue
-# #5ea2ff is the machine's and pink #ff7ac2 is the human's, and a token wearing the other
-# side's primary is the failure nobody notices by looking.
+# exact hex, and every token to its MEANING. Accents became legal in loopd/task-009 (the
+# amendment quoted in the palette fixture's header), so the exact-hex pin came off text,
+# success, warning and pink_FOR_SUBAGENTS_ONLY, and the semantic check replaced what it
+# protected: blue #5ea2ff is the machine's, pink #ff7ac2 is the human's, and a token
+# wearing the other side's primary is the failure nobody notices by looking.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
@@ -101,9 +101,8 @@ off_palette() { # <theme.json> -> the override keys whose colour is not a palett
 }
 off_duotone() { # <theme.json> -> "<key>=<got>" for each required key absent or off-value
   local k want got
-  # Narrowed by loopd/task-009 ("The duotone decision", 2026-10-02): text, success, warning
-  # and pink_FOR_SUBAGENTS_ONLY carry the owner's accents now, so only the keys the
-  # amendment still pins are listed. crossed_meaning() is what took over from them.
+  # Narrowed by loopd/task-009: text, success, warning and pink_FOR_SUBAGENTS_ONLY carry
+  # the owner's accents now, and crossed_meaning() is what took over for them.
   while read -r k want; do
     [ -n "$k" ] || continue
     got="$(jq -r --arg k "$k" '.overrides[$k] // "MISSING"' "$1")"
@@ -144,10 +143,13 @@ ok "a missing key is named"                  "$(off_duotone "$TMP/offbrand.json"
 jq '.overrides.error = "#00ff00"' "$THEME" > "$TMP/offhex.json"
 ok "…and an off hex on a still-pinned key is named" "$(off_duotone "$TMP/offhex.json" | sed 's/ $//')" \
    "error=#00ff00"
-jq --arg b "$BLUE" --arg p "$PINK" '.overrides.claude = $p | .overrides.permission = $b' \
-   "$THEME" > "$TMP/swapped.json"
+# success and warning are OFF the exact-hex pin, so this mutant is what shows the semantic
+# check standing on its own rather than riding off_duotone's remaining entries.
+jq --arg b "$BLUE" --arg p "$PINK" \
+   '.overrides.claude = $p | .overrides.success = $p
+    | .overrides.permission = $b | .overrides.warning = $b' "$THEME" > "$TMP/swapped.json"
 ok "a swapped theme is named on both sides" "$(crossed_meaning "$TMP/swapped.json" | sed 's/ $//')" \
-   "claude=$PINK permission=$BLUE"
+   "claude=$PINK success=$PINK permission=$BLUE warning=$BLUE"
 
 echo
 echo "pass=$pass fail=$fail"
