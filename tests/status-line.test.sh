@@ -32,9 +32,17 @@ TMP="$(mktemp -d "${TMPDIR:-/tmp}/statusline.XXXXXX")" || {
   echo "status-line.test: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}." >&2; exit 2; }
 trap 'rm -rf "$TMP"' EXIT
 
-pass=0; fail=0
+pass=0; fail=0; skip=0
 ok() { if [ "$2" = "$3" ]; then printf '  PASS  %-62s (%s)\n' "$1" "$2"; pass=$((pass+1))
        else printf '  FAIL  %-62s got %s, want %s\n' "$1" "$2" "$3"; fail=$((fail+1)); fi; }
+
+# `chmod 000` does not stop ROOT reading a file, and some filesystems ignore the mode
+# outright, so every case that needs an unreadable one PROBES its own fixture: untestable
+# here is SAID, never passed vacuously and never failed against a correct implementation.
+# Same shape as push-state.test.sh.
+unreadable() { chmod 000 "$1" 2>/dev/null; [ ! -r "$1" ]; }
+no_fixture() { # <what it would have asserted> <how many assertions>
+  printf '  SKIP  %-62s (cannot chmod 000 as this user)\n' "$1"; skip=$((skip + $2)); }
 
 # The offline proof: three commands that can only ever be caught. SENTINEL survives the
 # call, so "it printed the right line" and "it never asked the network" are two assertions.
@@ -139,22 +147,29 @@ ok "an empty queue ⇒ 0, not ?"      "$(plain "$D" | sed 's/.*· \([^·]*need y
 D="$TMP/d7"; mk "$D"; rm -f "$D"/projects/proj-a/tasks/*.md
 ok "a project with no tasks ⇒ 0"    "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "0 in flight"
 
-D="$TMP/d9"; mk "$D"; chmod 000 "$D/projects/proj-a/tasks/task-001.md"
-ok "an UNREADABLE task doc ⇒ ?, never a quiet undercount" \
-   "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "? in flight"
+D="$TMP/d9"; mk "$D"
+if unreadable "$D/projects/proj-a/tasks/task-001.md"; then
+  ok "an UNREADABLE task doc ⇒ ?, never a quiet undercount" \
+     "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "? in flight"
+else
+  no_fixture "an UNREADABLE task doc ⇒ ?, never a quiet undercount" 1
+fi
 chmod 644 "$D/projects/proj-a/tasks/task-001.md"
-D="$TMP/d10"; mk "$D"; chmod 000 "$D/$AB_AWAITING"
-UNREAD="$(plain "$D" | awk -F ' · ' '{ print $3 }')"
-ok "an unreadable AWAITING.md SPEAKS — it is arrived at, not chosen" \
-   "$UNREAD" "${AB_AWAITING##*/} unreadable — chmod +r $AB_AWAITING"
-ok "…and the repair is in the LINE, not in a doc the operator must go find" \
-   "$(printf '%s' "$UNREAD" | grep -c -- "chmod +r $AB_AWAITING" | tr -d ' ')" 1
-
-# THE DISCRIMINATOR. Each state asserted on its own is satisfiable by one rendering for all
-# three; this is the assertion a re-collapse of absent onto `? need you` cannot pass.
-ok "absent, unreadable and readable are three renderings, not one" \
-   "$(printf '%s\n%s\n%s\n' "$(plain "$TMP/d1")" "$(plain "$D")" "$(plain "$INST")" \
-      | sort -u | wc -l | tr -d ' ')" 3
+D="$TMP/d10"; mk "$D"
+if unreadable "$D/$AB_AWAITING"; then
+  UNREAD="$(plain "$D" | awk -F ' · ' '{ print $3 }')"
+  ok "an unreadable AWAITING.md SPEAKS — it is arrived at, not chosen" \
+     "$UNREAD" "${AB_AWAITING##*/} unreadable — chmod +r $AB_AWAITING"
+  ok "…and the repair is in the LINE, not in a doc the operator must go find" \
+     "$(printf '%s' "$UNREAD" | grep -c -- "chmod +r $AB_AWAITING" | tr -d ' ')" 1
+  # THE DISCRIMINATOR. Each state asserted on its own is satisfiable by one rendering for
+  # all three; this is the assertion a re-collapse of absent onto `? need you` cannot pass.
+  ok "absent, unreadable and readable are three renderings, not one" \
+     "$(printf '%s\n%s\n%s\n' "$(plain "$TMP/d1")" "$(plain "$D")" "$(plain "$INST")" \
+        | sort -u | wc -l | tr -d ' ')" 3
+else
+  no_fixture "unreadable SPEAKS, and the three states are three renderings" 3
+fi
 chmod 644 "$D/$AB_AWAITING"
 
 echo
@@ -208,9 +223,12 @@ Z="$(run --instance "$TMP/d5" --color always)"
 ok "zero in flight goes dim, not blue"      "$(sgr_of "$Z" '0 in flight')" 2
 U="$(run --instance "$TMP/d4" --color always)"
 ok "an unknown number is a warning, so pink" "$(sgr_of "$U" '? in flight')" 95
-chmod 000 "$TMP/d10/$AB_AWAITING"
-ok "…and so is an unreadable queue, which is a fault" \
-   "$(sgr_of "$(run --instance "$TMP/d10" --color always)" 'unreadable')" 95
+if unreadable "$TMP/d10/$AB_AWAITING"; then
+  ok "…and so is an unreadable queue, which is a fault" \
+     "$(sgr_of "$(run --instance "$TMP/d10" --color always)" 'unreadable')" 95
+else
+  no_fixture "…and so is an unreadable queue, which is a fault" 1
+fi
 chmod 644 "$TMP/d10/$AB_AWAITING"
 ok "an off queue paints nothing, because it is not a fault" \
    "$(printf '%s' "$(run --instance "$TMP/d1" --color always)" | grep -c 'need you\|unreadable' | tr -d ' ')" 0
@@ -277,5 +295,5 @@ printf '* TICK 2026-09-13T18:00:00Z by cbmono open: newer\n' >> "$D/$AB_LEDGER"
 ok "a newer TICK line moves the clock" \
    "$([ "$(plain "$D" | sed 's/.*· //')" != "last tick $HM" ] && echo yes || echo no)" yes
 
-printf '\npass=%d fail=%d\n' "$pass" "$fail"
+printf '\npass=%d fail=%d skip=%d\n' "$pass" "$fail" "$skip"
 [ "$fail" -eq 0 ]
