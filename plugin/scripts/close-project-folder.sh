@@ -329,7 +329,8 @@ EOF
       note "PRUNE" "would remove $PROJ/index.md (derived — the tick regenerates it)"
     fi
     echo "---"
-    echo "close-project-folder: report only — nothing changed. Re-run with --apply."
+    echo "close-project-folder: report only — nothing changed."
+    ab_say_run "Apply it with:" close-project-folder.sh "$SLUG" --apply
   fi
   exit 0
 fi
@@ -452,6 +453,6 @@ if [[ $APPLY -eq 1 ]]; then
 else
   printf 'close-project-folder: report only — nothing changed. %d path(s) would be stamped, %d directory/ies and %d file(s) would be pruned.\n' \
     "$stamped" "$pruned_dirs" "$pruned_files"
-  echo "Re-run with --apply."
+  ab_say_run "Apply it with:" close-project-folder.sh "$SLUG" --apply
 fi
 exit 0

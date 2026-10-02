@@ -480,7 +480,9 @@ done <<< "$FILE_LIST"
 kb_gen="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/build-kb-index.sh"
 if [[ -r knowledge/index.md && -x "$kb_gen" ]]; then
   if ! bash "$kb_gen" --print 2>/dev/null | diff -q - knowledge/index.md >/dev/null 2>&1; then
-    warn "knowledge/index.md" "carries rows the generator would not produce — it is derived, never hand-edited. Run build-kb-index.sh (build-kb-index.sh --check names each one)"
+    warn "knowledge/index.md" "carries rows the generator would not produce — it is derived, never hand-edited."
+    ab_say_run "         Regenerate it with:" build-kb-index.sh
+    ab_say_run "         Name each row with:" build-kb-index.sh --check
   fi
 fi
 

@@ -813,7 +813,7 @@ printf '  summary: %d in sync or with nothing to port, %d portable, %d ported, %
 # bundle that is entirely up to date.
 if [ "$APPLY" -eq 0 ] && [ $((portable + resolved)) -gt 0 ]; then
   left "re-run with --apply to write the $((portable + resolved)) seed change(s) above:"
-  left_more "$SELF '$TARGET' --apply"
+  ab_say_run "   " "$SELF" "'$TARGET'" --apply >> "$TMPD/left"
 fi
 if [ -s "$TMPD/conflicts" ]; then
   while IFS= read -r c; do

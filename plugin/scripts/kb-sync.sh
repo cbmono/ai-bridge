@@ -377,10 +377,13 @@ EOF
   status)
     kb_configured || exit 3
     kb_vars
-    [ -d "$KBGIT" ] || { warn "knowledge is configured but not mounted — run 'kb-sync.sh mount'."; exit 1; }
+    [ -d "$KBGIT" ] || { warn "knowledge is configured but not mounted. Mount it with:"
+      ab_say_run "kb-sync:  " kb-sync.sh mount >&2
+      exit 1; }
     ahead="$(unpushed_count)"
     if [ "$ahead" -gt 0 ]; then
-      warn "$ahead KB commit(s) are local and UNPUSHED in $KB_MOUNT — run 'kb-sync.sh commit' or push by hand."
+      warn "$ahead KB commit(s) are local and UNPUSHED in $KB_MOUNT. Push by hand, or run:"
+      ab_say_run "kb-sync:  " kb-sync.sh commit >&2
       exit 1
     fi
     say "KB mount is clean and pushed."

@@ -400,5 +400,5 @@ if [[ $APPLY -eq 1 ]]; then
 else
   printf 'migrate-bundle: %d would be fixed, %d need a human, %d skipped. (report only — nothing changed)\n' \
     "$fixed" "$human" "$skipped"
-  echo "Re-run with --apply to write these changes."
+  ab_say_run "Write these changes with:" migrate-bundle.sh --apply
 fi
