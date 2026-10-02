@@ -134,6 +134,8 @@ before2="$(kbsum)"
 ok "a proposal against a human-authored item is dropped" "$("$PROPOSE" --proposer "$P2" >/dev/null 2>&1; echo $?)" 1
 ok "…leaving knowledge/ byte-identical"             "$([ "$before2" = "$(kbsum)" ] && echo yes || echo no)" yes
 ok "no proposer configured is silence, not a failure" "$("$PROPOSE" >/dev/null 2>&1; echo $?)" 1
+ok "a proposer that FAILED is unknown, never nothing to propose" \
+  "$("$PROPOSE" --proposer 'exit 7' >/dev/null 2>&1; echo $?)" 2
 P3="$TMP/proposer-two.sh"
 cat >"$P3" <<'EOS'
 #!/usr/bin/env bash
@@ -154,6 +156,11 @@ ok "a role name as --by is refused"                 "$("$APPLY" --by cataloguer 
 ok "a report outside projects/*/tasks/ is refused"  "$("$APPLY" --by example-user-007 knowledge/index.md >/dev/null 2>&1; echo $?)" 1
 ok "a report that is still waiting blocks a second run" \
   "$("$PROPOSE" --proposer "$ONE" >/dev/null 2>&1; echo $?)" 1
+SHORT=projects/knowledge-reflection/tasks/task-099-short.md
+sed 's/^P1 · .*/P1 · status · keeper/' "$R2" >"$SHORT"
+ok "a truncated proposal line refuses the whole report" \
+  "$("$APPLY" --by example-user-007 "$SHORT" >/dev/null 2>&1; echo $?)" 1
+rm -f "$SHORT"
 
 echo "== criterion 6: the command is namespaced, state-changing and documented =="
 ok "the skill ships"                                "$([ -f "$SKILL" ] && echo yes || echo no)" yes
@@ -161,7 +168,7 @@ ok "…named for its directory"                       "$(sed -n 's/^name: //p' "
 ok "…human-triggered, never model-invoked"          "$(sed -n 's/^disable-model-invocation: //p' "$SKILL" | head -1)" true
 ok "…and it is in plugin-skills.test.sh's STATE_CHANGING list" \
   "$(grep -c '^STATE_CHANGING=.*kb-apply' "$REPO/tests/plugin-skills.test.sh")" 1
-ok "the README documents /loopd:kb-apply"           "$(grep -c '`/loopd:kb-apply' "$REPO/README.md")" 1
+ok "the README's command table carries the row"     "$(grep -c '^| `/loopd:kb-apply <report>` |' "$REPO/README.md")" 1
 ok "SCHEMA.md defines the report"                   "$(grep -c '^### The reflection report' "$SCHEMA")" 1
 ok "…and names both halves"                         "$(grep -c 'scripts/kb-propose.sh' "$SCHEMA")/$(grep -c 'scripts/kb-apply.sh' "$SCHEMA")" "1/1"
 

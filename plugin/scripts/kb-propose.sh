@@ -7,7 +7,7 @@
 # The surviving proposals become ONE draft task document — the report, and the only thing
 # that reaches the human, through build-awaiting.sh, which nothing here calls. It writes
 # nothing under knowledge/, never AWAITING.md, and never reaches kb-apply.sh.
-# Exit: 0 a report was written · 1 nothing to propose (reason on stderr) · 2 usage.
+# Exit: 0 a report was written · 1 nothing to propose · 2 usage, or the proposer failed.
 # Grammar and the split: SCHEMA.md "The reflection report".
 set -uo pipefail
 
@@ -32,9 +32,6 @@ cd "$INST" || exit 2
 case "$PROJECT" in ""|*[!A-Za-z0-9._-]*) echo "kb-propose: --project wants a slug" >&2; exit 2 ;; esac
 [ -n "$PROPOSER" ] || { echo "kb-propose: not due — no proposer configured" >&2; exit 1; }
 
-waiting="$(grep -l '^status:[[:space:]]*draft' "projects/$PROJECT"/tasks/*.md 2>/dev/null | head -1)"
-[ -z "$waiting" ] || { echo "kb-propose: not due — $waiting is still waiting on the human" >&2; exit 1; }
-
 drop() { echo "kb-propose: dropped — $1" >&2; }
 split5() { # <line> -> F1..F4 and F5, which keeps any ` · ` the reason carries
   local s="$1"
@@ -47,7 +44,12 @@ split5() { # <line> -> F1..F4 and F5, which keeps any ` · ` the reason carries
 fingerprint() { cksum <"$1" | awk '{print $1 "-" $2}'; }
 fmfield() { sed -n '2,/^---$/p' "$1" | sed -n "s/^$2:[[:space:]]*\([^[:space:]].*\)/\1/p" | head -n1; }
 
-RAW="$(bash -c "$PROPOSER" 2>/dev/null)"
+for t in "projects/$PROJECT"/tasks/*.md; do
+  [ -f "$t" ] && [ "$(fmfield "$t" status)" = draft ] || continue
+  echo "kb-propose: not due — $t is still waiting on the human" >&2; exit 1
+done
+
+RAW="$(bash -c "$PROPOSER")" || { echo "kb-propose: the proposer failed — proposing nothing" >&2; exit 2; }
 n=0; PROPOSALS=""
 while IFS= read -r line; do
   [ -n "${line//[[:space:]]/}" ] || continue

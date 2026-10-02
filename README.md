@@ -531,6 +531,8 @@ They ship in the plugin (`plugin/scripts/`) and are invoked as
 | `normalise-config.sh` | `<dir>` — reports what is out of place across the two config files: MISPLACED (a per-machine key in the tracked `instance.config.json`, or a tracked-only key such as `defaultOwner` in `instance.config.local.json`), MISSING (a seed key the tracked file lacks) and ORDER. Values are never changed — only placed, ordered, or added when absent — and the tracked file is left **staged**, never committed. Run by every `/loopd:init` stamp | only with `--apply` |
 | `migrate-bundle.sh` | mechanical schema repairs | only with `--apply` |
 | `ledger.sh` | `append` / `show` a knowledge item's append-only `ledger:` line — why it changed, who applied it, which items; no verb edits or removes an entry | `append` only, that one item |
+| `kb-propose.sh` | the scheduled half of the reflector: runs the instance's proposer and writes the surviving proposals to ONE draft task — the report. It writes nothing under `knowledge/`, never `AWAITING.md`, and never reaches the apply path. 0 a report was written · 1 nothing to propose · 2 usage | yes, one task document |
+| `kb-apply.sh` | the human half, behind `/loopd:kb-apply`: applies exactly the proposals one report names, plus the regenerated index, one `ledger:` entry per item, the report's `status: done` and ONE commit. Every proposal is checked first, so a stale, hand-authored or missing item refuses the whole report | yes, the items the report names |
 | `project-paused.sh` | answers whether a project is paused, as one predicate with a three-value exit | no |
 | `prune-worktrees.sh` | classifies worktrees, prints the `remove` commands | **never** |
 | `commit-as.sh` | commits as the right agent identity | yes |

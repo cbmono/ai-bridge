@@ -70,6 +70,7 @@ st="$(fmfield "$REPORT" status)"
 N=0; FILES=(); KINDS_OF=(); WITHS=(); WHYS=(); KEYS=(); VALS=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
+  [ "$(grep -o ' · ' <<<"$line" | wc -l)" -ge 6 ] || die 1 "a proposal is not seven ' · ' fields: $line"
   split7 "$line"
   case " $KINDS " in *" $G2 "*) ;; *) die 1 "$G1: kind '$G2' is not one of: $KINDS" ;; esac
   case "$G3" in ""|*[!A-Za-z0-9._-]*) die 1 "$G1: '$G3' is not a slug" ;; esac
