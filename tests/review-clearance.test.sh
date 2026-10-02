@@ -2245,6 +2245,16 @@ ACK_AT_HEAD="$(body_file \
 setup "$CLEAN_HEAD"; add_comment coderabbitai "$SKIP"; add_comment coderabbitai "$ACK_AT_HEAD"
 expect "a skip notice already asked at this head -> hold, not ask again" 1
 says   "  ...and says the ask has been made" "ALREADY been asked"
+
+# AND THE HOLD NAMES THE FORM THAT CAN STILL REVIEW THIS HEAD. The ack is the record that
+# the one-per-window quota was spent on bare `review`, and the reviewer's own disclaimer —
+# carried by every ack it posts, see the fixture — says that form will not re-review. A
+# hold that withholds `full review` is the loop this exit was meant to end.
+ACK_AT_HEAD_REAL="$(body_file "$(cat "$ACK")" "Review triggered for $CLEAN_HEAD.")"
+setup "$CLEAN_HEAD"; add_comment coderabbitai "$SKIP"; add_comment coderabbitai "$ACK_AT_HEAD_REAL"
+expect "…the recorded ack at this head -> hold too" 1
+says   "  ...and names the command that can review this head" "@coderabbitai full review"
+
 setup "$CLEAN_HEAD"; add_comment coderabbitai "$SKIP"
 add_comment coderabbitai "$(body_file \
   '<!-- CodeRabbit review command invocation: v2:abc -->' \

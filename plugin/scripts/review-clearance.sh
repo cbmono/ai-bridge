@@ -1995,6 +1995,7 @@ if [ -n "$skip_from" ] && [ -z "$other_refusal" ]; then
     echo "        at head $head_sha — its acknowledgement was posted here. Wait for" >&2
     echo "        that review; do not ask again at this head. It said:" >&2
     cat "$TMPD/skip-quote" >&2
+    incremental_note
     exit 1
   fi
   echo "refuse: $skip_from SKIPPED PR $pr — reviews are not automatic on this repository, so" >&2
