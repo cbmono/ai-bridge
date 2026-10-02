@@ -15,10 +15,13 @@
 #   index-kb.sh                 # index/refresh every product repo
 #   index-kb.sh --with-serena   # also warm Serena's LSP cache (if installed)
 #
-# Repos skipped by default: worktrees (_wt), instance dirs (_ai-bridge-*), and any
-# non-git directory. Add more (infra/assets repos with no useful call graph) via
-# `codegraphSkip` in instance.config.json (space-separated) or $CODEGRAPH_SKIP.
+# Repos skipped by default: worktrees (_wt), sibling BUNDLES (any directory carrying an
+# instance.config.json) and any non-git directory. Add more (infra/assets repos with no
+# useful call graph) via `codegraphSkip` in instance.config.json (space-separated) or
+# $CODEGRAPH_SKIP.
 set -uo pipefail
+
+. "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2
 
 WITH_SERENA=0
 case "${1:-}" in
@@ -71,9 +74,13 @@ if [[ "$WITH_SERENA" == 1 ]] && ! command -v serena >/dev/null 2>&1; then
   WITH_SERENA=0
 fi
 
+# A sibling bundle is recognised by its instance.config.json, never by a name prefix:
+# the bundle directories are being renamed, and a prefix test would index a control
+# panel as a product repo the moment one of them stops matching.
 is_skipped() {
   local name=$1 s
-  case "$name" in _wt|_ai-bridge-*) return 0 ;; esac
+  [[ "$name" == "_wt" ]] && return 0
+  ab_is_bundle "$REPOS_ROOT/$name" && return 0
   for s in $SKIP; do [[ "$name" == "$s" ]] && return 0; done
   return 1
 }

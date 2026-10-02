@@ -11,8 +11,10 @@
   // This ONLY changes how the editor displays things. The control panel and the
   // product repos stay PHYSICAL PEERS on disk — they are never nested — so a
   // product-repo session never inherits this instance's control-panel CLAUDE.md.
-  // The files.exclude glob hides the bridge folder from the "group repos" pane so
-  // it isn't shown twice (matches the `_ai-bridge-<group>` naming convention).
+  // The files.exclude globs hide the bridge folder from the "group repos" pane so
+  // it isn't shown twice. BOTH bundle prefixes are listed, because both exist — the
+  // bundle repos were renamed `_ai-bridge-*` -> `_loopd-*` and the local directories
+  // may be on either side of that; one pattern alone shows a renamed bundle twice.
   //
   // terminal.integrated.cwd pins every new terminal to the instance dir, whichever
   // pane is selected. A multi-root workspace chooses the terminal's folder
@@ -48,7 +50,8 @@
     // "terminal.integrated.cwd": "__BRIDGE_DIR__",
     "search.followSymlinks": false,
     "files.exclude": {
-      "_ai-bridge-*": true
+      "_ai-bridge-*": true,
+      "_loopd-*": true
     }
   }
 }
