@@ -5,8 +5,12 @@
 #
 # IT PINS THE SHAPE, AND SINCE loopd/task-005 THE PALETTE TOO. The owner's design handoff
 # landed, so the colours are no longer a placeholder: §6 holds every override to the
-# palette in tests/fixtures/theme-palette.txt and the duotone keys to their exact hex. A
-# third accent and a silently missing key are the two failures nobody notices by looking.
+# palette in tests/fixtures/theme-palette.txt, the keys the amendment still pins to their
+# exact hex, and every token to its MEANING. Since loopd/task-009 accents are permitted
+# (the amendment in the palette fixture's header), so the exact-hex pin came off text,
+# success, warning and pink_FOR_SUBAGENTS_ONLY and the semantic check replaces it: blue
+# #5ea2ff is the machine's and pink #ff7ac2 is the human's, and a token wearing the other
+# side's primary is the failure nobody notices by looking.
 #
 # ok() follows this directory's convention: it compares actual to expected.
 set -uo pipefail
@@ -86,7 +90,9 @@ ok "no shipped file spells the settings key" "$(files_naming "$REPO/plugin" '"th
 printf '{"theme": "custom:'"${PN}:"'loopd"}\n' > "$TMP/settings.json"
 ok "…and the same scanner finds it when it is there" "$(files_naming "$TMP" '"theme"')" 1
 
-echo "== 6. the palette is the handoff's, and the duotone keys carry their own hex =="
+echo "== 6. the palette is the handoff's, the pinned keys hold their hex, the meanings hold =="
+BLUE='#5ea2ff'   # the machine's
+PINK='#ff7ac2'   # the human's
 palette()    { grep -oE '^#[0-9a-f]{6}' "$PALETTE"; }
 off_palette() { # <theme.json> -> the override keys whose colour is not a palette value
   jq -r '.overrides | to_entries[] | "\(.key)\t\(.value|ascii_downcase)"' "$1" \
@@ -95,6 +101,9 @@ off_palette() { # <theme.json> -> the override keys whose colour is not a palett
 }
 off_duotone() { # <theme.json> -> "<key>=<got>" for each required key absent or off-value
   local k want got
+  # Narrowed by loopd/task-009 ("The duotone decision", 2026-10-02): text, success, warning
+  # and pink_FOR_SUBAGENTS_ONLY carry the owner's accents now, so only the keys the
+  # amendment still pins are listed. crossed_meaning() is what took over from them.
   while read -r k want; do
     [ -n "$k" ] || continue
     got="$(jq -r --arg k "$k" '.overrides[$k] // "MISSING"' "$1")"
@@ -104,25 +113,41 @@ claude                  #5ea2ff
 promptBorder            #5ea2ff
 briefLabelClaude        #5ea2ff
 blue_FOR_SUBAGENTS_ONLY #5ea2ff
-success                 #5ea2ff
-warning                 #ff7ac2
 error                   #ff7ac2
 permission              #ff7ac2
-pink_FOR_SUBAGENTS_ONLY #ff7ac2
 inactive                #6c7488
 subtle                  #262c37
-text                    #e9edf4
 REQ
+}
+crossed_meaning() { # <theme.json> -> "<key>=<hex>" per token wearing the other side's primary
+  local k got
+  for k in claude success merged suggestion planMode autoAccept ide fastMode promptBorder; do
+    got="$(jq -r --arg k "$k" '.overrides[$k] // "" | ascii_downcase' "$1")"
+    [ "$got" = "$PINK" ] && printf '%s=%s ' "$k" "$got"
+  done
+  for k in permission error warning; do
+    got="$(jq -r --arg k "$k" '.overrides[$k] // "" | ascii_downcase' "$1")"
+    [ "$got" = "$BLUE" ] && printf '%s=%s ' "$k" "$got"
+  done
+  return 0
 }
 ok "the palette file is long enough to be the palette" \
    "$([ "$(palette | grep -c .)" -ge 15 ] && echo yes || echo no)" yes
 ok "every override colour is a palette value" "$(off_palette "$THEME")" ""
 ok "every duotone key carries its handoff hex" "$(off_duotone "$THEME" | sed 's/ $//')" ""
+ok "no token wears the other side's primary" "$(crossed_meaning "$THEME" | sed 's/ $//')" ""
 
 jq 'del(.overrides.claude) | .overrides.warning = "#00ff00"' "$THEME" > "$TMP/offbrand.json"
 ok "a third accent is named"        "$(off_palette "$TMP/offbrand.json")" "warning"
-ok "a missing key and an off hex are named" "$(off_duotone "$TMP/offbrand.json" | sed 's/ $//')" \
-   "claude=MISSING warning=#00ff00"
+ok "a missing key is named"                  "$(off_duotone "$TMP/offbrand.json" | sed 's/ $//')" \
+   "claude=MISSING"
+jq '.overrides.error = "#00ff00"' "$THEME" > "$TMP/offhex.json"
+ok "…and an off hex on a still-pinned key is named" "$(off_duotone "$TMP/offhex.json" | sed 's/ $//')" \
+   "error=#00ff00"
+jq --arg b "$BLUE" --arg p "$PINK" '.overrides.claude = $p | .overrides.permission = $b' \
+   "$THEME" > "$TMP/swapped.json"
+ok "a swapped theme is named on both sides" "$(crossed_meaning "$TMP/swapped.json" | sed 's/ $//')" \
+   "claude=$PINK permission=$BLUE"
 
 echo
 echo "pass=$pass fail=$fail"
