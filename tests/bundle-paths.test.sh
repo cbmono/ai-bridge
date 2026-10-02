@@ -96,7 +96,9 @@ ok "a migrated bundle is not flagged" "$(ab_unmigrated "$B" && echo yes || echo 
 ok "a root SCHEMA.md is flagged"   "$(ab_unmigrated "$B" && echo yes || echo no)" yes
 notice="$(ab_unmigrated_notice "$B" 2>&1)"
 ok "the notice names the file"     "$(printf '%s' "$notice" | grep -c "SCHEMA.md -> $AB_SCHEMA")" 1
-ok "…and the one command that fixes it" "$(printf '%s' "$notice" | grep -c 'migrate-bundle.sh')" 1
+# The FLAGS, not just the script name: this assertion was `grep -c migrate-bundle.sh` and
+# stayed green while the notice printed a --layout the parser refuses.
+ok "…and the one command that fixes it" "$(printf '%s' "$notice" | grep -c 'migrate-bundle.sh --apply$')" 1
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"

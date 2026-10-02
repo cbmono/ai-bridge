@@ -94,7 +94,7 @@ ab_unmigrated_notice() { # <root> — names what is still at the root, and the o
   for pair in $AB_MOVES; do
     old="${pair%%:*}"; [ -e "$r/$old" ] && echo "             $old -> ${pair#*:}" >&2
   done
-  ab_say_run "           Fix it with:" migrate-bundle.sh --layout --apply >&2
+  ab_say_run "           Fix it with:" migrate-bundle.sh --apply >&2
 }
 
 ab_expand() {   # stdin -> stdout, __AB_SCHEMA__ and friends replaced by their values.

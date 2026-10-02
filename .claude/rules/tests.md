@@ -73,6 +73,7 @@ guard and leave its harness behind, with the required check green.
 - **Extend a `gh` stub to mirror real quirks rather than working around them in the script** — a 404 body goes to **stdout**, the "no required checks" message to **stderr**. `required-checks.test.sh` owns that stub.
 - **Compare resolved paths.** `mktemp` hands back `/var/...` while git reports `/private/var/...` on macOS, so an unresolved grep fails on a correct message. This trap has appeared three times in this codebase.
 - **`rule-globs-anchored.test.sh` asserts a measured fact the official docs contradict** — a `paths:` pattern is only root-anchored with a leading `/`. It is a test rather than a convention precisely because a convention that contradicts the documentation gets "corrected" back.
+- **An operator-facing "run this" notice emits through `ab_say_run <lead> <script> [arg...]`** (`plugin/scripts/bundle-paths.sh`), so `printed-commands.test.sh` can execute what it prints. A command welded into a sentence is invisible to it, and the sentence is what shipped `migrate-bundle.sh --layout --apply` against a parser that accepts only `--apply`.
 - **Fixtures must not touch the user's real `~/.claude` or a real instance.** Build a throwaway repo under `mktemp -d` and copy the script under test into it.
 
 ## Run the suite from the MAIN checkout, never a worktree
