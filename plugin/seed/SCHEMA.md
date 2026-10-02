@@ -74,6 +74,9 @@ description: <one line>
 kind: build | research                # build = ships code via PRs (default); research = produces in-bundle deliverables
 objective: /objectives/<slug>.md      # optional: link up to the objective it serves, WHEN one exists. Omit it and this project's own `success_criteria` are its anchor — see "Where a project's success is measured" below
 success_criteria: [ "<measurable signal>", ... ]   # optional: this project's own measurable success. Same rule as an objective's — name the command and today's number. What /audit grounds against when there is no `objective:`
+need: <who needs this, and what breaks for them if it never exists>   # THE VALUE GATE, all three keys: should this exist at all. Written on BOTH kinds, always — present is required, filled is not. See "The value gate" below
+cost_of_not_doing: <what the need above costs if it never ships>      # the answer that makes "not now" a real option
+no_owner: <who is allowed to say no>                                  # NOT the negation of `owner:` — the human who may stop this project. A decision with no owner is a trap
 target_repo: <org>/<repo>             # BUILD only: default repo for this project's tasks (<org> from instance.config.json). Omit for research.
 deliverables: [ "<artifact>", ... ]   # RESEARCH only: what this project produces, e.g. "tech landscape per domain (md)", "exec summary deck (marp)"
 autonomy: gated | <mode>              # optional (default gated). gated = the human promotes `ready` AND merges — both gates absolute. Any other value names a delegated-authority mode defined in `AUTONOMY.md`, and is INERT unless that file exists (absent ⇒ gated). See "Delegated authority" below.
@@ -86,6 +89,22 @@ status: active | paused | done        # paused gates DISPATCH only, never a task
 timestamp: <ISO 8601>
 ---
 ```
+
+**The value gate (`need:`, `cost_of_not_doing:`, `no_owner:`) is not `success_criteria`.**
+`success_criteria` answer *how will we know it worked*; these three answer *should it exist
+at all*. A project can have excellent criteria and no business existing, which is the
+failure these record — so they are never merged into `success_criteria`, and refine never
+rewrites one as the other. `/loopd:new-project` asks all three **on both kinds** and writes
+all three keys every time: they describe no machinery, so the build/research asymmetry does
+not reach them, and a speculative research project is where they bite hardest.
+
+**Present is required; filled is not.** An empty value is a legal answer and the honest one
+for a prototype — `need:` with nothing after it reads *"nobody yet, this is an experiment"*,
+a question asked and answered, where an **absent** key means it was never asked. Prefer the
+candid sentence to the blank: `need: nobody yet — an experiment` says more than either.
+Nothing validates this. `validate-bundle.sh` emits no diagnostic for a missing one at any
+severity, and must not grow one: every project created before these keys existed lacks all
+three, so the check would be noise on day one for 100% of them.
 
 **Two kinds of project.** `kind: build` (default) ships changes to a product repo
 as PRs, executed by role agents — the full `draft → ready → dispatch → PR → merge`

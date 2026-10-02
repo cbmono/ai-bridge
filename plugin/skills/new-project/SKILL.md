@@ -75,6 +75,18 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
    best-fitting one and accept "none"; **never mint an objective silently**, and only
    propose a new one for a goal that outlives this project.
 
+   **Then the value gate — three questions, asked HERE and on BOTH kinds.** Ask for
+   `need:` (who needs this, and what breaks for them if it never exists),
+   `cost_of_not_doing:` (what that need costs if it never ships) and `no_owner:` (who is
+   allowed to say no — a decision with no owner is a trap). They are **not**
+   `success_criteria` and never merge into them: the criteria answer *how will we know it
+   worked*, these answer *should it exist at all* (`SCHEMA.md` → the value gate). Asked in
+   this step, **before `kind` is settled in step 4** — they describe no machinery, so the
+   build/research asymmetry at the end of this file does not reach them, and a speculative
+   research project is where they bite hardest. **Present is required, filled is not**:
+   *"nobody needs this yet, it is an experiment"* is a good answer — record it verbatim and
+   never press for a stakeholder. An empty value is legal too; an omitted key is not.
+
 4. **Resolve capabilities & kind-specific fields (capabilities first).**
 
    **a. Capabilities (flags-first, else ask).** Settle `kind`, `autonomy`, `clis`, and
@@ -144,7 +156,9 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
 
 5. **Scaffold `projects/<slug>/`**, matching the schema/example exactly:
    - `project.md` — `type: Project` frontmatter (`title`, `description`, `kind`,
-     `success_criteria: [...]` from step 3, `status: active`, `timestamp`; plus
+     `success_criteria: [...]` from step 3, the step-3 value gate `need:`,
+     `cost_of_not_doing:` and `no_owner:` — **all three, always, on both kinds**, empty
+     where the answer was empty and never omitted — `status: active`, `timestamp`; plus
      `objective: /objectives/<slug>.md` only where step 3 resolved one) — plus
      `target_repo` for **build**, or `deliverables: [...]` for **research**; plus the
      capabilities from step 4: `autonomy:` (always; default `gated`), and `clis:` /
@@ -431,4 +445,6 @@ If `$ARGUMENTS` has no description, **ask** for a one-line goal before doing any
 - **A research project asks fewer questions on purpose.** No `target_repo`, no `clis`
   prompt, no CodeRabbit pass — each was dropped because it describes machinery a research
   project never runs (agents, PRs, code), not to save a click. Don't restore one for
-  symmetry with `build`; the two kinds are deliberately asymmetric.
+  symmetry with `build`; the two kinds are deliberately asymmetric. **The value gate is
+  not one of them**: `need:`, `cost_of_not_doing:` and `no_owner:` describe no machinery,
+  so step 3 asks all three on both kinds and step 5 writes all three keys.
