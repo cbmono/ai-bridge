@@ -53,8 +53,10 @@ assert "$WF is non-empty" "$([ -s "$WF" ] && echo 0 || echo 1)"
 WF_TEXT="$(cat "$WF")"
 
 echo "== it is valid YAML, checked against a real parser or actionlint, never a text guess =="
-# Same oracle order as deliverable-paths-vs-yaml.test.sh: PyYAML needs no second
-# interpreter, Psych ships with the Ruby macOS and Linux CI images both carry. Where a
+# PyYAML needs no second interpreter, Psych ships with the Ruby macOS and Linux CI images
+# both carry. Import order, not conformance: this file asks only "does it parse", and the
+# workflow carries no construct the two disagree about — deliverable-paths-vs-yaml.test.sh
+# does compare their readings, and chooses between them for that reason. Where a
 # repo has actionlint on PATH that is stronger still (schema-aware, not just "parses"),
 # so it is preferred when present. Absent all three: SKIP, never a false FAIL — a
 # missing optional tool is not a defect in the workflow.
