@@ -496,6 +496,7 @@ machine). The **one** authoritative list of which keys are locally overridable i
 | Key | Absent means | Overridable per machine |
 |---|---|---|
 | `org` | — | yes |
+| `group` | the bundle **directory** name minus `_ai-bridge-` / `_loopd-` | **no** — one bundle, one name |
 | `reposRoot` | required for dispatch | yes |
 | `worktreeRoot` | **`<reposRoot>/_wt`** | yes |
 | `authorEmail` | fall through to `git config user.email` | yes |

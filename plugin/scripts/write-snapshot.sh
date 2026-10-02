@@ -163,7 +163,7 @@ fi
 [[ -f "$OUT" ]] || { echo "write-snapshot: $OUT exists but is not a regular file — refusing to overwrite." >&2; exit 2; }
 
 NOW="${SNAPSHOT_NOW:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
-GROUP="$(basename "$PWD")"; GROUP="${GROUP#_ai-bridge-}"
+GROUP="$(ab_group .)"
 
 # ---------------------------------------------------------------- JSON primitives
 # Single-line YAML values only, so parameter expansion is enough and correct: strip

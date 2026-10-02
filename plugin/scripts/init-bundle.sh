@@ -1175,8 +1175,9 @@ fi
 
 # Name the seeded workspace file after the group so an open editor window is
 # identifiable (VS Code shows the .code-workspace *filename* — there's no top-level
-# name field). Group = instance dir name minus the _ai-bridge- prefix.
-WS_GROUP="$(basename "$TARGET")"; WS_GROUP="${WS_GROUP#_ai-bridge-}"
+# name field). The group is `group` in the bundle's config, else its directory name
+# minus a bundle prefix — bundle-paths.sh owns both halves.
+WS_GROUP="$(ab_group "$TARGET")"
 WS_NAME="${WS_GROUP}.code-workspace"
 
 # =========================================================================================

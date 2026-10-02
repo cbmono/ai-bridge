@@ -51,6 +51,32 @@ export AB_KEYS
 # and no reader would say why.
 ab_is_bundle() { [ -f "${1:-.}/instance.config.json" ]; }
 
+# A bundle's GROUP — the short name the board, the terminal board and the seeded
+# `<group>.code-workspace` all label it by. `group` in its TRACKED instance.config.json
+# (a shared fact, so never per-machine), else the directory name minus a bundle prefix.
+#
+# CONFIG FIRST is the whole point: with the name as the only source, renaming a bundle
+# directory renames the bundle everywhere and the KB indexer stops recognising it.
+# BOTH PREFIXES, because both exist — the bundle repos were renamed `_ai-bridge-*` ->
+# `_loopd-*` while the local directories were not, and the fallback has to stay right on
+# either side of that. The list is exported so the two python renderers read it from here
+# rather than carrying a third and fourth copy of the literal.
+AB_BUNDLE_PREFIXES="_ai-bridge- _loopd-"
+export AB_BUNDLE_PREFIXES
+
+ab_group() { # [<bundle root>] — prints the group, always something
+  local root="${1:-.}" g name p
+  g="$(grep -o '"group"[[:space:]]*:[[:space:]]*"[^"]*"' "$root/instance.config.json" 2>/dev/null \
+       | head -1 | sed 's/.*:[[:space:]]*"//; s/"$//')"
+  if [ -n "$g" ]; then printf '%s\n' "$g"; return 0; fi
+  name="$(cd "$root" 2>/dev/null && pwd || printf '%s' "$root")"
+  name="${name##*/}"
+  for p in $AB_BUNDLE_PREFIXES; do
+    case "$name" in "$p"?*) printf '%s\n' "${name#"$p"}"; return 0 ;; esac
+  done
+  printf '%s\n' "$name"
+}
+
 # Every AB_* path now has a PARENT DIRECTORY, which the pre-3.0 root spellings did not.
 # A writer that skipped this reported "the instance root is not writable" on a perfectly
 # writable bundle, so it is the resolver's job rather than each caller's.
