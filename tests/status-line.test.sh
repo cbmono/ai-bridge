@@ -9,6 +9,10 @@
 #     wrong or absent exactly when the line matters.
 #   * IT DEGRADES INSTEAD OF LYING. Every absent-file path renders `?` and never `0`, and
 #     `0` is still printed when zero is what the files say. Outside a bundle: nothing.
+#   * AWAITING.md IS THE ONE EXCEPTION, AND IT HAS THREE STATES, NOT TWO. Its absence is
+#     the queue's OFF SWITCH (build-awaiting.sh never recreates it), so absent drops the
+#     segment, unreadable says so and names the repair, and readable counts. The three
+#     cannot all pass on one rendering.
 #   * COLOUR SURVIVES A BARE NON-TTY, because a statusLine's stdout is always a pipe into
 #     Claude Code. `NO_COLOR` and `--color never` are the only opt-outs; 3/4-bit only.
 #   * OFFLINE AND MODEL-FREE, PROVEN: `gh`/`git`/`jq` are PATH stubs that leave a sentinel.
@@ -111,9 +115,12 @@ ok "…which is twice, in comments saying why not" \
 rm -f "$INST/$AB_SNAPSHOT" "$INST/$AB_STATE_DIR"
 
 echo
-echo "== 3. every absent input renders \`?\`, never \`0\` =="
+echo "== 3. every absent input renders \`?\`, never \`0\` — except the one that is an OFF SWITCH =="
 D="$TMP/d1"; mk "$D"; rm -f "$D/$AB_AWAITING"
-ok "no AWAITING.md ⇒ the queue is unknown" "$(plain "$D" | sed 's/.*· \([^·]*need you\) ·.*/\1/')" "? need you"
+ok "no AWAITING.md ⇒ the queue is off, so the segment is GONE" \
+   "$(plain "$D" | grep -c 'need you\|AWAITING' | tr -d ' ')" 0
+ok "…and the rest of the line is untouched" "$(plain "$D")" \
+   "AI Bridge · 2 in flight · lock free · last tick $HM"
 D="$TMP/d2"; mk "$D"; rm -f "$D/$AB_LEDGER"
 ok "no log.md ⇒ the time is unknown"       "$(plain "$D" | sed 's/.*· //')" "last tick ?"
 D="$TMP/d3"; mk "$D"; printf '# Log\n\nnothing yet\n' > "$D/$AB_LEDGER"
@@ -137,8 +144,17 @@ ok "an UNREADABLE task doc ⇒ ?, never a quiet undercount" \
    "$(plain "$D" | sed 's/.*Bridge · \([^·]*in flight\) ·.*/\1/')" "? in flight"
 chmod 644 "$D/projects/proj-a/tasks/task-001.md"
 D="$TMP/d10"; mk "$D"; chmod 000 "$D/$AB_AWAITING"
-ok "…and an unreadable AWAITING.md too" \
-   "$(plain "$D" | sed 's/.*· \([^·]*need you\) ·.*/\1/')" "? need you"
+UNREAD="$(plain "$D" | awk -F ' · ' '{ print $3 }')"
+ok "an unreadable AWAITING.md SPEAKS — it is arrived at, not chosen" \
+   "$UNREAD" "${AB_AWAITING##*/} unreadable — chmod +r $AB_AWAITING"
+ok "…and the repair is in the LINE, not in a doc the operator must go find" \
+   "$(printf '%s' "$UNREAD" | grep -c -- "chmod +r $AB_AWAITING" | tr -d ' ')" 1
+
+# THE DISCRIMINATOR. Each state asserted on its own is satisfiable by one rendering for all
+# three; this is the assertion a re-collapse of absent onto `? need you` cannot pass.
+ok "absent, unreadable and readable are three renderings, not one" \
+   "$(printf '%s\n%s\n%s\n' "$(plain "$TMP/d1")" "$(plain "$D")" "$(plain "$INST")" \
+      | sort -u | wc -l | tr -d ' ')" 3
 chmod 644 "$D/$AB_AWAITING"
 
 echo
@@ -190,8 +206,14 @@ ok "no third hue: every code emitted is blue, pink, bold, dim or dim italic" \
    "$(printf '%s' "$C" | tr '\033' '\n' | grep -oE '^\[[0-9;]+m' | sort -u | grep -vcE '^\[(94|95|1|2|3;2|0)m$' | tr -d ' ')" 0
 Z="$(run --instance "$TMP/d5" --color always)"
 ok "zero in flight goes dim, not blue"      "$(sgr_of "$Z" '0 in flight')" 2
-U="$(run --instance "$TMP/d1" --color always)"
-ok "an unknown number is a warning, so pink" "$(sgr_of "$U" '? need you')" 95
+U="$(run --instance "$TMP/d4" --color always)"
+ok "an unknown number is a warning, so pink" "$(sgr_of "$U" '? in flight')" 95
+chmod 000 "$TMP/d10/$AB_AWAITING"
+ok "…and so is an unreadable queue, which is a fault" \
+   "$(sgr_of "$(run --instance "$TMP/d10" --color always)" 'unreadable')" 95
+chmod 644 "$TMP/d10/$AB_AWAITING"
+ok "an off queue paints nothing, because it is not a fault" \
+   "$(printf '%s' "$(run --instance "$TMP/d1" --color always)" | grep -c 'need you\|unreadable' | tr -d ' ')" 0
 
 echo
 echo "== 8. 3/4-bit ONLY — no 256-colour, no truecolor, no terminfo probe =="
