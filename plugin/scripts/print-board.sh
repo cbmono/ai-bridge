@@ -251,6 +251,25 @@ def dirname(d):
         return d.name
 
 
+BUNDLE_PREFIXES = tuple(os.environ.get("AB_BUNDLE_PREFIXES", "").split())
+
+def group_label(d):
+    """A bundle's group: `group` from its own instance.config.json, else its directory
+    name minus a bundle prefix. Config FIRST, so renaming the directory does not rename
+    the bundle on the board. bundle-paths.sh owns the prefix list and exports it."""
+    try:
+        cfg = json.loads((d / "instance.config.json").read_text(encoding="utf-8"))
+        if isinstance(cfg, dict) and isinstance(cfg.get("group"), str) and cfg["group"]:
+            return cfg["group"]
+    except (ValueError, OSError, UnicodeDecodeError):
+        pass
+    name = dirname(d)
+    for p in BUNDLE_PREFIXES:
+        if name.startswith(p):
+            return name[len(p):]
+    return name
+
+
 def resolve_dirs(argv):
     """Named dirs, else `boardInstances`, else just this instance — never a glob.
 
@@ -306,7 +325,7 @@ for d in dirs:
         continue
     # str(), not just truthiness: a non-string group (say 5) survives a `not` test and
     # then breaks the first thing that compares or pads it.
-    data["group"] = clean(str(data.get("group") or "") or dirname(d).removeprefix("_ai-bridge-") or str(d))
+    data["group"] = clean(str(data.get("group") or "") or group_label(d) or str(d))
     instances.append(data)
 
 # ---------------------------------------------------------------- rows
