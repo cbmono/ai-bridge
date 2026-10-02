@@ -47,12 +47,13 @@ your change touches shared machinery every harness loads, and say why in the PR 
 
 ## The core
 
-`tests/run.sh` always runs these eight, because no changed path can be expected to name
+`tests/run.sh` always runs these nine, because no changed path can be expected to name
 them — they read `plugin/` wholesale or reach their subject indirectly:
 
 | Harness | Why it cannot be derived |
 |---|---|
 | `plugin-manifest`, `plugin-skills`, `plugin-agents` | structural, whole-tree |
+| `agent-body-links` | it reads every `plugin/agents/*.md` wholesale and resolves each path from the body's own directory. Derivation would select it only for a changed agent body, and the defect it guards is a path that goes dead because something *else* moved — `plugin/seed/CONVENTIONS.md`, a script — with no agent file in the diff |
 | `deny-baseline`, `agent-control` | the two enforcement **hooks** (ai-bridge-v2/task-003) |
 | `commit-as-guard`, `companion-plugins` | the two-human-authority guard (ai-bridge-v2/task-030). Both are also reachable by derivation and stay here anyway: the guard's behaviour depends on `plugin/scripts/resolve-autonomy.sh`, which `commit-as-guard.test.sh` never names |
 | `harness-read-paths` | it reads the whole `tests/` tree and resolves every literal path against the plugin tree — the one diff that names none of its own subject (ai-bridge-v2/task-029) |

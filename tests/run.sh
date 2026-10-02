@@ -32,6 +32,7 @@ CORE=(
   tests/plugin-manifest.test.sh
   tests/plugin-skills.test.sh
   tests/plugin-agents.test.sh
+  tests/agent-body-links.test.sh
   tests/deny-baseline.test.sh
   tests/agent-control.test.sh
   tests/commit-as-guard.test.sh
