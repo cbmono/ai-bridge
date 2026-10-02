@@ -301,7 +301,7 @@ if [[ -n "$PENDING" ]]; then
     # dirty and this script must not commit it — kb-sync.sh is the only KB writer.
     if [[ -d "$AB_DIR/kb.git" ]]; then
       echo "           knowledge/ is MOUNTED: its relinked files are uncommitted in that"
-      echo "           repository. Review and push them with: kb-sync.sh commit"
+      ab_say_run "           repository. Review and push them with:" kb-sync.sh commit
     fi
     echo "           Now run /${PLUGIN_NAME}:init to re-seed the ignore lines at their new paths."
   fi
@@ -395,7 +395,7 @@ fi
 if [[ $APPLY -eq 1 ]]; then
   printf 'migrate-bundle: %d fixed, %d left for a human, %d skipped, %d FAILED.\n' \
     "$fixed" "$human" "$skipped" "$failed"
-  echo "Now run: validate-bundle.sh"
+  ab_say_run "Now run:" validate-bundle.sh
   [[ $failed -eq 0 ]] || exit 1
 else
   printf 'migrate-bundle: %d would be fixed, %d need a human, %d skipped. (report only — nothing changed)\n' \

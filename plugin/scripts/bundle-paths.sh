@@ -80,13 +80,21 @@ ab_unmigrated() { # <root> — a bundle still carrying plugin files at its root
   return 1
 }
 
+# THE ONE FORM an operator-facing "run this" notice takes, and the reason it is a function:
+# its call sites are the inventory tests/printed-commands.test.sh probes, so the script and
+# its flags stay separate literal words instead of being welded into a sentence.
+ab_say_run() { # <lead> <script> [arg...] — on STDOUT; redirect at the call site
+  local lead="$1"; shift
+  printf '%s %s\n' "$lead" "$*"
+}
+
 ab_unmigrated_notice() { # <root> — names what is still at the root, and the one fix
   local r="${1:-.}" pair old
   echo "ai-bridge: this bundle still has plugin-owned files at its root:" >&2
   for pair in $AB_MOVES; do
     old="${pair%%:*}"; [ -e "$r/$old" ] && echo "             $old -> ${pair#*:}" >&2
   done
-  echo "           Fix it with: migrate-bundle.sh --layout --apply" >&2
+  ab_say_run "           Fix it with:" migrate-bundle.sh --apply >&2
 }
 
 ab_expand() {   # stdin -> stdout, __AB_SCHEMA__ and friends replaced by their values.
