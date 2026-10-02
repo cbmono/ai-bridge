@@ -93,7 +93,11 @@ ok "it names its own three readers"        \
 
 echo
 echo "== every role agent contract points at it =="
-POINTER='**Write less.** Read [`CONVENTIONS.md`](../../CONVENTIONS.md) → "Write less" before you'
+# The path is anchored to the plugin root, not to a cwd: the body is read from the plugin
+# cache and the agent runs with a bundle or a worktree as its cwd, so `../../` was dead
+# from both. tests/agent-body-links.test.sh owns that invariant; this line only pins that
+# the pointer is still here.
+POINTER='**Write less.** Read `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md` → "Write less" before you'
 agents=0
 for a in "$REPO"/plugin/agents/*.md; do
   agents=$((agents + 1))
