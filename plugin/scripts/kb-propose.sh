@@ -15,6 +15,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
 
 KINDS="status edit merge rename supersede"
+PROTECTED="ledger provenance"
 INST="$PWD"; PROPOSER=""; PROJECT="knowledge-reflection"
 need2() { [ "$1" -ge 2 ] || { echo "kb-propose: $2 needs a value" >&2; exit 2; }; }
 while [ $# -gt 0 ]; do
@@ -29,7 +30,7 @@ done
 INST="$(cd "$INST" 2>/dev/null && pwd)" || { echo "kb-propose: no such instance directory" >&2; exit 2; }
 cd "$INST" || exit 2
 [ -d knowledge ] || { echo "kb-propose: run from a bundle root (no knowledge/ here)" >&2; exit 2; }
-case "$PROJECT" in ""|*[!A-Za-z0-9._-]*) echo "kb-propose: --project wants a slug" >&2; exit 2 ;; esac
+case "$PROJECT" in ""|.|..|*[!A-Za-z0-9._-]*) echo "kb-propose: --project wants a slug" >&2; exit 2 ;; esac
 [ -n "$PROPOSER" ] || { echo "kb-propose: not due — no proposer configured" >&2; exit 1; }
 
 drop() { echo "kb-propose: dropped — $1" >&2; }
@@ -64,12 +65,14 @@ while IFS= read -r line; do
   # what a person wrote, so a proposal against one is dropped rather than queued.
   [ "$(fmfield "${MATCH[0]}" provenance)" = machine ] || { drop "$F2 is not provenance: machine"; continue; }
   [[ "$F3" =~ ^[a-z][a-z0-9_]*=[^[:space:]] ]] || { drop "'$F3' is not field=value"; continue; }
+  case " $PROTECTED " in *" ${F3%%=*} "*) drop "'${F3%%=*}' is not a proposal's to write"; continue ;; esac
   if [ "$F4" != - ]; then
     case "$F4" in ""|*[!A-Za-z0-9._,-]*) drop "'$F4' is not a slug list"; continue ;; esac
   fi
   case "$F1" in merge|rename|supersede)
     [ "$F4" != - ] || { drop "$F2: a $F1 must name the other item(s)"; continue; } ;;
   esac
+  case ",$F4," in *",$F2,"*) drop "$F2: --with names the item itself"; continue ;; esac
   [[ "$F5" =~ [^[:space:]] ]] || { drop "$F2: an empty reason"; continue; }
   case "$F3$F4$F5" in *'"'*|*\\*|*\`*|*\$*) drop "$F2: a field carries a quote, a backslash or a shell metacharacter"; continue ;; esac
   n=$((n + 1))

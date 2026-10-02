@@ -14,6 +14,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 . "$HERE/bundle-paths.sh" || exit 2
 
 KINDS="status edit merge rename supersede"
+# Neither is a proposal's to write: `ledger` has one append-only writer, and `provenance`
+# is the guard that decides whether this path may touch the item at all.
+PROTECTED="ledger provenance"
 ROLES="project-manager software-engineer devops-engineer qa-reviewer cataloguer human"
 ORIGPWD="$PWD"; INST="$PWD"; BY=""; REPORT=""
 die() { echo "kb-apply: $2" >&2; exit "$1"; }
@@ -39,6 +42,11 @@ cd "$INST" || exit 2
 [ -f "$REPORT" ] || die 1 "no such report: $REPORT"
 REPORT="${REPORT#"$INST"/}"
 case "$REPORT" in projects/*/tasks/*.md) ;; *) die 1 "$REPORT is not a task document under projects/*/tasks/" ;; esac
+
+# Narrows the tick-vs-human window with the mechanism the bundle already has; it does not
+# close it, exactly as skills/audit/SKILL.md says of the same probe.
+lock="$(bash "$HERE/tick-lock.sh" status --instance "$INST" 2>&1)"; lrc=$?
+[ "$lrc" -eq 0 ] || die 1 "a tick holds the dispatch lock, and it may be writing knowledge/ — $lock"
 
 fm() { sed -n '2,/^---$/p' "$1"; }
 fmfield() { fm "$1" | sed -n "s/^$2:[[:space:]]*\([^[:space:]].*\)/\1/p" | head -n1; }
@@ -81,10 +89,16 @@ while IFS= read -r line; do
   [ "$(fingerprint "${MATCH[0]}")" = "$G6" ] \
     || die 1 "$G1: $G3 has changed since the report was written — re-run kb-propose.sh"
   [[ "$G4" =~ ^[a-z][a-z0-9_]*=[^[:space:]] ]] || die 1 "$G1: '$G4' is not field=value"
+  case " $PROTECTED " in *" ${G4%%=*} "*) die 1 "$G1: '${G4%%=*}' is not a proposal's to write" ;; esac
   case "$G4$G5$G7" in *'"'*|*\\*) die 1 "$G1: a field carries a quote or a backslash" ;; esac
   case "$G2" in merge|rename|supersede)
     [ "$G5" != - ] || die 1 "$G1: a $G2 must name the other item(s), so this one leads to them" ;;
   esac
+  case ",$G5," in *",$G3,"*) die 1 "$G1: --with names $G3 itself" ;; esac
+  # One ledger entry per touched item is the contract, so one proposal per item is too.
+  for seen in ${FILES[@]+"${FILES[@]}"}; do
+    [ "$seen" != "${MATCH[0]}" ] || die 1 "$G1: $G3 is named by more than one proposal"
+  done
   FILES+=("${MATCH[0]}"); KINDS_OF+=("$G2"); WITHS+=("$G5"); WHYS+=("$G7")
   KEYS+=("${G4%%=*}"); VALS+=("${G4#*=}"); N=$((N + 1))
 done <<EOF

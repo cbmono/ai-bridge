@@ -20,8 +20,9 @@ exist in the cwd; if not, tell the user to `cd` into the instance and stop.
 
 ## Steps
 1. **Resolve the report.** `$ARGUMENTS` is a path to a task document under
-   `projects/*/tasks/`. Empty ⇒ list the `status: draft` reports in
-   `projects/knowledge-reflection/tasks/` and ask which; no match ⇒ say so and stop.
+   `projects/*/tasks/`. Empty ⇒ list every `status: draft` task carrying `P1 · ` lines
+   across **all** of `projects/*/tasks/*.md` and ask which — the proposer's `--project` is
+   a flag, so a report can live under any slug. No match ⇒ say so and stop.
 2. **Show the human the proposals first.** Print each `P<n> · …` line of the report with
    the item it names. This is the gate the whole design exists for: do not run step 3
    until they have said to.
@@ -48,7 +49,10 @@ whole report rather than applying the part of it that still checks out.
   `status: cancelled`. The row clears on the next tick and the proposal can be raised
   again by a later run.
 - **A refusal is information, not an obstacle.** `provenance: machine` is missing (a person
-  wrote that item), the item changed since the report was written, or the report is already
-  `done`. Re-run `kb-propose.sh` rather than editing the report by hand.
+  wrote that item), the item changed since the report was written, the report is already
+  `done`, or a tick holds the dispatch lock and may be writing `knowledge/`. Re-run
+  `kb-propose.sh` rather than editing the report by hand.
+- **`ledger:` and `provenance:` are refused as proposal fields.** The first has one
+  append-only writer; the second is the guard this path reads before it touches anything.
 - This command **never proposes, never promotes a task and never merges a PR**. The report
   is read, applied or cancelled.

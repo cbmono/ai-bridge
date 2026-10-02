@@ -326,9 +326,15 @@ P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 ·
 - **Apply writes what the report names and this exclusion set:** the regenerated
   `knowledge/index.md`, one `ledger:` entry per touched item, the report's own `status:
   done`, and **one commit**. Nothing else.
-- **Three refusals, each covering the whole report rather than part of it:** an item that is
-  not `provenance: machine` (the machinery never rewrites what a person wrote), an item whose
-  fingerprint has moved since the report was written, and a report that is not `draft`.
+- **The report's own project document is NOT in that set.** It is a bundle document like
+  every other, so the tick commits it under the `project-manager` identity; putting it in
+  apply's commit would widen a scope whose whole point is that it is closed.
+- **Refusals cover the whole report, never part of it:** an item that is not `provenance:
+  machine` (the machinery never rewrites what a person wrote), an item whose fingerprint has
+  moved since the report was written, a report that is not `draft`, two proposals naming one
+  item, a `ledger:` or `provenance:` write, and a tick holding the dispatch lock — which
+  narrows the concurrent-writer window with the mechanism the bundle has, and does not close
+  it (`skills/audit/SKILL.md` says the same of the same probe).
 
 ### type: Service  (`knowledge/services/<name>.md`)
 

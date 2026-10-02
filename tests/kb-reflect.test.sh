@@ -154,6 +154,48 @@ ok "…applying none of it — the second item is untouched" "$(cksum <knowledge
 ok "…and the report stays open"                     "$(sed -n 's/^status: //p' "$R2" | head -1)" draft
 ok "a role name as --by is refused"                 "$("$APPLY" --by cataloguer "$R2" >/dev/null 2>&1; echo $?)" 2
 ok "a report outside projects/*/tasks/ is refused"  "$("$APPLY" --by example-user-007 knowledge/index.md >/dev/null 2>&1; echo $?)" 1
+echo "== round 2: the write scope is closed, and a partial apply cannot start =="
+LEDGER_BEFORE="$(grep -c '^ledger:' knowledge/findings/duplicate.md)"
+for k in ledger provenance; do
+  printf '#!/usr/bin/env bash\necho "edit · bystander · %s=x · - · why"\n' "$k" >"$TMP/p-$k.sh"
+  chmod +x "$TMP/p-$k.sh"
+  # Its own project slug: the default one already holds a draft report, and the
+  # waiting-report guard would short-circuit before the proposer ever ran.
+  ok "a proposal writing $k: is dropped at propose" \
+    "$("$PROPOSE" --proposer "$TMP/p-$k.sh" --project "kb-r2-$k" 2>&1 >/dev/null | grep -c "'$k' is not a proposal")" 1
+  ok "…and no report was written for it" "$([ -d "projects/kb-r2-$k/tasks" ] && ls "projects/kb-r2-$k/tasks" | grep -c . || echo 0)" 0
+done
+# propose already refuses these, so apply needs a hand-built report of its own. Each
+# assertion reads the REFUSAL TEXT: an exit 1 for some earlier reason would prove nothing.
+FORGED=projects/knowledge-reflection/tasks/task-098-forged.md
+mk() { { sed -n '1,/^---$/p' "$R2" | sed 's/^status: .*/status: draft/'
+         printf '\n# Proposals\n\n%s\n' "$1"; } >"$FORGED"; }
+refusal() { "$APPLY" --by example-user-007 "$FORGED" 2>&1 >/dev/null | tail -1; }
+FP="$(cksum <knowledge/findings/duplicate.md | awk '{print $1 "-" $2}')"
+mk "P1 · edit · duplicate · ledger=[] · - · $FP · wipe it"
+ok "a ledger: write is refused before any write lands" \
+  "$(refusal | grep -c "'ledger' is not a proposal")" 1
+ok "…leaving the item's ledger intact"       "$(grep -c '^ledger:' knowledge/findings/duplicate.md)" "$LEDGER_BEFORE"
+mk "P1 · edit · duplicate · title=A · - · $FP · one
+P2 · edit · duplicate · lesson=B · - · $FP · two"
+ok "two proposals naming one item are refused" \
+  "$(refusal | grep -c 'named by more than one proposal')" 1
+mk "P1 · supersede · duplicate · status=superseded · duplicate · $FP · itself"
+ok "--with naming the item itself is refused before the field write" \
+  "$(refusal | grep -c 'names duplicate itself')" 1
+ok "…and that item is byte-identical"        "$(cksum <knowledge/findings/duplicate.md | awk '{print $1 "-" $2}')" "$FP"
+rm -f "$FORGED"
+ok "a '..' project slug is refused, not resolved" \
+  "$("$PROPOSE" --proposer "$ONE" --project .. >/dev/null 2>&1; echo $?)" 2
+ok "…and no tasks/ appeared at the instance root" "$([ -e tasks ] && echo yes || echo no)" no
+printf 'lock\n' >"$D/.ai-bridge/.tick-lock"
+ok "apply stands down while a tick holds the lock" \
+  "$("$APPLY" --by example-user-007 "$R2" 2>&1 >/dev/null | grep -c 'holds the dispatch lock')" 1
+rm -f "$D/.ai-bridge/.tick-lock" "$D/.ai-bridge/.tick-lock.claim"
+ok "…and clears once it is free"             "$(bash "$REPO/plugin/scripts/tick-lock.sh" status --instance "$D" >/dev/null 2>&1; echo $?)" 0
+ok "the skill discovers reports under ANY project slug" \
+  "$(grep -c 'projects/\*/tasks/\*\.md' "$SKILL")" 1
+
 ok "a report that is still waiting blocks a second run" \
   "$("$PROPOSE" --proposer "$ONE" >/dev/null 2>&1; echo $?)" 1
 SHORT=projects/knowledge-reflection/tasks/task-099-short.md
