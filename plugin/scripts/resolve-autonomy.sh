@@ -56,7 +56,7 @@
 # the end where the human keeps both gates, so a degraded read costs a human decision and
 # never a merge nobody approved.
 #
-# GENERIC TEMPLATE FILE — ships with the `ai-bridge` plugin; do not edit per instance. It
+# GENERIC TEMPLATE FILE — ships with the `loopd` plugin; do not edit per instance. It
 # reads no org, repo or path literal, and derives even its own marketplace's name.
 #
 # Verified by tests/companion-plugins.test.sh and tests/plugin-name.test.sh.

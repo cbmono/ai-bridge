@@ -55,7 +55,7 @@ SELFTEST_OK="pr-comment-clearance: self-test ok"
 # --- the numbers, and where each one came from --------------------------------
 # THESE ARE FIXTURES, NOT A LIVE READ. They were measured on 2026-08-31 in bytes under
 # `LC_ALL=C` over the fence-stripped rendering of every comment this repo's own agents
-# wrote on `cbmono/ai-bridge` pull requests 60-84 — 13 PR-thread comments and 3 inline
+# wrote on `cbmono/loopd` pull requests 60-84 — 13 PR-thread comments and 3 inline
 # review comments, 16 replies, 65 elements — plus the `alteos-gmbh/monorepo#3260` comment
 # that motivated the task. A live comment is not a fixture (anyone can edit one), so the
 # boundary values live here and this harness never asks the host for them.

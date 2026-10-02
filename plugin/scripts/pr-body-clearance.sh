@@ -195,7 +195,7 @@
 # give the repo two answers to one question. This file closes the gap that nothing read
 # the body's SHAPE at all.
 #
-# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
+# GENERIC PLUGIN FILE — ships inside the `loopd` plugin; nothing to edit per
 # instance. It takes no org, repo or vendor identity: those come from the arguments.
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:

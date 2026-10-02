@@ -342,7 +342,7 @@ echo "== 5. nothing in scope claims a shipped file IS symlinked, shared or ident
 # the false sentence says the WORD `symlinked`, which contains none of those three
 # strings. Five documents still described the pre-plugin model, and four of them SHIP INTO
 # EVERY BUNDLE a `/<plugin>:init` stamp creates — `plugin/seed/SCHEMA.md` told its owner
-# "this file is symlinked from the `ai-bridge` template and is identical across every
+# "this file is symlinked from the `loopd` template and is identical across every
 # instance", which is the opposite of the copy-once contract 1.0.0 shipped, and reads to
 # that owner as "your edits here are pointless". The same file's own README already said
 # the right thing 180 lines further down.
@@ -394,7 +394,7 @@ normalize() { # reads stdin
 #
 #   symlinked from|into|to …       provenance — it came from the template, or goes into
 #                                  an instance. `plugin/seed/agents/index.md`'s
-#                                  "(symlinked from the ai-bridge template)" has no verb
+#                                  "(symlinked from the loopd template)" has no verb
 #                                  at all, so the verb cannot be what this matches on.
 #   <our noun> is|are symlinked    the bare predicate. CLOSED subject list, which is why
 #                                  "$TMPDIR is symlinked on macOS" is not a hit.
@@ -462,11 +462,11 @@ echo "== 6. the claim grammar catches the five findings, and leaves history alon
 # quietly retire its coverage.
 PRE="$TMP/pre"; mkdir -p "$PRE/plugin/seed/agents" "$PRE/docs" "$PRE/.claude/rules"
 cat > "$PRE/plugin/seed/SCHEMA.md" <<'PRE_EOF'
-> **Generic template file.** This file is symlinked from the `ai-bridge`
+> **Generic template file.** This file is symlinked from the `loopd`
 > template and is identical across every instance. Instance-specific values
 PRE_EOF
 cat > "$PRE/plugin/seed/agents/index.md" <<'PRE_EOF'
-> **Generic template file** (symlinked from the `ai-bridge` template).
+> **Generic template file** (symlinked from the `loopd` template).
 PRE_EOF
 cat > "$PRE/plugin/seed/README.md" <<'PRE_EOF'
 is **symlinked in** from the template and gitignored; the slash commands come from

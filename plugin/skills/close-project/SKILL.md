@@ -24,7 +24,7 @@ about closeout is identical, and the project still ends `status: done`. See
 preconditions and dispatch; one background agent does steps 1–7 in a context that is
 thrown away. Two decisions never leave this thread, and they are named below.
 
-> **Generic plugin file** (ships inside the `ai-bridge` plugin, never copied into a bundle). Reads the
+> **Generic plugin file** (ships inside the `loopd` plugin, never copied into a bundle). Reads the
 > bundle's own `SCHEMA.md` (see "Project & objective completion") and
 > `instance.config.json` — never hardcode org/repo/path literals here.
 

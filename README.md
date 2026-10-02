@@ -265,7 +265,7 @@ Run these inside an instance.
 | `/loopd:audit` | (plugin) the slow counter-metric — is the throughput moving the real goals? Read-only, never acts |
 | `/loopd:fanout <task>` | (plugin) parallel work across several repos |
 | `/loopd:close-project [<slug>]` | (plugin) close a project and fold its conclusions into `knowledge/`, then remove its folder — or freeze and keep it, on `retain: true`. No slug opens a picker of the projects, multi-select, and asks about `--force`. [→](docs/schema.md#closing-a-project) |
-| `/loopd:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
+| `/loopd:welcome [check\|fix]` | (plugin) reprint the SessionStart banner; `check` reports state that could be wrong, `fix` repairs only the idempotent tier. [→](docs/conventions.md#21-loopdwelcome-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) |
 | `/loopd:brief-me [project]` | (plugin) a since-you-last-looked digest, or a meeting-ready brief for one project. Read-only |
 | `/loopd:capture <notes>` | (plugin) turn a decision or meeting notes into drafted projects and tasks, with provenance — never promoted |
 | `/loopd:work <task>` | (plugin) work one task in **this** session, ledger kept for you — the solo alternative to dispatching an agent |
@@ -379,7 +379,7 @@ full board; don't reintroduce one.**
 | `touch AWAITING.md` | back on |
 
 Derived and gitignored; never hand-edit it. Reasoning:
-[docs/conventions.md invariant 3](docs/conventions.md#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence).
+[docs/conventions.md invariant 3](docs/conventions.md#3-awaitingmd-is-loopds-only-status-artifact-and-it-is-opt-in-by-presence).
 
 A cross-instance board is available too, on the same off-by-deletion rule
 ([docs/operations.md § the board](docs/operations.md#5-the-cross-instance-board-optional)).
@@ -483,7 +483,7 @@ The short version. Each line links to the full reasoning; **none of them is deco
 | **Bundle repair** | `migrate-bundle.sh` is report-only by default and fixes only what has one right answer. **A false success is worse than the error it claims to fix.** [→](docs/conventions.md#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) |
 | **Retiring content** | machinery symlinks are swept; **seed content is only ever reported**, never deleted. [→](docs/operations.md#2-retiring-content-swept-vs-reported) |
 | **Board data** | the board's field list is a data-governance boundary — no question text, no document bodies, no author identity, no out-of-bundle paths. Nothing publishes it now, and a rendered file is still copyable. [→](docs/operations.md#before-it-leaves-the-machine-know-what-it-carries) |
-| **Untrusted text** | `AWAITING.md` items and the per-turn state injection are fenced as data before they enter session context. Keep the boundary. [→](docs/conventions.md#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) |
+| **Untrusted text** | `AWAITING.md` items and the per-turn state injection are fenced as data before they enter session context. Keep the boundary. [→](docs/conventions.md#12-three-loopd-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) |
 | **No customer PII** | not in a task title, not in an answer, not in a `Finding`. Titles reach the board; answers persist for the life of the repo. |
 | **Drift check** | `/loopd:audit` is read-only and advisory. It catches an autonomous loop gaming itself; it is not a merge-blocking guarantee. [→](docs/autonomy.md#the-audit-counter-metric) |
 
@@ -668,7 +668,7 @@ below are an example, not this repo's current pair; the only place the current o
 written down is [`VERSION`](VERSION):
 
 ```text
-⬆️  TEMPLATE UPDATE (ai-bridge) — this instance links 0.9.1, origin/main has 0.11.0
+⬆️  TEMPLATE UPDATE (loopd) — this instance links 0.9.1, origin/main has 0.11.0
 ```
 
 `scripts/check-template-version.sh` decides it, and **silence is its normal answer**. Equal
@@ -720,7 +720,7 @@ Agent-facing rules are in [`CLAUDE.md`](CLAUDE.md) and [`.claude/rules/`](.claud
 loopd used to live as an `ai-bridge/` subtree inside
 [`ai-setup`](https://github.com/cbmono/ai-setup), the Claude Code defaults repo. **This
 repo is now the canonical copy** — every instance's machinery ships from *this* repo as
-the `ai-bridge` plugin, and `/loopd:init` and `/loopd:welcome fix` here are the
+the `loopd` plugin, and `/loopd:init` and `/loopd:welcome fix` here are the
 ones to run.
 
 `ai-setup` **no longer carries the subtree** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69)
@@ -766,7 +766,7 @@ existed only in the fork closed *secret-exposure* paths the public repo was stil
 # THE ONE THING THAT STILL WANTS A CLONE of this repo: it writes absolute symlinks INTO
 # ~/.claude that point at the source tree, so it has to know where that tree is.
 git clone git@github.com:cbmono/loopd.git ~/workspace/loopd   # if you have none
-bash ~/workspace/ai-bridge/plugin/scripts/init-bundle.sh --config
+bash ~/workspace/loopd/plugin/scripts/init-bundle.sh --config
 ```
 
 It links **one file at a time** into `${CLAUDE_CONFIG_DIR:-~/.claude}`. A real file in the

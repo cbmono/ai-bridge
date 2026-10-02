@@ -26,7 +26,7 @@ theme file may use are listed once, in
 **What ships here, and the one thing that does not.** An installed plugin is the CONTENTS
 of this directory — `agents/ evals/ hooks/ scripts/ skills/` and, since task-022, the three
 files a stamp reads: `seed/`, `RETIRED` and a mirror of the template `VERSION`. So
-`/loopd:init` needs **no clone of `cbmono/ai-bridge`**, which is the whole point of
+`/loopd:init` needs **no clone of `cbmono/loopd`**, which is the whole point of
 shipping the installer in the plugin and was not true before 0.15.0: the root detection
 looked two directories above `scripts/` for `seed/`, which is where a *checkout* keeps it
 and not where a plugin cache does, so init exited 2 on every machine that installed it the
@@ -121,7 +121,7 @@ held to it too, and a companion that could remove a core gate would not be a com
 
 | | |
 |---|---|
-| **How it registers** | An entry in [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) with its own `source: ./<dir>` and `.claude-plugin/plugin.json` — installed with `/plugin install <name>@ai-bridge`. |
+| **How it registers** | An entry in [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) with its own `source: ./<dir>` and `.claude-plugin/plugin.json` — installed with `/plugin install <name>@loopd`. |
 | **Where core looks** | `<companion plugin root>/companion/<file>` — a **fixed relative path**, so a companion's own `README.md` or docs can never be mistaken for something core reads. |
 | **Which plugins count** | Only those installed from the **same marketplace core itself came from**, read out of `~/.claude/plugins/installed_plugins.json`. An unrelated plugin that happens to carry that path is not a companion. |
 | **What core reads** | Only names it already knows. Core never executes a companion's code, and a companion ships no hook and no agent — a second copy of a `PreToolUse` hook fires in every session on the machine. |
@@ -158,7 +158,7 @@ the loop cannot come to disagree about whether delegation exists at all.
 
 A plugin skill **shadows** a same-named project command, so each command migrated in a
 slice that moved the contract and retired the instance copy **in one change**, with the
-template's test suite as the spec — `/ai-bridge` first (its whole contract is this
+template's test suite as the spec — `/loopd:welcome` first (its whole contract is this
 plugin's `/welcome`), then `/audit`, `/answer`, `/fanout`, `/pr-review-request`,
 `/new-project`, `/close-project` and finally the loop itself, which is `/dispatch` here.
 The

@@ -424,7 +424,7 @@ else
   ok "…and did not fall back to its hardcoded list" \
      "$(grep -cF 'FALLBACK_DEFAULTS' "$TMP/as-out" || true)" 0
   # PROVIDED BY ai-setup means the entry resolves INTO the ai-setup tree. Not merely
-  # "resolves": at `main` the settings.json link still resolves — into the old ai-bridge
+  # "resolves": at `main` the settings.json link still resolves — into the old loopd
   # checkout it was already pointing at — which is precisely the state that becomes an absent
   # file the moment `--config` retires that link.
   provided_by_as() { # <top>

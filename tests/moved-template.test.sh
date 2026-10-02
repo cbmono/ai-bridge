@@ -133,7 +133,7 @@ RC=0; OUT="$(CLAUDE_PROJECT_DIR="$PLAIN" bash "$HOOK_SRC" 2>&1)" || RC=$?
 assert "exit 0"                          "$([[ $RC -eq 0 ]] && echo 0 || echo 1)"
 assert "…and prints NOTHING"             "$([ -z "$OUT" ] && echo 0 || echo 1)"
 # The guard is ONE marker. `.claude/agents` was its second half until the name swap
-# retired that directory — the eight role agents ship in the `ai-bridge` plugin — so a
+# retired that directory — the eight role agents ship in the `loopd` plugin — so a
 # config file with no agents directory beside it is an ORDINARY bundle, and the banner is
 # required to print in it. Requiring silence here would be requiring silence everywhere.
 BARE="$TMP/bare-repo"; mkdir -p "$BARE"; printf '{}\n' > "$BARE/instance.config.json"

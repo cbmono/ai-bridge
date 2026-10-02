@@ -15,7 +15,7 @@
 #   a/**               fires       FIRES        <- matched nest/a/...
 #   /a/**              fires       no
 #
-# The two real misfires that produced this test, while ai-bridge was still a subtree of
+# The two real misfires that produced this test, while loopd was still a subtree of
 # the ai-setup repo: a bare `install.sh` pattern loaded the parent repo's root-config rule
 # while editing THIS repo's `install.sh`, and a bare `.claude/hooks/**` loaded the parent
 # layer's hook conventions while editing `plugin/hooks/*`. Both were real, both

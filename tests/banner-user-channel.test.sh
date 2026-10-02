@@ -62,7 +62,7 @@ TPL="$(cd "$HERE/.." && pwd)"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
-# The four ai-bridge hooks are registered by the PLUGIN since task-013.
+# The four loopd hooks are registered by the PLUGIN since task-013.
 SETTINGS="$TPL/plugin/hooks/hooks.json"
 [ -f "$HOOK" ]     || { echo "banner-user-channel.test: hook not found at $HOOK" >&2; exit 2; }
 [ -f "$SETTINGS" ] || { echo "banner-user-channel.test: settings.json not found at $SETTINGS" >&2; exit 2; }
@@ -291,17 +291,17 @@ assert "the envelope is a single line (saw $n_out)"    "$(eq "$n_out" 1)"
 # prints them, which is what `/<plugin>:welcome` asks for.
 #
 # IT BOUNDS THE STANDING BANNER, NOT AN ALARM. This fixture is deliberately unconverted, so
-# §8's `ai-bridge check` block fires — and a block that exists to shout about a broken bundle
+# §8's `loopd check` block fires — and a block that exists to shout about a broken bundle
 # is the one thing a line budget must never silence. Measured to the last non-empty line
 # above it, which is the whole banner on a healthy instance.
-SM_STANDING="$(printf '%s\n' "$SM" | sed '/ai-bridge check — state worth a look/,$d')"
+SM_STANDING="$(printf '%s\n' "$SM" | sed '/loopd check — state worth a look/,$d')"
 sm_lines="$(printf '%s\n' "$SM_STANDING" | awk 'NF { last = NR } END { print last + 0 }')"
 assert "the human's standing banner is at most 12 lines (saw $sm_lines)" \
   "$([ "$sm_lines" -le 12 ] && echo 0 || echo 1)"
 assert "…and it is not empty, so the ceiling is not met by printing nothing" \
   "$([ "$sm_lines" -ge 6 ] && echo 0 || echo 1)"
 assert "…the alarm really was excluded, so the cut is not vacuous" \
-  "$(has 'ai-bridge check — state worth a look' "$SM")"
+  "$(has 'loopd check — state worth a look' "$SM")"
 assert "…the tables are what went"                     "$(hasnt 'maxAgentsInFlight' "$SM")"
 SM_FULL_TXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --full 2>/dev/null)"
 assert "…and \`--full\` still has them"                "$(has 'maxAgentsInFlight' "$SM_FULL_TXT")"
@@ -428,9 +428,9 @@ assert "a directory that is not an instance: exit 0"   "$(eq "$RC" 0)"
 assert "…and prints nothing at all, not an empty message" "$(eq "$OUT" '')"
 
 # =======================================================================================
-echo "== 5. text is still the default, so /ai-bridge and a terminal are unchanged =="
+echo "== 5. text is still the default, so /loopd:welcome and a terminal are unchanged =="
 # =======================================================================================
-# `/ai-bridge` (task-011) `exec`s this hook with no arguments and relays what comes back
+# `/loopd:welcome` (task-011) `exec`s this hook with no arguments and relays what comes back
 # verbatim, and a human runs it by hand in a terminal. Neither wants a JSON envelope, so
 # the JSON is what settings.json ASKS for — it is not the default, and this pins that.
 OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" 2>/dev/null)"; RC=$?
@@ -477,7 +477,7 @@ assert "…and says exactly what the coloured one says" \
   "$(eq "$(field "$OUT_NC" systemMessage)" "$(strip_sgr "$(field "$OUT" systemMessage)")")"
 
 # =======================================================================================
-echo "== 6. /ai-bridge INVOKES this hook, it does not reproduce it =="
+echo "== 6. /loopd:welcome INVOKES this hook, it does not reproduce it =="
 # =======================================================================================
 # GUARDED ON PRESENCE, and deliberately: `scripts/ai-bridge.sh` arrives with task-011
 # (ai-bridge#70), which is open at the time of writing. Until it lands there is nothing to
@@ -492,7 +492,7 @@ echo "== 6. /ai-bridge INVOKES this hook, it does not reproduce it =="
 # whatever it is spelled like.
 #
 # AGAINST THE HOOK'S `md` RENDERING, AND THAT IS THE RE-EXPRESSION OF THIS ASSERTION RATHER
-# THAN A RELAXATION OF IT. The bare form's stdout here is a PIPE, which is what `/ai-bridge`
+# THAN A RELAXATION OF IT. The bare form's stdout here is a PIPE, which is what `/loopd:welcome`
 # gives it — the output is relayed by the model into an assistant message, a channel measured
 # rendering markdown and destroying every ANSI byte — so it asks the hook for `--format md`.
 # The equality is therefore against the hook in that same rendering, and it still says the
@@ -513,7 +513,7 @@ if [ -f "$AB" ]; then
   # for them. The emphasis claims below are about the tables, so they run on it too.
   MD_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --format md --full 2>/dev/null)"
   TXT_OUT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --full 2>/dev/null)"
-  assert "the /ai-bridge bare form prints a banner" "$(has 'loopd' "$AB_OUT")"
+  assert "the /loopd:welcome bare form prints a banner" "$(has 'loopd' "$AB_OUT")"
   assert "…byte for byte the RELAYED rendering this hook prints" "$(eq "$AB_OUT" "$AB_MD")"
   assert "…and carries no banner text of its own" \
     "$(grep -qF 'loopd' "$AB" && echo 1 || echo 0)"
@@ -872,7 +872,7 @@ hook_run
 SM9="$(field "$OUT" systemMessage)"
 AC9="$(field "$OUT" hookSpecificOutput.additionalContext)"
 assert "text mode opens with exactly ONE blank line"          "$(eq "$(head_no "$TXT9")" 2)"
-assert "…the md rendering /ai-bridge relays does too"         "$(eq "$(head_no "$MD9")" 2)"
+assert "…the md rendering /loopd:welcome relays does too"         "$(eq "$(head_no "$MD9")" 2)"
 assert "…and so does systemMessage, the field the label prefixes" "$(eq "$(head_no "$SM9")" 2)"
 # THE MODEL'S CHANNEL NEEDS NONE OF THIS AND CARRIES IT ANYWAY, which is correct and costs
 # one byte: `additionalContext` is derived from the same buffer. One rendering, two fields,

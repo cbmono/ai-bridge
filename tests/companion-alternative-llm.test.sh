@@ -81,7 +81,7 @@ ok "…and names the token as set, not its value"     "$(cnt "$OUT" '^ANTHROPIC_
 ok "no key-slicing expression left in the script"   "$(grep -Ec 'KEY_HINT|KEY:0|KEY: -' "$LAUNCH")" 0
 
 # THE ONE DELIBERATE CHANGE FROM v1, asserted rather than left to the header: subagents
-# default to the PRO tier, because an ai-bridge instance dispatches role agents as subagents.
+# default to the PRO tier, because a loopd instance dispatches role agents as subagents.
 ok "…subagents default to the PRO tier, not flash"  "$(cnt "$OUT" '^CLAUDE_CODE_SUBAGENT_MODEL=deepseek-v4-pro$')" 1
 OUT2="$( cd "$BUNDLE" && DEEPSEEK_API_KEY="$KEY" DEEPSEEK_SUBAGENT_MODEL="deepseek-v4-flash" \
          bash "$LAUNCH" --print-env 2>&1 )"

@@ -115,7 +115,7 @@ rm -rf "$INST"; mkdir -p "$INST/.claude/agents"; : > "$INST/instance.config.json
 assert "instance.config.json alone IS the marker" "$( [ -n "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"
 
 # `.claude/agents` was a third condition until the name swap retired it: the role agents
-# ship in the `ai-bridge` plugin now, so requiring that directory would silence this hook
+# ship in the `loopd` plugin now, so requiring that directory would silence this hook
 # in every instance rather than in none. SCHEMA.md + instance.config.json is the pair.
 rm -rf "$INST"; mkdir -p "$INST"; : > "$INST/$AB_SCHEMA"; : > "$INST/instance.config.json"; run
 assert "no .claude/agents -> still prints" "$( [ -n "$OUT" ] && [ "$RC" = 0 ] && echo 0 || echo 1 )"

@@ -55,7 +55,7 @@ OTHER_SHA="0123456789abcdef0123456789abcdef01234567"
 INCIDENT_CHARS=14673
 
 # --- the concision ceilings, and the bodies behind them -----------------------
-# FIXTURES, measured 2026-09-06 off cbmono/ai-bridge and pinned here for the same reason
+# FIXTURES, measured 2026-09-06 off cbmono/loopd and pinned here for the same reason
 # the row corpus is: a live PR body is not a baseline. Both are the owner's evidence for
 # the ceiling, so both must be refused, and a complete body at 2,000 must not be.
 BODY_CEILING=2500
@@ -921,14 +921,14 @@ says_not "  …and its criteria table is well-formed"     "MISSING: the acceptan
 #   1. `CONVENTIONS.md` requires the literal heading `## Description` opening every
 #      body — "that exact string, character for character". #3286 opens with its TL;DR
 #      SENTENCE and no heading, so element 1 refuses it.
-says "  what it is refused for: the ai-bridge TL;DR heading" "MISSING: the TL;DR line"
+says "  what it is refused for: the loopd TL;DR heading" "MISSING: the TL;DR line"
 
 #   2. Two of its evidence cells are under the measured 13-byte floor — `see Notes` (9)
 #      and `binary slice` (12). `see above` (9) is the longest thing CONVENTIONS.md names
 #      as a floor FAILURE, so this is the floor working, not the floor misfiring.
 EXEMPLAR_HOUSED="$TMP/exemplar-housed.md"
 { printf '%s\n\n' '## Description'; cat "$EXEMPLAR"; } > "$EXEMPLAR_HOUSED"
-expect "…the same body under the ai-bridge heading -> the ROW bound, and only it" \
+expect "…the same body under the loopd heading -> the ROW bound, and only it" \
        3 --body-file "$EXEMPLAR_HOUSED"
 says   "  naming both cells under the floor"  "but 2 acceptance-criteria"
 says   "  row 11, 'binary slice'"             "row 11 under the FLOOR at 12 bytes"

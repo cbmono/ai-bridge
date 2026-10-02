@@ -112,7 +112,7 @@ SEEDPLACE='**It ships in the SEED because an installation had already reinvented
 REINVENT="one stamped bundle wrote *\"never manufacture a decision out of a side effect that isn't live yet\"* into its own \`CLAUDE.md\` by hand"
 TWOINST='A rule two installations write independently belongs in the seed rather than in a bundle.'
 ROT='prose alone already rotted once — on 2026-08-23'
-EVALREF='`plugin/evals/unverified-state-is-unknown` in `cbmono/ai-bridge` grades the behaviour'
+EVALREF='`plugin/evals/unverified-state-is-unknown` in `cbmono/loopd` grades the behaviour'
 TESTREF='`tests/unverified-read-is-unknown.test.sh` pins this rule, all four examples and the references to it'
 
 # ---- the references, both ways ----

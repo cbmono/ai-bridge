@@ -94,7 +94,7 @@ for s in $ALL; do
 done
 
 # =======================================================================================
-echo "== 4. welcome — the absorbed /ai-bridge contract, property by property =="
+echo "== 4. welcome — the absorbed /loopd:welcome contract, property by property =="
 # =======================================================================================
 W="$SK/welcome/SKILL.md"
 ok "welcome relays ai-bridge.sh verbatim"                "$(grep -c 'relay its output verbatim' "$W" | tr -d ' ')" 1

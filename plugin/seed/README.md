@@ -4,8 +4,8 @@ An [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-cata
 (OKF) **Knowledge Bundle** that acts as a **control panel** for a team of
 background AI agents working on this group's product repositories.
 
-This is an **instance** of the `ai-bridge` template. The generic machinery (the role
-agents, the scripts and the `SessionStart` hook) ships in the `ai-bridge`
+This is an **instance** of the `loopd` template. The generic machinery (the role
+agents, the scripts and the `SessionStart` hook) ships in the `loopd`
 **plugin**, installed once per machine — this bundle holds no copy of it and no link into
 any checkout. Its seed docs (`SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, this file)
 were **copied once and are yours**. The slash commands come from the same **plugin**
@@ -150,7 +150,7 @@ gitignored and safe to delete.
 
 ## Run the Project Manager
 From a fresh session **in this instance directory** (so the role agents, the
-clones, and `gh` are available), with the `ai-bridge` plugin installed on this
+clones, and `gh` are available), with the `loopd` plugin installed on this
 machine (`/plugin marketplace add cbmono/loopd`, then `/plugin install
 loopd@loopd`):
 

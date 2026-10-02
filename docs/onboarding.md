@@ -1,6 +1,6 @@
 # Your first hour
 
-For **someone joining an ai-bridge bundle** — a teammate's, or your own first one. It
+For **someone joining a loopd bundle** — a teammate's, or your own first one. It
 covers three things and then stops: getting installed, which skill to reach for, and the
 two decisions that never leave you. Short enough to read before a kickoff.
 
@@ -131,7 +131,7 @@ record — so the reasoning behind a task survives the session it was decided in
 
 ## Plugins that pair well
 
-**ai-bridge bundles no third-party plugin, and cannot.** Claude Code has no plugin
+**loopd bundles no third-party plugin, and cannot.** Claude Code has no plugin
 dependency mechanism (`claude plugin install --help`, 2.1.263, takes one `<plugin>` and no
 dependency option), and the core is domain-agnostic. So this is a list. Verdicts are the
 owner's, 2026-09-06.
@@ -147,7 +147,7 @@ owner's, 2026-09-06.
 | `terraform` | HashiCorp's Terraform MCP | recommended where the repo owns Terraform |
 | `context7` | up-to-date library docs over a hosted MCP | optional |
 | `code-review` | multi-agent PR review plugin | not needed: `/code-review` ships in Claude Code and `qa-reviewer` already dispatches it on your own usage; only `ultra` is billed separately |
-| `superpowers` | brainstorming, TDD, subagent-driven development, as skills that insist on being invoked first | **do not install with ai-bridge** — its SessionStart hook demands a skill before any response and pushes brainstorming on every creative ask, which fights a dispatched agent's task contract; its worktree skill overlaps ai-bridge's, and its planning/verification skills overlap ai-setup's `/plan` and `/verify` |
+| `superpowers` | brainstorming, TDD, subagent-driven development, as skills that insist on being invoked first | **do not install with loopd** — its SessionStart hook demands a skill before any response and pushes brainstorming on every creative ask, which fights a dispatched agent's task contract; its worktree skill overlaps loopd's, and its planning/verification skills overlap ai-setup's `/plan` and `/verify` |
 
 Install with `/plugin install <name>@claude-plugins-official`; one line per plugin, user scope, and it is available in every session on that machine.
 

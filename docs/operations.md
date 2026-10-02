@@ -11,7 +11,7 @@ board. Procedures here; the reasoning behind each one is linked.
 
 | Half | What it carries | Scope | Installed / refreshed by |
 |---|---|---|---|
-| the **plugin** (`ai-bridge`) | every slash command — `/loopd:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:board`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd`; `/plugin` to update it later |
+| the **plugin** (`loopd`) | every slash command — `/loopd:dispatch`, `:new-project`, `:close-project`, `:answer`, `:audit`, `:board`, `:fanout`, `:pr-review-request`, `:welcome`, `:brief-me`, `:capture`, `:work`, `:handoff` — the two `PreToolUse` enforcement hooks (`deny-destructive.sh`, `agent-control.sh`), and the role agents | **per machine**, once, for every bundle on it | `/plugin marketplace add cbmono/loopd`, then `/plugin install loopd@loopd`; `/plugin` to update it later |
 | the **bundle** (`plugin/seed/` content + your data) | `projects/`, `knowledge/`, `objectives/`, `instance.config*.json`, the seed docs (`CLAUDE.md`, `README.md`, `SCHEMA.md`, `CONVENTIONS.md`, `agents/index.md`, `.claude/settings.json`), the managed `.gitignore` lines, and the `repos/` links | **per bundle** | `/loopd:init <dir>` |
 
 **THE SECOND HALF NO LONGER CARRIES MACHINERY, AND THAT IS THE CHANGE.** A bundle used to
@@ -23,7 +23,7 @@ every link would dangle. **No clone of this repo is needed on a user's machine t
 bundle** — and that sentence was FALSE for one release, which is worth keeping here rather
 than quietly correcting. Measured 2026-09-05 on the installed 0.15.0 cache: it holds
 `agents/ evals/ hooks/ scripts/ skills/ README.md` and nothing else, so `init-bundle.sh`
-exited 2 with *cannot locate the ai-bridge template root* and `/loopd:init` was
+exited 2 with *cannot locate the loopd template root* and `/loopd:init` was
 unusable exactly where it is meant to be used. The claim was verified against a harness
 fixture shaped like the REPO, never against an installed plugin. `seed/`, `RETIRED` and a
 mirror of `VERSION` ship inside `plugin/` now, and the root is derived one directory above
@@ -51,7 +51,7 @@ that line is written down:
 | `VERSION` | the number, at the repo root — what the docs, `CLAUDE.md` and `check-template-version.sh` read |
 | `plugin/VERSION` | a byte-identical mirror, because an installed plugin has no checkout around it to read the root copy from |
 | `plugin/.claude-plugin/plugin.json` → `.version` | the plugin manifest |
-| `.claude-plugin/marketplace.json` → the `ai-bridge` entry | the marketplace listing |
+| `.claude-plugin/marketplace.json` → the `loopd` entry | the marketplace listing |
 
 A bump edits all four in one pull request. `tests/template-version.test.sh` section 1
 fails the build if any of them disagrees.
@@ -61,7 +61,7 @@ cosmetic — the update is never offered.** The host compares the version in `pl
 against the installed one and does nothing when they match, so a machine reports itself up
 to date while running older machinery. Measured 2026-09-06 at `182664d`: `VERSION` and
 `plugin/VERSION` said 1.1.0 and both manifests still said 1.0.1, so 1.0.2, 1.0.3, 1.0.4
-and 1.1.0 reached nobody — `claude plugin update ai-bridge` reported *1.0.0 → 1.0.1*,
+and 1.1.0 reached nobody — `claude plugin update loopd` reported *1.0.0 → 1.0.1*,
 installed a cache directory named 1.0.1, and the banner inside it printed the newer
 number (the one `plugin/VERSION` carried), not the one the cache directory was named for.
 
@@ -297,7 +297,7 @@ that most need converting. Full reasoning:
 
 **The plugin migration is the worked example, and it lands entirely on the top row.** Each
 command that became a plugin skill was one file under `symlink/.claude/commands/` — eight
-of them, `/ai-bridge`, `/answer`, `/audit`, `/fanout`, `/pr-review-request`,
+of them, `/loopd:welcome`, `/answer`, `/audit`, `/fanout`, `/pr-review-request`,
 `/new-project`, `/close-project` and the loop command that is now `/loopd:dispatch`.
 All eight are **machinery**, so all eight are swept by the re-stamp and **none** gets a
 `RETIRED` entry; no seed file was retired at all. That is not an oversight and `RETIRED`
@@ -437,7 +437,7 @@ re-renders the local page and reports its path ([below](#rendering-it-from-each-
 | Reach for it | by default, when you are already in a terminal | you want to open the page — and it is what each tick renders | you are embedding the markup in something else | while actively working a queue | somebody needs the board on a phone, or without a clone |
 
 **The watcher needs a process you keep alive, and that is a real cost, not a detail.**
-ai-bridge deliberately has no resident process: its agents are ephemeral subagents inside
+loopd deliberately has no resident process: its agents are ephemeral subagents inside
 one Claude Code session, nothing runs between sessions, and no daemon is installed or
 supervised. It is the same constraint that made munder-difflin's live telemetry
 unreachable for us. So the live page is a terminal tab you keep open — it stops when you
@@ -1018,7 +1018,7 @@ software-engineer     deep     → opus                     local
 
 Board   file:///Users/you/workspace/_ai-bridge-private/.board-live/board.html
 Run     /loopd:board serve for a live URL
-Update  claude plugin update ai-bridge  (2.0.3 → 2.0.4) — restart to apply it
+Update  claude plugin update loopd  (2.0.3 → 2.0.4) — restart to apply it
 ```
 
 **`owner` and `claudeAccount` are two different people, and the banner prints both.**
@@ -1039,7 +1039,7 @@ illustrative):
 
 | The check found | The row reads |
 |---|---|
-| the marketplace is ahead | `claude plugin update ai-bridge  (2.0.3 → 2.0.4) — restart to apply it` |
+| the marketplace is ahead | `claude plugin update loopd  (2.0.3 → 2.0.4) — restart to apply it` |
 | nothing newer | `up to date (2.0.3)` |
 | nothing newer, but this bundle was last stamped by an older plugin | `up to date (2.0.4) · bundle stamped at 2.0.3 — run /loopd:init` |
 | no answer — offline, no clone, no git | `unknown (offline)` |

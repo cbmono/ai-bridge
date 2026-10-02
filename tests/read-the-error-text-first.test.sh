@@ -121,7 +121,7 @@ PIPELINE='costs a **whole pipeline** and not the one step you doubted'
 HOURS='the "hours, and many builds" the owner reported'
 META='because the instruction on its own is already believed by everyone who skipped it'
 GAP='say **which clause you could not satisfy**'
-READER='`tests/read-the-error-text-first.test.sh` in `cbmono/ai-bridge` pins both clauses and both costs'
+READER='`tests/read-the-error-text-first.test.sh` in `cbmono/loopd` pins both clauses and both costs'
 
 # ---- failure-analyst.md ----
 FA_C1="1. **READ THE FAILING CHECK'S OWN ERROR TEXT — FIRST, BEFORE ANY HYPOTHESIS EXISTS.**"

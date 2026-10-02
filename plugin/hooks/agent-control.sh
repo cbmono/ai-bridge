@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# agent-control.sh — PreToolUse hook (ai-bridge PLUGIN). The live kill switch.
+# agent-control.sh — PreToolUse hook (loopd PLUGIN). The live kill switch.
 #
-# ai-bridge can dispatch a role agent but, until this hook, could not REDIRECT or
+# loopd can dispatch a role agent but, until this hook, could not REDIRECT or
 # cleanly STOP one. A bad dispatch ran to completion or was killed, and a kill
 # mid-worktree leaves the worktree and its index in whatever state the agent had
 # reached — which nothing then cleans up, because `prune-worktrees.sh` is
@@ -651,7 +651,7 @@ fenced() { # <headline>
 case "$verb" in
   halt)
     body="$(fenced "HALTED by the instance operator. Stop now — do not start another tool call, and do not work around this.")"
-    stop="ai-bridge: agent $agent_id ($agent_type) halted by the operator. See .claude/control/control.log."
+    stop="loopd: agent $agent_id ($agent_type) halted by the operator. See .claude/control/control.log."
     note halt "$agent_id" "$agent_type" "$tool_name" "$reason"
     jq -n --arg r "$body" --arg s "$stop" '{
       continue: false,

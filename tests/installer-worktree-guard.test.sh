@@ -21,8 +21,8 @@
 # alone would pass a script that refuses everywhere; "a stamp is allowed" alone would pass
 # one that never refuses at all. Both halves, from the SAME worktree, in this file.
 #
-# HISTORY. This file is the ai-bridge half of `ai-setup`'s test of the same name, ported
-# when ai-bridge became its own repo. The parent repo keeps the half that covers its own
+# HISTORY. This file is the loopd half of `ai-setup`'s test of the same name, ported
+# when loopd became its own repo. The parent repo keeps the half that covers its own
 # user-wide installer; neither guard is left untested.
 #
 # ok() compares actual to expected, per this directory's convention.

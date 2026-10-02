@@ -81,7 +81,7 @@
 # `.tick-lock`) and refuses (exit 2, file untouched) when it cannot compute the full
 # fingerprint: a partial record would turn the next check's "match" into a lie.
 #
-# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; no org, repo or path literals.
+# GENERIC PLUGIN FILE — ships inside the `loopd` plugin; no org, repo or path literals.
 # Verified by tests/tick-delta.test.sh.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]:-$0}")/bundle-paths.sh" || exit 2

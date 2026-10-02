@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# deny-destructive.sh — PreToolUse hook (ai-bridge PLUGIN). The destructive-action
+# deny-destructive.sh — PreToolUse hook (loopd PLUGIN). The destructive-action
 # deny baseline: the layer an agent cannot talk past.
 #
 # WHY THIS EXISTS. `permissions.deny` was empty in every live instance while agents ran
@@ -1130,7 +1130,7 @@ done
 
 # The fence marks the reason as data. It is assembled from literals in this file plus
 # fragments of the agent's own command, and lands in the agent's context.
-body="ai-bridge destructive-action baseline — rule \`$matched\` refused this command.
+body="loopd destructive-action baseline — rule \`$matched\` refused this command.
 
 $reason
 

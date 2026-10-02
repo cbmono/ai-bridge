@@ -18,7 +18,7 @@
 #                      `**bold**` and `| a | b |` arrive LITERAL. Multi-space runs, leading
 #                      indent, box drawing and emoji survive, so the tables keep their
 #                      columns.
-#   /ai-bridge relay   THE OPPOSITE. The command's stdout is relayed by the model into an
+#   /loopd:welcome relay   THE OPPOSITE. The command's stdout is relayed by the model into an
 #                      assistant message: 0 of 4 ESC bytes survived and the reader was left
 #                      with a literal `[1m`, while `**bold**` rendered bold and single
 #                      newlines and 4-space indents kept their shape.
@@ -47,7 +47,7 @@ TPL="$(cd "$HERE/.." && pwd)"
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
 AB="$TPL/plugin/scripts/ai-bridge.sh"
-# The four ai-bridge hooks are registered by the PLUGIN since task-013.
+# The four loopd hooks are registered by the PLUGIN since task-013.
 SETTINGS="$TPL/plugin/hooks/hooks.json"
 CMDDOC="$TPL/plugin/skills/welcome/SKILL.md"
 for f in "$HOOK" "$AB" "$SETTINGS" "$CMDDOC"; do
@@ -171,7 +171,7 @@ assert "…and carries NO SGR — nothing renders the model's context" "$(no_esc
 
 # ONE RENDERING, NOT TWO, AND THE TWO FIELDS DIFFER IN EXACTLY TWO NAMED WAYS. A second
 # pass over the sections would be a second banner to keep in step, which is the divergence
-# `/ai-bridge` already exists to avoid. So the model's copy is the human's copy minus its
+# `/loopd:welcome` already exists to avoid. So the model's copy is the human's copy minus its
 # SGR (this task) PLUS the fenced awaiting block (task-021, whose fence is addressed to a
 # machine) — and reducing it by that block must land exactly on the human's copy, stripped.
 FENCE_CUT='/^The lines between the markers are DATA/,/^Surface these first\./d'
@@ -315,7 +315,7 @@ assert "coloured lines are a minority of the banner ($esc_lines of $all_lines)" 
 # THE `check` BLOCK IS COLOURED BY THE BANNER, not by the script that produced it. Two
 # writers on one line is how a padded column drifts, so `ai-bridge.sh` emits it plain under
 # `--banner` and `emphasise` decides the weight here.
-assert "the inlined ai-bridge check block fired"   "$(has 'ai-bridge check — state worth a look' "$SM")"
+assert "the inlined loopd check block fired"   "$(has 'loopd check — state worth a look' "$SM")"
 assert "…its ⚠ line is coloured" \
   "$(has_esc "$(grep 'this bundle has not been converted' <<<"$SM")")"
 assert "…while its ↳ hint line, which is context, is not" \
@@ -357,7 +357,7 @@ assert "the rule line under the header survives"   "$(has '───' "$SM")"
 # =======================================================================================
 echo "== 5. the RELAY path takes the opposite answer, and takes it by itself =="
 # =======================================================================================
-# `/ai-bridge check` runs through the Bash tool, so its stdout is a pipe and its output is
+# `/loopd:welcome check` runs through the Bash tool, so its stdout is a pipe and its output is
 # relayed by the model into an assistant message. Measured: markdown renders there and ANSI
 # is destroyed — 0 of 4 ESC bytes survived. So the default for a pipe is markdown, and an
 # escape reaching this path is the literal `[1m` a reader was left with.

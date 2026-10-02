@@ -14,7 +14,7 @@
 # THE CONTRACT THIS PINS IS "EVERY SCRIPT IS ACCOUNTED FOR", NOT "EVERY SCRIPT IS A USER
 # COMMAND". Some of what ships in `plugin/scripts/` is internal plumbing a reader should
 # not be told to run (`resolve-config.sh`, `resolve-max-agents.sh`, `ai-bridge.sh`, which
-# backs the `/ai-bridge` command). The README therefore carries a second, explicitly
+# backs the `/loopd:welcome` command). The README therefore carries a second, explicitly
 # labelled **Internal helpers** table under the same heading, and this file scans the whole
 # `## Scripts` SECTION rather than one table — so a helper is documented as a helper and
 # still counts as accounted for. A future script may go in either table; it may not go in

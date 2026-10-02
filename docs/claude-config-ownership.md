@@ -16,12 +16,12 @@ Measured 2026-08-23:
 | | |
 |---|---|
 | ai-setup's installable entries | 26 |
-| …also shipped by ai-bridge | **24** |
+| …also shipped by loopd | **24** |
 | …of those, diverged | **14**, in *both* directions |
 | who decided which copy a machine got | **whichever installer ran last** |
 
 Both installers linked into `${CLAUDE_CONFIG_DIR:-~/.claude}`. Neither knew about the
-other. The machine that found this was on ai-bridge's side of the fork — the newer one — so
+other. The machine that found this was on loopd's side of the fork — the newer one — so
 nothing looked broken; running ai-setup's installer would silently have flipped 24 entries
 back to older copies.
 
@@ -40,10 +40,10 @@ the two copies has.
 ## The decision
 
 **ai-setup owns the directory.** It is the public defaults repo, it is where consumers
-already install from, and moving ownership there is what shrinks ai-bridge — which is what
+already install from, and moving ownership there is what shrinks loopd — which is what
 this repo's current objective is for.
 
-**ai-bridge keeps exactly the paths it PROBES for**, which today is three agents:
+**loopd keeps exactly the paths it PROBES for**, which today is three agents:
 `code-architect`, `deep-bug-scan`, `plan-architect`. That is not a taste boundary, it is
 the reason `config/` exists at all: this repo's role agents probe for those files with
 `test -f`, and a fresh laptop must work after one clone and one install without cloning a
@@ -53,7 +53,7 @@ config layer.
 ### Consequences, so the direction is not re-derived later
 
 1. **Ownership is about who INSTALLS a path, not about which text survives.** Where the
-   two copies had diverged, ai-bridge's was usually newer, so "ai-setup owns it" meant
+   two copies had diverged, loopd's was usually newer, so "ai-setup owns it" meant
    ai-setup **received** those fixes. It never meant ai-setup's older copy won.
 2. **The divergence was resolved by porting, not by picking a winner.** In both
    directions: ai-setup's `commands/acp.md` was *ahead* of the fork's after its own
@@ -71,7 +71,7 @@ config layer.
    handover: the roots this layer used to ship stay listed, so `--config` retires the
    now-dangling links from the old layer on the next run. Prune them and a retired command
    still registers, a retired hook still exits 127 on every launch.
-5. **Neither repo's change is safe alone.** ai-bridge dropping the set before ai-setup
+5. **Neither repo's change is safe alone.** loopd dropping the set before ai-setup
    ships the ported fixes leaves paths installed by nobody — silently, because an absent
    agent is a failed `test -f` and an absent command is a slash command that simply does
    not exist. The two PRs land together.

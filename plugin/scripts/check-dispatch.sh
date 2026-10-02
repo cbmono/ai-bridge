@@ -60,7 +60,7 @@
 # decided from the document alone, before the host is consulted at all, so an offline
 # machine, a missing CLI or a rate limit cannot silence the one verdict this exists for.
 #
-# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
+# GENERIC PLUGIN FILE — ships inside the `loopd` plugin; nothing to edit per
 # instance. It reads no org, repo or path literal.
 #
 # Verified by tests/check-dispatch.test.sh.
@@ -181,7 +181,7 @@ strip_trailing_comment() { # <text, one or more lines>
 # instance signature appears — `instance.config.json`, the same one marker
 # session-banner.sh, push-state.sh and the two plugin enforcement hooks use to decide "is
 # this an instance at all". It was a PAIR with `.claude/agents` until the name swap
-# retired that directory: the eight role agents ship in the `ai-bridge` plugin now, so the
+# retired that directory: the eight role agents ship in the `loopd` plugin now, so the
 # pair would have stopped matching in every instance at its next re-stamp.
 # Deliberately not $CLAUDE_PROJECT_DIR and not a path literal: this script ships in the
 # plugin, serves every instance and is run from anywhere, and a task document already knows where it
@@ -199,7 +199,7 @@ bundle_root() { # <task-doc>
 }
 
 # The shipped agent document for one role. It used to be one path literal inside the
-# bundle; the name swap moved the eight role agents into the `ai-bridge` PLUGIN, which is
+# bundle; the name swap moved the eight role agents into the `loopd` PLUGIN, which is
 # installed per MACHINE and not per instance, so this now has to look outside the bundle.
 # Three sources, cheapest first, and EVERY failure is silent — an unresolvable agent file
 # leaves the contradiction check saying nothing, exactly as a missing one always did.

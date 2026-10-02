@@ -60,7 +60,7 @@ worktree and gets the push refused. Run `git push --force-with-lease origin
 5. **Verify, then open the PR** per the shared conventions — install/build/lint/test
    green first (check `package.json`, `Makefile`, CI config); if you can't get them
    green, report the failure and **don't** open the PR. **Where the repo ships a runner
-   that selects on the diff — `tests/run.sh --changed` in `cbmono/ai-bridge` — that is
+   that selects on the diff — `tests/run.sh --changed` in `cbmono/loopd` — that is
    the default while you work, and its `--all` runs once before you open the PR.** **Self-review your diff and fix
    what it flags** (per the shared conventions) before opening it. PR body: the required
    short shape — opening with the literal heading `## Description`, then a

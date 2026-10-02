@@ -54,7 +54,7 @@ somebody's work, and safe to run again.
 `/loopd:welcome check` should say *"no symlinks outside repos/ — this bundle carries
 no machinery and no template link"*. If it does not, it names what is left and the repair.
 
-**You no longer need a clone of `cbmono/ai-bridge` on the machine.** Once every bundle on
+**You no longer need a clone of `cbmono/loopd` on the machine.** Once every bundle on
 it is converted, the checkout is only useful for working on this repo itself. Deleting it
 breaks nothing — that is the property this migration bought.
 
@@ -75,7 +75,7 @@ breaks nothing — that is the property this migration bought.
 **B is not a better A.** It buys exactly one thing — a folder with no history — and pays
 for it with the history. If you cannot name why you want that, you want A.
 
-**Either way, the plugin is `ai-bridge`.** `ai-bridge-v2` was the transition name; its
+**Either way, the plugin is `loopd`.** `ai-bridge-v2` was the transition name; its
 stub shipped for one version and was removed in 1.0.0, so install the bare name.
 Every command is namespaced — `/loopd:dispatch`, `/loopd:welcome`,
 `/loopd:new-project`, and the [rest](../README.md#commands) — and so is every role agent
@@ -138,8 +138,8 @@ git bundle verify ~/backups/_ai-bridge-<group>.bundle
 
 The two lines are in [README § Install step
 1](../README.md#1-install-the-plugin--once-per-machine). Per machine, not per instance:
-if this machine already has `ai-bridge`, skip the step. If it has `ai-bridge-v2`, install
-`ai-bridge`, uninstall the old one from `/plugin` → Manage, and relaunch Claude Code.
+if this machine already has `loopd`, skip the step. If it has `ai-bridge-v2`, install
+`loopd`, uninstall the old one from `/plugin` → Manage, and relaunch Claude Code.
 
 ### 3. Stamp the new folder
 
@@ -300,6 +300,6 @@ your content are left alone. It is not required before the delete — it is ther
 can look at what remains and confirm every last file of it is yours.
 
 **The plugin is not part of any of this.** It is per machine and every instance on that
-machine uses it, so do not uninstall `ai-bridge`. Uninstall `ai-bridge-v2` if it is still
+machine uses it, so do not uninstall `loopd`. Uninstall `ai-bridge-v2` if it is still
 listed. The optional `~/.claude` config layer is its own separate thing:
 `init-bundle.sh --config --uninstall` ([README § Uninstall](../README.md#uninstall)).

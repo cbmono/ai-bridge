@@ -66,7 +66,7 @@ instance.config.local.json
 
 # The derived navigation indexes (`/index.md`, `/projects/*/index.md`) are ignored
 # too — but the lines live in /loopd:init, NOT here, and that is not an oversight.
-# THIS FILE IS ITSELF AN ACTIVE .gitignore INSIDE THE ai-bridge TEMPLATE'S OWN
+# THIS FILE IS ITSELF AN ACTIVE .gitignore INSIDE THE loopd TEMPLATE'S OWN
 # `seed/` DIRECTORY, so a `/index.md` line here matches `seed/index.md`
 # and silently stops the template from tracking its own seed file. (Measured: it
 # broke the refresh-seeds.sh fixture, which re-inits a repo over a copy of seed/.) The
@@ -84,7 +84,7 @@ instance.config.local.json
 
 # NO MACHINERY BLOCK, DELIBERATELY. A bundle used to carry 37 symlinks into a
 # template checkout, listed between a marker pair /loopd:init rewrote on every
-# stamp. The machinery ships in the ai-bridge PLUGIN now — per machine, not per
+# stamp. The machinery ships in the loopd PLUGIN now — per machine, not per
 # bundle — so there is nothing here to ignore. A bundle stamped under the old design
 # still has the block; /loopd:init RETIRES it, markers and all, on the next stamp.
 

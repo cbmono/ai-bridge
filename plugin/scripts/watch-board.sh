@@ -16,7 +16,7 @@
 #     --once            render once and exit. No watching, nothing to interrupt.
 #
 # THE COST, STATED FIRST, BECAUSE IT IS THE REASON TO PICK A DIFFERENT RENDERER.
-# THIS NEEDS A RESIDENT PROCESS, AND ai-bridge DELIBERATELY DOES NOT HAVE ONE. Its
+# THIS NEEDS A RESIDENT PROCESS, AND loopd DELIBERATELY DOES NOT HAVE ONE. Its
 # agents are ephemeral subagents inside one Claude Code session; nothing here runs
 # between sessions, and no daemon is installed or supervised. That is the same
 # constraint that made munder-difflin's live telemetry unreachable for us. So this is

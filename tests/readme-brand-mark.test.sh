@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# readme-brand-mark.test.sh — the README's loopd mark is COPIED, and every command slug is
-# spelled under the plugin's own manifest name.
+# readme-brand-mark.test.sh — the README's loopd mark is COPIED, every command slug is
+# spelled under the plugin's own manifest name, and no shipped file carries the old brand
+# as PROSE.
 #
 # WHY THE MARK IS PINNED AS BYTES. The three rows are box-drawing glyphs (▄ ▐ ▌ ▝ ◀ ━),
 # not ASCII, and nothing else in this repo holds a copy to compare against. A row retyped
@@ -17,6 +18,14 @@
 # foreign-slug assertion runs over the whole shipped surface rather than this one file — the
 # knowledge/findings/a-zero-mention-assertion-scoped-to-the-renamed-file-is-not-a-sweep.md
 # is the measured cost of the narrower version (104 surviving mentions behind a green check).
+#
+# AND THE PROSE HALF (loopd/task-012), WHICH IS A PINNED LIST AND NOT A PATTERN. `ai-bridge`
+# survives legitimately in five classes — provenance, the `.ai-bridge/` bundle directory,
+# `_ai-bridge-*` instance names, filenames, and frozen identifiers — and no regex separates
+# those from brand prose without encoding a different class precisely. So the owner's ruling
+# of 2026-10-02 was to hand-classify all 202 matching files once and PIN the survivors:
+# tests/fixtures/brand/survivors.txt is the list, § 5 compares it to the repository in both
+# directions, and a file joining or leaving it does so in a PR that says why.
 #
 # NON-VACUOUS BY CONSTRUCTION. Each predicate also runs on a mutant carrying exactly the
 # drift it exists to catch, and the mutant must go red.
@@ -116,6 +125,34 @@ ok "mutant C: a renamed install line is reported" \
 sed "s|/${PN}:new-project||g" "$README" > "$TMP/dropped.md"
 ok "mutant D: one dropped command is named, while the rest survive" \
    "$(undocumented "$TMP/dropped.md")" new-project
+
+echo
+echo "== 5. the brand-prose class is empty, against the pinned survivor list =="
+SURV="$REPO/tests/fixtures/brand/survivors.txt"
+[ -f "$SURV" ] || { echo "readme-brand-mark.test: missing $SURV" >&2; exit 2; }
+listed()    { grep -v '^#' "$SURV" | cut -f2 | sort; }
+# The measure is criterion 1's own command, run from a root so a mutant tree can take it.
+sweep()     { ( cd "$1" && grep -rIl ai-bridge plugin docs README.md tests 2>/dev/null ) | sort; }
+pinned_in() { local r="$1" p; listed | while IFS= read -r p; do [ -e "$r/$p" ] && echo "$p"; done; }
+new_brand() { comm -13 <(pinned_in "$1") <(sweep "$1") | tr '\n' ' ' | sed 's/ $//'; }
+left_list() { comm -23 <(pinned_in "$1") <(sweep "$1") | tr '\n' ' ' | sed 's/ $//'; }
+
+ok "the list is sorted and has no duplicate" \
+   "$(listed | sort -u | cmp -s - <(listed) && echo yes || echo no)" yes
+ok "every pinned path is a tracked file" \
+   "$(listed | while IFS= read -r p; do (cd "$REPO" && git ls-files --error-unmatch "$p") >/dev/null 2>&1 || echo "$p"; done | tr '\n' ' ' | sed 's/ $//')" ""
+ok "no file outside the list carries the old brand" "$(new_brand "$REPO")" ""
+ok "…and no listed file has quietly stopped carrying it" "$(left_list "$REPO")" ""
+
+# Mutant E: a cleaned file takes the brand back as prose. The check must NAME it.
+MUT="$TMP/mut"; mkdir -p "$MUT/plugin/scripts"
+sed 's/`loopd` plugin/`ai-bridge` plugin/' "$REPO/plugin/scripts/task-owner.sh" > "$MUT/plugin/scripts/task-owner.sh"
+ok "mutant E: reintroduced brand prose is named" "$(new_brand "$MUT")" plugin/scripts/task-owner.sh
+
+# Mutant F: a listed file stops matching without leaving the list. The check must NAME it.
+MUT2="$TMP/mut2"; mkdir -p "$MUT2/plugin/scripts"
+sed 's/ai-bridge//g' "$REPO/plugin/scripts/bundle-paths.sh" > "$MUT2/plugin/scripts/bundle-paths.sh"
+ok "mutant F: a listed file that no longer matches is named" "$(left_list "$MUT2")" plugin/scripts/bundle-paths.sh
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

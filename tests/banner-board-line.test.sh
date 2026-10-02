@@ -70,7 +70,7 @@ TPL="$(cd "$HERE/.." && pwd)"
 HOOK="$TPL/plugin/hooks/session-banner.sh"
 # shellcheck source=../plugin/scripts/bundle-paths.sh
 . "$(dirname "$0")/../plugin/scripts/bundle-paths.sh"
-# The four ai-bridge hooks are registered by the PLUGIN since task-013, not by the
+# The four loopd hooks are registered by the PLUGIN since task-013, not by the
 # bundle's own settings.json.
 SETTINGS="$TPL/plugin/hooks/hooks.json"
 [ -f "$HOOK" ] || { echo "banner-board-line.test: hook not found at $HOOK" >&2; exit 2; }
@@ -146,7 +146,7 @@ cat > "$INST/instance.config.json" <<'EOF'
 }
 EOF
 # `.claude/agents` was the second half of the instance marker until the name swap retired
-# that directory — the eight role agents ship in the `ai-bridge` plugin now, so a hook
+# that directory — the eight role agents ship in the `loopd` plugin now, so a hook
 # that still required it would print nothing in every real instance. The marker is
 # `instance.config.json` alone, which is what the two plugin enforcement hooks already
 # key on, so the case below is the POSITIVE one: no agents directory, and the banner

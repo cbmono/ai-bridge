@@ -77,7 +77,7 @@
 #
 # THE CEILING IS 618 BYTES PER ELEMENT, AND HERE IS THE CORPUS IT CAME FROM.
 # Measured 2026-08-31, bytes under `LC_ALL=C`, over the fence-stripped rendering: every
-# comment written by this repo's own agents on `cbmono/ai-bridge` pull requests 60-84 (13
+# comment written by this repo's own agents on `cbmono/loopd` pull requests 60-84 (13
 # PR-thread comments + 3 inline review comments = 16 replies, 36 entries), plus the
 # `alteos-gmbh/monorepo#3260` comment that motivated the task.
 #
@@ -106,7 +106,7 @@
 # smallest offending one, which is symmetric by measurement and not by rounding.
 #
 # WHAT IT FAILS, COUNTED. The ceiling refuses 13 of the 65 elements and so 11 OF THE 17
-# REPLIES (10 of the 16 real ai-bridge ones, plus the motivating comment). The VERDICT
+# REPLIES (10 of the 16 real loopd ones, plus the motivating comment). The VERDICT
 # requirement refuses one further reply — `r-3890408025`, three short entries whose third
 # reads *"Not the same defect as the red harness"*, which is a verdict this vocabulary does
 # not know. So 12 of 17 are refused and 5 clear. That is a high rate and it is the honest
@@ -140,7 +140,7 @@
 # each of them whatever it is reporting — which is what the rule in `CONVENTIONS.md` says,
 # and the first cut of this file exempted both.
 #
-# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
+# GENERIC PLUGIN FILE — ships inside the `loopd` plugin; nothing to edit per
 # instance. It takes no org, repo or vendor identity: those come from the arguments.
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:

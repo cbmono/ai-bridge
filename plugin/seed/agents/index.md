@@ -1,7 +1,7 @@
 # Agent Roster & Routing
 
 The roles the Project Manager can assign tasks to. Executable definitions ship in the
-**`ai-bridge` plugin**, installed once per machine (`/plugin install
+**`loopd` plugin**, installed once per machine (`/plugin install
 loopd@loopd`) — the bundle no longer carries a copy. This is the routing
 reference.
 
@@ -10,7 +10,7 @@ resolve (measured 2026-09-02), and it fails with *no such agent* rather than wit
 anything that names the omission. **A task's `assignee:` field stays BARE** — it is a
 role name, not a dispatch string, and the PM adds the namespace when it spawns.
 
-> **Seed file — copied once, then yours.** Copied into this bundle from the `ai-bridge`
+> **Seed file — copied once, then yours.** Copied into this bundle from the `loopd`
 > plugin and owned by it since; `/loopd:welcome fix` 3-way merges a later template
 > change onto your edits.
 

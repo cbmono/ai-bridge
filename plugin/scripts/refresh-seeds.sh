@@ -125,7 +125,7 @@ BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 SELF="$BIN_DIR/$(basename "$0")"
 PLUGIN_ROOT="$(cd "$BIN_DIR/.." 2>/dev/null && pwd || true)"
 [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/VERSION" ] || {
-  echo "refresh-seeds: cannot locate the ai-bridge plugin root from $BIN_DIR" >&2; exit 2; }
+  echo "refresh-seeds: cannot locate the loopd plugin root from $BIN_DIR" >&2; exit 2; }
 SEED_SRC="$PLUGIN_ROOT/seed"
 DIFF_CAP="${UPGRADE_DIFF_LINES:-40}"   # lines of a conflicting diff to print inline
 
@@ -209,7 +209,7 @@ TARGET="$(cd "${TARGET:-$PWD}" 2>/dev/null && pwd || true)"
 # A bundle root, or refuse.
 if ! ab_is_bundle "$TARGET"; then
   cat >&2 <<EOF
-refresh-seeds: $TARGET is not an ai-bridge bundle root (expected instance.config.json).
+refresh-seeds: $TARGET is not a loopd bundle root (expected instance.config.json).
                To create a NEW bundle, run /${PLUGIN_NAME}:init $TARGET
 EOF
   exit 2
@@ -350,7 +350,7 @@ resolve_history() {
   HIST_LABEL="none — an installed plugin is a plain copy and carries no git history"
 }
 
-echo "ai-bridge seed refresh — $TARGET"
+echo "loopd seed refresh — $TARGET"
 echo "plugin:   $PLUGIN_ROOT"
 if [ "$APPLY" -eq 1 ]; then
   echo "mode:     APPLY — the mergeable changes below WILL be written."

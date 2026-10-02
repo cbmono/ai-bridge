@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# init-bundle.sh — create or refresh an ai-bridge BUNDLE, or link the CONFIG LAYER.
+# init-bundle.sh — create or refresh a loopd BUNDLE, or link the CONFIG LAYER.
 #
 #   Usage:
 #     init-bundle.sh [TARGET]           # create/refresh a bundle at TARGET (default: cwd)
@@ -77,7 +77,7 @@ set -euo pipefail
 # of `plugin/`, not the repo around it: the cache holds `agents/ evals/ hooks/ scripts/
 # skills/` and nothing else. The previous rule ("two directories up from scripts/") was
 # written against a checkout and only ever verified against one, so `/<plugin>:init` exited
-# 2 with "cannot locate the ai-bridge template root" on every machine that installed the
+# 2 with "cannot locate the loopd template root" on every machine that installed the
 # plugin the supported way — measured on 0.15.0, 2026-09-05.
 #
 # The rule now is ONE directory up from scripts/, which is the plugin root in both places:
@@ -91,7 +91,7 @@ set -euo pipefail
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$BIN_DIR/.." 2>/dev/null && pwd || true)"
 if [ -z "$PLUGIN_ROOT" ] || [ ! -f "$PLUGIN_ROOT/VERSION" ] || [ ! -d "$PLUGIN_ROOT/seed" ]; then
-  echo "error: cannot locate the ai-bridge plugin root from $BIN_DIR" >&2
+  echo "error: cannot locate the loopd plugin root from $BIN_DIR" >&2
   echo "       (expected <plugin>/scripts/, with VERSION and seed/ at <plugin>)" >&2
   exit 2
 fi
@@ -116,7 +116,7 @@ SEED_SRC="$PLUGIN_ROOT/seed"
 # file; from an installed plugin there is no checkout, so it is the same path under a
 # placeholder for one. Never a bare `/docs/...`, which is what an unguarded `$TEMPLATE_DIR`
 # would have printed once TEMPLATE_DIR became legitimately empty.
-doc_ref() { printf '%s/%s' "${TEMPLATE_DIR:-<ai-bridge>}" "$1"; }
+doc_ref() { printf '%s/%s' "${TEMPLATE_DIR:-<loopd>}" "$1"; }
 # The managed machinery block a symlink-era bundle carries. It is RETIRED, never
 # rewritten: there is no machinery in a bundle to list any more.
 BEGIN_MARK="# >>> ai-bridge machinery (symlinked) >>>"
@@ -264,7 +264,7 @@ fi
 # CONFIG LAYER (--config) — link config/ into the Claude Code config dir.
 # ===========================================================================
 #
-# WHY IT IS HERE AT ALL. ai-bridge used to depend on a *separate* config repo for four
+# WHY IT IS HERE AT ALL. loopd used to depend on a *separate* config repo for four
 # things, and all four failed SILENTLY: the `@~/.claude/claude-defaults.md` import every
 # instance inherited from seed/CLAUDE.md (now inlined there, so nothing can dangle), and
 # three probed-for agents — `code-architect`, `deep-bug-scan`, `plan-architect`. A fresh
@@ -274,7 +274,7 @@ fi
 # whole of `cbmono/ai-setup`'s `.claude/` tree bought a second problem: two installers
 # claiming `${CLAUDE_CONFIG_DIR:-~/.claude}`, 24 entries shipped by both, 14 diverged, and
 # ownership decided by whichever ran last. ai-setup owns that directory now. This layer
-# keeps exactly the paths ai-bridge itself PROBES for and nothing else — the smallest set
+# keeps exactly the paths loopd itself PROBES for and nothing else — the smallest set
 # that makes a fresh laptop work without cloning another repo. Re-adding anything here
 # re-creates the collision; `tests/config-ownership.test.sh` fails if you do.
 # Full reasoning: docs/claude-config-ownership.md.
@@ -825,7 +825,7 @@ config_install() {
     echo "       Nothing was written. Check the permissions on its parent directory." >&2
     return 1
   fi
-  echo "Linking the ai-bridge config layer into $CONFIG_DEST"
+  echo "Linking the loopd config layer into $CONFIG_DEST"
   while IFS=$'\t' read -r tier rel; do
     [ -n "$rel" ] || continue
     src="$CONFIG_SRC/$tier/$rel"; dst="$CONFIG_DEST/$rel"
@@ -931,7 +931,7 @@ EOF
   # It is ai-setup's file now, and it is the one file in the config dir that can already
   # hold permissions and plugins a human tuned by hand — the only place where replacing a
   # value could widen what Claude is allowed to *do*. Two installers writing it is exactly
-  # the collision this split removes, so ai-bridge does not write, merge, or even report on
+  # the collision this split removes, so loopd does not write, merge, or even report on
   # it. A link left over from when this layer DID ship one dangles the moment
   # config/opinionated/settings.json goes, and config_sweep below retires it.
 
@@ -967,7 +967,7 @@ EOF
 config_uninstall() {
   config_require_src
   config_src_probe || true
-  echo "Removing ai-bridge config-layer symlinks from $CONFIG_DEST"
+  echo "Removing loopd config-layer symlinks from $CONFIG_DEST"
   # `rm` IS CHECKED HERE for the same reason it is in config_install: `rm` failing on an
   # unwritable directory printed "  rm  <path>" anyway, because errexit is suspended by
   # `config_uninstall || config_rc=$?` and nothing looked at the status. Measured with
@@ -1130,7 +1130,7 @@ if [ -n "$ORG_FLAG" ]; then
       echo "  empty $ORG_SLUG has no commits — seeding it as this org's bundle"
       ORG_PUSH=yes
     else
-      echo "error: $ORG_SLUG exists and is not an ai-bridge bundle" >&2
+      echo "error: $ORG_SLUG exists and is not a loopd bundle" >&2
       echo "       (no instance.config.json, no $AB_SCHEMA). Refusing to stamp over it." >&2
       echo "       Pick another name: --org $ORG_FLAG --name <repo>" >&2
       echo "       The clone is at $TARGET — remove it if you did not want it:" >&2
@@ -1286,14 +1286,14 @@ EOF
 }
 
 if [ "$MODE" = "uninstall" ]; then
-  echo "Removing the ai-bridge derived views from $TARGET"
+  echo "Removing the loopd derived views from $TARGET"
   ( cd "$TARGET" && bash "$BIN_DIR/link-repos.sh" --remove ) || true
   convert_bundle
   echo "Done. Seed content, bundle data, and backups were left untouched."
   exit 0
 fi
 
-echo "Initialising the ai-bridge bundle at $TARGET"
+echo "Initialising the loopd bundle at $TARGET"
 
 # STEP 0 — convert first, so the seed step can fill a path a link used to occupy.
 convert_bundle
@@ -2920,12 +2920,12 @@ echo "Next: edit instance.config.json, then run /${PLUGIN_NAME}:dispatch from th
 echo "      (Set reposRoot in instance.config.local.json — it is per-machine — then"
 echo "       re-run /${PLUGIN_NAME}:init to fill in repos/.)"
 # THE OTHER HALF, and it is not this script's to install. Every slash command ships in the
-# ai-bridge PLUGIN now, per machine rather than per instance, so a perfect stamp still
+# loopd PLUGIN now, per machine rather than per instance, so a perfect stamp still
 # leaves a bundle nobody can drive if the plugin is missing — and the only symptom is
 # "unknown command", which accuses nothing. Printed unconditionally: this script cannot see
 # what Claude Code has installed, and a nudge that fires only when it is sure would never
 # fire at all. See docs/operations.md § 1.
-echo "      (The commands are the ai-bridge PLUGIN, installed once per machine:"
+echo "      (The commands are the loopd PLUGIN, installed once per machine:"
 echo "       /plugin marketplace add cbmono/loopd, then"
 echo "       /plugin install ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE} — then restart Claude Code.)"
 
