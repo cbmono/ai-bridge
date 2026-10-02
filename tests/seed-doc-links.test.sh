@@ -96,7 +96,7 @@ walk() {
       esac
       if [ -e "$abs" ]; then verdict=OK; else verdict=DEAD; fi
       echo "$dest:$line:$target:$verdict"
-    done < <(REL="$dest" awk -v REL="$dest" "$extract_links" "$root/$dest")
+    done < <(awk -v REL="$dest" "$extract_links" "$root/$dest")
   done < <(cd "$TPLSRC/plugin/seed" && find . -name '*.md' -type f | sed 's#^\./##' | sort)
 }
 
@@ -135,7 +135,7 @@ echo
 echo "== 3. the five instances resolve, by destination =="
 # Asserted by where a link LANDS, not by its text, so a different correct spelling passes.
 hits() { # <seeded doc> <expected bundle-relative target> — links in <doc> landing on it
-  local doc="$1" want="$2" dir n=0 line target abs
+  local doc="$1" want="$2" dir n=0 f line target verdict abs
   dir="$(dirname "$doc")"
   while IFS=: read -r f line target verdict; do
     [ "$f" = "$doc" ] && [ "$verdict" = OK ] || continue
@@ -163,16 +163,21 @@ ok "knowledge/vocab.md survives too"        "$(grep -c ':/knowledge/vocab.md:DEA
 echo
 echo "== 5. the walker CATCHES a planted dead link (a green-only harness proves nothing) =="
 # Both pre-3.0 spellings, planted into the stamped bundle: the relative form CLAUDE.md
-# shipped, and the root-absolute form index.md shipped.
+# shipped, and the root-absolute form index.md shipped. The third plant is the same dead
+# link inside an HTML comment — the only way to show the comment stripper works, since
+# every commented link the seed ships is also a `<slug>` placeholder.
 printf '\n[planted relative](CONVENTIONS.md)\n' >> "$INST/CLAUDE.md"
 printf '\n[planted absolute](/SCHEMA.md)\n'     >> "$INST/$AB_INDEX"
+printf '\n<!-- [planted, commented out](/NOPE-commented-out.md) -->\n' >> "$INST/$AB_INDEX"
 walk "$INST" > "$TMP/links.planted"
 planted_dead="$(grep -c ':DEAD$' "$TMP/links.planted")"
 ok "the relative pre-3.0 form is caught" \
   "$(grep -c "^CLAUDE.md:[0-9]*:CONVENTIONS.md:DEAD$" "$TMP/links.planted")" 1
 ok "the root-absolute pre-3.0 form is caught" \
   "$(grep -c "^$AB_INDEX:[0-9]*:/SCHEMA.md:DEAD$" "$TMP/links.planted")" 1
-ok "exactly the two plants are reported"    "$planted_dead" 2
+ok "the commented-out plant is NOT reported" \
+  "$(grep -c NOPE-commented-out "$TMP/links.planted")" 0
+ok "exactly the two live plants are reported" "$planted_dead" 2
 ok "…and the negative control still is not" \
   "$(grep -c ':/knowledge/index.md:DEAD$' "$TMP/links.planted")" 0
 
@@ -181,12 +186,10 @@ echo "== 6. the exclusions are asserted, so the scope rule is not merely written
 # Five placeholder targets ship in the seed today. Each would be a dead link to any
 # walker that took it literally, and all five together are what a noisy validator looks
 # like on day one.
-excluded() { grep -c ":$1:" "$TMP/links"; }
-ok "an external URL is out"               "$(grep -c '://' "$TMP/links")" 0
-ok "a bare 'url' shape is out"            "$(excluded url)" 0
-ok "a '<slug>' shape is out"              "$(grep -c '<' "$TMP/links")" 0
-ok "an ellipsis shape is out"             "$(grep -c '…' "$TMP/links")" 0
-ok "a link inside an HTML comment is out" "$(grep -c '/objectives/' "$TMP/links")" 0
+ok "an external URL is out"      "$(grep -c '://' "$TMP/links")" 0
+ok "a bare 'url' shape is out"   "$(grep -c ':url:' "$TMP/links")" 0
+ok "a '<slug>' shape is out"     "$(grep -c '<' "$TMP/links")" 0
+ok "an ellipsis shape is out"    "$(grep -c '…' "$TMP/links")" 0
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
