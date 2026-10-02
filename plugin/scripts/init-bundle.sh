@@ -1179,6 +1179,7 @@ fi
 # minus a bundle prefix — bundle-paths.sh owns both halves.
 WS_GROUP="$(ab_group "$TARGET")"
 WS_NAME="${WS_GROUP}.code-workspace"
+case "$WS_GROUP" in */*) WS_NAME="" ;; esac
 
 # =========================================================================================
 # THE CONVERSION SWEEP — a symlink-era bundle becomes a plugin-native one, in place.
@@ -1351,6 +1352,8 @@ if [ -d "$SEED_SRC" ]; then
       existing="$(find "$TARGET" -maxdepth 1 -name '*.code-workspace' 2>/dev/null | head -1)"
       if [ -n "$existing" ]; then
         echo "  keep  $(basename "$existing") (workspace exists)"
+      elif [ -z "$WS_NAME" ]; then
+        echo "  warn  group '$WS_GROUP' is not a file name; no .code-workspace seeded — fix \`group\` in instance.config.json" >&2
       else
         # The seed ships terminal.integrated.cwd commented out with a __BRIDGE_DIR__
         # placeholder; uncomment it with this instance's absolute path so every new

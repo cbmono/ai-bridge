@@ -66,8 +66,12 @@ export AB_BUNDLE_PREFIXES
 
 ab_group() { # [<bundle root>] — prints the group, always something
   local root="${1:-.}" g name p
-  g="$(grep -o '"group"[[:space:]]*:[[:space:]]*"[^"]*"' "$root/instance.config.json" 2>/dev/null \
-       | head -1 | sed 's/.*:[[:space:]]*"//; s/"$//')"
+  # Parsed, never grepped: a text match takes a NESTED "group" (a `people` entry, say)
+  # and disagrees with the board renderers' json read. No python3 => the name fallback.
+  g="$(python3 -c 'import json,sys
+d=json.load(open(sys.argv[1]))
+g=d.get("group") if isinstance(d,dict) else None
+print(g if isinstance(g,str) else "")' "$root/instance.config.json" 2>/dev/null)"
   if [ -n "$g" ]; then printf '%s\n' "$g"; return 0; fi
   name="$(cd "$root" 2>/dev/null && pwd || printf '%s' "$root")"
   name="${name##*/}"

@@ -99,6 +99,14 @@ ok "the legacy prefix is stripped"          "$(ab_group "$TMP/g/_ai-bridge-x")" 
 ok "the new prefix is stripped too"         "$(ab_group "$TMP/g/_loopd-x")" x
 ok "an unprefixed directory is its own name" "$(ab_group "$TMP/g/bare")" bare
 ok "a configured group WINS over the name"  "$(ab_group "$TMP/g/_loopd-named")" configured
+# A text match passes this and a JSON parse does not: the nested key comes first.
+new_bundle "$TMP/g/_loopd-nested" \
+  '{ "people": { "group": "nested-value" }, "group": "chosen" }'
+ok "only the TOP-LEVEL group is read"       "$(ab_group "$TMP/g/_loopd-nested")" chosen
+new_bundle "$TMP/g/_loopd-esc" '{ "group": "a\u0062c" }'
+ok "a JSON-escaped group is decoded"         "$(ab_group "$TMP/g/_loopd-esc")" abc
+new_bundle "$TMP/g/_loopd-onlynested" '{ "people": { "group": "nested-value" } }'
+ok "a nested-only group falls back to the name" "$(ab_group "$TMP/g/_loopd-onlynested")" onlynested
 # The prefix alone is a whole name, not an empty group — `${name#prefix}` would blank it.
 mkdir -p "$TMP/g/_loopd-" && printf '{}\n' > "$TMP/g/_loopd-/instance.config.json"
 ok "a bare prefix is left alone, never blanked" "$(ab_group "$TMP/g/_loopd-")" "_loopd-"
@@ -185,6 +193,13 @@ printf '{ "org": "fixture-org", "group": "chosen" }\n' > "$WSC/instance.config.j
 bash "$BRIDGE_INSTALL" "$WSC" >/dev/null 2>&1 </dev/null
 ok "…and after the configured group when there is one" \
   "$([ -f "$WSC/chosen.code-workspace" ] && echo yes || echo no)" yes
+WSS="$TMP/g/_loopd-slashed"; mkdir -p "$WSS"
+printf '{ "org": "fixture-org", "group": "../escaped" }\n' > "$WSS/instance.config.json"
+( cd "$WSS" && git init -q . ) 2>/dev/null || true
+WSSOUT="$(bash "$BRIDGE_INSTALL" "$WSS" 2>&1 </dev/null)"
+ok "a group with a slash writes no workspace outside the bundle" \
+  "$(ls "$TMP/g"/*.code-workspace "$WSS"/*.code-workspace 2>/dev/null | wc -l | tr -d ' ')" 0
+ok "…and says so" "$(printf '%s\n' "$WSSOUT" | grep -c "group '../escaped' is not a file name")" 1
 for p in _ai-bridge- _loopd-; do
   ok "the seed workspace hides a ${p}* bundle from the repos pane" \
     "$(grep -cF "\"$p*\": true" "$SEED_WS")" 1
