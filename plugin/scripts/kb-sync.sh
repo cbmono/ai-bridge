@@ -76,7 +76,7 @@ bounded() {
 
 # A URL is config we own, and it is printed. Userinfo and any query are REMOVED rather than
 # masked — a display form needs neither, and removing cannot leave a tail behind.
-safe_url() { printf '%s' "$1" | LC_ALL=C sed -e 's#\(://\)[^/]*@#\1#' -e 's#[?#].*$##'; }
+safe_url() { printf '%s' "$1" | LC_ALL=C sed -e 's|\(://\)[^/]*@|\1|' -e 's|[?#].*$||'; }
 
 # WHY THE LAST BOUNDED CALL FAILED, IN OUR OWN WORDS. The whole point is that a credential
 # failure must not read as elapsed time — the 2026-10-03 mount spent 140s raising a bound

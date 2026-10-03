@@ -391,6 +391,12 @@ out="$(bash "$SYNC" --instance "$TMP/tok" --timeout 20 mount 2>&1)"
 ok "a token in the configured URL never reaches the output" "$(has "$out" 's3cr3tt0ken')" no
 ok "…the userinfo is removed, not masked, so no tail can survive" "$(has "$out" '@127.0.0.1')" no
 ok "…and the remote is still named without it" "$(has "$out" "https://127.0.0.1:$PORT/acme/kb.git")" yes
+
+mkdir -p "$TMP/qs/$AB_DIR"; cp "$SEED/SCHEMA.md" "$TMP/qs/$AB_SCHEMA"
+printf '{ "knowledge": { "repo": "https://127.0.0.1:%s/acme/kb.git?access_token=s3cr3tQUERY", "path": "/", "ref": "main" } }\n' \
+  "$PORT" > "$TMP/qs/instance.config.json"
+out="$(bash "$SYNC" --instance "$TMP/qs" --timeout 20 mount 2>&1)"
+ok "a secret in a query string is dropped from the printed URL" "$(has "$out" 's3cr3tQUERY')" no
 unset GIT_SSL_NO_VERIFY
 reap
 
