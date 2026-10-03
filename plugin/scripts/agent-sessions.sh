@@ -149,16 +149,19 @@ scope = [canon(root), canon(wtroot)] + [w for w, _ in by_wt]
 
 # A PROCESS, not the registry's word for one: a session the registry still lists as
 # `blocked` after its agent died carries no live pid, and `state` cannot tell the two apart.
-# A pid we may not signal is another user's process, so not this user's agent.
+# EPERM means the process EXISTS; only ESRCH may be rendered as "no process".
 def alive(pid):
     if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
         return False
     try:
         os.kill(pid, 0)
+    except PermissionError:
+        return True
     except OSError:
         return False
     return True
 
+# Display only — classification above reads the raw value, as `in-flight` does.
 # Every printed field comes from JSON or a file name, so no control character reaches a terminal.
 def clean(v):
     return "".join(ch for ch in str(v) if unicodedata.category(ch)[0] != "C")
@@ -184,7 +187,7 @@ for r in rows:
         continue
     labels = sorted({l for w, l in by_wt if under(c, w)})
     task = clean(",".join(labels) if labels else "unattributed")
-    state = clean(r.get("state") or r.get("status") or "?")
+    state = str(r.get("state") or r.get("status") or "?")
     pid = r.get("pid")
     if alive(pid):
         proc, rank = "pid %d" % pid, 0
@@ -197,7 +200,7 @@ for r in rows:
         ghost += 1
     sid = clean(r.get("id") or str(r.get("sessionId") or "?").split("-")[0])
     where = "" if labels else "  " + clean(cwd or "(no cwd)")
-    out.append((rank, task, state, proc, age(r.get("startedAt")), sid + where))
+    out.append((rank, task, clean(state), proc, age(r.get("startedAt")), sid + where))
 
 if summary == "1":
     print(running, ghost)

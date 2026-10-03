@@ -109,9 +109,12 @@ H="$(FIXTURE="$TMP/hostile.json" view)"
 ok "no control character from the JSON reaches the terminal" \
    "$(printf '%s' "$H" | tr -d '\n' | LC_ALL=C tr -cd '\000-\037\177' | wc -c | tr -d ' ')" 0
 if [ "$(id -u)" -ne 0 ]; then
-  ok "a pid owned by another user is not this user's agent" \
-     "$(printf '%s\n' "$H" | awk '/root0001/ {print $3}')" none
+  ok "a pid we may not signal still EXISTS — never rendered as none" \
+     "$(printf '%s\n' "$H" | awk '/root0001/ {print $3, $4}')" "pid 1"
 fi
+printf '[{"id":"zw000001","kind":"background","cwd":"%s/t2","state":"done\\u200b"}]' "$WT" > "$TMP/zw.json"
+ok "a state that only LOOKS terminal is classified raw, as in-flight does" \
+   "$(FIXTURE="$TMP/zw.json" view --summary)" "0 1"
 
 echo "== 4. a failing read is UNKNOWN, never zero =="
 OUT="$(FAIL=1 view)"; RC=$?
