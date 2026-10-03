@@ -1,6 +1,6 @@
 # Design invariants, and why each one exists
 
-This is the reasoning behind ai-bridge's design. Every bullet here exists because
+This is the reasoning behind loopd's design. Every bullet here exists because
 something went wrong once, and the "why" is the record of what went wrong — so
 preserve it when you edit a rule rather than summarising it away.
 
@@ -14,7 +14,7 @@ move it here intact instead.
 
 > **History.** These paragraphs were relocated verbatim from `ai-setup`'s root
 > `CLAUDE.md`, then from `ai-setup/.claude/rules/ai-bridge.md`, and finally into this
-> repo when ai-bridge was split out of `ai-setup`. Paths were rewritten for this repo's
+> repo when loopd was split out of `ai-setup`. Paths were rewritten for this repo's
 > root (`ai-bridge/symlink/…` → `symlink/…`, `ai-bridge/tests/…` → `tests/…`); nothing
 > else was changed.
 
@@ -25,7 +25,7 @@ move it here intact instead.
 | 0 | [Layout](#layout) | the whole repo |
 | 1 | [Retiring seed content is only reported](#1-retiring-content-is-asymmetric) | `/loopd:init`, `/loopd:welcome fix`, `RETIRED`, `plugin/seed/` |
 | 2 | [Retiring machinery sweeps the links](#2-retiring-machinery-means-deleting-the-file-and-letting-loopdinit-sweep-the-links) | `/loopd:init`, `plugin/` |
-| 3 | [`AWAITING.md` is opt-in by presence](#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence) | `/loopd:init`, the PM agent, `session-banner.sh` |
+| 3 | [`AWAITING.md` is opt-in by presence](#3-awaitingmd-is-loopds-only-status-artifact-and-it-is-opt-in-by-presence) | `/loopd:init`, the PM agent, `session-banner.sh` |
 | 4 | [A deletable capability is one file](#4-a-capability-some-deployments-must-not-have-should-be-one-deletable-file) | `plugin-yolo/` (the `loopd-yolo` companion), `resolve-autonomy.sh`, `commit-as.sh` |
 | 5 | [`build` and `research` are asymmetric](#5-build-and-research-projects-are-deliberately-asymmetric) | `/new-project` |
 | 6 | [The merge gate: exit 0 is the only clearance](#6-the-delegated-merge-gate-resolves-its-required-checks-in-required-checkssh-and-exit-0-is-the-only-clearance) | `required-checks.sh`, `review-clearance.sh` |
@@ -34,7 +34,7 @@ move it here intact instead.
 | 9 | [`migrate-bundle.sh` fixes only what has one right answer](#9-migrate-bundlesh-fixes-only-what-has-one-right-answer-and-is-report-only-by-default) | `migrate-bundle.sh` |
 | 10 | [The scaffold review is a three-stage chain](#10-the-scaffold-review-is-a-three-stage-chain-with-a-declared-fallback-never-a-skip) | `/new-project` step 8 |
 | 11 | [The board's five invariants](#11-the-cross-instance-board-is-a-writer-three-renderers-and-one-deletable-generated-file) | `write-snapshot.sh`, `build-board.sh`, `print-board.sh`, `watch-board.sh` |
-| 12 | [Three behaviours against a silent wrong answer](#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) | `push-state.sh`, `answered_questions`, `maxPrLoc` |
+| 12 | [Three behaviours against a silent wrong answer](#12-three-loopd-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one) | `push-state.sh`, `answered_questions`, `maxPrLoc` |
 | 13 | [A shared instance is three no-ops and one gate](sharing.md) | `task-owner.sh`, config split, derived indexes |
 | 14 | [`knowledge/references/` is the fifth knowledge kind](#14-knowledgereferences-is-the-fifth-knowledge-kind) | `validate-bundle.sh`, `SCHEMA.md` |
 | 15 | [The config layer is one tier, and the arrow stays one-way](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way) | `init-bundle.sh --config`, `config/` |
@@ -43,14 +43,14 @@ move it here intact instead.
 | 18 | [The allowlist check is pinned from both sides](#18-the-tool-allowlist-check-is-pinned-from-both-sides-and-silence-is-a-failure) | `agent-tool-allowlist.test.sh` |
 | 19 | [The destructive-action baseline is a hook, and it is narrow on purpose](#19-the-destructive-action-baseline-is-a-hook-and-it-is-narrow-on-purpose) | `plugin/hooks/deny-destructive.sh`, `permissions.deny` |
 | 20 | [The version is a number the MERGE moves](#20-the-version-is-a-number-the-merge-moves-and-the-drift-check-speaks-only-when-behind) | `VERSION`, `release-bump.sh`, `check-template-version.sh`, `core` paths |
-| 21 | [`/ai-bridge` reports facts that can be false, and `fix` is tiered in code](#21-ai-bridge-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) | `ai-bridge.sh`, `/ai-bridge`, `session-banner.sh` |
+| 21 | [`/loopd:welcome` reports facts that can be false, and `fix` is tiered in code](#21-loopdwelcome-reports-facts-that-can-be-false-and-fix-is-tiered-in-code) | `ai-bridge.sh`, `/loopd:welcome`, `session-banner.sh` |
 
 ---
 
 ## Layout
 
-- **This repo** — a **reusable OKF control-panel template**. `plugin/` holds generic machinery (SCHEMA, `CONVENTIONS.md` — the shared role-agent conventions, read on dispatch because they govern the target repos, which no `paths:` glob can reach, role agents, `/loopd:dispatch`, `/new-project`, `/close-project`, `/pr-review-request`, `/answer`, `/fanout`, `/audit`, `commit-as.sh`, `required-checks.sh`, `task-owner.sh`, `prune-worktrees.sh`, `close-project-folder.sh`, `validate-bundle.sh`, `migrate-bundle.sh`, `write-snapshot.sh`, `build-board.sh`, `print-board.sh`, `watch-board.sh`, `index-kb.sh`, `link-repos.sh`, a `SessionStart` hook for tasks-awaiting-you, a `UserPromptSubmit` hook pushing current instance state) shipping in the `ai-bridge` plugin, installed once per machine and never copied into a per-group **instance**; `plugin/seed/` holds starting content copied once; `/loopd:init` stamps out / refreshes an instance and manages its gitignore; `RETIRED` declares seed paths the template has stopped shipping, which are reported and never deleted. Each instance is its own repo under `~/workspace/<group>/_ai-bridge-<group>/` (leading underscore, named distinctly from this template dir). `AUTONOMY.md` is deliberately NOT in that list: it is neither machinery nor seed, and ships from the `loopd-yolo` COMPANION plugin, `plugin-yolo/` (ai-bridge-v2/task-018). Keep machinery generic — org/repo/path/team/channel literals live in an instance's `instance.config.json` / `CLAUDE.md`, never in `plugin/`. <!-- This bullet was duplicated three times by conflict resolutions; it is now ONE line carrying the union of all three. If you resolve a conflict here, merge into this line — never append a second copy. -->
-- **Not part of the `~/.claude` config layer.** ai-bridge used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root installer is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery ships from *this* repo as the `ai-bridge` plugin, and `ai-setup`'s installer has nothing to do with it. **`ai-setup` no longer carries that subtree at all** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69) removed it, and its last state is in git history only (`git -C ai-setup show f8b09a4:ai-bridge/`), so a path under `ai-setup/ai-bridge/` does not exist rather than being stale. This sentence used to say the subtree was still there and frozen — which contradicted `README.md` and pointed maintainers at a checkout path that is gone. That is the same "documentation describes a deleted thing as live" defect that removing the subtree was meant to end, and the third instance of it corrected in this PR. `ai-setup`'s *config* layer briefly lived here too — forked wholesale under `config/` behind a second install target (`init-bundle.sh --config`) — but that fork is what caused 24 colliding `~/.claude` paths with 14 diverged, so it has since been handed back: `config/` now ships only the three agents ai-bridge itself probes for, and `~/.claude` is `ai-setup`'s alone again — see [15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
+- **This repo** — a **reusable OKF control-panel template**. `plugin/` holds generic machinery (SCHEMA, `CONVENTIONS.md` — the shared role-agent conventions, read on dispatch because they govern the target repos, which no `paths:` glob can reach, role agents, `/loopd:dispatch`, `/new-project`, `/close-project`, `/pr-review-request`, `/answer`, `/fanout`, `/audit`, `commit-as.sh`, `required-checks.sh`, `task-owner.sh`, `prune-worktrees.sh`, `close-project-folder.sh`, `validate-bundle.sh`, `migrate-bundle.sh`, `write-snapshot.sh`, `build-board.sh`, `print-board.sh`, `watch-board.sh`, `index-kb.sh`, `link-repos.sh`, a `SessionStart` hook for tasks-awaiting-you, a `UserPromptSubmit` hook pushing current instance state) shipping in the `loopd` plugin, installed once per machine and never copied into a per-group **instance**; `plugin/seed/` holds starting content copied once; `/loopd:init` stamps out / refreshes an instance and manages its gitignore; `RETIRED` declares seed paths the template has stopped shipping, which are reported and never deleted. Each instance is its own repo under `~/workspace/<group>/_ai-bridge-<group>/` (leading underscore, named distinctly from this template dir). `AUTONOMY.md` is deliberately NOT in that list: it is neither machinery nor seed, and ships from the `loopd-yolo` COMPANION plugin, `plugin-yolo/` (ai-bridge-v2/task-018). Keep machinery generic — org/repo/path/team/channel literals live in an instance's `instance.config.json` / `CLAUDE.md`, never in `plugin/`. <!-- This bullet was duplicated three times by conflict resolutions; it is now ONE line carrying the union of all three. If you resolve a conflict here, merge into this line — never append a second copy. -->
+- **Not part of the `~/.claude` config layer.** loopd used to live as an `ai-bridge/` subtree inside the [`ai-setup`](https://github.com/cbmono/ai-setup) repo, whose own root installer is scoped to `.claude` and never touched it. That separation is now physical: **this repo is the canonical copy**, an instance's machinery ships from *this* repo as the `loopd` plugin, and `ai-setup`'s installer has nothing to do with it. **`ai-setup` no longer carries that subtree at all** — [`ai-setup#69`](https://github.com/cbmono/ai-setup/pull/69) removed it, and its last state is in git history only (`git -C ai-setup show f8b09a4:ai-bridge/`), so a path under `ai-setup/ai-bridge/` does not exist rather than being stale. This sentence used to say the subtree was still there and frozen — which contradicted `README.md` and pointed maintainers at a checkout path that is gone. That is the same "documentation describes a deleted thing as live" defect that removing the subtree was meant to end, and the third instance of it corrected in this PR. `ai-setup`'s *config* layer briefly lived here too — forked wholesale under `config/` behind a second install target (`init-bundle.sh --config`) — but that fork is what caused 24 colliding `~/.claude` paths with 14 diverged, so it has since been handed back: `config/` now ships only the three agents loopd itself probes for, and `~/.claude` is `ai-setup`'s alone again — see [15](#15-the-config-layer-is-one-tier-and-the-arrow-stays-one-way). The two halves share the worktree guard and nothing else.
 
 ---
 
@@ -64,7 +64,7 @@ move it here intact instead.
 
 Removing a capability from `plugin/` leaves every already-stamped instance with a symlink into a path that no longer exists, and the link loop never notices because it only iterates files that *do* exist. A dangling command still registers with Claude Code, and a `SessionStart` hook whose script has vanished exits 127 on every launch — so absence here is **not** safe, unlike the `AUTONOMY.md` pattern. `/loopd:init` step 2b sweeps them, and its test is narrow on purpose: a link is removed only when it points **into this template's `plugin/`** (decided by `ours`, not by name) **and** its target is gone — that combination has exactly one possible meaning. A real file, a link elsewhere, or a link that still resolves is left alone, and **seed content is never removed**: a `todos.md` outliving the retired `/todo` feature is the human's own writing, so it is reported, not deleted. Covered by `tests/retire-machinery.test.sh`.
 
-## 3. `AWAITING.md` is ai-bridge's only status artifact, and it is opt-in by presence
+## 3. `AWAITING.md` is loopd's only status artifact, and it is opt-in by presence
 
 There is deliberately **no `/status` command** (deleted in favour of this) and no full board — the file lists only what a human decision unblocks (✅ approve · ❓ answer · 🔀 merge · ⛔ unblock · 🏁 close), because in-flight and upcoming work needs no decision and a board people scroll past is a board they stop reading. **`/loopd:init` creates it on the first stamp only** (gated by `FIRST_STAMP`, computed before seeding), and the `project-manager` rewrites it each tick **only if it already exists, never creating it** — so `rm AWAITING.md` disables it permanently and an installer re-run must not resurrect it. That's the `AUTONOMY.md` absence-is-safe pattern with the default flipped: a new instance ships with the nudge working, rather than silently off until someone reads the docs. If you ever move creation out of the first-stamp guard, you break the off switch. `session-banner.sh` greps for the literal `## 🔴 Awaiting you` heading and asterisk-space bullets, so **the PM agent owns that exact layout** and reshaping either silently empties the startup nudge. The hook fences the items as **untrusted data** before they enter session context — the text comes from task docs carrying human questions, tool output, and PR metadata, and sits beside the hook's own instruction, so keep the boundary if you touch that output. **The items and that fence are the model's copy only** (`additionalContext`); the human's copy (`systemMessage`) is one count line naming the number and where to act, because the fence is written for a machine and the list is a third rendering of a queue `/loopd:dispatch` and the board show better. The two travel together — never fence without items, never items without the fence — and `tests/awaiting-queue.test.sh` asserts both halves out of one run for that reason. Don't reintroduce a status command or the 🟡/🟢/⛔ sections.
 
@@ -110,7 +110,7 @@ It prefers **branch protection** and falls back to `.github/required-checks.txt`
 
 ## 7. `prune-worktrees.sh` is report-only, and that is load-bearing
 
-It classifies worktrees and prints `git worktree remove` commands; it never deletes. The removal path was deleted in ai-bridge v2 because it had destroyed three running agents' worktrees, and because no first-party mechanism covers this root: native worktree isolation and its retention sweep only reach worktrees the harness itself created, of the **session** repo — measured, see the `worktree-isolation-spike` finding — while ai-bridge's live under `<reposRoot>/_wt` and are created by agents calling `git worktree add`. **Do not reintroduce a delete, not even behind a flag**; the auto-mode permission classifier independently refuses bulk worktree deletion, which is the same conclusion reached from the other side. The accepted cost is that the worktree root grows and draining it is a periodic human job.
+It classifies worktrees and prints `git worktree remove` commands; it never deletes. The removal path was deleted in v2 because it had destroyed three running agents' worktrees, and because no first-party mechanism covers this root: native worktree isolation and its retention sweep only reach worktrees the harness itself created, of the **session** repo — measured, see the `worktree-isolation-spike` finding — while loopd's live under `<reposRoot>/_wt` and are created by agents calling `git worktree add`. **Do not reintroduce a delete, not even behind a flag**; the auto-mode permission classifier independently refuses bulk worktree deletion, which is the same conclusion reached from the other side. The accepted cost is that the worktree root grows and draining it is a periodic human job.
 
 **The classification guards still matter, because the labels are the product.**
 
@@ -146,11 +146,11 @@ Writes through a temp file **beside** the target carrying the target's mode, nev
 - **(c) Untrusted text, published sink.** Every snapshot string is HTML-escaped at one point, a PR URL becomes a link only on an http/https scheme, the page's only external request is one declared webfont, and its single `<script>` (a clipboard helper) receives nothing from a snapshot — collapsing is `<details>`, not JavaScript. That last clause used to read "zero external requests and no `<script>` at all", which described the kanban `columns` page; that page was rejected by the owner as unreadable and **deleted** on 2026-08-24, so the invariant now names what the published board actually does. Discovery is explicit — named dirs, else `boardInstances` in `instance.config.json`, and **if that key is absent or empty, just this instance** — never a glob, because the script ships in the plugin and serves instances whose workspace layout it cannot know. `build-board.sh` is the one script here that uses `python3` (stdlib), justified in its header: a hand-rolled awk JSON reader mis-handling a quote inside a title is precisely the bug that turns an untrusted title into markup on a published page.
 - **(d) A snapshot's TYPES are untrusted too, not just its text, and one drifted instance must not blank the board for the rest.** "Malformed" splits in two and only one half is a parse error: unparseable JSON — or a top level that is not an object, which raises `AttributeError` rather than `ValueError` and so needs its own `isinstance` check — becomes a named "Unreadable snapshot" note, but **valid JSON carrying wrong types** (`"tasks": "many"`, an `"order"` of `"first"`, a non-string `group`) parses cleanly and only surfaces later at an `int()` or a sort comparison, where an uncaught `ValueError`/`TypeError` means **no output file is written at all** — every healthy instance goes down with the drifted one. So every number goes through one `toint()` helper and `group` is forced to `str()`: the bad field degrades to `0` and everything else still renders. Don't reintroduce a bare `int()` on snapshot data, and note that the same reasoning makes portability a correctness issue in the writer — a GNU-only regex escape like `\b` is a wrong *answer* on a grep that lacks it, not an error, so the test keeps a static check that none has come back.
 
-- **(e) The renderers are presentation over a settled contract, and that is what makes each one after the first cheap.** Three now read the same snapshot: `build-board.sh` (an HTML page you may publish), `print-board.sh` (columns in a terminal) and `watch-board.sh` (a local page kept fresh, which reuses `build-board.sh` rather than forking its markup — two pages to keep escaping correctly is one page too many). None of them reads the bundle, so (a)–(d) hold for all of them without being re-implemented. Three things follow. **Escaping is per-MEDIUM, not one shared routine:** a terminal's metacharacters are worse than HTML's, because ESC repaints what the reader has already read and a newline forges a ROW — a board reporting work nobody has — so `print-board.sh` drops every code point in Unicode general category C rather than blocklisting known-bad sequences. **Colour is a TTY property**: piped output carries no escape byte (`NO_COLOR` honoured), or every board redirected into a file or a ticket is corrupted. **A number is never truncated** — narrowing drops whole all-zero columns, naming them, and clips names; a clipped count is a *wrong* number and indistinguishable from a right one. And the watcher's cost is stated in the docs where someone chooses a renderer, not buried: it needs a resident process, which ai-bridge deliberately does not have, which is the same constraint that made munder-difflin's live telemetry unreachable. `fswatch` is probed and never assumed, degrading to a polling loop (`--interval`, default **2** seconds) with `WATCH_BOARD_WATCHER` (`auto` when absent) overriding the probe. The watcher refreshes only **this** instance's snapshot: an earlier version ran the writer in every watched directory, so a watcher started in one group rewrote another group's file every two seconds.
+- **(e) The renderers are presentation over a settled contract, and that is what makes each one after the first cheap.** Three now read the same snapshot: `build-board.sh` (an HTML page you may publish), `print-board.sh` (columns in a terminal) and `watch-board.sh` (a local page kept fresh, which reuses `build-board.sh` rather than forking its markup — two pages to keep escaping correctly is one page too many). None of them reads the bundle, so (a)–(d) hold for all of them without being re-implemented. Three things follow. **Escaping is per-MEDIUM, not one shared routine:** a terminal's metacharacters are worse than HTML's, because ESC repaints what the reader has already read and a newline forges a ROW — a board reporting work nobody has — so `print-board.sh` drops every code point in Unicode general category C rather than blocklisting known-bad sequences. **Colour is a TTY property**: piped output carries no escape byte (`NO_COLOR` honoured), or every board redirected into a file or a ticket is corrupted. **A number is never truncated** — narrowing drops whole all-zero columns, naming them, and clips names; a clipped count is a *wrong* number and indistinguishable from a right one. And the watcher's cost is stated in the docs where someone chooses a renderer, not buried: it needs a resident process, which loopd deliberately does not have, which is the same constraint that made munder-difflin's live telemetry unreachable. `fswatch` is probed and never assumed, degrading to a polling loop (`--interval`, default **2** seconds) with `WATCH_BOARD_WATCHER` (`auto` when absent) overriding the probe. The watcher refreshes only **this** instance's snapshot: an earlier version ran the writer in every watched directory, so a watcher started in one group rewrote another group's file every two seconds.
 
 Covered by `tests/snapshot.test.sh` (146 assertions, mostly negative) for the writer and the HTML board, and `tests/board-renderers.test.sh` (155) for the terminal board and the watcher.
 
-## 12. Three ai-bridge behaviours that all exist because a *silent* wrong answer is worse than a loud one
+## 12. Three loopd behaviours that all exist because a *silent* wrong answer is worse than a loud one
 
 **(a) `push-state.sh`** (a `UserPromptSubmit` hook) restates current instance state every turn, because "told to read `fleet.json`" is not "always knows" — `/loopd:dispatch` is a long-lived session whose context still describes tick one after five ticks, and a stale roster is corrected only by a **newer statement** of the truth, so the injection says out loud that it supersedes any earlier count. It must stay **self-detecting** (silent outside an instance root — it ships in `plugin/seed/.claude/settings.json`, so a version that printed elsewhere would fire on every turn of every unrelated project) and it must **always print inside one, zeros included**, because an absent line is indistinguishable from a broken hook and `in-flight 0` is exactly the correction a session remembering three live dispatches needs. It emits **slugs and task ids only, never task `title:` prose** — that would multiply the per-turn cost for no correlation value — fences them as untrusted data, and caps each list at `PUSH_STATE_MAX` (default 12) while reporting what it dropped.
 
@@ -176,10 +176,10 @@ The gate is on the wrong verb if you get it backwards. The full reasoning — ow
 
 ## 15. The config layer is one tier, and the arrow stays one-way
 
-**ai-bridge depended on a separate repo for four things, and all four failed silently.**
+**loopd depended on a separate repo for four things, and all four failed silently.**
 The measurement that forced this: **nine** top-level entries of the live `~/.claude` were
 symlinks into that other checkout, so "it will never be used again" was false on the very
-machine running ai-bridge — it was the parent config layer of every session, instances
+machine running loopd — it was the parent config layer of every session, instances
 included. Four of those entries were load-bearing here: the `@~/.claude/claude-defaults.md`
 import in `plugin/seed/CLAUDE.md` (the hard one — every new instance inherited it), and probed
 lookups for `code-architect`, `deep-bug-scan` and `plan-architect`. A missing `@import` is
@@ -196,8 +196,8 @@ when absent, though, so an instance stamped earlier keeps the dead import foreve
 is instance data the human owns and has very likely edited around. Report-only, the same
 contract as `RETIRED`.
 
-**One tier now, and it ships only what ai-bridge itself needs.** `config/required/` — the
-three agents (`code-architect`, `deep-bug-scan`, `plan-architect`) ai-bridge's own role
+**One tier now, and it ships only what loopd itself needs.** `config/required/` — the
+three agents (`code-architect`, `deep-bug-scan`, `plan-architect`) loopd's own role
 agents probe for with `test -f` — is the entire config layer. `config/opinionated/`, the
 second tier this section used to describe (one person's commands, output style, hooks and
 scripts, the only place in this repo a company's internal tool could be named — `/dave`),
@@ -298,7 +298,7 @@ is about to be deleted. Covered by `tests/config-layer.test.sh`.
 
 ## 16. The kill switch is one hook, and it fails open
 
-ai-bridge could dispatch a role agent but not **redirect or cleanly stop** one. A bad
+loopd could dispatch a role agent but not **redirect or cleanly stop** one. A bad
 dispatch ran to completion or was killed, and a kill mid-worktree leaves the worktree and
 its index in whatever state the agent had reached — which nothing then cleans up, because
 `prune-worktrees.sh` is report-only ([7](#7-prune-worktreessh-is-report-only-and-that-is-load-bearing)).
@@ -307,7 +307,7 @@ only counter-metric is `/audit`, which is retrospective and slow-cadence. So the
 piece was a **live** one: `plugin/hooks/agent-control.sh` (a `PreToolUse` hook) plus
 `scripts/control.sh` (the operator side), supporting `gate`, `steer` and `halt` against
 one agent. The two halves install separately — the operator script is instance machinery
-`/loopd:init` stamps, the hook ships with the `ai-bridge` plugin — so arming an instance
+`/loopd:init` stamps, the hook ships with the `loopd` plugin — so arming an instance
 whose plugin is not installed writes directives nothing reads.
 
 **It is keyed on `agent_id`, and that was measured rather than assumed.** A spike proved
@@ -384,7 +384,7 @@ reachable through a hand-edited file, and never a reason to fail closed.
 **The note is fenced as untrusted data, and the PREFIX is what closes the hole.** A
 reason/note is human free text that the hook injects into the *agent's* context beside its
 own instruction, so it is fenced and labelled the way `session-banner.sh` fences its items
-([12](#12-three-ai-bridge-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one)).
+([12](#12-three-loopd-behaviours-that-all-exist-because-a-silent-wrong-answer-is-worse-than-a-loud-one)).
 Fencing alone is not enough: a note reading exactly `--- END OPERATOR DIRECTIVE ---` would
 forge the closing marker, so every injected line is prefixed and can never open at column
 0. `control.sh`'s `oneline()` is the **single** choke point where operator text becomes a
@@ -422,7 +422,7 @@ interrupt a command already running, and an agent making no tool calls is not re
 And the roster only fills while armed, so an agent dispatched on a disarmed instance has
 its id recorded nowhere — which is why arming is a separate act worth doing before you
 need it. **No cost-velocity circuit breaker was built**: that escalation ladder needs a
-resident process to run its beat, and ai-bridge has none.
+resident process to run its beat, and loopd has none.
 
 **One breaker does exist, and it needed no beat — the doom loop.** Same tool name, same
 argument fingerprint, N consecutive times for one `agent_id` is a `deny` naming the tool
@@ -798,9 +798,9 @@ commit whose `VERSION` happens to equal the remote's is invisible. The number mo
 the bump convention says it moves, so this detects drift across a bump and nothing finer —
 which is why the convention and the check are one invariant and not two.
 
-## 21. `/ai-bridge` reports facts that can be false, and `fix` is tiered in code
+## 21. `/loopd:welcome` reports facts that can be false, and `fix` is tiered in code
 
-> Since the plugin replatform, this contract ships as the `ai-bridge` plugin's
+> Since the plugin replatform, this contract ships as the `loopd` plugin's
 > `/welcome` skill (`/loopd:welcome [check|fix]`); the instance command file it
 > describes is retired. Everything below still governs the script and the relay.
 
@@ -822,7 +822,7 @@ ad-hoc work must
 line would read the same on a healthy instance and a broken one, it does not belong there.
 That is the test to apply to the next line somebody wants to add.
 
-**The bare form INVOKES the banner; it does not reprint it.** `/ai-bridge` `exec`s
+**The bare form INVOKES the banner; it does not reprint it.** `/loopd:welcome` `exec`s
 `session-banner.sh`, because its whole purpose is that a long session scrolled the real
 banner out of view — and the moment the two print differently, the form is a lie about what
 the session was told. `tests/ai-bridge-command.test.sh` asserts byte-identical output, so a

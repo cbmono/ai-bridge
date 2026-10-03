@@ -8,7 +8,7 @@
 #   1. THE FIXTURE IS NOW AN INSTANCE. The banner prints nothing at all unless
 #      `instance.config.json` and `.claude/agents` are both present — the same "is this
 #      actually an instance" signature check-machinery.sh and push-state.sh use. That
-#      NARROWS the old hook deliberately: AWAITING.md is an ai-bridge artifact, and a
+#      NARROWS the old hook deliberately: AWAITING.md is a loopd artifact, and a
 #      stray file of that name in an unrelated project was never meant to print. The
 #      non-bridge case below asserts exactly that, against a fixture with no signature.
 #   2. "SILENT" NOW MEANS "THIS SECTION IS ABSENT", not "the process printed nothing".

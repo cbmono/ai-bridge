@@ -48,9 +48,9 @@ cat > "$PP/hooks/hooks.json" <<'HOOK'
 "Stop":[{"hooks":[{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/hooks/mark.sh Stop"}]}]}}
 HOOK
 
-AP="$LAB/ai-bridge"
+AP="$LAB/loopd"
 mkdir -p "$AP/.claude-plugin" "$AP/agents"
-printf '{"name":"ai-bridge","version":"0.0.1","description":"throwaway probe plugin"}\n' > "$AP/.claude-plugin/plugin.json"
+printf '{"name":"loopd","version":"0.0.1","description":"throwaway probe plugin"}\n' > "$AP/.claude-plugin/plugin.json"
 # Same prompt as probe 8's inline agent, so 8 and 9 differ only in inline vs plugin.
 printf -- '---\nname: project-manager\ndescription: probe agent\ntools: Read\n---\nYou are terse.\n' > "$AP/agents/project-manager.md"
 

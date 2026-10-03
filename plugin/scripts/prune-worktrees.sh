@@ -133,7 +133,7 @@
 #
 # REPORT-ONLY. This script does not remove anything, ever. It classifies and
 # prints the `git worktree remove` commands for you to run. The removal path was
-# deleted in ai-bridge v2: it had destroyed three running agents' worktrees, and
+# deleted in v2: it had destroyed three running agents' worktrees, and
 # no harness mechanism covers worktrees under <reposRoot>/_wt (native isolation
 # and its retention sweep only reach worktrees the harness itself created, of the
 # SESSION repo — measured, see the worktree-isolation-spike finding). So the
@@ -146,7 +146,7 @@
 # Usage:  prune-worktrees.sh          # classify and report; never removes
 #         prune-worktrees.sh --dry-run  # accepted, no-op (always dry now)
 #
-# Verified by tests/prune-worktrees.test.sh in the ai-bridge template
+# Verified by tests/prune-worktrees.test.sh in the loopd template
 # repo, which builds one throwaway worktree per decision class and asserts every
 # outcome. Run it after any change here — this script cannot be exercised safely
 # by hand. (The harness lives outside plugin/ deliberately: everything under
@@ -160,7 +160,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run|-n) : ;;   # no-op; always report-only
     --reclaim)
-      echo "prune-worktrees: --reclaim was removed in ai-bridge v2 — this script never deletes." >&2
+      echo "prune-worktrees: --reclaim was removed in v2 — this script never deletes." >&2
       echo "  It prints the exact 'git worktree remove' commands; run the ones you want." >&2
       exit 2 ;;
     -h|--help)    sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; $d'; exit 0 ;;

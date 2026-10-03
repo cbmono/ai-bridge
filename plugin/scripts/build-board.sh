@@ -661,7 +661,7 @@ def others_for(d, me, default_owner):
 # ONE STRING, TWO CONTROLS. `promote → ready` in the task table and `Approve` on a
 # PROMOTION item in the waiting rail are the SAME decision — "this draft is ready" — so
 # they copy the same bytes, from here, instead of two spellings of one act. The button
-# used to copy a three-sentence prompt ("In the ai-bridge instance, promote … from draft
+# used to copy a three-sentence prompt ("In the loopd instance, promote … from draft
 # to ready: review its acceptance criteria, tighten any that are not testable, then set
 # status: ready.") while the rail copied a generic `APPROVED — go ahead.` Both were
 # wrong in the same way: the prompt told an agent how to do a job it already knows, and

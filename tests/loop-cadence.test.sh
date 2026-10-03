@@ -4,7 +4,7 @@
 # that lands mid-tick is a clean skip rather than a fault.
 #
 # WHY THIS EXISTS. `/loop [interval] <prompt>` and `/schedule` (remote routines) both ship
-# with Claude Code, and until now ai-bridge documented neither: the cadence was the owner
+# with Claude Code, and until now loopd documented neither: the cadence was the owner
 # re-running `/<plugin>:dispatch` by hand, or a session babysitting it. Naming `/loop` in
 # a document is cheap and unenforced — the control panel's
 # knowledge/findings/a-rule-with-no-reader-is-not-a-rule.md counts six rules in one month

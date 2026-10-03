@@ -266,7 +266,7 @@ echo "== 5. the INSTALLED layout: a stamp from a plugin cache, with no checkout 
 # ever exercised. A marketplace install is `source: ./plugin`, so what lands on a machine
 # is the CONTENTS of `plugin/` under a version directory and nothing above it. Measured on
 # the real 0.15.0 cache, 2026-09-05: `agents/ evals/ hooks/ scripts/ skills/ README.md`,
-# and `init-bundle.sh` exited 2 with "cannot locate the ai-bridge template root". A
+# and `init-bundle.sh` exited 2 with "cannot locate the loopd template root". A
 # criterion of "no clone is needed" that is only ever verified against the repo is a
 # criterion verified against the one layout where it could not fail.
 #
@@ -342,7 +342,7 @@ ok "…and that comparison catches a planted difference" \
 MUT="$TMP/cache-mut"; cp -R "$CACHE" "$MUT"; rm -rf "$MUT/seed"
 bash "$MUT/scripts/init-bundle.sh" "$TMP/_never" >"$TMP/mut.out" 2>&1
 ok "a plugin root with no seed/ is REFUSED"      "$?" 2
-ok "…naming the plugin root it could not verify" "$(grep -c 'cannot locate the ai-bridge plugin root' "$TMP/mut.out" | tr -d ' ')" 1
+ok "…naming the plugin root it could not verify" "$(grep -c 'cannot locate the loopd plugin root' "$TMP/mut.out" | tr -d ' ')" 1
 ok "…and nothing was stamped"                    "$(yn test -e "$TMP/_never")" no
 
 # `--config` is the ONE thing an installed plugin cannot do, and it must say so by name.

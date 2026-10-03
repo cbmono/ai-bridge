@@ -204,7 +204,7 @@ printf '%s\n' "$BARE6" > "$GHFIX/repos/acme_acme-notes"
 T6="$TMP/w6/_ai-bridge-acme"; mkdir -p "$T6"
 rc="$(run "$T6" --org acme --name acme-notes)"
 ok "exit 3 — it refuses"                      "$rc" 3
-ok "…by name"                                 "$(saw "$LAST_OUT" 'acme/acme-notes exists and is not an ai-bridge bundle')" yes
+ok "…by name"                                 "$(saw "$LAST_OUT" 'acme/acme-notes exists and is not a loopd bundle')" yes
 ok "…naming the two markers it looked for"    "$(saw "$LAST_OUT" "no instance.config.json, no $AB_SCHEMA")" yes
 ok "it did NOT stamp the seed over it"        "$([ -e "$T6/$AB_SCHEMA" ] && echo yes || echo no)" no
 ok "…and the repo's own content is intact"    "$(saw "$T6/README.md" "someone else's repo")" yes

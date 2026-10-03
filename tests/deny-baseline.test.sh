@@ -563,7 +563,7 @@ ok "main thread: gh run view --log is refused" \
 ok "…--log-failed is the same read" \
    "$(verdict "$CPROOT" 'gh run view --log-failed --job 12345')" "deny:launcher_diagnoses_nothing"
 ok "…and the same bytes via gh api" \
-   "$(verdict "$CPROOT" 'gh api /repos/cbmono/ai-bridge/actions/runs/123/logs')" "deny:launcher_diagnoses_nothing"
+   "$(verdict "$CPROOT" 'gh api /repos/cbmono/loopd/actions/runs/123/logs')" "deny:launcher_diagnoses_nothing"
 ok "…driving a cluster with kubectl" \
    "$(verdict "$CPROOT" 'kubectl get pods -n staging')" "deny:launcher_diagnoses_nothing"
 ok "…with argocd" \
@@ -591,7 +591,7 @@ ok "…and a path-qualified cat is still cat" \
 ok "a dispatched agent reads the CI log untouched" \
    "$(verdict_agent "$CPROOT" 'gh run view 33430116558 --log')" "allow"
 ok "…and gh api logs" \
-   "$(verdict_agent "$CPROOT" 'gh api /repos/cbmono/ai-bridge/actions/runs/123/logs')" "allow"
+   "$(verdict_agent "$CPROOT" 'gh api /repos/cbmono/loopd/actions/runs/123/logs')" "allow"
 ok "…and kubectl" \
    "$(verdict_agent "$CPROOT" 'kubectl get pods -n staging')" "allow"
 ok "…and argocd" \

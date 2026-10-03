@@ -1,6 +1,6 @@
 # Autonomy and the merge gate
 
-By default ai-bridge keeps two gates for the human: **promote** a `draft` to `ready`,
+By default loopd keeps two gates for the human: **promote** a `draft` to `ready`,
 and **merge** the PR (build) or **approve** the deliverable (research). Delegating
 either one is optional, and off unless you install it.
 

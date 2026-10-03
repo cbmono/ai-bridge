@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Exercises plugin/scripts/prune-worktrees.sh — the worktree CLASSIFIER.
-# It is report-only since ai-bridge v2: it never removes, it prints commands.
+# It is report-only since v2: it never removes, it prints commands.
 #
 # The pruner is the one script in this template that can destroy work, and it has
 # done so (three running agents' worktrees, 2026-08-04). It has no safe manual
@@ -514,7 +514,7 @@ assert "no worktree was deregistered" "$([[ "$BEFORE_WT" == "$AFTER_WT" ]] && ec
 assert "no worktree directory was deleted" "$([[ "$BEFORE_DIRS" == "$AFTER_DIRS" ]] && echo 0 || echo 1)"
 
 # ---- scenario B: --reclaim is refused ---------------------------------------
-# The removal path was deleted in ai-bridge v2 (it had destroyed three running
+# The removal path was deleted in v2 (it had destroyed three running
 # agents' worktrees, and no harness mechanism covers <reposRoot>/_wt). The flag is
 # kept only to fail loudly: a caller or a human with muscle memory must be told the
 # capability is gone, not silently given a no-op that looks like a clean sweep.

@@ -1092,13 +1092,13 @@ t = open('$RW').read()
 sys.exit(0 if t.index('Short name, long title') < t.index('class=\"promote\"') else 1)" && echo 0 || echo 1)"
 assert "…only on a draft row"                        "$(eq "$(grep -oF 'class="promote"' "$RW" | wc -l | tr -d ' ')" 1)"
 # THE PAYLOAD IS THE HANDLE AND THE VERB, and nothing else. It was three sentences —
-# `In the ai-bridge instance, promote <handle> from draft to ready: review its acceptance
+# `In the loopd instance, promote <handle> from draft to ready: review its acceptance
 # criteria, tighten any that are not testable, then set status: ready.` — which told an
 # agent how to do a job it already knows, and was a SECOND spelling of the decision the
 # rail's Approve copies for the same task. Both halves are pinned: the short form is
 # there, and the prose form is absent from the page.
 assert "…still only COPYING, and now handle + verb"  "$(fhas 'class="promote" data-copy="jitter/task-001: promote to ready"' "$RW")"
-assert "…and the three-sentence prompt is gone"      "$(fhasnt 'In the ai-bridge instance, promote' "$RW")"
+assert "…and the three-sentence prompt is gone"      "$(fhasnt 'In the loopd instance, promote' "$RW")"
 assert "…from every rendered page"                   "$(fhasnt 'tighten any that are not testable' "$HB")"
 # IT LOOKS LIKE A CONTROL AT REST, which is the property the old outline bought and the
 # soft-blue fill keeps: a chip only visible under a pointer is invisible to a touch

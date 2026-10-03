@@ -11,7 +11,7 @@ producer-defined extensions. This document is the contract for the custom
 missing optional fields and unknown keys (per the OKF spec).
 
 > **Seed file — copied once, then yours.** `/loopd:init` copied this file into the
-> bundle from the `ai-bridge` plugin; the bundle owns it from then on, so your edits stay
+> bundle from the `loopd` plugin; the bundle owns it from then on, so your edits stay
 > and this copy drifts from the template until `/loopd:init` 3-way merges a
 > later template change onto them. Instance-specific values (`<org>`, the clone root, the
 > author identity, team routing) live in `instance.config.json` and this instance's
@@ -256,7 +256,7 @@ pointer to the finished deliverable(s) on completion).
 
 ## type: Agent  (`agents/index.md` lists the roster)
 
-Executable definitions ship in the **`ai-bridge` plugin** (`/plugin install
+Executable definitions ship in the **`loopd` plugin** (`/plugin install
 loopd@loopd`), one per machine — not in the bundle. Dispatch them by their
 **namespaced** name, `loopd:<role>`: a bare agent name does NOT resolve (measured
 2026-09-02). The roster doc is a human-readable routing reference.
@@ -1265,7 +1265,7 @@ untracked scaffolding), `KEEP`, `STALE` or `UNREGISTERED`, and prints the exact
 own is always `KEEP`, because "already merged" and "dispatched but hasn't committed
 yet" are the same git state.
 
-The removal path was deleted in ai-bridge v2: it had destroyed three running agents'
+The removal path was deleted in v2: it had destroyed three running agents'
 worktrees, and no first-party mechanism covers this root (native isolation and its
 retention sweep only reach worktrees the harness created, of the *session* repo). So
 the worktree root does grow, and draining it is a periodic human job — surface the

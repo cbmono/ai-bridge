@@ -41,7 +41,7 @@ command -v jq >/dev/null 2>&1 || { echo "SKIP: jq not installed (the hook requir
 res() { (cd "$1" 2>/dev/null && pwd -P); }
 SHA="a30826d9c0ffee1234567890abcdef0123456789"
 OTHER_SHA="cb20f95c11112222333344445555666677778888"
-NWO="cbmono/ai-bridge"
+NWO="cbmono/ai-bridge"   # paired with the receipt filename asserted below; a fixture value, not prose
 
 # ------------------------------------------------------------------------------ fixtures
 # A bundle (the instance root the hook reads from CLAUDE_PROJECT_DIR) and a product-repo

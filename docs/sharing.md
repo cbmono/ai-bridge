@@ -186,7 +186,7 @@ Covered by `tests/task-owner.test.sh` (74 assertions, mostly refusals), `commit-
 
 The second clone is **not a first stamp** (`instance.config.json` arrives tracked), so
 `/loopd:init` there will **not** create `AWAITING.md`. It says so, with the `touch` to turn
-it on. See [conventions.md invariant 3](conventions.md#3-awaitingmd-is-ai-bridges-only-status-artifact-and-it-is-opt-in-by-presence)
+it on. See [conventions.md invariant 3](conventions.md#3-awaitingmd-is-loopds-only-status-artifact-and-it-is-opt-in-by-presence)
 for why that creation is gated on the first stamp.
 
 `SNAPSHOT.json` is **not** gated that way and needs no `touch`: the installer seeds it on

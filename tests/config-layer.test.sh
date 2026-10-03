@@ -3,7 +3,7 @@
 # config-layer.test.sh — `install.sh --config` links the ~/.claude layer, and the two
 # halves of this repo stay independent in both directions.
 #
-# WHY. ai-bridge had four dependencies on a separate config repo and all four failed
+# WHY. loopd had four dependencies on a separate config repo and all four failed
 # SILENTLY: the `@~/.claude/claude-defaults.md` import every instance inherited from
 # seed/CLAUDE.md, and three probed-for agents (`code-architect`, `deep-bug-scan`,
 # `plan-architect`). Folding that layer in is only worth doing if three properties hold,

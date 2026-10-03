@@ -13,7 +13,7 @@
 #
 # It reads a config key, an env var and a plugin registry. It never reads, writes or
 # prints a credential. Reasoning: projects/ai-bridge-next/tasks/task-002-*.md.
-# GENERIC TEMPLATE FILE — ships with the `ai-bridge` plugin; do not edit per instance.
+# GENERIC TEMPLATE FILE — ships with the `loopd` plugin; do not edit per instance.
 # Verified by tests/companion-account-switch.test.sh.
 set -uo pipefail
 _pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then . "$_pn"; fi

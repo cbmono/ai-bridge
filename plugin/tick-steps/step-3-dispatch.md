@@ -92,7 +92,7 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
      such sessions from August.
    - **`--add-dir <bundle root>`**, or the agent cannot reach its own task document: its
      cwd is the worktree, and the bundle is outside it.
-   - **The namespace is not optional** — the role agents ship in the `ai-bridge` plugin
+   - **The namespace is not optional** — the role agents ship in the `loopd` plugin
      and a bare agent name does NOT resolve (measured 2026-09-02); it fails with "no
      such agent", never with "you forgot the namespace". **It applies to every one of
      the eight** — `loopd:cataloguer`, `loopd:advisor`, `loopd:qa-reviewer`

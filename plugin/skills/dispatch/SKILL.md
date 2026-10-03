@@ -11,7 +11,7 @@ Start the **Project Manager loop** — but as a **SERIAL, completion-driven** lo
 
 > **This file is the steps.** The reasoning — why serial and not `/goal`, why the lock
 > exists and what it closed, why publishing was deleted, the measured incidents behind
-> each rule — is in `docs/pm-design.md` in the ai-bridge template ("The launcher").
+> each rule — is in `docs/pm-design.md` in the loopd template ("The launcher").
 > Read it before *changing* a rule here; you never need it to *run* the loop.
 
 Three standing facts the steps below rest on:
@@ -219,7 +219,7 @@ Parse `$ARGUMENTS` as the inter-tick **gap** (default **10m**). Then:
 
    The tick itself: spawn a **fresh** `project-manager` agent
    (`subagent_type: loopd:project-manager` — **namespaced**, because the role agents
-   ship in the `ai-bridge` plugin and a BARE agent name does not resolve, measured
+   ship in the `loopd` plugin and a BARE agent name does not resolve, measured
    2026-09-02) for ONE LIVE tick (background), with the standing guardrails below. **Fresh every time — never wake a completed tick with a message**;
    step 0.5 refuses such a tick anyway. **Brief it with the gap, the guardrails and the tick
    id you minted at step 1, verbatim — and not with state** — it reads the bundle, `git` and `gh` itself. **Run the tick on the

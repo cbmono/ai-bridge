@@ -450,7 +450,7 @@
 #      hand-started tick. End the tick. `--as launcher` never sees this: taking a lock
 #      where there is none is exactly what a launcher is for.
 #
-# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
+# GENERIC PLUGIN FILE — ships inside the `loopd` plugin; nothing to edit per
 # instance. It reads no org, repo or path literal.
 #
 # Verified by tests/tick-lock.test.sh.
@@ -879,7 +879,7 @@ case "$cmd" in
          # The redirect stays INSIDE this subshell: `noclobber` is a shell option, so a
          # `> $LOCK` applied by the caller truncates an existing lock instead of refusing.
          { printf '%s\n' \
-           "# ai-bridge PM tick lock. Taken by the LAUNCHER immediately before it dispatches a" \
+           "# loopd PM tick lock. Taken by the LAUNCHER immediately before it dispatches a" \
            "# tick, and only by it: a tick that finds no lock was not dispatched — it was resumed" \
            "# — and is refused rather than allowed to take one of its own." \
            "# PER CLONE and gitignored — NOT a cross-machine lock: two clones of one shared" \

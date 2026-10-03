@@ -138,7 +138,7 @@ print("\t".join([str(own), str(entries[0].get("version", ""))]))
 manifest_rows="$(core_manifest_versions "$TPL")" || manifest_rows="UNREADABLE"
 ok "plugin.json's version equals VERSION" \
   "$(printf '%s' "$manifest_rows" | cut -f1)" "$ver"
-ok "…and so does the ai-bridge marketplace entry's (the one with source ./plugin)" \
+ok "…and so does the loopd marketplace entry's (the one with source ./plugin)" \
   "$(printf '%s' "$manifest_rows" | cut -f2)" "$ver"
 
 # THE NEGATIVE CONTROL. Two assertions comparing a reader's output to `$ver` pass just as

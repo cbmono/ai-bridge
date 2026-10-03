@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# push-state.sh — UserPromptSubmit hook (ai-bridge machinery).
+# push-state.sh — UserPromptSubmit hook (loopd machinery).
 #
 # Pushes one compact line of CURRENT instance state into context on every turn.
 #

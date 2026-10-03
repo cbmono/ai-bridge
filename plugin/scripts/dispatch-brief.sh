@@ -126,7 +126,7 @@ else
     "$REPO" "${REPO##*/}"
 fi
 
-# Bands measured over 47 merged cbmono/ai-bridge PRs paired with their task's criteria
+# Bands measured over 47 merged cbmono/loopd PRs paired with their task's criteria
 # count (2026-09-06): 0-3 → 6 files/142 lines, 4-6 → 14/306, 7+ → 20/597.
 if   [ "$CRITERIA" -le 3 ]; then BAND=small;    FILES=6;  TURNS=3
 elif [ "$CRITERIA" -le 6 ]; then BAND=standard; FILES=14; TURNS=5

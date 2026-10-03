@@ -26,7 +26,7 @@ from a read that could not have answered is the same defect one document further
 
 > **This file is the steps.** The reasoning behind each rule — what went wrong to
 > produce it, with dates and measurements — is in `docs/pm-design.md` in the
-> ai-bridge template, section-per-step. Read it before *changing* a rule here;
+> loopd template, section-per-step. Read it before *changing* a rule here;
 > you never need it to *run* a tick.
 
 **Instance config.** Read `instance.config.json` at the bundle root for this

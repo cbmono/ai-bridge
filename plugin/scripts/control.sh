@@ -103,7 +103,7 @@ USAGE
 # ------------------------------------------------------------------ the instance
 # Walk up for the instance root, so this works from anywhere inside the bundle.
 # The same pair the hooks use. `.claude/agents` was a third condition until the name
-# swap retired it — the role agents ship in the `ai-bridge` plugin now, so testing for
+# swap retired it — the role agents ship in the `loopd` plugin now, so testing for
 # that directory would refuse in every instance rather than in none.
 find_root() {
   d="$(pwd -P)"
@@ -117,7 +117,7 @@ find_root() {
 }
 
 ROOT="$(find_root)" || {
-  echo "error: not inside an ai-bridge instance (no instance.config.json)." >&2
+  echo "error: not inside a loopd instance (no instance.config.json)." >&2
   echo "       Run this from an instance root." >&2
   exit 1
 }
@@ -339,7 +339,7 @@ halt|gate|pause|steer)
     echo "note   replaced the directive already pending for $id"
   fi
 
-  [ -f "$DIRECTIVES" ] || printf '%s\n' "# ai-bridge agent control — <verb>\\t<agent-id>\\t<set-at>\\t<reason>. Written by control.sh." > "$DIRECTIVES"
+  [ -f "$DIRECTIVES" ] || printf '%s\n' "# loopd agent control — <verb>\\t<agent-id>\\t<set-at>\\t<reason>. Written by control.sh." > "$DIRECTIVES"
   printf '%s\t%s\t%s\t%s\n' "$verb" "$id" "$(now)" "$reason" >> "$DIRECTIVES" \
     || { echo "error: could not write $DIRECTIVES" >&2; exit 1; }
 

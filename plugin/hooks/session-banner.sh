@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# session-banner.sh — THE SessionStart hook (ai-bridge machinery).
+# session-banner.sh — THE SessionStart hook (loopd machinery).
 #
 # One banner at the top of a session: which instance this is, what it is configured to do,
 # where the board is (or why there is not one), and whether anything is waiting on the
@@ -303,7 +303,7 @@ case "$FORMAT" in json|md) ;; *) FORMAT=text ;; esac
 # something genuinely died and masking it would only hide it.
 #
 # EMPTY BUFFER ⇒ NO OUTPUT, NOT `{"systemMessage":""}`. A directory that is not an
-# ai-bridge instance must stay silent on every channel, and an empty user-visible message
+# loopd instance must stay silent on every channel, and an empty user-visible message
 # is a blank notification rather than silence.
 #
 # `mktemp` FAILING IS NOT FATAL EITHER — it falls back to plain stdout, which is precisely
@@ -533,11 +533,11 @@ root="${CLAUDE_PROJECT_DIR:-$PWD}"
 # in precisely the case the machinery section exists for. That leaves ONE marker, and it is
 # `instance.config.json` — COPIED seed content, the one part a moved template cannot touch.
 # The second half of the old pair was `.claude/agents/`, and the name swap retired it: the
-# eight role agents ship in the `ai-bridge` plugin now, so keying on that directory would
+# eight role agents ship in the `loopd` plugin now, so keying on that directory would
 # silence the banner in every instance the moment it re-stamps. Same marker, same
 # reasoning, as the two plugin enforcement hooks. A non-bridge project has no
 # instance.config.json and sees nothing — including no awaiting queue, which is a
-# deliberate narrowing of the old show-awaiting.sh: AWAITING.md is an ai-bridge artifact,
+# deliberate narrowing of the old show-awaiting.sh: AWAITING.md is a loopd artifact,
 # and a stray file of that name in an unrelated project was never meant to print.
 cfg="$root/instance.config.json"
 [ -f "$cfg" ] || exit 0
@@ -569,7 +569,7 @@ if [ -n "$bin" ] && [ -r "$bin/bundle-paths.sh" ]; then
   # shellcheck source=../scripts/bundle-paths.sh
   . "$bin/bundle-paths.sh"
 else
-  echo "ai-bridge: bundle-paths.sh is unreachable, so the banner cannot name this bundle's files." >&2
+  echo "loopd: bundle-paths.sh is unreachable, so the banner cannot name this bundle's files." >&2
   exit 0
 fi
 ab_unmigrated "$root" && ab_unmigrated_notice "$root"
@@ -921,7 +921,7 @@ if [ "$n_legacy" -gt 0 ]; then
   echo "    are links into a template checkout, and ${n_dangling} of them are already dead."
   echo "    linked: $legacy"
   [ -n "$gone" ] && echo "    pointing into: $gone"
-  echo "    The machinery ships in the ai-bridge PLUGIN now, so these links are frozen at"
+  echo "    The machinery ships in the loopd PLUGIN now, so these links are frozen at"
   echo "    whatever that checkout last pulled — a plugin update never reaches them."
   echo "    REPAIR (idempotent, converts in place, touches no data):"
   printf '        /%s:init %q\n' "$PLUGIN_NAME" "$root"
@@ -1470,7 +1470,7 @@ if [ "$board_on" -eq 1 ]; then
     fi
     IFS="$TAB" read -r u_state u_here u_there u_name <<<"${_upd:-}"
     case "${u_state:-}" in
-      behind)  echo "$(pad Update "$BOARD_LW")claude plugin update ${u_name:-ai-bridge}  (${u_here} → ${u_there}) — restart to apply it" ;;
+      behind)  echo "$(pad Update "$BOARD_LW")claude plugin update ${u_name:-loopd}  (${u_here} → ${u_there}) — restart to apply it" ;;
       current)
         # `.ai-bridge/seed-base/VERSION` is the plugin version the bundle was last stamped
         # with; trailing the installed one means seed edits are waiting on /<plugin>:init.

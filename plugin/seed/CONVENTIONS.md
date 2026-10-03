@@ -20,7 +20,7 @@ a rule depends on a tool only some of you hold, it says **which list decides** a
 others do instead. Never the other way round — a condition on what is *installed* reads as
 satisfied while still being unexecutable for an agent that lacks the tool, which is exactly
 how the `code-architect` clause below went unnoticed. `tests/agent-tool-allowlist.test.sh`
-in `cbmono/ai-bridge` enforces this.
+in `cbmono/loopd` enforces this.
 
 <!-- tool-mention: Workflow(2), Agent(4), EnterWorktree(1), mcp__claude-in-chrome__*(1), AskUserQuestion(1) — named below to state their ABSENCE for some readers, never to instruct: no role agent holds Workflow; only qa-reviewer holds Agent, which is why the Explore rule states the route for the three that do not; EnterWorktree may be missing for a subagent; failure-analyst holds no browser tools; no role agent holds AskUserQuestion, which is why a tool request goes into open_questions instead of a live prompt. Every mention gives the route for an agent that lacks it. Enforced by tests/agent-tool-allowlist.test.sh. -->
 
@@ -55,7 +55,7 @@ which is the one surface with no length limit, and the short form links to it.
 command (**exit 3**); `validate-bundle.sh` warns on a `Finding` over 40 lines or missing its
 `lesson:` — **on the document you name (`validate-bundle.sh <path>`) as well as on the whole
 bundle**, so the cap lands while you are writing rather than at the next full run; and
-`tests/concision-contract.test.sh` in `cbmono/ai-bridge` fails when a
+`tests/concision-contract.test.sh` in `cbmono/loopd` fails when a
 `plugin/**/*.sh` file's comment-line share exceeds **35%**, ratcheting the files already
 above it so none may grow its share.
 
@@ -118,7 +118,7 @@ above it so none may grow its share.
   **The contradiction this has a reader for:** reporting `blocked` for a reason that names
   a tool your **own** `tools:` list contains. `check-dispatch.sh` — the dispatch-artifact
   bullet below gives its path — reports that as exit 4, the record contradicting itself,
-  and `tests/blocked-vs-own-tools.test.sh` in `cbmono/ai-bridge` pins it. Re-read your
+  and `tests/blocked-vs-own-tools.test.sh` in `cbmono/loopd` pins it. Re-read your
   allowlist before you write a blocker reason.
 - Read `instance.config.json` for `reposRoot` (where target repos are cloned).
   Honor this `CLAUDE.md` for data-handling, units, and commit-attribution.
@@ -345,7 +345,7 @@ above it so none may grow its share.
   **run the tests your change touches, plus anything that exercises the file you edited**,
   and **do not run the full suite locally as a matter of course**.
   **Where the repo ships a runner that selects on the diff, use it rather than choosing by
-  hand** — `tests/run.sh --changed` in `cbmono/ai-bridge` runs exactly what CI runs, and
+  hand** — `tests/run.sh --changed` in `cbmono/loopd` runs exactly what CI runs, and
   its `--all` runs once before the PR is opened. Selecting by hand is how a changed path
   ends up with no harness covering it and nobody noticing.
   **This is a rule about RE-RUNNING, not about testing.** Follow it literally and you still
@@ -366,18 +366,18 @@ above it so none may grow its share.
   job only if you will leave it alone; otherwise stop it.
   **The trade, with the measured numbers, so you can tell when it stops applying.** One CI
   round-trip costs **about 9 minutes of wall clock and no tokens** (8-10 minutes on a
-  clean runner, measured across `cbmono/ai-bridge`'s recent runs); the local full run
+  clean runner, measured across `cbmono/loopd`'s recent runs); the local full run
   measured **2026-08-29** cost **39m 47s and 269.4k tokens** on a machine that was also
   running a `/loopd:dispatch` tick. Same answer, several times the wall clock, and tokens on top.
   This is a **proportion argument, not a ban**: a *red* local run would have saved a CI
   round-trip, and the day a repo's CI is slower than its local suite, this rule inverts.
-  **The local run never was the gate.** In `cbmono/ai-bridge`, the `harness suite` job is a
+  **The local run never was the gate.** In `cbmono/loopd`, the `harness suite` job is a
   **required check** on every PR
   ([ai-bridge#42](https://github.com/cbmono/ai-bridge/pull/42)), and branch protection sets
   **`strict=true`**, which forces that check to run **against the merged base** before the
   PR can land. Your machine cannot produce that verdict, so skipping the local full run
   asks nobody to trust **less** verification — it moves the verification to the only place
-  the merge gate actually reads. `tests/local-vs-ci-testing.test.sh` in `cbmono/ai-bridge`
+  the merge gate actually reads. `tests/local-vs-ci-testing.test.sh` in `cbmono/loopd`
   pins the clauses above by name.
 - **A red check is EVIDENCE, and it is already written down: read the failing check's own
   error text BEFORE you form a hypothesis, and falsify locally BEFORE you push.** Two
@@ -404,7 +404,7 @@ above it so none may grow its share.
   hold — that is a capability gap (→ the three rungs above): say **which clause you could
   not satisfy**, and take the cheapest falsification you do have, which is re-reading the
   log *against* your hypothesis for the line that refutes it.
-  `tests/read-the-error-text-first.test.sh` in `cbmono/ai-bridge` pins both clauses and both
+  `tests/read-the-error-text-first.test.sh` in `cbmono/loopd` pins both clauses and both
   costs, here and in `plugin/agents/failure-analyst.md` — the agent whose whole job this is
   carries clause 1 as its **first** diagnosis step, because a diagnostician that reaches a
   hypothesis first has nothing left for the evidence to do.
@@ -437,7 +437,7 @@ above it so none may grow its share.
   rule and the narrow case of this one. A rule two installations write independently belongs
   in the seed rather than in a bundle.
   **Its two readers, because prose alone already rotted once — on 2026-08-23.**
-  `plugin/evals/unverified-state-is-unknown` in `cbmono/ai-bridge` grades the behaviour (the
+  `plugin/evals/unverified-state-is-unknown` in `cbmono/loopd` grades the behaviour (the
   empty-digest case: pass only when nothing is left standing as a conclusion), and
   `tests/unverified-read-is-unknown.test.sh` pins this rule, all four examples and the
   references to it.
@@ -479,7 +479,7 @@ above it so none may grow its share.
   consumed paths in its `CLAUDE.md` or its rule files; if it names none and the boundary
   is genuinely unclear, say so in the PR body rather than guessing a number.
   **UNLESS THE REPO SAYS THE BUMP HAPPENS ON THE DEFAULT BRANCH AT MERGE TIME — then your PR
-  carries no version change at all.** `cbmono/ai-bridge` says exactly that: leave every place
+  carries no version change at all.** `cbmono/loopd` says exactly that: leave every place
   the number lives alone, propose nothing, and let the merger run the repo's bump script on
   the default branch afterwards. The reason is one a big repo hits too — the number is
   usually several files, so while each PR carries it, any two open PRs conflict on all of
@@ -969,7 +969,7 @@ above it so none may grow its share.
   Keep them inside your own worktree — verified working with three concurrent agents on
   one tick.
   **A scratch path that the repo does not IGNORE is not scratch.** Until 2026-09-09 this
-  rule named a directory `cbmono/ai-bridge` TRACKS, so an obedient agent wrote its drafts
+  rule named a directory `cbmono/loopd` TRACKS, so an obedient agent wrote its drafts
   into version control and its own cleanup deleted a tracked file. `tmp/` is ignored by
   every bundle this seed stamps and by that repo; elsewhere, `git check-ignore -q` before
   you write, and pick a path the repo does ignore if it says no.
@@ -1017,4 +1017,4 @@ above it so none may grow its share.
   `codegraph affected <files>` before a change. Don't reach for it first for anything else
   — in the measurement above it placed last, it indexes no SQL, and its index is a stale
   snapshot that reports itself current. Skip silently if absent; it's an optional local
-  index (see the ai-bridge README).
+  index (see the loopd README).

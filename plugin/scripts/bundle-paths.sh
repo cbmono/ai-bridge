@@ -120,7 +120,7 @@ ab_say_run() { # <lead> <script> [arg...] — on STDOUT; redirect at the call si
 
 ab_unmigrated_notice() { # <root> — names what is still at the root, and the one fix
   local r="${1:-.}" pair old
-  echo "ai-bridge: this bundle still has plugin-owned files at its root:" >&2
+  echo "loopd: this bundle still has plugin-owned files at its root:" >&2
   for pair in $AB_MOVES; do
     old="${pair%%:*}"; [ -e "$r/$old" ] && echo "             $old -> ${pair#*:}" >&2
   done

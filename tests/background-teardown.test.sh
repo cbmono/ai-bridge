@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # background-teardown.test.sh — the reader for `CONVENTIONS.md` → "Anything you background
-# must be reaped by something that outlives YOU", and the reader for the `/ai-bridge check`
+# must be reaped by something that outlives YOU", and the reader for the `/loopd:welcome check`
 # row that reports orphaned processes under `worktreeRoot`.
 #
 # WHY THERE IS A TEST AT ALL. The rule this file guards REPLACED a rule that was already in
@@ -23,7 +23,7 @@
 #      the incident, reproduced. The bounded form from `CONVENTIONS.md` is then run through
 #      exactly the same SIGKILL and its child is verified to die anyway, on its own, with
 #      no parent left to help it. The unbounded run is what makes the bounded one non-vacuous.
-#   3. THE CHECK ROW (§7). `/ai-bridge check` reports an orphan whose cwd is under
+#   3. THE CHECK ROW (§7). `/loopd:welcome check` reports an orphan whose cwd is under
 #      `worktreeRoot` — asserted against a REAL synthetic orphan, not only against a clean
 #      machine — and, on every path where it cannot answer, says so instead of reporting
 #      zero. A false zero here would be worse than no row at all.
@@ -612,7 +612,7 @@ fi
 
 # =======================================================================================
 echo
-echo "== 8. /ai-bridge check reports THAT orphan — and never a false zero =="
+echo "== 8. /loopd:welcome check reports THAT orphan — and never a false zero =="
 # =======================================================================================
 # Asserted against the real orphan from §7, not against a clean machine: a row that reports
 # zero because it can never report anything else is the failure mode this row is written
@@ -775,7 +775,7 @@ fi
 # THE READER AGREES WITH THE MECHANISM. Both fixture worktrees are empty of orphans now, and
 # the row that reported one in §8 says so — including the watchdog, which ended itself.
 FINAL="$(bash "$AIB" check --instance "$INST" --template "$REPO" 2>&1)"
-ok "and /ai-bridge check now reports the roots clean" "$(saw "$FINAL" 'no orphan runs out of a worktree root')" yes
+ok "and /loopd:welcome check now reports the roots clean" "$(saw "$FINAL" 'no orphan runs out of a worktree root')" yes
 ok "…with no warning left about either worktree"      "$(printf '%s\n' "$FINAL" | grep -c '^⚠.*worktree' | tr -d ' ')" 0
 
 # =======================================================================================

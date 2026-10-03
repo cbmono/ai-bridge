@@ -132,7 +132,7 @@ bash "$TPL/plugin/scripts/init-bundle.sh" "$INST2" >"$TMP/out2a" 2>&1
 before="$(sed -n '/# >>> ai-bridge index ignore >>>/,/# <<< ai-bridge index ignore <<</p' "$INST2/.gitignore")"
 
 # Mutate the TEMPLATE's install.sh between runs — a new comment sentence AND a new
-# rule line, the way a future ai-bridge PR would extend this block.
+# rule line, the way a future loopd PR would extend this block.
 perl -0pi -e "s/surface, changes only when the KB changes, and a fresh clone needs it present\\.\n/surface, changes only when the KB changes, and a fresh clone needs it present.\n# UPDATED WORDING for the second-stamp test.\n/" "$TPL/plugin/scripts/init-bundle.sh"
 perl -0pi -e 's{^/projects/\*/index\.md\n(GI\n)}{/projects/*/index.md\n/.a-new-derived-index.json\n$1}m' "$TPL/plugin/scripts/init-bundle.sh"
 

@@ -130,7 +130,7 @@
 # review session re-reading a diff whose findings it has not replied to yet, which is the
 # most expensive wrong move available here.
 #
-# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; nothing to edit per
+# GENERIC PLUGIN FILE — ships inside the `loopd` plugin; nothing to edit per
 # instance. It takes no org, repo or reviewer identity: those come from the arguments.
 #
 # Exit codes — 0 is the ONLY clearance; every other code is a refusal:

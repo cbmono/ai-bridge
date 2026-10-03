@@ -328,7 +328,7 @@ ok "…and the marker/verb split is stated"  "$(saw "$QUEUE" '**A new verb is fr
 echo
 echo "== the agent file is resolved from the PLUGIN, not only from the bundle =="
 # The name swap moved the eight role agents out of every instance and into the
-# `ai-bridge` plugin, which is installed per MACHINE. So the one path literal this check
+# `loopd` plugin, which is installed per MACHINE. So the one path literal this check
 # used to read is gone, and the resolution has three sources — the ORDER is the contract,
 # because a bundle stamped before the swap still has an exact local copy and reading a
 # machine-wide one instead would answer for the wrong template.

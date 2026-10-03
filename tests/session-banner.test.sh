@@ -43,7 +43,7 @@ HOOK="$TPL/plugin/hooks/session-banner.sh"
 HOOKDIR="$TPL/plugin/hooks"
 SETTINGS="$TPL/plugin/seed/.claude/settings.json"
 # WHERE THE REGISTRATION LIVES NOW. It was the bundle's settings.json, symlinked in from
-# the template; the four ai-bridge hooks ship with the PLUGIN since task-013, so one
+# the template; the four loopd hooks ship with the PLUGIN since task-013, so one
 # install arms every bundle on the machine instead of only the ones somebody re-stamped.
 HOOKSJSON="$TPL/plugin/hooks/hooks.json"
 SCRIPTS="$TPL/plugin/scripts"
@@ -105,7 +105,7 @@ assert "hooks.json is still valid JSON" \
   "$(python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$HOOKSJSON" >/dev/null 2>&1 && echo 0 || echo 1)"
 assert "settings.json is still valid JSON" \
   "$(python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$SETTINGS" >/dev/null 2>&1 && echo 0 || echo 1)"
-assert "…and the seeded settings.json registers NO ai-bridge hook of its own" \
+assert "…and the seeded settings.json registers NO loopd hook of its own" \
   "$(grep -q '"hooks"' "$SETTINGS" && echo 1 || echo 0)"
 
 # =======================================================================================
@@ -233,7 +233,7 @@ assert "…and it is the tracked VALUE, 100"            "$(eq "$(value maxPrFile
 # silently wrong about the other half — the exact failure the column exists to prevent.
 assert "…and the owner row is tracked"                "$(eq "$(from owner)" tracked)"
 assert "…carrying the github user"                    "$(has 'owner ' "$OUT")"
-# `user · address`, NOT git's `user <address>`: the `/ai-bridge` path relays this table as
+# `user · address`, NOT git's `user <address>`: the `/loopd:welcome` path relays this table as
 # markdown, `<address>` is an AUTOLINK there, and the renderer ate both brackets — leaving
 # this one row's FROM two columns left of every other's. Section 10 pins the alignment
 # through the renderer's own transform; this pins the spelling, so a tidy-up back to angle
@@ -946,7 +946,7 @@ echo "== 10. the columns survive what a MARKDOWN RENDERER does to the text =="
 # =======================================================================================
 # THE DEFECT THIS SECTION EXISTS FOR WAS INVISIBLE TO EVERY ASSERTION ABOVE, and section 8's
 # `FROM` check is the reason: it reads the banner as the script WROTE it, where the tables
-# were always perfectly aligned. `/ai-bridge` relays the banner as MARKDOWN by design — ANSI
+# were always perfectly aligned. `/loopd:welcome` relays the banner as MARKDOWN by design — ANSI
 # does not survive that relay at all — so the bytes a human reads are the bytes AFTER a
 # renderer has had them. Measured 2026-08-31 on a real instance: the owner cell read
 # `<user> <name@example.com>`, `<…>` is autolink syntax, both brackets were eaten, and that
@@ -965,7 +965,7 @@ echo "== 10. the columns survive what a MARKDOWN RENDERER does to the text =="
 # machine that happened to run the harness.
 #
 # render_md — the banner as a markdown renderer LEAVES it, which is the only form in which
-# the `/ai-bridge` reader ever sees these columns. SIX transforms, each one a construct that
+# the `/loopd:welcome` reader ever sees these columns. SIX transforms, each one a construct that
 # consumes characters the script counted as width: `<…>` an autolink, `**…**` emphasis (which
 # the md rendering itself adds on the header rows), `[…](…)` an inline link, `` `…` `` a
 # code span, `~~…~~` strikethrough (4 characters gone), and `&name;` a CHARACTER REFERENCE,
@@ -1019,7 +1019,7 @@ for loc in en_US.UTF-8 C; do
     "$([ "$(has 'SETTING ' "$TXT")" = 0 ] && [ "$(has 'AGENT ' "$TXT")" = 0 ] && echo 0 || echo 1)"
   assert "…and after the renderer's transform, ONE FROM offset across both tables (text)" \
     "$(eq "$(render_md "$TXT" | from_offsets)" 1)"
-  assert "…and the same for the rendering /ai-bridge actually relays (md)" \
+  assert "…and the same for the rendering /loopd:welcome actually relays (md)" \
     "$(eq "$(render_md "$MD" | from_offsets)" 1)"
 done
 # THE CHECK DISCRIMINATES, or it is one more green alignment test. This is the shape the
@@ -1135,7 +1135,7 @@ done
 assert "…nor the emphasis marker byte itself" \
   "$(printf '%s\n' "$(tbl_rows "$OUT")" | LC_ALL=C grep -qF -- "$STX" && echo 1 || echo 0)"
 # THE MD RENDERING IS WHERE A LINK AND A CODE SPAN ACTUALLY FIRE, so the alignment claim is
-# made against the rendering `/ai-bridge` relays and not only against text mode.
+# made against the rendering `/loopd:welcome` relays and not only against text mode.
 assert "…and the md rendering keeps ONE FROM offset once rendered" \
   "$(eq "$(render_md "$MD_H" | from_offsets)" 1)"
 # EMPHASIS IS THE BANNER'S TO DECIDE, and the alignment check catches this only incidentally:

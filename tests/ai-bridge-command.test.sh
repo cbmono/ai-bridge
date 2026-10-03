@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# ai-bridge-command.test.sh — `/ai-bridge`: one banner, one list of checks, and two
+# ai-bridge-command.test.sh — `/loopd:welcome`: one banner, one list of checks, and two
 # non-actions that are the reason the command exists.
 #
 # THE TWO PROPERTIES A REVIEWER SHOULD BE ABLE TO REFUSE THE CHANGE ON, and they are both
@@ -124,7 +124,7 @@ echo "== 1. the bare form INVOKES the banner — it does not reproduce it =="
 INST1="$TMP/inst1"; mkinstance "$INST1"
 a="$(CLAUDE_PROJECT_DIR="$INST1" bash "$SH" 2>&1)"; arc=$?
 b="$(CLAUDE_PROJECT_DIR="$INST1" bash "$BANNER" --format md --no-logo --full 2>&1)"; brc=$?
-ok "bare /ai-bridge output is byte-identical to the hook's" "$([ "$a" = "$b" ] && echo yes || echo no)" yes
+ok "bare /loopd:welcome output is byte-identical to the hook's" "$([ "$a" = "$b" ] && echo yes || echo no)" yes
 ok "…and so is its exit status"                            "$arc" "$brc"
 ok "…and it is not empty (the comparison is not vacuous)"   "$([ -n "$a" ] && echo yes || echo no)" yes
 # THE RENDERING IS A CHOICE ABOUT THE READER, NOT A NEW BANNER: strip the emphasis markers

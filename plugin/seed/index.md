@@ -1,7 +1,7 @@
 # Control Center — Bundle Index
 
 Entry point for navigating this OKF Knowledge Bundle. The Project Manager reads
-this first. *(Seeded from the `ai-bridge` template — populate as you add
+this first. *(Seeded from the `loopd` template — populate as you add
 objectives and projects.)*
 
 ## Reference
