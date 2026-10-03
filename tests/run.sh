@@ -147,7 +147,8 @@ default_base() {
 # that prints, because a $( ) subshell would lose UNNAMED, which is half the answer.
 # A harness is selected because it NAMES a changed path, or a >=2-component suffix of one
 # (so "$REPO/scripts/foo.sh" style references still match; never a bare basename, which
-# would match half the suite) — never because somebody remembered to add a line.
+# would match half the suite) — never because somebody remembered to add a line. A changed
+# harness also selects ITSELF, which no naming rule can reach.
 select_derived() {
   local changed="$1" p suffix m hits derived=""
   UNNAMED=""
@@ -162,6 +163,11 @@ select_derived() {
         *)     break ;;
       esac
     done
+    # A harness is a read path of its own, and nothing in this suite names one BY PATH —
+    # so without this, editing a harness selected the core and the one file you changed
+    # was the one thing that did not run. (No harness NAME in this comment: the runner
+    # test derives CORE by grepping this file for one.)
+    case "$p" in tests/*.test.sh) [ ! -f "$p" ] || hits="${hits}$p"$'\n' ;; esac
     if [ -z "$hits" ]; then
       UNNAMED="${UNNAMED:+$UNNAMED }$p"
     else

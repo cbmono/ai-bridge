@@ -133,6 +133,17 @@ assert "…and points at --all before the PR"                   "$(has "$D_OUT" 
 assert "…and still ran the core, not zero harnesses"          "$(has "$D_OUT" "ok: all $core_count harnesses passed")"
 assert "…so no run reports a pass having run nothing"         "$(lacks "$D_OUT" 'ok: all 0 harnesses')"
 
+echo "== a changed HARNESS selects ITSELF — no naming rule can reach that =="
+# The case that let a red harness sit on the default branch: nothing names a harness by
+# path, so editing one used to run the core and not the file you were editing.
+R="$TMP/r"; mkdir -p "$R"; build "$R"
+( cd "$R/work" && git checkout -q -b feat && printf '# edited\n' >> tests/fp-names-nothing.test.sh \
+  && git add -A && git commit -qm edit ) >/dev/null 2>&1
+R_OUT="$(run_changed "$R/work")"
+assert "the edited harness is in the selection"               "$(has "$R_OUT" '  harness: tests/fp-names-nothing.test.sh')"
+assert "…and is not reported as covered by nothing"           "$(lacks "$R_OUT" 'no harness names these changed paths')"
+assert "…and the run is still green"                          "$(has "$R_OUT" 'ok: all')"
+
 echo "== --ci keeps the workflow's own verdict, which FAILS TOWARD THE FULL SUITE =="
 E_OUT="$(run_ci "$A/work")"
 assert "a plugin-only diff takes the fast path"               "$(has "$E_OUT" 'plugin-only diff — running')"

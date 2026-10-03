@@ -26,6 +26,10 @@
 # IT SKIPS, IT NEVER FALSELY FAILS. A machine with neither PyYAML nor Psych has no
 # oracle, and an oracle-less run must not turn red — that would make a missing optional
 # dependency look like a defect in the shipped scripts. It reports SKIP and exits 0.
+# THE SAME HOLDS PER SHAPE, and it did not until this was written: the two oracles
+# disagree about `flow-comment-tab`, so the file read 56/0 on CI (Psych) and 54/2 on a
+# machine with PyYAML, at one commit. An oracle is now chosen by conformance and a shape
+# it cannot read is SKIPped, so the verdict is the board's and never the machine's.
 #
 # THREE CLASSES OF SHAPE, and the third is the honest part:
 #   agree   the parser has an answer and the board must match it exactly, in order.
@@ -63,23 +67,29 @@ done
 command -v python3 >/dev/null 2>&1 || {
   echo "deliverable-paths-vs-yaml: needs python3 (build-board.sh does too)." >&2; exit 2; }
 
-# ------------------------------------------------------------------ the oracle
-# PyYAML first because it needs no second interpreter, Psych second because macOS ships
-# it. Whichever answers, it answers the same question: parse this project.md's
-# frontmatter and print `deliverable_paths` as a JSON array, or the word UNPARSEABLE.
-ORACLE=""
-if python3 -c 'import yaml' >/dev/null 2>&1; then ORACLE="pyyaml"
-elif command -v ruby >/dev/null 2>&1 && ruby -rpsych -e 'Psych::VERSION' >/dev/null 2>&1; then ORACLE="psych"
-fi
-if [[ -z "$ORACLE" ]]; then
-  skipped "no YAML parser on this machine (PyYAML or Ruby/Psych) — nothing to measure against"
-  echo "  NOTE  install either one to run the differential check; the shipped scripts need neither."
-  summary
-fi
+# ---------------------------------------------------------------------- fixtures
+# Two steps, never one — see tests/harness-temp-safety.test.sh for what the
+# one-expression form deletes. Before the oracle, because choosing one needs a file.
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/deliv-yaml.XXXXXX")" || {
+  echo "deliverable-paths-vs-yaml: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}." >&2; exit 2; }
+TMP="$(cd "$TMP" && pwd)"
+trap 'rm -rf "$TMP"' EXIT
 
-yaml_read() { # <project.md> -> JSON array, or UNPARSEABLE
-  case "$ORACLE" in
-    pyyaml) python3 - "$1" <<'PY'
+# ------------------------------------------------------------------ the oracle
+# Either parser answers the same question: parse this project.md's frontmatter and print
+# `deliverable_paths` as a JSON array, or the word UNPARSEABLE.
+#
+# THEY DO NOT AGREE, AND PICKING THE FIRST IMPORTABLE ONE PICKED A VERDICT PER MACHINE.
+# YAML 1.2 rules 32/33/66: `s-separate-in-line` is `s-white+` and `s-white` includes TAB,
+# so a tab before a trailing comment is legal and `flow-comment-tab` has a reading. Psych
+# returns it; PyYAML's scanner refuses any tab that cannot start a token — measured
+# identical at 6.0, 6.0.1, 6.0.2 and 6.0.3, so it is a deviation and not a regression.
+# CI has Psych and no PyYAML and was green; a machine with PyYAML read 54/2 on the same
+# commit. So the oracle is CHOSEN by conformance on that construct, not by import order,
+# and a shape the chosen oracle cannot read is reported unmeasurable rather than failed.
+yaml_read_with() { # <oracle> <project.md> -> JSON array, or UNPARSEABLE
+  case "$1" in
+    pyyaml) python3 - "$2" <<'PY'
 import sys, json, yaml
 t = open(sys.argv[1], encoding="utf-8").read().split("\n---\n")[0]
 t = t[4:] if t.startswith("---\n") else t
@@ -91,7 +101,7 @@ v = (d or {}).get("deliverable_paths")
 print(json.dumps(v if isinstance(v, list) else ([] if v is None else [v])))
 PY
       ;;
-    psych) ruby - "$1" <<'RB'
+    psych) ruby - "$2" <<'RB'
 require 'psych'
 require 'json'
 t = File.read(ARGV[0])
@@ -108,6 +118,27 @@ RB
       ;;
   esac
 }
+
+CANDIDATES=()
+python3 -c 'import yaml' >/dev/null 2>&1 && CANDIDATES+=(pyyaml)
+command -v ruby >/dev/null 2>&1 && ruby -rpsych -e 'Psych::VERSION' >/dev/null 2>&1 && CANDIDATES+=(psych)
+if [[ "${#CANDIDATES[@]}" == 0 ]]; then
+  skipped "no YAML parser on this machine (PyYAML or Ruby/Psych) — nothing to measure against"
+  echo "  NOTE  install either one to run the differential check; the shipped scripts need neither."
+  summary
+fi
+
+# The probe asserts the SPEC, not the board: `[ /a.md ]<TAB># c` is legal YAML 1.2 and
+# reads as one entry. A parser that refuses it is tab-blind and is used only if it is the
+# only one here.
+printf -- '---\ndeliverable_paths: [ /a.md ]\t# a tab is s-white, so this is a comment\n---\n' > "$TMP/probe.md"
+ORACLE=""; ORACLE_TAB_BLIND=""
+for c in "${CANDIDATES[@]}"; do
+  [[ "$(yaml_read_with "$c" "$TMP/probe.md")" == '["/a.md"]' ]] && { ORACLE="$c"; break; }
+done
+if [[ -z "$ORACLE" ]]; then ORACLE="${CANDIDATES[0]}"; ORACLE_TAB_BLIND=1; fi
+
+yaml_read() { yaml_read_with "$ORACLE" "$1"; }
 
 # --------------------------------------------------- the renderer's own predicate
 # Lifted out of build-board.sh at runtime, never transcribed. Both extractions are
@@ -134,14 +165,6 @@ for e in json.loads(sys.argv[1]):
         print(keep)
 PY
 }
-
-# ---------------------------------------------------------------------- fixtures
-# Two steps, never one — see tests/harness-temp-safety.test.sh for what the
-# one-expression form deletes.
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/deliv-yaml.XXXXXX")" || {
-  echo "deliverable-paths-vs-yaml: mktemp -d failed under TMPDIR=${TMPDIR:-/tmp}." >&2; exit 2; }
-TMP="$(cd "$TMP" && pwd)"
-trap 'rm -rf "$TMP"' EXIT
 
 INST="$TMP/_ai-bridge-fixture"
 mkdir -p "$INST" "$INST/$AB_DIR"
@@ -294,7 +317,7 @@ rendered_for() { # <slug> -> the data-copy values under that project, in page or
     | grep -F "/projects/$1/deliverables/" || true
 }
 
-agreed=0; disagreed=""
+agreed=0; disagreed=""; unmeasurable=0; unreadable=""
 for s in "${SHAPES[@]}"; do
   name="${s%%|*}"; rest="${s#*|}"
   klass="${rest%%|*}"; rest="${rest#*|}"
@@ -306,6 +329,15 @@ for s in "${SHAPES[@]}"; do
   if [[ "$klass" == "noyaml" ]]; then
     assert "$name: not YAML — the parser refuses it" "$(eq "$raw" "UNPARSEABLE")"
     assert "$name: …and the documented fallback renders" "$(eq "$got" "${expected//SLUG/$slug}")"
+    continue
+  fi
+
+  # The oracle refusing a shape that IS valid YAML says nothing about the board, and
+  # feeding `UNPARSEABLE` to renderable() made it say the opposite: json.loads died, the
+  # parser side came back empty, and the shape read as a disagreement.
+  if [[ "$raw" == "UNPARSEABLE" ]]; then
+    skipped "$name: $ORACLE refuses this shape — unmeasurable here, not a disagreement"
+    unmeasurable=$((unmeasurable+1)); unreadable="$unreadable$name "
     continue
   fi
 
@@ -350,9 +382,17 @@ done
 
 echo "== agreement with $ORACLE, pinned =="
 printf '  INFO  %s of %s comparable shapes agree; disagreeing: %s\n' \
-  "$agreed" "$(( ${#SHAPES[@]} - 2 ))" "${disagreed:-none}"
-assert "agreement is at or above the pinned floor ($AGREE_FLOOR)" \
-  "$( [[ "$agreed" -ge "$AGREE_FLOOR" ]] && echo 0 || echo 1 )"
+  "$agreed" "$(( ${#SHAPES[@]} - 2 - unmeasurable ))" "${disagreed:-none}"
+# AGREE_FLOOR is pinned against a CONFORMANT oracle. A shape this one cannot read was
+# never measured, so it is subtracted — printed, named, and only ever by shapes that
+# printed a SKIP line above. The pinned constant itself never moves to buy green.
+floor="$AGREE_FLOOR"; label="agreement is at or above the pinned floor ($AGREE_FLOOR)"
+if [[ "$unmeasurable" != 0 ]]; then
+  floor=$(( AGREE_FLOOR - unmeasurable ))
+  label="agreement is at or above the pinned floor ($AGREE_FLOOR less $unmeasurable unreadable = $floor)"
+  printf '  INFO  %s cannot read: %s— tab-blind=%s\n' "$ORACLE" "$unreadable" "${ORACLE_TAB_BLIND:-0}"
+fi
+assert "$label" "$( [[ "$agreed" -ge "$floor" ]] && echo 0 || echo 1 )"
 
 # The property that survives every gap: whatever the hand parser makes of a shape, no
 # value it renders may carry an out-of-bundle path. The sentinel is planted in six
