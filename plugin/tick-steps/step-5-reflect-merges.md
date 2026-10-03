@@ -5,11 +5,11 @@ it on its `steps:` line (`project-manager.md` → "Step files"). Every rule in t
 prompt still binds here — both authority gates, the ownership gate, the UNKNOWN rule.
 
 5. **Reflect merges.** For `in-review` tasks, check the PR(s): when **all** of a
-   task's PRs are **merged** → `status: done`. **You do not reclaim its worktree** —
-   nothing on your side deletes one. `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh`
-   classifies and prints the `git worktree remove` commands; report the finished ones and
-   let the human run them. Never remove a path by hand and never widen a report into a
-   sweep (`docs/pm-design.md#step-5` has the incident). Then re-evaluate dependents. If review
+   task's PRs are **merged** → `status: done`, then **reclaim that one task's worktree**
+   with `${CLAUDE_PLUGIN_ROOT}/scripts/reclaim-worktree.sh <task-path>` (below).
+   Never remove a path by hand, never use `prune-worktrees.sh` for it — that one still
+   deletes nothing — and never widen either into a sweep (`docs/pm-design.md#step-5` has
+   the incident). Then re-evaluate dependents. If review
    **requests changes** → back to `in-progress`. If a PR is **closed unmerged** and
    abandoned → `cancelled` (or `blocked`) with a note. A multi-PR task stays
    `in-review` until all merge. **`done` and `cancelled` are the two writes a task's
@@ -36,13 +36,26 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    decision that otherwise leaves no record anywhere, because marking a draft ready
    touches no bundle file.
 
-   **Report the worktree, never remove it.** `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` is
-   report-only: it classifies every worktree and prints the exact
-   `git worktree remove` commands. Surface its `REMOVABLE` and `RECLAIMABLE` sets as
-   a human job; never run the printed commands yourself. **Run it at most once per
-   tick, and only when you have no role agents in flight** — its
-   `PRUNE_ACTIVE_MINUTES` mtime veto (default 120) is a backstop, not the guard; your
-   in-flight count is the guard.
+   **ONE script removes a worktree, and only on the terminal case.**
+   `${CLAUDE_PLUGIN_ROOT}/scripts/reclaim-worktree.sh <task-path>` — one task per call,
+   driven by the task's own `worktree:`/`branch:`/`pr:` record, never by a scan.
+   **Exit 0 only when that task is `done` AND every URL in its `pr:` has MERGED**; run it
+   for each task you just moved to `done`, and report what it removed. **Exit 1 is a
+   REFUSAL** — a PR CLOSED-UNMERGED, an empty `pr:`, a dirty tree, an unpushed commit, an
+   ignored `.env`, a detached HEAD, a live process inside the tree. Record it on the task
+   as one `# Notes` line, `worktree retained: <reason>`, and never retry around it. Exit 3
+   is nothing to do.
+
+   **`${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` is unchanged and still report-only**,
+   and it is still the only thing that sees a worktree no task record names: it classifies
+   and prints the exact `git worktree remove` commands. Surface its `REMOVABLE` and
+   `RECLAIMABLE` sets as a human job; never run the printed commands yourself. **Run it at
+   most once per tick, and only when you have no role agents in flight** — its
+   `PRUNE_ACTIVE_MINUTES` mtime veto (default 120) is a backstop for the pruner, not the
+   guard; your in-flight count is the guard. **The veto does not apply to
+   `reclaim-worktree.sh`**: step 5 runs for `in-review` tasks, so a fast merge is always
+   reflected inside the window and no later tick revisits a `done` task — the live-process
+   check replaces it there.
 
    **Sum what that task cost, against the PR(s) that merged.** For each task you move to
    `done`, once:

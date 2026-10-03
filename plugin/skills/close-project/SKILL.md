@@ -307,7 +307,9 @@ is, while the log entry still names the human who decided.
    `status: achieved` only where that answer says so; never flip it silently, and never
    decide it yourself.
 
-5. **Report leftover worktrees** — **only when no role agents are in flight.** Run
+5. **Report leftover worktrees** — **only when no role agents are in flight.** A `done`
+   task's own worktree was already reclaimed by step 5's `reclaim-worktree.sh`, so what is
+   left here is what no task record names. Run
    `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh`; it classifies and prints `git worktree remove`
    commands but never deletes. Include its `REMOVABLE`/`RECLAIMABLE` lines for this
    project's worktrees in the closing summary so the human can reclaim them; don't

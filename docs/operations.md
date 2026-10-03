@@ -368,15 +368,22 @@ stop it from firing.
 
 ---
 
-## 4. Worktrees: reported, never deleted
+## 4. Worktrees: one script deletes, the pruner still reports
 
 ```bash
-scripts/prune-worktrees.sh                       # report
+scripts/reclaim-worktree.sh --dry-run <task-path>   # verify every guard, touch nothing
+scripts/reclaim-worktree.sh <task-path>             # remove that ONE recorded worktree
+scripts/prune-worktrees.sh                          # report everything else
 PRUNE_ACTIVE_MINUTES=30 scripts/prune-worktrees.sh
 ```
 
-**It never deletes.** It classifies and prints the `git worktree remove` commands for a
-human to run.
+`reclaim-worktree.sh` takes **one task path per call** and removes the single worktree that
+task recorded. **Exit 0 is the only clearance** and it needs the task `done` **and** every
+URL in its `pr:` MERGED. 1 refused, 2 cannot answer, 3 nothing to do. The tick runs it in
+step 5 for each task it has just moved to `done`.
+
+**`prune-worktrees.sh` never deletes.** It classifies and prints the `git worktree remove`
+commands for a human to run — it is what sees a worktree no task record names.
 
 | Label | Meaning |
 |---|---|
@@ -384,10 +391,12 @@ human to run.
 | `REMOVABLE` | its PR is merged or closed, and it has commits of its own |
 | `RECLAIMABLE` | a **detached-HEAD** worktree — no branch ref, so a human judges it |
 
-The removal path was deleted in v2 because it had destroyed three running agents'
-worktrees. **Do not reintroduce a delete, not even behind a flag.** The accepted cost is
-that the worktree root grows and draining it is a periodic human job. `worktreeRoot` is
-optional; absent it is **`<reposRoot>/_wt`**. Full reasoning, including all four
+The pruner's removal path was deleted in v2 because it had destroyed three running agents'
+worktrees. **Do not reintroduce a delete there, not even behind a flag** — the flag is
+forbidden because that script SCANS and INFERS. `reclaim-worktree.sh` never scans, which is
+why it is a different object and not that flag. The accepted cost is that a worktree no
+task record names still grows the root, and draining those is a periodic human job.
+`worktreeRoot` is optional; absent it is **`<reposRoot>/_wt`**. Full reasoning, including all four
 classification guards:
 [conventions.md invariant 7](conventions.md#7-prune-worktreessh-is-report-only-and-that-is-load-bearing).
 

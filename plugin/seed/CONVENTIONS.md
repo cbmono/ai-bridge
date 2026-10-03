@@ -961,9 +961,13 @@ above it so none may grow its share.
   `EnterWorktree` tool, which may be unavailable to you as a subagent.
   (`settings.json` sets `worktree.bgIsolation: none` so the control panel manages
   worktrees itself; harness isolation would only isolate this repo, not the product repos.)
-  **Nothing deletes your worktree while you are in it, or after.** `WorktreeRemove` has
-  never fired and `prune-worktrees.sh` only ever prints removal commands, so leaving work
-  uncommitted costs you nothing — but nothing tidies up for you either.
+  **Nothing deletes your worktree while you are working in it, and what deletes it after
+  refuses on anything of yours.** `prune-worktrees.sh` still only prints removal commands;
+  the one thing that deletes is `reclaim-worktree.sh`, which the tick runs for a task that
+  is `done` with every PR MERGED — and it refuses a dirty tree, an unpushed commit, a
+  detached HEAD, an ignored file that is not a known cache, and a live process inside the
+  tree. So uncommitted work is never taken from you; it just means the tree stays, and
+  nobody tidies it.
   **Scratch files go in `<worktree>/tmp/`, never a shared scratchpad.** Mutation
   scripts, probe output and throwaway configs collide when several agents run at once.
   Keep them inside your own worktree — verified working with three concurrent agents on

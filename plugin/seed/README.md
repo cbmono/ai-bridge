@@ -134,13 +134,13 @@ KB), records a **Project closed** entry in `log.md` (with the merged PRs and the
 removing commit), rolls the project to `status: done`, and then **removes the
 project folder**. There is **no `archive/`** — git history + the KB are the record,
 and a done folder left live would only cost context on every PM tick. Recover the
-full trail anytime with `git log -- projects/<slug>/`. Finished build worktrees
-under `worktreeRoot` (absent that key, `<reposRoot>/_wt`) are **never reclaimed
-automatically** — `scripts/prune-worktrees.sh` (each PM tick that has zero agents
-in flight, and on demand)
-classifies them and prints the `git worktree remove` commands for you to run. The
-removal path was deleted after it destroyed three running agents' worktrees, so
-draining that root is a periodic human job.
+full trail anytime with `git log -- projects/<slug>/`. A finished build worktree
+under `worktreeRoot` (absent that key, `<reposRoot>/_wt`) is reclaimed by
+`scripts/reclaim-worktree.sh <task-path>`, which the tick runs once a task is `done` with
+every PR merged, and which refuses everything else. Anything no task record names stays a
+human job: `scripts/prune-worktrees.sh` (each PM tick that has zero agents in flight, and
+on demand) classifies those and prints the `git worktree remove` commands for you to run —
+it has never deleted anything and still doesn't.
 
 ## See the group's repos from in here
 `repos/<name>` is a symlink to each clone under `reposRoot`, so `cd repos/<name>`
