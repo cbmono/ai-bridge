@@ -91,7 +91,10 @@ set -euo pipefail
 # (`VERSION` and `seed/` must be there), never searched for: a walk that keeps climbing
 # will eventually find SOME ancestor with a VERSION file, and answering with an unrelated
 # repo is worse than refusing.
-BIN_DIR="$(cd -P "$(dirname "$0")" && pwd)"
+# Through the operator's plugins/<plugin>/bin link (step 1g) a logical `cd ..` lands beside
+# the link, so follow a linked scripts dir one hop first; a real dir is untouched.
+_d="$(dirname "$0")"; if [ -L "$_d" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+BIN_DIR="$(cd "$_d" && pwd)"
 PLUGIN_ROOT="$(cd "$BIN_DIR/.." 2>/dev/null && pwd || true)"
 if [ -z "$PLUGIN_ROOT" ] || [ ! -f "$PLUGIN_ROOT/VERSION" ] || [ ! -d "$PLUGIN_ROOT/seed" ]; then
   echo "error: cannot locate the loopd plugin root from $BIN_DIR" >&2

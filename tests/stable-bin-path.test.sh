@@ -81,6 +81,8 @@ for sh in bash zsh; do
 done
 got="$(env -i HOME="$H" PATH=/usr/bin:/bin bash --norc -c "$L1"'; plugin-name.sh' 2>&1)"
 ok "plugin-name.sh by bare name derives the name" "$(printf '%s\n' "$got" | head -1)" "PLUGIN_NAME=$PN"
+got="$(env -i HOME="$H" PATH=/usr/bin:/bin bash --norc -c "$L1"'; refresh-seeds.sh --help >/dev/null 2>&1; echo $?')"
+ok "refresh-seeds.sh --help by bare name exits 0" "$got" 0
 
 echo "== 5. an absent or dangling link never touches PATH =="
 guard() { env -i HOME="$H" PATH=/usr/bin:/bin bash --norc -c "${1:-$L1}"'; printf %s "$PATH"'; }
@@ -137,9 +139,12 @@ ok "no plugin script or hook writes a shell rc" \
 printf 'echo "$x" >> ~/.zshrc\n' > "$TMP/mutant.sh"
 ok "…and that grep catches an append (mutant)" "$(grep -cE "$RCW" "$TMP/mutant.sh" | tr -d ' ')" 1
 
-echo "== 10. a script that climbs out of scripts/ resolves physically =="
-ok "no logical cd from a script's own dir up to its parent" \
-  "$(grep -nE 'cd "\$\(dirname [^)]*\)/\.\.' "$REPO"/plugin/scripts/*.sh | wc -l | tr -d ' ')" 0
+echo "== 10. every script that climbs out of scripts/ follows a linked scripts dir first =="
+ok "no cd from a script's own dirname straight up" \
+  "$(grep -lE 'cd "\$\(dirname [^)]*\)/\.\.' "$REPO"/plugin/scripts/*.sh | wc -l | tr -d ' ')" 0
+for f in $(grep -lE 'cd "\$\{?(BIN_DIR|BIN|selfdir|_d)\}?/\.\.' "$REPO"/plugin/scripts/*.sh); do
+  ok "${f##*/} follows its own dir link" "$(grep -cF 'if [ -L "$_d" ]' "$f" | tr -d ' ')" 1
+done
 
 echo
 printf 'pass=%d fail=%d\n' "$pass" "$fail"
