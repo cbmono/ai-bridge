@@ -454,6 +454,88 @@ for v in approve answer unblock merge; do
   simple "unreadable paused project.md (exit 2) keeps $v" "$(row_for "$OUTQ" "$v" "held-$v")" shown
 done
 
+# ROW ORDER IS AN EXECUTION ORDER (dispatch-reporting-defects/task-004): blocker above
+# blocked, then severity, then glob order. Each fixture is built so glob order alone would
+# render it wrong.
+echo
+echo "-- the queue is ordered so it can be worked top to bottom"
+RENDER="$TPL/plugin/scripts/build-awaiting.sh"
+oq() { # fresh banner-signed instance with projects p and q
+  setup; : > "$TMP/inst/$AB_AWAITING"
+  for p in p q; do mkdir -p "$TMP/inst/projects/$p/tasks"
+    printf -- '---\ntype: Project\ntitle: %s\nstatus: active\n---\n' "$p" > "$TMP/inst/projects/$p/project.md"; done
+}
+ot() { # <project> <file-stem> <title> <status> <depends_on> [open question]
+  printf -- '---\ntype: Task\ntitle: %s\nstatus: %s\nacceptance_criteria: [ "c" ]\nopen_questions: [ %s ]\ndepends_on: [ %s ]\n---\n' \
+    "$3" "$4" "${6:+\"$6\"}" "$5" > "$TMP/inst/projects/$1/tasks/$2.md"
+}
+orender() { bash "$RENDER" --instance "$TMP/inst" "$@" >/dev/null 2>&1; }
+otitles() { sed -n 's/^\* [^[]*\[\([^]]*\)\].*/\1/p' "$TMP/inst/$AB_AWAITING" | tr '\n' ' ' | sed 's/ $//'; }
+overbs()  { sed -n 's/^\* [^*]*\*\*\([a-z]*\)\*\*.*/\1/p' "$TMP/inst/$AB_AWAITING" | tr '\n' ' ' | sed 's/ $//'; }
+oheld()   { sed -n 's/^## 🔴 Awaiting you (\([0-9]*\)).*/\1/p' "$TMP/inst/$AB_AWAITING"; }
+orows()   { grep -c '^\* ' "$TMP/inst/$AB_AWAITING" | tr -d ' '; }
+
+# 1 — blocker before blocked, dominant over glob order.
+oq; ot p task-001-b B draft "task-002"; ot p task-002-a A draft ""
+orender; simple "blocker-above-blocked: bare id, B globs first"  "$(otitles)" "A B"
+oq; ot p task-001-b B draft "/projects/p/tasks/task-002-a.md"; ot p task-002-a A draft ""
+orender; simple "blocker-above-blocked: path form"              "$(otitles)" "A B"
+oq; ot p task-001-c C draft "task-002"; ot p task-002-b B in-progress "task-003"; ot p task-003-a A draft ""
+orender; simple "blocker-above-blocked: through a rowless task" "$(otitles)" "A C"
+oq; ot p task-001-b B draft "task-002"; ot q task-002-a A draft ""; ot p task-003-c C draft ""
+orender; simple "blocker-above-blocked: a bare id stays in its project" "$(otitles)" "B C A"
+oq; ot p task-001-b B blocked "task-002"; ot p task-002-a A draft ""
+orender; simple "blocker-above-blocked: dominates severity"     "$(overbs)" "approve unblock"
+
+# 2 — severity tiebreak, one row of each class, glob order the reverse of the wanted one.
+oq; printf -- '---\ntype: Project\ntitle: p\nstatus: active\n---\n' > "$TMP/inst/projects/p/project.md"
+ot p task-001-m M in-review ""; ot p task-002-p P draft ""; ot p task-003-a A draft "" "Q1: which colour?"
+ot p task-004-u U blocked ""; ot p task-005-g G draft "" "Q1: install the foo CLI"
+mkdir -p "$TMP/inst/projects/0-closing/tasks"
+printf -- '---\ntype: Project\ntitle: Z\nstatus: active\n---\n' > "$TMP/inst/projects/0-closing/project.md"
+printf -- '---\ntitle: done\nstatus: done\n---\n' > "$TMP/inst/projects/0-closing/tasks/task-001.md"
+orender --merge "$TMP/inst/projects/p/tasks/task-001-m.md=[pr](https://example.com/pr/1)"
+simple "severity-tiebreak: grant unblock answer approve merge close" "$(overbs)" "grant unblock answer approve merge close"
+cp "$TMP/inst/$AB_AWAITING" "$TMP/sev.md"
+# A seventh class would sort silently; the table must name exactly the classes add() emits.
+simple "severity-tiebreak: table names exactly the row classes" \
+  "$(sed -n '/^sev_of()/,/esac; }/p' "$RENDER" | grep -oE '[a-z]+\) echo [0-5]' | cut -d')' -f1 | sort | tr '\n' ' ')" \
+  "$(grep -oE 'add "[^"]*" [a-z]+' "$RENDER" | awk '{print $NF}' | sort -u | tr '\n' ' ')"
+
+# 3 — glob order is the last key, and the page is stable.
+oq; ot p task-001-x X draft ""; ot p task-002-g G draft "" "Q1: install the foo CLI"; ot p task-003-y Y draft ""
+orender; simple "glob-order-last: equal rank and severity keep filename order" "$(otitles)" "G X Y"
+oq; ot p task-001-b B draft "task-002"; ot p task-002-a A draft ""; ot p task-003-c C blocked "task-001"
+orender; sed '/^Last refreshed:/d' "$TMP/inst/$AB_AWAITING" > "$TMP/r1"
+orender; sed '/^Last refreshed:/d' "$TMP/inst/$AB_AWAITING" > "$TMP/r2"
+simple "glob-order-last: two renders are byte-identical (Last refreshed excepted)" \
+  "$(cmp -s "$TMP/r1" "$TMP/r2" && echo same || echo differ)" same
+
+# 4 — a cycle or a dangling reference drops only that edge, never a row, never loops.
+bounded() { # runs the render, refusing to wait on a loop
+  ( orender ) & local pid=$! i
+  for i in $(seq 1 100); do kill -0 "$pid" 2>/dev/null || { wait "$pid"; echo ended; return; }; sleep 0.1; done
+  kill "$pid" 2>/dev/null; echo hung
+}
+oq; ot p task-000-d D draft "task-001"; ot p task-001-a A draft "task-002"; ot p task-002-b B draft "task-001"
+ot p task-003-c C draft ""
+simple "cycle-safe: A<->B render terminates"                 "$(bounded)" ended
+simple "cycle-safe: every row once, A/B in glob order, D under A" "$(otitles)" "A D B C"
+simple "cycle-safe: rows in = rows out"                      "$(orows)/$(oheld)" "4/4"
+oq; ot p task-001-a A draft "task-001"; ot p task-002-b B draft ""
+simple "cycle-safe: a self-dependency terminates"            "$(bounded)" ended
+simple "cycle-safe: …and keeps its row"                      "$(otitles)" "A B"
+oq; ot p task-001-a A draft "task-009, /projects/p/tasks/nope.md"; ot p task-002-b B draft ""
+simple "cycle-safe: a dangling reference terminates"         "$(bounded)" ended
+simple "cycle-safe: …every row once, in glob order"          "$(otitles)" "A B"
+simple "cycle-safe: …rows in = rows out"                     "$(orows)/$(oheld)" "2/2"
+
+# 5 — row() is byte-unchanged and the banner still parses a sorted render.
+simple "row-format: row() is the one unchanged printf" \
+  "$(grep -cF "row() { printf '* %s **%s** — [%s](%s) · %s\\n' \"\$1\" \"\$2\" \"\$3\" \"\$4\" \"\$5\"; }" "$RENDER" | tr -d ' ')" 1
+cp "$TMP/sev.md" "$TMP/inst/$AB_AWAITING"
+check "row-format: the banner parses a sorted render" 6
+
 echo
 echo "pass=$pass fail=$fail"
 [ "$fail" -eq 0 ]
