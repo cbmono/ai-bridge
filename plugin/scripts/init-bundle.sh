@@ -175,7 +175,7 @@ while [ "$#" -gt 0 ]; do
       # line) — extend it when you add lines there, or --help truncates silently.
       # tests/config-layer.test.sh asserts the flags appear in the output, which is
       # what notices a stale range instead of leaving --help quietly truncated.
-      sed -n '3,71p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '3,74p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
     --owner|--email|--repos-root|--org|--name)
       [ "$#" -ge 2 ] || { echo "error: $arg needs a value" >&2; exit 2; }
