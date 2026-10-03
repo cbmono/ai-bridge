@@ -55,12 +55,12 @@ plugin/scripts/init-bundle.sh|bash \"\$BIN_DIR/kb-sync.sh\" status
 plugin/scripts/init-bundle.sh|init-bundle.sh '--email <commit-address>'
 plugin/scripts/init-bundle.sh|init-bundle.sh '--owner <github-login>'
 plugin/scripts/init-bundle.sh|init-bundle.sh '--repos-root <absolute path>'
-plugin/scripts/init-bundle.sh|kb-sync.sh commit --role human --message '\"<message>\"' -- '<path>...'
+plugin/scripts/init-bundle.sh|kb-sync.sh commit --message '\"<message>\"' -- '<path>...'
 plugin/scripts/init-bundle.sh|loopd/plugin/scripts/init-bundle.sh --config
 plugin/scripts/kb-sweep-due.sh|build-kb-index.sh --check
-plugin/scripts/kb-sync.sh|kb-sync.sh commit --role human --message '\"<message>\"' -- '<path>...'
+plugin/scripts/kb-sync.sh|kb-sync.sh commit --message '\"<message>\"' -- '<path>...'
 plugin/scripts/kb-sync.sh|kb-sync.sh mount
-plugin/scripts/migrate-bundle.sh|kb-sync.sh commit --role human --message '\"chore: relink knowledge/\"' -- '<path>...'
+plugin/scripts/migrate-bundle.sh|kb-sync.sh commit --message '\"chore: relink knowledge/\"' -- '<path>...'
 plugin/scripts/migrate-bundle.sh|migrate-bundle.sh --apply
 plugin/scripts/migrate-bundle.sh|validate-bundle.sh
 plugin/scripts/refresh-seeds.sh|\"\$SELF\" \"'\$TARGET'\" --apply
