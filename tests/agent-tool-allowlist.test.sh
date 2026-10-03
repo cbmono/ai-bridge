@@ -616,7 +616,11 @@ ok "shipped agents scanned"              "$([ "$SCANNED" -ge 8 ] && echo yes || 
 # repo ships. Adding a doc reference to an agent puts that doc in scope by itself, which
 # is the same self-tightening property the reader derivation below already had.
 doc_refs_of() { # <agent-file> — every `*.md` reference in its body, normalised
-  body "$1" | grep -oE '[A-Za-z0-9_./-]*[A-Za-z0-9_-]\.md' \
+  # `${CLAUDE_PLUGIN_ROOT}/seed/` is stripped FIRST: the braces fall outside the character
+  # class below, so an unstripped reference would surface as `seed/CONVENTIONS.md` and
+  # resolve against nothing — the shared doc every agent reads, silently out of scope.
+  body "$1" | sed 's#\${CLAUDE_PLUGIN_ROOT}/seed/##g' \
+    | grep -oE '[A-Za-z0-9_./-]*[A-Za-z0-9_-]\.md' \
     | sed -E 's#^(\.\./)+##; s#^/+##' | sort -u
 }
 
@@ -1048,10 +1052,13 @@ ok "falls through to plugin/seed/ for CLAUDE.md" "$(resolve_doc CLAUDE.md)" plug
 ok "an instance-only doc resolves to nothing" "$(resolve_doc AWAITING.md)" ""
 ok "an agent file is never a shared doc"     "$(resolve_doc .claude/agents/qa-reviewer.md)" ""
 ok "a slash command is never a shared doc"   "$(resolve_doc .claude/commands/pm-loop.md)" ""
-# Agent bodies write `../../CONVENTIONS.md`, so the reference normaliser is load-bearing:
-# without it the file this whole check was built for leaves the derived set silently.
-ok "the ../.. reference an agent writes normalises" \
+# Agent bodies write `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md`, so the reference
+# normaliser is load-bearing: without it the file this whole check was built for leaves
+# the derived set silently.
+ok "the plugin-root reference an agent writes normalises" \
   "$(doc_refs_of "$REPO/plugin/agents/software-engineer.md" | grep -cx 'CONVENTIONS.md')" 1
+ok "…and it is the shipped seed copy it resolves to" \
+  "$(resolve_doc CONVENTIONS.md)" plugin/seed/CONVENTIONS.md
 
 printf '\n%s passed, %s failed  (%s agent file(s) + %s shared doc(s); %s declared mention(s))\n' \
   "$pass" "$fail" "$SCANNED" "$SHARED_SCANNED" "$D"

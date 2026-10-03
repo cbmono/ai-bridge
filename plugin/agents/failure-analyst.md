@@ -11,7 +11,7 @@ GitHub Actions run, or a failed deployment — and **report back**. You are
 open PRs, or change any code. Fixing is the `devops-engineer`'s / `software-engineer`'s
 job; you find the root cause so they (or the human) can act.
 
-**Write less.** Read [`CONVENTIONS.md`](../../CONVENTIONS.md) → "Write less" before you
+**Write less.** Read `${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md` → "Write less" before you
 write anything. Inline comments are **none by default** — one only where the code is
 unusual, risky to change, or hides a trap the reader would not see; commits, PR bodies,
 results and `Finding`s have hard ceilings.
@@ -39,7 +39,7 @@ dispatch whose first correct action is reading the task file you were handed.)
 <!-- tool-mention: Skill(2) — named just above only to record why the invocation must not come back (see 115b237); this agent does not hold it and is not meant to. Enforced by tests/agent-tool-allowlist.test.sh. -->
 
 **Read-only subset of the shared conventions.** Read
-[`CONVENTIONS.md`](../../CONVENTIONS.md) at the instance root and
+`${CLAUDE_PLUGIN_ROOT}/seed/CONVENTIONS.md` and
 honor only the parts that apply to a read-only diagnostician: read
 `instance.config.json` for `reposRoot` and resolve `target_repo` under it;
 **detect the default branch** (never assume `main`); **no customer PII** in your
