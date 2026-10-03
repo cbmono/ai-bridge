@@ -9,9 +9,12 @@
 # form this design replaced could not, because `find knowledge -type f` does not follow a
 # starting-point symlink and would have regenerated an EMPTY index over a populated KB.
 #
-# OFFLINE BY CONSTRUCTION. The "remote" is a local bare repo, so every clone, fetch, rebase
-# and push here is a filesystem operation. Nothing reaches the network, including the
-# unroutable-remote case, which is the one that proves the timeout is real.
+# OFFLINE BY CONSTRUCTION, BUT NOT PATH-ONLY. Most "remotes" here are local bare repos, so
+# clone, fetch, rebase and push are filesystem operations. A local path has no transport in
+# it, though, and a fixture with no transport cannot see a transport defect at all — which
+# is how an HTTPS clone from an SSH-remoted bundle shipped. So the transport sections below
+# use remote URLs: hosts under `.invalid`, which RFC 2606 guarantees never resolve, and a
+# loopback TLS server that answers 401. Nothing leaves this machine.
 #
 # ok() compares actual to expected, in that order. Seeded ai-bridge-v3/task-021.
 set -uo pipefail
@@ -23,7 +26,8 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SYNC="$REPO/plugin/scripts/kb-sync.sh"
 SEED="$REPO/plugin/seed"
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/kb-mount.XXXXXX")" || exit 2
-trap 'rm -rf "$TMP"' EXIT
+SRV=""
+trap '[ -z "$SRV" ] || kill "$SRV" 2>/dev/null; rm -rf "$TMP"' EXIT
 
 pass=0; fail=0
 ok() {
@@ -273,6 +277,106 @@ ok "…and warns on something that is not one" \
   "$( cd "$D" && bash "$REPO/plugin/scripts/build-kb-index.sh" --check 2>&1 | grep -c "is not a GitHub login" | tr -d ' ')" 1
 ok "…as does validate-bundle" \
   "$( cd "$D" && bash "$V" 2>&1 | grep -c "is not a GitHub login" | tr -d ' ')" 1
+
+echo "== the clone inherits the bundle's own transport =="
+
+# `org/name` is shorthand, so SOMETHING has to supply the transport, and until now that was
+# a hardcoded https://github.com/ — unauthenticatable from the SSH-remoted bundles this
+# feature is for. The mount is inspected for the URL it DERIVED; no fetch can succeed
+# against `.invalid`, and GIT_SSH_COMMAND=false keeps ssh from dialling at all.
+derived_url() { # <fixture name> <bundle origin, or ""> [knowledge.repo] -> the KB remote
+  local d="$TMP/derive-$1" origin="$2" repo="${3:-acme/kb}"
+  mkdir -p "$d/$AB_DIR"; cp "$SEED/SCHEMA.md" "$d/$AB_SCHEMA"
+  ( cd "$d" && git init -q -b main . && { [ -z "$origin" ] || git remote add origin "$origin"; } )
+  printf '{ "knowledge": { "repo": "%s", "path": "/", "ref": "main" } }\n' "$repo" > "$d/instance.config.json"
+  GIT_SSH_COMMAND=false bash "$SYNC" --instance "$d" --timeout 2 mount >/dev/null 2>&1
+  git --git-dir="$d/$AB_DIR/kb.git" remote get-url origin 2>/dev/null
+}
+
+ok "an SSH-remoted bundle gets an SSH-remoted KB clone" \
+  "$(derived_url ssh 'git@git.invalid:acme/bundle.git')" 'git@git.invalid:acme/kb.git'
+ok "…an ssh:// bundle keeps its scheme, host and port" \
+  "$(derived_url sshurl 'ssh://git@git.invalid:2222/acme/bundle.git')" 'ssh://git@git.invalid:2222/acme/kb.git'
+ok "…an HTTPS bundle still gets HTTPS, on its own host" \
+  "$(derived_url https 'https://git.invalid/acme/bundle.git')" 'https://git.invalid/acme/kb.git'
+ok "…and a token in the bundle's remote never reaches the KB remote" \
+  "$(derived_url token 'https://x-access-token:s3cr3t@git.invalid/acme/bundle.git')" 'https://git.invalid/acme/kb.git'
+ok "a bundle with no origin keeps the github.com HTTPS default" \
+  "$(derived_url noorigin '')" 'https://github.com/acme/kb.git'
+ok "an explicit URL in knowledge.repo outranks the derivation" \
+  "$(derived_url explicit 'git@git.invalid:acme/bundle.git' 'https://git.invalid/other/kb.git')" \
+  'https://git.invalid/other/kb.git'
+ok "a local bare path is still taken verbatim" \
+  "$(derived_url path 'git@git.invalid:acme/bundle.git' "$BARE")" "$BARE"
+
+echo "== an auth failure is reported as an auth failure, not as the bound =="
+
+# A loopback TLS server answering 401: a real https:// remote, no credential helper, which
+# is the shape that blocked git on a username prompt for 140 seconds of retries.
+TLS="$TMP/tls"; mkdir -p "$TLS"
+cat > "$TLS/srv.py" <<'PY'
+import http.server, os, ssl, sys, threading, time
+cert, log = sys.argv[1], sys.argv[2]
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.headers.get('Authorization'):
+            open(log, 'a').write('authorization-header-seen\n')
+        self.send_response(401)
+        self.send_header('WWW-Authenticate', 'Basic realm="kb"')
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+    def log_message(self, *a): pass
+srv = http.server.HTTPServer(('127.0.0.1', 0), H)
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ctx.load_cert_chain(cert)
+srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+# The bound is on the CHILD, so nothing is orphaned if this harness dies first.
+threading.Thread(target=lambda: (time.sleep(180), os._exit(0)), daemon=True).start()
+print(srv.server_address[1], flush=True)
+srv.serve_forever()
+PY
+PORT=""
+if openssl req -x509 -newkey rsa:2048 -keyout "$TLS/k.pem" -out "$TLS/c.pem" -days 1 -nodes \
+     -subj "/CN=127.0.0.1" >/dev/null 2>&1 && cat "$TLS/k.pem" "$TLS/c.pem" > "$TLS/both.pem"; then
+  python3 "$TLS/srv.py" "$TLS/both.pem" "$TLS/authlog" > "$TLS/port" 2>/dev/null &
+  SRV=$!
+  disown "$SRV" 2>/dev/null
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    PORT="$(cat "$TLS/port" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.5
+  done
+fi
+ok "the loopback TLS fixture is up" "$([ -n "$PORT" ] && echo yes || echo no)" yes
+
+mount_401() { # <fixture name> -> the mount's combined output
+  local d="$TMP/$1"; mkdir -p "$d/$AB_DIR"; cp "$SEED/SCHEMA.md" "$d/$AB_SCHEMA"
+  printf '{ "knowledge": { "repo": "https://127.0.0.1:%s/acme/kb.git", "path": "/", "ref": "main" } }\n' \
+    "$PORT" > "$d/instance.config.json"
+  bash "$SYNC" --instance "$d" --timeout 20 mount 2>&1
+}
+
+export GIT_SSL_NO_VERIFY=true
+start=$(date +%s)
+out="$(mount_401 noauth)"
+elapsed=$(( $(date +%s) - start ))
+ok "an https:// mount with no credential helper names the credential failure" \
+  "$(has "$out" 'could not read Username')" yes
+ok "…and never reports it as the bound elapsing" "$(has "$out" 'bound')" no
+ok "…and says which remote and ref it was fetching" "$(has "$out" "https://127.0.0.1:$PORT/acme/kb.git")" yes
+ok "…in a fraction of the 20s bound, so raising the bound is visibly not the fix" \
+  "$([ -n "$PORT" ] && [ "$elapsed" -le 10 ] && echo yes || echo no)" yes
+
+# Deriving from the bundle's transport must not break the operator who genuinely uses
+# HTTPS: GIT_TERMINAL_PROMPT=0 disables the PROMPT and nothing else, so a helper is still
+# consulted and its Authorization header still goes out.
+rm -f "$TLS/authlog"
+out="$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper \
+       GIT_CONFIG_VALUE_0='!f() { echo username=u; echo password=p; }; f' \
+       mount_401 helper)"
+ok "a bundle with a credential helper still authenticates" \
+  "$([ -s "$TLS/authlog" ] && echo yes || echo no)" yes
+ok "…and never reaches the prompt path at all" "$(has "$out" 'could not read Username')" no
+unset GIT_SSL_NO_VERIFY
+[ -z "$SRV" ] || kill "$SRV" 2>/dev/null; SRV=""
 
 echo "== push-state.sh was NOT extended for any of this =="
 ok "push-state.sh names no KB sync" \

@@ -861,7 +861,7 @@ and need no plugin — share one copy.
 
 | | |
 |---|---|
-| `repo` | `org/name`. |
+| `repo` | `org/name`, cloned over **the same transport and host as this bundle's own `origin`** — SSH bundle, SSH clone. A full URL is taken verbatim, which is the override. |
 | `path` | `/` for the repo root, or `knowledge` for a top-level folder of that name inside a shared repo. |
 | `ref` | a **BRANCH** (default `main`). A tag or a SHA is refused **by name**: it checks out a detached HEAD the write path cannot push. |
 
@@ -892,6 +892,11 @@ human.
 **Reads are bounded and never fatal.** The dispatch tick fast-forwards the mount at its
 start and a `SessionStart` hook does the same; both carry an explicit timeout (git has none
 of its own and macOS ships no `timeout`), and a failed pull is reported, never fatal.
+**A failed network call is reported in git's own words**, and only a call that said nothing
+at all is reported as the bound elapsing — a credential failure named as a timeout invites
+raising the bound, which cannot fix it. Nothing here runs on a terminal, so
+`GIT_TERMINAL_PROMPT=0` is set: git fails at once instead of blocking on a username prompt.
+Credential helpers are untouched, so an HTTPS bundle that has one still authenticates.
 
 **The KB journals shard per month once shared** — `knowledge/log/<YYYY-MM>.md` and
 `knowledge/papercuts/<YYYY-MM>.md`; readers take the flat file and the shards both, so an
