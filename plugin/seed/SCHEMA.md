@@ -321,6 +321,40 @@ ledger: [ "L12 · 2026-10-01T09:00:00Z · merge · by <login> · items <this-slu
   pull-before-write and no floor-conflict resolution.
 - **Not counted** against a Finding's 40 lines, like `provenance:`.
 
+### The reflection report — a scheduled run proposes, a human-typed command applies
+
+`knowledge/` is merged rather than piled up by two halves that never meet. `scripts/kb-propose.sh`
+runs on the tick's cadence and writes **one draft task document** — the report — and nothing
+else; `scripts/kb-apply.sh`, reachable only through `/loopd:kb-apply`, is the one path that
+writes a proposal into `knowledge/`.
+
+```text
+P1 · supersede · duplicate · status=superseded · keeper · 1234567890-412 · the same claim as keeper, said twice
+```
+
+- **One proposal per line**, seven ` · ` fields: the id; a ledger kind (`status edit merge
+  rename supersede` — never `create`); the item's slug; **one** `field=value` to write into
+  its frontmatter; the other slugs a `merge`/`rename`/`supersede` leads to, or `-`; the
+  item's `cksum` fingerprint when the report was written; the reason. The reason keeps any
+  ` · ` it carries, so it goes last.
+- **The report is a task document** because `AWAITING.md` is derived and rewritten by every
+  tick: a row the scheduled run wrote into that file directly is deleted by the next one. It
+  is a `draft` carrying one `open_questions` entry, so it renders as `❓ answer` and never as
+  `✅ approve` — **a report is never promoted to `ready`**, which would dispatch an agent and
+  make a second apply path. Declining it is `status: cancelled`.
+- **Apply writes what the report names and this exclusion set:** the regenerated
+  `knowledge/index.md`, one `ledger:` entry per touched item, the report's own `status:
+  done`, and **one commit**. Nothing else.
+- **The report's own project document is NOT in that set.** It is a bundle document like
+  every other, so the tick commits it under the `project-manager` identity; putting it in
+  apply's commit would widen a scope whose whole point is that it is closed.
+- **Refusals cover the whole report, never part of it:** an item that is not `provenance:
+  machine` (the machinery never rewrites what a person wrote), an item whose fingerprint has
+  moved since the report was written, a report that is not `draft`, two proposals naming one
+  item, a `ledger:` or `provenance:` write, and a tick holding the dispatch lock — which
+  narrows the concurrent-writer window with the mechanism the bundle has, and does not close
+  it (`skills/audit/SKILL.md` says the same of the same probe).
+
 ### type: Service  (`knowledge/services/<name>.md`)
 
 ```yaml

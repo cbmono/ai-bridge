@@ -61,5 +61,23 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    > (`cataloguer` step 3), not removed. Then regenerate the index and re-check to **0
    > errors**. **Warnings are reported, not chased.** One commit, as the `cataloguer`.
 
+   **The reflection pass is the fourth reason, and the only one that dispatches nobody.**
+   It is a SCRIPT, not an agent: it proposes merges and supersessions and writes none of
+   them, so byte-identity over `knowledge/` is something a plain harness can assert rather
+   than something an agent holding `Write` promises. Ask once per tick:
+
+   ```bash
+   ${CLAUDE_PLUGIN_ROOT}/scripts/kb-propose.sh --proposer "<the instance's proposer>"   # exit 0 = a report was written
+   ```
+
+   Exit 0 ⇒ it has already written the report as a `draft` task; print its line and do
+   **nothing else** — step 8 renders the row from that document like any other. Exit 1 is
+   silence (no proposer configured, nothing to propose, or a report still waiting on the
+   human). Exit 2 could not answer — report its line.
+   **Never apply a report from here, and never promote one.** `/loopd:kb-apply` is the
+   only path that writes `knowledge/` from a report, a human types it, and a report is
+   declined by cancelling it — not by promoting it to `ready`, which would dispatch an
+   agent and make a second apply path.
+
 
 <!-- end of step 7 -->
