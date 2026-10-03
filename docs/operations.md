@@ -979,7 +979,11 @@ banner sample below, whose `─` rule it re-cuts to the new header's width) — 
 commit it makes. That bump commit goes **straight to main**: the merger pushes it directly,
 bypassing the required check as an admin (`enforce_admins` is off on this repo), and
 **main's suite on the push is the check**. There is no second, trivially-green PR, and the
-script refuses to run anywhere but the default branch on a clean tree. **`major` moves the
+script refuses to run anywhere but the default branch on a clean tree. **Write the release
+note first.** `docs/releases/v<new>.md` is the one path the script forgives on an otherwise
+clean tree, so an uncommitted note rides into the bump commit and the release arrives with
+the note that explains it; a note that already shipped is a record, and neither the bump nor
+`tests/template-version.test.sh` touches `docs/releases/` again. **`major` moves the
 companions too** — every non-core marketplace entry and its own `plugin.json` go to the same
 new major, because a companion tracks core's MAJOR, and a 2.0.0 core beside a 1.x companion
 fails main's own suite. The reason is

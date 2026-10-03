@@ -2,14 +2,16 @@
 # release-bump.sh <major|minor|patch> — move the version ON THE DEFAULT BRANCH, after a merge.
 # The ONLY writer of the five places that carry it: VERSION, plugin/VERSION, the two plugin
 # manifests, and every tracked doc that DISPLAYS the number (its `─` rule is resized with
-# the header). Refuses on a feature branch or a dirty tree, commits, prints the push.
+# the header) — never docs/releases/, where a shipped note records what shipped. The commit
+# also carries `docs/releases/v<new>.md`, the one path this script accepts dirty.
+# Refuses on a feature branch or any other dirty path, commits, prints the push.
 # `major` ALSO moves every companion plugin to <new major>.0.0: a companion tracks core's
 # MAJOR (plugin/README.md), so a v2 core beside a 1.x companion fails main's own suite.
 # Exit: 0 bumped · 1 refused (branch, dirty tree, missing file, unverifiable result) · 2 usage.
 # Reasoning: ai-bridge-next/task-026 and task-028, docs/conventions.md §20. Verified by tests/release-bump.test.sh.
 set -uo pipefail
 
-usage() { sed -n '2,9p' "$0" >&2; exit 2; }
+usage() { sed -n '2,11p' "$0" >&2; exit 2; }
 die() { printf 'release-bump: %s\n' "$1" >&2; exit 1; }
 
 FIELD=""; ROOT=""; ROOT_GIVEN=0; COMMIT=1; DRY=0
@@ -41,8 +43,6 @@ DEFAULT="$(git -C "$ROOT" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/n
 [ -n "$DEFAULT" ] || die "no origin/HEAD in $ROOT, so the default branch is unknown — 'git remote set-head origin -a' first"
 [ "$BRANCH" = "$DEFAULT" ] \
   || die "on '$BRANCH', not the default branch '$DEFAULT' — the bump lands after the merge, never inside a PR"
-[ -n "$(git -C "$ROOT" status --porcelain)" ] \
-  && die "the working tree is dirty — the bump is its own commit and nothing else"
 
 OLD="$(head -n 1 "$ROOT/VERSION" | tr -d '[:space:]')"
 printf '%s' "$OLD" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' || die "VERSION is not MAJOR.MINOR.PATCH: '$OLD'"
@@ -54,6 +54,14 @@ case "$FIELD" in
   minor) NEW="$MA.$((MI + 1)).0" ;;
   patch) NEW="$MA.$MI.$((PA + 1))" ;;
 esac
+
+# The release note for the version being cut is the ONE path allowed to be dirty: the bump
+# commit carries it, and a dirty tree is otherwise refused, so there is no other route by
+# which it could ride along.
+NOTE="docs/releases/v$NEW.md"
+DIRTY="$(git -C "$ROOT" status --porcelain | cut -c4- | grep -vFx "$NOTE")"
+[ -z "$DIRTY" ] \
+  || die "the working tree is dirty beyond $NOTE — the bump is its own commit, that note, and nothing else"
 
 # One writer, one verifier: python3 PLANS every file first (in situ, no reformatting), so a
 # missing or unparseable target refuses before the first write, then re-reads all five.
@@ -146,8 +154,12 @@ if companion_new:
         rel = os.path.join(os.path.normpath(src), ".claude-plugin", "plugin.json")
         planned.append((rel, set_version(read(os.path.join(root, rel)), rel, companion_new)))
 
+# docs/releases/ is a RECORD, not a display: rewriting the header of a shipped note to the
+# new number makes v3.0.0.md claim it is 3.1.0. The note for the version being cut carries
+# its own number already and needs no rewrite either.
 docs = [d for d in subprocess.check_output(
-    ["git", "-C", root, "ls-files", "*.md"]).decode("utf-8").split() if not d.startswith("tests/")]
+    ["git", "-C", root, "ls-files", "*.md"]).decode("utf-8").split()
+    if not d.startswith("tests/") and not d.startswith("docs/releases/")]
 for rel in docs:
     lines, hit = read(os.path.join(root, rel)).splitlines(True), False
     for k, line in enumerate(lines):
