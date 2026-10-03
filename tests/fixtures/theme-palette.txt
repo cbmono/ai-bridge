@@ -1,7 +1,11 @@
 # The loopd palette, copied verbatim from the owner's design handoff — tokens.css, the
 # `:root` block. THE ONE SOURCE: tests/plugin-theme.test.sh reads this file, and every
 # colour in plugin/themes/loopd.json must appear here.
-# Two colours only: blue is the machine's, pink is yours. A third accent is the bug.
+# AMENDED 2026-09-30 (owner), replacing "Two colours only: blue is the machine's, pink is
+# yours. A third accent is the bug.": blue #5ea2ff and pink #ff7ac2 stay the PRIMARY pair
+# with their meanings unchanged, and accents beside them are PERMITTED. Only exclusivity
+# retires. Still the bug: a machine-facing token recoloured to read as human-facing, or
+# the reverse — §6 of the suite asserts that, which is what replaced the line above.
 #101318  --loopd-bg
 #14171c  --loopd-terminal
 #171b22  --loopd-surface
@@ -21,3 +25,14 @@
 #ff7ac2  --loopd-pink
 #ff9ed3  --loopd-tube-pink-0
 #ffa3d4  --loopd-pink-bright
+# The accents, from the owner's palette recorded 2026-10-01 (loopd/task-009). Permitted by
+# the amendment above; each is carried by the override named after it.
+#57fffc  --loopd-accent-cyan      cyan_FOR_SUBAGENTS_ONLY
+#616161  --loopd-accent-grey      memoryBackgroundColor
+#80e59e  --loopd-accent-green     success, green_FOR_SUBAGENTS_ONLY
+#cb77f9  --loopd-accent-purple    purple_FOR_SUBAGENTS_ONLY
+#f5f5f5  --loopd-accent-ink       text
+#ff70bc  --loopd-accent-pink      warning
+#ffbb9e  --loopd-accent-orange    orange_FOR_SUBAGENTS_ONLY
+#ffc7e5  --loopd-accent-pink-soft pink_FOR_SUBAGENTS_ONLY
+#fffdc2  --loopd-accent-yellow    yellow_FOR_SUBAGENTS_ONLY
