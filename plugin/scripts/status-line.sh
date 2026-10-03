@@ -95,17 +95,24 @@ if [ -d "$root/projects" ]; then
 fi
 
 # --- need you: AWAITING.md's own items, counted the way the banner counts them -----------
-# Deletable by design, so absent is NOT zero — nothing can be established about the queue
-# from a file that is not there.
-awaiting="$UNKNOWN"
-if [ -r "$root/$AB_AWAITING" ]; then
-  awaiting="$(awk '
-    /^##[[:space:]].*Awaiting you/ { inblk = 1; next }
-    inblk && /^##[[:space:]]/      { exit }
-    inblk && /^[[:space:]]*\* /    { n++ }
-    END { print n + 0 }
-  ' "$root/$AB_AWAITING" 2>/dev/null)" || awaiting="$UNKNOWN"
-  [ -n "$awaiting" ] || awaiting="$UNKNOWN"
+# THREE STATES, THREE RENDERINGS, and `[ -r ]` alone cannot tell the first two apart.
+# ABSENT IS CHOSEN — build-awaiting.sh never recreates the file, so deleting it is how the
+# queue is switched off, and a state the human typed is not an error: the segment goes.
+# UNREADABLE IS ARRIVED AT, so it speaks, and it names its own repair in the line.
+awaiting=""
+queue=off
+if [ -e "$root/$AB_AWAITING" ]; then
+  queue=unreadable
+  if [ -r "$root/$AB_AWAITING" ]; then
+    queue=on
+    awaiting="$(awk '
+      /^##[[:space:]].*Awaiting you/ { inblk = 1; next }
+      inblk && /^##[[:space:]]/      { exit }
+      inblk && /^[[:space:]]*\* /    { n++ }
+      END { print n + 0 }
+    ' "$root/$AB_AWAITING" 2>/dev/null)" || awaiting="$UNKNOWN"
+    [ -n "$awaiting" ] || awaiting="$UNKNOWN"
+  fi
 fi
 
 # --- the lock: one `[ -f ]`, never a call into tick-lock.sh ------------------------------
@@ -135,7 +142,11 @@ SEP="$(paint "$C_DIM" ' · ')"
 
 printf '%s' "$(paint "$C_B" 'AI Bridge')"
 printf '%s%s' "$SEP" "$(paint "$(n_colour "$inflight" "$C_BLUE")" "$inflight in flight")"
-printf '%s%s' "$SEP" "$(paint "$(n_colour "$awaiting" "$C_PINK")" "$awaiting need you")"
+case "$queue" in
+  on)         printf '%s%s' "$SEP" "$(paint "$(n_colour "$awaiting" "$C_PINK")" "$awaiting need you")" ;;
+  unreadable) printf '%s%s' "$SEP" \
+                "$(paint "$C_PINK" "${AB_AWAITING##*/} unreadable — chmod +r $AB_AWAITING")" ;;
+esac
 if [ "$lock" = held ]; then printf '%s%s' "$SEP" "$(paint "$C_BLUE" 'lock held')"
 else                        printf '%s%s' "$SEP" "$(paint "$C_DIM" 'lock free')"; fi
 if [ "$last" = "$UNKNOWN" ]; then printf '%s%s\n' "$SEP" "$(paint "$C_PINK" "last tick $UNKNOWN")"
