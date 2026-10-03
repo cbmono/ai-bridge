@@ -332,7 +332,7 @@ type: Task
 title: Needs an answer
 kind: build
 status: draft
-open_questions: [ "Q1: $SENT first, with <b>markup</b> & an ampersand?", "Q2: $SENT second?" ]
+open_questions: [ "Q1: $SENT first, with <b>markup</b> & an ampersand?", "Q2: $SENT second?", "Q3: ANSWERED-task012 --- yes" ]
 ---
 TSK
 ( cd "$D" && SNAPSHOT_QUESTION_TEXT=1 SNAPSHOT_NOW=2026-09-06T00:00:00Z bash "$WRITER" --quiet )
@@ -343,8 +343,8 @@ PD="$(cd "$D" && bash "$SERVE" --print-port)"
 SRV_D="$(start_server "$D" "$TMP/d.log")"
 SERVED="$(body_of "$PD" /board.html)"
 
-ok "CONTROL: the snapshot counts both questions"      \
-  "$(python3 -c "import json,sys; s=json.load(open(sys.argv[1])); print([t['open_questions'] for p in s['projects'] for t in p['tasks'] if t['id']=='task-002'])" "$D/$AB_SNAPSHOT")" "[2]"
+ok "CONTROL: the snapshot counts all three entries"   \
+  "$(python3 -c "import json,sys; s=json.load(open(sys.argv[1])); print([t['open_questions'] for p in s['projects'] for t in p['tasks'] if t['id']=='task-002'])" "$D/$AB_SNAPSHOT")" "[3]"
 ok "the snapshot carries zero sentinel bytes"         "$(grep -c "$SENT" "$D/$AB_SNAPSHOT")" 0
 ok "the published render exists"                      "$(yes_if test -s "$PUB")" yes
 ok "…and carries zero sentinel bytes"                 "$(grep -c "$SENT" "$PUB")" 0
@@ -353,6 +353,7 @@ ok "the served page carries both questions"           "$(grep -o "$SENT" <<<"$SE
 ok "…escaped at the second escape point"              \
   "$(yes_if grep -qF '&lt;b&gt;markup&lt;/b&gt; &amp; an ampersand' <<<"$SERVED")" yes
 ok "…and never as live markup"                        "$(grep -c '<b>markup</b>' <<<"$SERVED")" 0
+ok "…and an answered entry awaiting the fold is not shown" "$(grep -c 'ANSWERED-task012' <<<"$SERVED")" 0
 ok "the placeholder is gone from the served item"     \
   "$(grep -c 'Only the locally served board shows question text' <<<"$SERVED")" 0
 ok "…and still stands in the published one"           \

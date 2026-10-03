@@ -78,7 +78,7 @@ fi
 HERE="$(cd "$(dirname "$0")" && pwd)"
 BOARD="$HERE/build-board.sh"
 WRITER="$HERE/write-snapshot.sh"
-for f in "$BOARD" "$WRITER"; do
+for f in "$BOARD" "$WRITER" "$HERE/fold-answers.sh"; do
   [[ -f "$f" ]] || { echo "board-serve: missing $f" >&2; exit 2; }
 done
 command -v python3 >/dev/null 2>&1 || {
@@ -98,6 +98,7 @@ PORT     = int(os.environ["BOARD_PORT"])
 INTERVAL = int(os.environ["BOARD_INTERVAL"])
 RENDER   = os.environ["BOARD_RENDER"]
 WRITER   = os.environ["BOARD_WRITER"]
+FOLD     = os.path.join(os.path.dirname(WRITER), "fold-answers.sh")
 PAGE     = os.path.join(OUT, "board.html")
 SNAP     = os.path.join(ROOT, os.environ["AB_SNAPSHOT"])
 STATE    = os.path.join(OUT, ".serve")
@@ -159,42 +160,19 @@ def list_instances():
         pass
 
 
-# write-snapshot.sh's list_region + list_entries_from_region, transcribed, so the page
-# shows the same entries the snapshot counted.
+# fold-answers.sh's --list is the one parser that round-trips these lists; a refusal
+# leaves the count paragraph, never a half-parsed question. An entry carrying ` --- ` is
+# answered and awaiting the fold, so it is skipped exactly as build-awaiting.sh skips it.
 def open_questions(path):
     try:
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            lines = fh.read().split("\n")
-    except OSError:
+        r = subprocess.run(["bash", FOLD, "--list", path, "open_questions"],
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=30)
+    except Exception:
         return []
-    if not lines or lines[0].strip() != "---":
+    if r.returncode != 0:
         return []
-    region, inblk = [], False
-    for line in lines[1:]:
-        if line.strip() == "---":
-            break
-        if line.startswith("open_questions:"):
-            region.append(line.split(":", 1)[1]); inblk = True
-        elif inblk and re.match(r"[ \t]+-", line):
-            region.append(line)
-        elif inblk and not line.strip():
-            continue
-        elif line[:1] and not line[:1].isspace():
-            inblk = False
-    inner = []
-    for line in region:
-        x = re.sub(r"^-[ \t]*", "", line.strip())
-        inner.append(re.sub(r"\]$", "", re.sub(r"^\[", "", x)).strip())
-    sep = r'"[ \t]*,[ \t]*"' if any('"' in x for x in inner) else r"[ \t]*,[ \t]*"
-    out = []
-    for x in "\n".join(inner).split("\n"):
-        for q in re.split(sep, x):
-            q = q.strip()
-            q = re.sub(r'"$', "", re.sub(r'^"', "", q))
-            q = re.sub(r"'$", "", re.sub(r"^'", "", q)).strip()
-            if q and q not in ("[", "]", "[]"):
-                out.append(q)
-    return out
+    return [q for q in r.stdout.decode("utf-8", "replace").splitlines()
+            if q.strip() and " --- " not in q]
 
 
 def fill(m):
