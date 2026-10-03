@@ -25,7 +25,8 @@ prompt still binds here — both authority gates, the ownership gate, the UNKNOW
    | exit 2 | either | unknown, which is not "finished". Report it and change nothing. |
 
    **Never `claude rm` a role agent's session** — it deletes the session **and its
-   worktree**, which belongs to `prune-worktrees.sh` and the human who runs its commands.
+   worktree**, which belongs to `reclaim-worktree.sh` once the task is `done` with every PR
+   merged, and to `prune-worktrees.sh` plus a human in every other case.
    `stop` is the verb here; `rm` is the human's, after the merge.
 
    **Check the artifact, don't believe the report.** For every task a dispatched agent

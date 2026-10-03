@@ -75,9 +75,9 @@ this file so product-repo sessions aren't told they are a control panel. -->
   you answer by appending ` --- <answer>` to the question's line, and the next tick
   folds it in as `<ISO 8601> by <login> · <entry>`), dispatches human-approved
   `ready` tasks, monitors PRs, reflects
-  merges as `done`, **reports** finished worktrees (`prune-worktrees.sh` prints
-  removal commands, never deletes), and **proposes** closing finished projects —
-  never closes them itself.
+  merges as `done`, **reclaims** its worktree (`reclaim-worktree.sh`; `done` plus every
+  PR merged, or refuses), **reports** the rest (`prune-worktrees.sh` never
+  deletes) and **proposes** closing finished projects — never closes them itself.
 - **Two human authorities** (`SCHEMA.md`): only the human promotes `draft → ready`,
   and only the human merges. The PM never sets `ready` and never merges.
 - **One active `/loopd:dispatch` loop per clone**, run from a session **in this

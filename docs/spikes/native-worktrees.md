@@ -62,7 +62,7 @@ it yet.**
 | where the worktree lands | `worktreeRoot/<task-slug>`, `git worktree add` by the agent | same path, created by a `WorktreeCreate` hook — measured to work |
 | `worktree:` / `branch:` in the task file | PM writes both before dispatch | hook cannot know either ⇒ **blocked** |
 | `prune-worktrees.sh` | report-only classifier over two roots | unchanged — `WorktreeRemove` never fires, so nothing is reaped for it |
-| `reclaim-worktree.sh` | task-driven removal | unchanged — it is the only task-aware reaper either way |
+| `reclaim-worktree.sh` | task-driven removal | unchanged — it is the only task-aware reaper either way (restored 2026-10-03) |
 | an existing `_wt` tree | drained by hand | untouched; the hook writes to the same root |
 
 **The one change that unblocks it**: `WorktreeCreate` carrying the spawning agent's
@@ -131,8 +131,13 @@ three running agents' worktrees on 2026-08-04 (`docs/pm-design.md`, step 5), and
 constraint binds the migration: the probe's own cleanup names the fixture's trees by path
 under a `mktemp` root, and the veto never lists a worktree root at all.
 
-**The settled target, for the follow-up task:** `prune-worktrees.sh` survives as a report
+**Superseded in part, 2026-10-03.** `reclaim-worktree.sh` is back
+(seed-gaps-and-worktree-cleanup/task-004) and the tick runs it; the veto's clearance rule
+below is **not** the one that shipped — reclaim requires at least one `pr:` URL and every
+URL MERGED, where the veto clears on an EMPTY `pr:`. The veto stays unwired, so the two do
+not conflict in practice; if `WorktreeRemove` ever fires, reclaim's G11 is the rule to
+port. **The settled target, for the follow-up task:** `prune-worktrees.sh` survives as a report
 over `git worktree list --porcelain` lock reasons and still deletes nothing;
-`reclaim-worktree.sh` is retired. Both are **untouched by this PR**. The follow-up is
+`reclaim-worktree.sh` was retired. Both are **untouched by this PR**. The follow-up is
 gated on the tick dispatching each role agent as its own session — the one route where
 `name` is the task id — not on a payload change we do not control.

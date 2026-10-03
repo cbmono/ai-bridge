@@ -405,10 +405,13 @@ ticks, regardless of how long a tick runs.
   (never `git add -A`), via
   `${CLAUDE_PLUGIN_ROOT}/scripts/commit-as.sh project-manager "<msg>" --stage -- <path>...`
   — `--stage` stages exactly those paths first; never `--no-verify` in target repos.
-- **Worktree hygiene.** `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` (≤ once per tick) **reports only —
+- **Worktree hygiene, two scripts.** `${CLAUDE_PLUGIN_ROOT}/scripts/reclaim-worktree.sh <task-path>`
+  removes the ONE worktree a `done` task recorded, and only when every URL in its `pr:` has
+  MERGED — step 5 runs it per task; exit 1 is a refusal to record, never to retry around.
+  `${CLAUDE_PLUGIN_ROOT}/scripts/prune-worktrees.sh` (≤ once per tick) **reports only —
   it never deletes anything**; surface its `REMOVABLE`/`RECLAIMABLE` sets as a human
   job. **Run it only when your in-flight count is zero** — the `PRUNE_ACTIVE_MINUTES`
-  mtime veto (default 120) is a backstop, not the guard.
+  mtime veto (default 120) is a backstop, not the guard, and does not apply to reclaim.
 - **Project close is human-gated.** The PM only *proposes* closing (all tasks
   terminal); the human confirms (or runs `/close-project`). The folder step is always
   `${CLAUDE_PLUGIN_ROOT}/scripts/close-project-folder.sh <slug> --apply`, never a hand-written `rm`;

@@ -186,9 +186,12 @@ branch:   <branch-name>                # optional, BUILD only. MACHINE-READ. Req
 # — a recorded path with no recorded branch cannot be proven to still be the worktree this
 # task created, and a worktree path can be recycled.
 #
-# NOTHING DELETES A WORKTREE AUTOMATICALLY. `WorktreeRemove` has never fired (measured
-# again 2026-09-14 on 2.1.270: 5 sessions, 5 trees, 0 events), so reclamation is
-# `prune-worktrees.sh` printing `git worktree remove` commands and a human running them.
+# EXACTLY ONE THING DELETES A WORKTREE, AND IT READS THESE FIELDS. `WorktreeRemove` has
+# never fired (measured again 2026-09-14 on 2.1.270: 5 sessions, 5 trees, 0 events).
+# `prune-worktrees.sh` still only prints `git worktree remove` commands for a human.
+# `reclaim-worktree.sh <task-path>` removes ONE recorded path, and only when `status:` is
+# `done` and every URL in `pr:` has MERGED — which is why `worktree:` without `branch:`,
+# and an empty `pr:`, are both refusals rather than silence.
 session: <id>                          # optional, BUILD only. MACHINE-READ by scripts/agent-sessions.sh.
 # The `claude --bg` background session running this task's role agent — the id that
 # `claude agents`, `attach`, `logs` and `stop` take. Written by the project-manager
@@ -1255,7 +1258,12 @@ permissions**; opting in per project = this field. Nothing to configure in this 
 swept as the legacy root). It must be outside any synced folder — sync rewrites
 files inside a worktree mid-run.
 
-**Nothing reclaims them automatically.** `scripts/prune-worktrees.sh` classifies and
+**One script reclaims them, on the terminal case only.**
+`scripts/reclaim-worktree.sh <task-path>` removes the single worktree that task recorded,
+and exits 0 only when the task is `done` and every URL in its `pr:` has MERGED — a PR
+CLOSED-UNMERGED, an empty `pr:`, a dirty or unpushed tree, a detached HEAD, an ignored
+file that is not a known cache, or a live process inside the tree are all refusals. The
+tick runs it in step 5. `scripts/prune-worktrees.sh` classifies and
 reports; it never removes. It scans `worktreeRoot` and the legacy `<reposRoot>/_wt`,
 labels each worktree `REMOVABLE` (real branch, merged/closed PR, fully clean tree),
 `RECLAIMABLE` (finished, but needs a human eye — either a detached HEAD, whose
@@ -1265,8 +1273,10 @@ untracked scaffolding), `KEEP`, `STALE` or `UNREGISTERED`, and prints the exact
 own is always `KEEP`, because "already merged" and "dispatched but hasn't committed
 yet" are the same git state.
 
-The removal path was deleted in v2: it had destroyed three running agents'
-worktrees, and no first-party mechanism covers this root (native isolation and its
-retention sweep only reach worktrees the harness created, of the *session* repo). So
-the worktree root does grow, and draining it is a periodic human job — surface the
-report, don't automate the delete.
+The pruner's own removal path was deleted in v2: it had destroyed three running
+agents' worktrees, and no first-party mechanism covers this root (native isolation and its
+retention sweep only reach worktrees the harness created, of the *session* repo). It stays
+deleted — a SCAN infers which worktree is finished, and that inference is what went wrong.
+`reclaim-worktree.sh` is a different object: it never scans, and the task record it reads
+was written by the thing that did the dispatching. Anything the pruner reports that no
+task record names is still a human job — surface the report, don't automate the delete.

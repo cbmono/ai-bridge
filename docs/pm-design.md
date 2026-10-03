@@ -497,19 +497,27 @@ about every future PR, not this one, so working around it per-PR hides a broken
 reviewer behind a per-PR fix and the human never learns it needs fixing.
 
 <a id="step-5"></a>
-### Step 5 — why nothing deletes a worktree, and pruning is report-only
+### Step 5 — why ONE script deletes a worktree, and pruning is still report-only
 
 The scan-based version of worktree removal destroyed three running agents' worktrees
 before it was deleted, and the states are genuinely ambiguous — a branch with no
 commits of its own is indistinguishable from a live dispatch that hasn't committed yet,
 and a detached HEAD's commits are on no branch ref at all.
 
-`reclaim-worktree.sh` was the one exception: record-driven removal of a single path the
-task itself named. It went with the migration to a `WorktreeCreate` hook
-(ai-bridge-v3/task-032) — the harness creates the tree, so the harness owns its
-lifecycle, and a second reaper on our side is one more thing that can be wrong about a
-live agent. Until `WorktreeRemove` fires (it still does not: measured 2026-09-14 on
-2.1.270, 5 sessions, 5 trees, 0 events), removal is a human's hand on a printed command.
+`reclaim-worktree.sh` is the one exception: record-driven removal of a single path the
+task itself named. It was retired with the migration to a `WorktreeCreate` hook
+(ai-bridge-v3/task-032) on the expectation that `WorktreeRemove` would reap the tree, and
+**it never fired** — measured 2026-09-14 on 2.1.270, 5 sessions, 5 trees, 0 events, and
+still 0 since. Report-only therefore cost something real: 42 worktrees registered on one
+machine on 2026-10-02, 12 of them stale leftovers from SIGKILLed harness runs, 68 MB. So
+the script is back (seed-gaps-and-worktree-cleanup/task-004), with the guards it had plus
+two the critique measured as missing — ignored content, and a live process in the tree —
+and minus the mtime veto, which cannot fire usefully on this path. The reasoning per guard
+is `docs/conventions.md` invariant 7.
+
+**It is not the pruner's flag coming back.** The pruner scans a directory and infers which
+worktree is finished; that inference is the incident. Reclaim reads a record the
+dispatching PM wrote and removes exactly the one path in it.
 
 `prune-worktrees.sh`'s liveness check (`PRUNE_ACTIVE_MINUTES`, default 120) is a
 best-effort backstop: an agent that is thinking, waiting on review, or running a long

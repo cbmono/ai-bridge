@@ -39,7 +39,7 @@
 # and nothing in the filesystem distinguishes that from an abandoned checkout.
 # So the caller-side rule survives as defence in depth, and remains the PRIMARY
 # guard: run this only when your own in-flight count is zero (see the
-# project-manager agent's "Report the worktree, never remove it"). The mtime veto catches the
+# project-manager agent's step 5). The mtime veto catches the
 # dispatch you forgot about; your in-flight count is what you actually rely on.
 #
 # THE LIVE-PROCESS SCAN IS A SEPARATE, LOUDER SIGNAL FROM THE MTIME GUARD ABOVE.
@@ -603,13 +603,13 @@ keep() { printf 'KEEP (%s)  %s  [%s]\n' "$1" "$wt" "$2"; kept=$((kept+1)); }
 # pastes into their shell. The command is printed, so its escaping is a security
 # boundary even though this script runs nothing.
 #
-# Deliberately WITHOUT `--force`. `tree_state` uses `git status --porcelain`, which
-# does not see ignored files, so a worktree whose only remaining content is an
-# ignored `.env` or a local config file classifies as clean — and `--force` would
-# delete it. Plain `git worktree remove` refuses instead, which hands that judgement
-# to the human along with everything else dangerous here. The cost is that genuinely
-# disposable artifacts (node_modules/, dist/) also make git refuse; adding `--force`
-# then is the human's call, on a tree they can look at.
+# Deliberately WITHOUT a force flag — but NOT because git would refuse. That claim stood
+# here until 2026-10-03 and is FALSE: measured on git 2.50.1, a worktree whose only content
+# is an ignored `.env` is removed with rc=0 and the file goes with it. `tree_state` uses
+# `git status --porcelain`, which never sees ignored paths, so the REMOVABLE verdict does
+# not account for them either and a human reads the line and decides. `reclaim-worktree.sh`
+# G12 checks ignored content explicitly, which is why that script may delete and this one
+# may not (tests/reclaim-worktree.test.sh measures both the refusal and its mutant).
 report_removable() { # <why> <label>
   printf 'REMOVABLE         %s  [%s]  (%s)\n' "$wt" "$2" "$1"
   removed=$((removed+1))
