@@ -338,19 +338,32 @@ threading.Thread(target=lambda: (time.sleep(180), os._exit(0)), daemon=True).sta
 print(srv.server_address[1], flush=True)
 srv.serve_forever()
 PY
+# This fixture's OWN failure is reported the way the script under test now reports git's:
+# openssl and python keep their stderr, and an absent port prints why instead of leaving
+# four downstream assertions to fail for a reason nobody can see. It cost a red CI run to
+# learn that, on a loaded runner, and the budget below is generous for the same reason.
 PORT=""
-if openssl req -x509 -newkey rsa:2048 -keyout "$TLS/k.pem" -out "$TLS/c.pem" -days 1 -nodes \
-     -subj "/CN=127.0.0.1" >/dev/null 2>&1 && cat "$TLS/k.pem" "$TLS/c.pem" > "$TLS/both.pem"; then
-  python3 "$TLS/srv.py" "$TLS/both.pem" "$TLS/authlog" > "$TLS/port" 2>/dev/null &
+openssl req -x509 -newkey rsa:2048 -keyout "$TLS/k.pem" -out "$TLS/c.pem" -days 1 -nodes \
+  -subj "/CN=127.0.0.1" >"$TLS/openssl.out" 2>&1; ssl_rc=$?
+if [ "$ssl_rc" -eq 0 ] && cat "$TLS/k.pem" "$TLS/c.pem" > "$TLS/both.pem"; then
+  python3 "$TLS/srv.py" "$TLS/both.pem" "$TLS/authlog" > "$TLS/port" 2>"$TLS/srv.err" &
   SRV=$!
   ( sleep 120; kill "$SRV" 2>/dev/null ) >/dev/null 2>&1 &
   DOG=$!
   disown "$SRV" 2>/dev/null; disown "$DOG" 2>/dev/null
-  for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
-    PORT="$(cat "$TLS/port" 2>/dev/null)"; [ -n "$PORT" ] && break; sleep 0.5
+  for _ in $(seq 1 120); do
+    PORT="$(tr -dc '0-9' < "$TLS/port" 2>/dev/null)"
+    [ -n "$PORT" ] && break
+    kill -0 "$SRV" 2>/dev/null || break
+    sleep 0.25
   done
 fi
 ok "the loopback TLS fixture is up" "$([ -n "$PORT" ] && echo yes || echo no)" yes
+if [ -z "$PORT" ]; then
+  printf '        openssl exit %s: %s\n' "$ssl_rc" "$(head -c 400 "$TLS/openssl.out" 2>/dev/null | tr '\n' ' ')"
+  printf '        server stderr: %s\n' "$(head -c 400 "$TLS/srv.err" 2>/dev/null | tr '\n' ' ')"
+  printf '        python3: %s (%s)\n' "$(command -v python3 || echo none)" "$(python3 -V 2>&1)"
+fi
 
 mount_401() { # <fixture name> -> the mount's combined output
   local d="$TMP/$1"; mkdir -p "$d/$AB_DIR"; cp "$SEED/SCHEMA.md" "$d/$AB_SCHEMA"
