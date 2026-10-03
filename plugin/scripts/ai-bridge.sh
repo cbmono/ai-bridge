@@ -82,7 +82,7 @@
 # `**⚠ text**`, so `^⚠` keeps matching for the banner's filter and for the harness whatever
 # the style is.
 #
-# GENERIC PLUGIN FILE — ships inside the `loopd` plugin; it reads no org, repo or path
+# GENERIC PLUGIN FILE — ships inside the `ai-bridge` plugin; it reads no org, repo or path
 # literal. Verified by tests/ai-bridge-command.test.sh.
 #
 # EVERY `check_*` AND `fix_*` FUNCTION IS INVOKED INDIRECTLY, by a name built from the row
@@ -165,20 +165,20 @@ esac
 if [ "$FORM" != banner ]; then
   while [ $# -gt 0 ]; do
     case "$1" in
-      --instance)    [ $# -ge 2 ] || { echo "loopd: --instance needs a directory" >&2; exit 2; }; ROOT="$2"; shift 2 ;;
+      --instance)    [ $# -ge 2 ] || { echo "ai-bridge: --instance needs a directory" >&2; exit 2; }; ROOT="$2"; shift 2 ;;
       --instance=*)  ROOT="${1#--instance=}"; shift ;;
-      --template)    [ $# -ge 2 ] || { echo "loopd: --template needs a directory" >&2; exit 2; }; TEMPLATE="$2"; shift 2 ;;
+      --template)    [ $# -ge 2 ] || { echo "ai-bridge: --template needs a directory" >&2; exit 2; }; TEMPLATE="$2"; shift 2 ;;
       --template=*)  TEMPLATE="${1#--template=}"; shift ;;
-      --since)       [ $# -ge 2 ] || { echo "loopd: --since needs a git ref" >&2; exit 2; }; SINCE="$2"; shift 2 ;;  # accepted, ignored — see above
+      --since)       [ $# -ge 2 ] || { echo "ai-bridge: --since needs a git ref" >&2; exit 2; }; SINCE="$2"; shift 2 ;;  # accepted, ignored — see above
       --since=*)     SINCE="${1#--since=}"; shift ;;                                                                       # accepted, ignored
       --only-problems) ONLY_PROBLEMS=1; shift ;;
       --banner)      BANNER_ONLY=1; shift ;;
       --list)        LIST=1; shift ;;
-      --style)       [ $# -ge 2 ] || { echo "loopd: --style needs a value" >&2; exit 2; }; STYLE="$2"; shift 2 ;;
+      --style)       [ $# -ge 2 ] || { echo "ai-bridge: --style needs a value" >&2; exit 2; }; STYLE="$2"; shift 2 ;;
       --style=*)     STYLE="${1#--style=}"; shift ;;
       --fetch)       FETCH=1; shift ;;
       -h|--help)     usage; exit 0 ;;
-      *)             echo "loopd: unknown argument: $1" >&2; usage; exit 2 ;;
+      *)             echo "ai-bridge: unknown argument: $1" >&2; usage; exit 2 ;;
     esac
   done
 fi
@@ -257,7 +257,7 @@ fi
 if [ "$FORM" = banner ]; then
   hook="$HOOKS/session-banner.sh"
   if [ ! -f "$hook" ]; then
-    echo "loopd: the session banner is not where this script expects it ($hook)." >&2
+    echo "ai-bridge: the session banner is not where this script expects it ($hook)." >&2
     echo "           That is a broken plugin install, not a bundle problem. Re-install:" >&2
     echo "           /plugin install ${PLUGIN_NAME}@${PLUGIN_MARKETPLACE}, then restart Claude Code." >&2
     exit 2
@@ -306,7 +306,7 @@ fi
 #   otherwise                   -> markdown. A pipe here is the Bash tool, and what comes out
 #                                            of it is relayed into an assistant message. That
 #                                            was measured rendering markdown and DESTROYING
-#                                            ANSI, so this is the branch `/loopd:welcome check`
+#                                            ANSI, so this is the branch `/ai-bridge check`
 #                                            actually takes.
 #
 # `NO_COLOR` IS TESTED BEFORE `--style`, AND THAT ORDER IS THE WHOLE OF THE CONTRACT. It is
@@ -424,7 +424,7 @@ check_template_behind() {
     IFS="$(printf '\t')" read -r st here there pname <<<"$state"
     case "${st:-}" in
       behind)  warn "plugin ${here} is behind the marketplace, which carries ${there}"
-               hint "claude plugin update ${pname:-loopd}   (then restart Claude Code)" ;;
+               hint "claude plugin update ${pname:-ai-bridge}   (then restart Claude Code)" ;;
       current) good "plugin version: ${here} is what the marketplace's default branch carries" ;;
       *)       good "plugin version: the marketplace could not be read, so drift is not judged"
                note "a plugin installed from a marketplace has one; a vendored copy may not" ;;
@@ -1160,12 +1160,12 @@ $CHECKS
 EOF
   [ -z "$rogue" ] && [ -z "$unwired" ] && return 0
   if [ -n "$rogue" ]; then
-    echo "loopd: REFUSING TO RUN — a repair exists for a tier that must never be repaired:" >&2
+    echo "ai-bridge: REFUSING TO RUN — a repair exists for a tier that must never be repaired:" >&2
     echo "           $rogue" >&2
     echo "           The tier declared in CHECKS is the only dispatch. Delete the function." >&2
   fi
   if [ -n "$unwired" ]; then
-    echo "loopd: REFUSING TO RUN — a row in CHECKS has no check function:" >&2
+    echo "ai-bridge: REFUSING TO RUN — a row in CHECKS has no check function:" >&2
     echo "           $unwired" >&2
     echo "           Add check_<id>, or remove the row. A missing one reads as a problem." >&2
   fi
@@ -1205,7 +1205,7 @@ if [ "$FORM" = check ]; then
       # wallpaper is how the lines that matter come to be skipped.
       [ "$rc" -eq 0 ] && continue
       if [ "$header_printed" -eq 0 ]; then
-        printf '%s\n' "⚠️  loopd check — state worth a look (/loopd:welcome check for all of it):"
+        printf '%s\n' "⚠️  ai-bridge check — state worth a look (/ai-bridge check for all of it):"
         header_printed=1
       fi
       # The verdict and its one command, nothing else. See `hint` above for the bound.
@@ -1227,10 +1227,10 @@ fi
 # The two ship-blockers therefore hold by construction rather than by care: there is no
 # branch here that could be pointed at a config file or a lock file.
 if [ -z "${AI_BRIDGE_INIT_PASS:-}" ]; then
-  echo "loopd fix has moved into /${PLUGIN_NAME}:init — run that instead; it stamps the bundle and then runs this same pass."
+  echo "ai-bridge fix has moved into /${PLUGIN_NAME}:init — run that instead; it stamps the bundle and then runs this same pass."
   exit 0
 fi
-echo "loopd fix — acting ONLY on the idempotent tier."
+echo "ai-bridge fix — acting ONLY on the idempotent tier."
 echo "                Config files and tick locks are NEVER written, reverted, staged,"
 echo "                cleared or rewritten by this command. They are reported."
 echo

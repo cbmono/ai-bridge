@@ -315,7 +315,7 @@ assert "coloured lines are a minority of the banner ($esc_lines of $all_lines)" 
 # THE `check` BLOCK IS COLOURED BY THE BANNER, not by the script that produced it. Two
 # writers on one line is how a padded column drifts, so `ai-bridge.sh` emits it plain under
 # `--banner` and `emphasise` decides the weight here.
-assert "the inlined loopd check block fired"   "$(has 'loopd check — state worth a look' "$SM")"
+assert "the inlined ai-bridge check block fired"   "$(has 'ai-bridge check — state worth a look' "$SM")"
 assert "…its ⚠ line is coloured" \
   "$(has_esc "$(grep 'this bundle has not been converted' <<<"$SM")")"
 assert "…while its ↳ hint line, which is context, is not" \

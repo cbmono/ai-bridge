@@ -291,17 +291,17 @@ assert "the envelope is a single line (saw $n_out)"    "$(eq "$n_out" 1)"
 # prints them, which is what `/<plugin>:welcome` asks for.
 #
 # IT BOUNDS THE STANDING BANNER, NOT AN ALARM. This fixture is deliberately unconverted, so
-# §8's `loopd check` block fires — and a block that exists to shout about a broken bundle
+# §8's `ai-bridge check` block fires — and a block that exists to shout about a broken bundle
 # is the one thing a line budget must never silence. Measured to the last non-empty line
 # above it, which is the whole banner on a healthy instance.
-SM_STANDING="$(printf '%s\n' "$SM" | sed '/loopd check — state worth a look/,$d')"
+SM_STANDING="$(printf '%s\n' "$SM" | sed '/ai-bridge check — state worth a look/,$d')"
 sm_lines="$(printf '%s\n' "$SM_STANDING" | awk 'NF { last = NR } END { print last + 0 }')"
 assert "the human's standing banner is at most 12 lines (saw $sm_lines)" \
   "$([ "$sm_lines" -le 12 ] && echo 0 || echo 1)"
 assert "…and it is not empty, so the ceiling is not met by printing nothing" \
   "$([ "$sm_lines" -ge 6 ] && echo 0 || echo 1)"
 assert "…the alarm really was excluded, so the cut is not vacuous" \
-  "$(has 'loopd check — state worth a look' "$SM")"
+  "$(has 'ai-bridge check — state worth a look' "$SM")"
 assert "…the tables are what went"                     "$(hasnt 'maxAgentsInFlight' "$SM")"
 SM_FULL_TXT="$(CLAUDE_PROJECT_DIR="$INST" bash "$HOOK" --full 2>/dev/null)"
 assert "…and \`--full\` still has them"                "$(has 'maxAgentsInFlight' "$SM_FULL_TXT")"
