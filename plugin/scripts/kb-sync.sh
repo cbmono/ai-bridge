@@ -47,9 +47,13 @@ cfg() { bash "$HERE/resolve-config.sh" --instance "$INST" "$@" 2>/dev/null; }
 # are untouched, so an HTTPS bundle that has one still authenticates.
 export GIT_TERMINAL_PROMPT=0
 
+# The child's stderr has to transit a FILE, not a variable: half the bounded calls below run
+# inside $( ) and a subshell's variables never come back. `mktemp` makes it 0600 in the
+# caller's own TMPDIR, every call truncates it, it is removed on the way out however we
+# leave, and nothing reads it without masking first.
 ERRLOG="$(mktemp "${TMPDIR:-/tmp}/kb-sync-err.XXXXXX" 2>/dev/null)" || ERRLOG=""
 cleanup() { [ -z "$ERRLOG" ] || rm -f "$ERRLOG"; }
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 # A bound that holds without coreutils `timeout`, which stock macOS does not ship:
 # the watchdog is a SIBLING, so it still fires if this shell is killed first.
@@ -70,20 +74,28 @@ bounded() {
   return $rc
 }
 
-# A URL can carry a token in its userinfo, and every line below is printed or logged.
-redact() { sed -E 's#(://)[^/@[:space:]]*@#\1***@#g'; }
-safe_url() { printf '%s' "$1" | redact; }
+# A URL can carry a token in its userinfo, and every line below is printed.
+mask_userinfo() { LC_ALL=C sed -e 's#[^/@[:space:]]*:[^/@[:space:]]*@#***@#g'; }
+safe_url() { printf '%s' "$1" | mask_userinfo; }
+
+# Git's stderr is REMOTE-INFLUENCED text that gets printed, so it is handled as DATA and
+# never passed through: userinfo masked, control characters dropped (a terminal escape is
+# the injection), newlines folded so a remote cannot forge a second `kb-sync:` line, and the
+# whole thing truncated. None of it is ever written to a commit, a document or the KB.
+quote_remote() { # stdin -> one bounded, printable line
+  LC_ALL=C tr '\r\n\t' '   ' | mask_userinfo |
+  LC_ALL=C sed -e 's/[^[:print:]]/ /g' -e 's/[[:space:]][[:space:]]*/ /g' \
+               -e 's/^ //' -e 's/ $//' | cut -c1-200
+}
 
 # Why the last bounded call failed, in git's own words where it gave any — so an auth
 # failure reads as an auth failure. Only a child that said NOTHING is reported as the
 # bound elapsing, which is the one case where the elapsed time is the whole story.
 why_failed() {
   local err=""
-  [ -z "$ERRLOG" ] || err="$(
-    tr -d '\r' < "$ERRLOG" 2>/dev/null | grep -v '^[[:space:]]*$' | head -3 |
-    redact | tr '\n' ' ' | sed -e 's/[[:space:]]*$//'
-  )"
-  if [ -n "$err" ]; then printf '%s' "$err"; else printf 'no output, killed at the %ss bound' "$TIMEOUT"; fi
+  [ -z "$ERRLOG" ] || err="$(head -c 4096 "$ERRLOG" 2>/dev/null | quote_remote)"
+  if [ -n "$err" ]; then printf 'git said: %s' "$err"
+  else printf 'no output, killed at the %ss bound' "$TIMEOUT"; fi
 }
 
 # The transport and host the bundle's OWN origin uses. A shorthand `org/name` cloned over
@@ -144,6 +156,9 @@ kb_vars() {
   KB_PATH="$(kb_read path)"; [ -n "$KB_PATH" ] || KB_PATH="/"
   KB_REF="$(kb_read ref)"; [ -n "$KB_REF" ] || KB_REF="main"
   KB_URL="$(remote_url "$KB_REPO")"
+  # From here KB_REPO is only ever DISPLAYED, so it is masked once rather than at each
+  # of the seven messages that name it. KB_URL keeps whatever the operator configured.
+  KB_REPO="$(safe_url "$KB_REPO")"
   local layout
   layout="$(mount_layout "$KB_PATH")" || die "knowledge.path is '$KB_PATH'. Only '/' (the repo
        root) and 'knowledge' (a top-level folder of that name) can be mounted at
@@ -246,7 +261,7 @@ mount_sources() {
     [ -n "${repo:-}" ] || continue
     first="$(printf '%s' "$seen" | awk -F'\t' -v n="$name" '$1==n {print $2; exit}')"
     if [ -n "$first" ]; then
-      warn "knowledgeSources[$i] '$repo' and '$first' both mount at knowledge-sources/$name — skipped. Rename one repo or drop one entry."
+      warn "knowledgeSources[$i] '$(safe_url "$repo")' and '$(safe_url "$first")' both mount at knowledge-sources/$name — skipped. Rename one repo or drop one entry."
       continue
     fi
     seen="$seen$name	$repo
@@ -258,9 +273,9 @@ mount_sources() {
     gd="$SRCROOT/$name.git"; wt="$INST/knowledge-sources/$name"
     [ -d "$gd" ] && continue
     if clone_mount "$gd" "$wt" "$(remote_url "$repo")" "$ref" "$sparse"; then
-      say "mounted read-only $repo at knowledge-sources/$name${sparse:+/$sparse}"
+      say "mounted read-only $(safe_url "$repo") at knowledge-sources/$name${sparse:+/$sparse}"
     else
-      rm -rf "$gd"; warn "could not mount read-only source $repo — skipped, not fatal"
+      rm -rf "$gd"; warn "could not mount read-only source $(safe_url "$repo") — skipped, not fatal"
     fi
   done <<EOF
 $(each_source)
@@ -424,7 +439,7 @@ case "$cmd" in
     pull_one "$KBGIT" "$KB_REF" "$KB_REPO"
     while IFS=$'\t' read -r i repo path ref name; do
       [ -n "${repo:-}" ] || continue
-      pull_one "$SRCROOT/$name.git" "$ref" "$repo"
+      pull_one "$SRCROOT/$name.git" "$ref" "$(safe_url "$repo")"
     done <<EOF
 $(each_source)
 EOF
