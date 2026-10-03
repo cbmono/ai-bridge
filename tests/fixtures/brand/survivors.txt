@@ -23,7 +23,6 @@ prov,bundle,instdir,fname,frozen	docs/operations.md
 prov	docs/pm-design.md
 frozen	docs/releases/v1.0.0.md
 prov,instdir	docs/sharing.md
-frozen	docs/spikes/headless-tick-probe.sh
 prov,bundle,fname	plugin/README.md
 prov	plugin/evals/README.md
 prov	plugin/hooks/deny-destructive.sh
