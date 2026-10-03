@@ -49,16 +49,16 @@ export GIT_TERMINAL_PROMPT=0
 
 # The child's stderr has to transit a FILE, not a variable: half the bounded calls below run
 # inside $( ) and a subshell's variables never come back. `mktemp` makes it 0600 in the
-# caller's own TMPDIR, every call truncates it, it is removed on the way out however we
-# leave, and nothing reads it without masking first.
+# caller's own TMPDIR, every call truncates it, why_failed truncates it again as soon as it
+# has classified, and it is removed on the way out. It is only ever READ, never emitted.
+# EXIT only, and no INT/TERM: a signal trap here would make this script ignore SIGINT and
+# carry on mid-rebase, which is the opposite of what push_with_one_retry's trap is for.
 ERRLOG="$(mktemp "${TMPDIR:-/tmp}/kb-sync-err.XXXXXX" 2>/dev/null)" || ERRLOG=""
 cleanup() { [ -z "$ERRLOG" ] || rm -f "$ERRLOG"; }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
 
 # A bound that holds without coreutils `timeout`, which stock macOS does not ship:
 # the watchdog is a SIBLING, so it still fires if this shell is killed first.
-# The child's stderr is KEPT rather than discarded, in a file and not a variable, because
-# half these calls run inside $( ) and a subshell's variables never come back.
 bounded() {
   [ -z "$ERRLOG" ] || : > "$ERRLOG"
   local err="${ERRLOG:-/dev/null}"
@@ -74,28 +74,41 @@ bounded() {
   return $rc
 }
 
-# A URL can carry a token in its userinfo, and every line below is printed.
-mask_userinfo() { LC_ALL=C sed -e 's#[^/@[:space:]]*:[^/@[:space:]]*@#***@#g'; }
-safe_url() { printf '%s' "$1" | mask_userinfo; }
+# A URL is config we own, and it is printed. Userinfo and any query are REMOVED rather than
+# masked — a display form needs neither, and removing cannot leave a tail behind.
+safe_url() { printf '%s' "$1" | LC_ALL=C sed -e 's#\(://\)[^/]*@#\1#' -e 's#[?#].*$##'; }
 
-# Git's stderr is REMOTE-INFLUENCED text that gets printed, so it is handled as DATA and
-# never passed through: userinfo masked, control characters dropped (a terminal escape is
-# the injection), newlines folded so a remote cannot forge a second `kb-sync:` line, and the
-# whole thing truncated. None of it is ever written to a commit, a document or the KB.
-quote_remote() { # stdin -> one bounded, printable line
-  LC_ALL=C tr '\r\n\t' '   ' | mask_userinfo |
-  LC_ALL=C sed -e 's/[^[:print:]]/ /g' -e 's/[[:space:]][[:space:]]*/ /g' \
-               -e 's/^ //' -e 's/ $//' | cut -c1-200
-}
-
-# Why the last bounded call failed, in git's own words where it gave any — so an auth
-# failure reads as an auth failure. Only a child that said NOTHING is reported as the
-# bound elapsing, which is the one case where the elapsed time is the whole story.
-why_failed() {
-  local err=""
-  [ -z "$ERRLOG" ] || err="$(head -c 4096 "$ERRLOG" 2>/dev/null | quote_remote)"
-  if [ -n "$err" ]; then printf 'git said: %s' "$err"
-  else printf 'no output, killed at the %ss bound' "$TIMEOUT"; fi
+# WHY THE LAST BOUNDED CALL FAILED, IN OUR OWN WORDS. The whole point is that a credential
+# failure must not read as elapsed time — the 2026-10-03 mount spent 140s raising a bound
+# against a username prompt. Git's stderr is how we KNOW which it was; it is never how we
+# SAY so. Remote-influenced text in a line a human and an agent both read is a log- and
+# prompt-injection surface, and redacting it is a blocklist against bytes we do not control.
+# So the vocabulary here is fixed and ours: a signature decides the phrase, an unrecognised
+# failure gets its exit code and the command that will show the real text, and nothing from
+# the remote is printed, logged or stored. Adding a signature is how this gets more specific.
+why_failed() { # <rc> -> one fixed phrase, never remote text
+  local rc="$1" sig=""
+  if [ -n "$ERRLOG" ] && [ -s "$ERRLOG" ]; then
+    if   grep -qE 'could not read (Username|Password)|terminal prompts disabled' "$ERRLOG" 2>/dev/null; then
+      sig='no credentials for this remote, and nothing could answer the prompt'
+    elif grep -qE 'Authentication failed|Invalid username or password|HTTP 40[13]' "$ERRLOG" 2>/dev/null; then
+      sig='the remote refused the credentials it was given'
+    elif grep -qE 'Permission denied \(publickey|Permission denied, please try again|Host key verification failed' "$ERRLOG" 2>/dev/null; then
+      sig='the remote refused this SSH key'
+    elif grep -qE 'Repository not found|not appear to be a git repository|Could not read from remote repository' "$ERRLOG" 2>/dev/null; then
+      sig='the remote could not be read — no such repository, or this identity cannot see it'
+    elif grep -qE "find remote ref" "$ERRLOG" 2>/dev/null; then
+      sig='no such branch on the remote'
+    elif grep -qE 'Could not resolve host|Connection refused|Connection timed out|Network is unreachable|Operation timed out|Failed to connect' "$ERRLOG" 2>/dev/null; then
+      sig='the remote host could not be reached'
+    fi
+    : > "$ERRLOG"
+  fi
+  if [ -n "$sig" ]; then printf '%s' "$sig"; return 0; fi
+  case "$rc" in
+    124|137|143) printf 'nothing was said within the %ss bound' "$TIMEOUT" ;;
+    *) printf 'git exited %s; re-run the fetch by hand to see what it said' "$rc" ;;
+  esac
 }
 
 # The transport and host the bundle's OWN origin uses. A shorthand `org/name` cloned over
@@ -109,6 +122,7 @@ bundle_remote_prefix() {
   case "$url" in
     ssh://*)
       rest="${url#ssh://}"; auth="${rest%%/*}"
+      auth="$(printf '%s' "$auth" | LC_ALL=C sed -e 's#:[^@]*@#@#')"   # keep the user, drop any password
       [ -z "$auth" ] || { printf 'ssh://%s/' "$auth"; return 0; } ;;
     http://*|https://*)
       rest="${url#*://}"; auth="${rest%%/*}"; auth="${auth##*@}"
@@ -189,7 +203,7 @@ check_ref() { # <url> <ref>
 }
 
 clone_mount() { # <gitdir> <worktree> <url> <ref> <sparse>
-  local gd="$1" wt="$2" url="$3" ref="$4" sparse="$5"
+  local gd="$1" wt="$2" url="$3" ref="$4" sparse="$5" rc=0
   mkdir -p "$(dirname "$gd")" "$wt" || return 1
   git init --bare --quiet "$gd" || return 1
   git --git-dir="$gd" config core.bare false || return 1
@@ -200,8 +214,9 @@ clone_mount() { # <gitdir> <worktree> <url> <ref> <sparse>
     git --git-dir="$gd" config core.sparseCheckout true || return 1
     printf '/%s/\n' "$sparse" > "$gd/info/sparse-checkout" || return 1
   fi
-  if ! bounded git --git-dir="$gd" fetch --quiet origin "$ref"; then
-    warn "fetching $ref from $(safe_url "$url") failed: $(why_failed)"
+  bounded git --git-dir="$gd" fetch --quiet origin "$ref"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    warn "fetching $ref from $(safe_url "$url") failed: $(why_failed "$rc")"
     git --git-dir="$gd" symbolic-ref HEAD "refs/heads/$ref"
     return 0
   fi
@@ -283,10 +298,11 @@ EOF
 }
 
 pull_one() { # <gitdir> <ref> <label>
-  local gd="$1" ref="$2" label="$3" wt
+  local gd="$1" ref="$2" label="$3" wt rc=0
   [ -d "$gd" ] || return 0
-  if ! bounded git --git-dir="$gd" fetch --quiet origin "$ref"; then
-    warn "could not fetch $label: $(why_failed) — using the local copy (not fatal)"
+  bounded git --git-dir="$gd" fetch --quiet origin "$ref"; rc=$?
+  if [ "$rc" -ne 0 ]; then
+    warn "could not fetch $label: $(why_failed "$rc") — using the local copy (not fatal)"
     return 0
   fi
   wt="$(git --git-dir="$gd" config core.worktree 2>/dev/null)"
@@ -400,12 +416,13 @@ $trailer"
 }
 
 push_with_one_retry() {
-  local attempt=0
+  local attempt=0 rc=0
   trap 'abort_rebase; cleanup' EXIT
   while [ "$attempt" -lt 2 ]; do
     attempt=$((attempt+1))
-    if ! bounded git --git-dir="$KBGIT" fetch --quiet origin "$KB_REF"; then
-      warn "could not fetch $KB_REPO on attempt $attempt: $(why_failed)"
+    bounded git --git-dir="$KBGIT" fetch --quiet origin "$KB_REF"; rc=$?
+    if [ "$rc" -ne 0 ]; then
+      warn "could not fetch $KB_REPO on attempt $attempt: $(why_failed "$rc")"
     elif ! kbg rebase --quiet FETCH_HEAD >/dev/null 2>&1; then
       if ! resolve_conflicts; then
         abort_rebase
@@ -413,12 +430,13 @@ push_with_one_retry() {
        Your commit is local in $KB_MOUNT; resolve and re-run 'kb-sync.sh commit'."
       fi
     fi
-    if bounded git --git-dir="$KBGIT" push --quiet origin "HEAD:refs/heads/$KB_REF"; then
+    bounded git --git-dir="$KBGIT" push --quiet origin "HEAD:refs/heads/$KB_REF"; rc=$?
+    if [ "$rc" -eq 0 ]; then
       trap cleanup EXIT
       say "pushed $(kbg rev-parse --short HEAD) to $KB_REPO ($KB_REF)."
       return 0
     fi
-    warn "push rejected on attempt $attempt of 2: $(why_failed)"
+    warn "push rejected on attempt $attempt of 2: $(why_failed "$rc")"
   done
   abort_rebase; trap cleanup EXIT
   die "the KB push failed twice — stopping rather than forcing.

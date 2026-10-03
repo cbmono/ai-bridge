@@ -302,6 +302,8 @@ ok "…an HTTPS bundle still gets HTTPS, on its own host" \
   "$(derived_url https 'https://git.invalid/acme/bundle.git')" 'https://git.invalid/acme/kb.git'
 ok "…and a token in the bundle's remote never reaches the KB remote" \
   "$(derived_url token 'https://x-access-token:s3cr3t@git.invalid/acme/bundle.git')" 'https://git.invalid/acme/kb.git'
+ok "…nor an ssh:// password, while the user it needs is kept" \
+  "$(derived_url sshpw 'ssh://git:s3cr3t@git.invalid:2222/acme/bundle.git')" 'ssh://git@git.invalid:2222/acme/kb.git'
 ok "a bundle with no origin keeps the github.com HTTPS default" \
   "$(derived_url noorigin '')" 'https://github.com/acme/kb.git'
 ok "an explicit URL in knowledge.repo outranks the derivation" \
@@ -362,7 +364,7 @@ start=$(date +%s)
 out="$(mount_401 noauth)"
 elapsed=$(( $(date +%s) - start ))
 ok "an https:// mount with no credential helper names the credential failure" \
-  "$(has "$out" 'could not read Username')" yes
+  "$(has "$out" 'no credentials for this remote')" yes
 ok "…and never reports it as the bound elapsing" "$(has "$out" 'bound')" no
 ok "…and says which remote and ref it was fetching" "$(has "$out" "https://127.0.0.1:$PORT/acme/kb.git")" yes
 ok "…in a fraction of the 20s bound, so raising the bound is visibly not the fix" \
@@ -377,23 +379,25 @@ out="$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper \
        mount_401 helper)"
 ok "a bundle with a credential helper still authenticates" \
   "$([ -s "$TLS/authlog" ] && echo yes || echo no)" yes
-ok "…and never reaches the prompt path at all" "$(has "$out" 'could not read Username')" no
+ok "…so the failure is the remote refusing, not a prompt nobody could answer" \
+  "$(has "$out" 'refused the credentials it was given')" yes
+ok "…and the prompt path is never reached" "$(has "$out" 'no credentials for this remote')" no
 
 # A token the operator put in the URL is git's to send and ours never to print.
+mkdir -p "$TMP/tok/$AB_DIR"; cp "$SEED/SCHEMA.md" "$TMP/tok/$AB_SCHEMA"
 printf '{ "knowledge": { "repo": "https://u:s3cr3tt0ken@127.0.0.1:%s/acme/kb.git", "path": "/", "ref": "main" } }\n' \
-  "$PORT" > "$TMP/tok.json"
-mkdir -p "$TMP/tok/$AB_DIR"; cp "$SEED/SCHEMA.md" "$TMP/tok/$AB_SCHEMA"; cp "$TMP/tok.json" "$TMP/tok/instance.config.json"
+  "$PORT" > "$TMP/tok/instance.config.json"
 out="$(bash "$SYNC" --instance "$TMP/tok" --timeout 20 mount 2>&1)"
 ok "a token in the configured URL never reaches the output" "$(has "$out" 's3cr3tt0ken')" no
-ok "…and the masked form is printed instead" "$(has "$out" '***@127.0.0.1')" yes
+ok "…the userinfo is removed, not masked, so no tail can survive" "$(has "$out" '@127.0.0.1')" no
+ok "…and the remote is still named without it" "$(has "$out" "https://127.0.0.1:$PORT/acme/kb.git")" yes
 unset GIT_SSL_NO_VERIFY
 reap
 
-echo "== what the remote says is QUOTED, never passed through =="
+echo "== what the remote says decides the phrase; it is never the phrase =="
 
-# git's stderr is remote-influenced, and this report is read by a human and by an agent. A
-# remote that answers with a terminal escape, a forged `kb-sync:` line and 400 bytes of
-# padding must come back as one bounded, printable, visibly-quoted line.
+# git's stderr is remote-influenced, and this report is read by a human and by an agent, so
+# none of it is emitted: it only selects which of this script's own fixed phrases is right.
 cat > "$TMP/evil-ssh.sh" <<'SH'
 #!/usr/bin/env bash
 printf '\033[31m' >&2
@@ -407,13 +411,15 @@ EVIL="$TMP/evil"; mkdir -p "$EVIL/$AB_DIR"; cp "$SEED/SCHEMA.md" "$EVIL/$AB_SCHE
 printf '{ "knowledge": { "repo": "ssh://git@127.0.0.1/acme/kb.git", "path": "/", "ref": "main" } }\n' \
   > "$EVIL/instance.config.json"
 out="$(GIT_SSH_COMMAND="$TMP/evil-ssh.sh" bash "$SYNC" --instance "$EVIL" --timeout 10 mount 2>&1)"
-ok "a forged 'kb-sync:' line from the remote is not a line" \
-  "$(printf '%s\n' "$out" | grep -c '^kb-sync:' | tr -d ' ')" 2
-ok "…the terminal escape is stripped" \
+ok "the failure is named in this script's own words" \
+  "$(has "$out" 'no such repository, or this identity cannot see it')" yes
+ok "…the remote's forged 'kb-sync:' line is not echoed" "$(has "$out" 'all clear')" no
+ok "…nor its terminal escape" \
   "$(printf '%s' "$out" | LC_ALL=C grep -c '[[:cntrl:]]' | tr -d ' ')" 0
-ok "…the quoted text is truncated, not echoed whole" \
-  "$(printf '%s' "$out" | LC_ALL=C grep -c 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' | tr -d ' ')" 0
-ok "…and it is attributed to the remote, not asserted as ours" "$(has "$out" 'git said:')" yes
+ok "…nor one byte of its padding" "$(has "$out" 'xxxxxxxxxxxxxxxx')" no
+ok "…and the whole report is this script's two lines" \
+  "$(printf '%s\n' "$out" | grep -c . | tr -d ' ')" \
+  "$(printf '%s\n' "$out" | grep -c '^kb-sync:' | tr -d ' ')"
 
 echo "== push-state.sh was NOT extended for any of this =="
 ok "push-state.sh names no KB sync" \

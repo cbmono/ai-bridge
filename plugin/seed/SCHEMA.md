@@ -892,11 +892,14 @@ human.
 **Reads are bounded and never fatal.** The dispatch tick fast-forwards the mount at its
 start and a `SessionStart` hook does the same; both carry an explicit timeout (git has none
 of its own and macOS ships no `timeout`), and a failed pull is reported, never fatal.
-**A failed network call is reported in git's own words**, and only a call that said nothing
-at all is reported as the bound elapsing — a credential failure named as a timeout invites
-raising the bound, which cannot fix it. Nothing here runs on a terminal, so
-`GIT_TERMINAL_PROMPT=0` is set: git fails at once instead of blocking on a username prompt.
-Credential helpers are untouched, so an HTTPS bundle that has one still authenticates.
+**A failed network call is reported by CAUSE, and only a call with no recognised cause is
+reported as the bound elapsing** — a credential failure named as a timeout invites raising
+the bound, which cannot fix it. Git's stderr decides which cause; it is never itself
+printed, because remote-influenced text in a line a human and an agent both read is an
+injection surface, and the phrases are a fixed vocabulary the sync owns. Nothing here runs
+on a terminal, so `GIT_TERMINAL_PROMPT=0` is set: git fails at once instead of blocking on a
+username prompt. Credential helpers are untouched, so an HTTPS bundle that has one still
+authenticates.
 
 **The KB journals shard per month once shared** — `knowledge/log/<YYYY-MM>.md` and
 `knowledge/papercuts/<YYYY-MM>.md`; readers take the flat file and the shards both, so an
