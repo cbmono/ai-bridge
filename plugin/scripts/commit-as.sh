@@ -289,7 +289,7 @@ if [ "${#kb_paths[@]}" -gt 0 ]; then
     echo "       another repository, and committing them here would commit nothing:" >&2
     for p in "${kb_paths[@]}"; do printf '         %s\n' "$p" >&2; done
     echo "       The tick is the only KB writer. Use:" >&2
-    echo "         kb-sync.sh commit --role $role --message \"$message\" -- <path>..." >&2
+    ab_say_run "        " kb-sync.sh commit --role "$role" --message "\"$message\"" -- '<path>...' >&2
     exit 5
   fi
   kb_index="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/build-kb-index.sh"

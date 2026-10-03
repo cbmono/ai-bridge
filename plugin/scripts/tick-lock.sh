@@ -806,7 +806,7 @@ judge_existing() {
     echo "UNREADABLE: $LOCK exists but does not say when it was taken or by whom," >&2
     echo "            so whether a tick is running cannot be computed from it. Refusing" >&2
     echo "            rather than guessing. Read the file, then either fix it or run:" >&2
-    echo "              tick-lock.sh release" >&2
+    ab_say_run "             " tick-lock.sh release >&2
     return 2
   fi
 
@@ -828,7 +828,7 @@ judge_existing() {
     echo "       This is NOT deleted for you and NOT assumed dead: a tick that dispatched" >&2
     echo "       role agents can legitimately run long, and deleting a live tick's lock is" >&2
     echo "       the double-dispatch this file exists to prevent. Decide, then either wait" >&2
-    echo "       or run: tick-lock.sh release" >&2
+    ab_say_run "       or run:" tick-lock.sh release >&2
     echo "       (TICK_LOCK_STALE_MINUTES raises the threshold if your ticks are longer.)" >&2
     return 2
   fi
@@ -992,7 +992,7 @@ case "$cmd" in
         echo "     /${PLUGIN_NAME}:dispatch session starts shares it, so this reads the same whether you are" >&2
         echo "     re-entering your own claim or meeting a sibling that session resumed." >&2
         echo "     Do not dispatch and do not delete anything. A human decides:" >&2
-        echo "       - if no other tick is running:  tick-lock.sh release, then re-run" >&2
+        ab_say_run "       - if no other tick is running, re-run after:" tick-lock.sh release >&2
         echo "       - if one is:                    let it finish; this tick ends here" >&2
         echo "     To make this decidable, give each tick a per-tick id: --claimant <id>." >&2
         exit 2 ;;

@@ -116,17 +116,6 @@ find_root() {
   return 1
 }
 
-ROOT="$(find_root)" || {
-  echo "error: not inside a loopd instance (no instance.config.json)." >&2
-  echo "       Run this from an instance root." >&2
-  exit 1
-}
-
-CTL="$ROOT/.claude/control"
-DIRECTIVES="$CTL/directives"
-ROSTER="$CTL/agents"
-ACTIONLOG="$CTL/control.log"
-
 MAX="${CONTROL_MAX:-20}"
 case "$MAX" in ''|*[!0-9]*) MAX=20 ;; esac
 MAX=$((10#$MAX))
@@ -187,8 +176,27 @@ arm() { # <quiet?>
 }
 
 # ------------------------------------------------------------------- the verbs
+# PARSED BEFORE THE INSTANCE GUARD, so a printed `control.sh <verb> <id>` can be probed
+# from a non-instance directory without reaching `arm` (tests/printed-commands.test.sh).
 cmd="${1:-}"; [ -n "$cmd" ] || usage 1
 shift || true
+case "$cmd" in
+  -h|--help|help) usage 0 ;;
+  halt|gate|pause|steer) check_id "${1:-}" || exit 1 ;;
+  arm|disarm|agents|status|log|clear) ;;
+  *) echo "error: unknown command '$cmd'" >&2; usage 1 ;;
+esac
+
+ROOT="$(find_root)" || {
+  echo "error: not inside a loopd instance (no instance.config.json)." >&2
+  echo "       Run this from an instance root." >&2
+  exit 1
+}
+
+CTL="$ROOT/.claude/control"
+DIRECTIVES="$CTL/directives"
+ROSTER="$CTL/agents"
+ACTIONLOG="$CTL/control.log"
 
 case "$cmd" in
 
@@ -239,7 +247,7 @@ agents)
     | awk -F'\t' 'BEGIN { printf "%-40s %-22s %s\n", "AGENT ID", "TYPE", "FIRST SEEN" }
                   { printf "%-40s %-22s %s\n", $1, $2, $3 }'
   echo
-  echo "Halt one with: control.sh halt <agent-id> \"<why>\""
+  ab_say_run "Halt one with:" control.sh halt '<agent-id>' '"<why>"'
   ;;
 
 status)
@@ -253,7 +261,8 @@ status)
     awk -F'\t' '/^[[:space:]]*(#|$)/ { next }
       { printf "%-8s %-40s %-22s %s\n", $1, $2, $3, $4 }' "$DIRECTIVES"
     echo
-    echo "Release one with: control.sh clear <agent-id>   (or --all)"
+    ab_say_run "Release one with:" control.sh clear '<agent-id>'
+    ab_say_run "     or all with:" control.sh clear --all
   fi
   if [ -s "$ACTIONLOG" ]; then
     echo
@@ -327,7 +336,8 @@ halt|gate|pause|steer)
     echo >&2
     awk -F'\t' '/^[[:space:]]*(#|$)/ { next } { printf "         %-8s %s\n", $1, $2 }' "$DIRECTIVES" >&2
     echo >&2
-    echo "         control.sh clear <agent-id>   (or --all)" >&2
+    ab_say_run "        " control.sh clear '<agent-id>' >&2
+    ab_say_run "        " control.sh clear --all >&2
     exit 1
   fi
 
@@ -355,7 +365,7 @@ halt|gate|pause|steer)
       echo "  It takes effect at that agent's NEXT tool call: the call is refused and the"
       echo "  agent is told to stop. It does not interrupt a command already running, and"
       echo "  an agent doing no tool calls at all is not reached."
-      echo "  Release with: control.sh clear $id"
+      ab_say_run "  Release with:" control.sh clear "$id"
       echo
       echo "  If this halt belongs in the bundle's permanent history, add it yourself —"
       echo "  the hook deliberately never edits tracked files (see its header). Prepend to"
@@ -363,12 +373,12 @@ halt|gate|pause|steer)
       echo
       echo "    * **Agent halted**: $id — $reason"
       echo
-      echo "    commit-as.sh human \"chore: record halt of $id\" -- $AB_LEDGER"
+      ab_say_run "   " commit-as.sh human "\"chore: record halt of $id\"" -- "$AB_LEDGER"
       ;;
     gate)
       echo "GATE set for $id. Every tool call is refused until you clear it; the agent is"
       echo "  told to report what it was about to do and wait."
-      echo "  Release with: control.sh clear $id"
+      ab_say_run "  Release with:" control.sh clear "$id"
       ;;
     steer)
       echo "STEER queued for $id — delivered once, at its next tool call, then consumed."
@@ -377,6 +387,4 @@ halt|gate|pause|steer)
   esac
   ;;
 
--h|--help|help) usage 0 ;;
-*) echo "error: unknown command '$cmd'" >&2; usage 1 ;;
 esac

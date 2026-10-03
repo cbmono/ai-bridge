@@ -783,7 +783,7 @@ config_require_src() {
     echo "error: --config needs a checkout of this repo, and this is an installed plugin." >&2
     echo "       config/ is not shipped in the plugin: it links three agent files into" >&2
     echo "       \${CLAUDE_CONFIG_DIR:-~/.claude}, which is a machine decision, not a bundle one." >&2
-    echo "       git clone https://github.com/cbmono/loopd && loopd/plugin/scripts/init-bundle.sh --config" >&2
+    ab_say_run "       git clone https://github.com/cbmono/loopd &&" loopd/plugin/scripts/init-bundle.sh --config >&2
     echo "       Bundle stamps (init-bundle.sh [TARGET]) need none of this." >&2
     exit 2
   fi
@@ -3130,6 +3130,7 @@ if [ -f "$BIN_DIR/kb-sync.sh" ]; then
   bash "$BIN_DIR/kb-sync.sh" --instance "$TARGET" status >/dev/null 2>&1 || krc=$?
   if [ "$krc" -eq 1 ]; then
     echo "warn  the mounted knowledge base has unpushed commits. To see and push them:"
-    echo "      bash $BIN_DIR/kb-sync.sh status   (then: kb-sync.sh commit)"
+    ab_say_run "     " bash "$BIN_DIR/kb-sync.sh" status
+    ab_say_run "      then:" kb-sync.sh commit
   fi
 fi

@@ -39,6 +39,7 @@ self="${BASH_SOURCE[0]:-$0}"
 here="$(cd "$(dirname "$self")" 2>/dev/null && pwd)" || here=""
 [ -n "$here" ] && [ -f "$here/build-kb-index.sh" ] \
   || { echo "kb-sweep-due: build-kb-index.sh not found beside this script" >&2; exit 2; }
+. "$here/bundle-paths.sh" || exit 2
 
 # Cheapest gates first, so a busy tick never pays for the KB walk.
 [ "$dispatched" -eq 0 ] || not_due "this tick dispatched $dispatched agent(s); the reflect path owns the KB"
@@ -58,5 +59,8 @@ printf 'KB SWEEP DUE: idle tick, %s error(s), %s warning(s) — dispatch the cat
   "$errors" "${warns:-0}"
 printf '%s\n' "$out" | awk -v lim="$LIST_LIMIT" '
   /^  ERROR  / { n++; if (n <= lim) { print; if ((getline nxt) > 0) print nxt } next }
-  END { if (n > lim) printf "  ... and %d more (build-kb-index.sh --check lists them all).\n", n - lim }'
+  END { if (n > lim) printf "  ... and %d more.\n", n - lim }'
+if [ "$(printf '%s\n' "$out" | grep -c '^  ERROR  ')" -gt "$LIST_LIMIT" ]; then
+  ab_say_run "  List them all with:" build-kb-index.sh --check
+fi
 exit 0
