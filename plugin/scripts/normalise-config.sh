@@ -13,7 +13,7 @@
 set -uo pipefail
 _pn="$(dirname "${BASH_SOURCE[0]:-$0}")/plugin-name.sh"; if [ -r "$_pn" ]; then . "$_pn"; fi
 
-BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+BIN_DIR="$(cd -P "$(dirname "$0")" && pwd)"
 SEED="$BIN_DIR/../seed/instance.config.json"
 TARGET="."
 APPLY=0

@@ -205,7 +205,7 @@ if [ -L "$SELF_PATH" ]; then
   _t="$(readlink "$SELF_PATH" 2>/dev/null || printf '%s' "$SELF_PATH")"
   case "$_t" in /*) SELF_PATH="$_t" ;; *) SELF_PATH="$(dirname "$SELF_PATH")/$_t" ;; esac
 fi
-BIN="$(cd "$(dirname "$SELF_PATH")" && pwd)"
+BIN="$(cd -P "$(dirname "$SELF_PATH")" && pwd)"
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$BIN/.." && pwd)}"
 HOOKS="$PLUGIN_ROOT/hooks"
 

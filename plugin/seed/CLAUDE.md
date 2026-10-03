@@ -38,6 +38,10 @@ ls -d ~/.claude/plugins/cache/*/loopd/*/scripts | sort -V | tail -1
 <scripts>/commit-as.sh human "<msg>" -- <path>...   # likewise validate-bundle.sh, pr-body-clearance.sh
 ```
 
+`/loopd:init` also keeps `~/.claude/plugins/loopd/bin` pointed at `<scripts>` and prints a
+`PATH` line for **your terminal only** — agents never use that path or a bare name, which
+match no permission rule.
+
 | To… | Run |
 |---|---|
 | See state & advance work (refine drafts, dispatch `ready` tasks, reflect merges) | **`/loopd:dispatch`** — one safe, idempotent tick. Add `10m` to loop on an interval; say "DRY RUN" to preview without spawning agents. |

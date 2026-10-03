@@ -31,7 +31,7 @@ done
 # the caller never named.
 [ "$ROOT_GIVEN" = 0 ] || [ -n "$ROOT" ] || usage
 
-[ -n "$ROOT" ] || ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+[ -n "$ROOT" ] || ROOT="$(cd -P "$(dirname "$0")/../.." && pwd)"
 [ -f "$ROOT/VERSION" ] || die "no VERSION under $ROOT — pass --repo <checkout>"
 command -v python3 >/dev/null 2>&1 || die "python3 is required: the manifests are JSON, and the banner rule is counted in CHARACTERS"
 git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || die "$ROOT is not a git checkout"
