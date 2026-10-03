@@ -304,6 +304,8 @@ ok "…and a token in the bundle's remote never reaches the KB remote" \
   "$(derived_url token 'https://x-access-token:s3cr3t@git.invalid/acme/bundle.git')" 'https://git.invalid/acme/kb.git'
 ok "…nor an ssh:// password, while the user it needs is kept" \
   "$(derived_url sshpw 'ssh://git:s3cr3t@git.invalid:2222/acme/bundle.git')" 'ssh://git@git.invalid:2222/acme/kb.git'
+ok "…and an http:// bundle inherits its HOST but never its plaintext SCHEME" \
+  "$(derived_url httporigin 'http://git.invalid/acme/bundle.git')" 'https://git.invalid/acme/kb.git'
 ok "a bundle with no origin keeps the github.com HTTPS default" \
   "$(derived_url noorigin '')" 'https://github.com/acme/kb.git'
 ok "an explicit URL in knowledge.repo outranks the derivation" \
@@ -382,6 +384,25 @@ ok "…and never reports it as the bound elapsing" "$(has "$out" 'bound')" no
 ok "…and says which remote and ref it was fetching" "$(has "$out" "https://127.0.0.1:$PORT/acme/kb.git")" yes
 ok "…in a fraction of the 20s bound, so raising the bound is visibly not the fix" \
   "$([ -n "$PORT" ] && [ "$elapsed" -le 10 ] && echo yes || echo no)" yes
+
+# An inherited askpass is the OTHER way a bounded child blocks for the whole bound, and
+# GIT_TERMINAL_PROMPT=0 does not close it. The helper records that it ran; it must not.
+cat > "$TLS/askpass.sh" <<'SH'
+#!/usr/bin/env bash
+printf 'consulted\n' >> "$ASKPASS_LOG"
+printf 'hunter2\n'
+SH
+chmod +x "$TLS/askpass.sh"
+export ASKPASS_LOG="$TLS/askpass.log"; rm -f "$ASKPASS_LOG"
+start=$(date +%s)
+out="$(GIT_ASKPASS="$TLS/askpass.sh" mount_401 askpass)"
+elapsed=$(( $(date +%s) - start ))
+ok "an inherited GIT_ASKPASS is never consulted" \
+  "$([ -e "$ASKPASS_LOG" ] && echo yes || echo no)" no
+ok "…so the failure is still the credential one, not its answer" \
+  "$(has "$out" 'no credentials for this remote')" yes
+ok "…and it cannot spend the bound" "$([ "$elapsed" -le 10 ] && echo yes || echo no)" yes
+unset ASKPASS_LOG
 
 # Deriving from the bundle's transport must not break the operator who genuinely uses
 # HTTPS: GIT_TERMINAL_PROMPT=0 disables the PROMPT and nothing else, so a helper is still

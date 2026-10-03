@@ -41,11 +41,16 @@ die()   { printf 'kb-sync: %s\n' "$1" >&2; exit "${2:-1}"; }
 
 cfg() { bash "$HERE/resolve-config.sh" --instance "$INST" "$@" 2>/dev/null; }
 
-# Nothing here runs on a terminal — a tick, a SessionStart hook, an agent. Git with no
-# credentials then BLOCKS on a username prompt until the watchdog kills it, which is the
-# shape that read as a timeout. 0 makes it fail at once, saying so; credential helpers
-# are untouched, so an HTTPS bundle that has one still authenticates.
+# Nothing here runs on a terminal — a tick, a SessionStart hook, an agent. Every way a
+# child can block on input that will never arrive is closed, because each one spends the
+# WHOLE bound and then reads as elapsed time: git's prompt, git's askpass, OpenSSH's own.
+# GIT_ASKPASS is set EMPTY rather than unset on purpose — git consults core.askPass and
+# SSH_ASKPASS only when GIT_ASKPASS is unset, so one empty value closes all three.
+# Credential HELPERS run before any of this and are untouched: an HTTPS bundle with one
+# still authenticates.
 export GIT_TERMINAL_PROMPT=0
+export GIT_ASKPASS=""
+export SSH_ASKPASS_REQUIRE=never
 
 # The child's stderr has to transit a FILE, not a variable: half the bounded calls below run
 # inside $( ) and a subshell's variables never come back. `mktemp` makes it 0600 in the
@@ -125,8 +130,11 @@ bundle_remote_prefix() {
       auth="$(printf '%s' "$auth" | LC_ALL=C sed -e 's#:[^@]*@#@#')"   # keep the user, drop any password
       [ -z "$auth" ] || { printf 'ssh://%s/' "$auth"; return 0; } ;;
     http://*|https://*)
+      # The HOST is inherited; the SCHEME is not. An http:// bundle would otherwise pull the
+      # KB — and whatever a helper supplies for it — in clear, which `main`'s hardcoded
+      # https:// never did. An operator who means http sets a full URL in `repo`.
       rest="${url#*://}"; auth="${rest%%/*}"; auth="${auth##*@}"
-      [ -z "$auth" ] || { printf '%s://%s/' "${url%%://*}" "$auth"; return 0; } ;;
+      [ -z "$auth" ] || { printf 'https://%s/' "$auth"; return 0; } ;;
     *@*:*)
       printf '%s:' "${url%%:*}"; return 0 ;;
   esac

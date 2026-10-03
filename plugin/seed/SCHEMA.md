@@ -861,7 +861,7 @@ and need no plugin — share one copy.
 
 | | |
 |---|---|
-| `repo` | `org/name`, cloned over **the same transport and host as this bundle's own `origin`** — SSH bundle, SSH clone. A full URL is taken verbatim, which is the override. |
+| `repo` | `org/name`, cloned over **the same transport and host as this bundle's own `origin`** — SSH bundle, SSH clone. An `http://` origin lends its host but not its scheme: the clone is HTTPS, never plaintext. A full URL is taken verbatim, which is the override. |
 | `path` | `/` for the repo root, or `knowledge` for a top-level folder of that name inside a shared repo. |
 | `ref` | a **BRANCH** (default `main`). A tag or a SHA is refused **by name**: it checks out a detached HEAD the write path cannot push. |
 
@@ -898,8 +898,10 @@ the bound, which cannot fix it. Git's stderr decides which cause; it is never it
 printed, because remote-influenced text in a line a human and an agent both read is an
 injection surface, and the phrases are a fixed vocabulary the sync owns. Nothing here runs
 on a terminal, so `GIT_TERMINAL_PROMPT=0` is set: git fails at once instead of blocking on a
-username prompt. Credential helpers are untouched, so an HTTPS bundle that has one still
-authenticates.
+username prompt — as are `GIT_ASKPASS` (empty, which also suppresses `core.askPass` and
+the `SSH_ASKPASS` fallback) and `SSH_ASKPASS_REQUIRE=never`, because an inherited askpass
+spends the whole bound and then reads as elapsed time too. Credential helpers run before
+any of that and are untouched, so an HTTPS bundle that has one still authenticates.
 
 **The KB journals shard per month once shared** — `knowledge/log/<YYYY-MM>.md` and
 `knowledge/papercuts/<YYYY-MM>.md`; readers take the flat file and the shards both, so an
