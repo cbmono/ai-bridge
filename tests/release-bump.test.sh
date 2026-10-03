@@ -17,6 +17,12 @@
 # `release-bump.sh` must pass it again. Nothing weaker would notice a harness quietly
 # reinstating "a plugin change bumps the version".
 #
+# THE RELEASE NOTE RIDES IN THE BUMP COMMIT, and `docs/releases/v<new>.md` is the one path
+# release-bump.sh forgives on an otherwise clean tree. It is asserted as a file set keyed to
+# the version the bump mints, not to a literal, so the next release cannot re-break it; a
+# bump that dropped the note turns that assertion red. The flip side is asserted too: a note
+# that already shipped is a RECORD, so a later bump must not rewrite its header.
+#
 # THE LOCKSTEP GUARANTEE IS NOT WEAKENED — the five still have to agree with each other,
 # which is exactly what running the real harness in both fixtures asserts.
 #
@@ -100,6 +106,19 @@ for i, l in enumerate(lines):
 io.open(p, "w", encoding="utf-8").write("\n".join(lines))
 ' "$1" "$2"
   GIT -C "$1" commit -q -am "plant five $2"
+}
+next_version() { # <dir> <field> — the number the bump is about to mint, so every assertion
+  # below is keyed to it rather than to whatever version this repo happens to sit on
+  python3 -c '
+import sys
+ma, mi, pa = [int(x) for x in open(sys.argv[1] + "/VERSION").read().strip().split(".")]
+f = sys.argv[2]
+print("%d.0.0" % (ma + 1) if f == "major" else
+      "%d.%d.0" % (ma, mi + 1) if f == "minor" else "%d.%d.%d" % (ma, mi, pa + 1))' "$1" "$2"
+}
+note() { # <dir> <version> — the release note an author writes under docs/releases/
+  mkdir -p "$1/docs/releases"
+  printf '# loopd %s\n\nwhat changed.\n' "$2" > "$1/docs/releases/v$2.md"
 }
 mkt_core() { # <dir> — the marketplace version of the entry the host resolves
   python3 -c '
@@ -247,11 +266,28 @@ echo
 echo "== 4. …and main after release-bump.sh passes the same harness =="
 GIT -C "$TMP/pr" checkout -q main
 GIT -C "$TMP/pr" merge -q --no-ff -m "merge: the plugin change" feat/a-plugin-change
+# A note that already SHIPPED records the version it shipped. Planted and committed here so
+# the assertion below reads a fixture rather than whatever docs/releases/ holds today.
+note "$TMP/pr" 0.1.0
+GIT -C "$TMP/pr" add -A >/dev/null
+GIT -C "$TMP/pr" commit -q -m "docs: a release note that already shipped"
+# The note for the version being cut is written and left UNCOMMITTED: the bump commit is
+# what carries it, which is the only way "the release commit carries the note" can hold —
+# the script refuses a dirty tree, so there is no second commit to put it in.
+NEXT="$(next_version "$TMP/pr" minor)"
+note "$TMP/pr" "$NEXT"
 ok "release-bump.sh runs on the merged main" "$(run minor --repo "$TMP/pr")" 0
 ok "…template-version.test.sh passes there too" "$(harness "$TMP/pr" template-version.test.sh)" "fail=0 rc=0"
-ok "…in ONE commit carrying exactly the five places" \
+ok "…in ONE commit carrying the five places AND the note for $NEXT" \
   "$(GIT -C "$TMP/pr" show --name-only --format= HEAD | grep . | LC_ALL=C sort | tr '\n' ' ')" \
-  ".claude-plugin/marketplace.json VERSION docs/operations.md plugin/.claude-plugin/plugin.json plugin/VERSION "
+  ".claude-plugin/marketplace.json VERSION docs/operations.md docs/releases/v$NEXT.md plugin/.claude-plugin/plugin.json plugin/VERSION "
+ok "…leaving the SHIPPED note on the version it shipped" \
+  "$(head -n 1 "$TMP/pr/docs/releases/v0.1.0.md")" "# loopd 0.1.0"
+# The note is the ONLY path the dirty-tree refusal forgives; widening it to anything else
+# would let an unrelated edit ride into a release commit.
+printf '\n# an edit that is not a release note\n' >> "$TMP/pr/plugin/scripts/task-owner.sh"
+ok "…while any OTHER dirty path still refuses" "$(run patch --repo "$TMP/pr")" 1
+GIT -C "$TMP/pr" checkout -q -- .
 # `claude plugin update` compares the installed version against plugin.json and does
 # nothing when they match, so a bump that misses that file is a release nobody is offered.
 ok "…including plugin.json, so a plugin update sees the bump" \

@@ -191,7 +191,10 @@ echo "== 2. one source, MIRRORED not duplicated: a doc that shows the number agr
 # `/dev/null` as a fixed argument to grep, not decoration: BSD xargs runs the utility even
 # on empty input, and a `grep` with no file operands reads STDIN — so an empty file list
 # would hang this harness rather than fail it.
-displays="$(cd "$TPL" && git ls-files '*.md' | grep -v '^tests/' \
+# `docs/releases/` is excluded for the same reason the history in conventions.md is: a
+# shipped note DISPLAYS the version it shipped, not the current one, and must not move when
+# the number does. release-bump.sh leaves that directory alone to match.
+displays="$(cd "$TPL" && git ls-files '*.md' | grep -vE '^(tests|docs/releases)/' \
             | xargs grep -hoE 'loopd v?[0-9]+\.[0-9]+\.[0-9]+' /dev/null 2>/dev/null \
             | sed 's/^loopd v\{0,1\}//' | sort -u)"
 n_displays="$(printf '%s' "$displays" | grep -c . || true)"
@@ -231,7 +234,7 @@ for name in sys.stdin.read().split():
 print(drifted)
 '
 }
-widths="$(cd "$TPL" && git ls-files '*.md' | grep -v '^tests/' | rule_drift)"
+widths="$(cd "$TPL" && git ls-files '*.md' | grep -vE '^(tests|docs/releases)/' | rule_drift)"
 ok "every sampled banner header is underlined to its own width" "$widths" 0
 mkdir -p "$TMP/planted"
 { printf 'loopd %s \xc2\xb7 x\n' "$ver"; printf '\xe2\x94\x80\xe2\x94\x80\n'; } > "$TMP/planted/sample.md"
