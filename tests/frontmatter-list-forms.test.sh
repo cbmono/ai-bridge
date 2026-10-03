@@ -72,6 +72,10 @@ build() { # <dir> <flow|block>
     list acceptance_criteria "$f" "one"
     list open_questions "$f"
     printf 'pr: [ ]\ntimestamp: 2026-10-01T00:00:00Z\n---\n'; } > "$t/task-004-clear.md"
+  { printf -- '---\ntype: Task\ntitle: In progress, asking\nkind: build\nstatus: in-progress\nassignee: software-engineer\n'
+    list acceptance_criteria "$f" "one"
+    list open_questions "$f" 'Q1: still open, `x`?'
+    printf 'pr: [ ]\ntimestamp: 2026-10-01T00:00:00Z\n---\n'; } > "$t/task-005-asking.md"
   mkdir -p "$d/scripts"; cp "$P"/scripts/*.sh "$d/scripts/"; cp -R "$P/tick-steps" "$d/tick-steps"
   printf '/%s\n' "$AB_STATE_DIR" > "$d/.gitignore"
   GIT -C "$d" init -q && GIT -C "$d" add -A && GIT -C "$d" commit -qm init
@@ -115,6 +119,8 @@ same "tick-delta.sh digest (fmlist/fmcount, answered_open)" \
      sh -c 'bash scripts/tick-delta.sh digest --instance . | grep -v "^head "'
 ok "…reading deps=2 q=3 off the block lists" \
    "$(run "$BLOCK" bash scripts/tick-delta.sh digest --instance . | grep -c 'task-002-draft.md .*deps=2 q=3 crit=yes')" 1
+ok "…and answering, not CANNOT ANSWER, for an unanswered block list (answered_open)" \
+   "$(run "$BLOCK" bash scripts/tick-delta.sh digest --instance . | grep -c 'task-005-asking.md .*q=1')" 1
 same "write-snapshot.sh (list_region, list_filled, yaml_list_entries, depends_ids, deliverable_path_entries)" \
      sh -c "bash scripts/write-snapshot.sh --quiet; cat $AB_SNAPSHOT"
 ok "…carrying both deliverables and both dependency ids" \
@@ -122,7 +128,7 @@ ok "…carrying both deliverables and both dependency ids" \
       | grep -cE 'deliverables/deck.html|"depends_on": \["task-001-dep", "task-404-gone"\]')" 2
 same "build-awaiting.sh (entries)"        sh -c "bash scripts/build-awaiting.sh --instance .; cat $AB_AWAITING"
 ok "…queueing the unanswered questions as answer and grant rows" \
-   "$(run "$BLOCK" sh -c "bash scripts/build-awaiting.sh --instance .; cat $AB_AWAITING" | grep -cE '^\* (❓|🧰)')" 2
+   "$(run "$BLOCK" sh -c "bash scripts/build-awaiting.sh --instance .; cat $AB_AWAITING" | grep -cE '^\* (❓|🧰)')" 3
 same "validate-bundle.sh (list_entries, refs_for)" bash scripts/validate-bundle.sh
 ok "…holding the done task on its caveat and naming the dangling dependency" \
    "$(run "$BLOCK" bash scripts/validate-bundle.sh | grep -cE 'held by an open caveat|dangling reference: /projects/demo/tasks/task-404')" 2
