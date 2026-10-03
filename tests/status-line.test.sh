@@ -245,9 +245,10 @@ ok "the theme's basic tier is asked for by name" "$(grep -c 'ab_theme "\$use_col
 ok "…and this file builds no escape of its own"  "$(grep -v '^[[:space:]]*#' "$SL" | grep -c '033' | tr -d ' ')" 0
 NT="$TMP/no-theme"; mkdir -p "$NT"
 cp "$SL" "$REPO/plugin/scripts/bundle-paths.sh" "$NT/"
+# Its own cache: this copy has no agent-sessions.sh, so it caches `agents ?` for $INST.
 ok "an unsourceable theme means no colour, never no line" \
-   "$(SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NT/status-line.sh" --instance "$INST" --color always </dev/null 2>/dev/null)" \
-   "$(plain "$INST")"
+   "$(XDG_CACHE_HOME="$TMP/nt-cache" SENTINEL="$SENTINEL" PATH="$BIN:$PATH" bash "$NT/status-line.sh" --instance "$INST" --color always </dev/null 2>/dev/null)" \
+   "$(plain "$INST" | sed 's/agents 0 running/agents ?/')"
 ok "no \`38;5;\` (256-colour) anywhere"  "$(grep -c '38;5;' "$SL" | tr -d ' ')" 0
 ok "no \`38;2;\` (truecolor) anywhere"   "$(grep -c '38;2;' "$SL" | tr -d ' ')" 0
 ok "COLORTERM is never asked"            "$(grep -v '^[[:space:]]*#' "$SL" | grep -c 'COLORTERM' | tr -d ' ')" 0

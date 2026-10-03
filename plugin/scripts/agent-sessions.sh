@@ -124,7 +124,7 @@ case "$1" in
         if (v != "") print v "\t" FILENAME
       }' "$@" 2>/dev/null)"
     python3 - "$json" "$root" "$wtroot" "$TERMINAL" "$summary" "$tasks" <<'PY' || {
-import json, os, re, sys, time
+import json, os, re, sys, time, unicodedata
 raw, root, wtroot, terminal, summary, tasks = sys.argv[1:7]
 try:
     rows = json.loads(raw)
@@ -149,16 +149,19 @@ scope = [canon(root), canon(wtroot)] + [w for w, _ in by_wt]
 
 # A PROCESS, not the registry's word for one: a session the registry still lists as
 # `blocked` after its agent died carries no live pid, and `state` cannot tell the two apart.
+# A pid we may not signal is another user's process, so not this user's agent.
 def alive(pid):
     if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
         return False
     try:
         os.kill(pid, 0)
-    except PermissionError:
-        return True
     except OSError:
         return False
     return True
+
+# Every printed field comes from JSON or a file name, so no control character reaches a terminal.
+def clean(v):
+    return "".join(ch for ch in str(v) if unicodedata.category(ch)[0] != "C")
 
 def age(ms):
     if not isinstance(ms, (int, float)) or isinstance(ms, bool):
@@ -180,8 +183,8 @@ for r in rows:
     if c and not any(under(c, d) for d in scope):
         continue
     labels = sorted({l for w, l in by_wt if under(c, w)})
-    task = ",".join(labels) if labels else "unattributed"
-    state = str(r.get("state") or r.get("status") or "?")
+    task = clean(",".join(labels) if labels else "unattributed")
+    state = clean(r.get("state") or r.get("status") or "?")
     pid = r.get("pid")
     if alive(pid):
         proc, rank = "pid %d" % pid, 0
@@ -192,8 +195,8 @@ for r in rows:
     else:
         proc, rank = "none", 1
         ghost += 1
-    sid = str(r.get("id") or str(r.get("sessionId") or "?").split("-")[0])
-    where = "" if labels else "  " + (cwd or "(no cwd)")
+    sid = clean(r.get("id") or str(r.get("sessionId") or "?").split("-")[0])
+    where = "" if labels else "  " + clean(cwd or "(no cwd)")
     out.append((rank, task, state, proc, age(r.get("startedAt")), sid + where))
 
 if summary == "1":

@@ -101,6 +101,18 @@ ok "running rows sort above the ones with no process" \
 ok "the tally" "$(view | tail -1)" "2 running · 3 no process · 1 ended, not listed"
 ok "--summary is the same two counts" "$(view --summary)" "2 3"
 
+cat > "$TMP/hostile.json" <<JSON
+[ {"id":"\u001b]0;x\u0007ab","kind":"background","cwd":"$WT/\u001b[2Jesc","state":"blocked\u001b[31m"},
+  {"id":"root0001","kind":"background","cwd":"$WT/t1","pid":1,"state":"working"} ]
+JSON
+H="$(FIXTURE="$TMP/hostile.json" view)"
+ok "no control character from the JSON reaches the terminal" \
+   "$(printf '%s' "$H" | tr -d '\n' | LC_ALL=C tr -cd '\000-\037\177' | wc -c | tr -d ' ')" 0
+if [ "$(id -u)" -ne 0 ]; then
+  ok "a pid owned by another user is not this user's agent" \
+     "$(printf '%s\n' "$H" | awk '/root0001/ {print $3}')" none
+fi
+
 echo "== 4. a failing read is UNKNOWN, never zero =="
 OUT="$(FAIL=1 view)"; RC=$?
 ok "claude fails ⇒ exit 2"     "$RC" 2
