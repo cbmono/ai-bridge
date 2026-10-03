@@ -300,25 +300,26 @@ EOF
 # goes with it. G9 cannot see it either — `status --porcelain` skips ignored paths. So
 # the check is explicit, and `--directory` collapses an ignored directory to one entry
 # so a node_modules does not print 40,000 lines.
-IGNORE_OK=( node_modules .git .pnpm-store .bun-cache .venv venv __pycache__
-            .pytest_cache .mypy_cache .next .nuxt .turbo .cache .gradle
-            tmp temp .DS_Store )
+IGNORE_OK=" node_modules .pnpm-store .pnpm-store-task .bun-cache .venv venv __pycache__ \
+.pytest_cache .mypy_cache .next .nuxt .turbo .cache .gradle tmp temp .DS_Store "
 
-ignored_keepers() { # <worktree> — ignored entries that are NOT a known cache
-  local entry top ok n
-  git -C "$1" ls-files -o -i --exclude-standard --directory 2>/dev/null \
-  | while IFS= read -r entry; do
-      [ -n "$entry" ] || continue
-      top="${entry%%/*}"
-      ok=1
-      for n in "${IGNORE_OK[@]}"; do
-        case "$top" in "$n"|"$n"-*|"$n".*) ok=0; break ;; esac
-      done
-      [ "$ok" -eq 1 ] && printf '%s\n' "$entry"
-    done
-}
+ignored="" ; ignored_rc=0
+ignored="$(git -C "$WT" ls-files -o -i --exclude-standard --directory 2>/dev/null)" || ignored_rc=$?
+[ "$ignored_rc" -eq 0 ] || refuse "cannot list the ignored content of $WT, so whether
+        anything of the human's is in there cannot be established."
 
-keepers="$(ignored_keepers "$WT")"
+# EXACT match on the first path component. A prefix or trailing glob would let `.envrc`
+# ride in on `.env` and `tmp.secrets` ride in on `tmp`.
+keepers=""
+while IFS= read -r entry; do
+  [ -n "$entry" ] || continue
+  case "$IGNORE_OK" in *" ${entry%%/*} "*) continue ;; esac
+  keepers="$keepers$entry
+"
+done <<EOF
+$ignored
+EOF
+keepers="${keepers%$'\n'}"
 [ -z "$keepers" ] || refuse "$WT holds IGNORED content that is not a known cache. git
         would delete it without complaint — 'git worktree remove' does not refuse an
         ignored file — so the last word on it stays the human's:
@@ -367,6 +368,9 @@ $ps_all
 EOF
   fi
 }
+
+ps -axo pid= >/dev/null 2>&1 || refuse "cannot enumerate processes, so whether something
+        is still running inside $WT cannot be established."
 
 live="$(live_processes_in "$WT")"
 [ -z "$live" ] || refuse "$WT has a live process inside it. A process whose cwd is in a
