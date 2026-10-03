@@ -121,7 +121,7 @@ set -euo pipefail
 # init-bundle.sh, and see the long comment there for why: `source: ./plugin` means an
 # INSTALLED plugin is the contents of `plugin/`, so `<cache>/scripts` and
 # `<root>/plugin/scripts` both resolve to the directory that carries `seed/` and `VERSION`.
-_d="$(dirname "$0")"; if [ -L "$_d" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+_d="$(dirname "$0")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
 BIN_DIR="$(cd "$_d" && pwd)"
 SELF="$BIN_DIR/$(basename "$0")"
 PLUGIN_ROOT="$(cd "$BIN_DIR/.." 2>/dev/null && pwd || true)"

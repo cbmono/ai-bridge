@@ -92,8 +92,8 @@ set -euo pipefail
 # will eventually find SOME ancestor with a VERSION file, and answering with an unrelated
 # repo is worse than refusing.
 # Through the operator's plugins/<plugin>/bin link (step 1g) a logical `cd ..` lands beside
-# the link, so follow a linked scripts dir one hop first; a real dir is untouched.
-_d="$(dirname "$0")"; if [ -L "$_d" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
+# the link, so a linked scripts dir whose parent is not a plugin root is followed one hop.
+_d="$(dirname "$0")"; if [ -L "$_d" ] && [ ! -f "$(dirname "$_d")/VERSION" ]; then _t="$(readlink "$_d")"; case "$_t" in /*) _d="$_t" ;; *) _d="$(dirname "$_d")/$_t" ;; esac; fi
 BIN_DIR="$(cd "$_d" && pwd)"
 PLUGIN_ROOT="$(cd "$BIN_DIR/.." 2>/dev/null && pwd || true)"
 if [ -z "$PLUGIN_ROOT" ] || [ ! -f "$PLUGIN_ROOT/VERSION" ] || [ ! -d "$PLUGIN_ROOT/seed" ]; then
