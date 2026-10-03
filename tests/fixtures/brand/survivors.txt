@@ -11,7 +11,6 @@
 #   frozen   a pre-rename identifier, an on-disk marker or schema literal, a release note
 #   harness  the check in section 5 below, which must name the string it sweeps for
 #   list     this file
-#   blocked  brand prose that cannot be renamed by prose alone -- see the PR for task-012
 #
 # <reason(s)><TAB><path>
 prov,instdir,fname,frozen	README.md
@@ -28,7 +27,7 @@ prov	plugin/evals/README.md
 prov	plugin/hooks/deny-destructive.sh
 prov,bundle,instdir,fname,frozen	plugin/hooks/session-banner.sh
 prov	plugin/scripts/agent-usage.sh
-fname,blocked	plugin/scripts/ai-bridge.sh
+fname	plugin/scripts/ai-bridge.sh
 frozen	plugin/scripts/board-serve.sh
 bundle,frozen	plugin/scripts/build-board.sh
 prov	plugin/scripts/build-kb-index.sh
@@ -129,6 +128,7 @@ prov,instdir	tests/install-era-wording.test.sh
 prov,frozen	tests/installer-worktree-guard.test.sh
 prov	tests/kb-index-integrity.test.sh
 prov,bundle	tests/kb-mount.test.sh
+bundle	tests/kb-reflect.test.sh
 prov,frozen	tests/kb-sync-write.test.sh
 prov,instdir	tests/link-repos.test.sh
 prov	tests/local-tier-seed.test.sh
